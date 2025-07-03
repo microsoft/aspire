@@ -366,6 +366,11 @@ public sealed class InteractionInput
     public string? Value { get; set; }
 
     /// <summary>
+    /// Gets or sets the bytes value of the input. Only used by <see cref="InputType.File"/> inputs.
+    /// </summary>
+    public byte[]? ValueBytes { get; set; }
+
+    /// <summary>
     /// Gets the placeholder text for the input.
     /// </summary>
     public string? Placeholder { get; init; }
@@ -599,7 +604,11 @@ public enum InputType
     /// <summary>
     /// A numeric input.
     /// </summary>
-    Number
+    Number,
+    /// <summary>
+    /// A file input.
+    /// </summary>
+    File
 }
 
 /// <summary>

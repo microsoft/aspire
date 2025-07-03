@@ -890,6 +890,11 @@ internal sealed class PublishingPromptInput
     public string? Value { get; init; }
 
     /// <summary>
+    /// Gets or sets the bytes value of the input. Only used by file inputs.
+    /// </summary>
+    public byte[]? ValueBytes { get; init; }
+
+    /// <summary>
     /// Gets the validation errors for the input.
     /// </summary>
     public IReadOnlyList<string>? ValidationErrors { get; init; }
@@ -945,6 +950,7 @@ internal class PublishingPromptInputAnswer
 {
     public string? Name { get; set; }
     public string? Value { get; set; }
+    public byte[]? ValueBytes { get; set; }
 }
 
 /// <summary>
@@ -1731,4 +1737,3 @@ internal sealed class ResourceLogBatch
     /// </summary>
     public required ResourceLogLine[] Lines { get; init; }
 }
-

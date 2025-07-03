@@ -342,6 +342,7 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
                     Required = input.Required,
                     Options = input.Options,
                     Value = input.Value,
+                    ValueBytes = input.ValueBytes,
                     ValidationErrors = input.ValidationErrors,
                     AllowCustomChoice = input.AllowCustomChoice,
                     UpdateStateOnChange = updateStateOnChangeInputs.Any(i => string.Equals(i, input.Name, StringComparisons.InteractionInputName)),
@@ -430,7 +431,7 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
                                     matchingInput = inputsInfo.Inputs[i];
                                 }
 
-                                dtos.Add(new InputDto(matchingInput.Name, responseAnswer.Value ?? "", matchingInput.InputType));
+                                dtos.Add(new InputDto(matchingInput.Name, responseAnswer.Value ?? "", matchingInput.InputType, responseAnswer.ValueBytes));
                             }
 
                             DashboardServiceData.ProcessInputs(

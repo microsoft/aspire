@@ -45,7 +45,11 @@ internal enum InputType
     /// <summary>
     /// A numeric input.
     /// </summary>
-    Number
+    Number,
+    /// <summary>
+    /// A file input.
+    /// </summary>
+    File
 }
 
 internal sealed class EnvVar

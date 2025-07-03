@@ -4,6 +4,7 @@
 using System.Text.RegularExpressions;
 using System.Globalization;
 using Aspire.DashboardService.Proto.V1;
+using Google.Protobuf;
 using Google.Protobuf.Collections;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
@@ -213,6 +214,10 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         {
             dto.Value = input.Value;
         }
+        if (input.ValueBytes != null)
+        {
+            dto.ValueBytes = ByteString.CopyFrom(input.ValueBytes);
+        }
         if (input.Options != null)
         {
             dto.Options.Add(input.Options.ToDictionary());
@@ -238,6 +243,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             Aspire.Hosting.InputType.Choice => Aspire.DashboardService.Proto.V1.InputType.Choice,
             Aspire.Hosting.InputType.Boolean => Aspire.DashboardService.Proto.V1.InputType.Boolean,
             Aspire.Hosting.InputType.Number => Aspire.DashboardService.Proto.V1.InputType.Number,
+            Aspire.Hosting.InputType.File => Aspire.DashboardService.Proto.V1.InputType.File,
             _ => throw new InvalidOperationException($"Unexpected input type: {inputType}"),
         };
     }
@@ -251,6 +257,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             Aspire.DashboardService.Proto.V1.InputType.Choice => InputType.Choice,
             Aspire.DashboardService.Proto.V1.InputType.Boolean => InputType.Boolean,
             Aspire.DashboardService.Proto.V1.InputType.Number => InputType.Number,
+            Aspire.DashboardService.Proto.V1.InputType.File => InputType.File,
             _ => throw new InvalidOperationException($"Unexpected input type: {inputType}"),
         };
     }

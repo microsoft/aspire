@@ -876,6 +876,7 @@ internal abstract class PipelineCommandBase : BaseCommand
             var input = inputs[i];
 
             string? result;
+            byte[]? resultBytes;
 
             // Get prompt for input if there are no validation errors (first time we've asked)
             // or there are validation errors and this input has an error.
@@ -884,16 +885,17 @@ internal abstract class PipelineCommandBase : BaseCommand
                 // Build the prompt text based on number of inputs
                 var promptText = BuildPromptText(input, inputs.Count, activity.Data.StatusText, activity.Data);
 
-                result = await HandleSingleInputAsync(input, promptText, cancellationToken);
+                (result, resultBytes) = await HandleSingleInputAsync(input, promptText, cancellationToken);
             }
             else
             {
-                result = input.Value;
+                (result, resultBytes) = (input.Value, input.ValueBytes);
             }
 
             answers[i] = new PublishingPromptInputAnswer
             {
-                Value = result
+                Value = result,
+                ValueBytes = resultBytes
             };
         }
 
@@ -901,7 +903,7 @@ internal abstract class PipelineCommandBase : BaseCommand
         await backchannel.CompletePromptResponseAsync(activity.Data.Id, answers, cancellationToken);
     }
 
-    private async Task<string?> HandleSingleInputAsync(PublishingPromptInput input, string promptText, CancellationToken cancellationToken)
+    private async Task<(string?, byte[]?)> HandleSingleInputAsync(PublishingPromptInput input, string promptText, CancellationToken cancellationToken)
     {
         if (!Enum.TryParse<InputType>(input.InputType, ignoreCase: true, out var inputType))
         {
@@ -918,29 +920,36 @@ internal abstract class PipelineCommandBase : BaseCommand
             }
         }
 
-        return inputType switch
+        string? value = null;
+        byte[]? valueBytes = null;
+
+        switch (inputType)
         {
-            InputType.Text => await InteractionService.PromptForStringAsync(
-                promptText,
-                binding: PromptBinding.CreateDefault(input.Value),
-                required: input.Required,
-                cancellationToken: cancellationToken),
+            case InputType.Text:
+                value = await InteractionService.PromptForStringAsync(promptText, binding: PromptBinding.CreateDefault(input.Value), required: input.Required, cancellationToken: cancellationToken);
+                break;
+            case InputType.SecretText:
+                value = await InteractionService.PromptForStringAsync(promptText, binding: PromptBinding.CreateDefault(input.Value), isSecret: true, required: input.Required, cancellationToken: cancellationToken);
+                break;
+            case InputType.Choice:
+                value = await HandleSelectInputAsync(input, promptText, cancellationToken);
+                break;
+            case InputType.Boolean:
+                var confirmed = await InteractionService.PromptConfirmAsync(promptText, binding: PromptBinding.CreateDefault(ParseBooleanValue(input.Value)), cancellationToken: cancellationToken);
+                value = confirmed.ToString().ToLowerInvariant();
+                break;
+            case InputType.Number:
+                value = await HandleNumberInputAsync(input, promptText, cancellationToken);
+                break;
+            case InputType.File:
+                (value, valueBytes) = await HandleFileInputAsync(input, promptText, cancellationToken);
+                break;
+            default:
+                value = await InteractionService.PromptForStringAsync(promptText, binding: PromptBinding.CreateDefault(input.Value), required: input.Required, cancellationToken: cancellationToken);
+                break;
+        }
 
-            InputType.SecretText => await InteractionService.PromptForStringAsync(
-                promptText,
-                binding: PromptBinding.CreateDefault(input.Value),
-                isSecret: true,
-                required: input.Required,
-                cancellationToken: cancellationToken),
-
-            InputType.Choice => await HandleSelectInputAsync(input, promptText, cancellationToken),
-
-            InputType.Boolean => (await InteractionService.PromptConfirmAsync(promptText, binding: PromptBinding.CreateDefault(ParseBooleanValue(input.Value)), cancellationToken: cancellationToken)).ToString().ToLowerInvariant(),
-
-            InputType.Number => await HandleNumberInputAsync(input, promptText, cancellationToken),
-
-            _ => await InteractionService.PromptForStringAsync(promptText, binding: PromptBinding.CreateDefault(input.Value), required: input.Required, cancellationToken: cancellationToken)
-        };
+        return (value, valueBytes);
     }
 
     private async Task<string?> HandleSelectInputAsync(PublishingPromptInput input, string promptText, CancellationToken cancellationToken)
@@ -995,6 +1004,40 @@ internal abstract class PipelineCommandBase : BaseCommand
             validator: Validator,
             required: input.Required,
             cancellationToken: cancellationToken);
+    }
+
+    private async Task<(string?, byte[]?)> HandleFileInputAsync(PublishingPromptInput input, string promptText, CancellationToken cancellationToken)
+    {
+        static ValidationResult Validator(string value)
+        {
+            if (!File.Exists(value))
+            {
+                return ValidationResult.Error("Please enter a valid file path.");
+            }
+
+            var fileInfo = new FileInfo(value);
+            if (fileInfo.Length > Aspire.Dashboard.Utils.InteractionConfig.MaxFileSizeBytes)
+            {
+                return ValidationResult.Error($"File size must be less than {Aspire.Dashboard.Utils.InteractionConfig.MaxFileSizeMegabytes} MB.");
+            }
+
+            return ValidationResult.Success();
+        }
+
+        var path = await InteractionService.PromptForStringAsync(
+            promptText,
+            binding: PromptBinding.CreateDefault(input.Value),
+            validator: Validator,
+            required: input.Required,
+            cancellationToken: cancellationToken);
+
+        if (string.IsNullOrEmpty(path))
+        {
+            return (null, null);
+        }
+
+        var fileBytes = await File.ReadAllBytesAsync(path, cancellationToken);
+        return (Path.GetFileName(path), fileBytes);
     }
 
     private static bool ParseBooleanValue(string? value)

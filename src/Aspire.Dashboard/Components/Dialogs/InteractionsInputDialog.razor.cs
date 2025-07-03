@@ -133,10 +133,7 @@ public partial class InteractionsInputDialog : IAsyncDisposable
         foreach (var inputModel in _inputDialogInputViewModels)
         {
             var field = GetFieldIdentifier(inputModel);
-            if (IsMissingRequiredValue(inputModel))
-            {
-                _validationMessages.Add(field, $"{inputModel.Input.Label} is required.");
-            }
+            EnsureRequiredField(field, inputModel);
         }
 
         _editContext.NotifyValidationStateChanged();
@@ -148,10 +145,7 @@ public partial class InteractionsInputDialog : IAsyncDisposable
 
         if (field.Model is InputViewModel inputModel)
         {
-            if (IsMissingRequiredValue(inputModel))
-            {
-                _validationMessages.Add(field, $"{inputModel.Input.Label} is required.");
-            }
+            EnsureRequiredField(field, inputModel);
 
             if (inputModel.Input.UpdateStateOnChange)
             {
@@ -162,12 +156,38 @@ public partial class InteractionsInputDialog : IAsyncDisposable
         _editContext.NotifyValidationStateChanged();
     }
 
+    private void EnsureRequiredField(FieldIdentifier field, InputViewModel inputModel)
+    {
+        if (IsMissingRequiredValue(inputModel))
+        {
+            _validationMessages.Add(field, Loc[nameof(Resources.Dialogs.FieldRequired)]);
+        }
+    }
+
+    private async Task OnFileInputProgress(InputViewModel inputModel, FluentInputFileEventArgs args)
+    {
+        inputModel.FileProgressPercent = args.ProgressPercent;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task OnFileInputCompleted(InputViewModel inputModel, IEnumerable<FluentInputFileEventArgs> args)
+    {
+        var file = args.Single();
+        inputModel.Value = Path.GetFileName(file.Name);
+        inputModel.ValueBytes = file.Buffer.Data;
+
+        _editContext.NotifyFieldChanged(new FieldIdentifier(inputModel, nameof(inputModel.ValueBytes)));
+
+        await InvokeAsync(StateHasChanged);
+    }
+
     private static FieldIdentifier GetFieldIdentifier(InputViewModel inputModel)
     {
         var fieldName = inputModel.Input.InputType switch
         {
             InputType.Boolean => nameof(inputModel.IsChecked),
             InputType.Number => nameof(inputModel.NumberValue),
+            InputType.File => nameof(inputModel.ValueBytes),
             _ => nameof(inputModel.Value)
         };
         return new FieldIdentifier(inputModel, fieldName);

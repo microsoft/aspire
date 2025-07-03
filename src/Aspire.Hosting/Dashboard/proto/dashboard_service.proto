@@ -431,6 +431,7 @@ message InteractionInput {
     bool update_state_on_change = 13;
     string name = 14;
     bool disabled = 15;
+    bytes value_bytes = 16;
 }
 enum MessageIntent {
     MESSAGE_INTENT_NONE = 0;
@@ -447,6 +448,7 @@ enum InputType {
     INPUT_TYPE_CHOICE = 3;
     INPUT_TYPE_BOOLEAN = 4;
     INPUT_TYPE_NUMBER = 5;
+    INPUT_TYPE_FILE = 6;
 }
 
 ////////////////////////////////////////////

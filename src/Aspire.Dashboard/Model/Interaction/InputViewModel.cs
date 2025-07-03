@@ -104,6 +104,16 @@ public sealed class InputViewModel
         set => Input.Value = value?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
     }
 
+    // Used when binding to FluentInputFile data. File name is stored in Value.
+    public byte[]? ValueBytes
+    {
+        get => Input.ValueBytes?.ToByteArray();
+        set => Input.ValueBytes = value != null ? Google.Protobuf.ByteString.CopyFrom(value) : Google.Protobuf.ByteString.Empty;
+    }
+
+    public int? FileProgressPercent { get; set; }
+    public string? FileName { get; set; }
+
     public bool InputDisabled => Input.Disabled || Input.Loading;
 
     // Used to track secret text visibility state

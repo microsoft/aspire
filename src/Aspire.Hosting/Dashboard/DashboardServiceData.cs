@@ -212,7 +212,7 @@ internal sealed class DashboardServiceData : IDisposable
                             serviceProvider,
                             logger,
                             inputsInfo,
-                            request.InputsDialog.InputItems.Select(i => new InputDto(i.Name, i.Value, DashboardService.MapInputType(i.InputType))).ToList(),
+                            request.InputsDialog.InputItems.Select(i => new InputDto(i.Name, i.Value, DashboardService.MapInputType(i.InputType), i.ValueBytes.ToByteArray())).ToList(),
                             request.ResponseUpdate,
                             interaction.CancellationToken);
 
@@ -225,7 +225,7 @@ internal sealed class DashboardServiceData : IDisposable
             cancellationToken).ConfigureAwait(false);
     }
 
-    public record InputDto(string Name, string Value, InputType InputType);
+    public record InputDto(string Name, string Value, InputType InputType, byte[]? ValueBytes = null);
 
     public static void ProcessInputs(IServiceProvider serviceProvider, ILogger logger, Interaction.InputsInteractionInfo inputsInfo, List<InputDto> inputDtos, bool dependencyChange, CancellationToken cancellationToken)
     {
@@ -250,6 +250,11 @@ internal sealed class DashboardServiceData : IDisposable
             if (!string.Equals(modelInput.Value ?? string.Empty, incomingValue ?? string.Empty))
             {
                 modelInput.Value = incomingValue;
+
+                if (requestInput.InputType == InputType.File)
+                {
+                    modelInput.ValueBytes = !string.IsNullOrEmpty(incomingValue) ? requestInput.ValueBytes : null;
+                }
 
                 // If we're processing updates because of a dependency change, check to see if this input is depended on.
                 if (dependencyChange)
