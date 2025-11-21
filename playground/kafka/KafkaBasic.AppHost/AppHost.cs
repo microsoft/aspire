@@ -4,10 +4,13 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
 var kafka = builder.AddKafka("kafka")
-    .WithKafkaUI(kafkaUi => kafkaUi.WithHostPort(8080))
-    .WithKafkaSchemaRegistry("schema-registry",registry => registry.WithHostPort(7000));
+    .WithKafkaUI(kafkaUi => kafkaUi.WithHostPort(8080));
+
+var schemaRegistry =
+    kafka.WithKafkaSchemaRegistry("schema-registry", registry => registry.WithHostPort(7000));
 
 builder.AddProject<Projects.Producer>("producer")
+    .WithReference(schemaRegistry)
     .WithReference(kafka).WaitFor(kafka)
     .WithArgs(kafka.Resource.Name);
 
@@ -22,8 +25,8 @@ builder.AddKafka("kafka2").WithKafkaUI();
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-//#if !SKIP_DASHBOARD_REFERENCE
+#if !SKIP_DASHBOARD_REFERENCE
 builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard);
-//#endif
+#endif
 
 builder.Build().Run();
