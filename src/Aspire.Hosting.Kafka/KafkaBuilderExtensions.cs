@@ -152,15 +152,15 @@ public static class KafkaBuilderExtensions
     }
 
     /// <summary>
-    /// Adds a Kafka UI container to the application.
+    /// Adds a Kafka Schema Registry container to the application.
     /// </summary>
     /// <remarks>
-    /// This version of the package defaults to the <inheritdoc cref="KafkaContainerImageTags.KafkaUiTag"/> tag of the <inheritdoc cref="KafkaContainerImageTags.KafkaUiImage"/> container image.
+    /// This version of the package defaults to the <inheritdoc cref="KafkaContainerImageTags.KafkaSchemaRegistryTag"/> tag of the <inheritdoc cref="KafkaContainerImageTags.KafkaSchemaRegistryImage"/> container image.
     /// </remarks>
     /// <param name="builder">The Kafka server resource builder.</param>
     /// <param name="configureContainer">Configuration callback for KafkaUI container resource.</param>
     /// <param name="containerName">The name of the container (Optional).</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{KafkaServerResource}"/>.</returns>
+    /// <returns>A reference to the <see cref="IResourceBuilder{KafkaSchemaRegistryResource}"/>.</returns>
     public static IResourceBuilder<KafkaSchemaRegistryResource> WithKafkaSchemaRegistry(this IResourceBuilder<KafkaServerResource> builder, string? containerName = null, Action<IResourceBuilder<KafkaSchemaRegistryResource>>? configureContainer = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -210,11 +210,11 @@ public static class KafkaBuilderExtensions
     }
 
     /// <summary>
-    /// Configures the host port that the Kakfa Schema Registry resource is exposed on instead of using randomly assigned port.
+    /// Configures the host port that the Kafka Schema Registry resource is exposed on instead of using randomly assigned port.
     /// </summary>
-    /// <param name="builder">The resource builder for Kakfa Schema Registry.</param>
+    /// <param name="builder">The resource builder for Kafka Schema Registry.</param>
     /// <param name="port">The port to bind on the host. If <see langword="null"/> is used random port will be assigned.</param>
-    /// <returns>The resource builder for Kakfa Schema Registry.</returns>
+    /// <returns>The resource builder for Kafka Schema Registry.</returns>
     public static IResourceBuilder<KafkaSchemaRegistryResource> WithHostPort(this IResourceBuilder<KafkaSchemaRegistryResource> builder, int? port)
     {
         ArgumentNullException.ThrowIfNull(builder);

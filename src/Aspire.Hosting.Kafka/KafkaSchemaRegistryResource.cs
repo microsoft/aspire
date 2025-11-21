@@ -6,9 +6,9 @@ using Aspire.Hosting.ApplicationModel;
 namespace Aspire.Hosting;
 
 /// <summary>
-/// A resource that represents a Kafka UI container.
+/// A resource that represents a Kafka Schema Registry container.
 /// </summary>
-/// <param name="name"></param>
+/// <param name="name">The name of the resource.</param>
 public sealed class KafkaSchemaRegistryResource(string name) : ContainerResource(name), IResourceWithConnectionString
 {
 
