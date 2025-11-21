@@ -161,7 +161,7 @@ public static class KafkaBuilderExtensions
     /// <param name="configureContainer">Configuration callback for KafkaUI container resource.</param>
     /// <param name="containerName">The name of the container (Optional).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KafkaServerResource}"/>.</returns>
-    public static IResourceBuilder<KafkaServerResource> WithKafkaSchemaRegistry(this IResourceBuilder<KafkaServerResource> builder, Action<IResourceBuilder<KafkaSchemaRegistryResource>>? configureContainer = null, string? containerName = null)
+    public static IResourceBuilder<KafkaServerResource> WithKafkaSchemaRegistry(this IResourceBuilder<KafkaServerResource> builder, string? containerName = null, Action<IResourceBuilder<KafkaSchemaRegistryResource>>? configureContainer = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
@@ -177,7 +177,7 @@ public static class KafkaBuilderExtensions
         var kafkaSchemaRegistryBuilder = builder.ApplicationBuilder.AddResource(kafkaSchemaRegistry)
             .WithImage(KafkaContainerImageTags.KafkaSchemaRegistryImage, KafkaContainerImageTags.KafkaSchemaRegistryTag)
             .WithImageRegistry(KafkaContainerImageTags.Registry)
-            .WithHttpEndpoint(8081, targetPort: KafkaSchemaRegistryPort, name: "primary")
+            .WithHttpEndpoint(targetPort: KafkaSchemaRegistryPort, name: "primary")
             .WithEnvironment(context =>
             {
                 context.EnvironmentVariables["SCHEMA_REGISTRY_HOST_NAME"] = "localhost";
@@ -222,10 +222,6 @@ public static class KafkaBuilderExtensions
         return builder.WithEndpoint("primary", endpoint =>
         {
             endpoint.Port = port;
-            if (endpoint.TargetPort == 0)
-            {
-                endpoint.TargetPort = KafkaSchemaRegistryPort;
-            }
         });
     }
 

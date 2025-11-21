@@ -5,7 +5,7 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 var kafka = builder.AddKafka("kafka")
     .WithKafkaUI(kafkaUi => kafkaUi.WithHostPort(8080))
-    .WithKafkaSchemaRegistry(registry => registry.WithHostPort(7000));
+    .WithKafkaSchemaRegistry("schema-registry",registry => registry.WithHostPort(7000));
 
 builder.AddProject<Projects.Producer>("producer")
     .WithReference(kafka).WaitFor(kafka)

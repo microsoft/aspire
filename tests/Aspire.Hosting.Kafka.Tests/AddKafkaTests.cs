@@ -179,6 +179,39 @@ public class AddKafkaTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(port, kafkaUiEndpoint.Port);
     }
 
+    public static TheoryData<string?, string, int?> WithKafkaSchemaRegistryAddsAnUniqueContainerSetsItsNameAndInvokesConfigurationCallbackTestVariations()
+    {
+        return new()
+        {
+            { "kafka-schema-registry", "kafka-schema-registry", 8082 },
+            { null, "kafka-schema-registry", 8082 },
+            { "kafka-schema-registry", "kafka-schema-registry", null },
+            { null, "kafka-schema-registry", null },
+        };
+    }
+
+    [Theory]
+    [MemberData(nameof(WithKafkaSchemaRegistryAddsAnUniqueContainerSetsItsNameAndInvokesConfigurationCallbackTestVariations))]
+    public void WithKafkaSchemaRegistryAddsAnUniqueContainerSetsItsNameAndInvokesConfigurationCallback(string? containerName, string expectedContainerName, int? port)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var configureContainerInvocations = 0;
+        Action<IResourceBuilder<KafkaSchemaRegistryResource>> kafkaSchemaRegistryCallback = kafkaUi =>
+        {
+            kafkaUi.WithHostPort(port);
+            configureContainerInvocations++;
+        };
+        builder.AddKafka("kafka1")
+            .WithKafkaSchemaRegistry(containerName: containerName, kafkaSchemaRegistryCallback);
+
+        Assert.Single(builder.Resources.OfType<KafkaSchemaRegistryResource>());
+        var kafkaSchemaResource = Assert.Single(builder.Resources, r => r.Name == expectedContainerName);
+        Assert.Equal(1, configureContainerInvocations);
+        var kafkaSchemaRegistryEndpoint = kafkaSchemaResource.Annotations.OfType<EndpointAnnotation>().Single();
+        Assert.Equal(8081, kafkaSchemaRegistryEndpoint.TargetPort);
+        Assert.Equal(port, kafkaSchemaRegistryEndpoint.Port);
+    }
+
     [Fact]
     public async Task KafkaEnvironmentCallbackIsIdempotent()
     {
