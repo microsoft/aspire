@@ -17,6 +17,8 @@ public static class KafkaBuilderExtensions
     private const int KafkaBrokerPort = 9092;
     private const int KafkaInternalBrokerPort = 9093;
     private const int KafkaUIPort = 8080;
+    private const int KafkaSchemaRegistryPort = 8081;
+
     private const string Target = "/var/lib/kafka/data";
 
     /// <summary>
@@ -150,6 +152,47 @@ public static class KafkaBuilderExtensions
     }
 
     /// <summary>
+    /// Adds a Kafka UI container to the application.
+    /// </summary>
+    /// <remarks>
+    /// This version of the package defaults to the <inheritdoc cref="KafkaContainerImageTags.KafkaUiTag"/> tag of the <inheritdoc cref="KafkaContainerImageTags.KafkaUiImage"/> container image.
+    /// </remarks>
+    /// <param name="builder">The Kafka server resource builder.</param>
+    /// <param name="configureContainer">Configuration callback for KafkaUI container resource.</param>
+    /// <param name="containerName">The name of the container (Optional).</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{KafkaServerResource}"/>.</returns>
+    public static IResourceBuilder<KafkaServerResource> WithKafkaSchemaRegistry(this IResourceBuilder<KafkaServerResource> builder, Action<IResourceBuilder<KafkaSchemaRegistryResource>>? configureContainer = null, string? containerName = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        if (builder.ApplicationBuilder.Resources.OfType<KafkaSchemaRegistryResource>().SingleOrDefault() is { } existingKafkaSchemaRegistryResource)
+        {
+            var builderForExistingResource = builder.ApplicationBuilder.CreateResourceBuilder(existingKafkaSchemaRegistryResource);
+            configureContainer?.Invoke(builderForExistingResource);
+            return builder;
+        }
+
+        containerName ??= "kafka-schema-registry";
+        var kafkaSchemaRegistry = new KafkaSchemaRegistryResource(containerName);
+        var kafkaSchemaRegistryBuilder = builder.ApplicationBuilder.AddResource(kafkaSchemaRegistry)
+            .WithImage(KafkaContainerImageTags.KafkaSchemaRegistryImage, KafkaContainerImageTags.KafkaSchemaRegistryTag)
+            .WithImageRegistry(KafkaContainerImageTags.Registry)
+            .WithHttpEndpoint(8081, targetPort: KafkaSchemaRegistryPort, name: "primary")
+            .WithEnvironment(context =>
+            {
+                context.EnvironmentVariables["SCHEMA_REGISTRY_HOST_NAME"] = "localhost";
+                context.EnvironmentVariables["SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS"] = "kafka:9093";
+                context.EnvironmentVariables["SCHEMA_REGISTRY_LISTENERS"] = $"http://0.0.0.0:{KafkaSchemaRegistryPort}"; })
+            .WithHttpHealthCheck("/subjects", 200, "primary")
+            .WaitFor(builder)
+            .ExcludeFromManifest();
+
+        configureContainer?.Invoke(kafkaSchemaRegistryBuilder);
+
+        return builder;
+    }
+
+    /// <summary>
     /// Configures the host port that the KafkaUI resource is exposed on instead of using randomly assigned port.
     /// </summary>
     /// <param name="builder">The resource builder for KafkaUI.</param>
@@ -163,6 +206,26 @@ public static class KafkaBuilderExtensions
         return builder.WithEndpoint("http", endpoint =>
         {
             endpoint.Port = port;
+        });
+    }
+
+    /// <summary>
+    /// Configures the host port that the Kakfa Schema Registry resource is exposed on instead of using randomly assigned port.
+    /// </summary>
+    /// <param name="builder">The resource builder for Kakfa Schema Registry.</param>
+    /// <param name="port">The port to bind on the host. If <see langword="null"/> is used random port will be assigned.</param>
+    /// <returns>The resource builder for Kakfa Schema Registry.</returns>
+    public static IResourceBuilder<KafkaSchemaRegistryResource> WithHostPort(this IResourceBuilder<KafkaSchemaRegistryResource> builder, int? port)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithEndpoint("primary", endpoint =>
+        {
+            endpoint.Port = port;
+            if (endpoint.TargetPort == 0)
+            {
+                endpoint.TargetPort = KafkaSchemaRegistryPort;
+            }
         });
     }
 

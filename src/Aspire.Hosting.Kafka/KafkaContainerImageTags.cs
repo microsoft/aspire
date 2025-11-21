@@ -19,5 +19,10 @@ internal static class KafkaContainerImageTags
 
     /// <remarks>v1.5.0</remarks>
     public const string KafkaUiTag = "v1.5.0";
-}
 
+    /// <remarks>confluentinc/cp-schema-registry</remarks>
+    public const string KafkaSchemaRegistryImage = "confluentinc/cp-schema-registry";
+
+    /// <remarks>8.1.0</remarks>
+    public const string KafkaSchemaRegistryTag = "8.1.0";
+}
