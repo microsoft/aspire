@@ -18,7 +18,19 @@ builder.AddProject<Projects.Consumer>("consumer")
     .WithReference(kafka).WaitFor(kafka)
     .WithArgs(kafka.Resource.Name);
 
-builder.AddKafka("kafka2").WithKafkaUI();
+var kafka2 = builder.AddKafka("kafka2").WithKafkaUI();
+var schemaRegistry2 =
+    kafka2.WithKafkaSchemaRegistry(registry => registry.WithHostPort(7001),"schema-registry-2");
+
+builder.AddProject<Projects.Producer>("producer-2")
+    .WithReference(schemaRegistry2)
+    .WithReference(kafka2).WaitFor(kafka2)
+    .WithArgs(kafka.Resource.Name);
+
+builder.AddProject<Projects.Consumer>("consumer-2")
+    .WithReference(kafka2).WaitFor(kafka2)
+    .WithArgs(kafka.Resource.Name);
+
 // This project is only added in playground projects to support development/debugging
 // of the dashboard. It is not required in end developer code. Comment out this code
 // or build with `/p:SkipDashboardReference=true`, to test end developer

@@ -164,15 +164,8 @@ public static class KafkaBuilderExtensions
     public static IResourceBuilder<KafkaSchemaRegistryResource> WithKafkaSchemaRegistry(this IResourceBuilder<KafkaServerResource> builder, Action<IResourceBuilder<KafkaSchemaRegistryResource>>? configureContainer = null, string? containerName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
-
-        if (builder.ApplicationBuilder.Resources.OfType<KafkaSchemaRegistryResource>().SingleOrDefault() is { } existingKafkaSchemaRegistryResource)
-        {
-            var builderForExistingResource = builder.ApplicationBuilder.CreateResourceBuilder(existingKafkaSchemaRegistryResource);
-            configureContainer?.Invoke(builderForExistingResource);
-            return builderForExistingResource;
-        }
-
         containerName ??= "kafka-schema-registry";
+
         var kafkaSchemaRegistry = new KafkaSchemaRegistryResource(containerName);
         var kafkaSchemaRegistryBuilder = builder.ApplicationBuilder.AddResource(kafkaSchemaRegistry)
             .WithImage(KafkaContainerImageTags.KafkaSchemaRegistryImage, KafkaContainerImageTags.KafkaSchemaRegistryTag)
