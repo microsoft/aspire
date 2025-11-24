@@ -24,6 +24,5 @@ public sealed class KafkaSchemaRegistryResource(string name) : ContainerResource
     /// <summary>
     /// Gets the connection string expression for the Kafka schema registry.
     /// </summary>
-    public ReferenceExpression ConnectionStringExpression =>
-        ReferenceExpression.Create($"http://{PrimaryEndpoint.Property(EndpointProperty.HostAndPort)}");
+    public ReferenceExpression ConnectionStringExpression => ReferenceExpression.Create($"{PrimaryEndpoint}");
 }

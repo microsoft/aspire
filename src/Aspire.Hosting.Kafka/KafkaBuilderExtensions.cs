@@ -161,7 +161,7 @@ public static class KafkaBuilderExtensions
     /// <param name="configureContainer">Configuration callback for KafkaUI container resource.</param>
     /// <param name="containerName">The name of the container (Optional).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KafkaSchemaRegistryResource}"/>.</returns>
-    public static IResourceBuilder<KafkaSchemaRegistryResource> WithKafkaSchemaRegistry(this IResourceBuilder<KafkaServerResource> builder, string? containerName = null, Action<IResourceBuilder<KafkaSchemaRegistryResource>>? configureContainer = null)
+    public static IResourceBuilder<KafkaSchemaRegistryResource> WithKafkaSchemaRegistry(this IResourceBuilder<KafkaServerResource> builder, Action<IResourceBuilder<KafkaSchemaRegistryResource>>? configureContainer = null, string? containerName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
@@ -181,7 +181,7 @@ public static class KafkaBuilderExtensions
             .WithEnvironment(context =>
             {
                 context.EnvironmentVariables["SCHEMA_REGISTRY_HOST_NAME"] = "localhost";
-                context.EnvironmentVariables["SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS"] = "kafka:9093";
+                context.EnvironmentVariables["SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS"] = builder.Resource.InternalEndpoint.Property(EndpointProperty.HostAndPort);
                 context.EnvironmentVariables["SCHEMA_REGISTRY_LISTENERS"] = $"http://0.0.0.0:{KafkaSchemaRegistryPort}"; })
             .WithHttpHealthCheck("/subjects", 200, "primary")
             .WaitFor(builder)

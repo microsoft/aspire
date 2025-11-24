@@ -7,7 +7,7 @@ var kafka = builder.AddKafka("kafka")
     .WithKafkaUI(kafkaUi => kafkaUi.WithHostPort(8080));
 
 var schemaRegistry =
-    kafka.WithKafkaSchemaRegistry("schema-registry", registry => registry.WithHostPort(7000));
+    kafka.WithKafkaSchemaRegistry(registry => registry.WithHostPort(7000),"schema-registry");
 
 builder.AddProject<Projects.Producer>("producer")
     .WithReference(schemaRegistry)
