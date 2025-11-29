@@ -6,6 +6,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <NoDefaultLaunchSettingsFile>true</NoDefaultLaunchSettingsFile>
     <StaticWebAssetProjectMode>Default</StaticWebAssetProjectMode>
+    <!-- Enable WebAssembly diagnostics for OpenTelemetry metrics -->
+    <!-- See: https://learn.microsoft.com/aspnet/core/blazor/performance/webassembly-event-pipe-diagnostics -->
+    <MetricsSupport>true</MetricsSupport>
+    <EventSourceSupport>true</EventSourceSupport>
   </PropertyGroup>
 
   <ItemGroup>

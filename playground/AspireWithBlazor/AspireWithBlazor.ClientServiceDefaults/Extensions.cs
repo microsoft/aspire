@@ -3,7 +3,6 @@ using AspireWithBlazor.ClientServiceDefaults.Telemetry;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using OpenTelemetry.Exporter;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -131,18 +130,15 @@ public static class BlazorClientExtensions
                     });
                 });
 
-            // Configure metrics with simple periodic exporting (simpler for WASM)
-            builder.Services.AddOpenTelemetry()
-                .WithMetrics(metrics =>
-                {
-                    metrics.AddOtlpExporter((exporterOptions, readerOptions) =>
-                    {
-                        exporterOptions.Endpoint = new Uri(endpoint, "v1/metrics");
-                        exporterOptions.Protocol = OtlpExportProtocol.HttpProtobuf;
-                        // Use a longer interval to reduce background work
-                        readerOptions.PeriodicExportingMetricReaderOptions.ExportIntervalMilliseconds = 10000;
-                    });
-                });
+            // Configure metrics with WebAssembly-compatible exporter
+            // The standard OpenTelemetry MeterProvider doesn't work in WebAssembly
+            // because it requires threading primitives not available in the browser.
+            // Our custom exporter uses MeterListener (a .NET runtime feature) instead,
+            // which works in the single-threaded WebAssembly environment.
+            var metricExporter = new WebAssemblyOtlpMetricExporter(
+                new Uri(endpoint, "v1/metrics"),
+                serviceName);
+            builder.Services.AddSingleton(metricExporter);
 
             // Configure logging with WebAssembly-compatible exporter
             // The custom exporter uses truly async HTTP calls without blocking,
