@@ -1,7 +1,16 @@
 @page "/"
+@inject ILogger<Home> Logger
 
 <PageTitle>Home</PageTitle>
 
 <h1>Hello, world!</h1>
 
 Welcome to your new app.
+
+@code {
+    protected override void OnInitialized()
+    {
+        Logger.LogInformation("Home page loaded at {Time}", DateTime.UtcNow);
+        Logger.LogDebug("Blazor WebAssembly client is running");
+    }
+}
