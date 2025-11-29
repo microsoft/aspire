@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Microsoft.Extensions.Hosting;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
 
 Console.WriteLine("[Aspire.Client] Starting WebAssembly client...");
 
@@ -79,7 +81,33 @@ Console.WriteLine("[Aspire.Client] weatherapi HttpClient added");
 
 Console.WriteLine("[Aspire.Client] Building host...");
 var host = builder.Build();
-Console.WriteLine("[Aspire.Client] Host built, running...");
+Console.WriteLine("[Aspire.Client] Host built");
+
+// WebAssembly does not support IHostedService, so TelemetryHostedService is never started.
+// We must force initialization of MeterProvider and TracerProvider manually.
+// See: https://github.com/dotnet/aspire/issues/2816
+Console.WriteLine("[Aspire.Client] Initializing OpenTelemetry providers...");
+try
+{
+    var meterProvider = host.Services.GetService<MeterProvider>();
+    Console.WriteLine($"[Aspire.Client] MeterProvider initialized: {meterProvider is not null}");
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"[Aspire.Client] MeterProvider initialization failed: {ex.Message}");
+}
+
+try
+{
+    var tracerProvider = host.Services.GetService<TracerProvider>();
+    Console.WriteLine($"[Aspire.Client] TracerProvider initialized: {tracerProvider is not null}");
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"[Aspire.Client] TracerProvider initialization failed: {ex.Message}");
+}
+
+Console.WriteLine("[Aspire.Client] Running host...");
 
 await host.RunAsync();
 Console.WriteLine("[Aspire.Client] Host stopped");

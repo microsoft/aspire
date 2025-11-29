@@ -1,7 +1,8 @@
+using System.Diagnostics;
+using AspireWithBlazor.ClientServiceDefaults.Telemetry;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using OpenTelemetry;
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -77,15 +78,69 @@ public static class BlazorClientExtensions
     private static WebAssemblyHostBuilder AddBlazorClientOpenTelemetryExporters(this WebAssemblyHostBuilder builder)
     {
         var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];
+        var serviceName = builder.Configuration["OTEL_SERVICE_NAME"] 
+            ?? builder.HostEnvironment.Environment;
+
+        Console.WriteLine($"[BlazorOTel] OTEL_EXPORTER_OTLP_ENDPOINT from config: '{otlpEndpoint ?? "(null)"}'");
+        Console.WriteLine($"[BlazorOTel] Service name: '{serviceName}'");
 
         if (!string.IsNullOrWhiteSpace(otlpEndpoint))
         {
-            // WebAssembly does not support gRPC, so we must use HTTP/Protobuf
-            // The OTLP exporter will append signal-specific paths: /v1/traces, /v1/metrics, /v1/logs
-            builder.Services.AddOpenTelemetry()
-                .UseOtlpExporter(OtlpExportProtocol.HttpProtobuf, new Uri(otlpEndpoint));
+            // The endpoint may be relative (/_otlp) or absolute (https://localhost:21187)
+            // For relative URLs, construct the full URL using the app's base address
+            Uri endpoint;
+            if (otlpEndpoint.StartsWith("/"))
+            {
+                // Relative URL - combine with app's base address
+                var baseUri = new Uri(builder.HostEnvironment.BaseAddress);
+                endpoint = new Uri(baseUri, otlpEndpoint);
+                Console.WriteLine($"[BlazorOTel] Using proxy endpoint: {endpoint}");
+            }
+            else
+            {
+                endpoint = new Uri(otlpEndpoint);
+                Console.WriteLine($"[BlazorOTel] Using direct dashboard endpoint: {endpoint}");
+            }
 
-            Console.WriteLine($"[BlazorOTel] Configured OTLP exporter with HttpProtobuf to: {otlpEndpoint}");
+            // Configure tracing with WebAssembly-compatible exporter
+            // The custom exporter uses truly async HTTP calls without blocking,
+            // which is required because WebAssembly is single-threaded and the
+            // standard OtlpTraceExporter uses blocking patterns that cause deadlock.
+            builder.Services.AddOpenTelemetry()
+                .WithTracing(tracing =>
+                {
+                    tracing.AddProcessor(sp =>
+                    {
+                        var exporter = new WebAssemblyOtlpTraceExporter(
+                            new Uri(endpoint, "v1/traces"),
+                            serviceName);
+
+                        return new TaskBasedBatchExportProcessor<Activity>(
+                            exporter,
+                            maxQueueSize: 2048,
+                            scheduledDelayMilliseconds: 5000,
+                            exporterTimeoutMilliseconds: 30000,
+                            maxExportBatchSize: 512);
+                    });
+                });
+
+            // Configure metrics with simple periodic exporting (simpler for WASM)
+            builder.Services.AddOpenTelemetry()
+                .WithMetrics(metrics =>
+                {
+                    metrics.AddOtlpExporter((exporterOptions, readerOptions) =>
+                    {
+                        exporterOptions.Endpoint = new Uri(endpoint, "v1/metrics");
+                        exporterOptions.Protocol = OtlpExportProtocol.HttpProtobuf;
+                        // Use a longer interval to reduce background work
+                        readerOptions.PeriodicExportingMetricReaderOptions.ExportIntervalMilliseconds = 10000;
+                    });
+                });
+
+            // Note: Logging export is deferred as OpenTelemetry logging uses threads that aren't supported in WASM
+            // Logs can be viewed in browser console
+
+            Console.WriteLine($"[BlazorOTel] Configured OTLP exporter with HttpProtobuf to: {endpoint}");
         }
         else
         {
