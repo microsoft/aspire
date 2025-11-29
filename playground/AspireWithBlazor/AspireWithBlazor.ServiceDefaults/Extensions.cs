@@ -158,15 +158,26 @@ public static class Extensions
             var config = new BlazorClientConfiguration();
 
             // Add OTEL configuration if available
-            // Flow the OTLP endpoint to the WebAssembly client for telemetry export
+            // Flow the OTLP HTTP endpoint to WebAssembly - dashboard CORS is configured to allow browser requests
+            // The HTTP endpoint is separate from the gRPC endpoint and supports Protobuf over HTTP
+            var otelHttpEndpoint = configuration["ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"];
             var otelEndpoint = configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];
-            if (!string.IsNullOrWhiteSpace(otelEndpoint))
+            if (!string.IsNullOrWhiteSpace(otelHttpEndpoint))
             {
-                config.OpenTelemetry["OTEL_EXPORTER_OTLP_ENDPOINT"] = otelEndpoint;
-                // Also add to WebAssembly environment so it's available via IConfiguration
-                config.WebAssembly.Environment["OTEL_EXPORTER_OTLP_ENDPOINT"] = otelEndpoint;
+                // Use the dedicated OTLP HTTP endpoint for WebAssembly
+                config.OpenTelemetry["OTEL_EXPORTER_OTLP_ENDPOINT"] = otelEndpoint ?? otelHttpEndpoint;
+                config.WebAssembly.Environment["OTEL_EXPORTER_OTLP_ENDPOINT"] = otelHttpEndpoint;
                 // Set protocol to HttpProtobuf for WebAssembly (gRPC not supported in browser)
                 config.WebAssembly.Environment["OTEL_EXPORTER_OTLP_PROTOCOL"] = "http/protobuf";
+                Console.WriteLine($"[ServiceDefaults] Configured OTLP HTTP endpoint for WebAssembly: {otelHttpEndpoint}");
+            }
+            else if (!string.IsNullOrWhiteSpace(otelEndpoint))
+            {
+                // Fallback to main OTLP endpoint if HTTP-specific one not configured
+                config.OpenTelemetry["OTEL_EXPORTER_OTLP_ENDPOINT"] = otelEndpoint;
+                config.WebAssembly.Environment["OTEL_EXPORTER_OTLP_ENDPOINT"] = otelEndpoint;
+                config.WebAssembly.Environment["OTEL_EXPORTER_OTLP_PROTOCOL"] = "http/protobuf";
+                Console.WriteLine($"[ServiceDefaults] Configured OTLP endpoint for WebAssembly (fallback): {otelEndpoint}");
             }
 
             // Flow other OTEL configuration
