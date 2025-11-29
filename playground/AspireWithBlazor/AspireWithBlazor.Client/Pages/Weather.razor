@@ -1,6 +1,7 @@
 @page "/weather"
 @attribute [StreamRendering]
 @inject IHttpClientFactory HttpClientFactory
+@inject ILogger<Weather> Logger
 
 <PageTitle>Weather</PageTitle>
 
@@ -42,8 +43,30 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        var client = HttpClientFactory.CreateClient("weatherapi");
-        forecasts = await client.GetFromJsonAsync<WeatherForecast[]>("weatherforecast");
+        Logger.LogInformation("Weather page initialized - starting to fetch weather data");
+        
+        try
+        {
+            var client = HttpClientFactory.CreateClient("weatherapi");
+            Logger.LogDebug("Created HTTP client for weather API");
+            
+            forecasts = await client.GetFromJsonAsync<WeatherForecast[]>("weatherforecast");
+            
+            Logger.LogInformation("Successfully loaded {ForecastCount} weather forecasts", forecasts?.Length ?? 0);
+            
+            if (forecasts != null && forecasts.Length > 0)
+            {
+                var hottest = forecasts.MaxBy(f => f.TemperatureC);
+                var coldest = forecasts.MinBy(f => f.TemperatureC);
+                Logger.LogInformation("Temperature range: {Coldest}°C to {Hottest}°C", 
+                    coldest?.TemperatureC, hottest?.TemperatureC);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load weather forecasts");
+            throw;
+        }
     }
 
     private class WeatherForecast

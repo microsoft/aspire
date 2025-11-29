@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OpenTelemetry.Exporter;
+using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -62,12 +63,18 @@ public static class BlazorClientExtensions
             .WithMetrics(metrics =>
             {
                 metrics.AddHttpClientInstrumentation()
-                    .AddRuntimeInstrumentation();
+                    .AddRuntimeInstrumentation()
+                    // Add Blazor component metrics
+                    // See: https://learn.microsoft.com/aspnet/core/blazor/performance#metrics-and-tracing
+                    .AddMeter("Microsoft.AspNetCore.Components")
+                    .AddMeter("Microsoft.AspNetCore.Components.Lifecycle");
             })
             .WithTracing(tracing =>
             {
                 tracing.AddSource(serviceName)
-                    .AddHttpClientInstrumentation();
+                    .AddHttpClientInstrumentation()
+                    // Add Blazor component tracing
+                    .AddSource("Microsoft.AspNetCore.Components");
             });
 
         builder.AddBlazorClientOpenTelemetryExporters();
@@ -137,8 +144,27 @@ public static class BlazorClientExtensions
                     });
                 });
 
-            // Note: Logging export is deferred as OpenTelemetry logging uses threads that aren't supported in WASM
-            // Logs can be viewed in browser console
+            // Configure logging with WebAssembly-compatible exporter
+            // The custom exporter uses truly async HTTP calls without blocking,
+            // which is required because WebAssembly is single-threaded and the
+            // standard OtlpLogExporter uses blocking patterns that cause deadlock.
+            builder.Services.AddOpenTelemetry()
+                .WithLogging(logging =>
+                {
+                    logging.AddProcessor(sp =>
+                    {
+                        var exporter = new WebAssemblyOtlpLogExporter(
+                            new Uri(endpoint, "v1/logs"),
+                            serviceName);
+
+                        return new TaskBasedBatchExportProcessor<LogRecord>(
+                            exporter,
+                            maxQueueSize: 2048,
+                            scheduledDelayMilliseconds: 5000,
+                            exporterTimeoutMilliseconds: 30000,
+                            maxExportBatchSize: 512);
+                    });
+                });
 
             Console.WriteLine($"[BlazorOTel] Configured OTLP exporter with HttpProtobuf to: {endpoint}");
         }
