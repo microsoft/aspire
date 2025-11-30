@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using AspireWithBlazor.ClientServiceDefaults.Telemetry;
+using Microsoft.AspNetCore.Components.Infrastructure;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -48,8 +49,10 @@ public static class BlazorClientExtensions
     public static WebAssemblyHostBuilder ConfigureBlazorClientOpenTelemetry(this WebAssemblyHostBuilder builder)
     {
         // Get service name from configuration or fall back to environment name
-        var serviceName = builder.Configuration["OTEL_SERVICE_NAME"] 
+        // Append "-client" suffix to distinguish WebAssembly client telemetry from the server-side host
+        var baseServiceName = builder.Configuration["OTEL_SERVICE_NAME"] 
             ?? builder.HostEnvironment.Environment;
+        var serviceName = $"{baseServiceName}-client";
 
         builder.Logging.AddOpenTelemetry(logging =>
         {
@@ -84,8 +87,10 @@ public static class BlazorClientExtensions
     private static WebAssemblyHostBuilder AddBlazorClientOpenTelemetryExporters(this WebAssemblyHostBuilder builder)
     {
         var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];
-        var serviceName = builder.Configuration["OTEL_SERVICE_NAME"] 
+        // Use the same "-client" suffix for the service name in exporters
+        var baseServiceName = builder.Configuration["OTEL_SERVICE_NAME"] 
             ?? builder.HostEnvironment.Environment;
+        var serviceName = $"{baseServiceName}-client";
 
         Console.WriteLine($"[BlazorOTel] OTEL_EXPORTER_OTLP_ENDPOINT from config: '{otlpEndpoint ?? "(null)"}'");
         Console.WriteLine($"[BlazorOTel] Service name: '{serviceName}'");
