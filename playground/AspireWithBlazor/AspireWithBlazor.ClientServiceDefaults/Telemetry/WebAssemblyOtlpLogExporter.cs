@@ -24,29 +24,29 @@ public sealed class WebAssemblyOtlpLogExporter : BaseExporter<LogRecord>
     private readonly Uri _endpoint;
     private readonly HttpClient _httpClient;
     private readonly string _serviceName;
+    private readonly Dictionary<string, string>? _headers;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="WebAssemblyOtlpLogExporter"/> class.
     /// </summary>
     /// <param name="endpoint">The OTLP HTTP endpoint (e.g., https://localhost:21188/v1/logs).</param>
     /// <param name="serviceName">The service name to use in resource attributes.</param>
+    /// <param name="headers">Optional headers to send with each request (e.g., x-otlp-api-key for authentication).</param>
     /// <param name="httpClient">Optional HTTP client to use. If null, a new one is created.</param>
-    public WebAssemblyOtlpLogExporter(Uri endpoint, string serviceName, HttpClient? httpClient = null)
+    public WebAssemblyOtlpLogExporter(Uri endpoint, string serviceName, Dictionary<string, string>? headers = null, HttpClient? httpClient = null)
     {
         _endpoint = endpoint ?? throw new ArgumentNullException(nameof(endpoint));
         _serviceName = serviceName ?? throw new ArgumentNullException(nameof(serviceName));
+        _headers = headers;
         _httpClient = httpClient ?? new HttpClient
         {
             Timeout = TimeSpan.FromSeconds(30)
         };
-        Console.WriteLine($"[WebAssemblyOtlpLogExporter] Created exporter for endpoint: {_endpoint}");
     }
 
     /// <inheritdoc/>
     public override ExportResult Export(in Batch<LogRecord> batch)
     {
-        Console.WriteLine($"[WebAssemblyOtlpLogExporter] Export called with {batch.Count} log records");
-
         // Convert batch to our simplified data format - we need to capture the data
         // before returning because the LogRecord objects will be pooled/recycled
         var logRecords = new List<LogRecordData>();
@@ -58,29 +58,23 @@ public sealed class WebAssemblyOtlpLogExporter : BaseExporter<LogRecord>
 
         if (logRecords.Count == 0)
         {
-            Console.WriteLine($"[WebAssemblyOtlpLogExporter] No log records to export");
             return ExportResult.Success;
         }
-
-        Console.WriteLine($"[WebAssemblyOtlpLogExporter] Serializing {logRecords.Count} log records to protobuf");
 
         try
         {
             // Serialize to OTLP protobuf format
             var protobufPayload = OtlpLogSerializer.SerializeLogsData(logRecords, _serviceName);
-            Console.WriteLine($"[WebAssemblyOtlpLogExporter] Serialized payload size: {protobufPayload.Length} bytes");
 
             // Fire-and-forget the HTTP call - this is the key difference from the standard exporter
             // We don't block on the result, which avoids the WebAssembly single-thread deadlock
             SendAsync(protobufPayload);
 
-            Console.WriteLine($"[WebAssemblyOtlpLogExporter] Export request sent (fire-and-forget)");
             return ExportResult.Success;
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[WebAssemblyOtlpLogExporter] Export failed: {ex.Message}");
-            Console.WriteLine($"[WebAssemblyOtlpLogExporter] Exception: {ex}");
             return ExportResult.Failure;
         }
     }
@@ -124,17 +118,22 @@ public sealed class WebAssemblyOtlpLogExporter : BaseExporter<LogRecord>
     {
         try
         {
-            using var content = new ByteArrayContent(payload);
-            content.Headers.ContentType = s_protobufMediaType;
+            using var request = new HttpRequestMessage(HttpMethod.Post, _endpoint);
+            request.Content = new ByteArrayContent(payload);
+            request.Content.Headers.ContentType = s_protobufMediaType;
 
-            Console.WriteLine($"[WebAssemblyOtlpLogExporter] Sending HTTP POST to {_endpoint} with Content-Type: application/x-protobuf");
-            var response = await _httpClient.PostAsync(_endpoint, content).ConfigureAwait(false);
-
-            if (response.IsSuccessStatusCode)
+            // Add custom headers (e.g., x-otlp-api-key for authentication)
+            if (_headers is not null)
             {
-                Console.WriteLine($"[WebAssemblyOtlpLogExporter] HTTP POST succeeded: {response.StatusCode}");
+                foreach (var header in _headers)
+                {
+                    request.Headers.TryAddWithoutValidation(header.Key, header.Value);
+                }
             }
-            else
+
+            var response = await _httpClient.SendAsync(request).ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
             {
                 var responseBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 Console.WriteLine($"[WebAssemblyOtlpLogExporter] HTTP POST failed: {response.StatusCode} - {responseBody}");
@@ -149,7 +148,6 @@ public sealed class WebAssemblyOtlpLogExporter : BaseExporter<LogRecord>
     /// <inheritdoc/>
     protected override bool OnShutdown(int timeoutMilliseconds)
     {
-        Console.WriteLine($"[WebAssemblyOtlpLogExporter] Shutdown called");
         return true;
     }
 }

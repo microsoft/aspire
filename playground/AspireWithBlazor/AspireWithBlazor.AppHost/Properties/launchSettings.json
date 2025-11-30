@@ -11,8 +11,7 @@
         "DOTNET_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21187",
         "DOTNET_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22185",
         "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "https://localhost:21188",
-        "ASPIRE_DASHBOARD_CORS_ALLOWED_ORIGINS": "*",
-        "ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS": "true"
+        "ASPIRE_DASHBOARD_CORS_ALLOWED_ORIGINS": "*"
       }
     },
     "http": {

@@ -25,6 +25,7 @@ public sealed class WebAssemblyOtlpMetricExporter : IDisposable
     private readonly Uri _endpoint;
     private readonly HttpClient _httpClient;
     private readonly string _serviceName;
+    private readonly Dictionary<string, string>? _headers;
     private readonly MeterListener _meterListener;
     private readonly List<OtlpMetricSerializer.CapturedMetric> _capturedMetrics = new();
     private readonly object _lock = new();
@@ -37,18 +38,21 @@ public sealed class WebAssemblyOtlpMetricExporter : IDisposable
     /// </summary>
     /// <param name="endpoint">The OTLP HTTP endpoint (e.g., https://localhost:21188/v1/metrics).</param>
     /// <param name="serviceName">The service name to use in resource attributes.</param>
+    /// <param name="headers">Optional headers to send with each request (e.g., x-otlp-api-key for authentication).</param>
     /// <param name="meterNames">The meter names to listen for. If null, listens to all meters.</param>
     /// <param name="exportIntervalMs">The export interval in milliseconds. Default is 10000 (10 seconds).</param>
     /// <param name="httpClient">Optional HTTP client to use. If null, a new one is created.</param>
     public WebAssemblyOtlpMetricExporter(
         Uri endpoint,
         string serviceName,
+        Dictionary<string, string>? headers = null,
         IEnumerable<string>? meterNames = null,
         int exportIntervalMs = 10000,
         HttpClient? httpClient = null)
     {
         _endpoint = endpoint ?? throw new ArgumentNullException(nameof(endpoint));
         _serviceName = serviceName ?? throw new ArgumentNullException(nameof(serviceName));
+        _headers = headers;
         _startTime = DateTimeOffset.UtcNow;
         _httpClient = httpClient ?? new HttpClient
         {
@@ -56,12 +60,6 @@ public sealed class WebAssemblyOtlpMetricExporter : IDisposable
         };
 
         var meterNamesSet = meterNames?.ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        Console.WriteLine($"[WebAssemblyOtlpMetricExporter] Created exporter for endpoint: {_endpoint}");
-        if (meterNamesSet is not null)
-        {
-            Console.WriteLine($"[WebAssemblyOtlpMetricExporter] Listening to meters: {string.Join(", ", meterNamesSet)}");
-        }
 
         // Create meter listener
         _meterListener = new MeterListener();
@@ -71,7 +69,6 @@ public sealed class WebAssemblyOtlpMetricExporter : IDisposable
             // Filter by meter name if specified
             if (meterNamesSet is null || meterNamesSet.Contains(instrument.Meter.Name))
             {
-                Console.WriteLine($"[WebAssemblyOtlpMetricExporter] Subscribing to instrument: {instrument.Meter.Name}/{instrument.Name}");
                 listener.EnableMeasurementEvents(instrument);
             }
         };
@@ -93,8 +90,6 @@ public sealed class WebAssemblyOtlpMetricExporter : IDisposable
             state: null,
             dueTime: exportIntervalMs,
             period: exportIntervalMs);
-
-        Console.WriteLine($"[WebAssemblyOtlpMetricExporter] Started with export interval: {exportIntervalMs}ms");
     }
 
     private void OnMeasurement<T>(Instrument instrument, T measurement, ReadOnlySpan<KeyValuePair<string, object?>> tags, object? state)
@@ -153,12 +148,9 @@ public sealed class WebAssemblyOtlpMetricExporter : IDisposable
             _capturedMetrics.Clear();
         }
 
-        Console.WriteLine($"[WebAssemblyOtlpMetricExporter] Exporting {metricsToExport.Count} metrics");
-
         try
         {
             var payload = OtlpMetricSerializer.SerializeMetricData(metricsToExport, _serviceName);
-            Console.WriteLine($"[WebAssemblyOtlpMetricExporter] Serialized payload size: {payload.Length} bytes");
 
             // Fire-and-forget the HTTP call
             SendAsync(payload);
@@ -177,17 +169,22 @@ public sealed class WebAssemblyOtlpMetricExporter : IDisposable
     {
         try
         {
-            using var content = new ByteArrayContent(payload);
-            content.Headers.ContentType = s_protobufMediaType;
+            using var request = new HttpRequestMessage(HttpMethod.Post, _endpoint);
+            request.Content = new ByteArrayContent(payload);
+            request.Content.Headers.ContentType = s_protobufMediaType;
 
-            Console.WriteLine($"[WebAssemblyOtlpMetricExporter] Sending HTTP POST to {_endpoint}");
-            var response = await _httpClient.PostAsync(_endpoint, content).ConfigureAwait(false);
-
-            if (response.IsSuccessStatusCode)
+            // Add custom headers (e.g., x-otlp-api-key for authentication)
+            if (_headers is not null)
             {
-                Console.WriteLine($"[WebAssemblyOtlpMetricExporter] HTTP POST succeeded: {response.StatusCode}");
+                foreach (var header in _headers)
+                {
+                    request.Headers.TryAddWithoutValidation(header.Key, header.Value);
+                }
             }
-            else
+
+            var response = await _httpClient.SendAsync(request).ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
             {
                 var responseBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 Console.WriteLine($"[WebAssemblyOtlpMetricExporter] HTTP POST failed: {response.StatusCode} - {responseBody}");
@@ -221,7 +218,5 @@ public sealed class WebAssemblyOtlpMetricExporter : IDisposable
 
         // Final flush
         ExportMetrics();
-
-        Console.WriteLine($"[WebAssemblyOtlpMetricExporter] Disposed");
     }
 }
