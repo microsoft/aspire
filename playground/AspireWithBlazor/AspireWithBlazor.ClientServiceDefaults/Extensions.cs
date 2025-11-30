@@ -47,7 +47,7 @@ public static class BlazorClientExtensions
             {
                 metrics.AddHttpClientInstrumentation()
                     .AddRuntimeInstrumentation()
-                    // Add Blazor component metrics
+                    // Add Blazor component metrics (this only works on 10.0 and onwards)
                     // See: https://learn.microsoft.com/aspnet/core/blazor/performance#metrics-and-tracing
                     .AddMeter("Microsoft.AspNetCore.Components")
                     .AddMeter("Microsoft.AspNetCore.Components.Lifecycle");
