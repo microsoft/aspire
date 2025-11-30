@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\AspireWithBlazorStandalone.WeatherApi\AspireWithBlazorStandalone.WeatherApi.csproj" />
+    <!-- WASM project uses Gateway package - it can't run standalone without DevServer -->
     <ProjectReference Include="..\AspireWithBlazorStandalone\AspireWithBlazorStandalone.csproj" />
   </ItemGroup>
 
