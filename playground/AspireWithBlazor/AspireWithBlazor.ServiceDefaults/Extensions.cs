@@ -173,9 +173,8 @@ public static class Extensions
     /// <returns>The configured endpoint route builder.</returns>
     public static IEndpointRouteBuilder MapConfigurationEndpoint(this IEndpointRouteBuilder endpoints, string path, Dictionary<string, string> mappings)
     {
-        endpoints.MapGet(path, (HttpContext context) =>
+        endpoints.MapGet(path, (IConfiguration configuration) =>
         {
-            var configuration = context.RequestServices.GetRequiredService<IConfiguration>();
             var response = new JsonObject();
 
             foreach (var (sourceKey, targetPath) in mappings)
@@ -195,14 +194,11 @@ public static class Extensions
 
                 foreach (var (key, value) in children)
                 {
-                    // Convert configuration key format (":") to environment variable format ("__")
-                    var envKey = key.Replace(":", "__");
-                    target[envKey] = value;
+                    target[key] = value;
                 }
             }
 
-            context.Response.ContentType = "application/json";
-            return context.Response.WriteAsync(response.ToJsonString());
+            return Results.Json(response);
         });
 
         return endpoints;
