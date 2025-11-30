@@ -1,4 +1,4 @@
-using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http;
@@ -23,6 +23,17 @@ public static class Extensions
     private const string HealthEndpointPath = "/health";
     private const string AlivenessEndpointPath = "/alive";
     private const string DefaultConfigurationEndpointPath = "/_blazor/_configuration";
+
+    /// <summary>
+    /// Default configuration mappings from source configuration keys to response JSON paths.
+    /// Keys are configuration section names, values are dot-separated JSON paths in the response.
+    /// </summary>
+    private static readonly Dictionary<string, string> s_defaultConfigurationMappings = new()
+    {
+        ["services"] = "WebAssembly:Environment",
+        ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "WebAssembly:Environment",
+        ["OTEL_EXPORTER_OTLP_HEADERS"] = "WebAssembly:Environment",
+    };
 
     /// <summary>
     /// Adds common .NET Aspire services to the application.
@@ -150,87 +161,70 @@ public static class Extensions
     /// <returns>The configured endpoint route builder.</returns>
     public static IEndpointRouteBuilder MapConfigurationEndpoint(this IEndpointRouteBuilder endpoints, string path)
     {
-        endpoints.MapGet(path, async (HttpContext context) =>
+        return MapConfigurationEndpoint(endpoints, path, s_defaultConfigurationMappings);
+    }
+
+    /// <summary>
+    /// Maps the configuration endpoint that exposes configuration to clients based on the provided mappings.
+    /// </summary>
+    /// <param name="endpoints">The endpoint route builder.</param>
+    /// <param name="path">The path for the configuration endpoint.</param>
+    /// <param name="mappings">Dictionary mapping source configuration keys to response JSON paths (colon-separated).</param>
+    /// <returns>The configured endpoint route builder.</returns>
+    public static IEndpointRouteBuilder MapConfigurationEndpoint(this IEndpointRouteBuilder endpoints, string path, Dictionary<string, string> mappings)
+    {
+        endpoints.MapGet(path, (HttpContext context) =>
         {
             var configuration = context.RequestServices.GetRequiredService<IConfiguration>();
+            var response = new JsonObject();
 
-            var config = new BlazorClientConfiguration();
-
-            // Flow OTLP endpoint for WebAssembly telemetry
-            var otelEndpoint = configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];
-            if (!string.IsNullOrWhiteSpace(otelEndpoint))
+            foreach (var (sourceKey, targetPath) in mappings)
             {
-                config.WebAssembly.Environment["OTEL_EXPORTER_OTLP_ENDPOINT"] = otelEndpoint;
-            }
+                var section = configuration.GetSection(sourceKey);
 
-            // Flow OTLP authentication headers (x-otlp-api-key) for dashboard authentication
-            var otelHeaders = configuration["OTEL_EXPORTER_OTLP_HEADERS"];
-            if (!string.IsNullOrWhiteSpace(otelHeaders))
-            {
-                config.WebAssembly.Environment["OTEL_EXPORTER_OTLP_HEADERS"] = otelHeaders;
-            }
+                // Check if this is a section with children or a single value
+                var children = section.AsEnumerable().Where(kvp => !string.IsNullOrEmpty(kvp.Value)).ToList();
 
-            // Build WebAssembly environment variables from service discovery configuration
-            // Format: services__{servicename}__{scheme}__{index} = url
-            var servicesSection = configuration.GetSection("services");
-            foreach (var service in servicesSection.GetChildren())
-            {
-                foreach (var endpoint in service.GetChildren())
+                if (children.Count == 0)
                 {
-                    var index = 0;
-                    foreach (var url in endpoint.GetChildren())
-                    {
-                        var envKey = $"services__{service.Key}__{endpoint.Key}__{index}";
-                        var envValue = url.Value ?? "";
-                        config.WebAssembly.Environment[envKey] = envValue;
-                        index++;
-                    }
-                    // Handle single value case
-                    if (index == 0 && !string.IsNullOrEmpty(endpoint.Value))
-                    {
-                        var envKey = $"services__{service.Key}__{endpoint.Key}__0";
-                        config.WebAssembly.Environment[envKey] = endpoint.Value;
-                    }
+                    continue;
+                }
+
+                // Get or create the target JsonObject at the specified path
+                var target = GetOrCreatePath(response, targetPath);
+
+                foreach (var (key, value) in children)
+                {
+                    // Convert configuration key format (":") to environment variable format ("__")
+                    var envKey = key.Replace(":", "__");
+                    target[envKey] = value;
                 }
             }
 
             context.Response.ContentType = "application/json";
-            await JsonSerializer.SerializeAsync(context.Response.Body, config, BlazorClientConfigurationContext.Default.BlazorClientConfiguration);
+            return context.Response.WriteAsync(response.ToJsonString());
         });
 
         return endpoints;
     }
-}
-
-/// <summary>
-/// Configuration model exposed to Blazor WebAssembly clients.
-/// </summary>
-public sealed class BlazorClientConfiguration
-{
-    /// <summary>
-    /// Gets or sets the service URL mappings.
-    /// Keys are service names, values are gateway-relative paths.
-    /// </summary>
-    public Dictionary<string, string> Services { get; set; } = [];
 
     /// <summary>
-    /// Gets or sets the WebAssembly-specific configuration including environment variables.
+    /// Gets or creates a nested JsonObject at the specified colon-separated path.
     /// </summary>
-    public WebAssemblyConfiguration WebAssembly { get; set; } = new();
-}
+    private static JsonObject GetOrCreatePath(JsonObject root, string path)
+    {
+        var segments = path.Split(':');
+        var current = root;
 
-/// <summary>
-/// WebAssembly-specific configuration.
-/// </summary>
-public sealed class WebAssemblyConfiguration
-{
-    /// <summary>
-    /// Gets or sets the environment variables to inject into the WebAssembly runtime.
-    /// </summary>
-    public Dictionary<string, string> Environment { get; set; } = [];
-}
+        foreach (var segment in segments)
+        {
+            if (!current.ContainsKey(segment))
+            {
+                current[segment] = new JsonObject();
+            }
+            current = (JsonObject)current[segment]!;
+        }
 
-[System.Text.Json.Serialization.JsonSerializable(typeof(BlazorClientConfiguration))]
-internal sealed partial class BlazorClientConfigurationContext : System.Text.Json.Serialization.JsonSerializerContext
-{
+        return current;
+    }
 }
