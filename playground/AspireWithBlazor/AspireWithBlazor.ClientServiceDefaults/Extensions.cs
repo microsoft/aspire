@@ -16,6 +16,8 @@ namespace Microsoft.Extensions.Hosting;
 /// </summary>
 public static class BlazorClientExtensions
 {
+    private const string ServiceName = "blazorapp-client";
+
     /// <summary>
     /// Adds Aspire service defaults to a Blazor WebAssembly application.
     /// </summary>
@@ -23,7 +25,7 @@ public static class BlazorClientExtensions
     /// <returns>The configured WebAssembly host builder.</returns>
     public static WebAssemblyHostBuilder AddBlazorClientServiceDefaults(this WebAssemblyHostBuilder builder)
     {
-        builder.ConfigureBlazorClientOpenTelemetry();
+        builder.ConfigureBlazorClientOpenTelemetry(ServiceName);
 
         builder.Services.AddServiceDiscovery();
 
@@ -44,14 +46,10 @@ public static class BlazorClientExtensions
     /// Telemetry is sent via HTTP/Protobuf through the gateway.
     /// </summary>
     /// <param name="builder">The WebAssembly host builder.</param>
+    /// <param name="serviceName">The service name for telemetry.</param>
     /// <returns>The configured WebAssembly host builder.</returns>
-    public static WebAssemblyHostBuilder ConfigureBlazorClientOpenTelemetry(this WebAssemblyHostBuilder builder)
+    private static WebAssemblyHostBuilder ConfigureBlazorClientOpenTelemetry(this WebAssemblyHostBuilder builder, string serviceName)
     {
-        // Get service name from configuration or fall back to environment name
-        // Append "-client" suffix to distinguish WebAssembly client telemetry from the server-side host
-        var baseServiceName = builder.Configuration["OTEL_SERVICE_NAME"] 
-            ?? builder.HostEnvironment.Environment;
-        var serviceName = $"{baseServiceName}-client";
 
         builder.Logging.AddOpenTelemetry(logging =>
         {
@@ -78,20 +76,15 @@ public static class BlazorClientExtensions
                     .AddSource("Microsoft.AspNetCore.Components");
             });
 
-        builder.AddBlazorClientOpenTelemetryExporters();
+        builder.AddBlazorClientOpenTelemetryExporters(serviceName);
 
         return builder;
     }
 
-    private static WebAssemblyHostBuilder AddBlazorClientOpenTelemetryExporters(this WebAssemblyHostBuilder builder)
+    private static WebAssemblyHostBuilder AddBlazorClientOpenTelemetryExporters(this WebAssemblyHostBuilder builder, string serviceName)
     {
         var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];
         var otlpHeaders = builder.Configuration["OTEL_EXPORTER_OTLP_HEADERS"];
-
-        // Use the same "-client" suffix for the service name in exporters
-        var baseServiceName = builder.Configuration["OTEL_SERVICE_NAME"] 
-            ?? builder.HostEnvironment.Environment;
-        var serviceName = $"{baseServiceName}-client";
 
         // Parse OTLP headers (format: "key1=value1,key2=value2" or "key1=value1")
         var headers = ParseOtlpHeaders(otlpHeaders);

@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -8,7 +7,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.ServiceDiscovery;
 using OpenTelemetry;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
@@ -24,7 +22,7 @@ public static class Extensions
 {
     private const string HealthEndpointPath = "/health";
     private const string AlivenessEndpointPath = "/alive";
-    private const string ConfigurationEndpointPath = "/_blazor/_configuration";
+    private const string DefaultConfigurationEndpointPath = "/_blazor/_configuration";
 
     /// <summary>
     /// Adds common .NET Aspire services to the application.
@@ -139,7 +137,7 @@ public static class Extensions
         }
 
         // Map the configuration endpoint for WebAssembly clients
-        app.MapConfigurationEndpoint();
+        app.MapConfigurationEndpoint(DefaultConfigurationEndpointPath);
 
         return app;
     }
@@ -148,74 +146,32 @@ public static class Extensions
     /// Maps the configuration endpoint that exposes service discovery and telemetry configuration to WebAssembly clients.
     /// </summary>
     /// <param name="endpoints">The endpoint route builder.</param>
+    /// <param name="path">The path for the configuration endpoint.</param>
     /// <returns>The configured endpoint route builder.</returns>
-    public static IEndpointRouteBuilder MapConfigurationEndpoint(this IEndpointRouteBuilder endpoints)
+    public static IEndpointRouteBuilder MapConfigurationEndpoint(this IEndpointRouteBuilder endpoints, string path)
     {
-        endpoints.MapGet(ConfigurationEndpointPath, async (HttpContext context, IServiceProvider services) =>
+        endpoints.MapGet(path, async (HttpContext context) =>
         {
             var configuration = context.RequestServices.GetRequiredService<IConfiguration>();
-            var serviceEndpointResolver = services.GetService<ServiceEndpointResolver>();
 
             var config = new BlazorClientConfiguration();
 
-            // Add OTEL configuration if available
-            // Flow the OTLP HTTP endpoint to WebAssembly - dashboard CORS is configured to allow browser requests
-            // The HTTP endpoint is separate from the gRPC endpoint and supports Protobuf over HTTP
-            var otelHttpEndpoint = configuration["ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"];
+            // Flow OTLP endpoint for WebAssembly telemetry
             var otelEndpoint = configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];
-            if (!string.IsNullOrWhiteSpace(otelHttpEndpoint))
+            if (!string.IsNullOrWhiteSpace(otelEndpoint))
             {
-                // Use the dedicated OTLP HTTP endpoint for WebAssembly
-                config.OpenTelemetry["OTEL_EXPORTER_OTLP_ENDPOINT"] = otelEndpoint ?? otelHttpEndpoint;
-                config.WebAssembly.Environment["OTEL_EXPORTER_OTLP_ENDPOINT"] = otelHttpEndpoint;
-                // Set protocol to HttpProtobuf for WebAssembly (gRPC not supported in browser)
-                config.WebAssembly.Environment["OTEL_EXPORTER_OTLP_PROTOCOL"] = "http/protobuf";
-            }
-            else if (!string.IsNullOrWhiteSpace(otelEndpoint))
-            {
-                // Fallback to main OTLP endpoint if HTTP-specific one not configured
-                config.OpenTelemetry["OTEL_EXPORTER_OTLP_ENDPOINT"] = otelEndpoint;
                 config.WebAssembly.Environment["OTEL_EXPORTER_OTLP_ENDPOINT"] = otelEndpoint;
-                config.WebAssembly.Environment["OTEL_EXPORTER_OTLP_PROTOCOL"] = "http/protobuf";
             }
 
-            // Flow OTLP authentication headers (x-otlp-api-key) to WebAssembly client
-            // This allows the browser to authenticate with the Aspire Dashboard OTLP endpoint
+            // Flow OTLP authentication headers (x-otlp-api-key) for dashboard authentication
             var otelHeaders = configuration["OTEL_EXPORTER_OTLP_HEADERS"];
             if (!string.IsNullOrWhiteSpace(otelHeaders))
             {
                 config.WebAssembly.Environment["OTEL_EXPORTER_OTLP_HEADERS"] = otelHeaders;
             }
 
-            // Flow other OTEL configuration
-            var otelServiceName = configuration["OTEL_SERVICE_NAME"];
-            if (!string.IsNullOrWhiteSpace(otelServiceName))
-            {
-                config.WebAssembly.Environment["OTEL_SERVICE_NAME"] = otelServiceName;
-            }
-
-            // Set a default service name for the WebAssembly client if not specified
-            if (!config.WebAssembly.Environment.ContainsKey("OTEL_SERVICE_NAME"))
-            {
-                config.WebAssembly.Environment["OTEL_SERVICE_NAME"] = "blazor-webassembly-client";
-            }
-
-            // Build WebAssembly environment variables from service discovery environment variables
+            // Build WebAssembly environment variables from service discovery configuration
             // Format: services__{servicename}__{scheme}__{index} = url
-
-            foreach (DictionaryEntry envVar in Environment.GetEnvironmentVariables())
-            {
-                if (envVar.Key is string key && envVar.Value is string value)
-                {
-                    // Look for service discovery environment variables
-                    if (key.StartsWith("services__", StringComparison.OrdinalIgnoreCase))
-                    {
-                        config.WebAssembly.Environment[key] = value;
-                    }
-                }
-            }
-
-            // Also check configuration for services section (in case it's set via config rather than env vars)
             var servicesSection = configuration.GetSection("services");
             foreach (var service in servicesSection.GetChildren())
             {
@@ -256,11 +212,6 @@ public sealed class BlazorClientConfiguration
     /// Keys are service names, values are gateway-relative paths.
     /// </summary>
     public Dictionary<string, string> Services { get; set; } = [];
-
-    /// <summary>
-    /// Gets or sets the OpenTelemetry configuration.
-    /// </summary>
-    public Dictionary<string, string> OpenTelemetry { get; set; } = [];
 
     /// <summary>
     /// Gets or sets the WebAssembly-specific configuration including environment variables.
