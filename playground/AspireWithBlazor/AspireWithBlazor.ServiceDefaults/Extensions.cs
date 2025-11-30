@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
@@ -152,7 +153,7 @@ public static class Extensions
     {
         endpoints.MapGet(ConfigurationEndpointPath, async (HttpContext context, IServiceProvider services) =>
         {
-            var configuration = context.RequestServices.GetRequiredService<Configuration.IConfiguration>();
+            var configuration = context.RequestServices.GetRequiredService<IConfiguration>();
             var serviceEndpointResolver = services.GetService<ServiceEndpointResolver>();
 
             var config = new BlazorClientConfiguration();
@@ -169,7 +170,6 @@ public static class Extensions
                 config.WebAssembly.Environment["OTEL_EXPORTER_OTLP_ENDPOINT"] = otelHttpEndpoint;
                 // Set protocol to HttpProtobuf for WebAssembly (gRPC not supported in browser)
                 config.WebAssembly.Environment["OTEL_EXPORTER_OTLP_PROTOCOL"] = "http/protobuf";
-                Console.WriteLine($"[ServiceDefaults] Configured OTLP HTTP endpoint for WebAssembly: {otelHttpEndpoint}");
             }
             else if (!string.IsNullOrWhiteSpace(otelEndpoint))
             {
@@ -177,7 +177,14 @@ public static class Extensions
                 config.OpenTelemetry["OTEL_EXPORTER_OTLP_ENDPOINT"] = otelEndpoint;
                 config.WebAssembly.Environment["OTEL_EXPORTER_OTLP_ENDPOINT"] = otelEndpoint;
                 config.WebAssembly.Environment["OTEL_EXPORTER_OTLP_PROTOCOL"] = "http/protobuf";
-                Console.WriteLine($"[ServiceDefaults] Configured OTLP endpoint for WebAssembly (fallback): {otelEndpoint}");
+            }
+
+            // Flow OTLP authentication headers (x-otlp-api-key) to WebAssembly client
+            // This allows the browser to authenticate with the Aspire Dashboard OTLP endpoint
+            var otelHeaders = configuration["OTEL_EXPORTER_OTLP_HEADERS"];
+            if (!string.IsNullOrWhiteSpace(otelHeaders))
+            {
+                config.WebAssembly.Environment["OTEL_EXPORTER_OTLP_HEADERS"] = otelHeaders;
             }
 
             // Flow other OTEL configuration
@@ -195,7 +202,6 @@ public static class Extensions
 
             // Build WebAssembly environment variables from service discovery environment variables
             // Format: services__{servicename}__{scheme}__{index} = url
-            Console.WriteLine("[ServiceDefaults] Building WebAssembly environment variables from service discovery...");
 
             foreach (DictionaryEntry envVar in Environment.GetEnvironmentVariables())
             {
@@ -204,7 +210,6 @@ public static class Extensions
                     // Look for service discovery environment variables
                     if (key.StartsWith("services__", StringComparison.OrdinalIgnoreCase))
                     {
-                        Console.WriteLine($"[ServiceDefaults] Found service env var: {key} = {value}");
                         config.WebAssembly.Environment[key] = value;
                     }
                 }
@@ -214,16 +219,13 @@ public static class Extensions
             var servicesSection = configuration.GetSection("services");
             foreach (var service in servicesSection.GetChildren())
             {
-                Console.WriteLine($"[ServiceDefaults] Found service in config: {service.Key}");
                 foreach (var endpoint in service.GetChildren())
                 {
-                    Console.WriteLine($"[ServiceDefaults]   Endpoint type: {endpoint.Key}");
                     var index = 0;
                     foreach (var url in endpoint.GetChildren())
                     {
                         var envKey = $"services__{service.Key}__{endpoint.Key}__{index}";
                         var envValue = url.Value ?? "";
-                        Console.WriteLine($"[ServiceDefaults]   Setting: {envKey} = {envValue}");
                         config.WebAssembly.Environment[envKey] = envValue;
                         index++;
                     }
@@ -231,16 +233,9 @@ public static class Extensions
                     if (index == 0 && !string.IsNullOrEmpty(endpoint.Value))
                     {
                         var envKey = $"services__{service.Key}__{endpoint.Key}__0";
-                        Console.WriteLine($"[ServiceDefaults]   Setting (single): {envKey} = {endpoint.Value}");
                         config.WebAssembly.Environment[envKey] = endpoint.Value;
                     }
                 }
-            }
-
-            Console.WriteLine($"[ServiceDefaults] Total WebAssembly environment variables: {config.WebAssembly.Environment.Count}");
-            foreach (var kvp in config.WebAssembly.Environment)
-            {
-                Console.WriteLine($"[ServiceDefaults]   {kvp.Key} = {kvp.Value}");
             }
 
             context.Response.ContentType = "application/json";
