@@ -21,9 +21,9 @@ public static class Extensions
 
     private static readonly Dictionary<string, string> s_defaultConfigurationMappings = new()
     {
-        ["services"] = "WebAssembly:Environment",
-        ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "WebAssembly:Environment",
-        ["OTEL_EXPORTER_OTLP_HEADERS"] = "WebAssembly:Environment",
+        ["services"] = "webAssembly:environment",
+        ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "webAssembly:environment",
+        ["OTEL_EXPORTER_OTLP_HEADERS"] = "webAssembly:environment",
     };
 
     public static TBuilder AddServiceDefaults<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
