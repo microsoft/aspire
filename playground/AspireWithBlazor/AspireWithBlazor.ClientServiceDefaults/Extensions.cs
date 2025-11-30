@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using AspireWithBlazor.ClientServiceDefaults.Telemetry;
-using Microsoft.AspNetCore.Components.Infrastructure;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -87,13 +86,15 @@ public static class BlazorClientExtensions
     private static WebAssemblyHostBuilder AddBlazorClientOpenTelemetryExporters(this WebAssemblyHostBuilder builder)
     {
         var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];
+        var otlpHeaders = builder.Configuration["OTEL_EXPORTER_OTLP_HEADERS"];
+
         // Use the same "-client" suffix for the service name in exporters
         var baseServiceName = builder.Configuration["OTEL_SERVICE_NAME"] 
             ?? builder.HostEnvironment.Environment;
         var serviceName = $"{baseServiceName}-client";
 
-        Console.WriteLine($"[BlazorOTel] OTEL_EXPORTER_OTLP_ENDPOINT from config: '{otlpEndpoint ?? "(null)"}'");
-        Console.WriteLine($"[BlazorOTel] Service name: '{serviceName}'");
+        // Parse OTLP headers (format: "key1=value1,key2=value2" or "key1=value1")
+        var headers = ParseOtlpHeaders(otlpHeaders);
 
         if (!string.IsNullOrWhiteSpace(otlpEndpoint))
         {
@@ -105,12 +106,10 @@ public static class BlazorClientExtensions
                 // Relative URL - combine with app's base address
                 var baseUri = new Uri(builder.HostEnvironment.BaseAddress);
                 endpoint = new Uri(baseUri, otlpEndpoint);
-                Console.WriteLine($"[BlazorOTel] Using proxy endpoint: {endpoint}");
             }
             else
             {
                 endpoint = new Uri(otlpEndpoint);
-                Console.WriteLine($"[BlazorOTel] Using direct dashboard endpoint: {endpoint}");
             }
 
             // Configure tracing with WebAssembly-compatible exporter
@@ -124,7 +123,8 @@ public static class BlazorClientExtensions
                     {
                         var exporter = new WebAssemblyOtlpTraceExporter(
                             new Uri(endpoint, "v1/traces"),
-                            serviceName);
+                            serviceName,
+                            headers);
 
                         return new TaskBasedBatchExportProcessor<Activity>(
                             exporter,
@@ -142,7 +142,8 @@ public static class BlazorClientExtensions
             // which works in the single-threaded WebAssembly environment.
             var metricExporter = new WebAssemblyOtlpMetricExporter(
                 new Uri(endpoint, "v1/metrics"),
-                serviceName);
+                serviceName,
+                headers);
             builder.Services.AddSingleton(metricExporter);
 
             // Configure logging with WebAssembly-compatible exporter
@@ -156,7 +157,8 @@ public static class BlazorClientExtensions
                     {
                         var exporter = new WebAssemblyOtlpLogExporter(
                             new Uri(endpoint, "v1/logs"),
-                            serviceName);
+                            serviceName,
+                            headers);
 
                         return new TaskBasedBatchExportProcessor<LogRecord>(
                             exporter,
@@ -166,14 +168,41 @@ public static class BlazorClientExtensions
                             maxExportBatchSize: 512);
                     });
                 });
-
-            Console.WriteLine($"[BlazorOTel] Configured OTLP exporter with HttpProtobuf to: {endpoint}");
-        }
-        else
-        {
-            Console.WriteLine("[BlazorOTel] OTEL_EXPORTER_OTLP_ENDPOINT not configured, telemetry export disabled");
         }
 
         return builder;
+    }
+
+    /// <summary>
+    /// Parses OTLP headers from the standard format "key1=value1,key2=value2".
+    /// </summary>
+    /// <param name="headersString">The headers string in OTLP format.</param>
+    /// <returns>A dictionary of headers, or null if no headers are configured.</returns>
+    private static Dictionary<string, string>? ParseOtlpHeaders(string? headersString)
+    {
+        if (string.IsNullOrWhiteSpace(headersString))
+        {
+            return null;
+        }
+
+        var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        // OTLP headers format: "key1=value1,key2=value2" or just "key1=value1"
+        var pairs = headersString.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        foreach (var pair in pairs)
+        {
+            var separatorIndex = pair.IndexOf('=');
+            if (separatorIndex > 0)
+            {
+                var key = pair.Substring(0, separatorIndex).Trim();
+                var value = pair.Substring(separatorIndex + 1).Trim();
+                if (!string.IsNullOrEmpty(key))
+                {
+                    headers[key] = value;
+                }
+            }
+        }
+
+        return headers.Count > 0 ? headers : null;
     }
 }
