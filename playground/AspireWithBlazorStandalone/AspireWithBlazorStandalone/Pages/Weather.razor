@@ -1,13 +1,17 @@
 @page "/weather"
-@inject HttpClient Http
+@inject IHttpClientFactory HttpClientFactory
 
 <PageTitle>Weather</PageTitle>
 
 <h1>Weather</h1>
 
-<p>This component demonstrates fetching data from the server.</p>
+<p>This component demonstrates fetching data from the WeatherAPI service via Aspire service discovery.</p>
 
-@if (forecasts == null)
+@if (errorMessage != null)
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+else if (forecasts == null)
 {
     <p><em>Loading...</em></p>
 }
@@ -38,10 +42,20 @@ else
 
 @code {
     private WeatherForecast[]? forecasts;
+    private string? errorMessage;
 
     protected override async Task OnInitializedAsync()
     {
-        forecasts = await Http.GetFromJsonAsync<WeatherForecast[]>("sample-data/weather.json");
+        try
+        {
+            var client = HttpClientFactory.CreateClient("weatherapi");
+            // Call the WeatherAPI directly using service discovery
+            forecasts = await client.GetFromJsonAsync<WeatherForecast[]>("weatherforecast");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to fetch weather data: {ex.Message}";
+        }
     }
 
     public class WeatherForecast

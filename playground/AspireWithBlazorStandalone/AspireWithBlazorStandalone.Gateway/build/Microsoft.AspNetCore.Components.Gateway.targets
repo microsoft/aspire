@@ -1,0 +1,44 @@
+<!--
+  Microsoft.AspNetCore.Components.Gateway.targets
+  
+  This file is imported late in the build process.
+  It overrides the run command to launch the Gateway instead of the WASM project directly.
+-->
+<Project>
+
+  <PropertyGroup>
+    <!-- Path to the Gateway project - go up from build folder to the Gateway project root -->
+    <_GatewayProjectPath>$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)..'))</_GatewayProjectPath>
+  </PropertyGroup>
+
+  <!--
+    Override the run command for Blazor WASM projects using the Gateway.
+    When you run "dotnet run" on the WASM project, it will launch the Gateway instead,
+    passing the paths to the WASM project's static assets.
+    
+    This target runs BeforeTargets="ComputeRunArguments" to ensure we override the SDK's
+    default run configuration (WasmAppHost) with our Gateway.
+  -->
+  <Target Name="_SetGatewayRunArguments" BeforeTargets="ComputeRunArguments">
+    <PropertyGroup>
+      <RunCommand>dotnet</RunCommand>
+      <RunArguments>run --project "$(_GatewayProjectPath)" -- --contentroot "$(MSBuildProjectDirectory)" --staticwebassets "$(TargetDir)$(TargetName).staticwebassets.runtime.json" --staticwebassetsendpoints "$(TargetDir)$(TargetName).staticwebassets.endpoints.json"</RunArguments>
+      <RunWorkingDirectory>$(MSBuildProjectDirectory)</RunWorkingDirectory>
+    </PropertyGroup>
+    <Message Importance="high" Text="Gateway: Running via Gateway project at $(_GatewayProjectPath)" />
+    <Message Importance="high" Text="Gateway: Content root: $(MSBuildProjectDirectory)" />
+    <Message Importance="high" Text="Gateway: Static web assets: $(TargetDir)$(TargetName).staticwebassets.runtime.json" />
+  </Target>
+
+  <!--
+    After publish, the static assets are ready to be served by the Gateway.
+  -->
+  <Target Name="PrepareGatewayAssets" 
+          AfterTargets="Publish">
+    
+    <Message Importance="high" Text="Gateway: WASM app published to $(PublishDir)" />
+    <Message Importance="high" Text="Gateway: Static assets ready for Gateway hosting" />
+    
+  </Target>
+
+</Project>
