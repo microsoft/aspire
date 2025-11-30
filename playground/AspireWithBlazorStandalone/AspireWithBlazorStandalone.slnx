@@ -64,6 +64,7 @@
     <Project Path="AspireWithBlazorStandalone.ServiceDefaults/AspireWithBlazorStandalone.ServiceDefaults.csproj" />
     <Project Path="AspireWithBlazorStandalone.ClientServiceDefaults/AspireWithBlazorStandalone.ClientServiceDefaults.csproj" />
     <Project Path="AspireWithBlazorStandalone.WeatherApi/AspireWithBlazorStandalone.WeatherApi.csproj" />
+    <Project Path="AspireWithBlazorStandalone.Gateway/AspireWithBlazorStandalone.Gateway.csproj" />
   </Folder>
   <Folder Name="/Solution Items/">
     <File Path="../../.editorconfig" />
