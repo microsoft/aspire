@@ -6,10 +6,6 @@ using System.Text;
 
 namespace AspireWithBlazor.ClientServiceDefaults.Telemetry.Serializer;
 
-/// <summary>
-/// Low-level protobuf serialization utilities.
-/// Based on OpenTelemetry.Exporter.OpenTelemetryProtocol implementation.
-/// </summary>
 internal static class ProtobufSerializer
 {
     private const uint UInt128 = 0x80;
@@ -147,9 +143,6 @@ internal static class ProtobufSerializer
         return writePosition;
     }
 
-    /// <summary>
-    /// Computes the number of bytes required to encode a 64-bit unsigned integer in varint format.
-    /// </summary>
     internal static int ComputeVarInt64Size(ulong value)
     {
         return value switch

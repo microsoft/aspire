@@ -13,21 +13,12 @@ using OpenTelemetry.Trace;
 
 namespace Microsoft.Extensions.Hosting;
 
-/// <summary>
-/// Adds common .NET Aspire services: service discovery, resilience, health checks, and OpenTelemetry.
-/// This project should be referenced by each service project in your solution.
-/// To learn more about using this project, see https://aka.ms/dotnet/aspire/service-defaults
-/// </summary>
 public static class Extensions
 {
     private const string HealthEndpointPath = "/health";
     private const string AlivenessEndpointPath = "/alive";
     private const string DefaultConfigurationEndpointPath = "/_blazor/_configuration";
 
-    /// <summary>
-    /// Default configuration mappings from source configuration keys to response JSON paths.
-    /// Keys are configuration section names, values are dot-separated JSON paths in the response.
-    /// </summary>
     private static readonly Dictionary<string, string> s_defaultConfigurationMappings = new()
     {
         ["services"] = "WebAssembly:Environment",
@@ -35,12 +26,6 @@ public static class Extensions
         ["OTEL_EXPORTER_OTLP_HEADERS"] = "WebAssembly:Environment",
     };
 
-    /// <summary>
-    /// Adds common .NET Aspire services to the application.
-    /// </summary>
-    /// <typeparam name="TBuilder">The type of the host application builder.</typeparam>
-    /// <param name="builder">The host application builder.</param>
-    /// <returns>The configured host application builder.</returns>
     public static TBuilder AddServiceDefaults<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
     {
         builder.ConfigureOpenTelemetry();
@@ -61,12 +46,6 @@ public static class Extensions
         return builder;
     }
 
-    /// <summary>
-    /// Configures OpenTelemetry for the application.
-    /// </summary>
-    /// <typeparam name="TBuilder">The type of the host application builder.</typeparam>
-    /// <param name="builder">The host application builder.</param>
-    /// <returns>The configured host application builder.</returns>
     public static TBuilder ConfigureOpenTelemetry<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
     {
         builder.Logging.AddOpenTelemetry(logging =>
@@ -111,12 +90,6 @@ public static class Extensions
         return builder;
     }
 
-    /// <summary>
-    /// Adds default health checks to the application.
-    /// </summary>
-    /// <typeparam name="TBuilder">The type of the host application builder.</typeparam>
-    /// <param name="builder">The host application builder.</param>
-    /// <returns>The configured host application builder.</returns>
     public static TBuilder AddDefaultHealthChecks<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
     {
         builder.Services.AddHealthChecks()
@@ -126,11 +99,6 @@ public static class Extensions
         return builder;
     }
 
-    /// <summary>
-    /// Maps default endpoints including health checks and the configuration endpoint for WebAssembly clients.
-    /// </summary>
-    /// <param name="app">The web application.</param>
-    /// <returns>The configured web application.</returns>
     public static WebApplication MapDefaultEndpoints(this WebApplication app)
     {
         // Adding health checks endpoints to applications in non-development environments has security implications.
@@ -153,24 +121,11 @@ public static class Extensions
         return app;
     }
 
-    /// <summary>
-    /// Maps the configuration endpoint that exposes service discovery and telemetry configuration to WebAssembly clients.
-    /// </summary>
-    /// <param name="endpoints">The endpoint route builder.</param>
-    /// <param name="path">The path for the configuration endpoint.</param>
-    /// <returns>The configured endpoint route builder.</returns>
     public static IEndpointRouteBuilder MapConfigurationEndpoint(this IEndpointRouteBuilder endpoints, string path)
     {
         return MapConfigurationEndpoint(endpoints, path, s_defaultConfigurationMappings);
     }
 
-    /// <summary>
-    /// Maps the configuration endpoint that exposes configuration to clients based on the provided mappings.
-    /// </summary>
-    /// <param name="endpoints">The endpoint route builder.</param>
-    /// <param name="path">The path for the configuration endpoint.</param>
-    /// <param name="mappings">Dictionary mapping source configuration keys to response JSON paths (colon-separated).</param>
-    /// <returns>The configured endpoint route builder.</returns>
     public static IEndpointRouteBuilder MapConfigurationEndpoint(this IEndpointRouteBuilder endpoints, string path, Dictionary<string, string> mappings)
     {
         endpoints.MapGet(path, (IConfiguration configuration) =>
@@ -204,9 +159,6 @@ public static class Extensions
         return endpoints;
     }
 
-    /// <summary>
-    /// Gets or creates a nested JsonObject at the specified colon-separated path.
-    /// </summary>
     private static JsonObject GetOrCreatePath(JsonObject root, string path)
     {
         var segments = path.Split(':');

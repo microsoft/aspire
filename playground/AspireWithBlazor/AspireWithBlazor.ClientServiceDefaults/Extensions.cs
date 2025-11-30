@@ -10,19 +10,10 @@ using OpenTelemetry.Trace;
 
 namespace Microsoft.Extensions.Hosting;
 
-/// <summary>
-/// Adds common .NET Aspire services for Blazor WebAssembly clients: service discovery, resilience, and OpenTelemetry.
-/// This project should be referenced by the Blazor WebAssembly client project.
-/// </summary>
 public static class BlazorClientExtensions
 {
     private const string ServiceName = "blazorapp-client";
 
-    /// <summary>
-    /// Adds Aspire service defaults to a Blazor WebAssembly application.
-    /// </summary>
-    /// <param name="builder">The WebAssembly host builder.</param>
-    /// <returns>The configured WebAssembly host builder.</returns>
     public static WebAssemblyHostBuilder AddBlazorClientServiceDefaults(this WebAssemblyHostBuilder builder)
     {
         builder.ConfigureBlazorClientOpenTelemetry(ServiceName);
@@ -41,13 +32,6 @@ public static class BlazorClientExtensions
         return builder;
     }
 
-    /// <summary>
-    /// Configures OpenTelemetry for the Blazor WebAssembly application.
-    /// Telemetry is sent via HTTP/Protobuf through the gateway.
-    /// </summary>
-    /// <param name="builder">The WebAssembly host builder.</param>
-    /// <param name="serviceName">The service name for telemetry.</param>
-    /// <returns>The configured WebAssembly host builder.</returns>
     private static WebAssemblyHostBuilder ConfigureBlazorClientOpenTelemetry(this WebAssemblyHostBuilder builder, string serviceName)
     {
 
@@ -166,11 +150,6 @@ public static class BlazorClientExtensions
         return builder;
     }
 
-    /// <summary>
-    /// Parses OTLP headers from the standard format "key1=value1,key2=value2".
-    /// </summary>
-    /// <param name="headersString">The headers string in OTLP format.</param>
-    /// <returns>A dictionary of headers, or null if no headers are configured.</returns>
     private static Dictionary<string, string>? ParseOtlpHeaders(string? headersString)
     {
         if (string.IsNullOrWhiteSpace(headersString))

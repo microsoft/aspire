@@ -8,16 +8,6 @@ using AspireWithBlazor.ClientServiceDefaults.Telemetry.Serializer;
 
 namespace AspireWithBlazor.ClientServiceDefaults.Telemetry;
 
-/// <summary>
-/// A WebAssembly-compatible metrics collector and exporter that uses truly async HTTP calls
-/// without blocking. This is necessary because the standard OpenTelemetry MeterProvider
-/// doesn't work on WebAssembly due to platform limitations.
-/// </summary>
-/// <remarks>
-/// This exporter manually collects metrics using a <see cref="MeterListener"/> and
-/// periodically exports them to the OTLP endpoint using async HTTP POST.
-/// Unlike the standard exporter, this uses a fire-and-forget pattern to avoid WebAssembly deadlocks.
-/// </remarks>
 public sealed class WebAssemblyOtlpMetricExporter : IDisposable
 {
     private static readonly MediaTypeHeaderValue s_protobufMediaType = new("application/x-protobuf");
@@ -33,15 +23,6 @@ public sealed class WebAssemblyOtlpMetricExporter : IDisposable
     private readonly DateTimeOffset _startTime;
     private bool _disposed;
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="WebAssemblyOtlpMetricExporter"/> class.
-    /// </summary>
-    /// <param name="endpoint">The OTLP HTTP endpoint (e.g., https://localhost:21188/v1/metrics).</param>
-    /// <param name="serviceName">The service name to use in resource attributes.</param>
-    /// <param name="headers">Optional headers to send with each request (e.g., x-otlp-api-key for authentication).</param>
-    /// <param name="meterNames">The meter names to listen for. If null, listens to all meters.</param>
-    /// <param name="exportIntervalMs">The export interval in milliseconds. Default is 10000 (10 seconds).</param>
-    /// <param name="httpClient">Optional HTTP client to use. If null, a new one is created.</param>
     public WebAssemblyOtlpMetricExporter(
         Uri endpoint,
         string serviceName,
@@ -155,16 +136,12 @@ public sealed class WebAssemblyOtlpMetricExporter : IDisposable
             // Fire-and-forget the HTTP call
             SendAsync(payload);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            Console.WriteLine($"[WebAssemblyOtlpMetricExporter] Export failed: {ex.Message}");
+            // Export failed - fire and forget pattern
         }
     }
 
-    /// <summary>
-    /// Sends the serialized protobuf payload asynchronously without blocking.
-    /// This is a fire-and-forget pattern to avoid WebAssembly deadlock.
-    /// </summary>
     private async void SendAsync(byte[] payload)
     {
         try
@@ -182,23 +159,14 @@ public sealed class WebAssemblyOtlpMetricExporter : IDisposable
                 }
             }
 
-            var response = await _httpClient.SendAsync(request).ConfigureAwait(false);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                var responseBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                Console.WriteLine($"[WebAssemblyOtlpMetricExporter] HTTP POST failed: {response.StatusCode} - {responseBody}");
-            }
+            await _httpClient.SendAsync(request).ConfigureAwait(false);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            Console.WriteLine($"[WebAssemblyOtlpMetricExporter] SendAsync failed: {ex.Message}");
+            // SendAsync failed - fire and forget pattern
         }
     }
 
-    /// <summary>
-    /// Forces an immediate export of all collected metrics.
-    /// </summary>
     public void Flush()
     {
         ExportMetrics();
