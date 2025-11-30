@@ -6,22 +6,12 @@ using Microsoft.Extensions.Logging;
 
 namespace AspireWithBlazor.ClientServiceDefaults.Telemetry.Serializer;
 
-/// <summary>
-/// Serializes log records to OTLP protobuf format.
-/// Based on OpenTelemetry.Exporter.OpenTelemetryProtocol implementation.
-/// </summary>
 internal static class OtlpLogSerializer
 {
     private const int ReserveSizeForLength = 4;
     private const int TraceIdSize = 16;
     private const int SpanIdSize = 8;
 
-    /// <summary>
-    /// Serializes a batch of log records to OTLP protobuf format.
-    /// </summary>
-    /// <param name="logRecords">The log records to serialize.</param>
-    /// <param name="serviceName">The service name for resource attributes.</param>
-    /// <returns>The serialized protobuf bytes.</returns>
     internal static byte[] SerializeLogsData(List<LogRecordData> logRecords, string serviceName)
     {
         // Initial buffer size - will grow if needed
@@ -349,11 +339,6 @@ internal static class OtlpLogSerializer
     }
 }
 
-/// <summary>
-/// Represents a simplified log record for serialization.
-/// We use this instead of OpenTelemetry's LogRecord because we need to capture
-/// log data in a fire-and-forget pattern without complex pooling.
-/// </summary>
 internal sealed class LogRecordData
 {
     public DateTimeOffset Timestamp { get; set; }

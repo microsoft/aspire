@@ -8,15 +8,6 @@ using OpenTelemetry;
 
 namespace AspireWithBlazor.ClientServiceDefaults.Telemetry;
 
-/// <summary>
-/// A WebAssembly-compatible OTLP trace exporter that uses truly async HTTP calls
-/// without blocking. This is necessary because WebAssembly is single-threaded
-/// and cannot use the blocking patterns in the standard OtlpTraceExporter.
-/// </summary>
-/// <remarks>
-/// This exporter serializes traces to OTLP protobuf format (application/x-protobuf)
-/// and sends them directly to the dashboard endpoint using async HTTP POST.
-/// </remarks>
 public sealed class WebAssemblyOtlpTraceExporter : BaseExporter<Activity>
 {
     private static readonly MediaTypeHeaderValue s_protobufMediaType = new("application/x-protobuf");
@@ -26,13 +17,6 @@ public sealed class WebAssemblyOtlpTraceExporter : BaseExporter<Activity>
     private readonly string _serviceName;
     private readonly Dictionary<string, string>? _headers;
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="WebAssemblyOtlpTraceExporter"/> class.
-    /// </summary>
-    /// <param name="endpoint">The OTLP HTTP endpoint (e.g., https://localhost:21188/v1/traces).</param>
-    /// <param name="serviceName">The service name to use in resource attributes.</param>
-    /// <param name="headers">Optional headers to send with each request (e.g., x-otlp-api-key for authentication).</param>
-    /// <param name="httpClient">Optional HTTP client to use. If null, a new one is created.</param>
     public WebAssemblyOtlpTraceExporter(Uri endpoint, string serviceName, Dictionary<string, string>? headers = null, HttpClient? httpClient = null)
     {
         _endpoint = endpoint ?? throw new ArgumentNullException(nameof(endpoint));
@@ -70,17 +54,12 @@ public sealed class WebAssemblyOtlpTraceExporter : BaseExporter<Activity>
 
             return ExportResult.Success;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            Console.WriteLine($"[WebAssemblyOtlpTraceExporter] Export failed: {ex.Message}");
             return ExportResult.Failure;
         }
     }
 
-    /// <summary>
-    /// Sends the serialized protobuf payload asynchronously without blocking.
-    /// This is a fire-and-forget pattern to avoid WebAssembly deadlock.
-    /// </summary>
     private async void SendAsync(byte[] payload)
     {
         try
@@ -98,17 +77,11 @@ public sealed class WebAssemblyOtlpTraceExporter : BaseExporter<Activity>
                 }
             }
 
-            var response = await _httpClient.SendAsync(request).ConfigureAwait(false);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                var responseBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                Console.WriteLine($"[WebAssemblyOtlpTraceExporter] HTTP POST failed: {response.StatusCode} - {responseBody}");
-            }
+            await _httpClient.SendAsync(request).ConfigureAwait(false);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            Console.WriteLine($"[WebAssemblyOtlpTraceExporter] SendAsync failed: {ex.Message}");
+            // SendAsync failed - fire and forget pattern
         }
     }
 

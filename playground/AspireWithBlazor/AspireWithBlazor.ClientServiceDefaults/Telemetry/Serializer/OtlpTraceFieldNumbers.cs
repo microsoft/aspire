@@ -3,10 +3,6 @@
 
 namespace AspireWithBlazor.ClientServiceDefaults.Telemetry.Serializer;
 
-/// <summary>
-/// Field number constants for OTLP trace protobuf fields.
-/// Based on https://github.com/open-telemetry/opentelemetry-proto/blob/v1.2.0/opentelemetry/proto/trace/v1/trace.proto
-/// </summary>
 internal static class OtlpTraceFieldNumbers
 {
     // TracesData

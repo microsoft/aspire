@@ -5,22 +5,12 @@ using System.Diagnostics;
 
 namespace AspireWithBlazor.ClientServiceDefaults.Telemetry.Serializer;
 
-/// <summary>
-/// Serializes activities (spans) to OTLP protobuf format.
-/// Based on OpenTelemetry.Exporter.OpenTelemetryProtocol implementation.
-/// </summary>
 internal static class OtlpTraceSerializer
 {
     private const int ReserveSizeForLength = 4;
     private const int TraceIdSize = 16;
     private const int SpanIdSize = 8;
 
-    /// <summary>
-    /// Serializes a batch of activities to OTLP protobuf format.
-    /// </summary>
-    /// <param name="activities">The activities to serialize.</param>
-    /// <param name="serviceName">The service name for resource attributes.</param>
-    /// <returns>The serialized protobuf bytes.</returns>
     internal static byte[] SerializeTraceData(List<Activity> activities, string serviceName)
     {
         // Initial buffer size - will grow if needed

@@ -6,11 +6,6 @@ using OpenTelemetry;
 
 namespace AspireWithBlazor.ClientServiceDefaults.Telemetry;
 
-/// <summary>
-/// A batch export processor that uses Tasks instead of Threads for WebAssembly compatibility.
-/// WebAssembly is single-threaded and doesn't support the default ThreadPool-based batch export.
-/// </summary>
-/// <typeparam name="T">The type of telemetry data being exported.</typeparam>
 public sealed class TaskBasedBatchExportProcessor<T> : BaseExportProcessor<T> where T : class
 {
     private readonly int _maxQueueSize;
@@ -23,14 +18,6 @@ public sealed class TaskBasedBatchExportProcessor<T> : BaseExportProcessor<T> wh
     private readonly Task _exportTask;
     private bool _disposed;
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="TaskBasedBatchExportProcessor{T}"/> class.
-    /// </summary>
-    /// <param name="exporter">The exporter to use.</param>
-    /// <param name="maxQueueSize">The maximum number of items in the queue.</param>
-    /// <param name="scheduledDelayMilliseconds">The delay between scheduled exports.</param>
-    /// <param name="exporterTimeoutMilliseconds">The timeout for the exporter.</param>
-    /// <param name="maxExportBatchSize">The maximum batch size for export.</param>
     public TaskBasedBatchExportProcessor(
         BaseExporter<T> exporter,
         int maxQueueSize = 2048,
@@ -47,7 +34,6 @@ public sealed class TaskBasedBatchExportProcessor<T> : BaseExportProcessor<T> wh
 
         // Start the background export task
         _exportTask = ExportLoopAsync(_shutdownCts.Token);
-        Console.WriteLine($"[TaskBasedBatchExportProcessor] Created processor for {typeof(T).Name}, maxQueueSize={maxQueueSize}, scheduledDelay={scheduledDelayMilliseconds}ms");
     }
 
     /// <inheritdoc/>
@@ -58,12 +44,9 @@ public sealed class TaskBasedBatchExportProcessor<T> : BaseExportProcessor<T> wh
             return;
         }
 
-        Console.WriteLine($"[TaskBasedBatchExportProcessor] OnEnd called with {typeof(T).Name}, buffer count: {_circularBuffer.Count}");
-
         // Add to buffer; drop if full
         if (!_circularBuffer.TryAdd(data))
         {
-            Console.WriteLine($"[TaskBasedBatchExportProcessor] Buffer full, dropping item");
             // Buffer is full, item dropped
             return;
         }
@@ -71,15 +54,10 @@ public sealed class TaskBasedBatchExportProcessor<T> : BaseExportProcessor<T> wh
         // If we've hit the batch size, trigger an export
         if (_circularBuffer.Count >= _maxExportBatchSize)
         {
-            Console.WriteLine($"[TaskBasedBatchExportProcessor] Triggering export, buffer count: {_circularBuffer.Count}");
             _exportTrigger.Release();
         }
     }
 
-    /// <summary>
-    /// Processes a single item. Not used in batch processing - items go through OnEnd.
-    /// </summary>
-    /// <param name="data">The data item.</param>
     protected override void OnExport(T data)
     {
         // For batch processing, items are collected in OnEnd and exported in batches
@@ -123,12 +101,8 @@ public sealed class TaskBasedBatchExportProcessor<T> : BaseExportProcessor<T> wh
 
         if (batch.Count == 0)
         {
-            Console.WriteLine($"[TaskBasedBatchExportProcessor] ExportBatchAsync called but batch is empty");
             return;
         }
-
-        Console.WriteLine($"[TaskBasedBatchExportProcessor] Exporting batch of {batch.Count} {typeof(T).Name} items");
-        Console.WriteLine($"[TaskBasedBatchExportProcessor] Exporter type: {exporter.GetType().FullName}");
 
         try
         {
@@ -138,7 +112,6 @@ public sealed class TaskBasedBatchExportProcessor<T> : BaseExportProcessor<T> wh
             // However, in .NET 8 WebAssembly, Task.Run still runs on the same thread.
             // The only way to avoid the deadlock is to use a fire-and-forget pattern.
             var batchToExport = new Batch<T>([.. batch], batch.Count);
-            Console.WriteLine($"[TaskBasedBatchExportProcessor] Calling exporter.Export with batch of {batchToExport.Count} items");
             
             // Schedule the export on a new async context that won't deadlock
             _ = Task.Run(async () =>
@@ -147,22 +120,17 @@ public sealed class TaskBasedBatchExportProcessor<T> : BaseExportProcessor<T> wh
                 await Task.Yield();
                 try
                 {
-                    var result = exporter.Export(batchToExport);
-                    Console.WriteLine($"[TaskBasedBatchExportProcessor] Export result: {result}");
+                    exporter.Export(batchToExport);
                 }
-                catch (Exception innerEx)
+                catch (Exception)
                 {
-                    Console.WriteLine($"[TaskBasedBatchExportProcessor] Export failed in Task.Run: {innerEx.Message}");
+                    // Export failed - logged at Debug level in production
                 }
             });
-            
-            Console.WriteLine($"[TaskBasedBatchExportProcessor] Export scheduled (fire-and-forget)");
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"Export failed: {ex.Message}");
-            Console.WriteLine($"[TaskBasedBatchExportProcessor] Export failed: {ex.Message}");
-            Console.WriteLine($"[TaskBasedBatchExportProcessor] Exception: {ex}");
         }
 
         // Yield to allow other async operations

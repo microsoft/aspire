@@ -3,21 +3,10 @@
 
 namespace AspireWithBlazor.ClientServiceDefaults.Telemetry.Serializer;
 
-/// <summary>
-/// Serializes metrics data to OTLP protobuf format for WebAssembly.
-/// </summary>
-/// <remarks>
-/// This is a simplified serializer for WebAssembly that captures metric data manually
-/// since the standard OpenTelemetry MeterProvider doesn't work on WebAssembly.
-/// It creates custom metrics that can be exported to the dashboard.
-/// </remarks>
 internal static class OtlpMetricSerializer
 {
     private const int ReserveSizeForLength = 4;
 
-    /// <summary>
-    /// Captured metric data for export.
-    /// </summary>
     internal readonly struct CapturedMetric
     {
         public string Name { get; init; }
@@ -39,9 +28,6 @@ internal static class OtlpMetricSerializer
         DoubleSum
     }
 
-    /// <summary>
-    /// Serializes a batch of captured metrics to OTLP protobuf format.
-    /// </summary>
     internal static byte[] SerializeMetricData(IReadOnlyList<CapturedMetric> metrics, string serviceName)
     {
         // Pre-allocate buffer (start with 8KB, grow as needed)
