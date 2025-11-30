@@ -37,9 +37,11 @@ export async function onRuntimeConfigLoaded(config) {
                 }
                 
                 // Add all Aspire environment variables to the MonoConfig
+                // Convert configuration key format (":") to environment variable format ("__")
                 for (const [key, value] of Object.entries(envVars)) {
-                    console.log(`[Aspire.JS] Setting env var: ${key} = ${value}`);
-                    config.environmentVariables[key] = value;
+                    const envKey = key.replaceAll(':', '__');
+                    console.log(`[Aspire.JS] Setting env var: ${envKey} = ${value}`);
+                    config.environmentVariables[envKey] = value;
                 }
                 
                 console.log('[Aspire.JS] Environment variables injected into MonoConfig:', 
