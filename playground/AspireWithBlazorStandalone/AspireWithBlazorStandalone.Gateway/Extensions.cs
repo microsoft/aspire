@@ -5,6 +5,7 @@ using OpenTelemetry;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 using Yarp.ReverseProxy.Configuration;
+using Yarp.ReverseProxy.Transforms;
 
 namespace Microsoft.Extensions.Hosting;
 
@@ -13,12 +14,14 @@ internal static class Extensions
     private const string HealthEndpointPath = "/health";
     private const string AlivenessEndpointPath = "/alive";
     private const string DefaultConfigurationEndpointPath = "/_blazor/_configuration";
+    private const string OtlpProxyPath = "/_otlp";
+    private const string OtlpClusterId = "cluster-otlp-dashboard";
 
     private static readonly Dictionary<string, string> s_defaultConfigurationMappings = new()
     {
         ["services"] = "webAssembly:environment",
+        // Note: OTEL config is handled specially when proxy is enabled
         ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "webAssembly:environment",
-        ["OTEL_EXPORTER_OTLP_HEADERS"] = "webAssembly:environment",
     };
 
     public static TBuilder AddServiceDefaults<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
@@ -96,26 +99,64 @@ internal static class Extensions
 
     /// <summary>
     /// Configures YARP reverse proxy to forward requests from /_api/{service-name}/{**path} to backend services.
+    /// Also configures OTLP telemetry proxy at /_otlp/{**path} to forward to the Dashboard OTLP endpoint.
     /// </summary>
     public static TBuilder AddServiceProxy<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
     {
+        var (routes, clusters) = GetProxyConfiguration(builder.Configuration);
+
         builder.Services.AddReverseProxy()
-            .LoadFromMemory(
-                routes: GetProxyRoutes(builder.Configuration),
-                clusters: GetProxyClusters(builder.Configuration))
-            .AddServiceDiscoveryDestinationResolver();
+            .LoadFromMemory(routes, clusters)
+            .AddServiceDiscoveryDestinationResolver()
+            .AddTransforms(context =>
+            {
+                // Add OTLP API key header for OTLP proxy requests
+                if (context.Route.RouteId == "route-otlp")
+                {
+                    var otlpHeaders = builder.Configuration["OTEL_EXPORTER_OTLP_HEADERS"];
+                    if (!string.IsNullOrEmpty(otlpHeaders))
+                    {
+                        // Parse "x-otlp-api-key=value" format
+                        foreach (var header in otlpHeaders.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                        {
+                            var parts = header.Split('=', 2);
+                            if (parts.Length == 2)
+                            {
+                                context.AddRequestTransform(transformContext =>
+                                {
+                                    transformContext.ProxyRequest.Headers.TryAddWithoutValidation(parts[0].Trim(), parts[1].Trim());
+                                    return ValueTask.CompletedTask;
+                                });
+                            }
+                        }
+                    }
+                }
+            });
 
         return builder;
     }
 
-    private static IReadOnlyList<RouteConfig> GetProxyRoutes(IConfiguration configuration)
+    private static (IReadOnlyList<RouteConfig> routes, IReadOnlyList<ClusterConfig> clusters) GetProxyConfiguration(IConfiguration configuration)
     {
         var routes = new List<RouteConfig>();
+        var clusters = new List<ClusterConfig>();
+
+        // Add service routes
+        AddServiceProxyRoutes(configuration, routes, clusters);
+
+        // Add OTLP proxy route
+        AddOtlpProxyRoute(configuration, routes, clusters);
+
+        return (routes, clusters);
+    }
+
+    private static void AddServiceProxyRoutes(IConfiguration configuration, List<RouteConfig> routes, List<ClusterConfig> clusters)
+    {
         var servicesSection = configuration.GetSection("services");
 
         if (!servicesSection.Exists())
         {
-            return routes;
+            return;
         }
 
         foreach (var serviceSection in servicesSection.GetChildren())
@@ -136,24 +177,6 @@ internal static class Extensions
                     new() { ["PathRemovePrefix"] = $"/_api/{serviceName}" }
                 }
             });
-        }
-
-        return routes;
-    }
-
-    private static IReadOnlyList<ClusterConfig> GetProxyClusters(IConfiguration configuration)
-    {
-        var clusters = new List<ClusterConfig>();
-        var servicesSection = configuration.GetSection("services");
-
-        if (!servicesSection.Exists())
-        {
-            return clusters;
-        }
-
-        foreach (var serviceSection in servicesSection.GetChildren())
-        {
-            var serviceName = serviceSection.Key;
 
             // Use service discovery URL format for the destination
             clusters.Add(new ClusterConfig
@@ -168,8 +191,45 @@ internal static class Extensions
                 }
             });
         }
+    }
 
-        return clusters;
+    private static void AddOtlpProxyRoute(IConfiguration configuration, List<RouteConfig> routes, List<ClusterConfig> clusters)
+    {
+        // Get the OTLP endpoint from configuration (set by Aspire host)
+        var otlpEndpoint = configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];
+
+        if (string.IsNullOrEmpty(otlpEndpoint))
+        {
+            return;
+        }
+
+        // Add route for OTLP proxy: /_otlp/{**catch-all} -> Dashboard OTLP endpoint
+        routes.Add(new RouteConfig
+        {
+            RouteId = "route-otlp",
+            ClusterId = OtlpClusterId,
+            Match = new RouteMatch
+            {
+                Path = $"{OtlpProxyPath}/{{**catch-all}}"
+            },
+            Transforms = new List<Dictionary<string, string>>
+            {
+                new() { ["PathRemovePrefix"] = OtlpProxyPath }
+            }
+        });
+
+        // Add cluster for Dashboard OTLP endpoint
+        clusters.Add(new ClusterConfig
+        {
+            ClusterId = OtlpClusterId,
+            Destinations = new Dictionary<string, DestinationConfig>
+            {
+                ["dashboard-otlp"] = new DestinationConfig
+                {
+                    Address = otlpEndpoint
+                }
+            }
+        });
     }
 
     public static WebApplication MapDefaultEndpoints(this WebApplication app, bool useProxy = false)
@@ -227,6 +287,16 @@ internal static class Extensions
                     {
                         var proxyValue = RewriteServiceUrlToProxy(key, value, httpContext);
                         target[key] = proxyValue;
+                    }
+                    // If proxy is enabled, rewrite OTLP endpoint to use the gateway proxy
+                    else if (useProxy && sourceKey == "OTEL_EXPORTER_OTLP_ENDPOINT" && !string.IsNullOrEmpty(value))
+                    {
+                        // Rewrite to gateway-relative OTLP proxy endpoint
+                        var request = httpContext.Request;
+                        var proxyOtlpEndpoint = $"{request.Scheme}://{request.Host}{OtlpProxyPath}";
+                        target[key] = proxyOtlpEndpoint;
+                        // Also add the protocol since browser needs HTTP (not gRPC)
+                        target["OTEL_EXPORTER_OTLP_PROTOCOL"] = "http/protobuf";
                     }
                     else
                     {
