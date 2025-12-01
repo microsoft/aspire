@@ -22,12 +22,17 @@
   <Target Name="_SetGatewayRunArguments" BeforeTargets="ComputeRunArguments">
     <PropertyGroup>
       <RunCommand>dotnet</RunCommand>
-      <RunArguments>run --project "$(_GatewayProjectPath)" -- --contentroot "$(MSBuildProjectDirectory)" --staticwebassets "$(TargetDir)$(TargetName).staticwebassets.runtime.json" --staticwebassetsendpoints "$(TargetDir)$(TargetName).staticwebassets.endpoints.json"</RunArguments>
+      <!-- 
+        Run the Gateway project via dotnet run. Environment variables like ASPNETCORE_URLS 
+        will be inherited by the child process.
+      -->
+      <RunArguments>run --no-launch-profile --project "$(_GatewayProjectPath)" -- --contentroot "$(MSBuildProjectDirectory)" --staticwebassets "$(TargetDir)$(TargetName).staticwebassets.runtime.json" --staticwebassetsendpoints "$(TargetDir)$(TargetName).staticwebassets.endpoints.json" --Proxy:UseProxy $(UseProxy)</RunArguments>
       <RunWorkingDirectory>$(MSBuildProjectDirectory)</RunWorkingDirectory>
     </PropertyGroup>
     <Message Importance="high" Text="Gateway: Running via Gateway project at $(_GatewayProjectPath)" />
     <Message Importance="high" Text="Gateway: Content root: $(MSBuildProjectDirectory)" />
     <Message Importance="high" Text="Gateway: Static web assets: $(TargetDir)$(TargetName).staticwebassets.runtime.json" />
+    <Message Importance="high" Text="Gateway: UseProxy: $(UseProxy)" />
   </Target>
 
   <!--
