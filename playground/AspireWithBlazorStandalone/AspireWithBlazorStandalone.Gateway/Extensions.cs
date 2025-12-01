@@ -4,6 +4,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using OpenTelemetry;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
+using Yarp.ReverseProxy.Configuration;
 
 namespace Microsoft.Extensions.Hosting;
 
@@ -93,7 +94,85 @@ internal static class Extensions
         return builder;
     }
 
-    public static WebApplication MapDefaultEndpoints(this WebApplication app)
+    /// <summary>
+    /// Configures YARP reverse proxy to forward requests from /_api/{service-name}/{**path} to backend services.
+    /// </summary>
+    public static TBuilder AddServiceProxy<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
+    {
+        builder.Services.AddReverseProxy()
+            .LoadFromMemory(
+                routes: GetProxyRoutes(builder.Configuration),
+                clusters: GetProxyClusters(builder.Configuration))
+            .AddServiceDiscoveryDestinationResolver();
+
+        return builder;
+    }
+
+    private static IReadOnlyList<RouteConfig> GetProxyRoutes(IConfiguration configuration)
+    {
+        var routes = new List<RouteConfig>();
+        var servicesSection = configuration.GetSection("services");
+
+        if (!servicesSection.Exists())
+        {
+            return routes;
+        }
+
+        foreach (var serviceSection in servicesSection.GetChildren())
+        {
+            var serviceName = serviceSection.Key;
+
+            // Create a route for each service: /_api/{serviceName}/{**catch-all}
+            routes.Add(new RouteConfig
+            {
+                RouteId = $"route-{serviceName}",
+                ClusterId = $"cluster-{serviceName}",
+                Match = new RouteMatch
+                {
+                    Path = $"/_api/{serviceName}/{{**catch-all}}"
+                },
+                Transforms = new List<Dictionary<string, string>>
+                {
+                    new() { ["PathRemovePrefix"] = $"/_api/{serviceName}" }
+                }
+            });
+        }
+
+        return routes;
+    }
+
+    private static IReadOnlyList<ClusterConfig> GetProxyClusters(IConfiguration configuration)
+    {
+        var clusters = new List<ClusterConfig>();
+        var servicesSection = configuration.GetSection("services");
+
+        if (!servicesSection.Exists())
+        {
+            return clusters;
+        }
+
+        foreach (var serviceSection in servicesSection.GetChildren())
+        {
+            var serviceName = serviceSection.Key;
+
+            // Use service discovery URL format for the destination
+            clusters.Add(new ClusterConfig
+            {
+                ClusterId = $"cluster-{serviceName}",
+                Destinations = new Dictionary<string, DestinationConfig>
+                {
+                    ["destination1"] = new DestinationConfig
+                    {
+                        Address = $"https+http://{serviceName}"
+                    }
+                }
+            });
+        }
+
+        return clusters;
+    }
+
+    public static WebApplication MapDefaultEndpoints(this WebApplication app, bool useProxy = false)
     {
         // Adding health checks endpoints to applications in non-development environments has security implications.
         // See https://aka.ms/dotnet/aspire/healthchecks for details before enabling these endpoints in non-development environments.
@@ -110,19 +189,19 @@ internal static class Extensions
         }
 
         // Map the configuration endpoint for WebAssembly clients
-        app.MapConfigurationEndpoint(DefaultConfigurationEndpointPath);
+        app.MapConfigurationEndpoint(DefaultConfigurationEndpointPath, useProxy);
 
         return app;
     }
 
-    public static IEndpointRouteBuilder MapConfigurationEndpoint(this IEndpointRouteBuilder endpoints, string path)
+    public static IEndpointRouteBuilder MapConfigurationEndpoint(this IEndpointRouteBuilder endpoints, string path, bool useProxy = false)
     {
-        return MapConfigurationEndpoint(endpoints, path, s_defaultConfigurationMappings);
+        return MapConfigurationEndpoint(endpoints, path, s_defaultConfigurationMappings, useProxy);
     }
 
-    public static IEndpointRouteBuilder MapConfigurationEndpoint(this IEndpointRouteBuilder endpoints, string path, Dictionary<string, string> mappings)
+    public static IEndpointRouteBuilder MapConfigurationEndpoint(this IEndpointRouteBuilder endpoints, string path, Dictionary<string, string> mappings, bool useProxy = false)
     {
-        endpoints.MapGet(path, (IConfiguration configuration) =>
+        endpoints.MapGet(path, (HttpContext httpContext, IConfiguration configuration) =>
         {
             var response = new JsonObject();
 
@@ -143,7 +222,16 @@ internal static class Extensions
 
                 foreach (var (key, value) in children)
                 {
-                    target[key] = value;
+                    // If proxy is enabled and this is a service URL, rewrite to proxy URL
+                    if (useProxy && sourceKey == "services" && !string.IsNullOrEmpty(value))
+                    {
+                        var proxyValue = RewriteServiceUrlToProxy(key, value, httpContext);
+                        target[key] = proxyValue;
+                    }
+                    else
+                    {
+                        target[key] = value;
+                    }
                 }
             }
 
@@ -151,6 +239,27 @@ internal static class Extensions
         });
 
         return endpoints;
+    }
+
+    private static string RewriteServiceUrlToProxy(string configKey, string originalValue, HttpContext httpContext)
+    {
+        // Config key format: "services:weatherapi:https:0" or "services:weatherapi:http:0"
+        // We need to extract the service name and rewrite to proxy URL
+
+        // Parse the key to get the service name
+        var parts = configKey.Split(':');
+        if (parts.Length < 2 || parts[0] != "services")
+        {
+            return originalValue;
+        }
+
+        var serviceName = parts[1];
+
+        // Build the proxy URL using the current request's scheme and host
+        var request = httpContext.Request;
+        var proxyBaseUrl = $"{request.Scheme}://{request.Host}/_api/{serviceName}";
+
+        return proxyBaseUrl;
     }
 
     private static JsonObject GetOrCreatePath(JsonObject root, string path)

@@ -14,7 +14,7 @@ This playground demonstrates the integration of Blazor Web applications with .NE
 ## Features
 
 ### Service Discovery
-The Blazor host exposes a `/_framework/_configuration` endpoint that provides service discovery information to WebAssembly clients. This enables the client to communicate with backend services through the gateway.
+The Blazor host exposes a `/_blazor/_configuration` endpoint that provides service discovery information to WebAssembly clients. This enables the client to communicate with backend services through the gateway.
 
 ### OpenTelemetry Integration
 Both server and client are configured with OpenTelemetry for distributed tracing and metrics:
