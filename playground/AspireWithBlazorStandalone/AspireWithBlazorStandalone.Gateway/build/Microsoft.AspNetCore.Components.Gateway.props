@@ -6,6 +6,12 @@
 -->
 <Project>
 
-  <!-- No properties needed - Gateway is mandatory when this package is referenced -->
+  <PropertyGroup>
+    <!-- Enable the YARP reverse proxy for API calls. When true, the Gateway proxies
+         requests from /_api/{service-name}/* to backend services, and the client
+         configuration is rewritten to use proxy URLs instead of direct service URLs.
+         This eliminates CORS issues and allows backend services to remain internal. -->
+    <UseProxy Condition="'$(UseProxy)' == ''">true</UseProxy>
+  </PropertyGroup>
 
 </Project>
