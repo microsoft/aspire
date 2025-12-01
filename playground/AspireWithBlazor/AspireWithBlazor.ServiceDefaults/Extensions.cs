@@ -99,7 +99,7 @@ public static class Extensions
         return builder;
     }
 
-    public static WebApplication MapDefaultEndpoints(this WebApplication app)
+    public static WebApplication MapDefaultEndpoints(this WebApplication app, bool useProxy = false)
     {
         // Adding health checks endpoints to applications in non-development environments has security implications.
         // See https://aka.ms/dotnet/aspire/healthchecks for details before enabling these endpoints in non-development environments.
@@ -116,19 +116,19 @@ public static class Extensions
         }
 
         // Map the configuration endpoint for WebAssembly clients
-        app.MapConfigurationEndpoint(DefaultConfigurationEndpointPath);
+        app.MapConfigurationEndpoint(DefaultConfigurationEndpointPath, useProxy);
 
         return app;
     }
 
-    public static IEndpointRouteBuilder MapConfigurationEndpoint(this IEndpointRouteBuilder endpoints, string path)
+    public static IEndpointRouteBuilder MapConfigurationEndpoint(this IEndpointRouteBuilder endpoints, string path, bool useProxy = false)
     {
-        return MapConfigurationEndpoint(endpoints, path, s_defaultConfigurationMappings);
+        return MapConfigurationEndpoint(endpoints, path, s_defaultConfigurationMappings, useProxy);
     }
 
-    public static IEndpointRouteBuilder MapConfigurationEndpoint(this IEndpointRouteBuilder endpoints, string path, Dictionary<string, string> mappings)
+    public static IEndpointRouteBuilder MapConfigurationEndpoint(this IEndpointRouteBuilder endpoints, string path, Dictionary<string, string> mappings, bool useProxy = false)
     {
-        endpoints.MapGet(path, (IConfiguration configuration) =>
+        endpoints.MapGet(path, (HttpContext httpContext, IConfiguration configuration) =>
         {
             var response = new JsonObject();
 
@@ -149,7 +149,16 @@ public static class Extensions
 
                 foreach (var (key, value) in children)
                 {
-                    target[key] = value;
+                    // If proxy is enabled and this is a service URL, rewrite to proxy URL
+                    if (useProxy && sourceKey == "services" && !string.IsNullOrEmpty(value))
+                    {
+                        var proxyValue = RewriteServiceUrlToProxy(key, value, httpContext);
+                        target[key] = proxyValue;
+                    }
+                    else
+                    {
+                        target[key] = value;
+                    }
                 }
             }
 
@@ -157,6 +166,27 @@ public static class Extensions
         });
 
         return endpoints;
+    }
+
+    private static string RewriteServiceUrlToProxy(string configKey, string originalValue, HttpContext httpContext)
+    {
+        // Config key format: "services:weatherapi:https:0" or "services:weatherapi:http:0"
+        // We need to extract the service name and rewrite to proxy URL
+        
+        // Parse the key to get the service name
+        var parts = configKey.Split(':');
+        if (parts.Length < 2 || parts[0] != "services")
+        {
+            return originalValue;
+        }
+
+        var serviceName = parts[1];
+        
+        // Build the proxy URL using the current request's scheme and host
+        var request = httpContext.Request;
+        var proxyBaseUrl = $"{request.Scheme}://{request.Host}/_api/{serviceName}";
+        
+        return proxyBaseUrl;
     }
 
     private static JsonObject GetOrCreatePath(JsonObject root, string path)

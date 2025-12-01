@@ -25,9 +25,16 @@ if (!string.IsNullOrEmpty(staticWebAssetsManifest) && File.Exists(staticWebAsset
     builder.WebHost.UseStaticWebAssets();
 }
 
+// Configure YARP proxy if enabled
+var useProxy = builder.Configuration.GetValue<bool>("Proxy:UseProxy");
+if (useProxy)
+{
+    builder.AddServiceProxy();
+}
+
 var app = builder.Build();
 
-app.MapDefaultEndpoints();
+app.MapDefaultEndpoints(useProxy);
 
 // UseBlazorFrameworkFiles() serves /_framework files and sets Blazor-Environment header
 app.UseBlazorFrameworkFiles();
@@ -41,6 +48,12 @@ app.UseStaticFiles(new StaticFileOptions
 });
 
 app.UseRouting();
+
+// Map YARP reverse proxy if enabled
+if (useProxy)
+{
+    app.MapReverseProxy();
+}
 
 app.MapFallbackToFile("index.html", new StaticFileOptions
 {
