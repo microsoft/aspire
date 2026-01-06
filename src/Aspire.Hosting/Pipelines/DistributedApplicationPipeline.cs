@@ -264,6 +264,14 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                 DumpDependencyGraphDiagnostics(stepsToAnalyze, context);
             }
         });
+
+        // Add the before-start step that runs during application startup
+        _steps.Add(new PipelineStep
+        {
+            Name = WellKnownPipelineSteps.BeforeStart,
+            Description = "Aggregation step for operations that run before the application starts.",
+            Action = _ => Task.CompletedTask
+        });
     }
 
     public bool HasSteps => _steps.Count > 0;
@@ -359,23 +367,12 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
     public async Task ExecuteAsync(PipelineContext context)
     {
-        var annotationSteps = await CollectStepsFromAnnotationsAsync(context).ConfigureAwait(false);
-        var allSteps = _steps.Concat(annotationSteps).ToList();
-
-        // Execute configuration callbacks even if there are no steps
-        // This allows callbacks to run validation or other logic
-        await ExecuteConfigurationCallbacksAsync(context, allSteps).ConfigureAwait(false);
+        var (allSteps, _) = await PrepareExecuteAsync(context).ConfigureAwait(false);
 
         if (allSteps.Count == 0)
         {
             return;
         }
-
-        ValidateSteps(allSteps);
-
-        // Convert RequiredBy relationships to DependsOn relationships before filtering
-        var allStepsByName = allSteps.ToDictionary(s => s.Name, StringComparer.Ordinal);
-        NormalizeRequiredByToDependsOn(allSteps, allStepsByName);
 
         // Capture resolved pipeline data for diagnostics (before filtering)
         _lastResolvedSteps = allSteps;
@@ -384,6 +381,54 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
         // Build dependency graph and execute with readiness-based scheduler
         await ExecuteStepsAsTaskDag(stepsToExecute, stepsByName, context).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Executes a specific pipeline step and all its dependencies.
+    /// </summary>
+    /// <param name="stepName">The name of the step to execute.</param>
+    /// <param name="context">The pipeline context for execution.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    internal async Task ExecuteStepSequentiallyAsync(
+        string stepName,
+        PipelineContext context)
+    {
+        var (allSteps, allStepsByName) = await PrepareExecuteAsync(context).ConfigureAwait(false);
+
+        if (allSteps.Count == 0)
+        {
+            return;
+        }
+
+        if (!allStepsByName.TryGetValue(stepName, out var targetStep))
+        {
+            var availableSteps = string.Join(", ", allSteps.Select(s => $"'{s.Name}'"));
+            throw new InvalidOperationException(
+                $"Step '{stepName}' not found in pipeline. Available steps: {availableSteps}");
+        }
+
+        var stepsToExecute = ComputeTransitiveDependencies(targetStep, allStepsByName);
+        var filteredStepsByName = stepsToExecute.ToDictionary(s => s.Name, StringComparer.Ordinal);
+
+        await ExecuteStepsSequentially(stepsToExecute, context).ConfigureAwait(false);
+    }
+
+    private async Task<(List<PipelineStep>, Dictionary<string, PipelineStep>)> PrepareExecuteAsync(PipelineContext context)
+    {
+        var annotationSteps = await CollectStepsFromAnnotationsAsync(context).ConfigureAwait(false);
+        var allSteps = _steps.Concat(annotationSteps).ToList();
+
+        // Execute configuration callbacks even if there are no steps
+        // This allows callbacks to run validation or other logic
+        await ExecuteConfigurationCallbacksAsync(context, allSteps).ConfigureAwait(false);
+
+        ValidateSteps(allSteps);
+
+        // Convert RequiredBy relationships to DependsOn relationships before filtering
+        var allStepsByName = allSteps.ToDictionary(s => s.Name, StringComparer.Ordinal);
+        NormalizeRequiredByToDependsOn(allSteps, allStepsByName);
+
+        return (allSteps, allStepsByName);
     }
 
     /// <summary>
@@ -743,6 +788,56 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         {
             // Restore the original token
             context.CancellationToken = originalToken;
+        }
+    }
+
+    /// <summary>
+    /// Executes pipeline steps sequentially in topological order.
+    /// Each step waits for the previous step to complete before starting.
+    /// </summary>
+    private static async Task ExecuteStepsSequentially(
+        List<PipelineStep> steps,
+        PipelineContext context)
+    {
+        // Validate no cycles exist in the dependency graph
+        var stepsByName = steps.ToDictionary(s => s.Name, StringComparer.Ordinal);
+        ValidateDependencyGraph(steps, stepsByName);
+
+        // Get topological order
+        var orderedSteps = GetTopologicalOrder(steps);
+
+        // Execute each step in order
+        foreach (var step in orderedSteps)
+        {
+            var activityReporter = context.Services.GetRequiredService<IPipelineActivityReporter>();
+            var reportingStep = await activityReporter.CreateStepAsync(step.Name, context.CancellationToken).ConfigureAwait(false);
+
+            await using (reportingStep.ConfigureAwait(false))
+            {
+                var stepContext = new PipelineStepContext
+                {
+                    PipelineContext = context,
+                    ReportingStep = reportingStep
+                };
+
+                try
+                {
+                    PipelineLoggerProvider.CurrentStep = reportingStep;
+                    await ExecuteStepAsync(step, stepContext).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    stepContext.Logger.LogError(ex, "Step '{StepName}' failed.", step.Name);
+
+                    // Report the failure to the activity reporter before disposing
+                    await reportingStep.FailAsync(ex.Message).ConfigureAwait(false);
+                    throw;
+                }
+                finally
+                {
+                    PipelineLoggerProvider.CurrentStep = null;
+                }
+            }
         }
     }
 

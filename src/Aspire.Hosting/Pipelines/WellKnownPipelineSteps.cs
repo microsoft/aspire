@@ -63,4 +63,9 @@ public static class WellKnownPipelineSteps
     /// The diagnostic step that dumps dependency graph information for troubleshooting.
     /// </summary>
     public const string Diagnostics = "diagnostics";
+
+    /// <summary>
+    /// The step that runs before the application starts.
+    /// </summary>
+    public const string BeforeStart = "before-start";
 }

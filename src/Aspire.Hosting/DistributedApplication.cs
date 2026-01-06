@@ -7,10 +7,12 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Ats;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
+using Aspire.Hosting.Pipelines;
 using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
 
@@ -556,6 +558,25 @@ public class DistributedApplication : IHost, IAsyncDisposable
             {
                 await lifecycleHook.BeforeStartAsync(appModel, cancellationToken).ConfigureAwait(false);
             }
+
+#pragma warning disable ASPIREPIPELINES001 // Pipeline APIs are experimental
+            // Execute the before-start pipeline step
+            var pipeline = _host.Services.GetRequiredService<IDistributedApplicationPipeline>();
+            var logger = _host.Services.GetRequiredService<ILogger<DistributedApplication>>();
+
+            // Cast to internal implementation to access ExecuteStepSequentiallyAsync
+            if (pipeline is DistributedApplicationPipeline pipelineImpl)
+            {
+                var pipelineContext = new PipelineContext(
+                    appModel,
+                    execContext,
+                    _host.Services,
+                    logger,
+                    cancellationToken);
+
+                await pipelineImpl.ExecuteStepSequentiallyAsync(WellKnownPipelineSteps.BeforeStart, pipelineContext).ConfigureAwait(false);
+            }
+#pragma warning restore ASPIREPIPELINES001
         }
         finally
         {
