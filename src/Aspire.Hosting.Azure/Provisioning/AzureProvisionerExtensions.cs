@@ -4,7 +4,7 @@
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.Provisioning;
 using Aspire.Hosting.Azure.Provisioning.Internal;
-using Aspire.Hosting.Lifecycle;
+using Aspire.Hosting.Pipelines;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -29,8 +29,28 @@ public static class AzureProvisionerExtensions
         builder.AddAzureEnvironment();
 #pragma warning restore ASPIREAZURE001
 
-        builder.Services.TryAddEventingSubscriber<AzureResourcePreparer>();
-        builder.Services.TryAddEventingSubscriber<AzureProvisioner>();
+        // Register services
+        builder.Services.TryAddSingleton<AzureResourcePreparer>();
+        builder.Services.TryAddSingleton<AzureProvisioner>();
+
+#pragma warning disable ASPIREPIPELINES001 // Pipeline APIs are experimental
+        builder.Pipeline.AddStep("azure-prepare-resources",
+            async context =>
+            {
+                var preparer = context.Services.GetRequiredService<AzureResourcePreparer>();
+                await preparer.PrepareResourcesAsync(context.Model, context.CancellationToken).ConfigureAwait(false);
+            },
+            requiredBy: WellKnownPipelineSteps.BeforeStart);
+
+        builder.Pipeline.AddStep("azure-provision",
+            async context =>
+            {
+                var provisioner = context.Services.GetRequiredService<AzureProvisioner>();
+                await provisioner.ProvisionResourcesAsync(context.Model, context.CancellationToken).ConfigureAwait(false);
+            },
+            requiredBy: WellKnownPipelineSteps.BeforeStart,
+            dependsOn: "azure-prepare-resources");
+#pragma warning restore ASPIREPIPELINES001
 
         // Attempt to read azure configuration from configuration
         builder.Services.AddOptions<AzureProvisionerOptions>()

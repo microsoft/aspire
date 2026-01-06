@@ -6,7 +6,6 @@
 
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning;
 using Azure.Provisioning.Roles;
@@ -73,14 +72,14 @@ public class AzureBicepResourceTests
 
     [Theory]
     [MemberData(nameof(AzureExtensions))]
-    public void AzureExtensionsAutomaticallyAddAzureProvisioning(Func<IDistributedApplicationBuilder, IResourceBuilder<IResource>> addAzureResource)
+    public async Task AzureExtensionsAutomaticallyAddAzureProvisioning(Func<IDistributedApplicationBuilder, IResourceBuilder<IResource>> addAzureResource)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         addAzureResource(builder);
 
         var app = builder.Build();
-        var eventingServices = app.Services.GetServices<IDistributedApplicationEventingSubscriber>();
-        Assert.Single(eventingServices.OfType<AzureProvisioner>());
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        Assert.Single(model.Resources.OfType<AzureEnvironmentResource>());
     }
 
     [Theory]

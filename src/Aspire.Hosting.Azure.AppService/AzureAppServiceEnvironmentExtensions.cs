@@ -4,7 +4,7 @@
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.AppService;
-using Aspire.Hosting.Lifecycle;
+using Aspire.Hosting.Pipelines;
 using Azure.Core;
 using Azure.Provisioning;
 using Azure.Provisioning.ApplicationInsights;
@@ -14,6 +14,7 @@ using Azure.Provisioning.Expressions;
 using Azure.Provisioning.OperationalInsights;
 using Azure.Provisioning.Roles;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Aspire.Hosting;
 
@@ -24,12 +25,23 @@ public static partial class AzureAppServiceEnvironmentExtensions
 {
     internal static IDistributedApplicationBuilder AddAzureAppServiceInfrastructureCore(this IDistributedApplicationBuilder builder)
     {
-        // ensure AzureProvisioning is added first so the AzureResourcePreparer lifecycle hook runs before AzureAppServiceInfrastructure
+        // ensure AzureProvisioning is added first so the AzureResourcePreparer pipeline step runs before AzureAppServiceInfrastructure
         builder.AddAzureProvisioning();
 
         builder.Services.Configure<AzureProvisioningOptions>(options => options.SupportsTargetedRoleAssignments = true);
 
-        builder.Services.TryAddEventingSubscriber<AzureAppServiceInfrastructure>();
+        builder.Services.TryAddSingleton<AzureAppServiceInfrastructure>();
+
+#pragma warning disable ASPIREPIPELINES001 // Pipeline APIs are experimental
+        builder.Pipeline.AddStep("azure-app-service-infrastructure",
+            async context =>
+            {
+                var infrastructure = context.Services.GetRequiredService<AzureAppServiceInfrastructure>();
+                await infrastructure.PrepareInfrastructureAsync(context.Model, context.Services, context.CancellationToken).ConfigureAwait(false);
+            },
+            requiredBy: WellKnownPipelineSteps.BeforeStart,
+            dependsOn: "azure-prepare-resources");
+#pragma warning restore ASPIREPIPELINES001
 
         return builder;
     }

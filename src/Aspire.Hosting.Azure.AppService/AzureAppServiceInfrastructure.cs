@@ -2,8 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Eventing;
-using Aspire.Hosting.Lifecycle;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -12,21 +10,20 @@ namespace Aspire.Hosting.Azure.AppService;
 internal sealed class AzureAppServiceInfrastructure(
     ILogger<AzureAppServiceInfrastructure> logger,
     IOptions<AzureProvisioningOptions> provisioningOptions,
-    DistributedApplicationExecutionContext executionContext) :
-    IDistributedApplicationEventingSubscriber
+    DistributedApplicationExecutionContext executionContext)
 {
-    private async Task OnBeforeStartAsync(BeforeStartEvent @event, CancellationToken cancellationToken = default)
+    internal async Task PrepareInfrastructureAsync(DistributedApplicationModel model, IServiceProvider services, CancellationToken cancellationToken = default)
     {
         if (!executionContext.IsPublishMode)
         {
             return;
         }
 
-        var appServiceEnvironments = @event.Model.Resources.OfType<AzureAppServiceEnvironmentResource>().ToArray();
+        var appServiceEnvironments = model.Resources.OfType<AzureAppServiceEnvironmentResource>().ToArray();
 
         if (appServiceEnvironments.Length == 0)
         {
-            EnsureNoPublishAsAzureAppServiceWebsiteAnnotations(@event.Model);
+            EnsureNoPublishAsAzureAppServiceWebsiteAnnotations(model);
             return;
         }
 
@@ -36,19 +33,19 @@ internal sealed class AzureAppServiceInfrastructure(
             if (appServiceEnvironment.HasAnnotationOfType<ContainerRegistryReferenceAnnotation>() &&
                 appServiceEnvironment.DefaultContainerRegistry is not null)
             {
-                @event.Model.Resources.Remove(appServiceEnvironment.DefaultContainerRegistry);
+                model.Resources.Remove(appServiceEnvironment.DefaultContainerRegistry);
             }
 
             var appServiceEnvironmentContext = new AzureAppServiceEnvironmentContext(
                 logger,
                 executionContext,
                 appServiceEnvironment,
-                @event.Services);
+                services);
 
             // Annotate the environment with its context
             appServiceEnvironment.Annotations.Add(new AzureAppServiceEnvironmentContextAnnotation(appServiceEnvironmentContext));
 
-            foreach (var resource in @event.Model.GetComputeResources())
+            foreach (var resource in model.GetComputeResources())
             {
                 // Support project resources and containers with Dockerfile
                 if (resource is not ProjectResource && !(resource.IsContainer() && resource.TryGetAnnotationsOfType<DockerfileBuildAnnotation>(out _)))
@@ -83,11 +80,5 @@ internal sealed class AzureAppServiceInfrastructure(
                 throw new InvalidOperationException($"Resource '{r.Name}' is configured to publish as an Azure AppService Website, but there are no '{nameof(AzureAppServiceEnvironmentResource)}' resources. Ensure you have added one by calling '{nameof(AzureAppServiceEnvironmentExtensions.AddAzureAppServiceEnvironment)}'.");
             }
         }
-    }
-
-    public Task SubscribeAsync(IDistributedApplicationEventing eventing, DistributedApplicationExecutionContext executionContext, CancellationToken cancellationToken)
-    {
-        eventing.Subscribe<BeforeStartEvent>(OnBeforeStartAsync);
-        return Task.CompletedTask;
     }
 }
