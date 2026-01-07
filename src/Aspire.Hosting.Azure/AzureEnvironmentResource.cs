@@ -68,6 +68,31 @@ public sealed class AzureEnvironmentResource : Resource
     {
         Annotations.Add(new PipelineStepAnnotation((factoryContext) =>
         {
+            var prepareResourcesStep = new PipelineStep
+            {
+                Name = $"azure-prepare-resources",
+                Description = $"Prepares the Azure resources.",
+                Action = async context =>
+                {
+                    var preparer = context.Services.GetRequiredService<AzureResourcePreparer>();
+                    await preparer.PrepareResourcesAsync(context.Model, context.CancellationToken).ConfigureAwait(false);
+                },
+                RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
+            };
+
+            var runModeProvisionStep = new PipelineStep
+            {
+                Name = $"run-mode-azure-provision",
+                Description = $"Provisions the Azure resources for {Name}.",
+                Action = async context =>
+                {
+                    var provisioner = context.Services.GetRequiredService<AzureProvisioner>();
+                    await provisioner.ProvisionResourcesAsync(context.Model, context.CancellationToken).ConfigureAwait(false);
+                },
+                RequiredBySteps = [WellKnownPipelineSteps.BeforeStart],
+                DependsOnSteps = [prepareResourcesStep.Name]
+            };
+
             var publishStep = new PipelineStep
             {
                 Name = $"publish-{Name}",
@@ -116,7 +141,7 @@ public sealed class AzureEnvironmentResource : Resource
 
             provisionStep.DependsOn(createContextStep);
 
-            return [publishStep, validateStep, createContextStep, provisionStep];
+            return [prepareResourcesStep, runModeProvisionStep, publishStep, validateStep, createContextStep, provisionStep];
         }));
 
         Annotations.Add(ManifestPublishingCallbackAnnotation.Ignore);

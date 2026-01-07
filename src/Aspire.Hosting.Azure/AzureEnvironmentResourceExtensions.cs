@@ -32,20 +32,19 @@ public static class AzureEnvironmentResourceExtensions
         var principalId = ParameterResourceBuilderExtensions.CreateParameter(builder, "principalId", false);
 
         var resource = new AzureEnvironmentResource(resourceName, locationParam, resourceGroupName, principalId);
-        if (builder.ExecutionContext.IsRunMode)
-        {
-            // Return a builder that isn't added to the top-level application builder
-            // so it doesn't surface as a resource.
-            return builder.CreateResourceBuilder(resource);
 
-        }
-
-        // In publish mode, add the resource to the application model
+        // Add the resource to the application model
         // but exclude it from the manifest so that it is not treated
         // as a publishable resource by components that process the manifest
         // for elements.
         return builder.AddResource(resource)
-            .ExcludeFromManifest();
+            .ExcludeFromManifest()
+            .WithInitialState(new()
+            {
+                ResourceType = nameof(AzureEnvironmentResource),
+                Properties = [],
+                IsHidden = true // hidden from the dashboard
+            });
     }
 
     /// <summary>
