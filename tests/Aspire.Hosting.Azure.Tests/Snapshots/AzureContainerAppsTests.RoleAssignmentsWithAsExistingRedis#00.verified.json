@@ -7,9 +7,9 @@
     "env_outputs_azure_container_registry_endpoint": "{env.outputs.AZURE_CONTAINER_REGISTRY_ENDPOINT}",
     "env_outputs_azure_container_registry_managed_identity_id": "{env.outputs.AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID}",
     "api_containerimage": "{api.containerImage}",
-    "api_identity_outputs_id": "{api-identity.outputs.id}",
     "redis_outputs_connectionstring": "{redis.outputs.connectionString}",
     "redis_outputs_hostname": "{redis.outputs.hostName}",
+    "api_identity_outputs_id": "{api-identity.outputs.id}",
     "api_identity_outputs_clientid": "{api-identity.outputs.clientId}"
   }
 }

@@ -7,8 +7,8 @@
     "env_outputs_azure_container_registry_endpoint": "{env.outputs.AZURE_CONTAINER_REGISTRY_ENDPOINT}",
     "env_outputs_azure_container_registry_managed_identity_id": "{env.outputs.AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID}",
     "api_containerimage": "{api.containerImage}",
-    "api_identity_outputs_id": "{api-identity.outputs.id}",
     "cosmos_outputs_connectionstring": "{cosmos.outputs.connectionString}",
+    "api_identity_outputs_id": "{api-identity.outputs.id}",
     "api_identity_outputs_clientid": "{api-identity.outputs.clientId}"
   }
 }

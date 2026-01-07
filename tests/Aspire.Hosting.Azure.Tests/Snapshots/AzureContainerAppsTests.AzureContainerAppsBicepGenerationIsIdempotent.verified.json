@@ -4,9 +4,9 @@
   "params": {
     "env_outputs_azure_container_apps_environment_default_domain": "{env.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN}",
     "env_outputs_azure_container_apps_environment_id": "{env.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_ID}",
-    "api_identity_outputs_id": "{api-identity.outputs.id}",
     "secret_value": "{secret.value}",
     "kv_outputs_name": "{kv.outputs.name}",
+    "api_identity_outputs_id": "{api-identity.outputs.id}",
     "api_identity_outputs_clientid": "{api-identity.outputs.clientId}"
   }
 }

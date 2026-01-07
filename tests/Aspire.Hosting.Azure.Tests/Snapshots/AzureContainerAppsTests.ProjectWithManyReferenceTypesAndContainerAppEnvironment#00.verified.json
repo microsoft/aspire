@@ -7,7 +7,6 @@
     "cae_outputs_azure_container_registry_endpoint": "{cae.outputs.AZURE_CONTAINER_REGISTRY_ENDPOINT}",
     "cae_outputs_azure_container_registry_managed_identity_id": "{cae.outputs.AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID}",
     "api_containerimage": "{api.containerImage}",
-    "api_identity_outputs_id": "{api-identity.outputs.id}",
     "api_containerport": "{api.containerPort}",
     "mydb_outputs_connectionstring": "{mydb.outputs.connectionString}",
     "storage_outputs_blobendpoint": "{storage.outputs.blobEndpoint}",
@@ -18,6 +17,7 @@
     "value0_value": "{value0.value}",
     "value1_value": "{value1.value}",
     "cs_connectionstring": "{cs.connectionString}",
+    "api_identity_outputs_id": "{api-identity.outputs.id}",
     "api_identity_outputs_clientid": "{api-identity.outputs.clientId}"
   }
 }
