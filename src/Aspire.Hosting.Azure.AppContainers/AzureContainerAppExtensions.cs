@@ -8,7 +8,7 @@ using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.AppContainers;
-using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Lifecycle;
 using Azure.Provisioning;
 using Azure.Provisioning.AppContainers;
 using Azure.Provisioning.ContainerRegistry;
@@ -17,7 +17,6 @@ using Azure.Provisioning.OperationalInsights;
 using Azure.Provisioning.Roles;
 using Azure.Provisioning.Storage;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using FileShare = Azure.Provisioning.Storage.FileShare;
 
 namespace Aspire.Hosting;
@@ -39,24 +38,14 @@ public static class AzureContainerAppExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
+        // ensure AzureProvisioning is added first so the AzureResourcePreparer lifecycle hook runs before AzureContainerAppsInfrastructure
         builder.AddAzureProvisioning();
 
         // AzureContainerAppsInfrastructure will handle adding role assignments,
         // so Azure resources don't need to add the default role assignments themselves
         builder.Services.Configure<AzureProvisioningOptions>(o => o.SupportsTargetedRoleAssignments = true);
 
-        builder.Services.TryAddSingleton<AzureContainerAppsInfrastructure>();
-
-#pragma warning disable ASPIREPIPELINES001 // Pipeline APIs are experimental
-        builder.Pipeline.AddStep("azure-container-apps-infrastructure",
-            async context =>
-            {
-                var infrastructure = context.Services.GetRequiredService<AzureContainerAppsInfrastructure>();
-                await infrastructure.PrepareInfrastructureAsync(context.Model, context.Services, context.CancellationToken).ConfigureAwait(false);
-            },
-            requiredBy: WellKnownPipelineSteps.BeforeStart,
-            dependsOn: "azure-prepare-resources");
-#pragma warning restore ASPIREPIPELINES001
+        builder.Services.TryAddEventingSubscriber<AzureContainerAppsInfrastructure>();
 
         return builder;
     }

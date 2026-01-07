@@ -3,6 +3,8 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.AppContainers;
+using Aspire.Hosting.Eventing;
+using Aspire.Hosting.Lifecycle;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -14,20 +16,15 @@ namespace Aspire.Hosting.Azure;
 internal sealed class AzureContainerAppsInfrastructure(
     ILogger<AzureContainerAppsInfrastructure> logger,
     DistributedApplicationExecutionContext executionContext,
-    IOptions<AzureProvisioningOptions> options)
+    IOptions<AzureProvisioningOptions> options) : IDistributedApplicationEventingSubscriber
 {
-    internal async Task PrepareInfrastructureAsync(DistributedApplicationModel model, IServiceProvider services, CancellationToken cancellationToken = default)
+    private async Task OnBeforeStartAsync(BeforeStartEvent @event, CancellationToken cancellationToken = default)
     {
-        // Only run in PublishMode
-        if (!executionContext.IsPublishMode)
-        {
-            return;
-        }
+        var caes = @event.Model.Resources.OfType<AzureContainerAppEnvironmentResource>().ToArray();
 
-        var caes = model.Resources.OfType<AzureContainerAppEnvironmentResource>().ToArray();
         if (caes.Length == 0)
         {
-            EnsureNoPublishAsAcaAnnotations(model);
+            EnsureNoPublishAsAcaAnnotations(@event.Model);
             return;
         }
 
@@ -37,16 +34,16 @@ internal sealed class AzureContainerAppsInfrastructure(
             if (environment.HasAnnotationOfType<ContainerRegistryReferenceAnnotation>() &&
                 environment.DefaultContainerRegistry is not null)
             {
-                model.Resources.Remove(environment.DefaultContainerRegistry);
+                @event.Model.Resources.Remove(environment.DefaultContainerRegistry);
             }
 
             var containerAppEnvironmentContext = new ContainerAppEnvironmentContext(
                 logger,
                 executionContext,
                 environment,
-                services);
+                @event.Services);
 
-            foreach (var r in model.GetComputeResources())
+            foreach (var r in @event.Model.GetComputeResources())
             {
                 // Skip resources that are explicitly targeted to a different compute environment
                 var resourceComputeEnvironment = r.GetComputeEnvironment();
@@ -84,5 +81,15 @@ internal sealed class AzureContainerAppsInfrastructure(
                 throw new InvalidOperationException($"Resource '{r.Name}' is configured to publish as an Azure Container App, but there are no '{nameof(AzureContainerAppEnvironmentResource)}' resources. Ensure you have added one by calling '{nameof(AzureContainerAppExtensions.AddAzureContainerAppEnvironment)}'.");
             }
         }
+    }
+
+    public Task SubscribeAsync(IDistributedApplicationEventing eventing, DistributedApplicationExecutionContext executionContext, CancellationToken cancellationToken)
+    {
+        if (!executionContext.IsRunMode)
+        {
+            eventing.Subscribe<BeforeStartEvent>(OnBeforeStartAsync);
+        }
+
+        return Task.CompletedTask;
     }
 }
