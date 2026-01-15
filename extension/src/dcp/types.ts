@@ -81,6 +81,8 @@ export interface EnvVar {
     value: string;
 }
 
+// VS Code does not export a ServerReadyAction type; mirror it here:
+// https://github.com/microsoft/vscode/blob/c36e2b89d9171f212b34491dd9b61eb72abbfb04/extensions/debug-server-ready/src/extension.ts#L15C1-L23C2
 export type ServerReadyActionAction = 'openExternally' | 'debugWithChrome' | 'debugWithEdge' | 'startDebugging';
 
 export interface ServerReadyAction {
