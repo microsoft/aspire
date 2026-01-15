@@ -81,6 +81,21 @@ export interface EnvVar {
     value: string;
 }
 
+export type ServerReadyActionAction = 'openExternally' | 'debugWithChrome' | 'debugWithEdge';
+
+export interface ServerReadyAction {
+    action: ServerReadyActionAction;
+    /**
+     * Regex that matches a URL. Prefer a capture group so VS Code can substitute it into uriFormat.
+     * Example match: "Now listening on: https://localhost:5001"
+     */
+    pattern: string;
+    /**
+     * URI format string used with the first capture group (commonly "%s").
+     */
+    uriFormat?: string;
+}
+
 export interface RunSessionPayload {
     launch_configurations: ExecutableLaunchConfiguration[];
     env?: EnvVar[];
@@ -137,6 +152,7 @@ export interface LaunchOptions {
     debugSessionId: string;
     isApphost: boolean;
     debugSession: AspireDebugSession;
+    parentDebugConfiguration?: AspireExtendedDebugConfiguration;
 };
 
 export interface StartAppHostOptions {
@@ -165,6 +181,7 @@ export interface AspireExtendedDebugConfiguration extends vscode.DebugConfigurat
     args?: string[];
     step?: string;
     env?: { [key: string]: string };
+    serverReadyAction?: ServerReadyAction;
 }
 
 interface AspireDebuggersConfiguration {
