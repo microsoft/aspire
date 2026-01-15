@@ -72,7 +72,11 @@ export async function readLaunchSettings(projectPath: string): Promise<LaunchSet
         }
 
         const launchSettingsExists = fs.existsSync(launchSettingsPath);
-        extensionLogOutputChannel.debug(`[launchSettings] projectPath=${projectPath} resolvedPath=${launchSettingsPath} exists=${launchSettingsExists}`);
+        extensionLogOutputChannel.debug('[launchSettings] Resolved launchSettings path', {
+            projectPath,
+            resolvedPath: launchSettingsPath,
+            exists: launchSettingsExists,
+        });
 
         if (launchSettingsExists) {
             let content = fs.readFileSync(launchSettingsPath, 'utf8');
