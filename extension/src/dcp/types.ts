@@ -81,10 +81,10 @@ export interface EnvVar {
     value: string;
 }
 
-export type ServerReadyActionAction = 'openExternally' | 'debugWithChrome' | 'debugWithEdge';
+export type ServerReadyActionAction = 'openExternally' | 'debugWithChrome' | 'debugWithEdge' | 'startDebugging';
 
 export interface ServerReadyAction {
-    action: ServerReadyActionAction;
+    action?: ServerReadyActionAction;
     /**
      * Regex that matches a URL. Prefer a capture group so VS Code can substitute it into uriFormat.
      * Example match: "Now listening on: https://localhost:5001"
@@ -94,6 +94,22 @@ export interface ServerReadyAction {
      * URI format string used with the first capture group (commonly "%s").
      */
     uriFormat?: string;
+    /**
+     * Web root for browser debugging (used by VS Code debug-server-ready).
+     */
+    webRoot?: string;
+    /**
+     * Optional name for startDebugging.
+     */
+    name?: string;
+    /**
+     * Optional debug configuration to start (used with startDebugging).
+     */
+    config?: vscode.DebugConfiguration;
+    /**
+     * Whether to stop the browser debug session when the server stops.
+     */
+    killOnServerStop?: boolean;
 }
 
 export interface RunSessionPayload {
