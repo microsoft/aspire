@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import { ExecutableLaunchConfiguration, EnvVar, ProjectLaunchConfiguration, ServerReadyAction, ServerReadyActionAction } from '../dcp/types';
+import { EnvVar, ProjectLaunchConfiguration, ServerReadyAction, ServerReadyActionAction } from '../dcp/types';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { isFileBasedApp } from './languages/dotnet';
 import { stripComments } from 'jsonc-parser';
