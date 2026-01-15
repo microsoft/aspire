@@ -263,13 +263,8 @@ export interface ServerReadyActionOptions {
 }
 
 export function determineServerReadyAction(
-    launchBrowserOrOptions?: boolean | ServerReadyActionOptions,
-    action?: ServerReadyActionAction
+    options: ServerReadyActionOptions = {}
 ): ServerReadyAction | undefined {
-    const options: ServerReadyActionOptions = typeof launchBrowserOrOptions === 'object'
-        ? launchBrowserOrOptions
-        : { launchBrowser: launchBrowserOrOptions, action };
-
     if (!options.launchBrowser) {
         return undefined;
     }
