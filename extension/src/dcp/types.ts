@@ -90,6 +90,7 @@ export interface ServerReadyAction {
     /**
      * Regex that matches a URL. Prefer a capture group so VS Code can substitute it into uriFormat.
      * Example match: "Now listening on: https://localhost:5001"
+     * Example pattern: '\\bNow listening on:\\s+(https?://\\S+)'
      */
     pattern: string;
     /**
