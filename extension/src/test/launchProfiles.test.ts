@@ -442,9 +442,12 @@ suite('Launch Profile Tests', () => {
     });
 
     suite('determineWorkingDirectory', () => {
-        const projectDir = path.resolve(path.sep, 'project');
-        const projectPath = path.join(projectDir, 'MyApp.csproj');
-        const absoluteWorkingDir = path.resolve(path.sep, 'custom', 'working', 'dir');
+        // Keep these tests cross-platform by deriving the platform's root from the current process.
+        // On Windows this is typically something like "C:\\" (drive-dependent), and on POSIX it's "/".
+        const systemRoot = path.parse(process.cwd()).root;
+        const projectPath = path.join(systemRoot, 'project', 'MyApp.csproj');
+        const projectDir = path.dirname(projectPath);
+        const absoluteWorkingDir = path.join(systemRoot, 'custom', 'working', 'dir');
 
         test('uses absolute working directory from launch profile', () => {
             const baseProfile: LaunchProfile = {
