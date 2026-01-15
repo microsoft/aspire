@@ -131,7 +131,13 @@ export function determineBaseLaunchProfile(
     launchConfig: ProjectLaunchConfiguration,
     launchSettings: LaunchSettings | null
 ): LaunchProfileResult {
-    extensionLogOutputChannel.debug(`[launchProfile] determineBaseLaunchProfile: disable_launch_profile=${launchConfig.disable_launch_profile === true} launch_profile='${launchConfig.launch_profile ?? ''}' hasLaunchSettings=${!!launchSettings} profileCount=${launchSettings?.profiles ? Object.keys(launchSettings.profiles).length : 0}`);
+    const debugMessage =
+        `[launchProfile] determineBaseLaunchProfile:
+  disable_launch_profile=${launchConfig.disable_launch_profile === true}
+  launch_profile='${launchConfig.launch_profile ?? ''}'
+  hasLaunchSettings=${!!launchSettings}
+  profileCount=${launchSettings?.profiles ? Object.keys(launchSettings.profiles).length : 0}`;
+    extensionLogOutputChannel.debug(debugMessage);
 
     // If disable_launch_profile property is set to true in project launch configuration, there is no base profile, regardless of the value of launch_profile property.
     if (launchConfig.disable_launch_profile === true) {
