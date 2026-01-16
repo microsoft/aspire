@@ -528,28 +528,28 @@ suite('Launch Profile Tests', () => {
         });
 
         test('returns existing when launchBrowser is undefined, applicationUrl is undefined and existing launch config serverReadyAction', () => {
-            const result = determineServerReadyAction(undefined, undefined, { action: 'openExternally', uriFormat: 'https://localhost:5001', pattern: '\\bNow listening on:\\s+https?://\\S+' });
+            const result = determineServerReadyAction(undefined, undefined, { action: 'openExternally', uriFormat: 'https://localhost:5001', pattern: '\\bNow listening on:\\s+(https?://\\S+)' });
             assert.notStrictEqual(result, undefined);
             assert.strictEqual(result?.action, 'openExternally');
             assert.strictEqual(result?.uriFormat, 'https://localhost:5001');
-            assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+https?://\\S+');
+            assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+(https?://\\S+)');
         });
 
         test('returns existing when launchBrowser is true, applicationUrl is undefined and existing launch config serverReadyAction', () => {
-            const result = determineServerReadyAction(true, undefined, { action: 'openExternally', uriFormat: 'https://localhost:5001', pattern: '\\bNow listening on:\\s+https?://\\S+' });
+            const result = determineServerReadyAction(true, undefined, { action: 'openExternally', uriFormat: 'https://localhost:5001', pattern: '\\bNow listening on:\\s+(https?://\\S+)' });
             assert.notStrictEqual(result, undefined);
             assert.strictEqual(result?.action, 'openExternally');
             assert.strictEqual(result?.uriFormat, 'https://localhost:5001');
-            assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+https?://\\S+');
+            assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+(https?://\\S+)');
         });
 
         test('returns undefined when launchBrowser is false, applicationUrl is undefined and existing launch config serverReadyAction', () => {
-            const result = determineServerReadyAction(false, undefined, { action: 'openExternally', uriFormat: 'https://localhost:5001', pattern: '\\bNow listening on:\\s+https?://\\S+' });
+            const result = determineServerReadyAction(false, undefined, { action: 'openExternally', uriFormat: 'https://localhost:5001', pattern: '\\bNow listening on:\\s+(https?://\\S+)' });
             assert.strictEqual(result, undefined);
         });
 
         test('returns undefined when launchBrowser is false, applicationUrl is not undefined and existing launch config serverReadyAction', () => {
-            const result = determineServerReadyAction(false, 'https://localhost:5001', { action: 'openExternally', uriFormat: 'https://localhost:5001', pattern: '\\bNow listening on:\\s+https?://\\S+' });
+            const result = determineServerReadyAction(false, 'https://localhost:5001', { action: 'openExternally', uriFormat: 'https://localhost:5001', pattern: '\\bNow listening on:\\s+(https?://\\S+)' });
             assert.strictEqual(result, undefined);
         });
 
@@ -560,7 +560,7 @@ suite('Launch Profile Tests', () => {
             assert.notStrictEqual(result, undefined);
             assert.strictEqual(result?.action, 'openExternally');
             assert.strictEqual(result?.uriFormat, applicationUrl);
-            assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+https?://\\S+');
+            assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+(https?://\\S+)');
         });
 
         test('returns serverReadyAction with first URL when multiple URLs separated by semicolon', () => {
@@ -570,7 +570,7 @@ suite('Launch Profile Tests', () => {
             assert.notStrictEqual(result, undefined);
             assert.strictEqual(result?.action, 'openExternally');
             assert.strictEqual(result?.uriFormat, 'https://localhost:5001');
-            assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+https?://\\S+');
+            assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+(https?://\\S+)');
         });
     });
 
