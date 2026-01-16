@@ -518,43 +518,59 @@ suite('Launch Profile Tests', () => {
 
     suite('determineServerReadyAction', () => {
         test('returns undefined when launchBrowser is false', () => {
-            const result = determineServerReadyAction({ launchBrowser: false });
+            const result = determineServerReadyAction(false, 'https://localhost:5001');
             assert.strictEqual(result, undefined);
         });
 
-        test('returns serverReadyAction when launchBrowser true', () => {
-            const result = determineServerReadyAction({ launchBrowser: true });
+        test('returns undefined when applicationUrl is undefined and no launch config serverReadyAction', () => {
+            const result = determineServerReadyAction(true, undefined, undefined);
+            assert.strictEqual(result, undefined);
+        });
+
+        test('returns existing when launchBrowser is undefined, applicationUrl is undefined and existing launch config serverReadyAction', () => {
+            const result = determineServerReadyAction(undefined, undefined, { action: 'openExternally', uriFormat: 'https://localhost:5001', pattern: '\\bNow listening on:\\s+https?://\\S+' });
+            assert.notStrictEqual(result, undefined);
+            assert.strictEqual(result?.action, 'openExternally');
+            assert.strictEqual(result?.uriFormat, 'https://localhost:5001');
+            assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+https?://\\S+');
+        });
+
+        test('returns existing when launchBrowser is true, applicationUrl is undefined and existing launch config serverReadyAction', () => {
+            const result = determineServerReadyAction(true, undefined, { action: 'openExternally', uriFormat: 'https://localhost:5001', pattern: '\\bNow listening on:\\s+https?://\\S+' });
+            assert.notStrictEqual(result, undefined);
+            assert.strictEqual(result?.action, 'openExternally');
+            assert.strictEqual(result?.uriFormat, 'https://localhost:5001');
+            assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+https?://\\S+');
+        });
+
+        test('returns undefined when launchBrowser is false, applicationUrl is undefined and existing launch config serverReadyAction', () => {
+            const result = determineServerReadyAction(false, undefined, { action: 'openExternally', uriFormat: 'https://localhost:5001', pattern: '\\bNow listening on:\\s+https?://\\S+' });
+            assert.strictEqual(result, undefined);
+        });
+
+        test('returns undefined when launchBrowser is false, applicationUrl is not undefined and existing launch config serverReadyAction', () => {
+            const result = determineServerReadyAction(false, 'https://localhost:5001', { action: 'openExternally', uriFormat: 'https://localhost:5001', pattern: '\\bNow listening on:\\s+https?://\\S+' });
+            assert.strictEqual(result, undefined);
+        });
+
+        test('returns serverReadyAction when launchBrowser true and applicationUrl provided', () => {
+            const applicationUrl = 'https://localhost:5001';
+            const result = determineServerReadyAction(true, applicationUrl);
 
             assert.notStrictEqual(result, undefined);
             assert.strictEqual(result?.action, 'openExternally');
-            assert.strictEqual(result?.uriFormat, '%s');
-            assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+(https?://\\S+)');
+            assert.strictEqual(result?.uriFormat, applicationUrl);
+            assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+https?://\\S+');
         });
 
-        test('uses provided action when specified', () => {
-            const result = determineServerReadyAction({ launchBrowser: true, action: 'debugWithEdge' });
+        test('returns serverReadyAction with first URL when multiple URLs separated by semicolon', () => {
+            const applicationUrl = 'https://localhost:5001;http://localhost:5000';
+            const result = determineServerReadyAction(true, applicationUrl);
 
             assert.notStrictEqual(result, undefined);
-            assert.strictEqual(result?.action, 'debugWithEdge');
-            assert.strictEqual(result?.uriFormat, '%s');
-            assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+(https?://\\S+)');
-        });
-
-        test('returns parent serverReadyAction when provided', () => {
-            const parent = {
-                serverReadyAction: {
-                    action: 'debugWithChrome' as const,
-                    pattern: '\\bNow listening on:\\s+(https?://\\S+)',
-                    uriFormat: '%s'
-                }
-            };
-
-            const result = determineServerReadyAction({ launchBrowser: true, parentDebugConfiguration: parent });
-
-            assert.notStrictEqual(result, undefined);
-            assert.strictEqual(result?.action, 'debugWithChrome');
-            assert.strictEqual(result?.uriFormat, '%s');
-            assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+(https?://\\S+)');
+            assert.strictEqual(result?.action, 'openExternally');
+            assert.strictEqual(result?.uriFormat, 'https://localhost:5001');
+            assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+https?://\\S+');
         });
     });
 
