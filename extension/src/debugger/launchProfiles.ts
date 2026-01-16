@@ -290,7 +290,7 @@ export function determineServerReadyAction(launchBrowser?: boolean, applicationU
 
     return {
         action: "openExternally",
-        pattern: "\\bNow listening on:\\s+https?://\\S+",
+        pattern: "\\bNow listening on:\\s+(https?://\\S+)",
         uriFormat: uriFormat
     };
 }
