@@ -345,8 +345,8 @@ suite('Dotnet Debugger Extension Tests', () => {
 
         // serverReadyAction should be present when launchBrowser is true
         assert.notStrictEqual(debugConfig.serverReadyAction, undefined);
-        assert.strictEqual(debugConfig.serverReadyAction.uriFormat, '%s');
-        assert.strictEqual(debugConfig.serverReadyAction.pattern, '\\bNow listening on:\\s+(https?://\\S+)');
+        assert.strictEqual(debugConfig.serverReadyAction?.uriFormat, '%s');
+        assert.strictEqual(debugConfig.serverReadyAction?.pattern, '\\bNow listening on:\\s+(https?://\\S+)');
 
         // cleanup
         fs.rmSync(tempDir, { recursive: true, force: true });

@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import { EnvVar, ProjectLaunchConfiguration, ServerReadyAction, ServerReadyActionAction } from '../dcp/types';
+import { ExecutableLaunchConfiguration, EnvVar, ProjectLaunchConfiguration } from '../dcp/types';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { isFileBasedApp } from './languages/dotnet';
 import { stripComments } from 'jsonc-parser';
@@ -266,27 +266,31 @@ export function determineWorkingDirectory(
     return projectDir;
 }
 
-export interface ServerReadyActionOptions {
-    launchBrowser?: boolean;
-    action?: ServerReadyActionAction;
-    parentDebugConfiguration?: { serverReadyAction?: ServerReadyAction } | null;
+export interface ServerReadyAction {
+    action: "openExternally";
+    pattern: string;
+    uriFormat: string;
 }
 
-export function determineServerReadyAction(
-    options: ServerReadyActionOptions = {}
-): ServerReadyAction | undefined {
-    if (!options.launchBrowser) {
+export function determineServerReadyAction(launchBrowser?: boolean, applicationUrl?: string, debugConfigurationServerReadyAction?: ServerReadyAction): ServerReadyAction | undefined {
+    if (launchBrowser === false) {
+        return undefined;
+    }
+    
+    // A serverReadyAction may already have been defined in the aspire launch configuration. In that case, it applies to all resources unless launchBrowser is false (resource explicitly has opted out of browser launch).
+    if (debugConfigurationServerReadyAction) {
+        return debugConfigurationServerReadyAction;
+    }
+
+    if (launchBrowser === undefined || !applicationUrl) {
         return undefined;
     }
 
-    const parentServerReadyAction = options.parentDebugConfiguration?.serverReadyAction;
-    if (parentServerReadyAction) {
-        return parentServerReadyAction;
-    }
+    let uriFormat = applicationUrl.includes(';') ? applicationUrl.split(';')[0] : applicationUrl;
 
     return {
-        action: options.action ?? 'openExternally',
-        pattern: "\\bNow listening on:\\s+(https?://\\S+)",
-        uriFormat: "%s"
+        action: "openExternally",
+        pattern: "\\bNow listening on:\\s+https?://\\S+",
+        uriFormat: uriFormat
     };
 }
