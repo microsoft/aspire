@@ -18,11 +18,26 @@ internal sealed class SeqHealthCheck(string seqUri) : IHealthCheck
     /// </summary>
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext _, CancellationToken cancellationToken = new CancellationToken())
     {
-        using var response = await _client.GetAsync("/health", cancellationToken)
-            .ConfigureAwait(false);
+        try
+        {
+            using var response = await _client.GetAsync("/health", cancellationToken)
+                .ConfigureAwait(false);
 
-        return response.IsSuccessStatusCode
-            ? HealthCheckResult.Healthy()
-            : HealthCheckResult.Unhealthy();
+            return response.IsSuccessStatusCode
+                ? HealthCheckResult.Healthy()
+                : HealthCheckResult.Unhealthy($"Request to {_client.BaseAddress}health returned {(int)response.StatusCode} {response.StatusCode}.");
+        }
+        catch (TaskCanceledException tce) when (!cancellationToken.IsCancellationRequested)
+        {
+            return HealthCheckResult.Unhealthy($"Request to {_client.BaseAddress}health timed out.", tce);
+        }
+        catch (HttpRequestException hre)
+        {
+            return HealthCheckResult.Unhealthy($"Failed to connect to {_client.BaseAddress}health.", hre);
+        }
+        catch (Exception ex)
+        {
+            return HealthCheckResult.Unhealthy($"Health check failed for {_client.BaseAddress}health.", ex);
+        }
     }
 }

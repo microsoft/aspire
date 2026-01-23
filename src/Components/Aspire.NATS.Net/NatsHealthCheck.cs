@@ -12,10 +12,10 @@ internal sealed class NatsHealthCheck(INatsConnection connection) : IHealthCheck
     {
         var result = connection.ConnectionState switch
         {
-            NatsConnectionState.Open => HealthCheckResult.Healthy(),
-            NatsConnectionState.Connecting or NatsConnectionState.Reconnecting => HealthCheckResult.Degraded(),
+            NatsConnectionState.Open => HealthCheckResult.Healthy("Connected to NATS server."),
+            NatsConnectionState.Connecting or NatsConnectionState.Reconnecting => HealthCheckResult.Degraded("Connecting to NATS server..."),
             NatsConnectionState.Closed => await TryConnect(connection).ConfigureAwait(false),
-            _ => new HealthCheckResult(context.Registration.FailureStatus)
+            _ => new HealthCheckResult(context.Registration.FailureStatus, "Unknown NATS connection state.")
         };
 
         return result;
@@ -26,11 +26,11 @@ internal sealed class NatsHealthCheck(INatsConnection connection) : IHealthCheck
         try
         {
             await natsConnection.ConnectAsync().ConfigureAwait(false);
-            return HealthCheckResult.Healthy();
+            return HealthCheckResult.Healthy("Connected to NATS server.");
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            return HealthCheckResult.Unhealthy();
+            return HealthCheckResult.Unhealthy("Failed to connect to NATS server.", ex);
         }
     }
 }

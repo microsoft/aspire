@@ -25,11 +25,11 @@ internal sealed class MilvusHealthCheck : IHealthCheck
 
             return milvusHealthState.IsHealthy
                 ? HealthCheckResult.Healthy()
-                : new HealthCheckResult(HealthStatus.Unhealthy, description: milvusHealthState.ToString());
+                : new HealthCheckResult(HealthStatus.Unhealthy, description: $"Milvus server is unhealthy: {milvusHealthState}");
         }
         catch (Exception ex)
         {
-            return new HealthCheckResult(context.Registration.FailureStatus, exception: ex);
+            return new HealthCheckResult(context.Registration.FailureStatus, "Failed to connect to Milvus server.", ex);
         }
     }
 }
