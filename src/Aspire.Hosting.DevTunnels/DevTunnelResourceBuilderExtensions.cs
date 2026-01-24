@@ -12,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting;
 
@@ -73,6 +74,9 @@ public static partial class DevTunnelsResourceBuilderExtensions
             throw new ArgumentException(errorMessage, nameof(options));
         }
 
+        // Add DevTunnel options to DI
+        builder.Services.AddSingleton(Options.Create(options));
+
         // Add services
         builder.Services.TryAddSingleton<DevTunnelCliInstallationManager>();
         builder.Services.TryAddSingleton<DevTunnelLoginManager>();
@@ -80,7 +84,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
         builder.Services.TryAddSingleton<IDevTunnelClient, DevTunnelCliClient>();
 
         var workingDirectory = builder.AppHostDirectory;
-        var tunnelResource = new DevTunnelResource(name, tunnelId, DevTunnelCli.GetCliPath(builder.Configuration), workingDirectory, options);
+        var tunnelResource = new DevTunnelResource(name, tunnelId, DevTunnelCli.GetCliPath(builder.Configuration), workingDirectory);
 
         // Health check
         var healtCheckKey = $"{name}-check";
@@ -98,7 +102,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
 #pragma warning restore ASPIREINTERACTION001
 
         var rb = builder.AddResource(tunnelResource)
-            .WithArgs("host", tunnelId, "--nologo")
+            .WithArgs("host", options.Region is not null ? $"{tunnelId}.{options.RegionCode}" : tunnelId, "--nologo")
             .WithIconName("CloudBidirectional")
             .WithEnvironment("TUNNEL_SERVICE_USER_AGENT", s_aspireUserAgent)
             .WithInitialState(new()
@@ -132,7 +136,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
                 try
                 {
                     logger.LogInformation("Creating dev tunnel '{TunnelId}'", tunnelResource.TunnelId);
-                    var tunnelStatus = await devTunnelClient.CreateTunnelAsync(tunnelResource.TunnelId, tunnelResource.Options, logger, ct).ConfigureAwait(false);
+                    var tunnelStatus = await devTunnelClient.CreateTunnelAsync(tunnelResource.TunnelId, logger, ct).ConfigureAwait(false);
                     logger.LogDebug("Dev tunnel '{TunnelId}' created", tunnelResource.TunnelId);
                 }
                 catch (Exception ex)

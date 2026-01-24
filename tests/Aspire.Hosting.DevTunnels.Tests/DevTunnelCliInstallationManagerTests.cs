@@ -89,7 +89,7 @@ public class DevTunnelCliInstallationManagerTests
             throw new NotImplementedException();
         }
 
-        public Task<DevTunnelStatus> CreateTunnelAsync(string tunnelId, DevTunnelOptions options, ILogger? logger = null, CancellationToken cancellationToken = default)
+        public Task<DevTunnelStatus> CreateTunnelAsync(string tunnelId, ILogger? logger = null, CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException();
         }
