@@ -98,7 +98,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
 #pragma warning restore ASPIREINTERACTION001
 
         var rb = builder.AddResource(tunnelResource)
-            .WithArgs("host", options.Region is not null ? $"{tunnelId}.{options.RegionCode}" : tunnelId, "--nologo")
+            .WithArgs("host", tunnelResource.ResolvedTunnelId, "--nologo")
             .WithIconName("CloudBidirectional")
             .WithEnvironment("TUNNEL_SERVICE_USER_AGENT", s_aspireUserAgent)
             .WithInitialState(new()
