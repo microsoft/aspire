@@ -5,17 +5,15 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.DevTunnels;
 
-internal sealed class DevTunnelCliClient(IConfiguration configuration, IOptions<DevTunnelOptions> options) : IDevTunnelClient
+internal sealed class DevTunnelCliClient(IConfiguration configuration) : IDevTunnelClient
 {
     private readonly int _maxCliAttempts = configuration.GetValue<int?>("ASPIRE_DEVTUNNEL_CLI_MAX_ATTEMPTS") ?? 3;
     private readonly TimeSpan _cliRetryOnErrorDelay = TimeSpan.FromSeconds(2);
     private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
     private readonly DevTunnelCli _cli = new(DevTunnelCli.GetCliPath(configuration));
-    private readonly DevTunnelOptions _options = options.Value;
 
     public async Task<Version> GetVersionAsync(ILogger? logger = default, CancellationToken cancellationToken = default)
     {
@@ -51,21 +49,21 @@ internal sealed class DevTunnelCliClient(IConfiguration configuration, IOptions<
         throw new DistributedApplicationException($"Failed to get devtunnel CLI version. Output: '{output}'. Error: '{error}'");
     }
 
-    public async Task<DevTunnelStatus> CreateTunnelAsync(string tunnelId, ILogger? logger = default, CancellationToken cancellationToken = default)
+    public async Task<DevTunnelStatus> CreateTunnelAsync(string tunnelId, DevTunnelOptions options, ILogger? logger = default, CancellationToken cancellationToken = default)
     {
         var attempts = 0;
         var exitCode = 0;
         string? error = null;
-        string resolvedTunnelId = ResolveTunnelId(tunnelId);
+        string resolvedTunnelId = options.Region is not null ? $"{tunnelId}.{options.RegionCode}" : tunnelId;
 
         while (attempts < _maxCliAttempts)
         {
-            logger?.LogTrace("Creating dev tunnel '{TunnelId}' with options: {Options}", tunnelId, _options.ToLoggerString());
+            logger?.LogTrace("Creating dev tunnel '{TunnelId}' with options: {Options}", tunnelId, options.ToLoggerString());
             if (attempts++ > 1)
             {
                 logger?.LogTrace("Attempt {Attempt} of {MaxAttempts} to create dev tunnel '{TunnelId}'", attempts, _maxCliAttempts, tunnelId);
             }
-            (var tunnel, exitCode, error) = await CallCliAsJsonAsync<DevTunnelStatus>((stdout, stderr, log, ct) => _cli.CreateTunnelAsync(tunnelId, _options, stdout, stderr, log, ct),
+            (var tunnel, exitCode, error) = await CallCliAsJsonAsync<DevTunnelStatus>((stdout, stderr, log, ct) => _cli.CreateTunnelAsync(tunnelId, options, stdout, stderr, log, ct),
                 "tunnel",
                 logger, cancellationToken).ConfigureAwait(false);
 
@@ -80,7 +78,7 @@ internal sealed class DevTunnelCliClient(IConfiguration configuration, IOptions<
                 // Update the tunnel as it already exists
                 logger?.LogTrace("Dev tunnel '{TunnelId}' already exists, will update it instead.", tunnelId);
                 (tunnel, exitCode, error) = await CallCliAsJsonAsync<DevTunnelStatus>(
-                    (stdout, stderr, log, ct) => _cli.UpdateTunnelAsync(resolvedTunnelId, _options, stdout, stderr, log, ct),
+                    (stdout, stderr, log, ct) => _cli.UpdateTunnelAsync(resolvedTunnelId, options, stdout, stderr, log, ct),
                     logger, cancellationToken).ConfigureAwait(false);
                 if (exitCode == 0 && tunnel is not null)
                 {
@@ -95,7 +93,7 @@ internal sealed class DevTunnelCliClient(IConfiguration configuration, IOptions<
                     if (exitCode == 0 && accessStatus is { AccessControlEntries: [] })
                     {
                         logger?.LogTrace("Dev tunnel '{TunnelId}' access policies cleared successfully.", resolvedTunnelId);
-                        if (_options.AllowAnonymous)
+                        if (options.AllowAnonymous)
                         {
                             // Set anonymous access as specified
                             logger?.LogTrace("Allowing anonymous access for dev tunnel '{TunnelId}'.", resolvedTunnelId);
@@ -130,7 +128,7 @@ internal sealed class DevTunnelCliClient(IConfiguration configuration, IOptions<
     {
         logger?.LogTrace("Getting details for dev tunnel '{TunnelId}'.", tunnelId);
         var (tunnel, exitCode, error) = await CallCliAsJsonAsync<DevTunnelStatus>(
-            (stdout, stderr, log, ct) => _cli.ShowTunnelAsync(ResolveTunnelId(tunnelId), stdout, stderr, log, ct),
+            (stdout, stderr, log, ct) => _cli.ShowTunnelAsync(tunnelId, stdout, stderr, log, ct),
             "tunnel",
             logger, cancellationToken).ConfigureAwait(false);
         return tunnel ?? throw new DistributedApplicationException($"Failed to get dev tunnel '{tunnelId}'. Exit code {exitCode}: {error}");
@@ -140,7 +138,7 @@ internal sealed class DevTunnelCliClient(IConfiguration configuration, IOptions<
     {
         logger?.LogTrace("Getting port list for dev tunnel '{TunnelId}'.", tunnelId);
         var (ports, exitCode, error) = await CallCliAsJsonAsync<DevTunnelPortList>(
-            (stdout, stderr, log, ct) => _cli.ListPortsAsync(ResolveTunnelId(tunnelId), stdout, stderr, log, ct),
+            (stdout, stderr, log, ct) => _cli.ListPortsAsync(tunnelId, stdout, stderr, log, ct),
             logger, cancellationToken).ConfigureAwait(false);
         return ports ?? throw new DistributedApplicationException($"Failed to get port list for dev tunnel '{tunnelId}'. Exit code {exitCode}: {error}");
     }
@@ -161,7 +159,7 @@ internal sealed class DevTunnelCliClient(IConfiguration configuration, IOptions<
             }
 
             (port, exitCode, error) = await CallCliAsJsonAsync<DevTunnelPortStatus>(
-                (outWriter, errWriter, log, ct) => _cli.CreatePortAsync(ResolveTunnelId(tunnelId), portNumber, portOptions, outWriter, errWriter, log, ct),
+                (outWriter, errWriter, log, ct) => _cli.CreatePortAsync(tunnelId, portNumber, portOptions, outWriter, errWriter, log, ct),
                 logger, cancellationToken).ConfigureAwait(false);
 
             if (exitCode == 0 && port is not null)
@@ -181,7 +179,7 @@ internal sealed class DevTunnelCliClient(IConfiguration configuration, IOptions<
                         logger?.LogTrace("Allowing anonymous access for port '{PortNumber}' on dev tunnel '{TunnelId}'.", portNumber, tunnelId);
                     }
                     (var result, exitCode, error) = await CallCliAsJsonAsync<DevTunnelAccessStatus>(
-                        (stdout, stderr, log, ct) => _cli.CreateAccessAsync(ResolveTunnelId(tunnelId), portNumber, anonymous, deny, stdout, stderr, log, ct),
+                        (stdout, stderr, log, ct) => _cli.CreateAccessAsync(tunnelId, portNumber, anonymous, deny, stdout, stderr, log, ct),
                         logger, cancellationToken).ConfigureAwait(false);
                 }
                 if (exitCode == 0)
@@ -194,7 +192,7 @@ internal sealed class DevTunnelCliClient(IConfiguration configuration, IOptions<
             {
                 logger?.LogTrace("Port '{PortNumber}' already exists on dev tunnel '{TunnelId}', deleting and trying again.", portNumber, tunnelId);
                 (var deleteResult, exitCode, error) = await CallCliAsJsonAsync<DevTunnelDeleteResult>(
-                    (stdout, stderr, log, ct) => _cli.DeletePortAsync(ResolveTunnelId(tunnelId), portNumber, stdout, stderr, log, ct),
+                    (stdout, stderr, log, ct) => _cli.DeletePortAsync(tunnelId, portNumber, stdout, stderr, log, ct),
                     logger, cancellationToken).ConfigureAwait(false);
                 if (exitCode == 0)
                 {
@@ -218,7 +216,7 @@ internal sealed class DevTunnelCliClient(IConfiguration configuration, IOptions<
     {
         logger?.LogTrace("Deleting port '{PortNumber}' on dev tunnel '{TunnelId}'.", portNumber, tunnelId);
         var (result, exitCode, error) = await CallCliAsJsonAsync<DevTunnelPortDeleteResult>(
-            (stdout, stderr, log, ct) => _cli.DeletePortAsync(ResolveTunnelId(tunnelId), portNumber, stdout, stderr, log, ct),
+            (stdout, stderr, log, ct) => _cli.DeletePortAsync(tunnelId, portNumber, stdout, stderr, log, ct),
             logger, cancellationToken).ConfigureAwait(false);
         return result ?? throw new DistributedApplicationException($"Failed to delete port '{portNumber}' on dev tunnel '{tunnelId}'. Exit code {exitCode}: {error}");
     }
@@ -227,7 +225,7 @@ internal sealed class DevTunnelCliClient(IConfiguration configuration, IOptions<
     {
         logger?.LogTrace("Getting access details for {PortInfo}dev tunnel '{TunnelId}'.", portNumber.HasValue ? $"port '{portNumber}' on " : string.Empty, tunnelId);
         var (access, exitCode, error) = await CallCliAsJsonAsync<DevTunnelAccessStatus>(
-            (stdout, stderr, log, ct) => _cli.ListAccessAsync(ResolveTunnelId(tunnelId), portNumber, stdout, stderr, log, ct),
+            (stdout, stderr, log, ct) => _cli.ListAccessAsync(tunnelId, portNumber, stdout, stderr, log, ct),
             logger, cancellationToken).ConfigureAwait(false);
         return access ?? throw new DistributedApplicationException($"Failed to get access details for '{tunnelId}'{(portNumber.HasValue ? $" port {portNumber}" : "")}. Exit code {exitCode}: {error}");
     }
@@ -311,16 +309,6 @@ internal sealed class DevTunnelCliClient(IConfiguration configuration, IOptions<
             logger?.LogError(ex, "Failed to parse JSON output into type '{TypeName}':\n{Output}", typeof(T).Name, output);
             throw new DistributedApplicationException($"Failed to parse JSON output into type '{typeof(T).Name}':\n{output}", ex);
         }
-    }
-
-    /// <summary>
-    /// Resolves the tunnel identifier by appending the region code if a region is specified in the options.
-    /// </summary>
-    /// <remarks>The DevTunnel Cli uses the fully qualified tunnelId to select correct existing dev tunnel</remarks>
-    /// <param name="tunnelId">The tunnel Id to resolve.</param>
-    private string ResolveTunnelId(string tunnelId)
-    {
-        return _options.Region is not null ? $"{tunnelId}.{_options.RegionCode}" : tunnelId;
     }
 
     private record DevTunnelDeleteResult(string DeletedTunnel);

@@ -13,7 +13,7 @@ internal interface IDevTunnelClient
 
     Task<UserLoginStatus> UserLoginAsync(LoginProvider provider, ILogger? logger = default, CancellationToken cancellationToken = default);
 
-    Task<DevTunnelStatus> CreateTunnelAsync(string tunnelId, ILogger? logger = default, CancellationToken cancellationToken = default);
+    Task<DevTunnelStatus> CreateTunnelAsync(string tunnelId, DevTunnelOptions options, ILogger? logger = default, CancellationToken cancellationToken = default);
 
     Task<DevTunnelPortList> GetPortListAsync(string tunnelId, ILogger? logger = default, CancellationToken cancellationToken = default);
 

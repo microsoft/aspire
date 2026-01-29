@@ -28,6 +28,11 @@ public sealed class DevTunnelResource(string name, string tunnelId, string comma
     /// </summary>
     public string TunnelId { get; init; } = tunnelId;
 
+    /// <summary>
+    /// Gets the fully qualified tunnel ID including the region suffix if a region is specified.
+    /// </summary>
+    internal string ResolvedTunnelId => Options.Region is not null ? $"{TunnelId}.{Options.RegionCode}" : TunnelId;
+
     internal List<DevTunnelPortResource> Ports { get; } = [];
 
     internal DevTunnelStatus? LastKnownStatus { get; set; }
