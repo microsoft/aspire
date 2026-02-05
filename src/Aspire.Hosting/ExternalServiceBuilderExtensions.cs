@@ -306,12 +306,32 @@ public static class ExternalServiceBuilderExtensions
 }
 
 /// <summary>
+/// Provides helper methods for HTTP health checks.
+/// </summary>
+internal static class HttpHealthCheckHelpers
+{
+    /// <summary>
+    /// Returns a friendly, user-readable error message for common HTTP health check exceptions.
+    /// </summary>
+    public static string GetFriendlyErrorMessage(Uri uri, Exception exception)
+    {
+        return exception switch
+        {
+            TaskCanceledException or OperationCanceledException => $"Request to {uri} timed out.",
+            HttpRequestException hre when hre.StatusCode.HasValue =>
+                $"Request to {uri} returned {(int)hre.StatusCode.Value} {hre.StatusCode.Value}.",
+            HttpRequestException => $"Failed to connect to {uri}.",
+            _ => $"Health check failed for {uri}."
+        };
+    }
+}
+
+/// <summary>
 /// A health check wrapper for static URIs that provides friendly error messages.
 /// </summary>
 internal sealed class StaticUriHealthCheck : IHealthCheck
 {
     private readonly Uri _uri;
-    private readonly int _expectedStatusCode;
     private readonly Func<HttpClient> _httpClientFactory;
     private readonly UriHealthCheckOptions _options;
     private readonly UriHealthCheck _uriHealthCheck;
@@ -319,7 +339,6 @@ internal sealed class StaticUriHealthCheck : IHealthCheck
     public StaticUriHealthCheck(Uri uri, int expectedStatusCode, Func<HttpClient> httpClientFactory)
     {
         _uri = uri ?? throw new ArgumentNullException(nameof(uri));
-        _expectedStatusCode = expectedStatusCode;
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
         _options = new UriHealthCheckOptions();
         _options.AddUri(uri, setup => setup.ExpectHttpCode(expectedStatusCode));
@@ -335,7 +354,7 @@ internal sealed class StaticUriHealthCheck : IHealthCheck
             // Wrap unhealthy results from UriHealthCheck with friendly messages
             if (result.Status == HealthStatus.Unhealthy && result.Exception is not null)
             {
-                var friendlyMessage = GetFriendlyErrorMessage(_uri, result.Exception);
+                var friendlyMessage = HttpHealthCheckHelpers.GetFriendlyErrorMessage(_uri, result.Exception);
                 return HealthCheckResult.Unhealthy(friendlyMessage, result.Exception);
             }
 
@@ -343,21 +362,9 @@ internal sealed class StaticUriHealthCheck : IHealthCheck
         }
         catch (Exception ex)
         {
-            var friendlyMessage = GetFriendlyErrorMessage(_uri, ex);
+            var friendlyMessage = HttpHealthCheckHelpers.GetFriendlyErrorMessage(_uri, ex);
             return HealthCheckResult.Unhealthy(friendlyMessage, ex);
         }
-    }
-
-    private static string GetFriendlyErrorMessage(Uri uri, Exception exception)
-    {
-        return exception switch
-        {
-            TaskCanceledException or OperationCanceledException => $"Request to {uri} timed out.",
-            HttpRequestException hre when hre.StatusCode.HasValue =>
-                $"Request to {uri} returned {(int)hre.StatusCode.Value} {hre.StatusCode.Value}.",
-            HttpRequestException => $"Failed to connect to {uri}.",
-            _ => $"Health check failed for {uri}."
-        };
     }
 }
 
@@ -419,7 +426,7 @@ internal sealed class ParameterUriHealthCheck : IHealthCheck
             // Wrap unhealthy results from UriHealthCheck with friendly messages
             if (result.Status == HealthStatus.Unhealthy && result.Exception is not null)
             {
-                var friendlyMessage = GetFriendlyErrorMessage(targetUri, result.Exception);
+                var friendlyMessage = HttpHealthCheckHelpers.GetFriendlyErrorMessage(targetUri, result.Exception);
                 return HealthCheckResult.Unhealthy(friendlyMessage, result.Exception);
             }
 
@@ -429,23 +436,11 @@ internal sealed class ParameterUriHealthCheck : IHealthCheck
         {
             if (targetUri is not null)
             {
-                var friendlyMessage = GetFriendlyErrorMessage(targetUri, ex);
+                var friendlyMessage = HttpHealthCheckHelpers.GetFriendlyErrorMessage(targetUri, ex);
                 return HealthCheckResult.Unhealthy(friendlyMessage, ex);
             }
 
             return new HealthCheckResult(context.Registration.FailureStatus, exception: ex);
         }
-    }
-
-    private static string GetFriendlyErrorMessage(Uri uri, Exception exception)
-    {
-        return exception switch
-        {
-            TaskCanceledException or OperationCanceledException => $"Request to {uri} timed out.",
-            HttpRequestException hre when hre.StatusCode.HasValue =>
-                $"Request to {uri} returned {(int)hre.StatusCode.Value} {hre.StatusCode.Value}.",
-            HttpRequestException => $"Failed to connect to {uri}.",
-            _ => $"Health check failed for {uri}."
-        };
     }
 }
