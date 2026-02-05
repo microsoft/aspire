@@ -11,7 +11,8 @@ namespace Aspire.Seq;
 /// <param name="seqUri">The URI of the Seq server to check.</param>
 internal sealed class SeqHealthCheck(string seqUri) : IHealthCheck
 {
-    readonly HttpClient _client = new(new SocketsHttpHandler { ActivityHeadersPropagator = null }) { BaseAddress = new Uri(seqUri) };
+    private readonly HttpClient _client = new(new SocketsHttpHandler { ActivityHeadersPropagator = null }) { BaseAddress = new Uri(seqUri) };
+    private readonly Uri _healthUri = new(new Uri(seqUri), "/health");
 
     /// <summary>
     /// Checks the health of a Seq server by calling its <a href="https://docs.datalust.co/docs/using-the-http-api#checking-health">health</a> endpoint.
@@ -25,19 +26,19 @@ internal sealed class SeqHealthCheck(string seqUri) : IHealthCheck
 
             return response.IsSuccessStatusCode
                 ? HealthCheckResult.Healthy()
-                : HealthCheckResult.Unhealthy($"Request to {_client.BaseAddress}health returned {(int)response.StatusCode} {response.StatusCode}.");
+                : HealthCheckResult.Unhealthy($"Request to {_healthUri} returned {(int)response.StatusCode} {response.StatusCode}.");
         }
         catch (TaskCanceledException tce) when (!cancellationToken.IsCancellationRequested)
         {
-            return HealthCheckResult.Unhealthy($"Request to {_client.BaseAddress}health timed out.", tce);
+            return HealthCheckResult.Unhealthy($"Request to {_healthUri} timed out.", tce);
         }
         catch (HttpRequestException hre)
         {
-            return HealthCheckResult.Unhealthy($"Failed to connect to {_client.BaseAddress}health.", hre);
+            return HealthCheckResult.Unhealthy($"Failed to connect to {_healthUri}.", hre);
         }
         catch (Exception ex)
         {
-            return HealthCheckResult.Unhealthy($"Health check failed for {_client.BaseAddress}health.", ex);
+            return HealthCheckResult.Unhealthy($"Health check failed for {_healthUri}.", ex);
         }
     }
 }

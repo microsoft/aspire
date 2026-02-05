@@ -306,12 +306,12 @@ public static class ExternalServiceBuilderExtensions
 }
 
 /// <summary>
-/// Provides helper methods for HTTP health checks.
+/// Helper methods for HTTP health check error messages.
 /// </summary>
 internal static class HttpHealthCheckHelpers
 {
     /// <summary>
-    /// Returns a friendly, user-readable error message for common HTTP health check exceptions.
+    /// Gets a friendly error message for the given exception.
     /// </summary>
     public static string GetFriendlyErrorMessage(Uri uri, Exception exception)
     {
@@ -327,7 +327,7 @@ internal static class HttpHealthCheckHelpers
 }
 
 /// <summary>
-/// A health check wrapper for static URIs that provides friendly error messages.
+/// HTTP health check for static URIs with friendly error messages.
 /// </summary>
 internal sealed class StaticUriHealthCheck : IHealthCheck
 {
@@ -369,7 +369,7 @@ internal sealed class StaticUriHealthCheck : IHealthCheck
 }
 
 /// <summary>
-/// A health check that resolves URL from a parameter asynchronously and delegates to UriHealthCheck.
+/// HTTP health check that resolves URL from a parameter at runtime.
 /// </summary>
 internal sealed class ParameterUriHealthCheck : IHealthCheck
 {
@@ -377,8 +377,6 @@ internal sealed class ParameterUriHealthCheck : IHealthCheck
     private readonly Func<HttpClient> _httpClientFactory;
     private readonly string? _path;
     private readonly int _expectedStatusCode;
-    private readonly UriHealthCheckOptions _options;
-    private readonly UriHealthCheck _uriHealthCheck;
 
     public ParameterUriHealthCheck(ParameterResource urlParameter, string? path, int expectedStatusCode, Func<HttpClient> httpClientFactory)
     {
@@ -386,8 +384,6 @@ internal sealed class ParameterUriHealthCheck : IHealthCheck
         _path = path;
         _expectedStatusCode = expectedStatusCode;
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
-        _options = new UriHealthCheckOptions();
-        _uriHealthCheck = new UriHealthCheck(_options, _httpClientFactory);
     }
 
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
@@ -419,9 +415,12 @@ internal sealed class ParameterUriHealthCheck : IHealthCheck
 
             targetUri = uri;
 
-            _options.AddUri(uri, setup => setup.ExpectHttpCode(_expectedStatusCode));
+            // Create fresh options and health check for each invocation to avoid duplicate URIs
+            var options = new UriHealthCheckOptions();
+            options.AddUri(uri, setup => setup.ExpectHttpCode(_expectedStatusCode));
+            var uriHealthCheck = new UriHealthCheck(options, _httpClientFactory);
 
-            var result = await _uriHealthCheck.CheckHealthAsync(context, cancellationToken).ConfigureAwait(false);
+            var result = await uriHealthCheck.CheckHealthAsync(context, cancellationToken).ConfigureAwait(false);
 
             // Wrap unhealthy results from UriHealthCheck with friendly messages
             if (result.Status == HealthStatus.Unhealthy && result.Exception is not null)
