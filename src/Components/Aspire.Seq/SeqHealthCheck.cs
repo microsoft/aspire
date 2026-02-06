@@ -32,6 +32,10 @@ internal sealed class SeqHealthCheck(string seqUri) : IHealthCheck
         {
             return HealthCheckResult.Unhealthy($"Request to {_healthUri} timed out.", tce);
         }
+        catch (TaskCanceledException tce) when (cancellationToken.IsCancellationRequested)
+        {
+            return HealthCheckResult.Unhealthy($"Health check for {_healthUri} was canceled.", tce);
+        }
         catch (HttpRequestException hre)
         {
             return HealthCheckResult.Unhealthy($"Failed to connect to {_healthUri}.", hre);
