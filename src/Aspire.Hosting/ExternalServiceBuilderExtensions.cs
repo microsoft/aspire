@@ -352,9 +352,11 @@ internal sealed class StaticUriHealthCheck : IHealthCheck
             var result = await _uriHealthCheck.CheckHealthAsync(context, cancellationToken).ConfigureAwait(false);
 
             // Wrap unhealthy results from UriHealthCheck with friendly messages
-            if (result.Status == HealthStatus.Unhealthy && result.Exception is not null)
+            if (result.Status == HealthStatus.Unhealthy)
             {
-                var friendlyMessage = HttpHealthCheckHelpers.GetFriendlyErrorMessage(_uri, result.Exception);
+                var friendlyMessage = result.Exception is not null
+                    ? HttpHealthCheckHelpers.GetFriendlyErrorMessage(_uri, result.Exception)
+                    : $"Health check failed for {_uri}.";
                 return HealthCheckResult.Unhealthy(friendlyMessage, result.Exception);
             }
 
@@ -423,9 +425,11 @@ internal sealed class ParameterUriHealthCheck : IHealthCheck
             var result = await uriHealthCheck.CheckHealthAsync(context, cancellationToken).ConfigureAwait(false);
 
             // Wrap unhealthy results from UriHealthCheck with friendly messages
-            if (result.Status == HealthStatus.Unhealthy && result.Exception is not null)
+            if (result.Status == HealthStatus.Unhealthy)
             {
-                var friendlyMessage = HttpHealthCheckHelpers.GetFriendlyErrorMessage(targetUri, result.Exception);
+                var friendlyMessage = result.Exception is not null
+                    ? HttpHealthCheckHelpers.GetFriendlyErrorMessage(targetUri, result.Exception)
+                    : $"Health check failed for {targetUri}.";
                 return HealthCheckResult.Unhealthy(friendlyMessage, result.Exception);
             }
 
