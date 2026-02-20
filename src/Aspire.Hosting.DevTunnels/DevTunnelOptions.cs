@@ -24,7 +24,7 @@ public sealed class DevTunnelOptions
     public List<string>? Labels { get; set; }
 
     /// <summary>
-    /// Optional DevTunnel region the Dev Tunnel is created in.
+    /// Optional region to create the dev tunnel in.
     /// If not specified, the region will be selected automatically based on the ping.
     /// </summary>
     public DevTunnelRegion? Region { get; set; }
