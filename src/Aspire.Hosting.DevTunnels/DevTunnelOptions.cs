@@ -81,9 +81,8 @@ public sealed class DevTunnelPortOptions
 }
 
 /// <summary>
-/// Specifies the available regions the dev tunnel can be created in. <b>Recommended to set to ensure use of existing dev tunnel</b>
+/// Region options for dev tunnel creation.
 /// </summary>
-/// <remarks>If specified, choose a region with lowest ping. Use the following command in a terminal to check: <br /> <br /> <c>devtunnel clusters --ping</c> </remarks>
 public enum DevTunnelRegion : byte
 {
     /// <summary>
