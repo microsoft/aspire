@@ -152,14 +152,15 @@ internal static class InteractionCommands
 
                 var result = await interactionService.PromptInputAsync(
                     "View file content",
-                    "Select a text file to display its content.",
+                    "Select a text file to display its content (up to 5 MB).",
                     new InteractionInput
                     {
                         Name = "file",
                         Label = "Text file",
                         InputType = InputType.FileChooser,
                         Required = true,
-                        Description = "Select a text file (e.g. .txt, .json, .xml, .cs)."
+                        Description = "Select a text file (e.g. .txt, .json, .xml, .cs).",
+                        MaxFileSize = 5 * 1024 * 1024 // 5 MB
                     },
                     cancellationToken: commandContext.CancellationToken);
 

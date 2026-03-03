@@ -699,6 +699,7 @@ namespace Aspire.Hosting
         public string? Label { get { throw null; } init { } }
 
         public int? MaxLength { get { throw null; } init { } }
+        public long? MaxFileSize { get { throw null; } init { } }
 
         public required string Name { get { throw null; } init { } }
 

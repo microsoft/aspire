@@ -198,16 +198,17 @@ public partial class InteractionsInputDialog : IAsyncDisposable
         await Dialog.CancelAsync();
     }
 
-    // Maximum number of bytes to read from an uploaded file into memory.
-    private const long MaxUploadedFileBytes = 1024 * 1024; // 1 MB
+    // Default maximum number of bytes to read from an uploaded file into memory.
+    private const long DefaultMaxUploadedFileBytes = 1024 * 1024; // 1 MB
 
     private async Task OnFileSelected(IEnumerable<FluentInputFileEventArgs> args, InputViewModel inputModel)
     {
         var file = args.FirstOrDefault();
         if (file?.Stream != null)
         {
-            // Wrap the file stream to prevent reading more than MaxUploadedFileBytes into memory.
-            using var limitedStream = new LimitedStream(file.Stream, MaxUploadedFileBytes);
+            var maxBytes = inputModel.Input.MaxFileSize > 0 ? inputModel.Input.MaxFileSize : DefaultMaxUploadedFileBytes;
+            // Wrap the file stream to prevent reading more than the configured max into memory.
+            using var limitedStream = new LimitedStream(file.Stream, maxBytes);
             using var reader = new StreamReader(limitedStream);
             inputModel.Value = await reader.ReadToEndAsync();
             inputModel.FileDisplayName = file.Name;

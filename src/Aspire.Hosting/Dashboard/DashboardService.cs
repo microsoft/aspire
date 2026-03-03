@@ -225,6 +225,10 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         {
             dto.MaxLength = input.MaxLength.Value;
         }
+        if (input.MaxFileSize != null)
+        {
+            dto.MaxFileSize = input.MaxFileSize.Value;
+        }
         dto.ValidationErrors.AddRange(input.ValidationErrors);
         return dto;
     }

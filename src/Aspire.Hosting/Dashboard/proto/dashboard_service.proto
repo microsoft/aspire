@@ -431,6 +431,7 @@ message InteractionInput {
     bool update_state_on_change = 13;
     string name = 14;
     bool disabled = 15;
+    int64 max_file_size = 16;
 }
 enum MessageIntent {
     MESSAGE_INTENT_NONE = 0;

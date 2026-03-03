@@ -396,6 +396,24 @@ public sealed class InteractionInput
             field = value;
         }
     }
+
+    /// <summary>
+    /// Gets or sets the maximum file size in bytes for <see cref="InputType.FileChooser"/> inputs.
+    /// If not specified, defaults to 1 MB.
+    /// </summary>
+    public long? MaxFileSize
+    {
+        get => field;
+        init
+        {
+            if (value is { } v)
+            {
+                ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(v, 0);
+            }
+
+            field = value;
+        }
+    }
 }
 
 /// <summary>
