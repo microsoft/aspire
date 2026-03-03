@@ -675,7 +675,8 @@ namespace Aspire.Hosting
         SecretText = 1,
         Choice = 2,
         Boolean = 3,
-        Number = 4
+        Number = 4,
+        FileChooser = 5
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]

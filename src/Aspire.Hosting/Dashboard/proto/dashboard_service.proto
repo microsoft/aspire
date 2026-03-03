@@ -447,6 +447,7 @@ enum InputType {
     INPUT_TYPE_CHOICE = 3;
     INPUT_TYPE_BOOLEAN = 4;
     INPUT_TYPE_NUMBER = 5;
+    INPUT_TYPE_FILE_CHOOSER = 6;
 }
 
 ////////////////////////////////////////////

@@ -198,6 +198,18 @@ public partial class InteractionsInputDialog : IAsyncDisposable
         await Dialog.CancelAsync();
     }
 
+    private async Task OnFileSelected(IEnumerable<FluentInputFileEventArgs> args, InputViewModel inputModel)
+    {
+        var file = args.FirstOrDefault();
+        if (file?.Stream != null)
+        {
+            using var reader = new StreamReader(file.Stream);
+            inputModel.Value = await reader.ReadToEndAsync();
+            inputModel.FileDisplayName = file.Name;
+            _editContext.NotifyFieldChanged(GetFieldIdentifier(inputModel));
+        }
+    }
+
     private async Task ToggleSecretTextVisibilityAsync(InputViewModel inputModel)
     {
         inputModel.IsSecretTextVisible = !inputModel.IsSecretTextVisible;

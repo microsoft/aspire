@@ -599,7 +599,11 @@ public enum InputType
     /// <summary>
     /// A numeric input.
     /// </summary>
-    Number
+    Number,
+    /// <summary>
+    /// A file chooser input. Allows the user to select a file using the OS/browser file picker.
+    /// </summary>
+    FileChooser
 }
 
 /// <summary>

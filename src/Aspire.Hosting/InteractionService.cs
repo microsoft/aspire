@@ -550,6 +550,9 @@ internal class InteractionService : IInteractionService
                                     context.AddValidationError(input, "Value must be a valid number.");
                                 }
                                 break;
+                            case InputType.FileChooser:
+                                // File chooser values are file paths; basic validation that the value is not empty is handled above.
+                                break;
                             default:
                                 break;
                         }

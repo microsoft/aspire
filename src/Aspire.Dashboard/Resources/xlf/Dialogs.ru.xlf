@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="ru" original="../Dialogs.resx">
     <body>
@@ -513,6 +513,16 @@ For more information about using AI agents with the dashboard, including setting
         <source>{0} for {1}</source>
         <target state="new">{0} for {1}</target>
         <note>{0} is the data type display name. {1} is the parent resource display name.</note>
+      </trans-unit>
+      <trans-unit id="InteractionFileChooserBrowse">
+        <source>Browse</source>
+        <target state="new">Browse</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InteractionFileChooserPlaceholder">
+        <source>Choose a file...</source>
+        <target state="new">Choose a file...</target>
+        <note />
       </trans-unit>
       <trans-unit id="ManageDataDialogTitle">
         <source>Manage logs and telemetry</source>
