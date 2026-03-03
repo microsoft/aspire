@@ -114,6 +114,55 @@ public class AtsExportsTests
                 Assert.Equal("a", input.Value);
             });
     }
+
+    [Fact]
+    public async Task PromptInputs_ResultCarriesSubmittedFileMetadataByName()
+    {
+        var interactionService = new TestInteractionService();
+
+        var promptTask = InteractionExports.PromptInputs(
+            interactionService,
+            "Upload",
+            "Select a file.",
+            [
+                InteractionExports.CreateFileChooserInput(interactionService, "artifact", new CreateInteractionInputOptions
+                {
+                    Label = "Artifact",
+                    MaxFileSize = 1024
+                }),
+            ]);
+
+        var data = await interactionService.Interactions.Reader.ReadAsync();
+        data.Inputs["artifact"].Value = "/repo/artifact.zip";
+        data.Inputs["artifact"].SetFileName("artifact.zip");
+        data.CompletionTcs.SetResult(InteractionResult.Ok(data.Inputs));
+
+        var result = await promptTask;
+
+        Assert.False(result.Canceled);
+        Assert.Equal("/repo/artifact.zip", result.Inputs["artifact"].Value);
+        Assert.Equal("artifact.zip", result.Inputs["artifact"].FileName);
+        Assert.Equal(1024, result.Inputs["artifact"].MaxFileSize);
+    }
+
+    [Fact]
+    public void CreateFileChooserInput_CreatesFileChooserWithOptions()
+    {
+        var interactionService = new TestInteractionService();
+
+        var input = InteractionExports.CreateFileChooserInput(interactionService, "artifact", new CreateInteractionInputOptions
+        {
+            Label = "Artifact",
+            Placeholder = "Choose artifact",
+            MaxFileSize = 2048
+        }).Input;
+
+        Assert.Equal("artifact", input.Name);
+        Assert.Equal("Artifact", input.Label);
+        Assert.Equal("Choose artifact", input.Placeholder);
+        Assert.Equal(InputType.FileChooser, input.InputType);
+        Assert.Equal(2048, input.MaxFileSize);
+    }
 #pragma warning restore ASPIREINTERACTION001
 
     private sealed class TestHostEnvironment : IHostEnvironment

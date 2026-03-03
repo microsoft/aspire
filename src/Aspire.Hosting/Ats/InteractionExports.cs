@@ -205,6 +205,15 @@ internal static class InteractionExports
     }
 
     /// <summary>
+    /// Creates a file chooser input.
+    /// </summary>
+    [AspireExport]
+    public static InteractionInputBuilder CreateFileChooserInput(this IInteractionService interactionService, string name, CreateInteractionInputOptions? options = null)
+    {
+        return InteractionInputBuilder.Create(name, InputType.FileChooser, options);
+    }
+
+    /// <summary>
     /// Creates a choice input that selects from a list of options.
     /// </summary>
     /// <param name="interactionService">The interaction service.</param>
@@ -257,6 +266,8 @@ internal static class InteractionExports
             AllowCustomChoice = input.AllowCustomChoice,
             Disabled = input.Disabled,
             MaxLength = input.MaxLength,
+            MaxFileSize = input.MaxFileSize,
+            FileName = input.FileName,
             // DynamicLoading is intentionally omitted: it holds the non-serializable LoadCallback delegate.
         };
     }
@@ -297,6 +308,7 @@ internal sealed class InteractionInputBuilder
             AllowCustomChoice = options?.AllowCustomChoice ?? false,
             Disabled = options?.Disabled ?? false,
             MaxLength = options?.MaxLength,
+            MaxFileSize = options?.MaxFileSize,
         };
 
         return new InteractionInputBuilder(input);
@@ -519,6 +531,11 @@ internal sealed class CreateInteractionInputOptions
     /// Gets or sets the maximum length for text inputs.
     /// </summary>
     public int? MaxLength { get; init; }
+
+    /// <summary>
+    /// Gets or sets the maximum file size in bytes for file chooser inputs.
+    /// </summary>
+    public long? MaxFileSize { get; init; }
 }
 
 /// <summary>

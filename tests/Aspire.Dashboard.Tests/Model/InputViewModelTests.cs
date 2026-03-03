@@ -387,4 +387,68 @@ public class InputViewModelTests
 
         Assert.Equal("local", viewModel.Value);
     }
+
+    [Fact]
+    public void InputViewModel_FileChooser_DefaultsToEmptyValue()
+    {
+        // Arrange
+        var input = new InteractionInput
+        {
+            Label = "Select File",
+            InputType = InputType.FileChooser
+        };
+
+        // Act
+        var viewModel = new InputViewModel(input);
+
+        // Assert
+        Assert.True(string.IsNullOrEmpty(viewModel.Value));
+        Assert.True(string.IsNullOrEmpty(viewModel.FileDisplayName));
+    }
+
+    [Fact]
+    public void InputViewModel_FileChooser_FileDisplayNameIsIndependentOfValue()
+    {
+        // Arrange
+        var input = new InteractionInput
+        {
+            Label = "Select File",
+            InputType = InputType.FileChooser
+        };
+        var viewModel = new InputViewModel(input);
+
+        // Act
+        viewModel.Value = "/tmp/aspire-uploads/abc123";
+        viewModel.FileDisplayName = "readme.txt";
+
+        // Assert - Value holds the file path, FileDisplayName holds the user-facing name
+        Assert.Equal("/tmp/aspire-uploads/abc123", viewModel.Value);
+        Assert.Equal("readme.txt", viewModel.FileDisplayName);
+    }
+
+    [Fact]
+    public void InputViewModel_FileChooser_SetInputPreservesFileDisplayNameWhenValueIsPreserved()
+    {
+        var initialInput = new InteractionInput
+        {
+            Label = "Select File",
+            InputType = InputType.FileChooser,
+            Value = "/upload/local"
+        };
+        var viewModel = new InputViewModel(initialInput);
+        viewModel.FileDisplayName = "local-file.txt";
+
+        var newInput = new InteractionInput
+        {
+            Label = "Select Another File",
+            InputType = InputType.FileChooser,
+            Value = string.Empty,
+            FileName = string.Empty
+        };
+
+        viewModel.SetInput(newInput);
+
+        Assert.Equal("/upload/local", viewModel.Value);
+        Assert.Equal("local-file.txt", viewModel.FileDisplayName);
+    }
 }
