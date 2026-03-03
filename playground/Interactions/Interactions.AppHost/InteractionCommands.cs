@@ -35,11 +35,13 @@ internal static class InteractionCommands
                     return CommandResults.Failure("Canceled");
                 }
 
-                logger.LogInformation("Selected file: {Value}", result.Data.Value);
+                var fileContent = result.Data.Value;
+                var fileSize = fileContent?.Length ?? 0;
+                logger.LogInformation("Selected file ({Size} characters)", fileSize);
 
                 _ = interactionService.PromptMessageBoxAsync(
                     "File selected",
-                    $"You selected: {result.Data.Value}",
+                    $"File received ({fileSize} characters).",
                     new MessageBoxInteractionOptions { Intent = MessageIntent.Success });
 
                 return CommandResults.Success();
@@ -87,7 +89,15 @@ internal static class InteractionCommands
 
                 foreach (var input in result.Data)
                 {
-                    logger.LogInformation("Input: {Name} = {Value}", input.Name, input.Value);
+                    // Log only size for file inputs to avoid leaking file contents into logs.
+                    if (input.InputType == InputType.FileChooser)
+                    {
+                        logger.LogInformation("Input: {Name} = ({Size} characters)", input.Name, input.Value?.Length ?? 0);
+                    }
+                    else
+                    {
+                        logger.LogInformation("Input: {Name} = {Value}", input.Name, input.Value);
+                    }
                 }
 
                 return CommandResults.Success();
@@ -122,14 +132,14 @@ internal static class InteractionCommands
                 }
                 else
                 {
-                    logger.LogInformation("Selected file: {Value}", result.Data.Value);
+                    logger.LogInformation("Selected file ({Size} characters)", result.Data.Value.Length);
                 }
 
                 _ = interactionService.PromptMessageBoxAsync(
                     "Result",
                     string.IsNullOrEmpty(result.Data.Value)
                         ? "No file was selected."
-                        : $"You selected: {result.Data.Value}",
+                        : $"File received ({result.Data.Value.Length} characters).",
                     new MessageBoxInteractionOptions { Intent = MessageIntent.Information });
 
                 return CommandResults.Success();
@@ -160,7 +170,7 @@ internal static class InteractionCommands
 
                 var content = result.Data.Value ?? string.Empty;
 
-                logger.LogInformation("File content ({Length} characters):\n{Content}", content.Length, content);
+                logger.LogInformation("File content received ({Length} characters)", content.Length);
 
                 // Show a truncated preview in a message box.
                 const int maxPreviewLength = 2000;

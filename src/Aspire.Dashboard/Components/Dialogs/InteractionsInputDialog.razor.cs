@@ -198,16 +198,107 @@ public partial class InteractionsInputDialog : IAsyncDisposable
         await Dialog.CancelAsync();
     }
 
+    // Maximum number of bytes to read from an uploaded file into memory.
+    private const long MaxUploadedFileBytes = 1024 * 1024; // 1 MB
+
     private async Task OnFileSelected(IEnumerable<FluentInputFileEventArgs> args, InputViewModel inputModel)
     {
         var file = args.FirstOrDefault();
         if (file?.Stream != null)
         {
-            using var reader = new StreamReader(file.Stream);
+            // Wrap the file stream to prevent reading more than MaxUploadedFileBytes into memory.
+            using var limitedStream = new LimitedStream(file.Stream, MaxUploadedFileBytes);
+            using var reader = new StreamReader(limitedStream);
             inputModel.Value = await reader.ReadToEndAsync();
             inputModel.FileDisplayName = file.Name;
-            _editContext.NotifyFieldChanged(GetFieldIdentifier(inputModel));
+
+            _editContext.NotifyFieldChanged(new FieldIdentifier(inputModel, nameof(inputModel.Value)));
+            _editContext.NotifyFieldChanged(new FieldIdentifier(inputModel, nameof(inputModel.FileDisplayName)));
         }
+        else
+        {
+            inputModel.Value = string.Empty;
+            inputModel.FileDisplayName = string.Empty;
+
+            _editContext.NotifyFieldChanged(new FieldIdentifier(inputModel, nameof(inputModel.Value)));
+            _editContext.NotifyFieldChanged(new FieldIdentifier(inputModel, nameof(inputModel.FileDisplayName)));
+        }
+    }
+
+    private sealed class LimitedStream(Stream innerStream, long maxBytes) : Stream
+    {
+        private long _bytesRead;
+
+        public override bool CanRead => innerStream.CanRead;
+        public override bool CanSeek => innerStream.CanSeek;
+        public override bool CanWrite => false;
+        public override long Length => innerStream.Length;
+
+        public override long Position
+        {
+            get => innerStream.Position;
+            set => innerStream.Position = value;
+        }
+
+        public override void Flush() => innerStream.Flush();
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            if (_bytesRead >= maxBytes)
+            {
+                return 0;
+            }
+
+            var remaining = maxBytes - _bytesRead;
+            if (count > remaining)
+            {
+                count = (int)remaining;
+            }
+
+            var read = innerStream.Read(buffer, offset, count);
+            _bytesRead += read;
+            return read;
+        }
+
+        public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            if (_bytesRead >= maxBytes)
+            {
+                return 0;
+            }
+
+            var remaining = maxBytes - _bytesRead;
+            if (count > remaining)
+            {
+                count = (int)remaining;
+            }
+
+            var read = await innerStream.ReadAsync(buffer.AsMemory(offset, count), cancellationToken).ConfigureAwait(false);
+            _bytesRead += read;
+            return read;
+        }
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            if (_bytesRead >= maxBytes)
+            {
+                return 0;
+            }
+
+            var remaining = maxBytes - _bytesRead;
+            if (buffer.Length > remaining)
+            {
+                buffer = buffer[..(int)remaining];
+            }
+
+            var read = await innerStream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+            _bytesRead += read;
+            return read;
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => innerStream.Seek(offset, origin);
+        public override void SetLength(long value) => innerStream.SetLength(value);
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 
     private async Task ToggleSecretTextVisibilityAsync(InputViewModel inputModel)
