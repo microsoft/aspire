@@ -47,6 +47,16 @@
         <target state="new">No options selected. Nothing to configure.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_SelectSkillLocations">
+        <source>Where should skill files be installed? [dim](Space to toggle, Enter to confirm)[/]</source>
+        <target state="new">Where should skill files be installed? [dim](Space to toggle, Enter to confirm)[/]</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_SelectSkills">
+        <source>Which skills should be installed? [dim](Space to toggle, Enter to confirm)[/]</source>
+        <target state="new">Which skills should be installed? [dim](Space to toggle, Enter to confirm)[/]</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_WhatToConfigure">
         <source>What would you like to configure? [dim](Enter to skip, Ctrl+C to cancel)[/]</source>
         <target state="new">What would you like to configure? [dim](Enter to skip, Ctrl+C to cancel)[/]</target>

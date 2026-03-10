@@ -105,4 +105,10 @@
   <data name="InitCommand_InstallSkillFile" xml:space="preserve">
     <value>Install Aspire skill file (Recommended)</value>
   </data>
+  <data name="InitCommand_SelectSkillLocations" xml:space="preserve">
+    <value>Where should skill files be installed? [dim](Space to toggle, Enter to confirm)[/]</value>
+  </data>
+  <data name="InitCommand_SelectSkills" xml:space="preserve">
+    <value>Which skills should be installed? [dim](Space to toggle, Enter to confirm)[/]</value>
+  </data>
 </root>

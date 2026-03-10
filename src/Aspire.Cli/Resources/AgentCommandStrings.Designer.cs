@@ -194,5 +194,23 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InitCommand_InstallSkillFile", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Where should skill files be installed?.
+        /// </summary>
+        internal static string InitCommand_SelectSkillLocations {
+            get {
+                return ResourceManager.GetString("InitCommand_SelectSkillLocations", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Which skills should be installed?.
+        /// </summary>
+        internal static string InitCommand_SelectSkills {
+            get {
+                return ResourceManager.GetString("InitCommand_SelectSkills", resourceCulture);
+            }
+        }
     }
 }

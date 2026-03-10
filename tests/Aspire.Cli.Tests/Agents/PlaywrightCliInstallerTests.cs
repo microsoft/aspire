@@ -477,19 +477,19 @@ public class PlaywrightCliInstallerTests
                 RepositoryRoot = new DirectoryInfo(tempDir)
             };
             context.AddSkillBaseDirectory(Path.Combine(".claude", "skills"));
+            context.AddSkillBaseDirectory(Path.Combine(".agents", "skills"));
             context.AddSkillBaseDirectory(Path.Combine(".github", "skills"));
-            context.AddSkillBaseDirectory(Path.Combine(".opencode", "skill"));
 
             await installer.InstallAsync(context, CancellationToken.None);
+
+            // Verify files were mirrored to .agents/skills/playwright-cli/
+            Assert.True(File.Exists(Path.Combine(tempDir, ".agents", "skills", "playwright-cli", "SKILL.md")));
+            Assert.True(File.Exists(Path.Combine(tempDir, ".agents", "skills", "playwright-cli", "subdir", "extra.md")));
+            Assert.Equal("# Playwright CLI Skill", await File.ReadAllTextAsync(Path.Combine(tempDir, ".agents", "skills", "playwright-cli", "SKILL.md")));
 
             // Verify files were mirrored to .github/skills/playwright-cli/
             Assert.True(File.Exists(Path.Combine(tempDir, ".github", "skills", "playwright-cli", "SKILL.md")));
             Assert.True(File.Exists(Path.Combine(tempDir, ".github", "skills", "playwright-cli", "subdir", "extra.md")));
-            Assert.Equal("# Playwright CLI Skill", await File.ReadAllTextAsync(Path.Combine(tempDir, ".github", "skills", "playwright-cli", "SKILL.md")));
-
-            // Verify files were mirrored to .opencode/skill/playwright-cli/
-            Assert.True(File.Exists(Path.Combine(tempDir, ".opencode", "skill", "playwright-cli", "SKILL.md")));
-            Assert.True(File.Exists(Path.Combine(tempDir, ".opencode", "skill", "playwright-cli", "subdir", "extra.md")));
         }
         finally
         {

@@ -17,9 +17,7 @@ internal sealed class VsCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
     private const string VsCodeFolderName = ".vscode";
     private const string McpConfigFileName = "mcp.json";
     private const string AspireServerName = "aspire";
-    private static readonly string s_skillFilePath = Path.Combine(".github", "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md");
     private static readonly string s_skillBaseDirectory = Path.Combine(".github", "skills");
-    private const string SkillFileDescription = "Create Aspire skill file (.github/skills/aspire/SKILL.md)";
 
     private readonly IVsCodeCliRunner _vsCodeCliRunner;
     private readonly PlaywrightCliInstaller _playwrightCliInstaller;
@@ -72,13 +70,6 @@ internal sealed class VsCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
 
             // Register Playwright CLI installation applicator
             CommonAgentApplicators.AddPlaywrightCliApplicator(context, _playwrightCliInstaller, s_skillBaseDirectory);
-
-            // Try to add skill file applicator for GitHub Copilot
-            CommonAgentApplicators.TryAddSkillFileApplicator(
-                context,
-                context.RepositoryRoot,
-                s_skillFilePath,
-                SkillFileDescription);
         }
         else if (await IsVsCodeAvailableAsync(cancellationToken).ConfigureAwait(false))
         {
@@ -91,13 +82,6 @@ internal sealed class VsCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
             
             // Register Playwright CLI installation applicator
             CommonAgentApplicators.AddPlaywrightCliApplicator(context, _playwrightCliInstaller, s_skillBaseDirectory);
-            
-            // Try to add skill file applicator for GitHub Copilot
-            CommonAgentApplicators.TryAddSkillFileApplicator(
-                context,
-                context.RepositoryRoot,
-                s_skillFilePath,
-                SkillFileDescription);
         }
         else
         {

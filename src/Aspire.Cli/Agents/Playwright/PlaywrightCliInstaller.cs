@@ -54,6 +54,8 @@ internal sealed class PlaywrightCliInstaller(
 
     /// <summary>
     /// The primary skill base directory where playwright-cli installs skills.
+    /// This must match the directory that the playwright-cli binary actually writes to.
+    /// See: https://github.com/microsoft/playwright-cli/issues/294
     /// </summary>
     internal static readonly string s_primarySkillBaseDirectory = Path.Combine(".claude", "skills");
 
