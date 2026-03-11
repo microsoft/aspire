@@ -61,10 +61,10 @@ internal sealed partial class CliTemplateFactory
                     _logger.LogDebug("Copying embedded TypeScript starter template files to '{OutputPath}'.", outputPath);
                     await CopyTemplateTreeToDiskAsync("ts-starter", outputPath, ApplyAllTokens, cancellationToken);
 
-                    // Write channel to settings.json before restore so package resolution uses the selected channel.
+                    // Write channel to aspire.config.json before restore so package resolution uses the selected channel.
                     if (!string.IsNullOrEmpty(inputs.Channel))
                     {
-                        var config = AspireJsonConfiguration.Load(outputPath);
+                        var config = AspireConfigFile.Load(outputPath);
                         if (config is not null)
                         {
                             config.Channel = inputs.Channel;

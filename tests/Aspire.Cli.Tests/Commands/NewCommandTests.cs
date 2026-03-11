@@ -1342,7 +1342,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((directory, cancellationToken) =>
         {
             buildAndGenerateCalled = true;
-            var config = AspireJsonConfiguration.Load(directory.FullName);
+            var config = AspireConfigFile.Load(directory.FullName);
             channelSeenByProject = config?.Channel;
 
             var modulesDir = Directory.CreateDirectory(Path.Combine(directory.FullName, ".modules"));

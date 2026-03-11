@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Nodes;
-using Aspire.Hosting.Ats;
+using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.TypeScript.Tests;
 

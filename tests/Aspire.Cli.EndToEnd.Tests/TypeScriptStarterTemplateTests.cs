@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.RegularExpressions;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
@@ -21,8 +22,16 @@ public sealed class TypeScriptStarterTemplateTests(ITestOutputHelper output)
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
         var workspace = TemporaryWorkspace.Create(output);
+        var localChannel = PrepareLocalChannel(repoRoot, workspace, installMode);
+        var bundlePath = FindLocalBundlePath(repoRoot, installMode);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, mountDockerSocket: true, workspace: workspace);
+        var additionalVolumes = new List<string>();
+        if (bundlePath is not null)
+        {
+            additionalVolumes.Add($"{bundlePath}:/opt/aspire-bundle:ro");
+        }
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, mountDockerSocket: true, workspace: workspace, additionalVolumes: additionalVolumes);
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
@@ -31,6 +40,36 @@ public sealed class TypeScriptStarterTemplateTests(ITestOutputHelper output)
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliInDockerAsync(installMode, counter);
+
+        // Set up bundle layout for SourceBuild mode so the CLI can find
+        // aspire-managed and DCP relative to the CLI binary location.
+        if (bundlePath is not null)
+        {
+            await auto.TypeAsync("ln -s /opt/aspire-bundle/managed ~/.aspire/managed && ln -s /opt/aspire-bundle/dcp ~/.aspire/dcp");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+        }
+
+        // Set up local channel NuGet packages for SourceBuild mode so the
+        // CLI can resolve Aspire packages during template creation.
+        if (localChannel is not null)
+        {
+            var containerLocalChannelPackagesPath = CliE2ETestHelpers.ToContainerPath(localChannel.PackagesPath, workspace);
+            await auto.TypeAsync($"mkdir -p ~/.aspire/hives/local && rm -rf ~/.aspire/hives/local/packages && ln -s '{containerLocalChannelPackagesPath}' ~/.aspire/hives/local/packages");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            // Set channel and SDK version globally so aspire new uses the local
+            // channel with the correct prerelease version (dev builds fall back to
+            // the last stable release by default, which won't match local packages).
+            await auto.TypeAsync("aspire config set channel local --global");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            await auto.TypeAsync($"aspire config set sdk.version {localChannel.SdkVersion} --global");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+        }
 
         // Step 1: Create project using aspire new, selecting the Express/React template
         await auto.AspireNewAsync("TsStarterApp", counter, template: AspireTemplate.ExpressReact);
@@ -63,4 +102,84 @@ public sealed class TypeScriptStarterTemplateTests(ITestOutputHelper output)
 
         await pendingRun;
     }
+
+    /// <summary>
+    /// Copies locally-built NuGet packages to the workspace for SourceBuild mode.
+    /// Returns null for non-SourceBuild modes (CI installs packages via the PR script).
+    /// </summary>
+    private static LocalChannelInfo? PrepareLocalChannel(
+        string repoRoot,
+        TemporaryWorkspace workspace,
+        CliE2ETestHelpers.DockerInstallMode installMode)
+    {
+        if (installMode != CliE2ETestHelpers.DockerInstallMode.SourceBuild)
+        {
+            return null;
+        }
+
+        var shippingPackagesDirectory = Path.Combine(repoRoot, "artifacts", "packages", "Debug", "Shipping");
+        if (!Directory.Exists(shippingPackagesDirectory))
+        {
+            throw new InvalidOperationException("Local source-built TypeScript E2E tests require packed Aspire packages. Run './build.sh --bundle --pack' first.");
+        }
+
+        var packageFiles = Directory.EnumerateFiles(shippingPackagesDirectory, "Aspire*.nupkg", SearchOption.TopDirectoryOnly)
+            .Where(file => !file.EndsWith(".symbols.nupkg", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        if (!packageFiles.Any(file => Path.GetFileName(file).StartsWith("Aspire.Hosting.", StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException("Local source-built TypeScript E2E tests require packed Aspire.Hosting packages. Run './build.sh --bundle --pack' first.");
+        }
+
+        var localChannelPackagesPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire-local", "packages");
+        Directory.CreateDirectory(localChannelPackagesPath);
+
+        foreach (var packageFile in packageFiles)
+        {
+            File.Copy(packageFile, Path.Combine(localChannelPackagesPath, Path.GetFileName(packageFile)), overwrite: true);
+        }
+
+        var sdkVersion = packageFiles
+            .Select(Path.GetFileName)
+            .FirstOrDefault(fileName => fileName is not null && Regex.IsMatch(fileName, @"^Aspire\.Hosting\.\d+\.\d+\.\d+.*\.nupkg$", RegexOptions.IgnoreCase))
+            ?.Replace("Aspire.Hosting.", string.Empty, StringComparison.OrdinalIgnoreCase)
+            ?.Replace(".nupkg", string.Empty, StringComparison.OrdinalIgnoreCase);
+
+        if (string.IsNullOrEmpty(sdkVersion))
+        {
+            throw new InvalidOperationException("Local source-built TypeScript E2E tests could not determine the Aspire SDK version from packed packages.");
+        }
+
+        return new LocalChannelInfo(localChannelPackagesPath, sdkVersion);
+    }
+
+    /// <summary>
+    /// Finds the extracted bundle layout directory for SourceBuild mode.
+    /// The bundle provides the aspire-managed server and DCP needed for template creation.
+    /// Returns null for non-SourceBuild modes (CI installs the full bundle via the PR script).
+    /// </summary>
+    private static string? FindLocalBundlePath(string repoRoot, CliE2ETestHelpers.DockerInstallMode installMode)
+    {
+        if (installMode != CliE2ETestHelpers.DockerInstallMode.SourceBuild)
+        {
+            return null;
+        }
+
+        var bundlePath = Path.Combine(repoRoot, "artifacts", "bundle", "linux-x64");
+        if (!Directory.Exists(bundlePath))
+        {
+            throw new InvalidOperationException("Local source-built TypeScript E2E tests require the bundle layout. Run './build.sh --bundle' first.");
+        }
+
+        var managedPath = Path.Combine(bundlePath, "managed", "aspire-managed");
+        if (!File.Exists(managedPath))
+        {
+            throw new InvalidOperationException($"Bundle layout is missing aspire-managed at {managedPath}. Run './build.sh --bundle' first.");
+        }
+
+        return bundlePath;
+    }
+
+    private sealed record LocalChannelInfo(string PackagesPath, string SdkVersion);
 }

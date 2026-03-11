@@ -15,6 +15,9 @@ namespace Aspire.Cli.Scaffolding;
 /// </summary>
 internal sealed class ScaffoldingService : IScaffoldingService
 {
+    private const string PackageJsonFileName = "package.json";
+    private const string JavaScriptHostingPackageName = "Aspire.Hosting.JavaScript";
+
     private readonly IAppHostServerProjectFactory _appHostServerProjectFactory;
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly IInteractionService _interactionService;
@@ -51,6 +54,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
         // Step 1: Resolve SDK and package strategy
         var sdkVersion = VersionHelper.GetDefaultSdkVersion();
         var config = AspireConfigFile.LoadOrCreate(directory.FullName, sdkVersion);
+        PreAddJavaScriptHostingForBrownfieldTypeScript(config, directory, language, sdkVersion);
 
         // Include the code generation package for scaffolding and code gen
         var codeGenPackage = await _languageDiscovery.GetPackageForLanguageAsync(language.LanguageId, cancellationToken);
@@ -207,5 +211,66 @@ internal sealed class ScaffoldingService : IScaffoldingService
         }
 
         _logger.LogDebug("Generated {Count} code files in {Path}", generatedFiles.Count, outputPath);
+    }
+
+    private static void PreAddJavaScriptHostingForBrownfieldTypeScript(
+        AspireConfigFile config,
+        DirectoryInfo directory,
+        LanguageInfo language,
+        string defaultSdkVersion)
+    {
+        if (!IsTypeScriptLanguage(language) ||
+            !File.Exists(Path.Combine(directory.FullName, PackageJsonFileName)) ||
+            config.Packages?.ContainsKey(JavaScriptHostingPackageName) == true)
+        {
+            return;
+        }
+
+        config.AddOrUpdatePackage(JavaScriptHostingPackageName, config.GetEffectiveSdkVersion(defaultSdkVersion));
+    }
+
+    private static bool IsTypeScriptLanguage(LanguageInfo language)
+    {
+        return language.LanguageId.Value.Equals(KnownLanguageId.TypeScript, StringComparison.OrdinalIgnoreCase) ||
+            language.LanguageId.Value.Equals(KnownLanguageId.TypeScriptAlias, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Resolves the SDK version to use for scaffolding.
+    /// If a channel is configured globally, queries that channel for available versions.
+    /// Otherwise, falls back to the default SDK version.
+    /// </summary>
+    private async Task<string> ResolveSdkVersionAsync(CancellationToken cancellationToken)
+    {
+        // Check for global channel setting
+        var channelName = await _configurationService.GetConfigurationAsync("channel", cancellationToken);
+        if (string.IsNullOrEmpty(channelName))
+        {
+            return DotNetBasedAppHostServerProject.DefaultSdkVersion;
+        }
+
+        // Find the matching channel
+        var allChannels = await _packagingService.GetChannelsAsync(cancellationToken);
+        var channel = allChannels.FirstOrDefault(c => string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
+        if (channel is null)
+        {
+            _logger.LogWarning("Configured channel '{Channel}' not found, using default SDK version", channelName);
+            return DotNetBasedAppHostServerProject.DefaultSdkVersion;
+        }
+
+        // Get template packages from the channel to determine SDK version
+        var templatePackages = await channel.GetTemplatePackagesAsync(new DirectoryInfo(Environment.CurrentDirectory), cancellationToken);
+        var latestPackage = templatePackages
+            .OrderByDescending(p => SemVersion.Parse(p.Version), SemVersion.PrecedenceComparer)
+            .FirstOrDefault();
+
+        if (latestPackage is null)
+        {
+            _logger.LogWarning("No packages found in channel '{Channel}', using default SDK version", channelName);
+            return DotNetBasedAppHostServerProject.DefaultSdkVersion;
+        }
+
+        _logger.LogDebug("Resolved SDK version {Version} from channel {Channel}", latestPackage.Version, channelName);
+        return latestPackage.Version;
     }
 }
