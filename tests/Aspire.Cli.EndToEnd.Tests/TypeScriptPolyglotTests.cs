@@ -191,6 +191,31 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         Assert.Equal(originalTsConfig, File.ReadAllText(Path.Combine(projectRoot, "tsconfig.json")));
         Assert.True(File.Exists(Path.Combine(projectRoot, "tsconfig.apphost.json")));
 
+        // Verify Aspire.Hosting.JavaScript was pre-added in config
+        var configPath = Path.Combine(projectRoot, "aspire.config.json");
+        var config = JsonNode.Parse(File.ReadAllText(configPath))!.AsObject();
+        var packagesNode = config["packages"];
+        Assert.NotNull(packagesNode);
+        var packages = packagesNode!.AsObject();
+        Assert.NotNull(packages["Aspire.Hosting.JavaScript"]);
+
+        // Modify apphost.ts to add the Vite app before running
+        var appHostPath = Path.Combine(projectRoot, "apphost.ts");
+        var newContent = """
+            // Aspire TypeScript AppHost
+            // For more information, see: https://aspire.dev
+
+            import { createBuilder } from './.modules/aspire.js';
+
+            const builder = await createBuilder();
+
+            await builder.addViteApp("brownfield", ".");
+
+            await builder.build().run();
+            """;
+
+        File.WriteAllText(appHostPath, newContent);
+
         // Run the apphost to verify it works
         await auto.TypeAsync("aspire run");
         await auto.EnterAsync();
@@ -206,16 +231,15 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
 
     private static void WriteLocalChannelSettings(string projectRoot, string sdkVersion)
     {
-        var settingsPath = Path.Combine(projectRoot, ".aspire", "settings.json");
-        Directory.CreateDirectory(Path.GetDirectoryName(settingsPath)!);
+        var configPath = Path.Combine(projectRoot, "aspire.config.json");
 
-        var settings = new JsonObject
+        var config = new JsonObject
         {
             ["channel"] = "local",
-            ["sdkVersion"] = sdkVersion
+            ["sdk"] = new JsonObject { ["version"] = sdkVersion }
         };
 
-        File.WriteAllText(settingsPath, settings.ToJsonString());
+        File.WriteAllText(configPath, config.ToJsonString());
     }
 
     private static LocalChannelInfo? PrepareLocalChannel(
