@@ -100,6 +100,42 @@ public sealed class TypeScriptLanguageSupportTests
     }
 
     [Fact]
+    public void Scaffold_UpgradesExistingDependencies_WhenAspireRequiresNewerVersion()
+    {
+        using var testDirectory = new TestDirectory();
+
+        File.WriteAllText(Path.Combine(testDirectory.Path, "package.json"), """
+            {
+              "dependencies": {
+                "vscode-jsonrpc": "^8.1.0"
+              },
+              "devDependencies": {
+                "@types/node": "^18.0.0",
+                "nodemon": "^3.1.0",
+                "tsx": "^4.18.0",
+                "typescript": "^5.2.0"
+              }
+            }
+            """);
+
+        var files = _languageSupport.Scaffold(new ScaffoldRequest
+        {
+            TargetPath = testDirectory.Path,
+            ProjectName = "Ignored"
+        });
+
+        var packageJson = ParseJson(files["package.json"]);
+        var dependencies = packageJson["dependencies"]!.AsObject();
+        var devDependencies = packageJson["devDependencies"]!.AsObject();
+
+        Assert.Equal("^8.2.0", dependencies["vscode-jsonrpc"]?.GetValue<string>());
+        Assert.Equal("^20.0.0", devDependencies["@types/node"]?.GetValue<string>());
+        Assert.Equal("^3.1.11", devDependencies["nodemon"]?.GetValue<string>());
+        Assert.Equal("^4.19.0", devDependencies["tsx"]?.GetValue<string>());
+        Assert.Equal("^5.3.0", devDependencies["typescript"]?.GetValue<string>());
+    }
+
+    [Fact]
     public void Scaffold_DoesNotEmitRootTsConfig_WhenOneAlreadyExists()
     {
         using var testDirectory = new TestDirectory();
@@ -131,8 +167,8 @@ public sealed class TypeScriptLanguageSupportTests
         var runtimeSpec = _languageSupport.GetRuntimeSpec();
         var watchExecute = Assert.IsType<CommandSpec>(runtimeSpec.WatchExecute);
 
-        Assert.Equal(new[] { "tsx", "--tsconfig", "tsconfig.apphost.json", "{appHostFile}" }, runtimeSpec.Execute.Args);
-        Assert.Contains("npx tsx --tsconfig tsconfig.apphost.json {appHostFile}", watchExecute.Args);
+        Assert.Equal(new[] { "--no-install", "tsx", "--tsconfig", "tsconfig.apphost.json", "{appHostFile}" }, runtimeSpec.Execute.Args);
+        Assert.Contains("npx --no-install tsx --tsconfig tsconfig.apphost.json {appHostFile}", watchExecute.Args);
     }
 
     private static JsonObject ParseJson(string content) => JsonNode.Parse(content)!.AsObject();
