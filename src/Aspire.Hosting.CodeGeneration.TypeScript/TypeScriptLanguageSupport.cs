@@ -4,6 +4,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.TypeSystem;
+using Semver;
 
 namespace Aspire.Hosting.CodeGeneration.TypeScript;
 
@@ -185,7 +186,18 @@ public sealed class TypeScriptLanguageSupport : ILanguageSupport
     private static void EnsureDependency(JsonObject packageJson, string sectionName, string packageName, string version)
     {
         var section = EnsureObject(packageJson, sectionName);
-        section[packageName] ??= version;
+
+        var existingVersion = GetStringValue(section[packageName]);
+        if (existingVersion is null)
+        {
+            section[packageName] = version;
+            return;
+        }
+
+        if (ShouldUpgradeDependency(existingVersion, version))
+        {
+            section[packageName] = version;
+        }
     }
 
     private static JsonObject EnsureObject(JsonObject parent, string propertyName)
@@ -198,6 +210,66 @@ public sealed class TypeScriptLanguageSupport : ILanguageSupport
         obj = new JsonObject();
         parent[propertyName] = obj;
         return obj;
+    }
+
+    private static string? GetStringValue(JsonNode? node)
+    {
+        return node is JsonValue value && value.TryGetValue<string>(out var stringValue) ? stringValue : null;
+    }
+
+    private static bool ShouldUpgradeDependency(string existingVersion, string desiredVersion)
+    {
+        return TryParseComparableVersion(existingVersion, out var existingSemVersion)
+            && TryParseComparableVersion(desiredVersion, out var desiredSemVersion)
+            && SemVersion.ComparePrecedence(existingSemVersion, desiredSemVersion) < 0;
+    }
+
+    private static bool TryParseComparableVersion(string version, out SemVersion semVersion)
+    {
+        var normalizedVersion = version.Trim();
+        if (normalizedVersion.Contains("||", StringComparison.Ordinal) ||
+            normalizedVersion.StartsWith("workspace:", StringComparison.OrdinalIgnoreCase) ||
+            normalizedVersion.StartsWith("file:", StringComparison.OrdinalIgnoreCase) ||
+            normalizedVersion.StartsWith("link:", StringComparison.OrdinalIgnoreCase))
+        {
+            semVersion = default!;
+            return false;
+        }
+
+        while (normalizedVersion.Length > 0)
+        {
+            if (normalizedVersion.StartsWith(">=", StringComparison.Ordinal) ||
+                normalizedVersion.StartsWith("<=", StringComparison.Ordinal))
+            {
+                normalizedVersion = normalizedVersion[2..].TrimStart();
+                continue;
+            }
+
+            if (normalizedVersion[0] is '^' or '~' or '>' or '<' or '=')
+            {
+                normalizedVersion = normalizedVersion[1..].TrimStart();
+                continue;
+            }
+
+            break;
+        }
+
+        if (SemVersion.TryParse(normalizedVersion, SemVersionStyles.Strict, out var strictVersion) &&
+            strictVersion is not null)
+        {
+            semVersion = strictVersion;
+            return true;
+        }
+
+        if (SemVersion.TryParse(normalizedVersion, SemVersionStyles.Any, out var anyVersion) &&
+            anyVersion is not null)
+        {
+            semVersion = anyVersion;
+            return true;
+        }
+
+        semVersion = default!;
+        return false;
     }
 
     /// <inheritdoc />
@@ -241,19 +313,20 @@ public sealed class TypeScriptLanguageSupport : ILanguageSupport
             Execute = new CommandSpec
             {
                 Command = "npx",
-                Args = ["tsx", "--tsconfig", AppHostTsConfigFileName, "{appHostFile}"]
+                Args = ["--no-install", "tsx", "--tsconfig", AppHostTsConfigFileName, "{appHostFile}"]
             },
             WatchExecute = new CommandSpec
             {
                 Command = "npx",
                 Args = [
+                    "--no-install",
                     "nodemon",
                     "--signal", "SIGTERM",
                     "--watch", ".",
                     "--ext", "ts",
                     "--ignore", "node_modules/",
                     "--ignore", ".modules/",
-                    "--exec", $"npx tsx --tsconfig {AppHostTsConfigFileName} {{appHostFile}}"
+                    "--exec", $"npx --no-install tsx --tsconfig {AppHostTsConfigFileName} {{appHostFile}}"
                 ]
             }
         };
