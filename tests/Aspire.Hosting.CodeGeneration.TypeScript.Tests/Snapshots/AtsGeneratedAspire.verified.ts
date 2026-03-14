@@ -3525,10 +3525,18 @@ process.on('unhandledRejection', (reason: unknown) => {
 process.on('uncaughtException', (error: Error) => {
     if (error instanceof AppHostUsageError) {
         console.error(`\n❌ AppHost Error: ${error.message}`);
+    } else if (error instanceof CapabilityError) {
+        console.error(`\n❌ Capability Error: ${error.message}`);
+        console.error(`   Code: ${error.code}`);
+        if (error.capability) {
+            console.error(`   Capability: ${error.capability}`);
+        }
     } else {
         console.error(`\n❌ Uncaught Exception: ${error.message}`);
     }
-    if (!(error instanceof AppHostUsageError) && error.stack) {
+    // Suppress stack traces for structured errors (AppHostUsageError, CapabilityError)
+    // to keep polyglot output clean. Use --verbose for full diagnostics.
+    if (!(error instanceof AppHostUsageError) && !(error instanceof CapabilityError) && error.stack) {
         console.error(error.stack);
     }
     process.exit(1);
