@@ -14,8 +14,6 @@ using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -54,9 +52,6 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IConsoleLogsService, I
     // it probably means DCP crashed and there is no point trying further.
     private static readonly TimeSpan s_disposeTimeout = TimeSpan.FromSeconds(10);
 
-    // Well-known location on disk where dev-cert key material is cached.
-    private static readonly string s_macOSUserDevCertificateLocation = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".aspire", "dev-certs", "https");
-
     // Regex for normalizing application names.
     [GeneratedRegex("""^(?<name>.+?)\.?AppHost$""", RegexOptions.ExplicitCapture | RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant)]
     private static partial Regex ApplicationNameRegex();
@@ -76,8 +71,8 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IConsoleLogsService, I
     private readonly ConcurrentBag<AppResource> _appResources = [];
 
     // Has an entry if we raised ResourceEndpointsAllocatedEvent for a resource with a given name.
-    // We want to ensure we raise the event only once for each app model resource. 
-    // There may be multiple physical replicas of the same app model resource 
+    // We want to ensure we raise the event only once for each app model resource.
+    // There may be multiple physical replicas of the same app model resource
     // which can result in the event being raised multiple times if we are not careful.
     private readonly HashSet<string> _endpointsAdvertised = new(StringComparers.ResourceName);
 
@@ -86,7 +81,6 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IConsoleLogsService, I
     private readonly Locations _locations;
     private readonly DcpResourceState _resourceState;
     private readonly ResourceSnapshotBuilder _snapshotBuilder;
-    private readonly SemaphoreSlim _serverCertificateCacheSemaphore = new(1, 1);
 
     private readonly string _normalizedApplicationName;
 
@@ -217,7 +211,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IConsoleLogsService, I
             {
                 await Task.WhenAll([getProxyAddresses, createContainerNetworks]).WaitAsync(ct).ConfigureAwait(false);
 
-                // Container creation tasks need to figure out dependencies of each container 
+                // Container creation tasks need to figure out dependencies of each container
                 // and then create Service and TunnelConfiguration definitions for each of them.
                 cctx.ContainerServicesSpecReady.Wait(ct);
                 cctx.ContainerServicesChan.Writer.Complete();
@@ -242,7 +236,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IConsoleLogsService, I
 
                 // createExecutableEndpoints() is not really part of container tunnel initialization,
                 // but configuring containers that use the tunnel require these host network-side endpoints to be ready,
-                // so instead of having container creation tasks wait on two separate tasks (current one + createExecutableEndpoints), 
+                // so instead of having container creation tasks wait on two separate tasks (current one + createExecutableEndpoints),
                 // we just wait for createExecutableEndpoints here, and container creation tasks can then wait on this one.
                 await createExecutableEndpoints.ConfigureAwait(false);
             }, ct);
@@ -342,7 +336,6 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IConsoleLogsService, I
     {
         var disposeCts = new CancellationTokenSource();
         disposeCts.CancelAfter(s_disposeTimeout);
-        _serverCertificateCacheSemaphore.Dispose();
         await StopAsync(disposeCts.Token).ConfigureAwait(false);
     }
 
@@ -1241,7 +1234,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IConsoleLogsService, I
             var (serviceName, isNew) = _nameGenerator.GetServiceName(re.Resource, endpoint, KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
             if (!isNew)
             {
-                // Entirely possible that multiple container resources reference the same host resource and endpoint. 
+                // Entirely possible that multiple container resources reference the same host resource and endpoint.
                 // We let the first container creation task (exists == false) create the service and other tasks just leverages it.
                 continue;
             }
@@ -1285,7 +1278,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IConsoleLogsService, I
             svc.Annotate(CustomResource.ContainerNetworkAnnotation, KnownNetworkIdentifiers.DefaultAspireContainerNetwork.Value);
             svc.Annotate(CustomResource.PrimaryServiceNameAnnotation, serverSvc.DcpResource.Metadata.Name);
 
-            // We use this to distinguish services based on real tunnel proxies 
+            // We use this to distinguish services based on real tunnel proxies
             // vs "placeholders" relying on host.docker.internal bridge (when tunnel is disabled).
             svc.Annotate(CustomResource.ContainerTunnelInstanceName, tunnelProxyName);
 
@@ -1757,7 +1750,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IConsoleLogsService, I
             {
                 var thumbprint = tlsCertificateConfiguration.Certificate.Thumbprint;
                 var publicCetificatePem = tlsCertificateConfiguration.Certificate.ExportCertificatePem();
-                (var keyPem, var pfxBytes) = await GetCertificateKeyMaterialAsync(tlsCertificateConfiguration, cancellationToken).ConfigureAwait(false);
+                (var keyPem, var pfxBytes) = await DeveloperCertificateService.GetKeyMaterialAsync(tlsCertificateConfiguration.Certificate, tlsCertificateConfiguration.Password, tlsCertificateConfiguration.IsKeyPathReferenced, tlsCertificateConfiguration.IsPfxPathReferenced, cancellationToken).ConfigureAwait(false);
 
                 if (OperatingSystem.IsWindows())
                 {
@@ -1998,8 +1991,8 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IConsoleLogsService, I
             try
             {
                 // In previous versions of Aspire we would delay raising BeforeResourceStarted event for explicit startup resources.
-                // But we need to determine whether the container is using any host resources, 
-                // and need to call environment and argument annotation callbacks in the process, and this means 
+                // But we need to determine whether the container is using any host resources,
+                // and need to call environment and argument annotation callbacks in the process, and this means
                 // we need to raise this event now, so that "last chance dynamic setup or validation" can be performed for the resource
                 // (see docs/specs/appmodel.md#well-known-lifecycle-events)
                 await _executorEvents.PublishAsync(new OnResourceStartingContext(cToken, KnownResourceTypes.Container, cr.ModelResource, dcpContainer.Metadata.Name)).ConfigureAwait(false);
@@ -2008,7 +2001,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IConsoleLogsService, I
                 // available if the resource isn't immediately started because it's waiting or is configured for explicit start.
                 await _executorEvents.PublishAsync(new OnResourceChangedContext(_shutdownCancellation.Token, KnownResourceTypes.Container, cr.ModelResource, cr.DcpResourceName, new ResourceStatus(null, null, null), s => _snapshotBuilder.ToSnapshot((Container)cr.DcpResource, s))).ConfigureAwait(false);
 
-                // Note: resource restart is done by calling StartResourceAsync(), which sets Spec.Start to true and 
+                // Note: resource restart is done by calling StartResourceAsync(), which sets Spec.Start to true and
                 // calls CreateDcpContainerAsync() directly, bypassing the following check.
                 var explicitStartup = cr.ModelResource.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _);
                 if (explicitStartup)
@@ -2024,9 +2017,9 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IConsoleLogsService, I
                 }
                 else
                 {
-                    // There will be no tunnel services for this container; we have complete information about services this container will need. 
+                    // There will be no tunnel services for this container; we have complete information about services this container will need.
                     signalServicesSpecReadyOnce();
-                    
+
                     await CreateDcpContainerAsync(cr, logger, cToken).ConfigureAwait(false);
                 }
             }
@@ -2285,7 +2278,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IConsoleLogsService, I
         {
             var thumbprint = tlsCertificateConfiguration.Certificate.Thumbprint;
             var publicCertificatePem = tlsCertificateConfiguration.Certificate.ExportCertificatePem();
-            (var keyPem, var pfxBytes) = await GetCertificateKeyMaterialAsync(tlsCertificateConfiguration, cancellationToken).ConfigureAwait(false);
+            (var keyPem, var pfxBytes) = await DeveloperCertificateService.GetKeyMaterialAsync(tlsCertificateConfiguration.Certificate, tlsCertificateConfiguration.Password, tlsCertificateConfiguration.IsKeyPathReferenced, tlsCertificateConfiguration.IsPfxPathReferenced, cancellationToken).ConfigureAwait(false);
             var certificateFiles = new List<ContainerFileSystemEntry>()
             {
                 new ContainerFileSystemEntry
@@ -2783,164 +2776,6 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IConsoleLogsService, I
             cancellationToken).ConfigureAwait(false);
 
         return (runArgs, failedToApplyArgs);
-    }
-
-    /// <summary>
-    /// Returns the certificate PEM format key and/or PFX bytes based on the provided configuration.
-    /// Only the formats referenced in resource configuration will be returned.
-    /// </summary>
-    /// <param name="configuration">The configuration details.</param>
-    /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
-    /// <returns>A tuple containing the PEM-encoded key and PFX bytes, if appropriate for the configuration.</returns>
-    /// <exception cref="InvalidOperationException"></exception>
-    private async Task<(char[]? keyPem, byte[]? pfxBytes)> GetCertificateKeyMaterialAsync(HttpsCertificateExecutionConfigurationData configuration, CancellationToken cancellationToken)
-    {
-        var certificate = configuration.Certificate;
-        var lookup = certificate.Thumbprint;
-        if (configuration.Password is not null)
-        {
-            lookup += $"-{configuration.Password}";
-        }
-
-        lookup = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(lookup)));
-
-        char[]? pemKey = null;
-        byte[]? pfxBytes = null;
-        // Ensure only one thread at a time is resolving certificates to avoid concurrent cache misses all trying to update
-        // the cache at the same time.
-        await _serverCertificateCacheSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            if (configuration.IsKeyPathReferenced)
-            {
-                var keyFileName = Path.Join(s_macOSUserDevCertificateLocation, $"{lookup}.key");
-                if (OperatingSystem.IsMacOS() && certificate.IsAspNetCoreDevelopmentCertificate())
-                {
-                    // On MacOS, we cache development certificate key material to avoid triggering repeated keychain prompts
-                    // when referencing the development certificate key. We don't do this for other OSes or other certificates.
-                    try
-                    {
-                        // Attempt to read the cached development certificate key
-                        if (File.Exists(keyFileName))
-                        {
-                            var keyCandidate = File.ReadAllText(keyFileName);
-
-                            if (!string.IsNullOrEmpty(keyCandidate))
-                            {
-                                pemKey = keyCandidate.ToCharArray();
-                            }
-                        }
-                    }
-                    catch
-                    {
-                        // Ignore errors and retrieve the key from the certificate
-                    }
-                }
-
-                if (pemKey is null)
-                {
-                    // See: https://github.com/dotnet/aspnetcore/blob/main/src/Shared/CertificateGeneration/CertificateManager.cs
-                    using var privateKey = certificate.GetRSAPrivateKey();
-                    if (privateKey is null)
-                    {
-                        throw new InvalidOperationException("The certificate does not have an associated RSA private key.");
-                    }
-
-                    var keyBytes = privateKey.ExportEncryptedPkcs8PrivateKey(
-                        configuration.Password ?? string.Empty,
-                        new PbeParameters(
-                            PbeEncryptionAlgorithm.Aes256Cbc,
-                            HashAlgorithmName.SHA256,
-                            iterationCount: configuration.Password is null ? 1 : 100_000));
-                    pemKey = PemEncoding.Write("ENCRYPTED PRIVATE KEY", keyBytes);
-
-                    if (configuration.Password is null)
-                    {
-                        using var tempKey = RSA.Create();
-                        tempKey.ImportFromEncryptedPem(pemKey, string.Empty);
-                        Array.Clear(keyBytes, 0, keyBytes.Length);
-                        Array.Clear(pemKey, 0, pemKey.Length);
-                        keyBytes = tempKey.ExportPkcs8PrivateKey();
-                        pemKey = PemEncoding.Write("PRIVATE KEY", keyBytes);
-                    }
-
-                    Array.Clear(keyBytes, 0, keyBytes.Length);
-
-                    if (pemKey is not null && OperatingSystem.IsMacOS() && certificate.IsAspNetCoreDevelopmentCertificate())
-                    {
-                        // On Mac, cache the development certificate key material if we had to load it from the keychain
-                        try
-                        {
-                            // Create the directory for storing macOS user dev certificates if it doesn't exist
-                            Directory.CreateDirectory(s_macOSUserDevCertificateLocation, UnixFileMode.UserExecute | UnixFileMode.UserWrite | UnixFileMode.UserRead);
-
-                            await File.WriteAllTextAsync(keyFileName, new string(pemKey), cancellationToken).ConfigureAwait(false);
-                        }
-                        catch
-                        {
-                            // This is a best effort caching operation
-                        }
-                    }
-                }
-            }
-
-            if (configuration.IsPfxPathReferenced)
-            {
-                var pfxFileName = Path.Join(s_macOSUserDevCertificateLocation, $"{lookup}.pfx");
-                if (OperatingSystem.IsMacOS() && certificate.IsAspNetCoreDevelopmentCertificate())
-                {
-                    // On MacOS, we cache development certificate key material to avoid triggering repeated keychain prompts
-                    // when referencing the development certificate key. We don't do this for other OSes or other certificates.
-                    try
-                    {
-                        // Attempt to read the cached development certificate key
-                        if (File.Exists(pfxFileName))
-                        {
-                            var pfxCandidate = File.ReadAllBytes(pfxFileName);
-                            if (pfxCandidate.Length > 0)
-                            {
-                                using var tempCert = new X509Certificate2(pfxCandidate, configuration.Password);
-                                if (tempCert.Thumbprint.Equals(certificate.Thumbprint, StringComparison.Ordinal))
-                                {
-                                    pfxBytes = pfxCandidate;
-                                }
-                            }
-                        }
-                    }
-                    catch
-                    {
-                        // Ignore errors and retrieve the key from the certificate
-                    }
-                }
-
-                if (pfxBytes is null)
-                {
-                    // On Mac, cache the development certificate pfx if we had to export it from the keychain
-                    pfxBytes = certificate.Export(X509ContentType.Pfx, configuration.Password);
-
-                    if (pfxBytes is not null && OperatingSystem.IsMacOS() && certificate.IsAspNetCoreDevelopmentCertificate())
-                    {
-                        try
-                        {
-                            // Create the directory for storing macOS user dev certificates if it doesn't exist
-                            Directory.CreateDirectory(s_macOSUserDevCertificateLocation, UnixFileMode.UserExecute | UnixFileMode.UserWrite | UnixFileMode.UserRead);
-
-                            File.WriteAllBytes(pfxFileName, pfxBytes);
-                        }
-                        catch
-                        {
-                            // This is a best effort caching operation
-                        }
-                    }
-                }
-            }
-        }
-        finally
-        {
-            _serverCertificateCacheSemaphore.Release();
-        }
-
-        return (pemKey, pfxBytes);
     }
 
     private static List<ContainerPortSpec> BuildContainerPorts(RenderedModelResource cr)

@@ -5,6 +5,7 @@ using System.Buffers;
 using System.Collections;
 using System.IO.Pipelines;
 using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Aspire.Dashboard.Utils;
 using Aspire.Hosting.ApplicationModel;
@@ -36,6 +37,8 @@ internal sealed class DcpHost
     private readonly IFileSystemService _fileSystemService;
     private readonly IConfiguration _configuration;
     private readonly CancellationTokenSource _shutdownCts = new();
+    private string? _dcpTlsCertFilePath;
+    private string? _dcpTlsKeyFilePath;
     private Task? _logProcessorTask;
 
     // These environment variables should never be inherited by DCP from app host.
@@ -76,6 +79,7 @@ internal sealed class DcpHost
     {
         await EnsureDcpContainerRuntimeAsync(cancellationToken).ConfigureAwait(false);
         await EnsureDevelopmentCertificateTrustAsync(cancellationToken).ConfigureAwait(false);
+        await PrepareDcpTlsCertificateAsync(cancellationToken).ConfigureAwait(false);
         EnsureDcpHostRunning();
     }
 
@@ -192,6 +196,78 @@ internal sealed class DcpHost
         }
     }
 
+    internal async Task PrepareDcpTlsCertificateAsync(CancellationToken cancellationToken)
+    {
+        // Check if we have a trusted developer certificate with a private key available
+        var certificates = _developerCertificateService.Certificates;
+        if (certificates.Count == 0)
+        {
+            return;
+        }
+
+        // Use the first (latest/best) certificate that has a private key
+        X509Certificate2? certificate = null;
+        foreach (var cert in certificates)
+        {
+            if (cert.HasPrivateKey)
+            {
+                certificate = cert;
+                break;
+            }
+        }
+
+        if (certificate is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var sessionDir = _locations.DcpSessionDir;
+
+            // Export the public certificate chain in PEM format
+            var certPem = certificate.ExportCertificatePem();
+            var certFilePath = Path.Combine(sessionDir, "dcp-tls.crt");
+            File.WriteAllText(certFilePath, certPem);
+
+            // Export the private key using the shared caching logic to avoid macOS keychain prompts
+            var (keyPem, _) = await DeveloperCertificateService.GetKeyMaterialAsync(
+                certificate, password: null, needKeyPem: true, needPfx: false, cancellationToken).ConfigureAwait(false);
+
+            if (keyPem is null)
+            {
+                _logger.LogWarning("Failed to export the private key for the developer certificate. DCP will use its default certificate.");
+                return;
+            }
+
+            var keyFilePath = Path.Combine(sessionDir, "dcp-tls.key");
+
+            if (OperatingSystem.IsWindows())
+            {
+                File.WriteAllText(keyFilePath, new string(keyPem));
+            }
+            else
+            {
+                // Write the key file with restricted permissions on Unix
+                using var fs = new FileStream(keyFilePath, FileMode.Create, FileAccess.Write, FileShare.None);
+                File.SetUnixFileMode(keyFilePath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+                using var writer = new StreamWriter(fs);
+                writer.Write(keyPem);
+            }
+
+            Array.Clear(keyPem, 0, keyPem.Length);
+
+            _dcpTlsCertFilePath = certFilePath;
+            _dcpTlsKeyFilePath = keyFilePath;
+
+            _logger.LogDebug("Prepared DCP TLS certificate at {CertPath} with key at {KeyPath}.", certFilePath, keyFilePath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to prepare TLS certificate for DCP. DCP will use its default certificate.");
+        }
+    }
+
     public async Task StopAsync()
     {
         _shutdownCts.Cancel();
@@ -252,6 +328,11 @@ internal sealed class DcpHost
         if (!string.IsNullOrEmpty(_dcpOptions.ContainerRuntime))
         {
             arguments += $" --container-runtime \"{_dcpOptions.ContainerRuntime}\"";
+        }
+
+        if (_dcpTlsCertFilePath is not null && _dcpTlsKeyFilePath is not null)
+        {
+            arguments += $" --tls-cert-file \"{_dcpTlsCertFilePath}\" --tls-private-key-file \"{_dcpTlsKeyFilePath}\"";
         }
 
         var dcpProcessSpec = new ProcessSpec(dcpExePath)
