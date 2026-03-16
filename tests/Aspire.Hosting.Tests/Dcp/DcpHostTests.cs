@@ -46,7 +46,8 @@ public sealed class DcpHostTests
 
     private static DcpHost CreateDcpHost(
         IDeveloperCertificateService? developerCertificateService = null,
-        Locations? locations = null)
+        Locations? locations = null,
+        IConfiguration? configuration = null)
     {
         var loggerFactory = new NullLoggerFactory();
         var dcpOptions = Options.Create(new DcpOptions());
@@ -56,8 +57,8 @@ public sealed class DcpHostTests
         var applicationModel = new DistributedApplicationModel(new ResourceCollection());
         var timeProvider = new FakeTimeProvider();
         developerCertificateService ??= new TestDeveloperCertificateService([], false, false, false);
-        var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
-        var configuration = new ConfigurationBuilder().Build();
+        configuration ??= new ConfigurationBuilder().Build();
+        var fileSystemService = new FileSystemService(configuration);
 
         return new DcpHost(
             loggerFactory,
@@ -72,13 +73,23 @@ public sealed class DcpHostTests
             configuration);
     }
 
+    private static IConfiguration CreateConfigWithDcpTlsEnabled()
+    {
+        return new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [KnownConfigNames.DcpDeveloperCertificate] = "true"
+            })
+            .Build();
+    }
+
     [Fact]
     public async Task PrepareDcpTlsCertificateAsync_WithCertAvailable_WritesCertAndKeyFiles()
     {
         using var cert = LoadTestCertificate();
         var certService = new TestDeveloperCertificateService([cert], false, false, false);
         var locations = CreateTestLocations();
-        var dcpHost = CreateDcpHost(developerCertificateService: certService, locations: locations);
+        var dcpHost = CreateDcpHost(developerCertificateService: certService, locations: locations, configuration: CreateConfigWithDcpTlsEnabled());
 
         await dcpHost.PrepareDcpTlsCertificateAsync(CancellationToken.None).DefaultTimeout();
 
@@ -104,7 +115,7 @@ public sealed class DcpHostTests
     {
         var certService = new TestDeveloperCertificateService([], false, false, false);
         var locations = CreateTestLocations();
-        var dcpHost = CreateDcpHost(developerCertificateService: certService, locations: locations);
+        var dcpHost = CreateDcpHost(developerCertificateService: certService, locations: locations, configuration: CreateConfigWithDcpTlsEnabled());
 
         await dcpHost.PrepareDcpTlsCertificateAsync(CancellationToken.None).DefaultTimeout();
 
@@ -121,7 +132,7 @@ public sealed class DcpHostTests
         using var originalCert = LoadTestCertificate();
         var certService = new TestDeveloperCertificateService([originalCert], false, false, false);
         var locations = CreateTestLocations();
-        var dcpHost = CreateDcpHost(developerCertificateService: certService, locations: locations);
+        var dcpHost = CreateDcpHost(developerCertificateService: certService, locations: locations, configuration: CreateConfigWithDcpTlsEnabled());
 
         await dcpHost.PrepareDcpTlsCertificateAsync(CancellationToken.None).DefaultTimeout();
 
@@ -137,5 +148,22 @@ public sealed class DcpHostTests
         var keyPem = File.ReadAllText(keyFilePath);
         Assert.Contains("BEGIN PRIVATE KEY", keyPem);
         Assert.DoesNotContain("ENCRYPTED", keyPem);
+    }
+
+    [Fact]
+    public async Task PrepareDcpTlsCertificateAsync_DefaultBehavior_SkipsCertExport()
+    {
+        using var cert = LoadTestCertificate();
+        var certService = new TestDeveloperCertificateService([cert], false, false, false);
+        var locations = CreateTestLocations();
+        var dcpHost = CreateDcpHost(developerCertificateService: certService, locations: locations);
+
+        await dcpHost.PrepareDcpTlsCertificateAsync(CancellationToken.None).DefaultTimeout();
+
+        var certFilePath = Path.Combine(locations.DcpSessionDir, "dcp-tls.crt");
+        var keyFilePath = Path.Combine(locations.DcpSessionDir, "dcp-tls.key");
+
+        Assert.False(File.Exists(certFilePath), "Certificate PEM file should not exist when DCP TLS flag is not set.");
+        Assert.False(File.Exists(keyFilePath), "Key PEM file should not exist when DCP TLS flag is not set.");
     }
 }

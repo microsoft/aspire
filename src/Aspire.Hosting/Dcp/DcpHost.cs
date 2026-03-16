@@ -198,6 +198,12 @@ internal sealed class DcpHost
 
     internal async Task PrepareDcpTlsCertificateAsync(CancellationToken cancellationToken)
     {
+        // Using the ASP.NET dev cert for DCP TLS is opt-in; by default DCP uses its own ephemeral certificate.
+        if (!_configuration.GetBool(KnownConfigNames.DcpDeveloperCertificate, defaultValue: false))
+        {
+            return;
+        }
+
         // Check if we have a trusted developer certificate with a private key available
         var certificates = _developerCertificateService.Certificates;
         if (certificates.Count == 0)
