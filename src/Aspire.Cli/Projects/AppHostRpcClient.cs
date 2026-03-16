@@ -53,14 +53,14 @@ internal sealed class AppHostRpcClient : IAppHostRpcClient
             "scaffoldAppHost", [languageId, targetPath, projectName], cancellationToken);
 
     /// <inheritdoc />
-    public Task<Dictionary<string, string>> GenerateCodeAsync(string languageId, CancellationToken cancellationToken)
+    public Task<Dictionary<string, string>> GenerateCodeAsync(string languageId, string? assemblyName = null, CancellationToken cancellationToken = default)
         => _jsonRpc.InvokeWithCancellationAsync<Dictionary<string, string>>(
-            "generateCode", [languageId], cancellationToken);
+            "generateCode", [languageId, assemblyName], cancellationToken);
 
     /// <inheritdoc />
-    public Task<Commands.Sdk.CapabilitiesInfo> GetCapabilitiesAsync(CancellationToken cancellationToken)
+    public Task<Commands.Sdk.CapabilitiesInfo> GetCapabilitiesAsync(IReadOnlyList<string>? assemblyNames = null, CancellationToken cancellationToken = default)
         => _jsonRpc.InvokeWithCancellationAsync<Commands.Sdk.CapabilitiesInfo>(
-            "getCapabilities", [], cancellationToken);
+            "getCapabilities", [assemblyNames], cancellationToken);
 
     // ═══════════════════════════════════════════════════════════════
     // GENERIC INVOKE

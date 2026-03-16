@@ -36,13 +36,13 @@ internal interface IAppHostRpcClient : IAsyncDisposable
     /// Generates code (e.g., TypeScript SDK) for a language.
     /// RPC method: "generateCode"
     /// </summary>
-    Task<Dictionary<string, string>> GenerateCodeAsync(string languageId, CancellationToken cancellationToken);
+    Task<Dictionary<string, string>> GenerateCodeAsync(string languageId, string? assemblyName = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets the ATS capabilities, types, and diagnostics.
     /// RPC method: "getCapabilities"
     /// </summary>
-    Task<CapabilitiesInfo> GetCapabilitiesAsync(CancellationToken cancellationToken);
+    Task<CapabilitiesInfo> GetCapabilitiesAsync(IReadOnlyList<string>? assemblyNames = null, CancellationToken cancellationToken = default);
 
     // ═══════════════════════════════════════════════════════════════
     // GENERIC INVOKE (for future/custom calls)

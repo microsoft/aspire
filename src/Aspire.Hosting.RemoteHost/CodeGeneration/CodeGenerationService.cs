@@ -31,7 +31,7 @@ internal sealed class CodeGenerationService
     /// </summary>
     /// <returns>The capabilities information.</returns>
     [JsonRpcMethod("getCapabilities")]
-    public CapabilitiesResponse GetCapabilities()
+    public CapabilitiesResponse GetCapabilities(string[]? assemblyNames = null)
     {
         _logger.LogDebug(">> getCapabilities()");
         var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -39,6 +39,10 @@ internal sealed class CodeGenerationService
         try
         {
             var context = _atsContextFactory.GetContext();
+            if (assemblyNames is { Length: > 0 })
+            {
+                context = AtsContextFilter.FilterByExportingAssembliesWithReferences(context, assemblyNames);
+            }
 
             var response = new CapabilitiesResponse
             {
@@ -146,9 +150,10 @@ internal sealed class CodeGenerationService
     /// Generates SDK code for the specified language.
     /// </summary>
     /// <param name="language">The target language (e.g., "TypeScript", "Python").</param>
+    /// <param name="assemblyName">The exporting assembly to scope the generated SDK to, or null to use the full ATS context.</param>
     /// <returns>A dictionary of file paths to file contents.</returns>
     [JsonRpcMethod("generateCode")]
-    public Dictionary<string, string> GenerateCode(string language)
+    public Dictionary<string, string> GenerateCode(string language, string? assemblyName = null)
     {
         _logger.LogDebug(">> generateCode({Language})", language);
         var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -160,7 +165,14 @@ internal sealed class CodeGenerationService
             {
                 throw new ArgumentException($"No code generator found for language: {language}");
             }
-            var files = generator.GenerateDistributedApplication(_atsContextFactory.GetContext());
+
+            var context = _atsContextFactory.GetContext();
+            if (!string.IsNullOrWhiteSpace(assemblyName))
+            {
+                context = AtsContextFilter.FilterByExportingAssembliesWithReferences(context, [assemblyName]);
+            }
+
+            var files = generator.GenerateDistributedApplication(context);
 
             _logger.LogDebug("<< generateCode({Language}) completed in {ElapsedMs}ms, generated {FileCount} files", language, sw.ElapsedMilliseconds, files.Count);
             return files;
