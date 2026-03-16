@@ -29,6 +29,11 @@ internal sealed class CodeGenerationService
     /// <summary>
     /// Gets the ATS capabilities, types, and diagnostics.
     /// </summary>
+    /// <param name="assemblyNames">
+    /// An optional list of assembly names used to scope the returned capabilities and types to those
+    /// exported by the specified assemblies and their referenced assemblies. If <c>null</c> or empty,
+    /// capabilities are returned for all available assemblies.
+    /// </param>
     /// <returns>The capabilities information.</returns>
     [JsonRpcMethod("getCapabilities")]
     public CapabilitiesResponse GetCapabilities(string[]? assemblyNames = null)
