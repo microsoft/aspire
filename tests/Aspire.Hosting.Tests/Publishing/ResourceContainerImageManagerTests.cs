@@ -660,7 +660,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         using var cts = new CancellationTokenSource(TestConstants.DefaultTimeoutTimeSpan);
         var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
 
-        var exception = await Assert.ThrowsAsync<Exception>(() =>
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             imageBuilder.BuildImageAsync(project.Resource, cts.Token));
 
         Assert.Contains("broken-project", exception.Message);
