@@ -11,11 +11,23 @@ namespace Aspire.Hosting.RemoteHost;
 /// </summary>
 internal static class AtsContextFilter
 {
+    /// <summary>
+    /// Filters the given ATS context to include only capabilities and types exported by the specified assemblies.
+    /// </summary>
+    /// <param name="context">The ATS context to filter.</param>
+    /// <param name="assemblyNames">The names of the assemblies to include.</param>
+    /// <returns>A filtered ATS context.</returns>
     public static AtsContext FilterByExportingAssemblies(
         AtsContext context,
         IReadOnlyCollection<string> assemblyNames)
         => FilterByExportingAssemblies(context, assemblyNames, includeReferencedTypes: false);
 
+    /// <summary>
+    /// Filters the given ATS context to include only capabilities and types exported by the specified assemblies, including all transitively referenced types.
+    /// </summary>
+    /// <param name="context">The ATS context to filter.</param>
+    /// <param name="assemblyNames">The names of the assemblies to include.</param>
+    /// <returns>A filtered ATS context.</returns>
     public static AtsContext FilterByExportingAssembliesWithReferences(
         AtsContext context,
         IReadOnlyCollection<string> assemblyNames)
