@@ -34,11 +34,9 @@ internal sealed class DcpHost
     private readonly Locations _locations;
     private readonly TimeProvider _timeProvider;
     private readonly IDeveloperCertificateService _developerCertificateService;
-    private readonly IFileSystemService _fileSystemService;
     private readonly IConfiguration _configuration;
     private readonly CancellationTokenSource _shutdownCts = new();
-    private string? _dcpTlsCertFilePath;
-    private string? _dcpTlsKeyFilePath;
+    private string? _dcpTlsCertThumbprint;
     private Task? _logProcessorTask;
 
     // These environment variables should never be inherited by DCP from app host.
@@ -59,7 +57,6 @@ internal sealed class DcpHost
         DistributedApplicationModel applicationModel,
         TimeProvider timeProvider,
         IDeveloperCertificateService developerCertificateService,
-        IFileSystemService fileSystemService,
         IConfiguration configuration)
     {
         _loggerFactory = loggerFactory;
@@ -71,7 +68,6 @@ internal sealed class DcpHost
         _applicationModel = applicationModel;
         _timeProvider = timeProvider;
         _developerCertificateService = developerCertificateService;
-        _fileSystemService = fileSystemService;
         _configuration = configuration;
     }
 
@@ -196,19 +192,27 @@ internal sealed class DcpHost
         }
     }
 
-    internal async Task PrepareDcpTlsCertificateAsync(CancellationToken cancellationToken)
+    internal Task PrepareDcpTlsCertificateAsync(CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         // Using the ASP.NET dev cert for DCP TLS is opt-in; by default DCP uses its own ephemeral certificate.
         if (!_configuration.GetBool(KnownConfigNames.DcpDeveloperCertificate, defaultValue: false))
         {
-            return;
+            return Task.CompletedTask;
+        }
+
+        if (!OperatingSystem.IsWindows())
+        {
+            _logger.LogWarning("Developer certificate thumbprint configuration is only supported on Windows. DCP will use its default certificate.");
+            return Task.CompletedTask;
         }
 
         // Check if we have a trusted developer certificate with a private key available
         var certificates = _developerCertificateService.Certificates;
         if (certificates.Count == 0)
         {
-            return;
+            return Task.CompletedTask;
         }
 
         // Use the first (latest/best) certificate that has a private key
@@ -224,54 +228,20 @@ internal sealed class DcpHost
 
         if (certificate is null)
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        try
+        var thumbprint = certificate.Thumbprint;
+        if (string.IsNullOrWhiteSpace(thumbprint))
         {
-            var sessionDir = _locations.DcpSessionDir;
-
-            // Export the public certificate chain in PEM format
-            var certPem = certificate.ExportCertificatePem();
-            var certFilePath = Path.Combine(sessionDir, "dcp-tls.crt");
-            File.WriteAllText(certFilePath, certPem);
-
-            // Export the private key using the shared caching logic to avoid macOS keychain prompts
-            var (keyPem, _) = await DeveloperCertificateService.GetKeyMaterialAsync(
-                certificate, password: null, needKeyPem: true, needPfx: false, cancellationToken).ConfigureAwait(false);
-
-            if (keyPem is null)
-            {
-                _logger.LogWarning("Failed to export the private key for the developer certificate. DCP will use its default certificate.");
-                return;
-            }
-
-            var keyFilePath = Path.Combine(sessionDir, "dcp-tls.key");
-
-            if (OperatingSystem.IsWindows())
-            {
-                File.WriteAllText(keyFilePath, new string(keyPem));
-            }
-            else
-            {
-                // Write the key file with restricted permissions on Unix
-                using var fs = new FileStream(keyFilePath, FileMode.Create, FileAccess.Write, FileShare.None);
-                File.SetUnixFileMode(keyFilePath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-                using var writer = new StreamWriter(fs);
-                writer.Write(keyPem);
-            }
-
-            Array.Clear(keyPem, 0, keyPem.Length);
-
-            _dcpTlsCertFilePath = certFilePath;
-            _dcpTlsKeyFilePath = keyFilePath;
-
-            _logger.LogDebug("Prepared DCP TLS certificate at {CertPath} with key at {KeyPath}.", certFilePath, keyFilePath);
+            _logger.LogWarning("Failed to read the developer certificate thumbprint. DCP will use its default certificate.");
+            return Task.CompletedTask;
         }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to prepare TLS certificate for DCP. DCP will use its default certificate.");
-        }
+
+        _dcpTlsCertThumbprint = thumbprint;
+        _logger.LogDebug("Prepared DCP TLS certificate thumbprint {Thumbprint}.", thumbprint);
+
+        return Task.CompletedTask;
     }
 
     public async Task StopAsync()
@@ -336,9 +306,9 @@ internal sealed class DcpHost
             arguments += $" --container-runtime \"{_dcpOptions.ContainerRuntime}\"";
         }
 
-        if (_dcpTlsCertFilePath is not null && _dcpTlsKeyFilePath is not null)
+        if (!string.IsNullOrWhiteSpace(_dcpTlsCertThumbprint))
         {
-            arguments += $" --tls-cert-file \"{_dcpTlsCertFilePath}\" --tls-private-key-file \"{_dcpTlsKeyFilePath}\"";
+            arguments += $" --tls-cert-thumbprint \"{_dcpTlsCertThumbprint}\"";
         }
 
         var dcpProcessSpec = new ProcessSpec(dcpExePath)
