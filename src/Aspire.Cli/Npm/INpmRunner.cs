@@ -27,6 +27,11 @@ internal sealed class NpmPackageInfo
 internal interface INpmRunner
 {
     /// <summary>
+    /// Gets a value indicating whether npm is available on the system PATH.
+    /// </summary>
+    bool IsAvailable { get; }
+
+    /// <summary>
     /// Resolves a package version and integrity hash from the npm registry.
     /// </summary>
     /// <param name="packageName">The npm package name (e.g., "@playwright/cli").</param>

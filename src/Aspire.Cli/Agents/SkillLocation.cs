@@ -23,7 +23,7 @@ internal sealed class SkillLocation
     /// </summary>
     public static readonly SkillLocation ClaudeCode = new(
         "Claude Code (.claude/skills/)",
-        "Required for Claude Code — also used by playwright-cli which currently writes here",
+        "Required for Claude Code",
         Path.Combine(".claude", "skills"),
         isDefault: false,
         includeUserLevel: false);

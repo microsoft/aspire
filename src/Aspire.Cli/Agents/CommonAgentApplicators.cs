@@ -114,7 +114,7 @@ internal static class CommonAgentApplicators
         context.PlaywrightApplicatorAdded = true;
         context.AddApplicator(new AgentEnvironmentApplicator(
             "Install Playwright CLI (Recommended for browser automation)",
-            ct => installer.InstallAsync(context, ct),
+            ct => installer.InstallAsync(context.RepositoryRoot.FullName, context.SkillBaseDirectories.ToHashSet(StringComparer.OrdinalIgnoreCase), ct),
             promptGroup: McpInitPromptGroup.Tools,
             priority: 1));
     }

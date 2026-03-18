@@ -12,6 +12,18 @@ namespace Aspire.Cli.Npm;
 /// </summary>
 internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
 {
+    /// <summary>
+    /// The public npm registry URL. Commands that resolve packages from the registry
+    /// pass this explicitly via <c>--registry</c> to avoid inheriting a project-level
+    /// <c>.npmrc</c> that may redirect to a private feed (e.g. Azure DevOps).
+    /// </summary>
+    private const string PublicRegistry = "https://registry.npmjs.org/";
+
+    private readonly Lazy<string?> _npmPath = new(() => PathLookupHelper.FindFullPathFromPath("npm"));
+
+    /// <inheritdoc />
+    public bool IsAvailable => _npmPath.Value is not null;
+
     /// <inheritdoc />
     public async Task<NpmPackageInfo?> ResolvePackageAsync(string packageName, string versionRange, CancellationToken cancellationToken)
     {
@@ -30,7 +42,7 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
             // Resolve version: npm view <package>@<range> version
             var versionOutput = await RunNpmCommandInDirectoryAsync(
                 npmPath,
-                ["view", $"{packageName}@{versionRange}", "version"],
+                ["view", $"{packageName}@{versionRange}", "version", "--registry", PublicRegistry],
                 tempDir,
                 cancellationToken);
 
@@ -49,7 +61,7 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
             // Resolve integrity hash: npm view <package>@<version> dist.integrity
             var integrityOutput = await RunNpmCommandInDirectoryAsync(
                 npmPath,
-                ["view", $"{packageName}@{version}", "dist.integrity"],
+                ["view", $"{packageName}@{version}", "dist.integrity", "--registry", PublicRegistry],
                 tempDir,
                 cancellationToken);
 
@@ -82,7 +94,7 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
 
         var output = await RunNpmCommandInDirectoryAsync(
             npmPath,
-            ["pack", $"{packageName}@{version}", "--pack-destination", outputDirectory],
+            ["pack", $"{packageName}@{version}", "--pack-destination", outputDirectory, "--registry", PublicRegistry],
             outputDirectory,
             cancellationToken);
 
@@ -136,7 +148,7 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
             // Install the package from the registry to get proper attestation metadata
             var installOutput = await RunNpmCommandInDirectoryAsync(
                 npmPath,
-                ["install", $"{packageName}@{version}", "--ignore-scripts"],
+                ["install", $"{packageName}@{version}", "--ignore-scripts", "--registry", PublicRegistry],
                 tempDir,
                 cancellationToken);
 
@@ -192,13 +204,41 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
 
     private string? FindNpmPath()
     {
-        var npmPath = PathLookupHelper.FindFullPathFromPath("npm");
+        var npmPath = _npmPath.Value;
         if (npmPath is null)
         {
             logger.LogDebug("npm is not installed or not found in PATH");
         }
 
         return npmPath;
+    }
+
+    /// <summary>
+    /// On Windows, npm is a batch wrapper (npm.cmd) that launches node.exe with npm-cli.js.
+    /// Launching .cmd files via Process.Start with redirected stdout produces empty output.
+    /// This method resolves the underlying node.exe + npm-cli.js to invoke directly.
+    /// </summary>
+    private static (string NodeExe, string NpmCliJs)? ResolveNodeAndNpmCli(string npmCmdPath)
+    {
+        var npmDir = Path.GetDirectoryName(npmCmdPath);
+        if (npmDir is null)
+        {
+            return null;
+        }
+
+        var nodeExe = Path.Combine(npmDir, "node.exe");
+        if (!File.Exists(nodeExe))
+        {
+            return null;
+        }
+
+        var npmCliJs = Path.Combine(npmDir, "node_modules", "npm", "bin", "npm-cli.js");
+        if (!File.Exists(npmCliJs))
+        {
+            return null;
+        }
+
+        return (nodeExe, npmCliJs);
     }
 
     private static string CreateIsolatedTempDirectory()
@@ -230,7 +270,7 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
 
         try
         {
-            var startInfo = new ProcessStartInfo(npmPath)
+            var startInfo = new ProcessStartInfo
             {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -238,6 +278,28 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
                 CreateNoWindow = true,
                 WorkingDirectory = workingDirectory
             };
+
+            // On Windows, npm resolves to npm.cmd (a batch wrapper). Launching
+            // .cmd files via Process.Start with redirected stdout produces empty
+            // output. Resolve to the underlying node.exe + npm-cli.js instead.
+            if (OperatingSystem.IsWindows() && npmPath.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase))
+            {
+                var resolved = ResolveNodeAndNpmCli(npmPath);
+                if (resolved is null)
+                {
+                    logger.LogWarning("Could not resolve node.exe/npm-cli.js from {NpmCmd}, falling back to direct invocation which may produce empty output", npmPath);
+                    startInfo.FileName = npmPath;
+                }
+                else
+                {
+                    startInfo.FileName = resolved.Value.NodeExe;
+                    startInfo.ArgumentList.Add(resolved.Value.NpmCliJs);
+                }
+            }
+            else
+            {
+                startInfo.FileName = npmPath;
+            }
 
             foreach (var arg in args)
             {

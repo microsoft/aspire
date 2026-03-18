@@ -249,6 +249,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
                     workspaceRoot,
                     location.RelativeSkillDirectory,
                     skill,
+                    isUserLevel: false,
                     cancellationToken);
 
                 if (location.IncludeUserLevel)
@@ -257,20 +258,27 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
                         ExecutionContext.HomeDirectory,
                         location.RelativeSkillDirectory,
                         skill,
+                        isUserLevel: true,
                         cancellationToken);
                 }
             }
         }
 
         // --- Phase 4: Handle Playwright CLI (installs binary + mirrors skill files to registered directories) ---
+        var selectedSkillDirs = selectedLocations.Select(l => l.RelativeSkillDirectory).ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (selectedSkills.Contains(SkillDefinition.PlaywrightCli) && selectedLocations.Count > 0)
         {
             try
             {
-                var installed = await _playwrightCliInstaller.InstallAsync(context, cancellationToken);
+                var (installed, errorMessage) = await _playwrightCliInstaller.InstallAsync(workspaceRoot.FullName, selectedSkillDirs, cancellationToken);
                 if (installed)
                 {
                     _interactionService.DisplayMessage(KnownEmojis.CheckMark, "Installed Playwright CLI");
+                }
+                else if (errorMessage is not null)
+                {
+                    _interactionService.DisplayError(errorMessage);
+                    hasErrors = true;
                 }
                 else
                 {
@@ -359,6 +367,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         DirectoryInfo rootDirectory,
         string relativeSkillDirectory,
         SkillDefinition skill,
+        bool isUserLevel,
         CancellationToken cancellationToken)
     {
         var relativePath = Path.Combine(relativeSkillDirectory, skill.Name, "SKILL.md");
@@ -383,7 +392,8 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             }
 
             await File.WriteAllTextAsync(fullPath, content, cancellationToken);
-            _interactionService.DisplayMessage(KnownEmojis.CheckMark, $"Installed {skill.Name} skill ({relativePath})");
+            var displayPath = isUserLevel ? $"~/{relativePath}" : relativePath;
+            _interactionService.DisplayMessage(KnownEmojis.CheckMark, $"Installed {skill.Name} skill ({displayPath})");
             return true;
         }
         catch (IOException ex)
