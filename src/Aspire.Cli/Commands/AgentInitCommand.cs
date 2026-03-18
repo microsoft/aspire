@@ -211,7 +211,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
                 item => item switch
                 {
                     SkillDefinition skill => $"{skill.Name} — {skill.Description}",
-                    AgentEnvironmentApplicator app => $"[bold]{app.Description}[/] [dim](configures detected agent environments)[/]",
+                    AgentEnvironmentApplicator app => $"[bold]{app.Description}[/] [dim]{AgentCommandStrings.InitCommand_ConfiguresDetectedAgentEnvironments}[/]",
                     _ => item.ToString()!
                 },
                 preSelected: preSelectedItems,
@@ -220,18 +220,16 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
 
             selectedSkills = selectedItems.OfType<SkillDefinition>().ToList();
 
-            // Check if MCP was selected
-            if (combinedMcpApplicator is not null && selectedItems.Contains(combinedMcpApplicator))
+            // Clear MCP applicator if it was not selected by the user.
+            if (combinedMcpApplicator is not null && !selectedItems.Contains(combinedMcpApplicator))
             {
-                // Will be applied in Phase 5
-            }
-            else
-            {
-                combinedMcpApplicator = null; // Not selected, clear it
+                combinedMcpApplicator = null;
             }
         }
 
         // --- Phase 3: Apply skill files for selected locations × skills ---
+        // Each skill file write is fast (small markdown files), so sequential execution
+        // is fine — parallelizing would complicate error handling for no meaningful gain.
         var hasErrors = false;
         foreach (var location in selectedLocations)
         {
@@ -270,19 +268,24 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         {
             try
             {
-                var (installed, errorMessage) = await _playwrightCliInstaller.InstallAsync(workspaceRoot.FullName, selectedSkillDirs, cancellationToken);
-                if (installed)
+                var (status, message) = await _playwrightCliInstaller.InstallAsync(workspaceRoot.FullName, selectedSkillDirs, cancellationToken);
+                switch (status)
                 {
-                    _interactionService.DisplayMessage(KnownEmojis.CheckMark, "Installed Playwright CLI");
-                }
-                else if (errorMessage is not null)
-                {
-                    _interactionService.DisplayError(errorMessage);
-                    hasErrors = true;
-                }
-                else
-                {
-                    _interactionService.DisplaySubtleMessage("Playwright CLI installation skipped (npm may not be available)");
+                    case PlaywrightInstallStatus.Installed:
+                        _interactionService.DisplayMessage(KnownEmojis.CheckMark, AgentCommandStrings.InitCommand_InstalledPlaywrightCli);
+                        break;
+                    case PlaywrightInstallStatus.InstalledWithWarnings:
+                        _interactionService.DisplayMessage(KnownEmojis.Warning, message!);
+                        break;
+                    case PlaywrightInstallStatus.Failed:
+                        _interactionService.DisplayError(message!);
+                        _interactionService.DisplayMessage(KnownEmojis.PageFacingUp, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, ExecutionContext.LogFilePath));
+                        hasErrors = true;
+                        break;
+                    case PlaywrightInstallStatus.Skipped:
+                        // npm is not available — not an error, just informational.
+                        _interactionService.DisplaySubtleMessage(AgentCommandStrings.InitCommand_PlaywrightCliSkipped);
+                        break;
                 }
             }
             catch (InvalidOperationException ex)
@@ -299,9 +302,13 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             {
                 await combinedMcpApplicator.ApplyAsync(cancellationToken);
             }
+            // InvalidOperationException is thrown by scanner-generated applicators
+            // (e.g., MCP config writers) when the underlying operation fails.
             catch (InvalidOperationException ex)
             {
                 _interactionService.DisplayError(ex.Message);
+                // JsonException as InnerException indicates a malformed config file
+                // (e.g., invalid JSON in .copilot/mcp-config.json or .vscode/mcp.json).
                 if (ex.InnerException is JsonException)
                 {
                     _interactionService.DisplaySubtleMessage(
@@ -312,6 +319,8 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         }
 
         // --- Phase 6: Handle any remaining applicators ---
+        // This covers applicators whose PromptGroup doesn't fall into SkillFiles,
+        // Tools, or AgentEnvironments (currently none, but future-proofing).
         var otherApplicators = userChoices
             .Where(a => a.PromptGroup != McpInitPromptGroup.SkillFiles
                      && a.PromptGroup != McpInitPromptGroup.Tools
@@ -393,12 +402,14 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
 
             await File.WriteAllTextAsync(fullPath, content, cancellationToken);
             var displayPath = isUserLevel ? $"~/{relativePath}" : relativePath;
-            _interactionService.DisplayMessage(KnownEmojis.CheckMark, $"Installed {skill.Name} skill ({displayPath})");
+            _interactionService.DisplayMessage(KnownEmojis.CheckMark,
+                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkill, skill.Name, displayPath));
             return true;
         }
-        catch (IOException ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            _interactionService.DisplayError($"Failed to install {skill.Name} skill at {fullPath}: {ex.Message}");
+            _interactionService.DisplayError(
+                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_FailedToInstallSkill, skill.Name, fullPath, ex.Message));
             return false;
         }
     }

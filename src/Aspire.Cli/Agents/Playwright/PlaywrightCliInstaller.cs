@@ -11,6 +11,32 @@ using Semver;
 namespace Aspire.Cli.Agents.Playwright;
 
 /// <summary>
+/// Describes the outcome of a Playwright CLI installation attempt.
+/// </summary>
+internal enum PlaywrightInstallStatus
+{
+    /// <summary>
+    /// Installation completed successfully.
+    /// </summary>
+    Installed,
+
+    /// <summary>
+    /// Installation completed but some post-install steps (e.g., mirroring) had warnings.
+    /// </summary>
+    InstalledWithWarnings,
+
+    /// <summary>
+    /// Installation was skipped because a prerequisite (npm) is not available.
+    /// </summary>
+    Skipped,
+
+    /// <summary>
+    /// Installation failed.
+    /// </summary>
+    Failed
+}
+
+/// <summary>
 /// Orchestrates secure installation of the Playwright CLI with supply chain verification.
 /// </summary>
 internal sealed class PlaywrightCliInstaller(
@@ -77,21 +103,21 @@ internal sealed class PlaywrightCliInstaller(
     /// <param name="repoRoot">The workspace/repository root directory.</param>
     /// <param name="selectedSkillDirectories">The skill directories the user explicitly selected.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
-    /// <returns>A tuple where <c>Success</c> is true if installation succeeded, and <c>ErrorMessage</c> contains the failure reason (or <see langword="null"/> when npm is not available on the system PATH).</returns>
-    public async Task<(bool Success, string? ErrorMessage)> InstallAsync(string repoRoot, IReadOnlySet<string> selectedSkillDirectories, CancellationToken cancellationToken)
+    /// <returns>A tuple where <c>Status</c> indicates the outcome (installed, skipped, or failed) and <c>Message</c> contains additional details when applicable.</returns>
+    public async Task<(PlaywrightInstallStatus Status, string? Message)> InstallAsync(string repoRoot, IReadOnlySet<string> selectedSkillDirectories, CancellationToken cancellationToken)
     {
         return await interactionService.ShowStatusAsync(
             "Installing Playwright CLI...",
             () => InstallCoreAsync(repoRoot, selectedSkillDirectories, cancellationToken));
     }
 
-    private async Task<(bool Success, string? ErrorMessage)> InstallCoreAsync(string repoRoot, IReadOnlySet<string> selectedSkillDirectories, CancellationToken cancellationToken)
+    private async Task<(PlaywrightInstallStatus Status, string? Message)> InstallCoreAsync(string repoRoot, IReadOnlySet<string> selectedSkillDirectories, CancellationToken cancellationToken)
     {
-        // Early exit if npm is not available — the only case where we silently skip.
+        // Early exit if npm is not available — playwright-cli requires npm.
         if (!npmRunner.IsAvailable)
         {
-            logger.LogDebug("npm is not available on PATH, skipping Playwright CLI installation");
-            return (false, null);
+            logger.LogDebug("npm is not available on PATH, skipping Playwright CLI installation.");
+            return (PlaywrightInstallStatus.Skipped, null);
         }
 
         // Step 1: Resolve the target version and integrity hash from the npm registry.
@@ -100,18 +126,18 @@ internal sealed class PlaywrightCliInstaller(
 
         if (!string.IsNullOrEmpty(versionOverride))
         {
-            logger.LogDebug("Using version override from '{ConfigKey}': {Version}", VersionOverrideKey, versionOverride);
+            logger.LogDebug("Using version override from '{ConfigKey}': {Version}.", VersionOverrideKey, versionOverride);
         }
 
-        logger.LogDebug("Resolving {Package}@{Range} from npm registry", PackageName, effectiveRange);
+        logger.LogDebug("Resolving {Package}@{Range} from npm registry.", PackageName, effectiveRange);
         var packageInfo = await npmRunner.ResolvePackageAsync(PackageName, effectiveRange, cancellationToken);
 
         if (packageInfo is null)
         {
-            return (false, $"Failed to resolve {PackageName}@{effectiveRange} from the npm registry");
+            return (PlaywrightInstallStatus.Failed, $"Failed to resolve {PackageName}@{effectiveRange} from the npm registry.");
         }
 
-        logger.LogDebug("Resolved {Package}@{Version} with integrity {Integrity}", PackageName, packageInfo.Version, packageInfo.Integrity);
+        logger.LogDebug("Resolved {Package}@{Version} with integrity {Integrity}.", PackageName, packageInfo.Version, packageInfo.Integrity);
 
         // Step 2: Check if a suitable version is already installed.
         var installedVersion = await playwrightCliRunner.GetVersionAsync(cancellationToken);
@@ -121,7 +147,7 @@ internal sealed class PlaywrightCliInstaller(
             if (comparison >= 0)
             {
                 logger.LogDebug(
-                    "playwright-cli {InstalledVersion} is already installed (target: {TargetVersion}), skipping installation",
+                    "playwright-cli {InstalledVersion} is already installed (target: {TargetVersion}), skipping installation.",
                     installedVersion,
                     packageInfo.Version);
 
@@ -130,7 +156,7 @@ internal sealed class PlaywrightCliInstaller(
             }
 
             logger.LogDebug(
-                "Upgrading playwright-cli from {InstalledVersion} to {TargetVersion}",
+                "Upgrading playwright-cli from {InstalledVersion} to {TargetVersion}.",
                 installedVersion,
                 packageInfo.Version);
         }
@@ -151,7 +177,7 @@ internal sealed class PlaywrightCliInstaller(
             // Step 3: Verify provenance via Sigstore bundle verification and SLSA attestation checks.
             // This cryptographically verifies the Sigstore bundle (Fulcio CA, Rekor tlog, OIDC identity)
             // and then checks the provenance fields (source repo, workflow, build type, ref).
-            logger.LogDebug("Verifying provenance for {Package}@{Version}", PackageName, packageInfo.Version);
+            logger.LogDebug("Verifying provenance for {Package}@{Version}.", PackageName, packageInfo.Version);
             var provenanceResult = await provenanceChecker.VerifyProvenanceAsync(
                 PackageName,
                 packageInfo.Version.ToString(),
@@ -171,7 +197,7 @@ internal sealed class PlaywrightCliInstaller(
                     packageInfo.Version,
                     provenanceResult.Outcome,
                     ExpectedSourceRepository);
-                return (false, $"Provenance verification failed for {PackageName}@{packageInfo.Version}: {provenanceResult.Outcome}");
+                return (PlaywrightInstallStatus.Failed, $"Provenance verification failed for {PackageName}@{packageInfo.Version}: {provenanceResult.Outcome}.");
             }
 
             logger.LogDebug(
@@ -187,13 +213,13 @@ internal sealed class PlaywrightCliInstaller(
 
         try
         {
-            logger.LogDebug("Downloading {Package}@{Version} to {TempDir}", PackageName, packageInfo.Version, tempDir);
+            logger.LogDebug("Downloading {Package}@{Version} to {TempDir}.", PackageName, packageInfo.Version, tempDir);
             var tarballPath = await npmRunner.PackAsync(PackageName, packageInfo.Version.ToString(), tempDir, cancellationToken);
 
             if (tarballPath is null)
             {
-                logger.LogWarning("Failed to download {Package}@{Version}", PackageName, packageInfo.Version);
-                return (false, $"Failed to download {PackageName}@{packageInfo.Version}");
+                logger.LogWarning("Failed to download {Package}@{Version}.", PackageName, packageInfo.Version);
+                return (PlaywrightInstallStatus.Failed, $"Failed to download {PackageName}@{packageInfo.Version}.");
             }
 
             // Step 5: Verify the downloaded tarball's SHA-512 hash matches the SRI integrity value.
@@ -203,22 +229,22 @@ internal sealed class PlaywrightCliInstaller(
                     "Integrity verification failed for {Package}@{Version}. The downloaded package may have been tampered with.",
                     PackageName,
                     packageInfo.Version);
-                return (false, $"Integrity verification failed for {PackageName}@{packageInfo.Version}. The downloaded package may have been tampered with.");
+                return (PlaywrightInstallStatus.Failed, $"Integrity verification failed for {PackageName}@{packageInfo.Version}. The downloaded package may have been tampered with.");
             }
 
             if (!validationDisabled)
             {
-                logger.LogDebug("Integrity verification passed for {TarballPath}", tarballPath);
+                logger.LogDebug("Integrity verification passed for {TarballPath}.", tarballPath);
             }
 
             // Step 6: Install globally from the verified tarball.
-            logger.LogDebug("Installing {Package}@{Version} globally", PackageName, packageInfo.Version);
+            logger.LogDebug("Installing {Package}@{Version} globally.", PackageName, packageInfo.Version);
             var installSuccess = await npmRunner.InstallGlobalAsync(tarballPath, cancellationToken);
 
             if (!installSuccess)
             {
-                logger.LogWarning("Failed to install {Package}@{Version} globally", PackageName, packageInfo.Version);
-                return (false, $"Failed to install {PackageName}@{packageInfo.Version} globally via npm");
+                logger.LogWarning("Failed to install {Package}@{Version} globally.", PackageName, packageInfo.Version);
+                return (PlaywrightInstallStatus.Failed, $"Failed to install {PackageName}@{packageInfo.Version} globally via npm.");
             }
 
             // Step 7: Generate skill files and mirror to selected locations.
@@ -246,17 +272,17 @@ internal sealed class PlaywrightCliInstaller(
     /// to the user-selected locations and cleans up any unselected locations that
     /// playwright-cli created during this run.
     /// </summary>
-    private async Task<(bool Success, string? ErrorMessage)> InstallAndMirrorSkillsAsync(
+    private async Task<(PlaywrightInstallStatus Status, string? Message)> InstallAndMirrorSkillsAsync(
         string repoRoot,
         IReadOnlySet<string> selectedSkillDirectories,
         CancellationToken cancellationToken)
     {
-        logger.LogDebug("Generating Playwright CLI skill files");
+        logger.LogDebug("Generating Playwright CLI skill files.");
         var preExisting = SnapshotPlaywrightSkillDirs(repoRoot);
         var skillsInstalled = await playwrightCliRunner.InstallSkillsAsync(repoRoot, cancellationToken);
         if (!skillsInstalled)
         {
-            return (false, "Failed to generate Playwright CLI skill files");
+            return (PlaywrightInstallStatus.Failed, "Failed to generate Playwright CLI skill files.");
         }
 
         try
@@ -265,10 +291,11 @@ internal sealed class PlaywrightCliInstaller(
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            logger.LogWarning(ex, "Failed to mirror Playwright CLI skill files");
+            logger.LogWarning(ex, "Failed to mirror Playwright CLI skill files to some locations.");
+            return (PlaywrightInstallStatus.InstalledWithWarnings, "Installed Playwright CLI (some locations failed to mirror).");
         }
 
-        return (true, null);
+        return (PlaywrightInstallStatus.Installed, null);
     }
 
     /// <summary>
@@ -300,7 +327,7 @@ internal sealed class PlaywrightCliInstaller(
 
         if (!Directory.Exists(primarySkillDir))
         {
-            logger.LogDebug("Primary skill directory does not exist: {PrimarySkillDir}", primarySkillDir);
+            logger.LogDebug("Primary skill directory does not exist: {PrimarySkillDir}.", primarySkillDir);
             return;
         }
 
@@ -317,11 +344,11 @@ internal sealed class PlaywrightCliInstaller(
             try
             {
                 SyncDirectory(primarySkillDir, targetSkillDir);
-                logger.LogDebug("Mirrored playwright-cli skills to {TargetDir}", targetSkillDir);
+                logger.LogDebug("Mirrored playwright-cli skills to {TargetDir}.", targetSkillDir);
             }
-            catch (IOException ex)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                logger.LogWarning(ex, "Failed to mirror playwright-cli skills to {TargetDir}", targetSkillDir);
+                logger.LogWarning(ex, "Failed to mirror playwright-cli skills to {TargetDir}.", targetSkillDir);
             }
         }
 
@@ -349,24 +376,29 @@ internal sealed class PlaywrightCliInstaller(
             try
             {
                 Directory.Delete(skillDir, recursive: true);
-                logger.LogDebug("Removed playwright-cli skills from unselected location: {SkillDir}", skillDir);
+                logger.LogDebug("Removed playwright-cli skills from unselected location: {SkillDir}.", skillDir);
 
                 // Walk up and remove empty parent directories that we may have created,
                 // but stop at the repo root so we never delete user content.
+                // Depth is limited to the number of path segments in the skill directory
+                // relative to the repo root as an additional safeguard.
+                var maxDepth = location.RelativeSkillDirectory.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Length + 1;
+                var depth = 0;
                 var parent = Path.GetDirectoryName(skillDir);
                 while (parent is not null
+                    && ++depth <= maxDepth
                     && !string.Equals(parent, repoRoot, StringComparison.OrdinalIgnoreCase)
                     && Directory.Exists(parent)
                     && Directory.GetFileSystemEntries(parent).Length == 0)
                 {
                     Directory.Delete(parent);
-                    logger.LogDebug("Removed empty directory: {Dir}", parent);
+                    logger.LogDebug("Removed empty directory: {Dir}.", parent);
                     parent = Path.GetDirectoryName(parent);
                 }
             }
-            catch (IOException ex)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                logger.LogDebug(ex, "Failed to remove playwright-cli skills from {SkillDir}", skillDir);
+                logger.LogDebug(ex, "Failed to remove playwright-cli skills from {SkillDir}.", skillDir);
             }
         }
     }

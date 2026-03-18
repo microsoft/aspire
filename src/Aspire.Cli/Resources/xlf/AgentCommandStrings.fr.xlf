@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="fr" original="../AgentCommandStrings.resx">
     <body>
@@ -45,6 +45,86 @@
       <trans-unit id="InitCommand_NothingSelected">
         <source>No options selected. Nothing to configure.</source>
         <target state="new">No options selected. Nothing to configure.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_ConfiguresDetectedAgentEnvironments">
+        <source>(configures detected agent environments)</source>
+        <target state="new">(configures detected agent environments)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_FailedToInstallSkill">
+        <source>Failed to install {0} skill at {1}: {2}.</source>
+        <target state="new">Failed to install {0} skill at {1}: {2}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_InstalledPlaywrightCli">
+        <source>Installed Playwright CLI.</source>
+        <target state="new">Installed Playwright CLI.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_InstalledSkill">
+        <source>Installed {0} skill ({1}).</source>
+        <target state="new">Installed {0} skill ({1}).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_PlaywrightCliSkipped">
+        <source>Playwright CLI requires npm, which was not found on PATH. Skipping installation.</source>
+        <target state="new">Playwright CLI requires npm, which was not found on PATH. Skipping installation.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkillDescription_Aspire">
+        <source>Aspire CLI commands and workflows for distributed apps</source>
+        <target state="new">Aspire CLI commands and workflows for distributed apps</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkillDescription_DotnetInspect">
+        <source>Query .NET API surfaces across NuGet packages and platform libraries</source>
+        <target state="new">Query .NET API surfaces across NuGet packages and platform libraries</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkillDescription_PlaywrightCli">
+        <source>Browser automation and functional testing</source>
+        <target state="new">Browser automation and functional testing</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkillLocation_ClaudeCodeDescription">
+        <source>Required for Claude Code</source>
+        <target state="new">Required for Claude Code</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkillLocation_ClaudeCodeName">
+        <source>Claude Code (.claude/skills/)</source>
+        <target state="new">Claude Code (.claude/skills/)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkillLocation_GitHubSkillsDescription">
+        <source>Legacy location for GitHub Copilot skills</source>
+        <target state="new">Legacy location for GitHub Copilot skills</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkillLocation_GitHubSkillsName">
+        <source>VS Code / GitHub Copilot (.github/skills/)</source>
+        <target state="new">VS Code / GitHub Copilot (.github/skills/)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkillLocation_OpenCodeDescription">
+        <source>Legacy location for OpenCode skills</source>
+        <target state="new">Legacy location for OpenCode skills</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkillLocation_OpenCodeName">
+        <source>OpenCode (.opencode/skill/)</source>
+        <target state="new">OpenCode (.opencode/skill/)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkillLocation_StandardDescription">
+        <source>Supported by VS Code, GitHub Copilot, and OpenCode (also installs at ~/)</source>
+        <target state="new">Supported by VS Code, GitHub Copilot, and OpenCode (also installs at ~/)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkillLocation_StandardName">
+        <source>Standard (.agents/skills/)</source>
+        <target state="new">Standard (.agents/skills/)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SelectSkillLocations">

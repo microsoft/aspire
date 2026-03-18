@@ -212,5 +212,149 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InitCommand_SelectSkills", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Installed Playwright CLI..
+        /// </summary>
+        internal static string InitCommand_InstalledPlaywrightCli {
+            get {
+                return ResourceManager.GetString("InitCommand_InstalledPlaywrightCli", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Playwright CLI requires npm, which was not found on PATH. Skipping installation..
+        /// </summary>
+        internal static string InitCommand_PlaywrightCliSkipped {
+            get {
+                return ResourceManager.GetString("InitCommand_PlaywrightCliSkipped", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Installed {0} skill ({1})..
+        /// </summary>
+        internal static string InitCommand_InstalledSkill {
+            get {
+                return ResourceManager.GetString("InitCommand_InstalledSkill", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Failed to install {0} skill at {1}: {2}..
+        /// </summary>
+        internal static string InitCommand_FailedToInstallSkill {
+            get {
+                return ResourceManager.GetString("InitCommand_FailedToInstallSkill", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to (configures detected agent environments).
+        /// </summary>
+        internal static string InitCommand_ConfiguresDetectedAgentEnvironments {
+            get {
+                return ResourceManager.GetString("InitCommand_ConfiguresDetectedAgentEnvironments", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire CLI commands and workflows for distributed apps.
+        /// </summary>
+        internal static string SkillDescription_Aspire {
+            get {
+                return ResourceManager.GetString("SkillDescription_Aspire", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Browser automation and functional testing.
+        /// </summary>
+        internal static string SkillDescription_PlaywrightCli {
+            get {
+                return ResourceManager.GetString("SkillDescription_PlaywrightCli", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Query .NET API surfaces across NuGet packages and platform libraries.
+        /// </summary>
+        internal static string SkillDescription_DotnetInspect {
+            get {
+                return ResourceManager.GetString("SkillDescription_DotnetInspect", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Standard (.agents/skills/).
+        /// </summary>
+        internal static string SkillLocation_StandardName {
+            get {
+                return ResourceManager.GetString("SkillLocation_StandardName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Supported by VS Code, GitHub Copilot, and OpenCode (also installs at ~/).
+        /// </summary>
+        internal static string SkillLocation_StandardDescription {
+            get {
+                return ResourceManager.GetString("SkillLocation_StandardDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Claude Code (.claude/skills/).
+        /// </summary>
+        internal static string SkillLocation_ClaudeCodeName {
+            get {
+                return ResourceManager.GetString("SkillLocation_ClaudeCodeName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Required for Claude Code.
+        /// </summary>
+        internal static string SkillLocation_ClaudeCodeDescription {
+            get {
+                return ResourceManager.GetString("SkillLocation_ClaudeCodeDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to VS Code / GitHub Copilot (.github/skills/).
+        /// </summary>
+        internal static string SkillLocation_GitHubSkillsName {
+            get {
+                return ResourceManager.GetString("SkillLocation_GitHubSkillsName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Legacy location for GitHub Copilot skills.
+        /// </summary>
+        internal static string SkillLocation_GitHubSkillsDescription {
+            get {
+                return ResourceManager.GetString("SkillLocation_GitHubSkillsDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to OpenCode (.opencode/skill/).
+        /// </summary>
+        internal static string SkillLocation_OpenCodeName {
+            get {
+                return ResourceManager.GetString("SkillLocation_OpenCodeName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Legacy location for OpenCode skills.
+        /// </summary>
+        internal static string SkillLocation_OpenCodeDescription {
+            get {
+                return ResourceManager.GetString("SkillLocation_OpenCodeDescription", resourceCulture);
+            }
+        }
     }
 }

@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Resources;
+
 namespace Aspire.Cli.Agents;
 
 /// <summary>
@@ -12,8 +14,8 @@ internal sealed class SkillLocation
     /// Standard <c>.agents/skills/</c> location supported by VS Code, GitHub Copilot, and OpenCode.
     /// </summary>
     public static readonly SkillLocation Standard = new(
-        "Standard (.agents/skills/)",
-        "Supported by VS Code, GitHub Copilot, and OpenCode",
+        AgentCommandStrings.SkillLocation_StandardName,
+        AgentCommandStrings.SkillLocation_StandardDescription,
         Path.Combine(".agents", "skills"),
         isDefault: true,
         includeUserLevel: true);
@@ -22,8 +24,8 @@ internal sealed class SkillLocation
     /// Claude Code <c>.claude/skills/</c> location.
     /// </summary>
     public static readonly SkillLocation ClaudeCode = new(
-        "Claude Code (.claude/skills/)",
-        "Required for Claude Code",
+        AgentCommandStrings.SkillLocation_ClaudeCodeName,
+        AgentCommandStrings.SkillLocation_ClaudeCodeDescription,
         Path.Combine(".claude", "skills"),
         isDefault: false,
         includeUserLevel: false);
@@ -32,8 +34,8 @@ internal sealed class SkillLocation
     /// VS Code / GitHub Copilot <c>.github/skills/</c> location.
     /// </summary>
     public static readonly SkillLocation GitHubSkills = new(
-        "VS Code / GitHub Copilot (.github/skills/)",
-        "Legacy location for GitHub Copilot skills",
+        AgentCommandStrings.SkillLocation_GitHubSkillsName,
+        AgentCommandStrings.SkillLocation_GitHubSkillsDescription,
         Path.Combine(".github", "skills"),
         isDefault: false,
         includeUserLevel: false);
@@ -42,8 +44,8 @@ internal sealed class SkillLocation
     /// OpenCode <c>.opencode/skill/</c> location.
     /// </summary>
     public static readonly SkillLocation OpenCode = new(
-        "OpenCode (.opencode/skill/)",
-        "Legacy location for OpenCode skills",
+        AgentCommandStrings.SkillLocation_OpenCodeName,
+        AgentCommandStrings.SkillLocation_OpenCodeDescription,
         Path.Combine(".opencode", "skill"),
         isDefault: false,
         includeUserLevel: false);

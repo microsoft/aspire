@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Resources;
+
 namespace Aspire.Cli.Agents;
 
 /// <summary>
@@ -13,7 +15,7 @@ internal sealed class SkillDefinition
     /// </summary>
     public static readonly SkillDefinition Aspire = new(
         CommonAgentApplicators.AspireSkillName,
-        "Aspire CLI commands and workflows for distributed apps",
+        AgentCommandStrings.SkillDescription_Aspire,
         CommonAgentApplicators.SkillFileContent,
         isDefault: true);
 
@@ -22,7 +24,7 @@ internal sealed class SkillDefinition
     /// </summary>
     public static readonly SkillDefinition PlaywrightCli = new(
         "playwright-cli",
-        "Browser automation and functional testing",
+        AgentCommandStrings.SkillDescription_PlaywrightCli,
         skillContent: null, // Playwright is installed via PlaywrightCliInstaller, not a static file
         isDefault: true);
 
@@ -31,7 +33,7 @@ internal sealed class SkillDefinition
     /// </summary>
     public static readonly SkillDefinition DotnetInspect = new(
         CommonAgentApplicators.DotnetInspectSkillName,
-        "Query .NET API surfaces across NuGet packages and platform libraries",
+        AgentCommandStrings.SkillDescription_DotnetInspect,
         CommonAgentApplicators.DotnetInspectSkillFileContent,
         isDefault: true);
 

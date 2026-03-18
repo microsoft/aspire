@@ -36,10 +36,10 @@ public class PlaywrightCliInstallerTests
             var playwrightRunner = new TestPlaywrightCliRunner();
             var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
 
-            var (success, errorMessage) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
+            var (status, message) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
 
-            Assert.False(success);
-            Assert.NotNull(errorMessage);
+            Assert.Equal(PlaywrightInstallStatus.Failed, status);
+            Assert.NotNull(message);
         }
         finally
         {
@@ -69,9 +69,9 @@ public class PlaywrightCliInstallerTests
             };
             var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
 
-            var (success, _) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
+            var (status, _) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
 
-            Assert.True(success);
+            Assert.Equal(PlaywrightInstallStatus.Installed, status);
             Assert.True(playwrightRunner.InstallSkillsCalled);
             Assert.False(npmRunner.PackCalled);
             Assert.False(npmRunner.InstallGlobalCalled);
@@ -139,9 +139,9 @@ public class PlaywrightCliInstallerTests
             };
             var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
 
-            var (success, _) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
+            var (status, _) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
 
-            Assert.True(success);
+            Assert.Equal(PlaywrightInstallStatus.Installed, status);
             Assert.True(playwrightRunner.InstallSkillsCalled);
             Assert.False(npmRunner.PackCalled);
         }
@@ -170,10 +170,10 @@ public class PlaywrightCliInstallerTests
             var playwrightRunner = new TestPlaywrightCliRunner();
             var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
 
-            var (success, errorMessage) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
+            var (status, message) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
 
-            Assert.False(success);
-            Assert.NotNull(errorMessage);
+            Assert.Equal(PlaywrightInstallStatus.Failed, status);
+            Assert.NotNull(message);
             Assert.True(npmRunner.PackCalled);
         }
         finally
@@ -208,10 +208,10 @@ public class PlaywrightCliInstallerTests
             var repoRoot = CreateTestRepoRoot();
             try
             {
-                var (success, errorMessage) = await installer.InstallAsync(repoRoot, s_emptySkillDirs, CancellationToken.None);
+                var (status, message) = await installer.InstallAsync(repoRoot, s_emptySkillDirs, CancellationToken.None);
 
-                Assert.False(success);
-                Assert.NotNull(errorMessage);
+                Assert.Equal(PlaywrightInstallStatus.Failed, status);
+                Assert.NotNull(message);
                 Assert.False(npmRunner.InstallGlobalCalled);
             }
             finally
@@ -259,9 +259,9 @@ public class PlaywrightCliInstallerTests
             var repoRoot = CreateTestRepoRoot();
             try
             {
-                var (success, _) = await installer.InstallAsync(repoRoot, s_emptySkillDirs, CancellationToken.None);
+                var (status, _) = await installer.InstallAsync(repoRoot, s_emptySkillDirs, CancellationToken.None);
 
-                Assert.True(success);
+                Assert.Equal(PlaywrightInstallStatus.Installed, status);
                 Assert.True(npmRunner.InstallGlobalCalled);
                 Assert.True(playwrightRunner.InstallSkillsCalled);
             }
@@ -306,10 +306,10 @@ public class PlaywrightCliInstallerTests
             var repoRoot = CreateTestRepoRoot();
             try
             {
-                var (success, errorMessage) = await installer.InstallAsync(repoRoot, s_emptySkillDirs, CancellationToken.None);
+                var (status, message) = await installer.InstallAsync(repoRoot, s_emptySkillDirs, CancellationToken.None);
 
-                Assert.False(success);
-                Assert.NotNull(errorMessage);
+                Assert.Equal(PlaywrightInstallStatus.Failed, status);
+                Assert.NotNull(message);
             }
             finally
             {
@@ -357,9 +357,9 @@ public class PlaywrightCliInstallerTests
             var repoRoot = CreateTestRepoRoot();
             try
             {
-                var (success, _) = await installer.InstallAsync(repoRoot, s_emptySkillDirs, CancellationToken.None);
+                var (status, _) = await installer.InstallAsync(repoRoot, s_emptySkillDirs, CancellationToken.None);
 
-                Assert.True(success);
+                Assert.Equal(PlaywrightInstallStatus.Installed, status);
                 Assert.True(npmRunner.PackCalled);
                 Assert.True(npmRunner.InstallGlobalCalled);
                 Assert.True(playwrightRunner.InstallSkillsCalled);
@@ -446,10 +446,10 @@ public class PlaywrightCliInstallerTests
             var playwrightRunner = new TestPlaywrightCliRunner();
             var installer = new PlaywrightCliInstaller(npmRunner, provenanceChecker, playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
 
-            var (success, errorMessage) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
+            var (status, message) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
 
-            Assert.False(success);
-            Assert.NotNull(errorMessage);
+            Assert.Equal(PlaywrightInstallStatus.Failed, status);
+            Assert.NotNull(message);
             Assert.True(provenanceChecker.ProvenanceCalled);
             Assert.False(npmRunner.PackCalled);
         }
@@ -492,9 +492,9 @@ public class PlaywrightCliInstallerTests
             var repoRoot = CreateTestRepoRoot();
             try
             {
-                var (success, _) = await installer.InstallAsync(repoRoot, s_emptySkillDirs, CancellationToken.None);
+                var (status, _) = await installer.InstallAsync(repoRoot, s_emptySkillDirs, CancellationToken.None);
 
-                Assert.True(success);
+                Assert.Equal(PlaywrightInstallStatus.Installed, status);
                 Assert.False(provenanceChecker.ProvenanceCalled);
                 Assert.True(npmRunner.PackCalled);
                 Assert.True(npmRunner.InstallGlobalCalled);

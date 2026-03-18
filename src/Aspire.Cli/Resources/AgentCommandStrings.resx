@@ -111,4 +111,52 @@
   <data name="InitCommand_SelectSkills" xml:space="preserve">
     <value>Which skills should be installed? [dim](Space to toggle, Enter to confirm)[/]</value>
   </data>
+  <data name="InitCommand_InstalledPlaywrightCli" xml:space="preserve">
+    <value>Installed Playwright CLI.</value>
+  </data>
+  <data name="InitCommand_PlaywrightCliSkipped" xml:space="preserve">
+    <value>Playwright CLI requires npm, which was not found on PATH. Skipping installation.</value>
+  </data>
+  <data name="InitCommand_InstalledSkill" xml:space="preserve">
+    <value>Installed {0} skill ({1}).</value>
+  </data>
+  <data name="InitCommand_FailedToInstallSkill" xml:space="preserve">
+    <value>Failed to install {0} skill at {1}: {2}.</value>
+  </data>
+  <data name="InitCommand_ConfiguresDetectedAgentEnvironments" xml:space="preserve">
+    <value>(configures detected agent environments)</value>
+  </data>
+  <data name="SkillDescription_Aspire" xml:space="preserve">
+    <value>Aspire CLI commands and workflows for distributed apps</value>
+  </data>
+  <data name="SkillDescription_PlaywrightCli" xml:space="preserve">
+    <value>Browser automation and functional testing</value>
+  </data>
+  <data name="SkillDescription_DotnetInspect" xml:space="preserve">
+    <value>Query .NET API surfaces across NuGet packages and platform libraries</value>
+  </data>
+  <data name="SkillLocation_StandardName" xml:space="preserve">
+    <value>Standard (.agents/skills/)</value>
+  </data>
+  <data name="SkillLocation_StandardDescription" xml:space="preserve">
+    <value>Supported by VS Code, GitHub Copilot, and OpenCode (also installs at ~/)</value>
+  </data>
+  <data name="SkillLocation_ClaudeCodeName" xml:space="preserve">
+    <value>Claude Code (.claude/skills/)</value>
+  </data>
+  <data name="SkillLocation_ClaudeCodeDescription" xml:space="preserve">
+    <value>Required for Claude Code</value>
+  </data>
+  <data name="SkillLocation_GitHubSkillsName" xml:space="preserve">
+    <value>VS Code / GitHub Copilot (.github/skills/)</value>
+  </data>
+  <data name="SkillLocation_GitHubSkillsDescription" xml:space="preserve">
+    <value>Legacy location for GitHub Copilot skills</value>
+  </data>
+  <data name="SkillLocation_OpenCodeName" xml:space="preserve">
+    <value>OpenCode (.opencode/skill/)</value>
+  </data>
+  <data name="SkillLocation_OpenCodeDescription" xml:space="preserve">
+    <value>Legacy location for OpenCode skills</value>
+  </data>
 </root>

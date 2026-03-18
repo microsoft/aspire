@@ -198,7 +198,7 @@ internal static class CommonAgentApplicators
         | View traces | `aspire otel traces [resource]` |
         | View spans | `aspire otel spans [resource]` |
         | Logs for a trace | `aspire otel logs --trace-id <id>` |
-        | Export telemetry to zip | `aspire export [resource]` |
+        | Export telemetry and resource data to zip | `aspire export [resource]` |
         | Add an integration | `aspire add` |
         | List running AppHosts | `aspire ps` |
         | Update AppHost packages | `aspire update` |
@@ -248,7 +248,7 @@ internal static class CommonAgentApplicators
         2. `aspire otel logs <resource>` — view structured logs
         3. `aspire logs <resource>` — view console output
         4. `aspire otel traces <resource>` — view distributed traces
-        5. `aspire export` — export telemetry data to a zip for deeper analysis
+        5. `aspire export` — export telemetry and resource data to a zip for deeper analysis
 
         ### Adding integrations
 
