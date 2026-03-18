@@ -178,7 +178,9 @@ internal sealed class SdkDumpCommand : BaseCommand
                     : null;
 
                 _logger.LogDebug("Fetching capabilities via RPC");
-                var capabilities = await rpcClient.GetCapabilitiesAsync(exportAssemblyNames, cancellationToken);
+                var capabilities = exportAssemblyNames is not null
+                    ? await rpcClient.GetCapabilitiesForAssembliesAsync(exportAssemblyNames, cancellationToken)
+                    : await rpcClient.GetCapabilitiesAsync(cancellationToken);
 
                 // Output Info-level diagnostics to stderr via logger (shown with -d flag)
                 var infoDiagnostics = capabilities.Diagnostics.Where(d => d.Severity == "Info").ToList();

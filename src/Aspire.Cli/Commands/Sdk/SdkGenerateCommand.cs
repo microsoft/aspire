@@ -170,7 +170,7 @@ internal sealed class SdkGenerateCommand : BaseCommand
                 await using var rpcClient = await AppHostRpcClient.ConnectAsync(socketPath, cancellationToken);
 
                 _logger.LogDebug("Generating {Language} SDK via RPC", languageInfo.CodeGenerator);
-                var generatedFiles = await rpcClient.GenerateCodeAsync(languageInfo.CodeGenerator, integrationAssemblyName, cancellationToken);
+                var generatedFiles = await rpcClient.GenerateCodeForAssemblyAsync(languageInfo.CodeGenerator, integrationAssemblyName, cancellationToken);
 
                 // Write generated files
                 var outputDirFullPath = Path.GetFullPath(outputDir.FullName);

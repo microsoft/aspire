@@ -1213,7 +1213,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         _logger.LogDebug("Generating {CodeGenerator} code via RPC for {Count} packages", codeGenerator, integrationsList.Count);
 
         // Use the typed RPC method
-        var files = await rpcClient.GenerateCodeAsync(codeGenerator, cancellationToken: cancellationToken);
+        var files = await rpcClient.GenerateCodeAsync(codeGenerator, cancellationToken);
 
         // Write generated files to the output directory
         var outputPath = Path.Combine(appPath, LanguageInfo.GeneratedFolderName);
