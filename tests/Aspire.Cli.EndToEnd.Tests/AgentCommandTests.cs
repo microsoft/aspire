@@ -131,18 +131,14 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.WaitAsync(500); // Small delay to ensure prompt is ready
         await auto.EnterAsync(); // Accept default workspace path
         await auto.WaitUntilAsync(
-            s => s.ContainsText("configure") || s.ContainsText("No agent environments") || s.ContainsText("omplete"),
-            timeout: TimeSpan.FromSeconds(60), description: "configure prompt, completion, or no environments message");
-
-        // If we got the configure prompt, just press Enter to accept defaults
-        // If we got complete/no-env, this Enter is harmless
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        // Debug: Show the scanner log file to diagnose what the scanner found
-        await auto.TypeAsync("cat /tmp/aspire-deprecated-scan.log 2>/dev/null || echo 'No debug log found'");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Scanning context", timeout: TimeSpan.FromSeconds(10));
+            s => s.ContainsText("skill files be installed"),
+            timeout: TimeSpan.FromSeconds(60), description: "skill location prompt");
+        await auto.EnterAsync(); // Accept default skill locations (Standard)
+        await auto.WaitUntilAsync(
+            s => s.ContainsText("skills should be installed"),
+            timeout: TimeSpan.FromSeconds(30), description: "skill selection prompt");
+        await auto.EnterAsync(); // Accept default skills
+        await auto.WaitUntilTextAsync("complete", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 3: Verify config was updated to new format
