@@ -29,6 +29,9 @@ import { AspireAppHostTreeProvider } from './views/AspireAppHostTreeProvider';
 import { AppHostDataRepository } from './views/AppHostDataRepository';
 import { installCliStableCommand, installCliDailyCommand, verifyCliInstalledCommand } from './commands/walkthroughCommands';
 import { AspireMcpServerDefinitionProvider } from './mcp/AspireMcpServerDefinitionProvider';
+import { AspireCodeLensProvider } from './editor/AspireCodeLensProvider';
+import { AspireGutterDecorationProvider } from './editor/AspireGutterDecorationProvider';
+import { getSupportedLanguageIds } from './editor/parsers/AppHostResourceParser';
 
 let aspireExtensionContext = new AspireExtensionContext();
 
@@ -112,6 +115,38 @@ export async function activate(context: vscode.ExtensionContext) {
   dataRepository.activate();
 
   context.subscriptions.push(appHostTreeView, refreshRunningAppHostsRegistration, switchToGlobalViewRegistration, switchToWorkspaceViewRegistration, openDashboardRegistration, stopAppHostRegistration, stopResourceRegistration, startResourceRegistration, restartResourceRegistration, viewResourceLogsRegistration, executeResourceCommandRegistration, copyEndpointUrlRegistration, openInExternalBrowserRegistration, openInSimpleBrowserRegistration, copyResourceNameRegistration, copyPidRegistration, copyAppHostPathRegistration, { dispose: () => { appHostTreeProvider.dispose(); dataRepository.dispose(); } });
+
+  // CodeLens provider — shows Debug on pipeline steps, resource state on resources
+  const codeLensProvider = new AspireCodeLensProvider(appHostTreeProvider);
+  const languageFilters = getSupportedLanguageIds().map(lang => ({ language: lang, scheme: 'file' }));
+  const codeLensRegistration = vscode.languages.registerCodeLensProvider(languageFilters, codeLensProvider);
+  const codeLensDebugPipelineStepRegistration = vscode.commands.registerCommand('aspire-vscode.codeLensDebugPipelineStep', (stepName: string) => editorCommandProvider.tryExecuteDoAppHost(false, stepName));
+  const codeLensResourceActionRegistration = vscode.commands.registerCommand('aspire-vscode.codeLensResourceAction', (resourceName: string, action: string, appHostPath: string) => {
+    let command = `resource "${resourceName}" ${action}`;
+    if (appHostPath) {
+      command += ` --apphost "${appHostPath}"`;
+    }
+    terminalProvider.sendAspireCommandToAspireTerminal(command);
+  });
+  const codeLensViewLogsRegistration = vscode.commands.registerCommand('aspire-vscode.codeLensViewLogs', (resourceName: string, appHostPath: string) => {
+    let command = `logs "${resourceName}"`;
+    if (appHostPath) {
+      command += ` --apphost "${appHostPath}"`;
+    }
+    command += ' --follow';
+    terminalProvider.sendAspireCommandToAspireTerminal(command);
+  });
+  const codeLensRevealResourceRegistration = vscode.commands.registerCommand('aspire-vscode.codeLensRevealResource', (resourceName: string) => {
+    const element = appHostTreeProvider.findResourceElement(resourceName);
+    if (element) {
+      appHostTreeView.reveal(element, { select: true, focus: true });
+    }
+  });
+  context.subscriptions.push(codeLensRegistration, codeLensDebugPipelineStepRegistration, codeLensResourceActionRegistration, codeLensViewLogsRegistration, codeLensRevealResourceRegistration, codeLensProvider);
+
+  // Gutter decorations — colored dots next to resources showing runtime state
+  const gutterDecorationProvider = new AspireGutterDecorationProvider(appHostTreeProvider);
+  context.subscriptions.push(gutterDecorationProvider);
 
   context.subscriptions.push(cliAddCommandRegistration, cliNewCommandRegistration, cliInitCommandRegistration, cliDeployCommandRegistration, cliPublishCommandRegistration, cliDoCommandRegistration, openTerminalCommandRegistration, configureLaunchJsonCommandRegistration);
   context.subscriptions.push(cliUpdateCommandRegistration, cliUpdateSelfCommandRegistration, settingsCommandRegistration, openLocalSettingsCommandRegistration, openGlobalSettingsCommandRegistration, runAppHostCommandRegistration, debugAppHostCommandRegistration);

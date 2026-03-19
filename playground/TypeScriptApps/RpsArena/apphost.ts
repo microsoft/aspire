@@ -11,6 +11,7 @@ const builder = await createBuilder();
 const postgres = await builder
     .addPostgres("postgres")
     .withLifetime(ContainerLifetime.Persistent)
+    .withPgAdmin()
     .withDataVolume();
 
 const gameDb = await postgres.addDatabase("gamedb");
