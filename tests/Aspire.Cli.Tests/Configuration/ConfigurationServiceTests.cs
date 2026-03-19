@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Configuration;
@@ -224,5 +226,65 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
         var result = File.ReadAllText(settingsFilePath);
         Assert.Contains("appHost", result);
         Assert.Contains("MyApp/MyApp.csproj", result);
+    }
+
+    [Fact]
+    public async Task SetConfigurationAsync_WritesBooleanStringAsJsonString()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var (service, settingsFilePath) = CreateService(workspace, "{}");
+
+        await service.SetConfigurationAsync("features.polyglotSupportEnabled", "true", isGlobal: false);
+
+        // Value is written as a JSON string "true", not a JSON boolean true.
+        // The FlexibleBooleanConverter handles parsing "true" -> bool on read.
+        var json = JsonNode.Parse(File.ReadAllText(settingsFilePath));
+        var node = json!["features"]!["polyglotSupportEnabled"];
+        Assert.Equal(JsonValueKind.String, node!.GetValueKind());
+        Assert.Equal("true", node.GetValue<string>());
+
+        // Verify round-trip through AspireConfigFile.Load still works
+        var config = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+        Assert.NotNull(config?.Features);
+        Assert.True(config.Features["polyglotSupportEnabled"]);
+    }
+
+    [Fact]
+    public async Task SetConfigurationAsync_ChannelWithBooleanLikeValue_StaysAsString()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var (service, settingsFilePath) = CreateService(workspace, "{}");
+
+        // "true" is a valid channel value and must remain a string in JSON
+        // to avoid corrupting the string-typed Channel property.
+        await service.SetConfigurationAsync("channel", "true", isGlobal: false);
+
+        // Must be a JSON string "true", not a JSON boolean true
+        var json = JsonNode.Parse(File.ReadAllText(settingsFilePath));
+        var node = json!["channel"];
+        Assert.Equal(JsonValueKind.String, node!.GetValueKind());
+        Assert.Equal("true", node.GetValue<string>());
+
+        // Verify it round-trips correctly through AspireConfigFile.Load
+        var config = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+        Assert.NotNull(config);
+        Assert.Equal("true", config.Channel);
+    }
+
+    [Fact]
+    public async Task SetConfigurationAsync_WritesStringValueAsString()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var (service, settingsFilePath) = CreateService(workspace, "{}");
+
+        await service.SetConfigurationAsync("channel", "daily", isGlobal: false);
+
+        var json = JsonNode.Parse(File.ReadAllText(settingsFilePath));
+        var node = json!["channel"];
+        Assert.Equal(JsonValueKind.String, node!.GetValueKind());
+        Assert.Equal("daily", node.GetValue<string>());
     }
 }
