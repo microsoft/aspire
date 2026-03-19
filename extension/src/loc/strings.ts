@@ -97,6 +97,3 @@ export const cliFoundAtDefaultPath = (path: string) => vscode.l10n.t('Aspire CLI
 export const selectDirectoryTitle = vscode.l10n.t('Select directory');
 export const selectFileTitle = vscode.l10n.t('Select file');
 export const enterPipelineStep = vscode.l10n.t('Enter the pipeline step to execute');
-
-// Endpoint URL context menu strings
-export const copiedUrlToClipboard = (url: string) => vscode.l10n.t('Copied {0} to clipboard', url);

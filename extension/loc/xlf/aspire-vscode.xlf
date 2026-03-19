@@ -88,8 +88,17 @@
     <trans-unit id="configuration.aspire.enableAspireDashboardAutoLaunch">
       <source xml:lang="en">Controls what happens with the Aspire Dashboard when debugging starts.</source>
     </trans-unit>
+    <trans-unit id="command.copyPid">
+      <source xml:lang="en">Copy ID</source>
+    </trans-unit>
     <trans-unit id="command.copyEndpointUrl">
       <source xml:lang="en">Copy URL</source>
+    </trans-unit>
+    <trans-unit id="command.copyAppHostPath">
+      <source xml:lang="en">Copy apphost path</source>
+    </trans-unit>
+    <trans-unit id="command.copyResourceName">
+      <source xml:lang="en">Copy resource name</source>
     </trans-unit>
     <trans-unit id="walkthrough.getStarted.createProject.title">
       <source xml:lang="en">Create a new project</source>
@@ -280,6 +289,9 @@
     <trans-unit id="views.runningAppHosts.welcome">
       <source xml:lang="en">No running Aspire apphost detected in this workspace.&#10;[Refresh](command:aspire-vscode.refreshRunningAppHosts)</source>
     </trans-unit>
+    <trans-unit id="views.runningAppHosts.globalWelcome">
+      <source xml:lang="en">No running Aspire apphosts detected on this machine.&#10;[Refresh](command:aspire-vscode.refreshRunningAppHosts)</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.noWatchTask">
       <source xml:lang="en">No watch task found. Please ensure a watch task is defined in your workspace.</source>
     </trans-unit>
@@ -304,11 +316,11 @@
     <trans-unit id="command.openGlobalSettings">
       <source xml:lang="en">Open global Aspire settings</source>
     </trans-unit>
-    <trans-unit id="command.openInExternalBrowser">
-      <source xml:lang="en">Open in External Browser</source>
-    </trans-unit>
     <trans-unit id="command.openInSimpleBrowser">
-      <source xml:lang="en">Open in Simple Browser</source>
+      <source xml:lang="en">Open in VS Code</source>
+    </trans-unit>
+    <trans-unit id="command.openInExternalBrowser">
+      <source xml:lang="en">Open in browser</source>
     </trans-unit>
     <trans-unit id="command.openLocalSettings">
       <source xml:lang="en">Open local Aspire settings</source>
@@ -358,6 +370,9 @@
     <trans-unit id="walkthrough.getStarted.createProject.description">
       <source xml:lang="en">Scaffold a new Aspire project from a starter template. The template includes an apphost orchestrator, a sample API, and a web frontend.&#10;&#10;[Create new project](command:aspire-vscode.new)</source>
     </trans-unit>
+    <trans-unit id="views.runningAppHosts.loading">
+      <source xml:lang="en">Searching for running apphosts...</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.openCliInstallInstructions">
       <source xml:lang="en">See CLI installation instructions</source>
     </trans-unit>
@@ -374,7 +389,7 @@
       <source xml:lang="en">Show a notification with a link to open the dashboard.</source>
     </trans-unit>
     <trans-unit id="command.switchToGlobalView">
-      <source xml:lang="en">Show global apphosts</source>
+      <source xml:lang="en">Show all running apphosts</source>
     </trans-unit>
     <trans-unit id="command.switchToWorkspaceView">
       <source xml:lang="en">Show workspace apphost</source>

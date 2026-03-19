@@ -81,6 +81,10 @@ export class AppHostDataRepository {
     // ── Error state ──
     private _errorMessage: string | undefined;
 
+    // ── Loading state ──
+    private _loadingWorkspace = true;
+    private _loadingGlobal = true;
+
     private readonly _configChangeDisposable: vscode.Disposable;
     private _disposed = false;
 
@@ -131,6 +135,8 @@ export class AppHostDataRepository {
         }
         this._viewMode = mode;
         vscode.commands.executeCommand('setContext', 'aspire.viewMode', mode);
+        this._setError(undefined);
+        this._updateLoadingContext();
         this._syncPolling();
         this._onDidChangeData.fire();
     }
@@ -272,10 +278,11 @@ export class AppHostDataRepository {
                     if (!this._disposed && !this._describeRestarting) {
                         if (!this._describeReceivedData && code !== 0) {
                             // The process exited with a non-zero code without ever producing valid data.
-                            // This likely means the CLI does not support the describe command.
-                            extensionLogOutputChannel.warn('aspire describe --follow exited without producing data; the installed Aspire CLI may not support this feature.');
+                            // This is expected when no apphost is running. Don't set the error state
+                            // since that would show the "CLI not supported" banner; instead just show
+                            // the normal "no running apphost" welcome.
+                            extensionLogOutputChannel.warn('aspire describe --follow exited without producing data; no running apphost or CLI may not support this feature.');
                             this._workspaceResources.clear();
-                            this._setError(errorFetchingAppHosts(`exit code ${code}`));
                             this._updateWorkspaceContext();
                         } else {
                             this._workspaceResources.clear();
@@ -300,12 +307,16 @@ export class AppHostDataRepository {
                     extensionLogOutputChannel.warn(`aspire describe --follow error: ${error.message}`);
                     this._describeProcess = undefined;
                     if (!this._disposed && !this._describeRestarting) {
+                        this._loadingWorkspace = false;
+                        this._updateLoadingContext();
                         this._setError(errorFetchingAppHosts(error.message));
                     }
                 }
             });
         }).catch(error => {
             extensionLogOutputChannel.warn(`Failed to start describe watch: ${error}`);
+            this._loadingWorkspace = false;
+            this._updateLoadingContext();
             this._setError(errorFetchingAppHosts(String(error)));
         });
     }
@@ -345,6 +356,10 @@ export class AppHostDataRepository {
     private _updateWorkspaceContext(): void {
         const hasResources = this._workspaceResources.size > 0;
         vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasResources);
+        if (this._loadingWorkspace) {
+            this._loadingWorkspace = false;
+            this._updateLoadingContext();
+        }
         this._onDidChangeData.fire();
     }
 
@@ -397,15 +412,24 @@ export class AppHostDataRepository {
                         this._setError(undefined);
                         this._handlePsOutput(retryStdout);
                     } else {
+                        this._loadingGlobal = false;
+                        this._updateLoadingContext();
                         this._setError(errorFetchingAppHosts(retryStderr || `exit code ${retryCode}`));
                     }
                     this._fetchInProgress = false;
                 });
             } else {
+                this._loadingGlobal = false;
+                this._updateLoadingContext();
                 this._setError(errorFetchingAppHosts(stderr || `exit code ${code}`));
                 this._fetchInProgress = false;
             }
         });
+    }
+
+    private _updateLoadingContext(): void {
+        const isLoading = this._viewMode === 'workspace' ? this._loadingWorkspace : this._loadingGlobal;
+        vscode.commands.executeCommand('setContext', 'aspire.loading', isLoading);
     }
 
     private _setError(message: string | undefined): void {
@@ -425,6 +449,11 @@ export class AppHostDataRepository {
             const parsed: AppHostDisplayInfo[] = JSON.parse(stdout);
             const changed = JSON.stringify(parsed) !== JSON.stringify(this._appHosts);
             this._appHosts = parsed;
+
+            if (this._loadingGlobal) {
+                this._loadingGlobal = false;
+                this._updateLoadingContext();
+            }
 
             if (changed) {
                 vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', parsed.length === 0);

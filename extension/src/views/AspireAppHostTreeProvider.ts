@@ -15,7 +15,6 @@ import {
     tooltipState,
     tooltipHealth,
     tooltipEndpoints,
-    copiedUrlToClipboard,
 } from '../loc/strings';
 import {
     AppHostDataRepository,
@@ -24,7 +23,7 @@ import {
     shortenPath,
 } from './AppHostDataRepository';
 
-type TreeElement = AppHostItem | DetailItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem;
+type TreeElement = AppHostItem | DetailItem | PidItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem;
 
 function sortResources(resources: ResourceJson[]): ResourceJson[] {
     return [...resources].sort((a, b) => {
@@ -72,6 +71,14 @@ class DetailItem extends vscode.TreeItem {
         this.iconPath = new vscode.ThemeIcon(icon);
         this.tooltip = tooltip;
         this.command = command;
+    }
+}
+
+class PidItem extends vscode.TreeItem {
+    constructor(public readonly pid: number, label: string, icon: string) {
+        super(label, vscode.TreeItemCollapsibleState.None);
+        this.iconPath = new vscode.ThemeIcon(icon);
+        this.contextValue = 'pidItem';
     }
 }
 
@@ -271,20 +278,22 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         }
 
         if (element instanceof AppHostItem) {
-            const items: (DetailItem | EndpointUrlItem | ResourcesGroupItem)[] = [];
+            const items: (DetailItem | PidItem | EndpointUrlItem | ResourcesGroupItem)[] = [];
             const appHost = element.appHost;
 
             if (appHost.dashboardUrl) {
                 items.push(new EndpointUrlItem(appHost.dashboardUrl, dashboardLabel));
             }
 
-            items.push(new DetailItem(
+            items.push(new PidItem(
+                appHost.appHostPid,
                 appHostPidLabel(appHost.appHostPid),
                 'terminal',
             ));
 
             if (appHost.cliPid !== null) {
-                items.push(new DetailItem(
+                items.push(new PidItem(
+                    appHost.cliPid,
                     cliPidLabel(appHost.cliPid),
                     'terminal-cmd',
                 ));
@@ -429,9 +438,21 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         }
     }
 
+    async copyAppHostPath(element: AppHostItem): Promise<void> {
+        await vscode.env.clipboard.writeText(element.appHost.appHostPath);
+    }
+
     async copyEndpointUrl(element: EndpointUrlItem): Promise<void> {
         await vscode.env.clipboard.writeText(element.url);
-        vscode.window.showInformationMessage(copiedUrlToClipboard(element.url));
+    }
+
+    async copyResourceName(element: ResourceItem): Promise<void> {
+        const name = element.resource.displayName ?? element.resource.name;
+        await vscode.env.clipboard.writeText(name);
+    }
+
+    async copyPid(element: PidItem): Promise<void> {
+        await vscode.env.clipboard.writeText(element.pid.toString());
     }
 
     openInExternalBrowser(element: EndpointUrlItem): void {
