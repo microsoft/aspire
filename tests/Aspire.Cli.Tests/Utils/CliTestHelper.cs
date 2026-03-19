@@ -3,6 +3,7 @@
 
 using System.Text;
 using Aspire.Cli.Agents;
+using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Certificates;
@@ -36,6 +37,7 @@ using Aspire.Cli.Utils.EnvironmentChecker;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Caching;
 using Aspire.Cli.Diagnostics;
+using Aspire.Cli.Npm;
 
 namespace Aspire.Cli.Tests.Utils;
 
@@ -124,6 +126,10 @@ internal static class CliTestHelper
         services.AddSingleton(options.AuxiliaryBackchannelMonitorFactory);
         services.AddSingleton(options.AgentEnvironmentDetectorFactory);
         services.AddSingleton(options.GitRepositoryFactory);
+        services.AddSingleton(options.NpmRunnerFactory);
+        services.AddSingleton(options.NpmProvenanceCheckerFactory);
+        services.AddSingleton(options.PlaywrightCliRunnerFactory);
+        services.AddSingleton<PlaywrightCliInstaller>();
         services.AddSingleton<IScaffoldingService, ScaffoldingService>();
         services.AddSingleton<IAppHostServerProjectFactory, AppHostServerProjectFactory>();
         services.AddSingleton(options.AppHostServerSessionFactory);
@@ -523,6 +529,12 @@ internal sealed class CliServiceCollectionTestOptions
         var logger = serviceProvider.GetRequiredService<ILogger<GitRepository>>();
         return new GitRepository(executionContext, logger);
     };
+
+    public Func<IServiceProvider, INpmRunner> NpmRunnerFactory { get; set; } = _ => new FakeNpmRunner();
+
+    public Func<IServiceProvider, INpmProvenanceChecker> NpmProvenanceCheckerFactory { get; set; } = _ => new FakeNpmProvenanceChecker();
+
+    public Func<IServiceProvider, IPlaywrightCliRunner> PlaywrightCliRunnerFactory { get; set; } = _ => new FakePlaywrightCliRunner();
 
     public Func<IServiceProvider, ILanguageService> LanguageServiceFactory { get; set; } = (IServiceProvider serviceProvider) =>
     {
