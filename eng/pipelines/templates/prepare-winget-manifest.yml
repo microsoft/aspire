@@ -57,8 +57,13 @@ steps:
     displayName: 🟣Set version ${{ parameters.version }}
 
   - pwsh: |
-      Write-Host "Installing Microsoft.WinGet.Client from PSGallery..."
-      Install-PSResource -Name Microsoft.WinGet.Client -Repository PSGallery -TrustRepository
+      Write-Host "Registering dotnet-public feed as PSResource repository..."
+      Register-PSResourceRepository -Name 'dotnet-public' `
+        -Uri 'https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public/nuget/v3/index.json' `
+        -Trusted
+
+      Write-Host "Installing Microsoft.WinGet.Client from dotnet-public feed..."
+      Install-PSResource -Name Microsoft.WinGet.Client -Repository 'dotnet-public' -TrustRepository
 
       Write-Host "Microsoft.WinGet.Client installed. Listing installed version:"
       Get-Module -ListAvailable Microsoft.WinGet.Client | Select-Object Name, Version | Format-Table
