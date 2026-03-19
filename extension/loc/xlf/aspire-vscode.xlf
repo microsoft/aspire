@@ -88,6 +88,9 @@
     <trans-unit id="configuration.aspire.enableAspireDashboardAutoLaunch">
       <source xml:lang="en">Controls what happens with the Aspire Dashboard when debugging starts.</source>
     </trans-unit>
+    <trans-unit id="command.copyEndpointUrl">
+      <source xml:lang="en">Copy URL</source>
+    </trans-unit>
     <trans-unit id="walkthrough.getStarted.createProject.title">
       <source xml:lang="en">Create a new project</source>
     </trans-unit>
@@ -300,6 +303,12 @@
     </trans-unit>
     <trans-unit id="command.openGlobalSettings">
       <source xml:lang="en">Open global Aspire settings</source>
+    </trans-unit>
+    <trans-unit id="command.openInExternalBrowser">
+      <source xml:lang="en">Open in External Browser</source>
+    </trans-unit>
+    <trans-unit id="command.openInSimpleBrowser">
+      <source xml:lang="en">Open in Simple Browser</source>
     </trans-unit>
     <trans-unit id="command.openLocalSettings">
       <source xml:lang="en">Open local Aspire settings</source>

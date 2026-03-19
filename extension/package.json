@@ -263,6 +263,24 @@
         "icon": "$(terminal)"
       },
       {
+        "command": "aspire-vscode.copyEndpointUrl",
+        "title": "%command.copyEndpointUrl%",
+        "category": "Aspire",
+        "icon": "$(clippy)"
+      },
+      {
+        "command": "aspire-vscode.openInExternalBrowser",
+        "title": "%command.openInExternalBrowser%",
+        "category": "Aspire",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "aspire-vscode.openInSimpleBrowser",
+        "title": "%command.openInSimpleBrowser%",
+        "category": "Aspire",
+        "icon": "$(browser)"
+      },
+      {
         "command": "aspire-vscode.switchToGlobalView",
         "title": "%command.switchToGlobalView%",
         "category": "Aspire",
@@ -431,6 +449,21 @@
           "command": "aspire-vscode.executeResourceCommand",
           "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^resource/",
           "group": "4_commands@1"
+        },
+        {
+          "command": "aspire-vscode.copyEndpointUrl",
+          "when": "view == aspire-vscode.runningAppHosts && viewItem == endpointUrl",
+          "group": "1_clipboard@1"
+        },
+        {
+          "command": "aspire-vscode.openInExternalBrowser",
+          "when": "view == aspire-vscode.runningAppHosts && viewItem == endpointUrl",
+          "group": "2_open@1"
+        },
+        {
+          "command": "aspire-vscode.openInSimpleBrowser",
+          "when": "view == aspire-vscode.runningAppHosts && viewItem == endpointUrl",
+          "group": "2_open@2"
         }
       ]
     },
