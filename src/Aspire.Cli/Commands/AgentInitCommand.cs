@@ -139,7 +139,6 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
 
     private async Task<int> ExecuteAgentInitAsync(DirectoryInfo workspaceRoot, CancellationToken cancellationToken)
     {
-        System.Diagnostics.Debugger.Launch();
         var context = new AgentEnvironmentScanContext
         {
             WorkingDirectory = ExecutionContext.WorkingDirectory,

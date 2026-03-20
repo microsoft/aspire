@@ -93,14 +93,8 @@
   <data name="SkipNoneDescription" xml:space="preserve">
     <value>None — skip</value>
   </data>
-  <data name="InitCommand_NothingSelected" xml:space="preserve">
-    <value>No options selected. Nothing to configure.</value>
-  </data>
   <data name="InitCommand_ConfigureMcpServer" xml:space="preserve">
     <value>Install Aspire MCP server</value>
-  </data>
-  <data name="InitCommand_InstallSkillFile" xml:space="preserve">
-    <value>Install Aspire skill file (Recommended)</value>
   </data>
   <data name="InitCommand_SelectSkillLocations" xml:space="preserve">
     <value>Where should skill files be installed?</value>

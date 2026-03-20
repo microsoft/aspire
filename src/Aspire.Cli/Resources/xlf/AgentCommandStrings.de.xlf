@@ -37,16 +37,6 @@
         <target state="needs-review-translation">Initialisieren Sie die Agent-Umgebungskonfiguration für erkannte Agenten.</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_InstallSkillFile">
-        <source>Install Aspire skill file (Recommended)</source>
-        <target state="new">Install Aspire skill file (Recommended)</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InitCommand_NothingSelected">
-        <source>No options selected. Nothing to configure.</source>
-        <target state="new">No options selected. Nothing to configure.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="InitCommand_ConfiguresDetectedAgentEnvironments">
         <source>(configures detected agent environments)</source>
         <target state="new">(configures detected agent environments)</target>

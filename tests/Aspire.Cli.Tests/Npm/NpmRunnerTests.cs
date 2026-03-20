@@ -105,11 +105,25 @@ public class NpmRunnerTests
     }
 
     [Fact]
-    public void CreateNpmProcessStartInfo_WithEmptyArgs_ProducesValidStartInfo()
+    public void CreateNpmProcessStartInfo_WithEmptyArgs_OnNonWindows_ProducesValidStartInfo()
     {
+        Assert.SkipUnless(!RuntimeInformation.IsOSPlatform(OSPlatform.Windows), "Non-Windows-only test.");
+
         var startInfo = NpmRunner.CreateNpmProcessStartInfo("/usr/bin/npm", [], "/tmp");
 
         Assert.Equal("/usr/bin/npm", startInfo.FileName);
         Assert.Empty(startInfo.ArgumentList);
+    }
+
+    [Fact]
+    public void CreateNpmProcessStartInfo_WithEmptyArgs_OnWindows_ProducesValidStartInfo()
+    {
+        Assert.SkipUnless(RuntimeInformation.IsOSPlatform(OSPlatform.Windows), "Windows-only test.");
+
+        var startInfo = NpmRunner.CreateNpmProcessStartInfo(@"C:\Program Files\nodejs\npm.cmd", [], @"C:\temp");
+
+        Assert.Equal("cmd.exe", startInfo.FileName);
+        Assert.Contains("npm.cmd", startInfo.Arguments);
+        Assert.Equal(@"C:\temp", startInfo.WorkingDirectory);
     }
 }

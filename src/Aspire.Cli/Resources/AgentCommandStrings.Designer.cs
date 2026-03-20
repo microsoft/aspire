@@ -178,15 +178,6 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to No options selected. Nothing to configure..
-        /// </summary>
-        internal static string InitCommand_NothingSelected {
-            get {
-                return ResourceManager.GetString("InitCommand_NothingSelected", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Install Aspire MCP server.
         /// </summary>
         internal static string InitCommand_ConfigureMcpServer {
@@ -195,15 +186,6 @@ namespace Aspire.Cli.Resources {
             }
         }
         
-        /// <summary>
-        ///   Looks up a localized string similar to Install Aspire skill file (Recommended).
-        /// </summary>
-        internal static string InitCommand_InstallSkillFile {
-            get {
-                return ResourceManager.GetString("InitCommand_InstallSkillFile", resourceCulture);
-            }
-        }
-
         /// <summary>
         ///   Looks up a localized string similar to Installed Playwright CLI..
         /// </summary>
