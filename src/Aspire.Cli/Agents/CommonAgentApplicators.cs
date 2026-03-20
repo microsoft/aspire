@@ -21,75 +21,6 @@ internal static class CommonAgentApplicators
     internal const string DotnetInspectSkillName = "dotnet-inspect";
 
     /// <summary>
-    /// Tries to add an applicator for creating/updating a skill file at the specified path.
-    /// </summary>
-    /// <param name="context">The scan context.</param>
-    /// <param name="workspaceRoot">The workspace root directory.</param>
-    /// <param name="skillRelativePath">The relative path to the skill file from workspace root (e.g., ".github/skills/aspire/SKILL.md").</param>
-    /// <param name="description">The description to show in the applicator prompt.</param>
-    /// <param name="skillContent">The content for the skill file. If null, defaults to <see cref="SkillFileContent"/>.</param>
-    /// <param name="deduplicationKey">Optional key for deduplication. If null, uses <paramref name="skillRelativePath"/>. Use a unique key when the same relative path is used with different root directories.</param>
-    /// <returns>
-    /// <c>true</c> if an applicator was added to create or update the skill file; otherwise, <c>false</c> if an applicator was
-    /// already added for the specified key or if the skill file already exists and its content is already current.
-    /// </returns>
-    public static bool TryAddSkillFileApplicator(
-        AgentEnvironmentScanContext context,
-        DirectoryInfo workspaceRoot,
-        string skillRelativePath,
-        string description,
-        string? skillContent = null,
-        string? deduplicationKey = null)
-    {
-        var key = deduplicationKey ?? skillRelativePath;
-
-        // Check if we've already added an applicator for this specific skill path
-        if (context.HasSkillFileApplicator(key))
-        {
-            return false;
-        }
-
-        var content = skillContent ?? SkillFileContent;
-        var skillFilePath = Path.Combine(workspaceRoot.FullName, skillRelativePath);
-
-        // Mark this skill path as having an applicator (whether file exists or not)
-        context.MarkSkillFileApplicatorAdded(key);
-
-        // Check if the skill file already exists
-        if (File.Exists(skillFilePath))
-        {
-            // Read existing content and check if it differs from current content
-            // Normalize line endings for comparison to handle cross-platform differences
-            var existingContent = File.ReadAllText(skillFilePath);
-            var normalizedExisting = NormalizeLineEndings(existingContent);
-            var normalizedExpected = NormalizeLineEndings(content);
-
-            if (!string.Equals(normalizedExisting, normalizedExpected, StringComparison.Ordinal))
-            {
-                // Content differs, offer to update
-                context.AddApplicator(new AgentEnvironmentApplicator(
-                    $"{description} (update - content has changed)",
-                    ct => UpdateSkillFileAsync(skillFilePath, content, ct),
-                    promptGroup: McpInitPromptGroup.SkillFiles,
-                    priority: 0));
-                return true;
-            }
-
-            // File exists and content is the same, nothing to do
-            return false;
-        }
-
-        // Skill file doesn't exist, add applicator to create it
-        context.AddApplicator(new AgentEnvironmentApplicator(
-            description,
-            ct => CreateSkillFileAsync(skillFilePath, content, ct),
-            promptGroup: McpInitPromptGroup.SkillFiles,
-            priority: 0));
-
-        return true;
-    }
-
-    /// <summary>
     /// Adds a single Playwright CLI installation applicator if not already added.
     /// Called by scanners that detect an environment supporting Playwright.
     /// The applicator uses <see cref="PlaywrightCliInstaller"/> to securely install the CLI and generate skill files.
@@ -117,41 +48,6 @@ internal static class CommonAgentApplicators
             ct => installer.InstallAsync(context.RepositoryRoot.FullName, context.SkillBaseDirectories.ToHashSet(StringComparer.OrdinalIgnoreCase), ct),
             promptGroup: McpInitPromptGroup.Tools,
             priority: 1));
-    }
-
-    /// <summary>
-    /// Creates a skill file at the specified path.
-    /// </summary>
-    private static async Task CreateSkillFileAsync(string skillFilePath, string content, CancellationToken cancellationToken)
-    {
-        // Ensure the directory exists
-        var directory = Path.GetDirectoryName(skillFilePath);
-        if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
-        // Only create the file if it doesn't already exist
-        if (!File.Exists(skillFilePath))
-        {
-            await File.WriteAllTextAsync(skillFilePath, content, cancellationToken);
-        }
-    }
-
-    /// <summary>
-    /// Updates an existing skill file at the specified path with the latest content.
-    /// </summary>
-    private static async Task UpdateSkillFileAsync(string skillFilePath, string content, CancellationToken cancellationToken)
-    {
-        await File.WriteAllTextAsync(skillFilePath, content, cancellationToken);
-    }
-
-    /// <summary>
-    /// Normalizes line endings to LF for consistent comparison across platforms.
-    /// </summary>
-    private static string NormalizeLineEndings(string content)
-    {
-        return content.ReplaceLineEndings("\n");
     }
 
     /// <summary>

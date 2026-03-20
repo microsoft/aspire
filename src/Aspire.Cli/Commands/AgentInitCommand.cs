@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Agents;
@@ -167,7 +168,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
 
         // --- Phase 1: Skill location selection ---
         var selectedLocations = await _interactionService.PromptForSelectionsAsync(
-            AgentCommandStrings.InitCommand_SelectSkillLocations,
+            $"{AgentCommandStrings.InitCommand_SelectSkillLocations} [dim]{AgentCommandStrings.SelectionPrompt_HintSpaceToggleEnterConfirm}[/]",
             SkillLocation.All,
             loc => $"{loc.Name} — {loc.Description}",
             preSelected: SkillLocation.All.Where(l => l.IsDefault),
@@ -206,7 +207,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             // MCP is intentionally NOT pre-selected
 
             var selectedItems = await _interactionService.PromptForSelectionsAsync(
-                AgentCommandStrings.InitCommand_SelectSkills,
+                $"{AgentCommandStrings.InitCommand_SelectSkills} [dim]{AgentCommandStrings.SelectionPrompt_HintSpaceToggleEnterConfirm}[/]",
                 skillChoices,
                 item => item switch
                 {
@@ -286,6 +287,8 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
                         // npm is not available — not an error, just informational.
                         _interactionService.DisplaySubtleMessage(AgentCommandStrings.InitCommand_PlaywrightCliSkipped);
                         break;
+                    default:
+                        throw new UnreachableException($"Unexpected PlaywrightInstallStatus: {status}");
                 }
             }
             catch (InvalidOperationException ex)
@@ -304,55 +307,17 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             }
             // InvalidOperationException is thrown by scanner-generated applicators
             // (e.g., MCP config writers) when the underlying operation fails.
+            // JsonException as InnerException indicates a malformed config file
+            // (e.g., invalid JSON in .copilot/mcp-config.json or .vscode/mcp.json).
             catch (InvalidOperationException ex)
             {
                 _interactionService.DisplayError(ex.Message);
-                // JsonException as InnerException indicates a malformed config file
-                // (e.g., invalid JSON in .copilot/mcp-config.json or .vscode/mcp.json).
                 if (ex.InnerException is JsonException)
                 {
                     _interactionService.DisplaySubtleMessage(
                         string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.SkippedMalformedConfigFile, combinedMcpApplicator.Description));
                 }
                 hasErrors = true;
-            }
-        }
-
-        // --- Phase 6: Handle any remaining applicators ---
-        // This covers applicators whose PromptGroup doesn't fall into SkillFiles,
-        // Tools, or AgentEnvironments (currently none, but future-proofing).
-        var otherApplicators = userChoices
-            .Where(a => a.PromptGroup != McpInitPromptGroup.SkillFiles
-                     && a.PromptGroup != McpInitPromptGroup.Tools
-                     && a.PromptGroup != McpInitPromptGroup.AgentEnvironments)
-            .ToList();
-
-        if (otherApplicators.Count > 0)
-        {
-            var selected = await _interactionService.PromptForSelectionsAsync(
-                AgentCommandStrings.InitCommand_WhatToConfigure,
-                otherApplicators,
-                applicator => applicator.Description,
-                preSelected: otherApplicators,
-                optional: true,
-                cancellationToken);
-
-            foreach (var applicator in selected)
-            {
-                try
-                {
-                    await applicator.ApplyAsync(cancellationToken);
-                }
-                catch (InvalidOperationException ex)
-                {
-                    _interactionService.DisplayError(ex.Message);
-                    if (ex.InnerException is JsonException)
-                    {
-                        _interactionService.DisplaySubtleMessage(
-                            string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.SkippedMalformedConfigFile, applicator.Description));
-                    }
-                    hasErrors = true;
-                }
             }
         }
 

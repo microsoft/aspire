@@ -93,9 +93,6 @@
   <data name="SkipNoneDescription" xml:space="preserve">
     <value>None — skip</value>
   </data>
-  <data name="InitCommand_WhatToConfigure" xml:space="preserve">
-    <value>What would you like to configure? [dim](Enter to skip, Ctrl+C to cancel)[/]</value>
-  </data>
   <data name="InitCommand_NothingSelected" xml:space="preserve">
     <value>No options selected. Nothing to configure.</value>
   </data>
@@ -106,10 +103,10 @@
     <value>Install Aspire skill file (Recommended)</value>
   </data>
   <data name="InitCommand_SelectSkillLocations" xml:space="preserve">
-    <value>Where should skill files be installed? [dim](Space to toggle, Enter to confirm)[/]</value>
+    <value>Where should skill files be installed?</value>
   </data>
   <data name="InitCommand_SelectSkills" xml:space="preserve">
-    <value>Which skills should be installed? [dim](Space to toggle, Enter to confirm)[/]</value>
+    <value>Which skills should be installed?</value>
   </data>
   <data name="InitCommand_InstalledPlaywrightCli" xml:space="preserve">
     <value>Installed Playwright CLI.</value>
@@ -158,5 +155,32 @@
   </data>
   <data name="SkillLocation_OpenCodeDescription" xml:space="preserve">
     <value>Legacy location for OpenCode skills</value>
+  </data>
+  <data name="SelectionPrompt_HintSpaceToggleEnterConfirm" xml:space="preserve">
+    <value>(Space to toggle, Enter to confirm)</value>
+  </data>
+  <data name="PlaywrightCliInstaller_InstallingStatus" xml:space="preserve">
+    <value>Installing Playwright CLI...</value>
+  </data>
+  <data name="PlaywrightCliInstaller_FailedToResolvePackage" xml:space="preserve">
+    <value>Failed to resolve {0} from the npm registry.</value>
+  </data>
+  <data name="PlaywrightCliInstaller_ProvenanceVerificationFailed" xml:space="preserve">
+    <value>Provenance verification failed for {0}: {1}</value>
+  </data>
+  <data name="PlaywrightCliInstaller_FailedToDownload" xml:space="preserve">
+    <value>Failed to download {0}.</value>
+  </data>
+  <data name="PlaywrightCliInstaller_IntegrityVerificationFailed" xml:space="preserve">
+    <value>Integrity verification failed for {0}. The downloaded package may have been tampered with.</value>
+  </data>
+  <data name="PlaywrightCliInstaller_FailedToInstallGlobally" xml:space="preserve">
+    <value>Failed to install {0} globally via npm.</value>
+  </data>
+  <data name="PlaywrightCliInstaller_FailedToGenerateSkillFiles" xml:space="preserve">
+    <value>Failed to generate Playwright CLI skill files.</value>
+  </data>
+  <data name="PlaywrightCliInstaller_InstalledWithMirrorWarnings" xml:space="preserve">
+    <value>Installed Playwright CLI (some locations failed to mirror).</value>
   </data>
 </root>

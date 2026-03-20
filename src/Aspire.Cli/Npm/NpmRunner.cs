@@ -42,7 +42,7 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
             // Resolve version: npm view <package>@<range> version
             var versionOutput = await RunNpmCommandInDirectoryAsync(
                 npmPath,
-                ["view", $"{packageName}@{versionRange}", "version", "--registry", PublicRegistry],
+                ["view", NpmPackageInfo.FormatPackageSpecifier(packageName, versionRange), "version", "--registry", PublicRegistry],
                 tempDir,
                 cancellationToken);
 
@@ -61,7 +61,7 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
             // Resolve integrity hash: npm view <package>@<version> dist.integrity
             var integrityOutput = await RunNpmCommandInDirectoryAsync(
                 npmPath,
-                ["view", $"{packageName}@{version}", "dist.integrity", "--registry", PublicRegistry],
+                ["view", NpmPackageInfo.FormatPackageSpecifier(packageName, version), "dist.integrity", "--registry", PublicRegistry],
                 tempDir,
                 cancellationToken);
 
@@ -94,7 +94,7 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
 
         var output = await RunNpmCommandInDirectoryAsync(
             npmPath,
-            ["pack", $"{packageName}@{version}", "--pack-destination", outputDirectory, "--registry", PublicRegistry],
+            ["pack", NpmPackageInfo.FormatPackageSpecifier(packageName, version), "--pack-destination", outputDirectory, "--registry", PublicRegistry],
             outputDirectory,
             cancellationToken);
 
@@ -148,7 +148,7 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
             // Install the package from the registry to get proper attestation metadata
             var installOutput = await RunNpmCommandInDirectoryAsync(
                 npmPath,
-                ["install", $"{packageName}@{version}", "--ignore-scripts", "--registry", PublicRegistry],
+                ["install", NpmPackageInfo.FormatPackageSpecifier(packageName, version), "--ignore-scripts", "--registry", PublicRegistry],
                 tempDir,
                 cancellationToken);
 

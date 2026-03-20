@@ -1,9 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Security.Cryptography;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Npm;
+using Aspire.Cli.Resources;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Semver;
@@ -107,7 +109,7 @@ internal sealed class PlaywrightCliInstaller(
     public async Task<(PlaywrightInstallStatus Status, string? Message)> InstallAsync(string repoRoot, IReadOnlySet<string> selectedSkillDirectories, CancellationToken cancellationToken)
     {
         return await interactionService.ShowStatusAsync(
-            "Installing Playwright CLI...",
+            AgentCommandStrings.PlaywrightCliInstaller_InstallingStatus,
             () => InstallCoreAsync(repoRoot, selectedSkillDirectories, cancellationToken));
     }
 
@@ -134,7 +136,7 @@ internal sealed class PlaywrightCliInstaller(
 
         if (packageInfo is null)
         {
-            return (PlaywrightInstallStatus.Failed, $"Failed to resolve {PackageName}@{effectiveRange} from the npm registry.");
+            return (PlaywrightInstallStatus.Failed, string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_FailedToResolvePackage, NpmPackageInfo.FormatPackageSpecifier(PackageName, effectiveRange)));
         }
 
         logger.LogDebug("Resolved {Package}@{Version} with integrity {Integrity}.", PackageName, packageInfo.Version, packageInfo.Integrity);
@@ -197,7 +199,7 @@ internal sealed class PlaywrightCliInstaller(
                     packageInfo.Version,
                     provenanceResult.Outcome,
                     ExpectedSourceRepository);
-                return (PlaywrightInstallStatus.Failed, $"Provenance verification failed for {PackageName}@{packageInfo.Version}: {provenanceResult.Outcome}.");
+                return (PlaywrightInstallStatus.Failed, string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_ProvenanceVerificationFailed, NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version), provenanceResult.Outcome));
             }
 
             logger.LogDebug(
@@ -219,7 +221,7 @@ internal sealed class PlaywrightCliInstaller(
             if (tarballPath is null)
             {
                 logger.LogWarning("Failed to download {Package}@{Version}.", PackageName, packageInfo.Version);
-                return (PlaywrightInstallStatus.Failed, $"Failed to download {PackageName}@{packageInfo.Version}.");
+                return (PlaywrightInstallStatus.Failed, string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_FailedToDownload, NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version)));
             }
 
             // Step 5: Verify the downloaded tarball's SHA-512 hash matches the SRI integrity value.
@@ -229,7 +231,7 @@ internal sealed class PlaywrightCliInstaller(
                     "Integrity verification failed for {Package}@{Version}. The downloaded package may have been tampered with.",
                     PackageName,
                     packageInfo.Version);
-                return (PlaywrightInstallStatus.Failed, $"Integrity verification failed for {PackageName}@{packageInfo.Version}. The downloaded package may have been tampered with.");
+                return (PlaywrightInstallStatus.Failed, string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_IntegrityVerificationFailed, NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version)));
             }
 
             if (!validationDisabled)
@@ -244,7 +246,7 @@ internal sealed class PlaywrightCliInstaller(
             if (!installSuccess)
             {
                 logger.LogWarning("Failed to install {Package}@{Version} globally.", PackageName, packageInfo.Version);
-                return (PlaywrightInstallStatus.Failed, $"Failed to install {PackageName}@{packageInfo.Version} globally via npm.");
+                return (PlaywrightInstallStatus.Failed, string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_FailedToInstallGlobally, NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version)));
             }
 
             // Step 7: Generate skill files and mirror to selected locations.
@@ -282,7 +284,7 @@ internal sealed class PlaywrightCliInstaller(
         var skillsInstalled = await playwrightCliRunner.InstallSkillsAsync(repoRoot, cancellationToken);
         if (!skillsInstalled)
         {
-            return (PlaywrightInstallStatus.Failed, "Failed to generate Playwright CLI skill files.");
+            return (PlaywrightInstallStatus.Failed, AgentCommandStrings.PlaywrightCliInstaller_FailedToGenerateSkillFiles);
         }
 
         try
@@ -292,7 +294,7 @@ internal sealed class PlaywrightCliInstaller(
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             logger.LogWarning(ex, "Failed to mirror Playwright CLI skill files to some locations.");
-            return (PlaywrightInstallStatus.InstalledWithWarnings, "Installed Playwright CLI (some locations failed to mirror).");
+            return (PlaywrightInstallStatus.InstalledWithWarnings, AgentCommandStrings.PlaywrightCliInstaller_InstalledWithMirrorWarnings);
         }
 
         return (PlaywrightInstallStatus.Installed, null);
@@ -376,30 +378,37 @@ internal sealed class PlaywrightCliInstaller(
             try
             {
                 Directory.Delete(skillDir, recursive: true);
-                logger.LogDebug("Removed playwright-cli skills from unselected location: {SkillDir}.", skillDir);
+                logger.LogDebug("Removed playwright-cli skills from unselected location: {SkillDir}", skillDir);
 
-                // Walk up and remove empty parent directories that we may have created,
-                // but stop at the repo root so we never delete user content.
-                // Depth is limited to the number of path segments in the skill directory
-                // relative to the repo root as an additional safeguard.
-                var maxDepth = location.RelativeSkillDirectory.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Length + 1;
-                var depth = 0;
-                var parent = Path.GetDirectoryName(skillDir);
-                while (parent is not null
-                    && ++depth <= maxDepth
-                    && !string.Equals(parent, repoRoot, StringComparison.OrdinalIgnoreCase)
-                    && Directory.Exists(parent)
-                    && Directory.GetFileSystemEntries(parent).Length == 0)
-                {
-                    Directory.Delete(parent);
-                    logger.LogDebug("Removed empty directory: {Dir}.", parent);
-                    parent = Path.GetDirectoryName(parent);
-                }
+                RemoveEmptyParentDirectories(skillDir, repoRoot, location.RelativeSkillDirectory, logger);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 logger.LogDebug(ex, "Failed to remove playwright-cli skills from {SkillDir}.", skillDir);
             }
+        }
+    }
+
+    /// <summary>
+    /// Walks up from <paramref name="startDir"/> and removes empty parent directories,
+    /// stopping at <paramref name="stopDir"/> (never deleted). The number of levels walked
+    /// is bounded by the segment count in <paramref name="relativeSkillDirectory"/> + 1
+    /// as an additional safeguard against unintended recursion.
+    /// </summary>
+    internal static void RemoveEmptyParentDirectories(string startDir, string stopDir, string relativeSkillDirectory, ILogger? logger = null)
+    {
+        var maxDepth = relativeSkillDirectory.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Length + 1;
+        var depth = 0;
+        var parent = Path.GetDirectoryName(startDir);
+        while (parent is not null
+            && ++depth <= maxDepth
+            && !string.Equals(parent, stopDir, StringComparison.OrdinalIgnoreCase)
+            && Directory.Exists(parent)
+            && Directory.GetFileSystemEntries(parent).Length == 0)
+        {
+            Directory.Delete(parent);
+            logger?.LogDebug("Removed empty directory: {Dir}", parent);
+            parent = Path.GetDirectoryName(parent);
         }
     }
 

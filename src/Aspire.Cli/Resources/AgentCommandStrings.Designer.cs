@@ -160,11 +160,20 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to What would you like to configure?.
+        ///   Looks up a localized string similar to Where should skill files be installed?.
         /// </summary>
-        internal static string InitCommand_WhatToConfigure {
+        internal static string InitCommand_SelectSkillLocations {
             get {
-                return ResourceManager.GetString("InitCommand_WhatToConfigure", resourceCulture);
+                return ResourceManager.GetString("InitCommand_SelectSkillLocations", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Which skills should be installed?.
+        /// </summary>
+        internal static string InitCommand_SelectSkills {
+            get {
+                return ResourceManager.GetString("InitCommand_SelectSkills", resourceCulture);
             }
         }
         
@@ -192,24 +201,6 @@ namespace Aspire.Cli.Resources {
         internal static string InitCommand_InstallSkillFile {
             get {
                 return ResourceManager.GetString("InitCommand_InstallSkillFile", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Where should skill files be installed?.
-        /// </summary>
-        internal static string InitCommand_SelectSkillLocations {
-            get {
-                return ResourceManager.GetString("InitCommand_SelectSkillLocations", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Which skills should be installed?.
-        /// </summary>
-        internal static string InitCommand_SelectSkills {
-            get {
-                return ResourceManager.GetString("InitCommand_SelectSkills", resourceCulture);
             }
         }
 
@@ -354,6 +345,87 @@ namespace Aspire.Cli.Resources {
         internal static string SkillLocation_OpenCodeDescription {
             get {
                 return ResourceManager.GetString("SkillLocation_OpenCodeDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to (Space to toggle, Enter to confirm).
+        /// </summary>
+        internal static string SelectionPrompt_HintSpaceToggleEnterConfirm {
+            get {
+                return ResourceManager.GetString("SelectionPrompt_HintSpaceToggleEnterConfirm", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Installing Playwright CLI....
+        /// </summary>
+        internal static string PlaywrightCliInstaller_InstallingStatus {
+            get {
+                return ResourceManager.GetString("PlaywrightCliInstaller_InstallingStatus", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Failed to resolve {0} from the npm registry..
+        /// </summary>
+        internal static string PlaywrightCliInstaller_FailedToResolvePackage {
+            get {
+                return ResourceManager.GetString("PlaywrightCliInstaller_FailedToResolvePackage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Provenance verification failed for {0}: {1}.
+        /// </summary>
+        internal static string PlaywrightCliInstaller_ProvenanceVerificationFailed {
+            get {
+                return ResourceManager.GetString("PlaywrightCliInstaller_ProvenanceVerificationFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Failed to download {0}..
+        /// </summary>
+        internal static string PlaywrightCliInstaller_FailedToDownload {
+            get {
+                return ResourceManager.GetString("PlaywrightCliInstaller_FailedToDownload", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Integrity verification failed for {0}. The downloaded package may have been tampered with..
+        /// </summary>
+        internal static string PlaywrightCliInstaller_IntegrityVerificationFailed {
+            get {
+                return ResourceManager.GetString("PlaywrightCliInstaller_IntegrityVerificationFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Failed to install {0} globally via npm..
+        /// </summary>
+        internal static string PlaywrightCliInstaller_FailedToInstallGlobally {
+            get {
+                return ResourceManager.GetString("PlaywrightCliInstaller_FailedToInstallGlobally", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Failed to generate Playwright CLI skill files..
+        /// </summary>
+        internal static string PlaywrightCliInstaller_FailedToGenerateSkillFiles {
+            get {
+                return ResourceManager.GetString("PlaywrightCliInstaller_FailedToGenerateSkillFiles", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Installed Playwright CLI (some locations failed to mirror)..
+        /// </summary>
+        internal static string PlaywrightCliInstaller_InstalledWithMirrorWarnings {
+            get {
+                return ResourceManager.GetString("PlaywrightCliInstaller_InstalledWithMirrorWarnings", resourceCulture);
             }
         }
     }

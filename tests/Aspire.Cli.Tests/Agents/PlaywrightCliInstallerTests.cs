@@ -826,6 +826,139 @@ public class PlaywrightCliInstallerTests
         }
     }
 
+    [Fact]
+    public void RemoveEmptyParentDirectories_RemovesEmptyParentsUpToStopDir()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"aspire-rmparent-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            // Create .claude/skills/playwright-cli (3 levels), then remove playwright-cli
+            var skillDir = Path.Combine(tempDir, ".claude", "skills", "playwright-cli");
+            Directory.CreateDirectory(skillDir);
+            Directory.Delete(skillDir);
+
+            // Now .claude/skills is empty — RemoveEmptyParentDirectories should clean up
+            PlaywrightCliInstaller.RemoveEmptyParentDirectories(
+                skillDir,
+                tempDir,
+                Path.Combine(".claude", "skills"));
+
+            Assert.False(Directory.Exists(Path.Combine(tempDir, ".claude", "skills")));
+            Assert.False(Directory.Exists(Path.Combine(tempDir, ".claude")));
+            Assert.True(Directory.Exists(tempDir)); // stop dir should NOT be deleted
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void RemoveEmptyParentDirectories_StopsAtNonEmptyParent()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"aspire-rmparent-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            // Create .claude/skills/playwright-cli and .claude/skills/other-skill
+            var skillDir = Path.Combine(tempDir, ".claude", "skills", "playwright-cli");
+            Directory.CreateDirectory(skillDir);
+            Directory.CreateDirectory(Path.Combine(tempDir, ".claude", "skills", "other-skill"));
+            Directory.Delete(skillDir);
+
+            PlaywrightCliInstaller.RemoveEmptyParentDirectories(
+                skillDir,
+                tempDir,
+                Path.Combine(".claude", "skills"));
+
+            // .claude/skills should still exist because it has other-skill
+            Assert.True(Directory.Exists(Path.Combine(tempDir, ".claude", "skills")));
+            Assert.True(Directory.Exists(Path.Combine(tempDir, ".claude", "skills", "other-skill")));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void RemoveEmptyParentDirectories_NeverDeletesStopDir()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"aspire-rmparent-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            // Create a single level: .agents/playwright-cli
+            var skillDir = Path.Combine(tempDir, ".agents", "playwright-cli");
+            Directory.CreateDirectory(skillDir);
+            Directory.Delete(skillDir);
+
+            PlaywrightCliInstaller.RemoveEmptyParentDirectories(
+                skillDir,
+                tempDir,
+                ".agents");
+
+            // .agents should be removed (it's empty and not the stop dir)
+            Assert.False(Directory.Exists(Path.Combine(tempDir, ".agents")));
+            // tempDir (stop dir) must never be removed
+            Assert.True(Directory.Exists(tempDir));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void RemoveEmptyParentDirectories_RespectsMaxDepthLimit()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"aspire-rmparent-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            // Create a deep path: a/b/c/d/e
+            var deepDir = Path.Combine(tempDir, "a", "b", "c", "d", "e");
+            Directory.CreateDirectory(deepDir);
+            Directory.Delete(deepDir);
+            // d, c, b, a are all empty
+
+            // Relative path "a/b" means maxDepth = 3 (2 segments + 1)
+            // Starting from e's path, it should walk up: d (1), c (2), b (3) — stops there
+            PlaywrightCliInstaller.RemoveEmptyParentDirectories(
+                deepDir,
+                tempDir,
+                Path.Combine("a", "b"));
+
+            // d, c, b should be removed (within maxDepth)
+            Assert.False(Directory.Exists(Path.Combine(tempDir, "a", "b", "c", "d")));
+            Assert.False(Directory.Exists(Path.Combine(tempDir, "a", "b", "c")));
+            Assert.False(Directory.Exists(Path.Combine(tempDir, "a", "b")));
+            // a should still exist (maxDepth exceeded)
+            Assert.True(Directory.Exists(Path.Combine(tempDir, "a")));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
     private sealed class TestNpmRunner : INpmRunner
     {
         public bool IsAvailable => true;
