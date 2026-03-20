@@ -321,6 +321,10 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
                 digestBytes, HashAlgorithmType.Sha512, bundle, policy, cancellationToken).ConfigureAwait(false);
         }
 
+        // NOTE: When there is no SRI integrity digest and no DSSE envelope, this returns a generic
+        // VerificationResult with a failure reason string. The caller maps any verification failure
+        // to AttestationParseFailed, which differs from the previous behavior (PayloadDecodeFailed)
+        // that occurred when TryVerifyAsync was called with a null payload.
         if (bundle.DsseEnvelope is null)
         {
             return (false, new VerificationResult { FailureReason = "No DSSE envelope found in bundle." });
@@ -363,8 +367,8 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
             if (extensions.Issuer is null || !string.Equals(extensions.Issuer, expectedIdentity.Issuer, StringComparison.Ordinal))
             {
                 logger.LogWarning(
-                    "OIDC issuer mismatch for {Package}@{Version}: expected '{Expected}', got '{Actual}'",
-                    packageName, version, expectedIdentity.Issuer, extensions.Issuer);
+                    "OIDC issuer mismatch for {PackageSpecifier}: expected '{Expected}', got '{Actual}'",
+                    NpmPackageInfo.FormatPackageSpecifier(packageName, version), expectedIdentity.Issuer, extensions.Issuer);
                 return new ProvenanceVerificationResult { Outcome = ProvenanceVerificationOutcome.AttestationParseFailed };
             }
         }
@@ -404,7 +408,7 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
     /// <summary>
     /// Extracts the URI-type Subject Alternative Name from a certificate in a platform-independent way.
     /// Handles both "URI:" (Linux/OpenSSL) and "URL=" (Windows/CryptoAPI) formatting
-    /// produced by X509Extension.Format.
+    /// produced by <c>X509Extension.Format(bool)</c>.
     /// </summary>
     internal static string? ExtractSubjectAlternativeNamePortable(X509Certificate2 cert)
     {
@@ -416,21 +420,36 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
             }
 
             var formatted = ext.Format(false);
-            foreach (var part in formatted.Split(',', StringSplitOptions.TrimEntries))
+            var uri = ParseUriFromFormattedSan(formatted);
+            if (uri is not null)
             {
-                // Linux/OpenSSL formats as "URI:https://..."
-                var uriIdx = part.IndexOf("URI:", StringComparison.OrdinalIgnoreCase);
-                if (uriIdx >= 0)
-                {
-                    return part[(uriIdx + 4)..].Trim();
-                }
+                return uri;
+            }
+        }
 
-                // Windows/CryptoAPI formats as "URL=https://..."
-                var urlIdx = part.IndexOf("URL=", StringComparison.OrdinalIgnoreCase);
-                if (urlIdx >= 0)
-                {
-                    return part[(urlIdx + 4)..].Trim();
-                }
+        return null;
+    }
+
+    /// <summary>
+    /// Parses a URI value from the formatted string representation of a Subject Alternative Name extension.
+    /// Handles both "URI:" (Linux/OpenSSL) and "URL=" (Windows/CryptoAPI) formatting conventions.
+    /// </summary>
+    internal static string? ParseUriFromFormattedSan(string formattedSan)
+    {
+        foreach (var part in formattedSan.Split(',', StringSplitOptions.TrimEntries))
+        {
+            // Linux/OpenSSL formats as "URI:https://..."
+            var uriIdx = part.IndexOf("URI:", StringComparison.OrdinalIgnoreCase);
+            if (uriIdx >= 0)
+            {
+                return part[(uriIdx + 4)..].Trim();
+            }
+
+            // Windows/CryptoAPI formats as "URL=https://..."
+            var urlIdx = part.IndexOf("URL=", StringComparison.OrdinalIgnoreCase);
+            if (urlIdx >= 0)
+            {
+                return part[(urlIdx + 4)..].Trim();
             }
         }
 
