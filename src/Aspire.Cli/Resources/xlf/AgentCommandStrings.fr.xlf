@@ -112,11 +112,6 @@
         <target state="new">Provenance verification failed for {0}: {1}</target>
         <note />
       </trans-unit>
-      <trans-unit id="SelectionPrompt_HintSpaceToggleEnterConfirm">
-        <source>(Space to toggle, Enter to confirm)</source>
-        <target state="new">(Space to toggle, Enter to confirm)</target>
-        <note />
-      </trans-unit>
       <trans-unit id="SkillDescription_Aspire">
         <source>Aspire CLI commands and workflows for distributed apps</source>
         <target state="new">Aspire CLI commands and workflows for distributed apps</target>

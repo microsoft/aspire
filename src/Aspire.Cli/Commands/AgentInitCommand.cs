@@ -139,6 +139,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
 
     private async Task<int> ExecuteAgentInitAsync(DirectoryInfo workspaceRoot, CancellationToken cancellationToken)
     {
+        System.Diagnostics.Debugger.Launch();
         var context = new AgentEnvironmentScanContext
         {
             WorkingDirectory = ExecutionContext.WorkingDirectory,
@@ -168,7 +169,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
 
         // --- Phase 1: Skill location selection ---
         var selectedLocations = await _interactionService.PromptForSelectionsAsync(
-            $"{AgentCommandStrings.InitCommand_SelectSkillLocations} [dim]{AgentCommandStrings.SelectionPrompt_HintSpaceToggleEnterConfirm}[/]",
+            AgentCommandStrings.InitCommand_SelectSkillLocations,
             SkillLocation.All,
             loc => $"{loc.Name} — {loc.Description}",
             preSelected: SkillLocation.All.Where(l => l.IsDefault),
@@ -207,7 +208,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             // MCP is intentionally NOT pre-selected
 
             var selectedItems = await _interactionService.PromptForSelectionsAsync(
-                $"{AgentCommandStrings.InitCommand_SelectSkills} [dim]{AgentCommandStrings.SelectionPrompt_HintSpaceToggleEnterConfirm}[/]",
+                AgentCommandStrings.InitCommand_SelectSkills,
                 skillChoices,
                 item => item switch
                 {
@@ -280,7 +281,6 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
                         break;
                     case PlaywrightInstallStatus.Failed:
                         _interactionService.DisplayError(message!);
-                        _interactionService.DisplayMessage(KnownEmojis.PageFacingUp, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, ExecutionContext.LogFilePath));
                         hasErrors = true;
                         break;
                     case PlaywrightInstallStatus.Skipped:
@@ -324,6 +324,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         if (hasErrors)
         {
             _interactionService.DisplayMessage(KnownEmojis.Warning, AgentCommandStrings.ConfigurationCompletedWithErrors);
+            _interactionService.DisplayMessage(KnownEmojis.PageFacingUp, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, ExecutionContext.LogFilePath));
         }
         else
         {

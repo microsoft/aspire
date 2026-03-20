@@ -156,9 +156,6 @@
   <data name="SkillLocation_OpenCodeDescription" xml:space="preserve">
     <value>Legacy location for OpenCode skills</value>
   </data>
-  <data name="SelectionPrompt_HintSpaceToggleEnterConfirm" xml:space="preserve">
-    <value>(Space to toggle, Enter to confirm)</value>
-  </data>
   <data name="PlaywrightCliInstaller_InstallingStatus" xml:space="preserve">
     <value>Installing Playwright CLI...</value>
   </data>

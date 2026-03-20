@@ -349,15 +349,6 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to (Space to toggle, Enter to confirm).
-        /// </summary>
-        internal static string SelectionPrompt_HintSpaceToggleEnterConfirm {
-            get {
-                return ResourceManager.GetString("SelectionPrompt_HintSpaceToggleEnterConfirm", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Installing Playwright CLI....
         /// </summary>
         internal static string PlaywrightCliInstaller_InstallingStatus {
