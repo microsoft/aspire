@@ -213,34 +213,6 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
         return npmPath;
     }
 
-    /// <summary>
-    /// On Windows, npm is a batch wrapper (npm.cmd) that launches node.exe with npm-cli.js.
-    /// Launching .cmd files via Process.Start with redirected stdout produces empty output.
-    /// This method resolves the underlying node.exe + npm-cli.js to invoke directly.
-    /// </summary>
-    private static (string NodeExe, string NpmCliJs)? ResolveNodeAndNpmCli(string npmCmdPath)
-    {
-        var npmDir = Path.GetDirectoryName(npmCmdPath);
-        if (npmDir is null)
-        {
-            return null;
-        }
-
-        var nodeExe = Path.Combine(npmDir, "node.exe");
-        if (!File.Exists(nodeExe))
-        {
-            return null;
-        }
-
-        var npmCliJs = Path.Combine(npmDir, "node_modules", "npm", "bin", "npm-cli.js");
-        if (!File.Exists(npmCliJs))
-        {
-            return null;
-        }
-
-        return (nodeExe, npmCliJs);
-    }
-
     private static string CreateIsolatedTempDirectory()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), $"aspire-npm-{Guid.NewGuid():N}");
@@ -280,30 +252,24 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
             };
 
             // On Windows, npm resolves to npm.cmd (a batch wrapper). Launching
-            // .cmd files via Process.Start with redirected stdout produces empty
-            // output. Resolve to the underlying node.exe + npm-cli.js instead.
+            // .cmd files via Process.Start with redirected stdout can produce empty
+            // output. Use cmd.exe /c to invoke the batch file reliably.
+            // Note: cmd.exe /c has special quote-stripping rules that are incompatible
+            // with ArgumentList (which individually quotes each argument). We must use
+            // the Arguments string property and wrap the entire command in an outer set
+            // of quotes so cmd.exe preserves interior quoting correctly.
             if (OperatingSystem.IsWindows() && npmPath.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase))
             {
-                var resolved = ResolveNodeAndNpmCli(npmPath);
-                if (resolved is null)
-                {
-                    logger.LogWarning("Could not resolve node.exe/npm-cli.js from {NpmCmd}, falling back to direct invocation which may produce empty output.", npmPath);
-                    startInfo.FileName = npmPath;
-                }
-                else
-                {
-                    startInfo.FileName = resolved.Value.NodeExe;
-                    startInfo.ArgumentList.Add(resolved.Value.NpmCliJs);
-                }
+                startInfo.FileName = "cmd.exe";
+                startInfo.Arguments = $"/c \"\"{npmPath}\" {string.Join(" ", args.Select(a => $"\"{a}\""))}\"";
             }
             else
             {
                 startInfo.FileName = npmPath;
-            }
-
-            foreach (var arg in args)
-            {
-                startInfo.ArgumentList.Add(arg);
+                foreach (var arg in args)
+                {
+                    startInfo.ArgumentList.Add(arg);
+                }
             }
 
             using var process = new Process { StartInfo = startInfo };
