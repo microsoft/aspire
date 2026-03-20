@@ -121,7 +121,7 @@
     <value>Installed {0} skill ({1}).</value>
   </data>
   <data name="InitCommand_FailedToInstallSkill" xml:space="preserve">
-    <value>Failed to install {0} skill at {1}: {2}.</value>
+    <value>Failed to install {0} skill at {1}: {2}</value>
   </data>
   <data name="InitCommand_ConfiguresDetectedAgentEnvironments" xml:space="preserve">
     <value>(configures detected agent environments)</value>

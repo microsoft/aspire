@@ -287,7 +287,7 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
                 var resolved = ResolveNodeAndNpmCli(npmPath);
                 if (resolved is null)
                 {
-                    logger.LogWarning("Could not resolve node.exe/npm-cli.js from {NpmCmd}, falling back to direct invocation which may produce empty output", npmPath);
+                    logger.LogWarning("Could not resolve node.exe/npm-cli.js from {NpmCmd}, falling back to direct invocation which may produce empty output.", npmPath);
                     startInfo.FileName = npmPath;
                 }
                 else
