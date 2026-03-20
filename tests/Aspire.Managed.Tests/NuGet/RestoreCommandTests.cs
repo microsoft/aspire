@@ -32,19 +32,19 @@ public class RestoreCommandTests : IDisposable
         // doesn't interfere. The env var takes precedence over config files
         // in NuGet's resolution order.
         var options = new RemoteInvokeOptions();
-        options.StartInfo.RedirectStandardOutput = true;
         options.StartInfo.Environment.Remove("NUGET_PACKAGES");
 
-        using var result = RemoteExecutor.Invoke(static async (tempDirPath) =>
+        RemoteExecutor.Invoke(static async (tempDirPath) =>
         {
             var command = RestoreCommand.Create();
             var outputDir = Path.Combine(tempDirPath, "obj");
 
-            await command.Parse(["--package", "Fake.Package,1.0.0", "--no-nuget-org", "--verbose", "--output", outputDir, "--working-dir", tempDirPath]).InvokeAsync();
-        }, _tempDir.Path, options);
+            await command.Parse(["--package", "Fake.Package,1.0.0", "--no-nuget-org", "--output", outputDir, "--working-dir", tempDirPath]).InvokeAsync();
+        }, _tempDir.Path, options).Dispose();
 
-        var consoleOutput = result.Process.StandardOutput.ReadToEnd();
-        Assert.Contains($"Packages: {customPackagesDir}", consoleOutput);
+        // NuGet writes packageFolders into project.assets.json with the resolved packages directory.
+        var assetsContent = File.ReadAllText(Path.Combine(_tempDir.Path, "obj", "project.assets.json"));
+        Assert.Contains(JsonEncodedPath(customPackagesDir), assetsContent);
     }
 
     [Fact]
@@ -55,18 +55,67 @@ public class RestoreCommandTests : IDisposable
         // Run in a separate process with NUGET_PACKAGES set to the custom directory.
         // The env var takes priority over all config file settings.
         var options = new RemoteInvokeOptions();
-        options.StartInfo.RedirectStandardOutput = true;
         options.StartInfo.Environment["NUGET_PACKAGES"] = customPackagesDir;
 
-        using var result = RemoteExecutor.Invoke(static async (tempDirPath) =>
+        RemoteExecutor.Invoke(static async (tempDirPath) =>
         {
             var command = RestoreCommand.Create();
             var outputDir = Path.Combine(tempDirPath, "obj");
 
-            await command.Parse(["--package", "Fake.Package,1.0.0", "--no-nuget-org", "--verbose", "--output", outputDir, "--working-dir", tempDirPath]).InvokeAsync();
-        }, _tempDir.Path, options);
+            await command.Parse(["--package", "Fake.Package,1.0.0", "--no-nuget-org", "--output", outputDir, "--working-dir", tempDirPath]).InvokeAsync();
+        }, _tempDir.Path, options).Dispose();
 
-        var consoleOutput = result.Process.StandardOutput.ReadToEnd();
-        Assert.Contains($"Packages: {customPackagesDir}", consoleOutput);
+        // NuGet writes packageFolders into project.assets.json with the resolved packages directory.
+        var assetsContent = File.ReadAllText(Path.Combine(_tempDir.Path, "obj", "project.assets.json"));
+        Assert.Contains(JsonEncodedPath(customPackagesDir), assetsContent);
     }
+
+    [Fact]
+    public void RestoreCommand_CliSourcesAreAppendedToConfigSources()
+    {
+        var nugetConfigPath = Path.Combine(_tempDir.Path, "NuGet.config");
+        var configSourcePath = Path.Combine(_tempDir.Path, "config-source");
+        var cliSourcePath = Path.Combine(_tempDir.Path, "cli-source");
+
+        File.WriteAllText(nugetConfigPath, $"""
+            <?xml version="1.0" encoding="utf-8"?>
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="ConfigSource" value="{configSourcePath}" />
+              </packageSources>
+            </configuration>
+            """);
+
+        // Run in a separate process so the parent's NuGet config doesn't interfere.
+        var options = new RemoteInvokeOptions();
+        options.StartInfo.Environment.Remove("NUGET_PACKAGES");
+
+        RemoteExecutor.Invoke(static async (nugetConfig, cliSourcePath, tempDirPath) =>
+        {
+            var command = RestoreCommand.Create();
+            var outputDir = Path.Combine(tempDirPath, "obj");
+
+            // Pass --source in addition to the config source. Both should be used.
+            await command.Parse([
+                "--package", "Fake.Package,1.0.0",
+                "--no-nuget-org",
+                "--nuget-config", nugetConfig,
+                "--source", cliSourcePath,
+                "--output", outputDir,
+                "--working-dir", tempDirPath]).InvokeAsync();
+        }, nugetConfigPath, cliSourcePath, _tempDir.Path, options).Dispose();
+
+        // NuGet writes the resolved sources into project.assets.json regardless of
+        // whether the restore succeeds. Verify both sources are present.
+        var assetsContent = File.ReadAllText(Path.Combine(_tempDir.Path, "obj", "project.assets.json"));
+        Assert.Contains(JsonEncodedPath(configSourcePath), assetsContent);
+        Assert.Contains(JsonEncodedPath(cliSourcePath), assetsContent);
+    }
+
+    /// <summary>
+    /// Converts a file path to its JSON-escaped representation (e.g. backslashes doubled).
+    /// </summary>
+    private static string JsonEncodedPath(string path) =>
+        path.Replace(@"\", @"\\");
 }
