@@ -144,9 +144,8 @@ public static class RestoreCommand
         var outputPath = Path.GetFullPath(output);
         Directory.CreateDirectory(outputPath);
 
-        packagesDir ??= Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".nuget", "packages");
+        var settings = Settings.LoadDefaultSettings(workingDir, nugetConfigPath, new XPlatMachineWideSetting());
+        packagesDir ??= SettingsUtility.GetGlobalPackagesFolder(settings);
 
         var logger = new NuGetLogger(verbose);
 
