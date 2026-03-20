@@ -327,7 +327,7 @@ internal sealed class PlaywrightCliInstaller(
 
         if (!Directory.Exists(primarySkillDir))
         {
-            logger.LogDebug("Primary skill directory does not exist: {PrimarySkillDir}.", primarySkillDir);
+            logger.LogDebug("Primary skill directory does not exist: {PrimarySkillDir}", primarySkillDir);
             return;
         }
 
