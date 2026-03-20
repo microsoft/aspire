@@ -33,6 +33,8 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
             return null;
         }
 
+        logger.LogDebug("Resolving npm package {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, versionRange));
+
         // Use an isolated temp subdirectory so npm doesn't pick up .npmrc or
         // other config files from the shared temp root or the user's CWD.
         var tempDir = CreateIsolatedTempDirectory();
@@ -48,6 +50,7 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
 
             if (versionOutput is null)
             {
+                logger.LogDebug("Failed to resolve version for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, versionRange));
                 return null;
             }
 
@@ -71,6 +74,8 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
                 return null;
             }
 
+            logger.LogDebug("Resolved {PackageSpecifier} with integrity {Integrity}", NpmPackageInfo.FormatPackageSpecifier(packageName, version), integrityOutput.Trim());
+
             return new NpmPackageInfo
             {
                 Version = version,
@@ -92,6 +97,8 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
             return null;
         }
 
+        logger.LogDebug("Packing npm package {PackageSpecifier} to {OutputDirectory}", NpmPackageInfo.FormatPackageSpecifier(packageName, version), outputDirectory);
+
         var output = await RunNpmCommandInDirectoryAsync(
             npmPath,
             ["pack", NpmPackageInfo.FormatPackageSpecifier(packageName, version), "--pack-destination", outputDirectory, "--registry", PublicRegistry],
@@ -100,6 +107,7 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
 
         if (output is null)
         {
+            logger.LogDebug("Failed to pack {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
             return null;
         }
 
@@ -118,6 +126,8 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
             return null;
         }
 
+        logger.LogDebug("Packed {PackageSpecifier} to {TarballPath}", NpmPackageInfo.FormatPackageSpecifier(packageName, version), tarballPath);
+
         return tarballPath;
     }
 
@@ -129,6 +139,8 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
         {
             return false;
         }
+
+        logger.LogDebug("Auditing npm signatures for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
 
         // npm audit signatures requires a project context (node_modules + package-lock.json).
         // For global tool installs there is no project, so we create a temporary one.
@@ -165,7 +177,14 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
                 tempDir,
                 cancellationToken);
 
-            return auditOutput is not null;
+            if (auditOutput is null)
+            {
+                logger.LogDebug("Signature audit failed for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
+                return false;
+            }
+
+            logger.LogDebug("Signature audit passed for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
+            return true;
         }
         finally
         {
@@ -182,6 +201,8 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
             return false;
         }
 
+        logger.LogDebug("Installing npm package globally from {TarballPath}", tarballPath);
+
         // Use an isolated temp subdirectory so npm doesn't pick up .npmrc or
         // other config files from the shared temp root or the user's CWD.
         var tempDir = CreateIsolatedTempDirectory();
@@ -194,7 +215,14 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
                 tempDir,
                 cancellationToken);
 
-            return output is not null;
+            if (output is null)
+            {
+                logger.LogDebug("Failed to install npm package globally from {TarballPath}", tarballPath);
+                return false;
+            }
+
+            logger.LogDebug("Successfully installed npm package globally from {TarballPath}", tarballPath);
+            return true;
         }
         finally
         {

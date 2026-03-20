@@ -31,9 +31,12 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
         CancellationToken cancellationToken,
         string? sriIntegrity = null)
     {
+        logger.LogDebug("Verifying provenance for {Package}@{Version} from {ExpectedSourceRepository}", packageName, version, expectedSourceRepository);
+
         var json = await FetchAttestationJsonAsync(packageName, version, cancellationToken).ConfigureAwait(false);
         if (json is null)
         {
+            logger.LogDebug("Attestation fetch failed for {Package}@{Version}", packageName, version);
             return new ProvenanceVerificationResult { Outcome = ProvenanceVerificationOutcome.AttestationFetchFailed };
         }
 
@@ -41,11 +44,13 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
         var bundleJson = ExtractSlsaBundleJson(json, out var parseFailed);
         if (bundleJson is null)
         {
+            var outcome = parseFailed
+                    ? ProvenanceVerificationOutcome.AttestationParseFailed
+                    : ProvenanceVerificationOutcome.SlsaProvenanceNotFound;
+            logger.LogDebug("SLSA bundle extraction failed for {Package}@{Version}: {Outcome}", packageName, version, outcome);
             return new ProvenanceVerificationResult
             {
-                Outcome = parseFailed
-                    ? ProvenanceVerificationOutcome.AttestationParseFailed
-                    : ProvenanceVerificationOutcome.SlsaProvenanceNotFound
+                Outcome = outcome
             };
         }
 
@@ -75,12 +80,17 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
         var provenance = ExtractProvenanceFromResult(verificationResult!);
         if (provenance is null)
         {
+            logger.LogDebug("Failed to extract provenance data from verified result for {Package}@{Version}", packageName, version);
             return new ProvenanceVerificationResult { Outcome = ProvenanceVerificationOutcome.AttestationParseFailed };
         }
 
-        return VerifyProvenanceFields(
+        var result = VerifyProvenanceFields(
             provenance, expectedSourceRepository, expectedWorkflowPath,
             expectedBuildType, validateWorkflowRef);
+
+        logger.LogDebug("Provenance verification for {Package}@{Version} completed with outcome {Outcome}", packageName, version, result.Outcome);
+
+        return result;
     }
 
     /// <summary>
