@@ -126,7 +126,7 @@ internal sealed class PlaywrightCliInstaller(
 
         if (!string.IsNullOrEmpty(versionOverride))
         {
-            logger.LogDebug("Using version override from '{ConfigKey}': {Version}.", VersionOverrideKey, versionOverride);
+            logger.LogDebug("Using version override from '{ConfigKey}': {Version}", VersionOverrideKey, versionOverride);
         }
 
         logger.LogDebug("Resolving {Package}@{Range} from npm registry.", PackageName, effectiveRange);
