@@ -139,7 +139,7 @@ internal sealed class PlaywrightCliInstaller(
             return (PlaywrightInstallStatus.Failed, string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_FailedToResolvePackage, NpmPackageInfo.FormatPackageSpecifier(PackageName, effectiveRange)));
         }
 
-        logger.LogDebug("Resolved {Package}@{Version} with integrity {Integrity}.", PackageName, packageInfo.Version, packageInfo.Integrity);
+        logger.LogDebug("Resolved {PackageSpecifier} with integrity {Integrity}.", NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version), packageInfo.Integrity);
 
         // Step 2: Check if a suitable version is already installed.
         var installedVersion = await playwrightCliRunner.GetVersionAsync(cancellationToken);
@@ -179,7 +179,7 @@ internal sealed class PlaywrightCliInstaller(
             // Step 3: Verify provenance via Sigstore bundle verification and SLSA attestation checks.
             // This cryptographically verifies the Sigstore bundle (Fulcio CA, Rekor tlog, OIDC identity)
             // and then checks the provenance fields (source repo, workflow, build type, ref).
-            logger.LogDebug("Verifying provenance for {Package}@{Version}.", PackageName, packageInfo.Version);
+            logger.LogDebug("Verifying provenance for {PackageSpecifier}.", NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version));
             var provenanceResult = await provenanceChecker.VerifyProvenanceAsync(
                 PackageName,
                 packageInfo.Version.ToString(),
@@ -194,18 +194,16 @@ internal sealed class PlaywrightCliInstaller(
             if (!provenanceResult.IsVerified)
             {
                 logger.LogWarning(
-                    "Provenance verification failed for {Package}@{Version}: {Outcome}. Expected source repository: {ExpectedRepo}",
-                    PackageName,
-                    packageInfo.Version,
+                    "Provenance verification failed for {PackageSpecifier}: {Outcome}. Expected source repository: {ExpectedRepo}",
+                    NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version),
                     provenanceResult.Outcome,
                     ExpectedSourceRepository);
                 return (PlaywrightInstallStatus.Failed, string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_ProvenanceVerificationFailed, NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version), provenanceResult.Outcome));
             }
 
             logger.LogDebug(
-                "Provenance verification passed for {Package}@{Version} (source: {SourceRepo})",
-                PackageName,
-                packageInfo.Version,
+                "Provenance verification passed for {PackageSpecifier} (source: {SourceRepo})",
+                NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version),
                 provenanceResult.Provenance?.SourceRepository);
         }
 
@@ -215,12 +213,12 @@ internal sealed class PlaywrightCliInstaller(
 
         try
         {
-            logger.LogDebug("Downloading {Package}@{Version} to {TempDir}.", PackageName, packageInfo.Version, tempDir);
+            logger.LogDebug("Downloading {PackageSpecifier} to {TempDir}.", NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version), tempDir);
             var tarballPath = await npmRunner.PackAsync(PackageName, packageInfo.Version.ToString(), tempDir, cancellationToken);
 
             if (tarballPath is null)
             {
-                logger.LogWarning("Failed to download {Package}@{Version}.", PackageName, packageInfo.Version);
+                logger.LogWarning("Failed to download {PackageSpecifier}.", NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version));
                 return (PlaywrightInstallStatus.Failed, string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_FailedToDownload, NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version)));
             }
 
@@ -228,9 +226,8 @@ internal sealed class PlaywrightCliInstaller(
             if (!validationDisabled && !VerifyIntegrity(tarballPath, packageInfo.Integrity))
             {
                 logger.LogWarning(
-                    "Integrity verification failed for {Package}@{Version}. The downloaded package may have been tampered with.",
-                    PackageName,
-                    packageInfo.Version);
+                    "Integrity verification failed for {PackageSpecifier}. The downloaded package may have been tampered with.",
+                    NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version));
                 return (PlaywrightInstallStatus.Failed, string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_IntegrityVerificationFailed, NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version)));
             }
 
@@ -240,12 +237,12 @@ internal sealed class PlaywrightCliInstaller(
             }
 
             // Step 6: Install globally from the verified tarball.
-            logger.LogDebug("Installing {Package}@{Version} globally.", PackageName, packageInfo.Version);
+            logger.LogDebug("Installing {PackageSpecifier} globally.", NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version));
             var installSuccess = await npmRunner.InstallGlobalAsync(tarballPath, cancellationToken);
 
             if (!installSuccess)
             {
-                logger.LogWarning("Failed to install {Package}@{Version} globally.", PackageName, packageInfo.Version);
+                logger.LogWarning("Failed to install {PackageSpecifier} globally.", NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version));
                 return (PlaywrightInstallStatus.Failed, string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_FailedToInstallGlobally, NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version)));
             }
 
