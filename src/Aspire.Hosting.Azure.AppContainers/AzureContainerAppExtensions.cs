@@ -168,7 +168,7 @@ public static class AzureContainerAppExtensions
 
             if (appEnvResource.EnableDashboard)
             {
-                var dashboard = new ContainerAppEnvironmentDotnetComponentResource("aspireDashboard", "2024-10-02-preview")
+                var dashboard = new ContainerAppEnvironmentDotnetComponentResource("aspireDashboard", "2025-10-02-preview")
                 {
                     Name = "aspire-dashboard",
                     ComponentType = "AspireDashboard",

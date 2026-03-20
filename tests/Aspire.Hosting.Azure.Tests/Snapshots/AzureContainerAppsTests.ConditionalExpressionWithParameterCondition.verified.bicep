@@ -13,7 +13,7 @@ param api_containerimage string
 
 param enable_feature_value string
 
-resource api 'Microsoft.App/containerApps@2025-02-02-preview' = {
+resource api 'Microsoft.App/containerApps@2025-10-02-preview' = {
   name: 'api'
   location: location
   properties: {
