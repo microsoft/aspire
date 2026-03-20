@@ -12,6 +12,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Utils;
+using Microsoft.Extensions.Configuration;
 using Spectre.Console;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
@@ -74,7 +75,8 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         IPackagingService packagingService,
         IConfigurationService configurationService,
         AgentInitCommand agentInitCommand,
-        ICliHostEnvironment hostEnvironment)
+        ICliHostEnvironment hostEnvironment,
+        IConfiguration configuration)
         : base("new", NewCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _prompter = prompter;
@@ -91,7 +93,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         Options.Add(s_versionOption);
 
         // Customize description based on whether staging channel is enabled
-        var isStagingEnabled = _features.IsFeatureEnabled(KnownFeatures.StagingChannelEnabled, false);
+        var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(_features, configuration);
         _channelOption = new Option<string?>("--channel")
         {
             Description = isStagingEnabled
