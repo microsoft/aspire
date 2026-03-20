@@ -614,9 +614,9 @@ function Get-CliExecutablePath {
     return Join-Path $DestinationPath $exeName
 }
 
-# Function to backup existing CLI executable before overwriting
-# This allows installation to proceed even when the CLI is running
-# The running process still has a handle to the old file, but the file can be renamed
+# Function to back up an existing CLI executable before overwriting it.
+# This matches self-update semantics by deleting stale *.old.* backups first.
+# On Windows, a running process can still block the rename.
 function Backup-ExistingCliExecutable {
     [CmdletBinding(SupportsShouldProcess)]
     [OutputType([string])]
@@ -631,7 +631,9 @@ function Backup-ExistingCliExecutable {
         
         if ($PSCmdlet.ShouldProcess($TargetExePath, "Backup to $backupPath")) {
             Write-Message "Backing up existing CLI: $TargetExePath -> $backupPath" -Level Verbose
-            
+
+            Remove-OldCliBackupFiles -TargetExePath $TargetExePath
+
             # Rename existing executable to .old.[timestamp]
             Move-Item -Path $TargetExePath -Destination $backupPath -Force
             return $backupPath
@@ -714,8 +716,8 @@ function Expand-AspireCliArchive {
             New-Item -ItemType Directory -Path $DestinationPath -Force | Out-Null
         }
         else {
-            # Backup existing executable before extraction
-            # This allows installation to proceed even when the CLI is running
+            # Back up the existing executable before extraction.
+            # On Windows, this can still fail if the file is locked by a running process.
             $backupPath = Backup-ExistingCliExecutable -TargetExePath $targetExePath
         }
 
@@ -744,7 +746,7 @@ function Expand-AspireCliArchive {
         }
 
         # Clean up old backup files on successful extraction
-        if ($backupPath -and (Test-Path $targetExePath)) {
+        if (Test-Path $targetExePath) {
             Remove-OldCliBackupFiles -TargetExePath $targetExePath
         }
 
