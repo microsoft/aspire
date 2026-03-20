@@ -135,7 +135,7 @@ Right-click a resource to start, stop, or restart it, view its logs, run resourc
 
 The dashboard gives you a live view of your running app — all your resources and their health, endpoint URLs, console logs from every service, structured logs (via OpenTelemetry), distributed traces across services, and metrics.
 
-![Aspire Dashboard showing running resources](resources/aspire-dashboard-dark.png)
+![Aspire Dashboard showing running resources](https://raw.githubusercontent.com/dotnet/aspire/main/extension/resources/aspire-dashboard-dark.png)
 
 It opens automatically when you start your app. You can pick which browser it uses with the `aspire.dashboardBrowser` setting — system default browser, or Chrome, Edge, or Firefox as a debug session. When using a debug browser, the `aspire.closeDashboardOnDebugEnd` setting controls whether it closes automatically when you stop debugging. Firefox also requires the [Firefox Debugger](https://marketplace.visualstudio.com/items?itemName=firefox-devtools.vscode-firefox-debug) extension.
 
