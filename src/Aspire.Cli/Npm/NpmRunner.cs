@@ -235,6 +235,45 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
         }
     }
 
+    /// <summary>
+    /// Creates a <see cref="ProcessStartInfo"/> configured to run an npm command.
+    /// On Windows, .cmd files are invoked via cmd.exe /c for reliable stdout redirection.
+    /// </summary>
+    internal static ProcessStartInfo CreateNpmProcessStartInfo(string npmPath, string[] args, string workingDirectory)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WorkingDirectory = workingDirectory
+        };
+
+        // On Windows, npm resolves to npm.cmd (a batch wrapper). Launching
+        // .cmd files via Process.Start with redirected stdout can produce empty
+        // output. Use cmd.exe /c to invoke the batch file reliably.
+        // Note: cmd.exe /c has special quote-stripping rules that are incompatible
+        // with ArgumentList (which individually quotes each argument). We must use
+        // the Arguments string property and wrap the entire command in an outer set
+        // of quotes so cmd.exe preserves interior quoting correctly.
+        if (OperatingSystem.IsWindows() && npmPath.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase))
+        {
+            startInfo.FileName = "cmd.exe";
+            startInfo.Arguments = @$"/c """"{npmPath}"" {string.Join(" ", args.Select(a => @$"""{a}"""))}""";
+        }
+        else
+        {
+            startInfo.FileName = npmPath;
+            foreach (var arg in args)
+            {
+                startInfo.ArgumentList.Add(arg);
+            }
+        }
+
+        return startInfo;
+    }
+
     private async Task<string?> RunNpmCommandInDirectoryAsync(string npmPath, string[] args, string workingDirectory, CancellationToken cancellationToken)
     {
         var argsString = string.Join(" ", args);
@@ -242,35 +281,7 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
 
         try
         {
-            var startInfo = new ProcessStartInfo
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                WorkingDirectory = workingDirectory
-            };
-
-            // On Windows, npm resolves to npm.cmd (a batch wrapper). Launching
-            // .cmd files via Process.Start with redirected stdout can produce empty
-            // output. Use cmd.exe /c to invoke the batch file reliably.
-            // Note: cmd.exe /c has special quote-stripping rules that are incompatible
-            // with ArgumentList (which individually quotes each argument). We must use
-            // the Arguments string property and wrap the entire command in an outer set
-            // of quotes so cmd.exe preserves interior quoting correctly.
-            if (OperatingSystem.IsWindows() && npmPath.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase))
-            {
-                startInfo.FileName = "cmd.exe";
-                startInfo.Arguments = $"/c \"\"{npmPath}\" {string.Join(" ", args.Select(a => $"\"{a}\""))}\"";
-            }
-            else
-            {
-                startInfo.FileName = npmPath;
-                foreach (var arg in args)
-                {
-                    startInfo.ArgumentList.Add(arg);
-                }
-            }
+            var startInfo = CreateNpmProcessStartInfo(npmPath, args, workingDirectory);
 
             using var process = new Process { StartInfo = startInfo };
             process.Start();
