@@ -252,6 +252,11 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
             //      defense-in-depth checks on the SLSA predicate fields (source repository, workflow
             //      path, build type, workflow ref) from the DSSE payload, which was signature-verified
             //      in step 1.
+            //
+            // Once the upstream bug is fixed in Sigstore 0.5.0 and we upgrade, this retry logic and
+            // the VerifyCertificateIdentityFromBundle/ExtractSubjectAlternativeNamePortable helpers
+            // can be removed — the initial VerifyBundleWithPolicyAsync call with CertificateIdentity
+            // will succeed on all platforms.
             if (!success
                 && result?.FailureReason is not null
                 && result.FailureReason.Contains("Subject Alternative Name", StringComparison.OrdinalIgnoreCase))
