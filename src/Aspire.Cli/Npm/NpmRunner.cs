@@ -70,7 +70,7 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
 
             if (string.IsNullOrWhiteSpace(integrityOutput))
             {
-                logger.LogDebug("Could not resolve integrity hash for {Package}@{Version}", packageName, version);
+                logger.LogDebug("Could not resolve integrity hash for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
                 return null;
             }
 
@@ -166,7 +166,7 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
 
             if (installOutput is null)
             {
-                logger.LogDebug("Failed to install {Package}@{Version} into temporary project for audit", packageName, version);
+                logger.LogDebug("Failed to install {PackageSpecifier} into temporary project for audit", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
                 return false;
             }
 
