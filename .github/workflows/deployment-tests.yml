@@ -36,6 +36,7 @@ jobs:
   deployment_tests:
     uses: ./.github/workflows/deployment-e2e-tests.yml
     if: ${{ github.repository_owner == 'microsoft' }}
+    secrets: inherit
     with:
       pr_number: ${{ inputs.pr_number || '' }}
 

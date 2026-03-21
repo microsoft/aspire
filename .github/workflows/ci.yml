@@ -73,6 +73,7 @@ jobs:
     permissions:
       id-token: write
       contents: read
+    secrets: inherit
     # Run on non-fork PRs and push events (main/release branches), skip docs-only changes
     if: >-
       ${{
