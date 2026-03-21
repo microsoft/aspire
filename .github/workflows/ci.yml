@@ -66,12 +66,28 @@ jobs:
     with:
       versionOverrideArg: ${{ needs.prepare_for_ci.outputs.VERSION_SUFFIX_OVERRIDE }}
 
+  deployment_tests:
+    uses: ./.github/workflows/deployment-e2e-tests.yml
+    name: Deployment E2E Tests
+    needs: [prepare_for_ci]
+    # Run on non-fork PRs and push events (main/release branches), skip docs-only changes
+    if: >-
+      ${{
+        github.repository_owner == 'microsoft' &&
+        needs.prepare_for_ci.outputs.skip_workflow != 'true' &&
+        (github.event_name == 'push' ||
+         github.event.pull_request.head.repo.full_name == github.repository)
+      }}
+    with:
+      pr_number: ${{ github.event.number && format('{0}', github.event.number) || '' }}
+      versionOverrideArg: ${{ needs.prepare_for_ci.outputs.VERSION_SUFFIX_OVERRIDE }}
+
   # This job is used for branch protection. It fails if any of the dependent jobs failed
   results:
     if: ${{ always() && github.repository_owner == 'microsoft' }}
     runs-on: ubuntu-latest
     name: Final Results
-    needs: [prepare_for_ci, tests]
+    needs: [prepare_for_ci, tests, deployment_tests]
 
     steps:
       - name: Fail if any of the dependent jobs failed
@@ -87,6 +103,7 @@ jobs:
           ${{ always() &&
               needs.prepare_for_ci.outputs.skip_workflow != 'true' &&
               needs.tests.outputs.skip_workflow != 'true' &&
+              needs.deployment_tests.outputs.skip_workflow != 'true' &&
               (contains(needs.*.result, 'failure') ||
                contains(needs.*.result, 'cancelled') ||
                contains(needs.*.result, 'skipped')) }}

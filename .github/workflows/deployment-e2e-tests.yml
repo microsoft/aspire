@@ -1,0 +1,263 @@
+# Reusable workflow for deployment E2E tests
+#
+# Called from:
+# - ci.yml: Runs on every non-fork PR
+# - deployment-tests.yml: Nightly schedule and manual triggers
+#
+# Security:
+# - Uses OIDC (Workload Identity Federation) for Azure authentication
+# - No stored Azure secrets - credentials flow from the deployment-testing environment
+#
+name: Deployment E2E Tests (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      pr_number:
+        description: 'PR number (empty for non-PR runs)'
+        required: false
+        type: string
+        default: ''
+      versionOverrideArg:
+        description: 'Version suffix override for the build (e.g., /p:VersionSuffix=pr.123.gabcdef01)'
+        required: false
+        type: string
+        default: ''
+    outputs:
+      skip_workflow:
+        description: 'Whether the workflow was skipped (no deployment tests found)'
+        value: ${{ jobs.enumerate.outputs.skip_workflow }}
+
+jobs:
+  # Enumerate deployment test classes to build the matrix
+  enumerate:
+    name: Enumerate Tests
+    runs-on: ubuntu-latest
+    if: ${{ github.repository_owner == 'microsoft' }}
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.enumerate.outputs.all_tests }}
+      skip_workflow: ${{ steps.check_matrix.outputs.skip_workflow }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: ./.github/actions/enumerate-tests
+        id: enumerate
+        with:
+          buildArgs: '/p:OnlyDeploymentTests=true'
+
+      - name: Display test matrix
+        run: |
+          echo "Deployment test matrix:"
+          echo '${{ steps.enumerate.outputs.all_tests }}' | jq .
+
+      - name: Check if matrix is empty
+        id: check_matrix
+        run: |
+          MATRIX='${{ steps.enumerate.outputs.all_tests }}'
+          if [ "$MATRIX" = '{"include":[]}' ] || [ -z "$MATRIX" ]; then
+            echo "skip_workflow=true" >> $GITHUB_OUTPUT
+            echo "No deployment tests found, skipping workflow"
+          else
+            echo "skip_workflow=false" >> $GITHUB_OUTPUT
+          fi
+
+  # Build solution and CLI once, share via artifacts
+  build:
+    name: Build
+    needs: [enumerate]
+    if: ${{ needs.enumerate.outputs.skip_workflow != 'true' }}
+    runs-on: 8-core-ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          global-json-file: global.json
+
+      - name: Restore solution
+        run: ./restore.sh
+
+      - name: Build solution and pack CLI
+        run: |
+          # Build the full solution and pack CLI for local testing
+          ./build.sh --build --pack -c Release ${{ inputs.versionOverrideArg }}
+        env:
+          # Skip native build to save time - we'll use the non-native CLI
+          SkipNativeBuild: true
+
+      - name: Prepare CLI artifacts
+        run: |
+          # Create a clean artifact directory with CLI and packages
+          ARTIFACT_DIR="${{ github.workspace }}/cli-artifacts"
+          mkdir -p "$ARTIFACT_DIR/bin"
+          mkdir -p "$ARTIFACT_DIR/packages"
+
+          # Copy CLI binary and dependencies
+          cp -r "${{ github.workspace }}/artifacts/bin/Aspire.Cli/Release/net10.0/"* "$ARTIFACT_DIR/bin/"
+
+          # Copy NuGet packages
+          PACKAGES_DIR="${{ github.workspace }}/artifacts/packages/Release/Shipping"
+          if [ -d "$PACKAGES_DIR" ]; then
+            find "$PACKAGES_DIR" -name "*.nupkg" -exec cp {} "$ARTIFACT_DIR/packages/" \;
+          fi
+
+          echo "CLI artifacts prepared:"
+          ls -la "$ARTIFACT_DIR/bin/"
+          echo "Package count: $(find "$ARTIFACT_DIR/packages" -name "*.nupkg" | wc -l)"
+
+      - name: Upload CLI artifacts
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        with:
+          name: aspire-cli-artifacts
+          path: ${{ github.workspace }}/cli-artifacts/
+          retention-days: 1
+
+  # Run each deployment test class in parallel
+  deploy-test:
+    name: Deploy (${{ matrix.shortname }})
+    needs: [enumerate, build]
+    if: ${{ needs.enumerate.outputs.skip_workflow != 'true' }}
+    runs-on: 8-core-ubuntu-latest
+    environment: deployment-testing
+    permissions:
+      id-token: write  # For OIDC Azure login
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.enumerate.outputs.matrix) }}
+    env:
+      ASPIRE_DEPLOYMENT_TEST_SUBSCRIPTION: ${{ secrets.AZURE_DEPLOYMENT_TEST_SUBSCRIPTION_ID }}
+      ASPIRE_DEPLOYMENT_TEST_RG_PREFIX: ${{ vars.ASPIRE_DEPLOYMENT_TEST_RG_PREFIX || 'aspire-e2e' }}
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          global-json-file: global.json
+
+      - name: Restore and build test project
+        run: |
+          ./restore.sh
+          ./build.sh -restore -ci -build -projects ${{ github.workspace }}/tests/Aspire.Deployment.EndToEnd.Tests/Aspire.Deployment.EndToEnd.Tests.csproj -c Release
+        env:
+          SkipNativeBuild: true
+
+      - name: Download CLI artifacts
+        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
+        with:
+          name: aspire-cli-artifacts
+          path: ${{ github.workspace }}/cli-artifacts
+
+      - name: Install Aspire CLI from artifacts
+        run: |
+          ASPIRE_HOME="$HOME/.aspire"
+          mkdir -p "$ASPIRE_HOME/bin"
+
+          # Copy CLI binary and dependencies
+          cp -r "${{ github.workspace }}/cli-artifacts/bin/"* "$ASPIRE_HOME/bin/"
+          chmod +x "$ASPIRE_HOME/bin/aspire"
+
+          # Add to PATH for this job
+          echo "$ASPIRE_HOME/bin" >> $GITHUB_PATH
+
+          # Set up NuGet hive for local packages
+          HIVE_DIR="$ASPIRE_HOME/hives/local/packages"
+          mkdir -p "$HIVE_DIR"
+          cp "${{ github.workspace }}/cli-artifacts/packages/"*.nupkg "$HIVE_DIR/" 2>/dev/null || true
+
+          # Configure CLI to use local channel
+          "$ASPIRE_HOME/bin/aspire" config set channel local --global || true
+
+          echo "✅ Aspire CLI installed:"
+          "$ASPIRE_HOME/bin/aspire" --version
+
+      - name: Azure Login (OIDC)
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_DEPLOYMENT_TEST_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_DEPLOYMENT_TEST_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_DEPLOYMENT_TEST_SUBSCRIPTION_ID }}
+        with:
+          script: |
+            const token = await core.getIDToken('api://AzureADTokenExchange');
+            core.setSecret(token);
+
+            // Login directly - token never leaves this step
+            await exec.exec('az', [
+              'login', '--service-principal',
+              '--username', process.env.AZURE_CLIENT_ID,
+              '--tenant', process.env.AZURE_TENANT_ID,
+              '--federated-token', token,
+              '--allow-no-subscriptions'
+            ]);
+
+            await exec.exec('az', [
+              'account', 'set',
+              '--subscription', process.env.AZURE_SUBSCRIPTION_ID
+            ]);
+
+      - name: Verify Azure authentication
+        run: |
+          echo "Verifying Azure authentication..."
+          az account show --query "{subscriptionId:id, tenantId:tenantId, user:user.name}" -o table
+          echo "✅ Azure authentication successful"
+
+      - name: Verify Docker is running
+        run: |
+          echo "Verifying Docker daemon..."
+          docker version
+          docker info | head -20
+          echo "✅ Docker is available"
+
+      - name: Run deployment test (${{ matrix.shortname }})
+        id: run_tests
+        env:
+          GITHUB_PR_NUMBER: ${{ inputs.pr_number }}
+          GITHUB_PR_HEAD_SHA: ${{ github.sha }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_DEPLOYMENT_TEST_SUBSCRIPTION_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_DEPLOYMENT_TEST_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_DEPLOYMENT_TEST_CLIENT_ID }}
+          Azure__SubscriptionId: ${{ secrets.AZURE_DEPLOYMENT_TEST_SUBSCRIPTION_ID }}
+          Azure__Location: westus3
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ./dotnet.sh test tests/Aspire.Deployment.EndToEnd.Tests/Aspire.Deployment.EndToEnd.Tests.csproj \
+            -c Release \
+            --logger "trx;LogFileName=${{ matrix.shortname }}.trx" \
+            --results-directory ${{ github.workspace }}/testresults \
+            -- \
+            --filter-not-trait "quarantined=true" \
+            ${{ matrix.extraTestArgs }} \
+            || echo "test_failed=true" >> $GITHUB_OUTPUT
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        with:
+          name: deployment-test-results-${{ matrix.shortname }}
+          path: |
+            ${{ github.workspace }}/testresults/
+          retention-days: 30
+
+      - name: Upload recordings
+        if: always()
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        with:
+          name: deployment-test-recordings-${{ matrix.shortname }}
+          path: |
+            ${{ github.workspace }}/testresults/recordings/
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Check for test failures
+        if: steps.run_tests.outputs.test_failed == 'true'
+        run: |
+          echo "::error::Deployment test ${{ matrix.shortname }} failed. Check the test results artifact for details."
+          exit 1

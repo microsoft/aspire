@@ -1,4 +1,4 @@
-name: Add CLI E2E Recording Comment
+name: Add E2E Recording Comments
 
 on:
   # Trigger when the CI workflow completes (success, failure, or cancelled)
@@ -278,3 +278,348 @@ jobs:
           else
             echo "No recordings found in $RECORDINGS_DIR"
           fi
+
+  # Post deployment E2E test recordings as a separate PR comment
+  add-deployment-recording-comment:
+    # Only run on the microsoft org and for pull requests
+    if: >-
+      ${{ github.repository_owner == 'microsoft' &&
+          (github.event.workflow_run.event == 'pull_request' || github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      actions: read
+    steps:
+      - name: Get workflow run info
+        id: run-info
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        with:
+          script: |
+            let runId, prNumber, headSha;
+
+            if (context.eventName === 'workflow_dispatch') {
+              runId = context.payload.inputs.run_id;
+              const run = await github.rest.actions.getWorkflowRun({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: runId
+              });
+              headSha = run.data.head_sha;
+
+              const prs = await github.rest.pulls.list({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                head: `${context.repo.owner}:${run.data.head_branch}`
+              });
+              prNumber = prs.data.length > 0 ? prs.data[0].number : null;
+            } else {
+              runId = context.payload.workflow_run.id;
+              headSha = context.payload.workflow_run.head_sha;
+
+              const prs = context.payload.workflow_run.pull_requests;
+              prNumber = prs && prs.length > 0 ? prs[0].number : null;
+            }
+
+            if (!prNumber) {
+              console.log('No PR found for this workflow run, skipping deployment recording comment');
+              core.setOutput('skip', 'true');
+              return;
+            }
+
+            core.setOutput('skip', 'false');
+            core.setOutput('run_id', runId);
+            core.setOutput('pr_number', prNumber);
+            core.setOutput('head_sha', headSha);
+            console.log(`Run ID: ${runId}, PR: ${prNumber}, SHA: ${headSha}`);
+
+      - name: Get deployment test job results and download recording artifacts
+        if: steps.run-info.outputs.skip != 'true'
+        id: get-results
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const runId = ${{ steps.run-info.outputs.run_id }};
+
+            // Get all jobs for the workflow run to determine per-test results
+            const jobs = await github.paginate(
+              github.rest.actions.listJobsForWorkflowRun,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: runId,
+                per_page: 100
+              }
+            );
+
+            // Filter for deployment test matrix jobs (format: "Deploy (TestClassName)")
+            const deployJobs = jobs.filter(job => job.name.match(/Deploy \(.+\)/));
+
+            if (deployJobs.length === 0) {
+              console.log('No deployment test jobs found in this run');
+              core.setOutput('has_results', 'false');
+              return;
+            }
+
+            const passedTests = [];
+            const failedTests = [];
+            const cancelledTests = [];
+
+            for (const job of deployJobs) {
+              const match = job.name.match(/Deploy \((.+)\)/);
+              const testName = match ? match[1] : job.name;
+
+              console.log(`Job "${job.name}" - conclusion: ${job.conclusion}`);
+
+              if (job.conclusion === 'success') {
+                passedTests.push(testName);
+              } else if (job.conclusion === 'failure') {
+                failedTests.push(testName);
+              } else if (job.conclusion === 'cancelled') {
+                cancelledTests.push(testName);
+              }
+            }
+
+            core.setOutput('has_results', 'true');
+            core.setOutput('passed_tests', JSON.stringify(passedTests));
+            core.setOutput('failed_tests', JSON.stringify(failedTests));
+            core.setOutput('cancelled_tests', JSON.stringify(cancelledTests));
+
+            // Download deployment recording artifacts
+            const allArtifacts = await github.paginate(
+              github.rest.actions.listWorkflowRunArtifacts,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: runId,
+                per_page: 100
+              }
+            );
+
+            const recordingArtifacts = allArtifacts.filter(a =>
+              a.name.startsWith('deployment-test-recordings-')
+            );
+
+            console.log(`Found ${recordingArtifacts.length} deployment recording artifacts`);
+
+            const recordingsDir = 'recordings';
+            fs.mkdirSync(recordingsDir, { recursive: true });
+
+            for (const artifact of recordingArtifacts) {
+              console.log(`Downloading ${artifact.name}...`);
+
+              const download = await github.rest.actions.downloadArtifact({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                artifact_id: artifact.id,
+                archive_format: 'zip'
+              });
+
+              const artifactPath = path.join(recordingsDir, `${artifact.name}.zip`);
+              fs.writeFileSync(artifactPath, Buffer.from(download.data));
+            }
+
+      - name: Extract deployment recordings from artifacts
+        if: steps.run-info.outputs.skip != 'true' && steps.get-results.outputs.has_results == 'true'
+        shell: bash
+        run: |
+          mkdir -p cast_files
+
+          for zipfile in recordings/*.zip; do
+            if [ -f "$zipfile" ]; then
+              ARTIFACT_NAME=$(basename "$zipfile" .zip)
+              SHORTNAME=${ARTIFACT_NAME#deployment-test-recordings-}
+              EXTRACT_DIR="recordings/extracted_${ARTIFACT_NAME}"
+              unzip -o "$zipfile" -d "$EXTRACT_DIR" || true
+
+              # Rename .cast files to use the shortname
+              CAST_INDEX=0
+              while IFS= read -r -d '' castfile; do
+                if [ $CAST_INDEX -eq 0 ]; then
+                  cp "$castfile" "cast_files/${SHORTNAME}.cast"
+                else
+                  cp "$castfile" "cast_files/${SHORTNAME}-${CAST_INDEX}.cast"
+                fi
+                CAST_INDEX=$((CAST_INDEX + 1))
+              done < <(find "$EXTRACT_DIR" -name "*.cast" -print0)
+            fi
+          done
+
+          echo "Found deployment recordings:"
+          ls -la cast_files/ || echo "No .cast files found"
+
+      - name: Upload deployment recordings and post comment
+        if: steps.run-info.outputs.skip != 'true' && steps.get-results.outputs.has_results == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+          GITHUB_EVENT_REPO_NAME: ${{ github.event.repository.name }}
+          PASSED_TESTS: ${{ steps.get-results.outputs.passed_tests }}
+          FAILED_TESTS: ${{ steps.get-results.outputs.failed_tests }}
+          CANCELLED_TESTS: ${{ steps.get-results.outputs.cancelled_tests }}
+        shell: bash
+        run: |
+          PR_NUMBER="${{ steps.run-info.outputs.pr_number }}"
+          RUN_ID="${{ steps.run-info.outputs.run_id }}"
+          HEAD_SHA="${{ steps.run-info.outputs.head_sha }}"
+          SHORT_SHA="${HEAD_SHA:0:7}"
+          RUN_URL="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}"
+
+          # Parse test results
+          PASSED_COUNT=$(echo "$PASSED_TESTS" | jq 'length')
+          FAILED_COUNT=$(echo "$FAILED_TESTS" | jq 'length')
+          CANCELLED_COUNT=$(echo "$CANCELLED_TESTS" | jq 'length')
+
+          # Determine overall status
+          if [ "$FAILED_COUNT" -gt 0 ]; then
+            EMOJI="❌"
+            STATUS="failed"
+          elif [ "$CANCELLED_COUNT" -gt 0 ] && [ "$PASSED_COUNT" -eq 0 ]; then
+            EMOJI="⚠️"
+            STATUS="cancelled"
+          elif [ "$PASSED_COUNT" -gt 0 ]; then
+            EMOJI="✅"
+            STATUS="passed"
+          else
+            EMOJI="❓"
+            STATUS="unknown"
+          fi
+
+          # Upload recordings to asciinema
+          RECORDINGS_DIR="cast_files"
+          declare -A RECORDING_URLS
+
+          if [ -d "$RECORDINGS_DIR" ] && compgen -G "$RECORDINGS_DIR"/*.cast > /dev/null; then
+            pip install --quiet asciinema
+
+            MAX_UPLOAD_RETRIES=5
+            RETRY_BASE_DELAY_SECONDS=30
+
+            for castfile in "$RECORDINGS_DIR"/*.cast; do
+              if [ -f "$castfile" ]; then
+                filename=$(basename "$castfile" .cast)
+                echo "Uploading $castfile..."
+
+                ASCIINEMA_URL=""
+                for attempt in $(seq 1 "$MAX_UPLOAD_RETRIES"); do
+                  UPLOAD_OUTPUT=$(asciinema upload "$castfile" 2>&1) || true
+                  ASCIINEMA_URL=$(echo "$UPLOAD_OUTPUT" | grep -oP 'https://asciinema\.org/a/[a-zA-Z0-9_-]+' | head -1) || true
+                  if [ -n "$ASCIINEMA_URL" ]; then
+                    break
+                  fi
+                  if [ "$attempt" -lt "$MAX_UPLOAD_RETRIES" ]; then
+                    DELAY=$((attempt * RETRY_BASE_DELAY_SECONDS))
+                    echo "Upload attempt $attempt failed, retrying in ${DELAY}s..."
+                    sleep "$DELAY"
+                  fi
+                done
+
+                if [ -n "$ASCIINEMA_URL" ]; then
+                  RECORDING_URLS["$filename"]="$ASCIINEMA_URL"
+                  echo "Uploaded: $ASCIINEMA_URL"
+                else
+                  RECORDING_URLS["$filename"]="FAILED"
+                  echo "Failed to upload $castfile after $MAX_UPLOAD_RETRIES attempts"
+                fi
+              fi
+            done
+          fi
+
+          # Build the comment
+          COMMENT_MARKER="<!-- deployment-e2e-recordings -->"
+
+          COMMENT_BODY="${COMMENT_MARKER}
+          ${EMOJI} **Deployment E2E Tests ${STATUS}** — ${PASSED_COUNT} passed, ${FAILED_COUNT} failed, ${CANCELLED_COUNT} cancelled (commit \`${SHORT_SHA}\`)
+
+          <details>
+          <summary>View test results and recordings</summary>
+
+          [View workflow run](${RUN_URL})
+
+          | Test | Result | Recording |
+          |------|--------|-----------|"
+
+          # Add passed tests
+          while IFS= read -r test; do
+            [ -z "$test" ] && continue
+            RECORDING_LINK=""
+            if [ -n "${RECORDING_URLS[$test]+x}" ]; then
+              if [ "${RECORDING_URLS[$test]}" = "FAILED" ]; then
+                RECORDING_LINK="❌ Upload failed"
+              else
+                RECORDING_LINK="[▶️ View Recording](${RECORDING_URLS[$test]})"
+              fi
+            fi
+            COMMENT_BODY="${COMMENT_BODY}
+          | ${test} | ✅ Passed | ${RECORDING_LINK} |"
+          done < <(echo "$PASSED_TESTS" | jq -r '.[]')
+
+          # Add failed tests
+          while IFS= read -r test; do
+            [ -z "$test" ] && continue
+            RECORDING_LINK=""
+            if [ -n "${RECORDING_URLS[$test]+x}" ]; then
+              if [ "${RECORDING_URLS[$test]}" = "FAILED" ]; then
+                RECORDING_LINK="❌ Upload failed"
+              else
+                RECORDING_LINK="[▶️ View Recording](${RECORDING_URLS[$test]})"
+              fi
+            fi
+            COMMENT_BODY="${COMMENT_BODY}
+          | ${test} | ❌ Failed | ${RECORDING_LINK} |"
+          done < <(echo "$FAILED_TESTS" | jq -r '.[]')
+
+          # Add cancelled tests
+          while IFS= read -r test; do
+            [ -z "$test" ] && continue
+            RECORDING_LINK=""
+            if [ -n "${RECORDING_URLS[$test]+x}" ]; then
+              if [ "${RECORDING_URLS[$test]}" = "FAILED" ]; then
+                RECORDING_LINK="❌ Upload failed"
+              else
+                RECORDING_LINK="[▶️ View Recording](${RECORDING_URLS[$test]})"
+              fi
+            fi
+            COMMENT_BODY="${COMMENT_BODY}
+          | ${test} | ⚠️ Cancelled | ${RECORDING_LINK} |"
+          done < <(echo "$CANCELLED_TESTS" | jq -r '.[]')
+
+          COMMENT_BODY="${COMMENT_BODY}
+
+          ---
+          <sub>📹 Recordings uploaded automatically from [CI run #${RUN_ID}](${RUN_URL})</sub>
+
+          </details>"
+
+          # Delete any existing deployment recording comments, then post the new one
+          EXISTING_COMMENT_IDS=$(gh api graphql -f query='
+            query($owner: String!, $repo: String!, $pr: Int!) {
+              repository(owner: $owner, name: $repo) {
+                pullRequest(number: $pr) {
+                  comments(first: 100) {
+                    nodes {
+                      databaseId
+                      author { login }
+                      body
+                    }
+                  }
+                }
+              }
+            }' -f owner="$GITHUB_REPOSITORY_OWNER" -f repo="$GITHUB_EVENT_REPO_NAME" -F pr="$PR_NUMBER" \
+            --jq '.data.repository.pullRequest.comments.nodes[] | select(.author.login == "github-actions" and (.body | contains("'"${COMMENT_MARKER}"'"))) | .databaseId') || true
+
+          for COMMENT_ID in $EXISTING_COMMENT_IDS; do
+            echo "Deleting old comment $COMMENT_ID"
+            gh api \
+              --method DELETE \
+              -H "Accept: application/vnd.github+json" \
+              "/repos/${GITHUB_REPOSITORY}/issues/comments/${COMMENT_ID}" || true
+          done
+
+          echo "Creating new deployment recording comment on PR #${PR_NUMBER}"
+          gh pr comment "${PR_NUMBER}" --repo "$GITHUB_REPOSITORY" --body "$COMMENT_BODY"
+          echo "Posted deployment recording comment to PR #${PR_NUMBER}"

@@ -8,7 +8,6 @@ namespace Aspire.Deployment.EndToEnd.Tests.Helpers;
 
 /// <summary>
 /// Extension methods for <see cref="Hex1bTerminalAutomator"/> providing deployment E2E test patterns.
-/// These parallel the <see cref="Hex1bTerminalInputSequenceBuilder"/>-based methods in <see cref="DeploymentE2ETestHelpers"/>.
 /// </summary>
 internal static class DeploymentE2EAutomatorHelpers
 {
