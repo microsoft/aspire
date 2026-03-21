@@ -50,11 +50,11 @@ public class SqlServerServerResource : ContainerResource, IResourceWithConnectio
         var builder = new ReferenceExpressionBuilder();
 
         builder.Append($"Server={PrimaryEndpoint.Property(EndpointProperty.IPV4Host)},{PrimaryEndpoint.Property(EndpointProperty.Port)};");
-        builder.Append($"User ID={UserNameReference};");
-        builder.Append($"Password={PasswordParameter};");
+        builder.Append($";User ID={UserNameReference}");
+        builder.Append($";Password={PasswordParameter}");
         builder.Append($"{PrimaryEndpoint.GetTlsValue(
             enabledValue: ReferenceExpression.Empty,
-            disabledValue: ReferenceExpression.Create($"TrustServerCertificate=true;"))}");
+            disabledValue: ReferenceExpression.Create($";TrustServerCertificate=true"))}");
 
         return builder.Build();
     }
@@ -84,12 +84,12 @@ public class SqlServerServerResource : ContainerResource, IResourceWithConnectio
 
         if (!string.IsNullOrEmpty(databaseName))
         {
-            builder.Append($"databaseName={databaseName:uri}");
+            builder.Append($";databaseName={databaseName:uri}");
         }
 
         builder.Append($"{PrimaryEndpoint.GetTlsValue(
             enabledValue: ReferenceExpression.Empty,
-            disabledValue: ReferenceExpression.Create($"trustServerCertificate=true;"))}");
+            disabledValue: ReferenceExpression.Create($";trustServerCertificate=true"))}");
 
         return builder.Build();
     }
@@ -98,10 +98,9 @@ public class SqlServerServerResource : ContainerResource, IResourceWithConnectio
     /// Gets the JDBC connection string for the SQL Server.
     /// </summary>
     /// <remarks>
-    /// <para>Format: <c>jdbc:sqlserver://{host}:{port}[];trustServerCertificate=true]</c>.</para>
+    /// <para>Format: <c>jdbc:sqlserver://{Host}:{Port}[;databaseName={Database}][;trustServerCertificate=true]</c>.</para>
     /// <para>User and password credentials are not included in the JDBC connection string.
-    /// Use the <see cref="UserNameReference"/> and <see cref="PasswordParameter"/> connection properties to access credentials.</para>
-    /// </remarks>
+    /// Use the <c>Username</c> and <c>Password</c> connection properties to access credentials.</para>    /// </remarks>
     public ReferenceExpression JdbcConnectionString => BuildJdbcConnectionString();
 
     /// <summary>
@@ -124,7 +123,7 @@ public class SqlServerServerResource : ContainerResource, IResourceWithConnectio
     /// Gets the connection string for the SQL Server.
     /// </summary>
     /// <param name="cancellationToken"> A <see cref="CancellationToken"/> to observe while waiting for the task to complete.</param>
-    /// <returns>A connection string for the SQL Server in the form "Server=host,port;User ID=sa;Password=password", with "TrustServerCertificate=true" appended when TLS certificate material is not configured.</returns>
+    /// <returns>A connection string for the SQL Server in the form "Server=host,port;User ID=sa;Password=password", with "TrustServerCertificate=true" appended when a certificate is not configured.</returns>
     public ValueTask<string?> GetConnectionStringAsync(CancellationToken cancellationToken = default)
     {
         return ConnectionStringExpression.GetValueAsync(cancellationToken);

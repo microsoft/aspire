@@ -99,7 +99,7 @@ public static partial class SqlServerBuilderExtensions
             {
                 var executionContext = ctx.Services.GetRequiredService<DistributedApplicationExecutionContext>();
 
-                // Dev cert versions prior to 6 don't include "127.0.0.1" int eh SAN, and so won't be trusted
+                // Dev cert versions prior to 6 don't include "127.0.0.1" in the SAN, and so won't be trusted
                 // So only enable TLS if we have a custom cert, or a dev cert with version 6 or higher.
                 if (executionContext.IsRunMode)
                 {
