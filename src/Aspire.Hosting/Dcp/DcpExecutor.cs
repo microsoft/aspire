@@ -272,11 +272,6 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IConsoleLogsService, I
 
             await _executorEvents.PublishAsync(new OnEndpointsAllocatedContext(ct)).ConfigureAwait(false);
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            // This is here so hosting does not throw an exception when CTRL+C during startup.
-            _logger.LogDebug("Cancellation received during application startup.");
-        }
         catch
         {
             _shutdownCancellation.Cancel();
