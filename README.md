@@ -92,7 +92,7 @@ curl -sSL https://aspire.dev/install.sh | bash
 
 ## What is in this repo?
 
-This repo contains the Aspire CLI, AppHost SDK, dashboard, service discovery infrastructure, project templates, and integrations.
+This repo contains the Aspire CLI, AppHost SDK, dashboard, service discovery infrastructure, project templates, integrations, and VS Code Extension.
 
 ## Contributing
 
