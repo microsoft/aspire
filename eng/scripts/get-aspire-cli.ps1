@@ -635,7 +635,12 @@ function Backup-ExistingCliExecutable {
             Remove-OldCliBackupFiles -TargetExePath $TargetExePath
 
             # Rename existing executable to .old.[timestamp]
-            Move-Item -Path $TargetExePath -Destination $backupPath -Force
+            try {
+                Move-Item -Path $TargetExePath -Destination $backupPath -Force -ErrorAction Stop
+            }
+            catch {
+                throw "Failed to back up existing CLI at '$TargetExePath'. The file may be in use by another process. Please close any running Aspire CLI instances and try again. Error: $($_.Exception.Message)"
+            }
             return $backupPath
         }
     }
@@ -661,7 +666,7 @@ function Restore-CliExecutableFromBackup {
             Remove-Item -Path $TargetExePath -Force -ErrorAction SilentlyContinue
         }
         
-        Move-Item -Path $BackupPath -Destination $TargetExePath -Force
+        Move-Item -Path $BackupPath -Destination $TargetExePath -Force -ErrorAction Stop
     }
 }
 
@@ -685,7 +690,7 @@ function Remove-OldCliBackupFiles {
     foreach ($backupFile in $oldBackupFiles) {
         if ($PSCmdlet.ShouldProcess($backupFile.FullName, "Delete old backup")) {
             try {
-                Remove-Item -Path $backupFile.FullName -Force
+                Remove-Item -Path $backupFile.FullName -Force -ErrorAction Stop
                 Write-Message "Deleted old backup file: $($backupFile.FullName)" -Level Verbose
             }
             catch {
@@ -713,7 +718,7 @@ function Expand-AspireCliArchive {
         # Create destination directory if it doesn't exist
         if (-not (Test-Path $DestinationPath)) {
             Write-Message "Creating destination directory: $DestinationPath" -Level Verbose
-            New-Item -ItemType Directory -Path $DestinationPath -Force | Out-Null
+            New-Item -ItemType Directory -Path $DestinationPath -Force -ErrorAction Stop | Out-Null
         }
         else {
             # Back up the existing executable before extraction.
@@ -727,7 +732,7 @@ function Expand-AspireCliArchive {
                 throw "Expand-Archive cmdlet not found. Please use PowerShell 5.0 or later to extract ZIP files."
             }
 
-            Expand-Archive -Path $ArchiveFile -DestinationPath $DestinationPath -Force
+            Expand-Archive -Path $ArchiveFile -DestinationPath $DestinationPath -Force -ErrorAction Stop
         }
         else {
             # Use tar for tar.gz files on Unix systems
@@ -739,6 +744,9 @@ function Expand-AspireCliArchive {
             try {
                 Set-Location $DestinationPath
                 & tar -xzf $ArchiveFile
+                if ($LASTEXITCODE -ne 0) {
+                    throw "tar command failed with exit code $LASTEXITCODE"
+                }
             }
             finally {
                 Set-Location $currentLocation
@@ -1005,7 +1013,7 @@ function Install-AspireExtension {
         if ($PSCmdlet.ShouldProcess($extractDir, "Extract extension archive")) {
             # Expand the zip archive
             if ($Script:IsModernPowerShell) {
-                Expand-Archive -Path $ExtensionArchive -DestinationPath $extractDir -Force
+                Expand-Archive -Path $ExtensionArchive -DestinationPath $extractDir -Force -ErrorAction Stop
             } else {
                 Add-Type -AssemblyName System.IO.Compression.FileSystem
                 [System.IO.Compression.ZipFile]::ExtractToDirectory($ExtensionArchive, $extractDir)
@@ -1168,7 +1176,7 @@ function Install-AspireCli {
     if ($PSCmdlet.ShouldProcess($InstallPath, "Create temporary directory")) {
         Write-Message "Creating temporary directory: $tempDir" -Level Verbose
         try {
-            New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+            New-Item -ItemType Directory -Path $tempDir -Force -ErrorAction Stop | Out-Null
         }
         catch {
             throw "Failed to create temporary directory: $tempDir - $($_.Exception.Message)"
@@ -1316,7 +1324,7 @@ function Start-AspireCliInstallation {
             Write-Message "Creating installation directory: $resolvedInstallPath" -Level Info
             if ($PSCmdlet.ShouldProcess($resolvedInstallPath, "Create installation directory")) {
                 try {
-                    New-Item -ItemType Directory -Path $resolvedInstallPath -Force | Out-Null
+                    New-Item -ItemType Directory -Path $resolvedInstallPath -Force -ErrorAction Stop | Out-Null
                 }
                 catch {
                     throw "Failed to create installation directory: $resolvedInstallPath - $($_.Exception.Message)"
