@@ -613,6 +613,14 @@ public static class ResourceExtensions
             {
                 logger.LogInformation("Waiting for value for connection string from resource '{ResourceName}'", cs.Name);
             }
+            else if (TryGetEndpointReference(valueProvider, out var endpointReference))
+            {
+                logger.LogInformation(
+                    "Waiting for endpoint '{EndpointName}' on resource '{ResourceName}' for the '{NetworkName}' network",
+                    endpointReference.EndpointName,
+                    endpointReference.Resource.Name,
+                    endpointReference.ContextNetworkID?.Value);
+            }
             else
             {
                 if (key is null)
@@ -627,6 +635,18 @@ public static class ResourceExtensions
         }
 
         return await task.ConfigureAwait(false);
+    }
+
+    private static bool TryGetEndpointReference(IValueProvider valueProvider, [NotNullWhen(true)] out EndpointReference? endpointReference)
+    {
+        endpointReference = valueProvider switch
+        {
+            EndpointReference endpoint => endpoint,
+            EndpointReferenceExpression { Endpoint: var endpoint } => endpoint,
+            _ => null
+        };
+
+        return endpointReference is not null;
     }
 
     /// <summary>
