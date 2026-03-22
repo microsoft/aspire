@@ -346,7 +346,7 @@ public class SigstoreNpmProvenanceCheckerTests
 
     [Theory]
     [InlineData("https://github.com/microsoft/playwright-cli", "microsoft", "playwright-cli")]
-    [InlineData("https://github.com/dotnet/aspire", "dotnet", "aspire")]
+    [InlineData("https://github.com/microsoft/aspire", "microsoft", "aspire")]
     [InlineData("https://github.com/owner/repo", "owner", "repo")]
     public void TryParseGitHubOwnerRepo_WithValidUrl_ReturnsTrueAndParsesComponents(string url, string expectedOwner, string expectedRepo)
     {

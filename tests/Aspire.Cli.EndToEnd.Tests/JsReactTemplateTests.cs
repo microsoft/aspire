@@ -38,7 +38,7 @@ public sealed class JsReactTemplateTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire run");
         await auto.EnterAsync();
 
-        // Regression test for https://github.com/dotnet/aspire/issues/13971
+        // Regression test for https://github.com/microsoft/aspire/issues/13971
         await auto.WaitUntilAsync(s =>
         {
             if (s.ContainsText("Select an apphost to use:"))

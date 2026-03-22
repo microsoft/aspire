@@ -35,7 +35,7 @@ internal sealed class LanguageService : ILanguageService
     {
         // Try new nested key first, then fall back to legacy flat key.
         // TODO: Remove "language" fallback once legacy .aspire/settings.json is no longer supported.
-        // Tracked by https://github.com/dotnet/aspire/issues/15239
+        // Tracked by https://github.com/microsoft/aspire/issues/15239
         var languageId = await _configurationService.GetConfigurationAsync(LanguageConfigKey, cancellationToken)
             ?? await _configurationService.GetConfigurationAsync("language", cancellationToken);
 

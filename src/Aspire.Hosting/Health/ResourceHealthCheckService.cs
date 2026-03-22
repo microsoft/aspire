@@ -379,7 +379,7 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
             }
 
             // Don't throw to avoid writing the thrown exception to the debug console.
-            // See https://github.com/dotnet/aspire/issues/7486
+            // See https://github.com/microsoft/aspire/issues/7486
             await delayInterruptedTask.WaitAsync(delay, cancellationToken).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
             var delayInterrupted = delayInterruptedTask.IsCompletedSuccessfully == true;
 

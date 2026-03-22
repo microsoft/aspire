@@ -341,7 +341,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IConsoleLogsService, I
             // This is just a perf optimization, so we do not care that much if this call fails.
             // There is not much difference for single app run, but for tests that tend to launch multiple instances
             // of app host from the same process, the gain from programmatic orchestrator shutdown is significant
-            // See https://github.com/dotnet/aspire/issues/6561 for more info.
+            // See https://github.com/microsoft/aspire/issues/6561 for more info.
             await _kubernetesService.StopServerAsync(Model.ResourceCleanup.Full, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -1735,7 +1735,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IConsoleLogsService, I
             var spec = exe.Spec;
 
             // Don't create an args collection unless needed. A null args collection means a project run by the will use args provided by the launch profile.
-            // https://github.com/dotnet/aspire/blob/main/docs/specs/IDE-execution.md#launch-profile-processing-project-launch-configuration
+            // https://github.com/microsoft/aspire/blob/main/docs/specs/IDE-execution.md#launch-profile-processing-project-launch-configuration
             spec.Args = null;
 
             // An executable can be restarted so args must be reset to an empty state.
@@ -1908,7 +1908,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IConsoleLogsService, I
         // Launch args is the final list of args that are displayed in the UI and possibly added to the executable spec.
         // They're built from app host resource model args and any args in the effective launch profile.
         // Follows behavior in the IDE execution spec when in IDE execution mode:
-        // https://github.com/dotnet/aspire/blob/main/docs/specs/IDE-execution.md#project-launch-configuration-type-project
+        // https://github.com/microsoft/aspire/blob/main/docs/specs/IDE-execution.md#project-launch-configuration-type-project
         var launchArgs = new List<(string Value, bool IsSensitive, bool Executable, bool Display)>();
 
         // If the executable is a project then include any command line args from the launch profile.

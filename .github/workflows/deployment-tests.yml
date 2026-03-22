@@ -35,7 +35,7 @@ jobs:
   notify-start:
     name: Notify PR
     runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'dotnet' && inputs.pr_number != '' }}
+    if: ${{ github.repository_owner == 'microsoft' && inputs.pr_number != '' }}
     permissions:
       pull-requests: write
     steps:
@@ -57,7 +57,7 @@ jobs:
   enumerate:
     name: Enumerate Tests
     runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'dotnet' }}
+    if: ${{ github.repository_owner == 'microsoft' }}
     permissions:
       contents: read
     outputs:
@@ -79,7 +79,7 @@ jobs:
   build:
     name: Build
     runs-on: 8-core-ubuntu-latest
-    if: ${{ github.repository_owner == 'dotnet' }}
+    if: ${{ github.repository_owner == 'microsoft' }}
     permissions:
       contents: read
     steps:
@@ -307,7 +307,7 @@ jobs:
             ### Labels
             This issue was automatically created by the deployment E2E test workflow.
 
-            /cc @dotnet/aspire-team
+            /cc @microsoft/aspire-team
             `;
 
             // Check if a similar issue already exists (created today)

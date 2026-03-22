@@ -20,7 +20,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- see https://github.com/dotnet/aspire/pull/1225 -->
+    <!-- see https://github.com/microsoft/aspire/pull/1225 -->
     <None Include="templates\**\*" />
   </ItemGroup>
 

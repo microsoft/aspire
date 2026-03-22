@@ -171,19 +171,19 @@ Additional scripts exist to fetch CLI and NuGet artifacts from a pull request bu
 
 Quick fetch (Bash):
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dotnet/aspire/main/eng/scripts/get-aspire-cli-pr.sh | bash -s -- <PR_NUMBER>
+curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.sh | bash -s -- <PR_NUMBER>
 ```
 
 Quick fetch (PowerShell):
 ```powershell
-iex "& { $(irm https://raw.githubusercontent.com/dotnet/aspire/main/eng/scripts/get-aspire-cli-pr.ps1) } <PR_NUMBER>"
+iex "& { $(irm https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.ps1) } <PR_NUMBER>"
 ```
 
 NuGet hive path pattern: `~/.aspire/hives/pr-<PR_NUMBER>/packages`
 
 ### Repository Override
 
-You can point the PR artifact retrieval scripts at a fork by setting the `ASPIRE_REPO` environment variable to `owner/name` before invoking the script (defaults to `dotnet/aspire`).
+You can point the PR artifact retrieval scripts at a fork by setting the `ASPIRE_REPO` environment variable to `owner/name` before invoking the script (defaults to `microsoft/aspire`).
 
 Examples:
 

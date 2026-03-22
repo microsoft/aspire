@@ -88,7 +88,7 @@ public sealed class BannerTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/14307")]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/14307")]
     public async Task Banner_NotDisplayedWithNoLogoFlag()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

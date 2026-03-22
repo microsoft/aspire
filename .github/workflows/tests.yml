@@ -219,7 +219,7 @@ jobs:
     uses: ./.github/workflows/typescript-sdk-tests.yml
 
   results:
-    if: ${{ always() && github.repository_owner == 'dotnet' }}
+    if: ${{ always() && github.repository_owner == 'microsoft' }}
     runs-on: ubuntu-latest
     name: Final Test Results
     needs: [

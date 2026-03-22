@@ -8,7 +8,7 @@
   "icon": "dotnet-aspire-logo-128.png",
   "license": "SEE LICENSE IN LICENSE.TXT",
   "bugs": {
-    "url": "https://github.com/dotnet/aspire/issues"
+    "url": "https://github.com/microsoft/aspire/issues"
   },
   "engines": {
     "vscode": "^1.98.0"
@@ -598,7 +598,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/dotnet/aspire",
+    "url": "https://github.com/microsoft/aspire",
     "branch": "main"
   },
   "scripts": {

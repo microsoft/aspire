@@ -3,7 +3,7 @@
 # HOW TO USE:
 # 1. Edit the CONFIGURATION section below with the test you want to reproduce
 # 2. Push to your branch
-# 3. Trigger: gh workflow run reproduce-flaky-tests.yml --repo dotnet/aspire --ref <your-branch>
+# 3. Trigger: gh workflow run reproduce-flaky-tests.yml --repo microsoft/aspire --ref <your-branch>
 # 4. Check the results across OSes and runners
 #
 # The configuration is designed to be edited by agents (Copilot, etc.)

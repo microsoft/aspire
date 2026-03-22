@@ -341,7 +341,7 @@ function Get-CLIArchitectureFromArchitecture {
             return "arm64"
         }
         default {
-            throw "Architecture '$Architecture' not supported. If you think this is a bug, report it at https://github.com/dotnet/aspire/issues"
+            throw "Architecture '$Architecture' not supported. If you think this is a bug, report it at https://github.com/microsoft/aspire/issues"
         }
     }
 }

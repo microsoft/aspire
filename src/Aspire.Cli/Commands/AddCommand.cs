@@ -104,7 +104,7 @@ internal sealed class AddCommand : BaseCommand
                 if (!isProjectReferenceMode)
                 {
                     // TODO: Remove legacy AspireJsonConfiguration fallback once confident most users
-                    // have migrated. Tracked by https://github.com/dotnet/aspire/issues/15239
+                    // have migrated. Tracked by https://github.com/microsoft/aspire/issues/15239
                     try
                     {
                         configuredChannel = AspireConfigFile.Load(appHostDirectory)?.Channel

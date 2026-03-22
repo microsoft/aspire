@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net;
@@ -205,7 +205,7 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
     [InlineData("get", true)]
     [InlineData("post", false)]
     [Theory]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/9725")]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/9725")]
     public async Task WithHttpCommand_ResultsInExpectedResultForHttpMethod(string? httpMethod, bool expectSuccess)
     {
         // Arrange

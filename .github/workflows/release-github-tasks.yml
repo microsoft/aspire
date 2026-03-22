@@ -238,8 +238,8 @@ jobs:
           ## What's New in Aspire $VERSION
 
           See the full changelog and documentation at:
-          - 📖 [Documentation](https://learn.microsoft.com/dotnet/aspire/)
-          - 🐛 [Known Issues](https://github.com/dotnet/aspire/issues?q=is%3Aissue+is%3Aopen+label%3A%22known-issue%22)
+          - 📖 [Documentation](https://learn.microsoft.com/microsoft/aspire/)
+          - 🐛 [Known Issues](https://github.com/microsoft/aspire/issues?q=is%3Aissue+is%3Aopen+label%3A%22known-issue%22)
 
           ### Installation
 
@@ -306,6 +306,13 @@ jobs:
       inputs.skip_merge_pr != true
     runs-on: ubuntu-latest
     steps:
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
+        with:
+          app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+
       - name: Checkout Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
@@ -314,7 +321,7 @@ jobs:
       - name: Check for Existing PR
         id: check-pr
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           RELEASE_BRANCH="${{ inputs.release_branch }}"
           EXISTING_PR=$(gh pr list --head "$RELEASE_BRANCH" --base main --json number --jq '.[0].number // empty')
@@ -351,7 +358,7 @@ jobs:
         if: steps.check-pr.outputs.pr_exists != 'true' && inputs.dry_run != true
         uses: dotnet/actions-create-pull-request@e8d799aa1f8b17f324f9513832811b0a62f1e0b1 # v1
         with:
-          token: ${{ github.token }}
+          token: ${{ steps.app-token.outputs.token }}
           title: "Merge ${{ inputs.release_branch }} to main after v${{ inputs.release_version }} release"
           body: |
             This PR merges the `${{ inputs.release_branch }}` branch back to `main` after the v${{ inputs.release_version }} release.
@@ -363,7 +370,7 @@ jobs:
 
             ---
             *Created automatically by the release workflow.*
-          head: ${{ inputs.release_branch }}
+          branch: ${{ inputs.release_branch }}
           base: main
           labels: |
             area-infrastructure
@@ -380,16 +387,24 @@ jobs:
       inputs.is_prerelease != true
     runs-on: ubuntu-latest
     steps:
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
+        with:
+          app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+
       - name: Checkout Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
           ref: main
           fetch-depth: 1
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Check for Existing PR
         id: check-pr
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           BRANCH_NAME="update-baseline-${{ inputs.release_version }}"
           EXISTING_PR=$(gh pr list --head "$BRANCH_NAME" --json number --jq '.[0].number // empty')
@@ -463,7 +478,7 @@ jobs:
         if: steps.check-pr.outputs.pr_exists != 'true' && inputs.dry_run != true
         uses: dotnet/actions-create-pull-request@e8d799aa1f8b17f324f9513832811b0a62f1e0b1 # v1
         with:
-          token: ${{ github.token }}
+          token: ${{ steps.app-token.outputs.token }}
           title: "Update PackageValidationBaselineVersion to ${{ inputs.release_version }}"
           body: |
             This PR updates the `PackageValidationBaselineVersion` to `${{ inputs.release_version }}` after the release.
@@ -475,7 +490,7 @@ jobs:
 
             ---
             *Created automatically by the release workflow.*
-          head: update-baseline-${{ inputs.release_version }}
+          branch: update-baseline-${{ inputs.release_version }}
           base: main
           labels: |
             area-infrastructure

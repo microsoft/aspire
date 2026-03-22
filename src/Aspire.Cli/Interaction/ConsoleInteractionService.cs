@@ -250,7 +250,7 @@ internal class ConsoleInteractionService : IInteractionService
     /// <remarks>
     /// This is a workaround for https://github.com/spectreconsole/spectre.console/issues/2054.
     /// Once the upstream fix is available, this method should be removed and callers should
-    /// use EscapeMarkup() directly. See https://github.com/dotnet/aspire/issues/15309.
+    /// use EscapeMarkup() directly. See https://github.com/microsoft/aspire/issues/15309.
     /// </remarks>
     internal static Func<T, string> MakeSafeFormatter<T>(Func<T, string> choiceFormatter)
     {

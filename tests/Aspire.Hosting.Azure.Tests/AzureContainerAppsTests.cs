@@ -1399,7 +1399,7 @@ public class AzureContainerAppsTests
         await Verify(manifest.BicepText, "bicep");
     }
 
-    // see https://github.com/dotnet/aspire/issues/8381 for more information on this scenario
+    // see https://github.com/microsoft/aspire/issues/8381 for more information on this scenario
     // Azure SqlServer needs an admin when it is first provisioned. To supply this, we use the
     // principalId from the Azure Container App Environment.
     [Fact]

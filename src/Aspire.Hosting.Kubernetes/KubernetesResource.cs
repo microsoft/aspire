@@ -180,7 +180,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
                 // but reuse the http endpoint's HelmValue so no duplicate K8s port is generated.
                 // This matches the core framework's SetBothPortsEnvVariables() behavior,
                 // which skips DefaultHttpsEndpoint when setting HTTPS_PORTS.
-                // See: https://github.com/dotnet/aspire/issues/14029
+                // See: https://github.com/microsoft/aspire/issues/14029
                 if (resource is ProjectResource projectResource &&
                     endpoint == projectResource.DefaultHttpsEndpoint)
                 {

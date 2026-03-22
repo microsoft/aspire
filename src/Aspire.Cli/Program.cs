@@ -160,7 +160,7 @@ public class Program
 
         // TODO: Remove globalsettings.json migration once confident most users have migrated.
         // The old file is intentionally kept so older CLI versions continue to work during
-        // the transition period. Tracked by https://github.com/dotnet/aspire/issues/15239
+        // the transition period. Tracked by https://github.com/microsoft/aspire/issues/15239
         var legacyPath = Path.Combine(usersAspirePath, "globalsettings.json");
         if (!File.Exists(newPath) && File.Exists(legacyPath))
         {

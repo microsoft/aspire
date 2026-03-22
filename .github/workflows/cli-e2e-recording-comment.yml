@@ -20,7 +20,7 @@ jobs:
     # Only run on the dotnet org and for pull requests
     # Note: This runs for all conclusions (success, failure, cancelled) since recordings may exist
     if: >-
-      ${{ github.repository_owner == 'dotnet' &&
+      ${{ github.repository_owner == 'microsoft' &&
           (github.event.workflow_run.event == 'pull_request' || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
     permissions:

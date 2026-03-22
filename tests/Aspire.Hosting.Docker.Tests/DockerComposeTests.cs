@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECOMPUTE002
@@ -349,7 +349,7 @@ public class DockerComposeTests(ITestOutputHelper output)
 
     [Fact]
     [RequiresFeature(TestFeature.Docker)]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/15078", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/15078", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public async Task DeployWithDashboard_PrintsDashboardAndServiceEndpoints()
     {
         using var tempDir = new TestTempDirectory();

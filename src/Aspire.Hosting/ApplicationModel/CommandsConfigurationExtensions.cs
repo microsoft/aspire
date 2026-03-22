@@ -131,7 +131,7 @@ internal static class CommandsConfigurationExtensions
         }
 
         // Treat "Unknown" as stopped so the command to start the resource is available when "Unknown".
-        // There is a situation where a container can be stopped with this state: https://github.com/dotnet/aspire/issues/5977
+        // There is a situation where a container can be stopped with this state: https://github.com/microsoft/aspire/issues/5977
         static bool IsStopped(string? state) => KnownResourceStates.TerminalStates.Contains(state) || state == KnownResourceStates.NotStarted || state == "Unknown";
         static bool IsStopping(string? state) => state == KnownResourceStates.Stopping;
         static bool IsStarting(string? state) => state == KnownResourceStates.Starting;

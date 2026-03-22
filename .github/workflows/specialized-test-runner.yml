@@ -34,7 +34,7 @@ jobs:
   generate_tests_matrix:
     name: Generate test runsheet
     runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'dotnet' }}
+    if: ${{ github.repository_owner == 'microsoft' }}
     outputs:
       runsheet: ${{ steps.generate_tests_matrix.outputs.runsheet }}
       requiresNugets: ${{ steps.check_nugets.outputs.requiresNugets }}
@@ -109,13 +109,13 @@ jobs:
   build_packages:
     name: Build packages
     needs: [generate_tests_matrix]
-    if: ${{ github.repository_owner == 'dotnet' && needs.generate_tests_matrix.outputs.requiresNugets == 'true' }}
+    if: ${{ github.repository_owner == 'microsoft' && needs.generate_tests_matrix.outputs.requiresNugets == 'true' }}
     uses: ./.github/workflows/build-packages.yml
 
   build_cli_archives:
     name: Build native CLI archives
     needs: [generate_tests_matrix]
-    if: ${{ github.repository_owner == 'dotnet' && (needs.generate_tests_matrix.outputs.requiresNugets == 'true' || needs.generate_tests_matrix.outputs.requiresCliArchive == 'true') }}
+    if: ${{ github.repository_owner == 'microsoft' && (needs.generate_tests_matrix.outputs.requiresNugets == 'true' || needs.generate_tests_matrix.outputs.requiresCliArchive == 'true') }}
     uses: ./.github/workflows/build-cli-native-archives.yml
 
   run_tests:
@@ -125,7 +125,7 @@ jobs:
       fail-fast: false
       matrix:
         tests: ${{ fromJson(needs.generate_tests_matrix.outputs.runsheet) }}
-    if: ${{ github.repository_owner == 'dotnet' && !cancelled() && !failure() }}
+    if: ${{ github.repository_owner == 'microsoft' && !cancelled() && !failure() }}
     uses: ./.github/workflows/run-tests.yml
     with:
       testShortName: ${{ matrix.tests.project }}
@@ -138,7 +138,7 @@ jobs:
       requiresCliArchive: ${{ matrix.tests.requiresCliArchive == true }}
 
   results:
-    if: ${{ always() && github.repository_owner == 'dotnet' }}
+    if: ${{ always() && github.repository_owner == 'microsoft' }}
     runs-on: ubuntu-latest
     name: Final Results
     needs: [generate_tests_matrix, build_packages, build_cli_archives, run_tests]

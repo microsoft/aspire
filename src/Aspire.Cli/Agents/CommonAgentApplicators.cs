@@ -232,7 +232,7 @@ internal static class CommonAgentApplicators
         - Use `--isolated` when working in a worktree.
         - **Avoid persistent containers** early in development to prevent state management issues.
         - **Never install the Aspire workload** — it is obsolete.
-        - Prefer `aspire.dev` and `learn.microsoft.com/dotnet/aspire` for official documentation.
+        - Prefer `aspire.dev` and `learn.microsoft.com/microsoft/aspire` for official documentation.
 
         ## Playwright CLI
 

@@ -17,7 +17,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 public sealed class WaitCommandTests(ITestOutputHelper output)
 {
     [Fact]
-    [QuarantinedTest("https://github.com/dotnet/aspire/issues/14993")]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/14993")]
     public async Task CreateStartWaitAndStopAspireProject()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

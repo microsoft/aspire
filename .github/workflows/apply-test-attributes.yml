@@ -13,7 +13,7 @@ concurrency:
 jobs:
   quarantine_test:
     if: >-
-      github.repository == 'dotnet/aspire' &&
+      github.repository == 'microsoft/aspire' &&
       (
         startsWith(github.event.comment.body, '/quarantine-test ') ||
         startsWith(github.event.comment.body, '/unquarantine-test ') ||
@@ -353,6 +353,16 @@ jobs:
             body: body
           });
 
+    # Generate the App token only after verifying the commenter has write access,
+    # to avoid minting a privileged token for unauthorized users.
+    - name: Generate GitHub App Token
+      if: success()
+      id: app-token
+      uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
+      with:
+        app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+        private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+
     # Credentials must persist for git push operations later in workflow
     - name: Checkout repo
       if: success()
@@ -360,6 +370,7 @@ jobs:
       with:
         ref: ${{ steps.determine-target.outputs.checkout_ref }}
         fetch-depth: 0
+        token: ${{ steps.app-token.outputs.token }}
 
     - name: Setup .NET
       if: success()
@@ -431,6 +442,7 @@ jobs:
         CHECKOUT_REF: ${{ steps.determine-target.outputs.checkout_ref }}
         IS_NEW_PR: ${{ steps.determine-target.outputs.is_new_pr }}
       with:
+        github-token: ${{ steps.app-token.outputs.token }}
         script: |
           const { spawnSync } = require('child_process');
           const fs = require('fs');

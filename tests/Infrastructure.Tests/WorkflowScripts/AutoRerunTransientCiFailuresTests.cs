@@ -340,7 +340,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                 job = new WorkflowJob
                 {
                     Id = 10,
-                    CheckRunUrl = "https://api.github.com/repos/dotnet/aspire/check-runs/123456789"
+                    CheckRunUrl = "https://api.github.com/repos/microsoft/aspire/check-runs/123456789"
                 }
             });
 
@@ -358,7 +358,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                 job = new WorkflowJob { Id = 42 },
                 workflowJob = new WorkflowJob
                 {
-                    CheckRunUrl = "https://api.github.com/repos/dotnet/aspire/check-runs/987654321"
+                    CheckRunUrl = "https://api.github.com/repos/microsoft/aspire/check-runs/987654321"
                 }
             });
 
@@ -376,7 +376,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                 job = new WorkflowJob
                 {
                     Id = 42,
-                    CheckRunUrl = "https://api.github.com/repos/dotnet/aspire/actions/jobs/42"
+                    CheckRunUrl = "https://api.github.com/repos/microsoft/aspire/actions/jobs/42"
                 },
                 workflowJob = new WorkflowJob()
             });
@@ -812,14 +812,14 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                 dryRun = false,
                 rerunEligible = true,
                 sourceRunAttempt = 1,
-                sourceRunUrl = "https://github.com/dotnet/aspire/actions/runs/123"
+                sourceRunUrl = "https://github.com/microsoft/aspire/actions/runs/123"
             });
 
         SummaryEvent headingEvent = Assert.Single(result.Events, e => e.Type == "heading" && e.Level == 1);
         Assert.Equal("Rerun eligible", headingEvent.Text);
 
         SummaryEvent linkEvent = Assert.Single(result.Events, e => e.Type == "link" && e.Text == "workflow run attempt 1");
-        Assert.Equal("https://github.com/dotnet/aspire/actions/runs/123/attempts/1", linkEvent.Href);
+        Assert.Equal("https://github.com/microsoft/aspire/actions/runs/123/attempts/1", linkEvent.Href);
 
         SummaryEvent rawEvent = Assert.Single(result.Events, e => e.Type == "raw" && e.Text == "Matched 1 retry-safe job for rerun.");
         Assert.Equal("Matched 1 retry-safe job for rerun.", rawEvent.Text);
@@ -845,7 +845,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                 dryRun = true,
                 rerunEligible = true,
                 sourceRunAttempt = 1,
-                sourceRunUrl = "https://github.com/dotnet/aspire/actions/runs/123"
+                sourceRunUrl = "https://github.com/microsoft/aspire/actions/runs/123"
             });
 
         SummaryEvent headingEvent = Assert.Single(result.Events, e => e.Type == "heading" && e.Level == 1);
@@ -868,7 +868,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                 owner = "dotnet",
                 repo = "aspire",
                 retryableJobs = Array.Empty<RetryableJobInput>(),
-                sourceRunUrl = "https://github.com/dotnet/aspire/actions/runs/123"
+                sourceRunUrl = "https://github.com/microsoft/aspire/actions/runs/123"
             });
 
         Assert.Empty(result.Requests);
@@ -891,14 +891,14 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                     {
                         Id = 11,
                         Name = "Tests / One",
-                        HtmlUrl = "https://github.com/dotnet/aspire/actions/runs/123/job/11",
+                        HtmlUrl = "https://github.com/microsoft/aspire/actions/runs/123/job/11",
                         Reason = "Reason one"
                     },
                     new RetryableJobInput
                     {
                         Id = 22,
                         Name = "Tests / Two",
-                        HtmlUrl = "https://github.com/dotnet/aspire/actions/runs/123/job/22",
+                        HtmlUrl = "https://github.com/microsoft/aspire/actions/runs/123/job/22",
                         Reason = "Reason two"
                     }
                 },
@@ -909,12 +909,12 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                 },
                 commentHtmlUrlByNumber = new Dictionary<string, string>
                 {
-                    ["15110"] = "https://github.com/dotnet/aspire/pull/15110#issuecomment-123"
+                    ["15110"] = "https://github.com/microsoft/aspire/pull/15110#issuecomment-123"
                 },
                 latestRunAttempt = 2,
                 sourceRunId = 123,
                 sourceRunAttempt = 1,
-                sourceRunUrl = "https://github.com/dotnet/aspire/actions/runs/123"
+                sourceRunUrl = "https://github.com/microsoft/aspire/actions/runs/123"
             });
 
         Assert.Collection(
@@ -941,7 +941,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                 Assert.Equal("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", request.Route);
                 Assert.Equal(15110, request.Payload.GetProperty("issue_number").GetInt32());
                 Assert.Equal(
-                    "Re-running the failed jobs in the CI workflow for this pull request because 2 jobs were identified as retry-safe transient failures in [the CI run attempt](https://github.com/dotnet/aspire/actions/runs/123/attempts/1).\nGitHub was asked to rerun all failed jobs for that attempt, and the rerun is being tracked in [the rerun attempt](https://github.com/dotnet/aspire/actions/runs/123/attempts/2).\nThe job links below point to the failed attempt jobs that matched the retry-safe transient failure rules.\n\n- [Tests / One](https://github.com/dotnet/aspire/actions/runs/123/job/11) - Reason one\n- [Tests / Two](https://github.com/dotnet/aspire/actions/runs/123/job/22) - Reason two",
+                    "Re-running the failed jobs in the CI workflow for this pull request because 2 jobs were identified as retry-safe transient failures in [the CI run attempt](https://github.com/microsoft/aspire/actions/runs/123/attempts/1).\nGitHub was asked to rerun all failed jobs for that attempt, and the rerun is being tracked in [the rerun attempt](https://github.com/microsoft/aspire/actions/runs/123/attempts/2).\nThe job links below point to the failed attempt jobs that matched the retry-safe transient failure rules.\n\n- [Tests / One](https://github.com/microsoft/aspire/actions/runs/123/job/11) - Reason one\n- [Tests / Two](https://github.com/microsoft/aspire/actions/runs/123/job/22) - Reason two",
                     request.Payload.GetProperty("body").GetString());
             });
 
@@ -949,13 +949,13 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         Assert.Equal("Rerun requested", headingEvent.Text);
 
         SummaryEvent failedAttemptLink = Assert.Single(result.Events, e => e.Type == "link" && e.Text == "workflow run attempt 1");
-        Assert.Equal("https://github.com/dotnet/aspire/actions/runs/123/attempts/1", failedAttemptLink.Href);
+        Assert.Equal("https://github.com/microsoft/aspire/actions/runs/123/attempts/1", failedAttemptLink.Href);
 
         SummaryEvent rerunAttemptLink = Assert.Single(result.Events, e => e.Type == "link" && e.Text == "workflow run attempt 2");
-        Assert.Equal("https://github.com/dotnet/aspire/actions/runs/123/attempts/2", rerunAttemptLink.Href);
+        Assert.Equal("https://github.com/microsoft/aspire/actions/runs/123/attempts/2", rerunAttemptLink.Href);
 
         SummaryEvent commentLink = Assert.Single(result.Events, e => e.Type == "link" && e.Text == "PR #15110 comment");
-        Assert.Equal("https://github.com/dotnet/aspire/pull/15110#issuecomment-123", commentLink.Href);
+        Assert.Equal("https://github.com/microsoft/aspire/pull/15110#issuecomment-123", commentLink.Href);
 
         SummaryEvent rerunExplanation = Assert.Single(result.Events, e => e.Type == "raw" && e.Text == "The matched jobs below made the run eligible for rerun. GitHub was asked to rerun all failed jobs for the failed attempt.");
         Assert.Equal("The matched jobs below made the run eligible for rerun. GitHub was asked to rerun all failed jobs for the failed attempt.", rerunExplanation.Text);
@@ -990,7 +990,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                     {
                         Id = 11,
                         Name = "Tests / One",
-                        HtmlUrl = "https://github.com/dotnet/aspire/actions/runs/123/job/11",
+                        HtmlUrl = "https://github.com/microsoft/aspire/actions/runs/123/job/11",
                         Reason = "Reason one"
                     }
                 },
@@ -999,7 +999,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                 {
                     ["15110"] = "closed"
                 },
-                sourceRunUrl = "https://github.com/dotnet/aspire/actions/runs/123"
+                sourceRunUrl = "https://github.com/microsoft/aspire/actions/runs/123"
             });
 
         RequestRecord request = Assert.Single(result.Requests);
@@ -1010,7 +1010,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         Assert.Equal(1, skippedHeading.Level);
 
         SummaryEvent analyzedRunLink = Assert.Single(result.Events, e => e.Type == "link" && e.Text == "workflow run");
-        Assert.Equal("https://github.com/dotnet/aspire/actions/runs/123", analyzedRunLink.Href);
+        Assert.Equal("https://github.com/microsoft/aspire/actions/runs/123", analyzedRunLink.Href);
 
         SummaryEvent skippedRaw = Assert.Single(result.Events, e => e.Type == "raw" && e.Text is not null && e.Text.Contains("All associated pull requests are closed."));
         Assert.Contains("All associated pull requests are closed. No jobs were rerun.", skippedRaw.Text);
@@ -1032,7 +1032,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                     {
                         Id = 11,
                         Name = "Tests / One",
-                        HtmlUrl = "https://github.com/dotnet/aspire/actions/runs/123/job/11",
+                        HtmlUrl = "https://github.com/microsoft/aspire/actions/runs/123/job/11",
                         Reason = "Reason one"
                     }
                 },
@@ -1044,7 +1044,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                 latestRunAttempt = 2,
                 sourceRunId = 123,
                 sourceRunAttempt = 1,
-                sourceRunUrl = "https://github.com/dotnet/aspire/actions/runs/123"
+                sourceRunUrl = "https://github.com/microsoft/aspire/actions/runs/123"
             });
 
         Assert.Contains(result.Events, e => e.Type == "raw" && e.Text == "Pull request comments:");

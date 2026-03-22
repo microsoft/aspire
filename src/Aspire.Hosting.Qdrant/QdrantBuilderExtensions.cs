@@ -91,7 +91,7 @@ public static class QdrantBuilderExtensions
             .WithUrlForEndpoint(QdrantServerResource.PrimaryEndpointName, c =>
             {
                 c.DisplayText = "Qdrant (GRPC)";
-                // https://github.com/dotnet/aspire/issues/8809
+                // https://github.com/microsoft/aspire/issues/8809
                 c.DisplayLocation = UrlDisplayLocation.DetailsOnly;
             })
             .WithUrlForEndpoint(QdrantServerResource.HttpEndpointName, c => c.DisplayText = "Qdrant (HTTP)")

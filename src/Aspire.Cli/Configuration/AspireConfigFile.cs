@@ -166,7 +166,7 @@ internal sealed class AspireConfigFile
         }
 
         // TODO: Remove legacy .aspire/settings.json + apphost.run.json fallback once confident
-        // most users have migrated. Tracked by https://github.com/dotnet/aspire/issues/15239
+        // most users have migrated. Tracked by https://github.com/microsoft/aspire/issues/15239
         // Fall back to .aspire/settings.json + apphost.run.json → migrate
         var legacyConfig = AspireJsonConfiguration.Load(directory);
         if (legacyConfig is not null)
@@ -196,7 +196,7 @@ internal sealed class AspireConfigFile
     /// <remarks>
     /// This is legacy migration code that reads the old apphost.run.json format and converts
     /// it to <see cref="AspireConfigProfile"/> entries. Will be removed once legacy files are
-    /// no longer supported. Tracked by https://github.com/dotnet/aspire/issues/15239
+    /// no longer supported. Tracked by https://github.com/microsoft/aspire/issues/15239
     /// </remarks>
     internal static Dictionary<string, AspireConfigProfile>? ReadApphostRunProfiles(string apphostRunPath, ILogger? logger = null)
     {

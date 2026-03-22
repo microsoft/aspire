@@ -209,7 +209,7 @@ internal sealed class ProjectLocator(
             }
 
             // TODO: Remove legacy .aspire/settings.json fallback once confident most users have migrated.
-            // Tracked by https://github.com/dotnet/aspire/issues/15239
+            // Tracked by https://github.com/microsoft/aspire/issues/15239
             // Fall back to .aspire/settings.json
             var settingsFile = new FileInfo(ConfigurationHelper.BuildPathToSettingsJsonFile(searchDirectory.FullName));
 

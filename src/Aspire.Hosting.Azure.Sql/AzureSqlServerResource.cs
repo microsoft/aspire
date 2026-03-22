@@ -335,7 +335,7 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
                 $principalName = "$env:PRINCIPALNAME"
                 $id = "$env:ID"
 
-                # Install SqlServer module - using specific version to avoid breaking changes in 22.4.5.1 (see https://github.com/dotnet/aspire/issues/9926)
+                # Install SqlServer module - using specific version to avoid breaking changes in 22.4.5.1 (see https://github.com/microsoft/aspire/issues/9926)
                 Install-Module -Name SqlServer -RequiredVersion 22.3.0 -Force -AllowClobber -Scope CurrentUser
                 Import-Module SqlServer
 

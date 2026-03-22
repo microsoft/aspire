@@ -217,7 +217,7 @@ Retrieves resource console logs from the `ResourceLoggerService`. These are the 
 
 > **Note:** These are console logs (stdout/stderr), not OpenTelemetry structured logs. For OTel logs, traces, and metrics, use the Dashboard's telemetry views or configure an external collector.
 
-See [GitHub Issue #8069](https://github.com/dotnet/aspire/issues/8069) for the original feature request.
+See [GitHub Issue #8069](https://github.com/microsoft/aspire/issues/8069) for the original feature request.
 
 ```bash
 aspire logs [resource] [--project <path>] [--follow] [--format json]

@@ -574,7 +574,7 @@ internal class DotNetTemplateFactory(
             if (newProjectExitCode != 0)
             {
                 // Exit code 73 indicates that the output directory already contains files from a previous project
-                // See: https://github.com/dotnet/aspire/issues/9685
+                // See: https://github.com/microsoft/aspire/issues/9685
                 if (newProjectExitCode == 73)
                 {
                     interactionService.DisplayError(TemplatingStrings.ProjectAlreadyExists);

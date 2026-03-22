@@ -10,11 +10,11 @@ body:
         Please keep in mind that the GitHub issue tracker is not intended as a general support forum, but for reporting **non-security** bugs and feature requests.
 
         If you believe you have an issue that affects the SECURITY of the platform, please do NOT create an issue and instead email your issue details to secure@microsoft.com. Your report may be eligible for our [bug bounty](https://www.microsoft.com/msrc/bounty-dot-net-core) but ONLY if it is reported through email.
-        For other types of questions, consider using [Discussions](https://github.com/dotnet/aspire/discussions).
+        For other types of questions, consider using [Discussions](https://github.com/microsoft/aspire/discussions).
   - type: checkboxes
     attributes:
       label: Is there an existing issue for this?
-      description: Please search to see if an issue already exists for the bug you encountered ([aspire/issues](https://github.com/dotnet/aspire/issues)). More information on our issue management policies is available [here](https://aka.ms/aspnet/issue-policies).
+      description: Please search to see if an issue already exists for the bug you encountered ([aspire/issues](https://github.com/microsoft/aspire/issues)). More information on our issue management policies is available [here](https://aka.ms/aspnet/issue-policies).
       options:
         - label: I have searched the existing issues
           required: true

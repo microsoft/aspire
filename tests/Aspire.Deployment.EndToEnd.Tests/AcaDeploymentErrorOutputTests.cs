@@ -14,7 +14,7 @@ namespace Aspire.Deployment.EndToEnd.Tests;
 /// that the error output does not contain verbose HTTP details from RequestFailedException.
 /// </summary>
 /// <remarks>
-/// See https://github.com/dotnet/aspire/issues/12303
+/// See https://github.com/microsoft/aspire/issues/12303
 /// </remarks>
 public sealed class AcaDeploymentErrorOutputTests(ITestOutputHelper output)
 {

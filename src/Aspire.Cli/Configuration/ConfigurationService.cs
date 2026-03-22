@@ -106,7 +106,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
             }
 
             // TODO: Remove legacy .aspire/settings.json fallback once confident most users have migrated.
-            // Tracked by https://github.com/dotnet/aspire/issues/15239
+            // Tracked by https://github.com/microsoft/aspire/issues/15239
             // Fall back to .aspire/settings.json (legacy)
             var legacySettingsPath = ConfigurationHelper.BuildPathToSettingsJsonFile(searchDirectory.FullName);
             if (File.Exists(legacySettingsPath))

@@ -835,7 +835,7 @@ builder.Build().Run();");
     }
 
     /// <summary>
-    /// Regression test for https://github.com/dotnet/aspire/issues/13971
+    /// Regression test for https://github.com/microsoft/aspire/issues/13971
     /// Verifies that AppHost.cs (without SDK directive, with sibling .csproj) is NOT detected as a single-file apphost.
     /// This simulates the .NET starter template structure.
     /// </summary>
@@ -879,7 +879,7 @@ builder.Build().Run();");
     }
 
     /// <summary>
-    /// Regression test for https://github.com/dotnet/aspire/issues/13971
+    /// Regression test for https://github.com/microsoft/aspire/issues/13971
     /// Verifies that even if apphost.cs has the SDK directive, it is NOT detected if there's a sibling .csproj.
     /// </summary>
     [Fact]

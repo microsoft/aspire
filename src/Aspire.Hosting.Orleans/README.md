@@ -37,4 +37,4 @@ https://learn.microsoft.com/dotnet/orleans/
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

@@ -798,7 +798,7 @@ The self-extracting binary is the **recommended distribution format** — one fi
 
 ### Download Locations
 
-- **GitHub Releases**: `https://github.com/dotnet/aspire/releases`
+- **GitHub Releases**: `https://github.com/microsoft/aspire/releases`
 - **aspire.dev**: Direct download links on documentation site
 
 ---

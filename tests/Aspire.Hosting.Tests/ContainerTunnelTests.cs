@@ -45,7 +45,7 @@ public class ContainerTunnelTests(ITestOutputHelper testOutputHelper)
 
     [Fact]
     [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/15358")]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/15358")]
     public async Task ProxylessEndpointWorksWithContainerTunnel()
     {
         var port = await Helpers.Network.GetAvailablePortAsync();

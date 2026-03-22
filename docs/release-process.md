@@ -1,6 +1,6 @@
 # Aspire Release Process
 
-This document describes the release process for dotnet/aspire, including both the automated workflows and manual steps required by the release manager.
+This document describes the release process for microsoft/aspire, including both the automated workflows and manual steps required by the release manager.
 
 ## Overview
 
@@ -82,7 +82,7 @@ After automation completes:
    - Baseline version PR: Updates `PackageValidationBaselineVersion`
 
 2. **Verify the release**:
-   - Check the [GitHub Releases page](https://github.com/dotnet/aspire/releases)
+   - Check the [GitHub Releases page](https://github.com/microsoft/aspire/releases)
    - Verify packages on [NuGet.org](https://www.nuget.org/packages?q=owner%3Adotnet+aspire)
    - Test installation: `dotnet new install Aspire.ProjectTemplates::VERSION`
 
@@ -136,10 +136,10 @@ The pipeline uses the `Aspire-Release-Secrets` variable group. Note that NuGet p
 
 | Connection Name | Purpose |
 |-----------------|---------|
-| `NuGet.org - dotnet/aspire` | NuGet service connection for publishing packages to NuGet.org |
+| `NuGet.org - microsoft/aspire` | NuGet service connection for publishing packages to NuGet.org |
 | `Darc: Maestro Production` | Used for darc channel promotion |
 
-> **Note**: The `NuGet.org - dotnet/aspire` service connection must be configured in Azure DevOps Project Settings → Service connections with:
+> **Note**: The `NuGet.org - microsoft/aspire` service connection must be configured in Azure DevOps Project Settings → Service connections with:
 > - **Type**: NuGet
 > - **Authentication**: ApiKey
 > - **Feed URL**: `https://api.nuget.org/v3/index.json`
@@ -175,7 +175,7 @@ This indicates a mismatch between the expected release commit and an existing ta
 The `1ES.PublishNuget@1` task is configured with `allowPackageConflicts: true`, which means it will skip packages that already exist on NuGet.org. If publishing fails:
 
 1. Check the pipeline logs for specific error messages
-2. Verify the service connection `NuGet.org - dotnet/aspire` is properly configured
+2. Verify the service connection `NuGet.org - microsoft/aspire` is properly configured
 3. Ensure the API key in the service connection has push permissions for the package IDs
 4. Re-run the pipeline (it will skip already-published packages)
 

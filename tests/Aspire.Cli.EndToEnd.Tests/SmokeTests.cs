@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
@@ -43,7 +43,7 @@ public sealed class SmokeTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire run");
         await auto.EnterAsync();
 
-        // Regression test for https://github.com/dotnet/aspire/issues/13971
+        // Regression test for https://github.com/microsoft/aspire/issues/13971
         // If the apphost selection prompt appears, it means multiple apphosts were
         // incorrectly detected (e.g., AppHost.cs was incorrectly treated as a single-file apphost)
         await auto.WaitUntilAsync(s =>

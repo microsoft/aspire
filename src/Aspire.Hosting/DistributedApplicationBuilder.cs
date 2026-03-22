@@ -211,7 +211,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         }
 
         // This is so that we can see certificate errors in the resource server in the console logs.
-        // See: https://github.com/dotnet/aspire/issues/2914
+        // See: https://github.com/microsoft/aspire/issues/2914
         _innerBuilder.Logging.AddFilter("Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServer", LogLevel.Warning);
 
         // Add the logging configuration again to allow the user to override the defaults

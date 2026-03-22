@@ -275,7 +275,7 @@ steps:
               "${{ parameters.buildScript }} -testnobuild -test -configuration ${{ parameters.buildConfig }} /bl:${{ parameters.repoLogPath }}/tests.binlog /maxcpucount:1 /p:BuildInParallel=false $(_OfficialBuildIdArgs)"
       env:
         DOCKER_BUILDKIT: 1
-        # https://github.com/dotnet/aspire/issues/5195#issuecomment-2271687822
+        # https://github.com/microsoft/aspire/issues/5195#issuecomment-2271687822
         DOTNET_ASPIRE_DEPENDENCY_CHECK_TIMEOUT: 180
         ASPIRE__TEST__DCPLOGBASEPATH: $(Build.ArtifactStagingDirectory)/artifacts/log/dcp
         DOTNET_ROOT: $(Build.SourcesDirectory)/.dotnet

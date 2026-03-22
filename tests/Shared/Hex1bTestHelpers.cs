@@ -556,14 +556,14 @@ internal static class Hex1bTestHelpers
         if (OperatingSystem.IsWindows())
         {
             // PowerShell: Get PR head SHA, then fetch and run install script from that SHA
-            command = $"$ref = (gh api repos/dotnet/aspire/pulls/{prNumber} --jq '.head.sha'); " +
-                      $"iex \"& {{ $(irm https://raw.githubusercontent.com/dotnet/aspire/$ref/eng/scripts/get-aspire-cli-pr.ps1) }} {prNumber}\"";
+            command = $"$ref = (gh api repos/microsoft/aspire/pulls/{prNumber} --jq '.head.sha'); " +
+                      $"iex \"& {{ $(irm https://raw.githubusercontent.com/microsoft/aspire/$ref/eng/scripts/get-aspire-cli-pr.ps1) }} {prNumber}\"";
         }
         else
         {
             // Bash: Get PR head SHA, then fetch and run install script from that SHA
-            command = $"ref=$(gh api repos/dotnet/aspire/pulls/{prNumber} --jq '.head.sha') && " +
-                      $"curl -fsSL https://raw.githubusercontent.com/dotnet/aspire/$ref/eng/scripts/get-aspire-cli-pr.sh | bash -s -- {prNumber}";
+            command = $"ref=$(gh api repos/microsoft/aspire/pulls/{prNumber} --jq '.head.sha') && " +
+                      $"curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/$ref/eng/scripts/get-aspire-cli-pr.sh | bash -s -- {prNumber}";
         }
 
         return builder

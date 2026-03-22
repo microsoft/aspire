@@ -1451,7 +1451,7 @@ This section explains how to develop and test custom language SDKs using a local
 1. Clone the Aspire repository:
 
    ```bash
-   git clone https://github.com/dotnet/aspire.git
+   git clone https://github.com/microsoft/aspire.git
    cd aspire
    ```
 

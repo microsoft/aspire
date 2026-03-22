@@ -20,15 +20,15 @@ When CI tests fail, use the `DownloadFailingJobLogs.cs` tool to automatically do
 Get the run ID from the GitHub Actions URL or use the `gh` CLI:
 
 ```bash
-# From URL: https://github.com/dotnet/aspire/actions/runs/19846215629
+# From URL: https://github.com/microsoft/aspire/actions/runs/19846215629
 #                                                        ^^^^^^^^^^
 #                                                        run ID
 
 # Or find the latest run on a branch
-gh run list --repo dotnet/aspire --branch <branch-name> --limit 1 --json databaseId --jq '.[0].databaseId'
+gh run list --repo microsoft/aspire --branch <branch-name> --limit 1 --json databaseId --jq '.[0].databaseId'
 
 # Or for a PR
-gh pr checks <pr-number> --repo dotnet/aspire
+gh pr checks <pr-number> --repo microsoft/aspire
 ```
 
 ### Step 2: Run the Tool
@@ -66,10 +66,10 @@ The tool creates files in your current directory:
 
 ```bash
 # 1. Check failed jobs on a PR
-gh pr checks 14105 --repo dotnet/aspire 2>&1 | Where-Object { $_ -match "fail" }
+gh pr checks 14105 --repo microsoft/aspire 2>&1 | Where-Object { $_ -match "fail" }
 
 # 2. Get the run ID
-$runId = gh run list --repo dotnet/aspire --branch davidfowl/my-branch --limit 1 --json databaseId --jq '.[0].databaseId'
+$runId = gh run list --repo microsoft/aspire --branch davidfowl/my-branch --limit 1 --json databaseId --jq '.[0].databaseId'
 
 # 3. Download failure logs
 cd tools/scripts
@@ -93,7 +93,7 @@ The tool prints a summary for each failed job:
 === Failed Job 1/1 ===
 Name: Tests / Integrations macos (Hosting.Azure) / Hosting.Azure (macos-latest)
 ID: 56864254427
-URL: https://github.com/dotnet/aspire/actions/runs/19846215629/job/56864254427
+URL: https://github.com/microsoft/aspire/actions/runs/19846215629/job/56864254427
 Downloading job logs...
 Saved job logs to: failed_job_0_Tests___Integrations_macos__Hosting_Azure____Hosting_Azure__macos-latest_.log
 
@@ -142,7 +142,7 @@ Get-Content "failed_job_*.log" | Select-String -Pattern "timeout|timed out|Timeo
 Sometimes job logs aren't available (404). Use annotations instead:
 
 ```bash
-gh api repos/dotnet/aspire/check-runs/<job-id>/annotations
+gh api repos/microsoft/aspire/check-runs/<job-id>/annotations
 ```
 
 This returns structured error information even when full logs aren't downloadable.
@@ -155,7 +155,7 @@ This returns structured error information even when full logs aren't downloadabl
 
 **Diagnosis:**
 ```powershell
-gh api repos/dotnet/aspire/check-runs/<job-id>/annotations 2>&1
+gh api repos/microsoft/aspire/check-runs/<job-id>/annotations 2>&1
 ```
 
 **Common fixes:**
@@ -268,7 +268,7 @@ rm -rf tools/scripts/artifact_*
 
 - .NET 10 SDK or later
 - GitHub CLI (`gh`) installed and authenticated
-- Access to the dotnet/aspire repository
+- Access to the microsoft/aspire repository
 
 ## See Also
 

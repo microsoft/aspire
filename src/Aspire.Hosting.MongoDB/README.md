@@ -57,4 +57,4 @@ Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPE
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

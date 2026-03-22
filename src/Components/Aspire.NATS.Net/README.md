@@ -109,8 +109,8 @@ builder.AddNatsClient("nats");
 ## Additional documentation
 
 * https://nats-io.github.io/nats.net.v2/documentation/intro.html
-* https://github.com/dotnet/aspire/tree/main/src/Components/README.md
+* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

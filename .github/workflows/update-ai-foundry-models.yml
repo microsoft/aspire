@@ -12,7 +12,7 @@ permissions:
 jobs:
   generate-and-pr:
     runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'dotnet' }}
+    if: ${{ github.repository_owner == 'microsoft' }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -23,10 +23,17 @@ jobs:
           "$GITHUB_WORKSPACE/dotnet.sh" run GenModel.cs
           "$GITHUB_WORKSPACE/dotnet.sh" run GenModel.cs --local
 
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
+        with:
+          app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+
       - name: Create or update pull request
         uses: dotnet/actions-create-pull-request@e8d799aa1f8b17f324f9513832811b0a62f1e0b1
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
           branch: update-ai-foundry-models
           base: main
           commit-message: "[Automated] Update Microsoft Foundry Models"

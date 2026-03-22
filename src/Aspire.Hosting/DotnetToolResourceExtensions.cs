@@ -92,7 +92,7 @@ public static class DotnetToolResourceExtensions
             x.Args.Add(ArgumentSeparator);
         }
 
-        //TODO: Move to WithConfigurationFinalizer once merged - https://github.com/dotnet/aspire/pull/13200
+        //TODO: Move to WithConfigurationFinalizer once merged - https://github.com/microsoft/aspire/pull/13200
         async Task BeforeResourceStarted(T resource, BeforeResourceStartedEvent evt, CancellationToken ct)
         {
             var rns = evt.Services.GetRequiredService<ResourceNotificationService>();

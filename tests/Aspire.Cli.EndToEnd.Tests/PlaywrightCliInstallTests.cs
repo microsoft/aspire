@@ -104,7 +104,7 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
     /// workspace root, <c>playwright-cli install --skills</c> generates skill files in the
     /// workspace root, not the current working directory.
     ///
-    /// This is a regression test for https://github.com/dotnet/aspire/issues/15140 where
+    /// This is a regression test for https://github.com/microsoft/aspire/issues/15140 where
     /// the missing <c>WorkingDirectory</c> on <c>ProcessStartInfo</c> caused skill files
     /// to be dropped in the CLI process's current working directory.
     /// </summary>

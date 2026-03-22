@@ -11,7 +11,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 
 /// <summary>
 /// End-to-end tests for aspire stop in non-interactive mode.
-/// Validates fix for https://github.com/dotnet/aspire/issues/14558.
+/// Validates fix for https://github.com/microsoft/aspire/issues/14558.
 /// </summary>
 public sealed class StopNonInteractiveTests(ITestOutputHelper output)
 {

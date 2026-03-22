@@ -180,7 +180,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         {
             // For legacy .aspire/settings.json, the config directory is the parent of .aspire/
             // TODO: Remove legacy .aspire/ check once confident most users have migrated.
-            // Tracked by https://github.com/dotnet/aspire/issues/15239
+            // Tracked by https://github.com/microsoft/aspire/issues/15239
             if (string.Equals(settingsFile.Directory.Name, ".aspire", StringComparison.OrdinalIgnoreCase)
                 && settingsFile.Directory.Parent is not null)
             {

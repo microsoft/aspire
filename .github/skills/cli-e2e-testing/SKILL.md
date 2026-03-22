@@ -524,7 +524,7 @@ gh run list --branch $(git branch --show-current) --workflow CI --limit 5
 # Get the run ID from the output or use:
 RUN_ID=$(gh run list --branch $(git branch --show-current) --workflow CI --limit 1 --json databaseId --jq '.[0].databaseId')
 echo "Run ID: $RUN_ID"
-echo "URL: https://github.com/dotnet/aspire/actions/runs/$RUN_ID"
+echo "URL: https://github.com/microsoft/aspire/actions/runs/$RUN_ID"
 ```
 
 ### Step 2: Find CLI E2E Test Artifacts
@@ -538,7 +538,7 @@ Artifact names follow the pattern: `logs-<TestClass>-ubuntu-latest`
 gh run view $RUN_ID --json jobs --jq '.jobs[] | select(.name | test("Cli E2E")) | {name, conclusion}'
 
 # List available CLI E2E artifacts
-gh api --paginate "repos/dotnet/aspire/actions/runs/$RUN_ID/artifacts" \
+gh api --paginate "repos/microsoft/aspire/actions/runs/$RUN_ID/artifacts" \
   --jq '.artifacts[].name' | grep -i "smoke"
 ```
 

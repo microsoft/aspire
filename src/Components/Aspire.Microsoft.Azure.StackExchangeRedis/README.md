@@ -113,6 +113,6 @@ This will also require your Azure environment to be configured by following [the
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire
 
 _*Redis is a registered trademark of Redis Ltd. Any rights therein are reserved to Redis Ltd._

@@ -230,7 +230,7 @@ get_cli_architecture_from_architecture() {
             printf "arm64"
             ;;
         *)
-            say_error "Architecture $architecture not supported. If you think this is a bug, report it at https://github.com/dotnet/aspire/issues"
+            say_error "Architecture $architecture not supported. If you think this is a bug, report it at https://github.com/microsoft/aspire/issues"
             return 1
             ;;
     esac
@@ -248,7 +248,7 @@ detect_architecture() {
             printf "arm64"
             ;;
         *)
-            say_error "Architecture $uname_m not supported. If you think this is a bug, report it at https://github.com/dotnet/aspire/issues"
+            say_error "Architecture $uname_m not supported. If you think this is a bug, report it at https://github.com/microsoft/aspire/issues"
             return 1
             ;;
     esac
