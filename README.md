@@ -39,7 +39,7 @@ builder.Build().Run();
 **TypeScript** (`apphost.ts`)
 
 ```typescript
-import { createBuilder } from "./.modules/aspire.js";
+import { createBuilder } from './.modules/aspire.js';
 
 const builder = await createBuilder();
 
