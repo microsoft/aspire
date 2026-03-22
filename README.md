@@ -104,7 +104,7 @@ Security issues and bugs should be reported privately, via email, to the Microso
 
 ### Note on containers used by Aspire resource and client integrations
 
-The Aspire project cannot evaluate the underlying third-party containers for which it provides API support for suitability for specific customer requirements.
+The Aspire team cannot evaluate the underlying third-party containers for which it provides API support for suitability for specific customer requirements.
 
 You should evaluate whichever containers you chose to compose and automate with Aspire to ensure they meet your, your employers or your government’s requirements on security and safety as well as cryptographic regulations and any other regulatory or corporate standards that may apply to your use of the container.
 
