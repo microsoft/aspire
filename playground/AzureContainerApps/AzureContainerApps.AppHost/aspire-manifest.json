@@ -1,5 +1,4 @@
 {
-  "$schema": "https://json.schemastore.org/aspire-8.0.json",
   "resources": {
     "infra-acr": {
       "type": "azure.bicep.v0",
@@ -43,8 +42,8 @@
     },
     "cache": {
       "type": "container.v1",
-      "connectionString": "{cache.bindings.tcp.host}:{cache.bindings.tcp.port},password={cache-password.value}",
-      "image": "docker.io/library/redis:8.2",
+      "connectionString": "{cache.bindings.tcp.host}:{cache.bindings.tcp.port},password={cache-password.value}{cond-cache-bindings-tcp-tlsenabled-3eddb73a.connectionString}",
+      "image": "docker.io/library/redis:8.6",
       "deployment": {
         "type": "azure.bicep.v0",
         "path": "cache-containerapp.module.bicep",
@@ -72,7 +71,7 @@
       },
       "bindings": {
         "tcp": {
-          "scheme": "tcp",
+          "scheme": "redis",
           "protocol": "tcp",
           "transport": "tcp",
           "targetPort": 6379
@@ -157,7 +156,7 @@
         "CACHE_HOST": "{cache.bindings.tcp.host}",
         "CACHE_PORT": "{cache.bindings.tcp.port}",
         "CACHE_PASSWORD": "{cache-password.value}",
-        "CACHE_URI": "redis://:{cache-password-uri-encoded.value}@{cache.bindings.tcp.host}:{cache.bindings.tcp.port}",
+        "CACHE_URI": "{cache.bindings.tcp.scheme}://:{cache-password-uri-encoded.value}@{cache.bindings.tcp.host}:{cache.bindings.tcp.port}",
         "ConnectionStrings__account": "{account.connectionString}",
         "ACCOUNT_URI": "{account.outputs.connectionString}",
         "ACCOUNT_ACCOUNTKEY": "{account-kv.secrets.primaryaccesskey--account}",
@@ -220,6 +219,10 @@
       "type": "annotated.string",
       "value": "{cache-password.value}",
       "filter": "uri"
+    },
+    "cond-cache-bindings-tcp-tlsenabled-3eddb73a": {
+      "type": "value.v0",
+      "connectionString": ""
     }
   }
 }

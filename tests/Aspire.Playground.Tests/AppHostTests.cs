@@ -30,7 +30,7 @@ public class AppHostTests
 
     [Theory]
     [MemberData(nameof(TestEndpoints))]
-    [QuarantinedTest("https://github.com/dotnet/aspire/issues/6866")]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/6866")]
     public async Task TestEndpointsReturnOk(TestEndpoints testEndpoints)
     {
         var appHostType = testEndpoints.AppHostType!;
@@ -132,7 +132,7 @@ public class AppHostTests
     {
         IList<TestEndpoints> candidates =
         [
-            // Disable due to https://github.com/dotnet/aspire/issues/5959
+            // Disable due to https://github.com/microsoft/aspire/issues/5959
             //new TestEndpoints(typeof(Projects.EventHubs.AppHost",
             //    resourceEndpoints: new() { { "api", ["/alive", "/health"] } },
             //    waitForTexts: [
@@ -163,7 +163,7 @@ public class AppHostTests
             // Cosmos emulator is extremely slow to start up and unreliable in CI
             //new TestEndpoints(typeof(Projects.CosmosEndToEnd_AppHost),
             //    resourceEndpoints: new() { { "api", ["/alive", "/health", "/"] } },
-            //    // "/ef" - disabled due to https://github.com/dotnet/aspire/issues/5415
+            //    // "/ef" - disabled due to https://github.com/microsoft/aspire/issues/5415
             //    waitForTexts: [
             //        new ("cosmos", "Started$"),
             //        new ("api", "Application started")

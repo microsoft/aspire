@@ -6,7 +6,6 @@
 @inject IStringLocalizer<Dashboard.Resources.Resources> Loc
 @inject IStringLocalizer<ControlsStrings> ControlsStringsLoc
 @inject IStringLocalizer<Columns> ColumnsLoc
-@inject IStringLocalizer<Commands> CommandsLoc
 
 <PageTitle><ApplicationName ResourceName="@nameof(Dashboard.Resources.Resources.ResourcesPageTitle)" Loc="@Loc" /></PageTitle>
 
@@ -206,14 +205,13 @@
                                                                      IsCommandExecuting="@((resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name))"
                                                                      OnViewDetails="@((buttonId) => ShowResourceDetailsAsync(context.Resource, buttonId))"
                                                                      Resource="context.Resource"
-                                                                     GetResourceName="GetResourceName"
                                                                      MaxHighlightedCount="_maxHighlightedCount"
                                                                      ResourceByName="@_resourceByName" />
                                                 </div>
                                             </AspireTemplateColumn>
                                         </ChildContent>
                                         <EmptyContent>
-                                            <FluentIcon Icon="Icons.Regular.Size24.AppGeneric" />&nbsp;@(PageViewModel.SelectedViewKind == ResourceViewKind.Parameters ? Loc[nameof(Dashboard.Resources.Resources.ResourcesNoParameters)] : Loc[nameof(Dashboard.Resources.Resources.ResourcesNoResources)])
+                                            <FluentIcon Value="@(PageViewModel.SelectedViewKind == ResourceViewKind.Parameters ? (Icon)new Icons.Regular.Size24.Key() : new Icons.Regular.Size24.AppGeneric())" />&nbsp;@(PageViewModel.SelectedViewKind == ResourceViewKind.Parameters ? Loc[nameof(Dashboard.Resources.Resources.ResourcesNoParameters)] : Loc[nameof(Dashboard.Resources.Resources.ResourcesNoResources)])
                                         </EmptyContent>
                                     </FluentDataGrid>
                                 </GridColumnManager>
@@ -264,8 +262,8 @@
             @* Don't display footer with the resource graph *@
             <div hidden="@(PageViewModel.SelectedViewKind == ResourceViewKind.Graph)">
                 <TotalItemsFooter @ref="_totalItemsFooter"
-                                  SingularText="@Loc[nameof(Dashboard.Resources.Resources.TotalItemsFooterSingularText)]"
-                                  PluralText="@Loc[nameof(Dashboard.Resources.Resources.TotalItemsFooterPluralText)]"
+                                  SingularText="@(PageViewModel.SelectedViewKind == ResourceViewKind.Parameters ? Loc[nameof(Dashboard.Resources.Resources.TotalItemsFooterParametersSingularText)] : Loc[nameof(Dashboard.Resources.Resources.TotalItemsFooterSingularText)])"
+                                  PluralText="@(PageViewModel.SelectedViewKind == ResourceViewKind.Parameters ? Loc[nameof(Dashboard.Resources.Resources.TotalItemsFooterParametersPluralText)] : Loc[nameof(Dashboard.Resources.Resources.TotalItemsFooterPluralText)])"
                                   TotalItemCount="@_totalItemsCount"/>
             </div>
         </FooterSection>

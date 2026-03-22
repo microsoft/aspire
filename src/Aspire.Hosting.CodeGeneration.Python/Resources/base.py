@@ -8,24 +8,54 @@ from transport import AspireClient, Handle
 
 
 class ReferenceExpression:
-    """Represents a reference expression passed to capabilities."""
+    """Represents a reference expression passed to capabilities.
+    Supports both value mode (format + valueProviders) and conditional mode (condition + whenTrue + whenFalse)."""
 
     def __init__(self, format_string: str, value_providers: List[Any]) -> None:
         self._format_string = format_string
         self._value_providers = value_providers
+        self._condition: Any = None
+        self._when_true: ReferenceExpression | None = None
+        self._when_false: ReferenceExpression | None = None
+        self._match_value: str | None = None
+        self._is_conditional = False
 
     @staticmethod
     def create(format_string: str, *values: Any) -> "ReferenceExpression":
         value_providers = [_extract_reference_value(value) for value in values]
         return ReferenceExpression(format_string, value_providers)
 
+    @staticmethod
+    def create_conditional(condition: Any, match_value: str, when_true: "ReferenceExpression", when_false: "ReferenceExpression") -> "ReferenceExpression":
+        """Creates a conditional reference expression from its parts."""
+        expr = ReferenceExpression.__new__(ReferenceExpression)
+        expr._format_string = ""
+        expr._value_providers = []
+        expr._condition = condition
+        expr._when_true = when_true
+        expr._when_false = when_false
+        expr._match_value = match_value
+        expr._is_conditional = True
+        return expr
+
     def to_json(self) -> Dict[str, Any]:
+        if self._is_conditional:
+            return {
+                "$expr": {
+                    "condition": serialize_value(self._condition),
+                    "whenTrue": self._when_true.to_json(),
+                    "whenFalse": self._when_false.to_json(),
+                    "matchValue": self._match_value,
+                }
+            }
         payload: Dict[str, Any] = {"format": self._format_string}
         if self._value_providers:
             payload["valueProviders"] = self._value_providers
         return {"$expr": payload}
 
     def __str__(self) -> str:
+        if self._is_conditional:
+            return "ReferenceExpression(conditional)"
         return f"ReferenceExpression({self._format_string})"
 
 

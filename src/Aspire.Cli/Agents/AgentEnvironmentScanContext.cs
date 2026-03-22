@@ -10,6 +10,7 @@ internal sealed class AgentEnvironmentScanContext
 {
     private readonly List<AgentEnvironmentApplicator> _applicators = [];
     private readonly HashSet<string> _skillFileApplicatorPaths = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _skillBaseDirectories = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Gets the working directory being scanned.
@@ -24,30 +25,10 @@ internal sealed class AgentEnvironmentScanContext
     public required DirectoryInfo RepositoryRoot { get; init; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether a Playwright applicator has been added.
+    /// Gets or sets a value indicating whether a Playwright CLI applicator has been added.
     /// This is used to ensure only one applicator for Playwright is added across all scanners.
     /// </summary>
     public bool PlaywrightApplicatorAdded { get; set; }
-
-    /// <summary>
-    /// Stores the Playwright configuration callbacks from each scanner.
-    /// These will be executed if the user selects to configure Playwright.
-    /// </summary>
-    private readonly List<Func<CancellationToken, Task>> _playwrightConfigurationCallbacks = [];
-
-    /// <summary>
-    /// Adds a Playwright configuration callback for a specific environment.
-    /// </summary>
-    /// <param name="callback">The callback to execute if Playwright is configured.</param>
-    public void AddPlaywrightConfigurationCallback(Func<CancellationToken, Task> callback)
-    {
-        _playwrightConfigurationCallbacks.Add(callback);
-    }
-
-    /// <summary>
-    /// Gets all registered Playwright configuration callbacks.
-    /// </summary>
-    public IReadOnlyList<Func<CancellationToken, Task>> PlaywrightConfigurationCallbacks => _playwrightConfigurationCallbacks;
 
     /// <summary>
     /// Checks if a skill file applicator has already been added for the specified path.
@@ -82,4 +63,19 @@ internal sealed class AgentEnvironmentScanContext
     /// Gets the collection of detected applicators.
     /// </summary>
     public IReadOnlyList<AgentEnvironmentApplicator> Applicators => _applicators;
+
+    /// <summary>
+    /// Registers a skill base directory for an agent environment (e.g., ".claude/skills", ".github/skills").
+    /// These directories are used to mirror skill files across all detected agent environments.
+    /// </summary>
+    /// <param name="relativeSkillBaseDir">The relative path to the skill base directory from the repository root.</param>
+    public void AddSkillBaseDirectory(string relativeSkillBaseDir)
+    {
+        _skillBaseDirectories.Add(relativeSkillBaseDir);
+    }
+
+    /// <summary>
+    /// Gets the registered skill base directories for all detected agent environments.
+    /// </summary>
+    public IReadOnlyCollection<string> SkillBaseDirectories => _skillBaseDirectories;
 }

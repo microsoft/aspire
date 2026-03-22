@@ -1,0 +1,530 @@
+# Release Pipeline: Publish NuGet Packages and Promote to GA Channel
+#
+# This pipeline automates the release process for microsoft/aspire:
+# 1. Downloads signed packages from a specified build
+# 2. Publishes packages to NuGet.org
+# 3. Promotes the build to the Aspire GA channel via darc
+# 4. Submits WinGet manifests and Homebrew cask PRs
+#
+# For full documentation, see: docs/release-process.md
+
+trigger: none  # Manual trigger only
+pr: none       # Not triggered by PRs
+
+parameters:
+  - name: GaChannelName
+    displayName: 'GA Channel Name'
+    type: string
+    default: 'Aspire 9.x GA'
+
+  - name: DryRun
+    displayName: 'Dry Run (skip actual publish - for testing)'
+    type: boolean
+    default: false
+
+  # Idempotency flags for re-running after partial failures
+  - name: SkipNuGetPublish
+    displayName: 'Skip NuGet Publishing (set true if already completed)'
+    type: boolean
+    default: false
+
+  - name: SkipChannelPromotion
+    displayName: 'Skip Channel Promotion (set true if already completed)'
+    type: boolean
+    default: false
+
+  - name: SkipWinGetPublish
+    displayName: 'Skip WinGet Publishing (set true if already completed)'
+    type: boolean
+    default: false
+
+  - name: SkipHomebrewPublish
+    displayName: 'Skip Homebrew Publishing (set true if already completed)'
+    type: boolean
+    default: false
+
+variables:
+  - template: /eng/pipelines/common-variables.yml@self
+  - template: /eng/common/templates-official/variables/pool-providers.yml@self
+  # Variable group containing secrets (VscePublishToken for future use)
+  # Note: NuGet publishing uses service connection 'NuGet.org - microsoft/aspire' instead of API key
+  - group: Aspire-Release-Secrets
+  # Variable group containing aspire-winget-bot-pat and aspire-homebrew-bot-pat for WinGet and Homebrew publishing
+  - group: Aspire-Secrets
+
+resources:
+  repositories:
+    - repository: 1ESPipelineTemplates
+      type: git
+      name: 1ESPipelineTemplates/1ESPipelineTemplates
+      ref: refs/tags/release
+  pipelines:
+    - pipeline: aspire-build
+      source: dotnet-aspire  # Name of the main build pipeline
+      project: internal      # AzDO project name
+      trigger: none          # Manual trigger only - no automatic releases
+
+extends:
+  template: v1/1ES.Official.PipelineTemplate.yml@1ESPipelineTemplates
+  parameters:
+    pool:
+      name: NetCore1ESPool-Internal
+      image: windows.vs2026preview.scout.amd64
+      os: windows
+    # Required for publishing to external feeds like nuget.org
+    # Pattern from dotnet-workload-versions/official.yml
+    # Note: 'Permissive,CFSClean' blocks NuGet.org - must use just 'Permissive'
+    settings:
+      networkIsolationPolicy: Permissive
+
+    stages:
+      # ===== STAGE 1: PREPARE ARTIFACTS =====
+      # This buildJob downloads artifacts from the source build and re-publishes them.
+      # 1ES PT will inject SBOM generation tasks, making the artifacts compliant for releaseJob.
+      - stage: PrepareArtifacts
+        displayName: 'Prepare Artifacts with SBOM'
+        jobs:
+          - job: PrepareJob
+            displayName: 'Download and Re-publish Artifacts'
+            timeoutInMinutes: 30
+            pool:
+              name: NetCore1ESPool-Internal
+              image: windows.vs2026preview.scout.amd64
+              os: windows
+            variables:
+              SourceBuildId: $(resources.pipeline.aspire-build.runID)
+            templateContext:
+              outputs:
+                - output: pipelineArtifact
+                  displayName: 'Publish PackageArtifacts with SBOM'
+                  targetPath: '$(Pipeline.Workspace)/packages/PackageArtifacts'
+                  artifactName: 'PackageArtifacts'
+                - output: pipelineArtifact
+                  displayName: 'Publish WinGet Manifests'
+                  targetPath: '$(Pipeline.Workspace)/installers/winget-manifests-stable'
+                  artifactName: 'winget-manifests-stable'
+                - output: pipelineArtifact
+                  displayName: 'Publish Homebrew Cask'
+                  targetPath: '$(Pipeline.Workspace)/installers/homebrew-cask-stable'
+                  artifactName: 'homebrew-cask-stable'
+            steps:
+              - checkout: none
+
+              - powershell: |
+                  Write-Host "=== Prepare Artifacts Stage ==="
+                  Write-Host "Source Build ID: $(resources.pipeline.aspire-build.runID)"
+                  Write-Host "Source Build Name: $(resources.pipeline.aspire-build.runName)"
+                  Write-Host "This stage downloads artifacts and re-publishes them so 1ES PT can generate SBOM."
+                  Write-Host "==============================="
+                displayName: 'Log Stage Info'
+
+              # Download artifacts from the source build pipeline
+              - download: aspire-build
+                displayName: 'Download PackageArtifacts from Source Build'
+                artifact: PackageArtifacts
+                patterns: '**/*.nupkg'
+
+              - download: aspire-build
+                displayName: 'Download WinGet Manifests from Source Build'
+                artifact: winget-manifests-stable
+
+              - download: aspire-build
+                displayName: 'Download Homebrew Cask from Source Build'
+                artifact: homebrew-cask-stable
+
+              # Move artifacts to expected location for output
+              - powershell: |
+                  $sourcePath = "$(Pipeline.Workspace)/aspire-build/PackageArtifacts"
+                  $targetPath = "$(Pipeline.Workspace)/packages/PackageArtifacts"
+                  
+                  Write-Host "Moving artifacts from $sourcePath to $targetPath"
+                  
+                  if (!(Test-Path $targetPath)) {
+                    New-Item -ItemType Directory -Path $targetPath -Force | Out-Null
+                  }
+                  
+                  # Copy all nupkg files
+                  $packages = Get-ChildItem -Path $sourcePath -Filter "*.nupkg" -Recurse
+                  Write-Host "Found $($packages.Count) packages to copy"
+                  
+                  foreach ($pkg in $packages) {
+                    Copy-Item $pkg.FullName -Destination $targetPath -Force
+                    Write-Host "  Copied: $($pkg.Name)"
+                  }
+                  
+                  Write-Host "✓ Artifacts prepared for SBOM generation"
+                displayName: 'Prepare Artifacts for Publishing'
+
+              # Copy installer artifacts to expected locations for output
+              - powershell: |
+                  $artifacts = @(
+                    @{ Name = 'winget-manifests-stable'; Source = '$(Pipeline.Workspace)/aspire-build/winget-manifests-stable'; Target = '$(Pipeline.Workspace)/installers/winget-manifests-stable' },
+                    @{ Name = 'homebrew-cask-stable'; Source = '$(Pipeline.Workspace)/aspire-build/homebrew-cask-stable'; Target = '$(Pipeline.Workspace)/installers/homebrew-cask-stable' }
+                  )
+
+                  foreach ($artifact in $artifacts) {
+                    Write-Host "Copying $($artifact.Name) from $($artifact.Source) to $($artifact.Target)"
+
+                    if (!(Test-Path $artifact.Target)) {
+                      New-Item -ItemType Directory -Path $artifact.Target -Force | Out-Null
+                    }
+
+                    $files = Get-ChildItem -Path $artifact.Source -Recurse -File
+                    Write-Host "  Found $($files.Count) files"
+                    foreach ($file in $files) {
+                      $relativePath = $file.FullName.Substring($artifact.Source.Length + 1)
+                      $destPath = Join-Path $artifact.Target $relativePath
+                      $destDir = Split-Path $destPath -Parent
+                      if (!(Test-Path $destDir)) {
+                        New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+                      }
+                      Copy-Item $file.FullName -Destination $destPath -Force
+                      Write-Host "    Copied: $relativePath"
+                    }
+                  }
+
+                  Write-Host "✓ Installer artifacts prepared"
+                displayName: 'Prepare Installer Artifacts'
+
+      # ===== STAGE 2: RELEASE =====
+      # This releaseJob consumes the artifacts with SBOM and publishes to NuGet.org
+      - stage: Release
+        displayName: 'Release to NuGet and Promote'
+        dependsOn: PrepareArtifacts
+        jobs:
+          - job: ReleaseJob
+            displayName: 'Validate, Publish, and Promote'
+            timeoutInMinutes: 120
+            pool:
+              name: NetCore1ESPool-Internal
+              image: windows.vs2026preview.scout.amd64
+              os: windows
+            variables:
+              BarBuildId: ''
+            # templateContext type: releaseJob enables proper network access for external publishing
+            # inputs.pipelineArtifact consumes artifacts from PrepareArtifacts stage (which have SBOM)
+            templateContext:
+              type: releaseJob
+              isProduction: true
+              inputs:
+                - input: pipelineArtifact
+                  artifactName: PackageArtifacts
+                  targetPath: '$(Pipeline.Workspace)/packages/PackageArtifacts'
+            steps:
+              # ===== VALIDATION =====
+              # Note: No checkout - releaseJob doesn't allow it. All scripts are inlined.
+              # Artifacts are downloaded via templateContext inputs above.
+
+              - powershell: |
+                  Write-Host "=== Release Pipeline Parameters ==="
+                  Write-Host "Source Build Pipeline: aspire-build"
+                  Write-Host "Source Build ID: $(resources.pipeline.aspire-build.runID)"
+                  Write-Host "Source Build Name: $(resources.pipeline.aspire-build.runName)"
+                  Write-Host "Source Build URI: $(resources.pipeline.aspire-build.runURI)"
+                  Write-Host "GA Channel: ${{ parameters.GaChannelName }}"
+                  Write-Host "Dry Run: ${{ parameters.DryRun }}"
+                  Write-Host "Skip NuGet Publish: ${{ parameters.SkipNuGetPublish }}"
+                  Write-Host "Skip Channel Promotion: ${{ parameters.SkipChannelPromotion }}"
+                  Write-Host "==================================="
+                displayName: 'Validate Parameters'
+
+              # ===== EXTRACT BAR BUILD ID =====
+              - powershell: |
+                  $buildId = "$(resources.pipeline.aspire-build.runID)"
+                  $org = "$(System.CollectionUri)"
+                  $project = "internal"
+
+                  Write-Host "Fetching build tags for build: $buildId"
+
+                  # Use Azure DevOps REST API to get build tags
+                  $uri = "${org}${project}/_apis/build/builds/${buildId}/tags?api-version=7.0"
+                  Write-Host "API URI: $uri"
+
+                  try {
+                    $response = Invoke-RestMethod -Uri $uri -Headers @{
+                      Authorization = "Bearer $(System.AccessToken)"
+                    } -Method Get
+
+                    Write-Host "Build tags found: $($response.value -join ', ')"
+
+                    # Find the BAR ID tag
+                    $barIdTag = $response.value | Where-Object { $_ -match 'BAR ID - (\d+)' }
+
+                    if ($barIdTag -and $barIdTag -match 'BAR ID - (\d+)') {
+                      $barBuildId = $Matches[1]
+                      Write-Host "✓ Extracted BAR Build ID: $barBuildId"
+                      Write-Host "##vso[task.setvariable variable=BarBuildId]$barBuildId"
+                    } else {
+                      Write-Error "Could not find BAR ID tag in build $buildId. Tags found: $($response.value -join ', ')"
+                      exit 1
+                    }
+                  } catch {
+                    Write-Error "Failed to fetch build tags: $_"
+                    exit 1
+                  }
+                displayName: 'Extract BAR Build ID'
+                env:
+                  SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+
+              # ===== DOWNLOAD PACKAGES =====
+              # Artifacts are downloaded automatically via templateContext.inputs above
+
+              - task: UseDotNet@2
+                displayName: 'Install .NET 10 SDK'
+                inputs:
+                  packageType: 'sdk'
+                  version: '10.0.x'
+
+              - powershell: |
+                  $packagesPath = "$(Pipeline.Workspace)/packages/PackageArtifacts"
+                  Write-Host "=== Package Inventory ==="
+
+                  $packages = Get-ChildItem -Path $packagesPath -Filter "*.nupkg" -Recurse
+                  Write-Host "Found $($packages.Count) packages:"
+
+                  foreach ($pkg in $packages) {
+                    $sizeMB = [math]::Round($pkg.Length / 1MB, 2)
+                    Write-Host "  - $($pkg.Name) ($sizeMB MB)"
+                  }
+
+                  if ($packages.Count -eq 0) {
+                    Write-Error "No packages found in artifacts!"
+                    exit 1
+                  }
+
+                  Write-Host "==========================="
+                displayName: 'List Packages'
+
+              # ===== VERIFY SIGNATURES =====
+              - powershell: |
+                  $packagesPath = "$(Pipeline.Workspace)/packages/PackageArtifacts"
+                  Write-Host "=== Verifying Package Signatures ==="
+
+                  $packages = Get-ChildItem -Path $packagesPath -Filter "*.nupkg" -Recurse
+                  $failedVerification = @()
+
+                  foreach ($package in $packages) {
+                    Write-Host "Verifying: $($package.Name)"
+
+                    # Use $ErrorActionPreference to prevent PowerShell from treating stderr as terminating error
+                    $originalErrorActionPreference = $ErrorActionPreference
+                    $ErrorActionPreference = 'Continue'
+                    $result = dotnet nuget verify $package.FullName 2>&1
+                    $verifyExitCode = $LASTEXITCODE
+                    $ErrorActionPreference = $originalErrorActionPreference
+
+                    if ($verifyExitCode -ne 0) {
+                      Write-Host "  ❌ Signature verification FAILED"
+                      Write-Host $result
+                      $failedVerification += $package.Name
+                    } else {
+                      Write-Host "  ✓ Signature valid"
+                    }
+                  }
+
+                  if ($failedVerification.Count -gt 0) {
+                    Write-Host ""
+                    Write-Host "=== SIGNATURE VERIFICATION FAILED ==="
+                    Write-Host "The following packages failed signature verification:"
+                    foreach ($pkg in $failedVerification) {
+                      Write-Host "  - $pkg"
+                    }
+                    Write-Error "Package signature verification failed. Aborting release."
+                    exit 1
+                  }
+
+                  Write-Host ""
+                  Write-Host "✓ All $($packages.Count) packages passed signature verification"
+                  Write-Host "==========================="
+                displayName: 'Verify Package Signatures'
+
+              # ===== PUBLISH TO NUGET =====
+              # Dry Run: List packages that would be published (skip actual publish)
+              - ${{ if and(eq(parameters.DryRun, true), eq(parameters.SkipNuGetPublish, false)) }}:
+                - powershell: |
+                    $packagesPath = "$(Pipeline.Workspace)/packages/PackageArtifacts"
+                    Write-Host "=== DRY RUN MODE ==="
+                    Write-Host "⚠️ The following packages would be published to NuGet.org:"
+                    Write-Host ""
+                    $packages = Get-ChildItem -Path $packagesPath -Filter "*.nupkg" -Recurse
+                    foreach ($pkg in $packages) {
+                      $sizeMB = [math]::Round($pkg.Length / 1MB, 2)
+                      Write-Host "  - $($pkg.Name) ($sizeMB MB)"
+                    }
+                    Write-Host ""
+                    Write-Host "Total: $($packages.Count) packages"
+                    Write-Host "=== DRY RUN - No packages were actually published ==="
+                  displayName: 'Dry Run - List Packages (No Publish)'
+
+              # Actual Publish: Use 1ES.PublishNuget task (only when not dry run and not skipped)
+              # Pattern from dotnet-diagnostics-internal-components and dotnet-macios:
+              # - useDotNetTask: false (required - DotNetCoreCLI@2 doesn't support encrypted API keys)
+              # - nuGetFeedType: external + publishFeedCredentials for NuGet.org
+              - ${{ if and(eq(parameters.DryRun, false), eq(parameters.SkipNuGetPublish, false)) }}:
+                - task: 1ES.PublishNuget@1
+                  displayName: 'Push Packages to NuGet.org'
+                  inputs:
+                    useDotNetTask: false
+                    packagesToPush: '$(Pipeline.Workspace)/packages/PackageArtifacts/*.nupkg'
+                    packageParentPath: '$(Pipeline.Workspace)/packages/PackageArtifacts'
+                    nuGetFeedType: external
+                    publishFeedCredentials: 'NuGet.org - microsoft/aspire'
+
+              # Skip message when SkipNuGetPublish is true
+              - ${{ if eq(parameters.SkipNuGetPublish, true) }}:
+                - powershell: |
+                    Write-Host "=== Skipping NuGet Publishing (SkipNuGetPublish=true) ==="
+                  displayName: 'Skip NuGet Publish (flagged)'
+
+              # ===== PROMOTE TO CHANNEL =====
+              - ${{ if eq(parameters.SkipChannelPromotion, false) }}:
+                - powershell: |
+                    Write-Host "Installing darc CLI..."
+                    
+                    # Query Maestro API for the correct darc version
+                    $versionEndpoint = 'https://maestro.dot.net/api/assets/darc-version?api-version=2020-02-20'
+                    $darcVersion = (Invoke-WebRequest -Uri $versionEndpoint -UseBasicParsing).Content
+                    Write-Host "Darc version: $darcVersion"
+                    
+                    # Install darc as a .NET global tool
+                    $arcadeServicesSource = 'https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-eng/nuget/v3/index.json'
+                    Write-Host "Installing darc from $arcadeServicesSource..."
+                    
+                    dotnet tool install microsoft.dotnet.darc --version $darcVersion --add-source "$arcadeServicesSource" -g
+                    
+                    if ($LASTEXITCODE -ne 0) {
+                      Write-Error "Failed to install darc CLI"
+                      exit 1
+                    }
+                    
+                    Write-Host "✓ Darc CLI installed successfully"
+                  displayName: 'Install darc'
+
+                - task: AzureCLI@2
+                  displayName: 'Promote Build to Channel'
+                  inputs:
+                    azureSubscription: 'Darc: Maestro Production'
+                    scriptType: 'pscore'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      $barBuildId = "$(BarBuildId)"
+                      $channelName = "${{ parameters.GaChannelName }}"
+                      $dryRun = [System.Convert]::ToBoolean("${{ parameters.DryRun }}")
+                      $azdoToken = $env:SYSTEM_ACCESSTOKEN
+
+                      Write-Host "=== Channel Promotion ==="
+                      Write-Host "BAR Build ID: $barBuildId"
+                      Write-Host "Target Channel: $channelName"
+
+                      if ($dryRun) {
+                        Write-Host "⚠️ DRY RUN MODE - Build will not actually be promoted"
+                        Write-Host "[DRY RUN] Would run: darc add-build-to-channel --id $barBuildId --channel '$channelName' --azdev-pat <token> --ci"
+                        exit 0
+                      }
+
+                      Write-Host "Promoting build $barBuildId to channel '$channelName'..."
+
+                      # darc is installed as a global tool, so it's available in PATH
+                      # --azdev-pat is required for darc to access Azure DevOps build artifacts
+                      darc add-build-to-channel `
+                        --id $barBuildId `
+                        --channel "$channelName" `
+                        --azdev-pat "$azdoToken" `
+                        --ci
+
+                      if ($LASTEXITCODE -ne 0) {
+                        Write-Error "Failed to promote build to channel"
+                        exit 1
+                      }
+
+                      Write-Host "✓ Build successfully promoted to '$channelName'"
+                      Write-Host "==========================="
+                  env:
+                    SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+
+              # ===== SUMMARY =====
+              - powershell: |
+                  Write-Host ""
+                  Write-Host "╔═══════════════════════════════════════════════════════════════╗"
+                  Write-Host "║                    RELEASE SUMMARY                            ║"
+                  Write-Host "╠═══════════════════════════════════════════════════════════════╣"
+                  Write-Host "║ Source Build:   $(resources.pipeline.aspire-build.runName)"
+                  Write-Host "║ Source Build ID: $(resources.pipeline.aspire-build.runID)"
+                  Write-Host "║ BAR Build ID:   $(BarBuildId)"
+                  Write-Host "║ GA Channel:     ${{ parameters.GaChannelName }}"
+                  Write-Host "║ Dry Run:        ${{ parameters.DryRun }}"
+                  Write-Host "╠═══════════════════════════════════════════════════════════════╣"
+                  Write-Host "║ NuGet Publish:  ${{ parameters.SkipNuGetPublish }}" -NoNewline
+                  if ("${{ parameters.SkipNuGetPublish }}" -eq "true") {
+                    Write-Host " (SKIPPED)"
+                  } else {
+                    Write-Host " (EXECUTED)"
+                  }
+                  Write-Host "║ Channel Promo:  ${{ parameters.SkipChannelPromotion }}" -NoNewline
+                  if ("${{ parameters.SkipChannelPromotion }}" -eq "true") {
+                    Write-Host " (SKIPPED)"
+                  } else {
+                    Write-Host " (EXECUTED)"
+                  }
+                  Write-Host "║ WinGet:         (runs in parallel after this job)"
+                  Write-Host "║ Homebrew:       (runs in parallel after this job)"
+                  Write-Host "╚═══════════════════════════════════════════════════════════════╝"
+                  Write-Host ""
+                displayName: 'Print Summary'
+                condition: always()
+
+          # ===== WINGET PUBLISHING =====
+          - job: WinGetJob
+            displayName: 'Submit WinGet Release Manifests'
+            dependsOn: ReleaseJob
+            condition: |
+              and(
+                in(dependencies.ReleaseJob.result, 'Succeeded', 'SucceededWithIssues'),
+                eq('${{ parameters.SkipWinGetPublish }}', 'false')
+              )
+            timeoutInMinutes: 30
+            pool:
+              name: NetCore1ESPool-Internal
+              image: windows.vs2026preview.scout.amd64
+              os: windows
+            templateContext:
+              type: releaseJob
+              isProduction: true
+              inputs:
+                - input: pipelineArtifact
+                  artifactName: winget-manifests-stable
+                  targetPath: '$(Pipeline.Workspace)/winget/winget-manifests-stable'
+            steps:
+              - template: /eng/pipelines/templates/publish-winget.yml@self
+                parameters:
+                  manifestArtifactPath: $(Pipeline.Workspace)/winget/winget-manifests-stable
+                  packageIdentifier: Microsoft.Aspire
+                  dryRun: ${{ parameters.DryRun }}
+
+          # ===== HOMEBREW PUBLISHING =====
+          - job: HomebrewJob
+            displayName: 'Submit Homebrew Release Cask'
+            dependsOn: ReleaseJob
+            condition: |
+              and(
+                in(dependencies.ReleaseJob.result, 'Succeeded', 'SucceededWithIssues'),
+                eq('${{ parameters.SkipHomebrewPublish }}', 'false')
+              )
+            timeoutInMinutes: 30
+            pool:
+              name: NetCore1ESPool-Internal
+              image: windows.vs2026preview.scout.amd64
+              os: windows
+            templateContext:
+              type: releaseJob
+              isProduction: true
+              inputs:
+                - input: pipelineArtifact
+                  artifactName: homebrew-cask-stable
+                  targetPath: '$(Pipeline.Workspace)/homebrew/homebrew-cask-stable'
+            steps:
+              - template: /eng/pipelines/templates/publish-homebrew.yml@self
+                parameters:
+                  caskArtifactPath: $(Pipeline.Workspace)/homebrew/homebrew-cask-stable
+                  channel: stable
+                  dryRun: ${{ parameters.DryRun }}

@@ -14,6 +14,7 @@ public static class ForwardedTransformExtensions
     /// <summary>
     /// Adds the transform which will add X-Forwarded-* headers.
     /// </summary>
+    [AspireExport("withTransformXForwarded", Description = "Adds the transform which will add X-Forwarded-* headers.")]
     public static YarpRoute WithTransformXForwarded(
         this YarpRoute route,
         string headerPrefix = "X-Forwarded-",
@@ -30,6 +31,7 @@ public static class ForwardedTransformExtensions
     /// <summary>
     /// Adds the transform which will add the Forwarded header as defined by [RFC 7239](https://tools.ietf.org/html/rfc7239).
     /// </summary>
+    [AspireExport("withTransformForwarded", Description = "Adds the transform which will add the Forwarded header as defined by [RFC 7239](https://tools.ietf.org/html/rfc7239).")]
     public static YarpRoute WithTransformForwarded(this YarpRoute route, bool useHost = true, bool useProto = true,
         NodeFormat forFormat = NodeFormat.Random, NodeFormat byFormat = NodeFormat.Random, ForwardedTransformActions action = ForwardedTransformActions.Set)
     {
@@ -40,6 +42,7 @@ public static class ForwardedTransformExtensions
     /// <summary>
     /// Adds the transform which will set the given header with the Base64 encoded client certificate.
     /// </summary>
+    [AspireExport("withTransformClientCertHeader", Description = "Adds the transform which will set the given header with the Base64 encoded client certificate.")]
     public static YarpRoute WithTransformClientCertHeader(this YarpRoute route, string headerName)
     {
         route.Configure(r => r.WithTransformClientCertHeader(headerName));

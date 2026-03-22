@@ -52,11 +52,6 @@
         <target state="translated">La versione installata dell'interfaccia della riga di comando del tunnel dev {0} non è supportata. È necessaria la versione {1} o successiva.</target>
         <note />
       </trans-unit>
-      <trans-unit id="InstallationInstructions">
-        <source>Installation instructions</source>
-        <target state="translated">Istruzioni per l'installazione</target>
-        <note />
-      </trans-unit>
       <trans-unit id="LoginWithGitHub">
         <source>Login with GitHub</source>
         <target state="translated">Accedi con GitHub</target>
@@ -65,21 +60,6 @@
       <trans-unit id="LoginWithMicrosoft">
         <source>Login with Microsoft</source>
         <target state="translated">Accedi con Microsoft</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RequiredCommandNotification">
-        <source>Required command '{0}' was not found on PATH or at a specified location.</source>
-        <target state="translated">Il comando richiesto '{0}' non è stato trovato in PATH o nel percorso specificato.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RequiredCommandNotificationWithLink">
-        <source>Required command '{0}' was not found. See installation instructions for more details.</source>
-        <target state="translated">Il comando obbligatorio '{0}' non è stato trovato. Per altri dettagli, vedere le istruzioni di installazione.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RequiredCommandNotificationWithValidation">
-        <source>{0} See installation instructions for more details.</source>
-        <target state="translated">{0} Per altri dettagli, vedere le istruzioni di installazione.</target>
         <note />
       </trans-unit>
     </body>

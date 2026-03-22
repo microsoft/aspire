@@ -109,15 +109,15 @@ Follow the established emoji patterns from existing templates:
 ### Complete Example: New Feature
 
 ```markdown
-### ✨ Azure AI Foundry integration
+### ✨ Microsoft Foundry integration
 
-Aspire now provides first-class support for Azure AI Foundry, enabling you to easily integrate AI models and deployments into your distributed applications.
+Aspire now provides first-class support for Microsoft Foundry, enabling you to easily integrate AI models and deployments into your distributed applications.
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
 
-// Add Azure AI Foundry resource
-var aiFoundry = builder.AddAzureAIFoundry("ai-foundry");
+// Add Microsoft Foundry resource
+var aiFoundry = builder.AddFoundry("ai-foundry");
 
 // Add model deployment
 var gptDeployment = aiFoundry.AddDeployment("gpt-4", "gpt-4", "1106", "OpenAI");
@@ -129,7 +129,7 @@ builder.AddProject<Projects.ChatApi>("chat-api")
 await builder.Build().RunAsync();
 ```
 
-This integration streamlines AI model deployment and management, allowing you to focus on building intelligent applications rather than infrastructure setup. Learn more about [Azure AI Foundry integration](../azure/azure-ai-foundry.md).
+This integration streamlines AI model deployment and management, allowing you to focus on building intelligent applications rather than infrastructure setup. Learn more about [Microsoft Foundry integration](../azure/azure-ai-foundry.md).
 ```
 
 ### Complete Example: Breaking Change

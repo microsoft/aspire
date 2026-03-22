@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using Aspire.Hosting.Azure;
 using Azure.Provisioning.Primitives;
 using Azure.Provisioning.WebPubSub;
@@ -13,7 +15,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <param name="name">The name of the resource.</param>
 /// <param name="configureInfrastructure">Callback to configure the Azure resources.</param>
 public class AzureWebPubSubResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
-    : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString
+    : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString, IAzurePrivateEndpointTarget
 {
     internal Dictionary<string, AzureWebPubSubHubResource> Hubs { get; } = new(StringComparer.OrdinalIgnoreCase);
 
@@ -26,6 +28,11 @@ public class AzureWebPubSubResource(string name, Action<AzureResourceInfrastruct
     /// Gets the "name" output reference for the resource.
     /// </summary>
     public BicepOutputReference NameOutputReference => new("name", this);
+
+    /// <summary>
+    /// Gets the "id" output reference for the resource.
+    /// </summary>
+    public BicepOutputReference Id => new("id", this);
 
     /// <summary>
     /// Gets the connection string template for the manifest for Azure Web PubSub.
@@ -73,4 +80,10 @@ public class AzureWebPubSubResource(string name, Action<AzureResourceInfrastruct
     {
         yield return new("Uri", UriExpression);
     }
+
+    BicepOutputReference IAzurePrivateEndpointTarget.Id => Id;
+
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["webpubsub"];
+
+    string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() => "privatelink.webpubsub.azure.com";
 }

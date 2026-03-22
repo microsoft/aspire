@@ -353,7 +353,7 @@ ATS categorizes types for serialization and code generation using `AtsTypeCatego
 | `Handle` | Opaque object references | `{ "$handle": "42", "$type": "..." }` |
 | `Dto` | Data transfer objects with `[AspireDto]` | JSON object |
 | `Callback` | Guest-provided delegate functions | String (callback ID) |
-| `Array` | Immutable arrays/readonly collections | JSON array (copied by value) |
+| `Array` | Immutable arrays/readonly collections (for example, `IReadOnlyList<T>`/`IEnumerable<T>`) | JSON array (copied by value) |
 | `List` | Mutable `List<T>` | Handle when exposed as property; JSON array when passed as parameter |
 | `Dict` | Mutable `Dictionary<K,V>` | Handle when exposed as property; JSON object when passed as parameter |
 
@@ -563,6 +563,14 @@ Callbacks are passed as string IDs **when invoking a capability that accepts a d
 
 When the host later invokes that callback, arguments use **positional keys** (`p0`, `p1`, ...), not parameter names. See [invokeCallback](#invokecallback-host--guest) for the wire format.
 
+`CancellationToken` is special in generated TypeScript:
+
+- **User-authored inputs** accept `AbortSignal | CancellationToken`
+- **Host-provided values** are materialized as `CancellationToken`
+
+This keeps local TypeScript ergonomic while preserving remote token handles that
+need to round-trip back through the transport layer.
+
 #### Callback Handle Wrapping (TypeScript)
 
 When the host invokes a callback, handle parameters are automatically converted to typed wrapper classes:
@@ -755,9 +763,10 @@ Cancellation tokens enable cooperative cancellation of long-running callbacks.
 
 **Token flow:**
 1. Host creates token when invoking a callback that accepts `CancellationToken`
-2. Host passes token ID in callback args as `$cancellationToken`
-3. Guest can cancel by calling `cancelToken` RPC method
-4. Host disposes token when callback completes
+2. If `CancellationToken` is part of the callback signature, the host passes the token ID in the matching positional `pN` argument
+3. Host also includes the same token ID as `$cancellationToken` metadata for transport-level cancellation wiring
+4. Guest can cancel by calling `cancelToken` RPC method
+5. Host disposes token when callback completes
 
 ```json
 // Callback request with cancellation token
@@ -765,6 +774,7 @@ Cancellation tokens enable cooperative cancellation of long-running callbacks.
     "callback_1_1234567890",
     {
         "p0": {"$handle": "5", "$type": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext"},
+        "p1": "ct_a1b2c3d4-e5f6-7890-abcd-ef1234567890",
         "$cancellationToken": "ct_a1b2c3d4-e5f6-7890-abcd-ef1234567890"
     }
 ]}
@@ -857,7 +867,7 @@ Fields starting with `$` are reserved for ATS protocol metadata:
 |------|------------|---------------|
 | Handle | `{ "$handle": "42", "$type": "Assembly/Namespace.Type" }` | Always handle |
 | DTO | Plain object (requires `[AspireDto]`) | Copied by value |
-| Array/IReadOnlyList | JSON array | Copied by value |
+| Array/IReadOnlyList/IEnumerable | JSON array | Copied by value |
 | `List<T>` | JSON array (parameter) or Handle (return/property) | Handle if returned |
 | `Dictionary<K,V>` | JSON object (parameter) or Handle (return/property) | Handle if returned |
 | Nullable | Value or `null` | Same as inner type |
@@ -971,6 +981,7 @@ Primitive type mapping:
 | `number` | `number` |
 | `boolean` | `boolean` |
 | `any` | `any` |
+| `CancellationToken` | `CancellationToken` for returned/host-provided values; `AbortSignal \| CancellationToken` for generated input parameters |
 | `{Assembly}/{Type}` | `Handle<'{Assembly}/{Type}'>` (typed handle alias) |
 
 ---
@@ -1013,6 +1024,32 @@ const api = await builder
 // Build and run
 await builder.build().run();
 ```
+
+### Cancellation Ergonomics
+
+Generated TypeScript APIs accept either `AbortSignal` or `CancellationToken`
+for user-supplied cancellation input.
+
+Use `AbortSignal` when you create cancellation in TypeScript:
+
+```typescript
+const controller = new AbortController();
+const connectionStringExpression = await db.uriExpression.get();
+const connectionString = await connectionStringExpression.getValue(controller.signal);
+```
+
+When the host gives you a token through callback context or another generated API,
+the generated SDK returns a `CancellationToken` so the remote handle can be passed
+through other generated calls without losing identity:
+
+```typescript
+const cancellationToken = await context.cancellationToken.get();
+const connectionStringExpression = await db.uriExpression.get();
+const connectionString = await connectionStringExpression.getValue(cancellationToken);
+```
+
+Both shapes are accepted by generated input parameters, so local and remote
+cancellation can be mixed naturally in the same AppHost.
 
 ### Fluent Async Chaining
 
@@ -1414,7 +1451,7 @@ This section explains how to develop and test custom language SDKs using a local
 1. Clone the Aspire repository:
 
    ```bash
-   git clone https://github.com/dotnet/aspire.git
+   git clone https://github.com/microsoft/aspire.git
    cd aspire
    ```
 
@@ -1425,24 +1462,9 @@ This section explains how to develop and test custom language SDKs using a local
    ./build.cmd  # Windows
    ```
 
-### Enabling Polyglot Support
+### Polyglot Support
 
-Polyglot support is behind a feature flag that must be enabled before you can use non-.NET languages. Enable it using the `aspire config` command:
-
-```bash
-# Enable polyglot support globally (recommended for SDK development)
-aspire config set features:polyglotSupportEnabled true --global
-
-# Or enable it locally for a specific project
-aspire config set features:polyglotSupportEnabled true
-```
-
-This enables the `--language` option on `aspire init` and `aspire new` commands, and allows the CLI to detect and run non-.NET app hosts.
-
-> **Note:** When running the CLI from source with `dotnet run`, use the full command:
-> ```bash
-> dotnet run --project /path/to/aspire/src/Aspire.Cli/Aspire.Cli.csproj -- config set features:polyglotSupportEnabled true --global
-> ```
+Polyglot support is enabled by default. The `--language` option is available on `aspire init` and `aspire new`, and the CLI can detect and run non-.NET AppHosts without additional configuration.
 
 ### Setting Up Local Development Mode
 
@@ -1469,10 +1491,10 @@ Use `dotnet run` to execute the CLI directly from source:
 
 ```bash
 # Create a new Python app
-dotnet run --project /path/to/aspire/src/Aspire.Cli/Aspire.Cli.csproj -- init -l python
+dotnet run --project /path/to/aspire/src/Aspire.Cli/Aspire.Cli.csproj -- init --language python
 
 # Create a new TypeScript app
-dotnet run --project /path/to/aspire/src/Aspire.Cli/Aspire.Cli.csproj -- init -l typescript
+dotnet run --project /path/to/aspire/src/Aspire.Cli/Aspire.Cli.csproj -- init --language typescript
 ```
 
 The `-l` (or `--language`) flag specifies the target language for scaffolding.
@@ -1495,7 +1517,7 @@ The `-d` (or `--debug`) flag enables additional diagnostic output, useful when d
 
 2. **Testing code generators**: Modify your `ICodeGenerator` implementation, then run `aspire run` in a test app—the new generated code will be produced automatically.
 
-3. **Testing language support**: Modify your `ILanguageSupport` implementation, then use `aspire init -l <language>` to test scaffolding or `aspire run` to test detection and execution.
+3. **Testing language support**: Modify your `ILanguageSupport` implementation, then use `aspire init --language <language>` to test scaffolding or `aspire run` to test detection and execution.
 
 4. **Inspecting generated code**: Check the `.modules/` folder in your test app to see the generated SDK files and verify they match your expectations.
 
@@ -1503,8 +1525,8 @@ The `-d` (or `--debug`) flag enables additional diagnostic output, useful when d
 
 | Task | Command |
 |------|---------|
-| Scaffold Python app | `dotnet run --project $ASPIRE_REPO_ROOT/src/Aspire.Cli/Aspire.Cli.csproj -- init -l python` |
-| Scaffold TypeScript app | `dotnet run --project $ASPIRE_REPO_ROOT/src/Aspire.Cli/Aspire.Cli.csproj -- init -l typescript` |
+| Scaffold Python app | `dotnet run --project $ASPIRE_REPO_ROOT/src/Aspire.Cli/Aspire.Cli.csproj -- init --language python` |
+| Scaffold TypeScript app | `dotnet run --project $ASPIRE_REPO_ROOT/src/Aspire.Cli/Aspire.Cli.csproj -- init --language typescript` |
 | Run app | `dotnet run --project $ASPIRE_REPO_ROOT/src/Aspire.Cli/Aspire.Cli.csproj -- run` |
 | Run with debug output | `dotnet run --project $ASPIRE_REPO_ROOT/src/Aspire.Cli/Aspire.Cli.csproj -- run -d` |
 | Add integration | `dotnet run --project $ASPIRE_REPO_ROOT/src/Aspire.Cli/Aspire.Cli.csproj -- add` |

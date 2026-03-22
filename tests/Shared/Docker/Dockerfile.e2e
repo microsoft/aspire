@@ -1,0 +1,101 @@
+# Multi-stage Dockerfile for Aspire E2E testing (.NET variant).
+#
+# Includes: .NET SDK 10.0, Docker CLI (via host socket mount), gh CLI,
+#           Node.js, Python, Aspire install scripts.
+#
+# Usage:
+#   Local dev (build from source):
+#     BuildContext = repo root, no special build args needed.
+#     Docker builds all packages and the native AOT CLI from source.
+#
+#   CI (pre-built artifacts):
+#     Pass SKIP_SOURCE_BUILD=true as a build arg.
+#     The test code installs from CI artifacts or aspire.dev instead.
+
+# ============================================================
+# Stage 1: Build Aspire from source
+# ============================================================
+# Produces NuGet packages and the native AOT CLI binary.
+# Skipped when SKIP_SOURCE_BUILD=true (CI mode).
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+
+ARG SKIP_SOURCE_BUILD=false
+
+# Install native AOT build toolchain.
+RUN if [ "$SKIP_SOURCE_BUILD" != "true" ]; then \
+      apt-get update -qq && \
+      apt-get install -y --no-install-recommends clang zlib1g-dev && \
+      rm -rf /var/lib/apt/lists/*; \
+    fi
+
+WORKDIR /repo
+
+# Copy everything (filtered by .dockerignore at repo root).
+COPY . .
+
+# Full build: restore, build, pack, then bundle (native AOT CLI).
+RUN if [ "$SKIP_SOURCE_BUILD" != "true" ]; then \
+      ./restore.sh && \
+      ./build.sh --pack -c Release && \
+      ./build.sh --bundle -c Release; \
+    else \
+      mkdir -p /repo/artifacts/bundle; \
+    fi
+
+# ============================================================
+# Stage 2: .NET test runtime environment
+# ============================================================
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS runtime
+
+# --- Common tooling (shared between dotnet and polyglot variants) ---
+
+# Install gh CLI (needed by get-aspire-cli-pr.sh to download PR artifacts).
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends gpg docker.io && \
+    curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+      | gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+      > /etc/apt/sources.list.d/github-cli.list && \
+    apt-get update -qq && \
+    apt-get install -y --no-install-recommends gh && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Node.js (needed for TypeScript/JS templates and polyglot AppHosts).
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Python (needed for Python templates).
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends python3 python3-pip python3-venv && \
+    rm -rf /var/lib/apt/lists/*
+
+# --- Aspire CLI setup ---
+
+# Copy the install scripts.
+COPY eng/scripts/get-aspire-cli.sh /opt/aspire-scripts/
+COPY eng/scripts/get-aspire-cli-pr.sh /opt/aspire-scripts/
+RUN chmod +x /opt/aspire-scripts/*.sh
+
+# Copy the bundle directory from the build stage.
+# When SKIP_SOURCE_BUILD=true the directory is empty; the conditional RUN below handles both cases.
+COPY --from=build /repo/artifacts/bundle /tmp/bundle
+
+# Install the CLI from the bundle archive (no-op when the bundle directory is empty).
+RUN if ls /tmp/bundle/aspire-*-linux-x64.tar.gz 1>/dev/null 2>&1; then \
+      mkdir -p /root/.aspire && \
+      tar -xzf /tmp/bundle/aspire-*-linux-x64.tar.gz -C /root/.aspire && \
+      rm -f /tmp/bundle/aspire-*-linux-x64.tar.gz; \
+    fi
+
+# Create the workspace mount point.
+RUN mkdir -p /workspace
+WORKDIR /workspace
+
+ENV PATH="/root/.aspire/bin:/root/.aspire:${PATH}"
+ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
+ENV DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
+ENV DOTNET_GENERATE_ASPNET_CERTIFICATE=false
+ENV ASPIRE_PLAYGROUND=true
+ENV TERM=xterm
+

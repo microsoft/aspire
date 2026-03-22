@@ -416,7 +416,8 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
             {
                 BaseAddress = new Uri($"https://{app.McpEndPointAccessor().EndPoint}")
             };
-            var mcpRequest = McpServiceTests.CreateListToolsRequest();
+            var mcpSessionId = await McpServiceTests.InitializeSessionAsync(mcpHttpClient);
+            var mcpRequest = McpServiceTests.CreateListToolsRequest(mcpSessionId);
 
             var responseMessage = await mcpHttpClient.SendAsync(mcpRequest).DefaultTimeout(TestConstants.LongTimeoutDuration);
             responseMessage.EnsureSuccessStatusCode();
@@ -685,44 +686,49 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         Assert.Collection(l,
             w =>
             {
-                Assert.Equal("Aspire version: {Version}", GetValue(w.State, "{OriginalFormat}"));
+                Assert.Equal("Aspire version: {Version}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
             },
             w =>
             {
-                Assert.Equal("Now listening on: {DashboardUri}", GetValue(w.State, "{OriginalFormat}"));
+                Assert.Equal("Now listening on: {DashboardUri}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
 
-                var uri = new Uri((string)GetValue(w.State, "DashboardUri")!);
+                var uri = new Uri((string)LogTestHelpers.GetValue(w, "DashboardUri")!);
                 Assert.NotEqual(0, uri.Port);
             },
             w =>
             {
-                Assert.Equal("OTLP/gRPC listening on: {OtlpEndpointUri}", GetValue(w.State, "{OriginalFormat}"));
+                Assert.Equal("OTLP/gRPC listening on: {OtlpEndpointUri}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
 
-                var uri = new Uri((string)GetValue(w.State, "OtlpEndpointUri")!);
+                var uri = new Uri((string)LogTestHelpers.GetValue(w, "OtlpEndpointUri")!);
                 Assert.NotEqual(0, uri.Port);
             },
             w =>
             {
-                Assert.Equal("OTLP/HTTP listening on: {OtlpEndpointUri}", GetValue(w.State, "{OriginalFormat}"));
+                Assert.Equal("OTLP/HTTP listening on: {OtlpEndpointUri}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
 
-                var uri = new Uri((string)GetValue(w.State, "OtlpEndpointUri")!);
+                var uri = new Uri((string)LogTestHelpers.GetValue(w, "OtlpEndpointUri")!);
                 Assert.NotEqual(0, uri.Port);
             },
             w =>
             {
-                Assert.Equal("MCP listening on: {McpEndpointUri}", GetValue(w.State, "{OriginalFormat}"));
+                Assert.Equal("MCP listening on: {McpEndpointUri}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
 
-                var uri = new Uri((string)GetValue(w.State, "McpEndpointUri")!);
+                var uri = new Uri((string)LogTestHelpers.GetValue(w, "McpEndpointUri")!);
                 Assert.NotEqual(0, uri.Port);
             },
             w =>
             {
-                Assert.Equal("OTLP server is unsecured. Untrusted apps can send telemetry to the dashboard. For more information, visit https://go.microsoft.com/fwlink/?linkid=2267030", GetValue(w.State, "{OriginalFormat}"));
+                Assert.Equal("OTLP server is unsecured. Untrusted apps can send telemetry to the dashboard. For more information, visit https://go.microsoft.com/fwlink/?linkid=2267030", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
                 Assert.Equal(LogLevel.Warning, w.LogLevel);
             },
             w =>
             {
-                Assert.Equal("MCP server is unsecured. Untrusted apps can access sensitive information.", GetValue(w.State, "{OriginalFormat}"));
+                Assert.Equal("MCP server is unsecured. Untrusted apps can access sensitive information.", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
+                Assert.Equal(LogLevel.Warning, w.LogLevel);
+            },
+            w =>
+            {
+                Assert.Equal("Dashboard API is unsecured. Untrusted apps can access sensitive telemetry data.", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
                 Assert.Equal(LogLevel.Warning, w.LogLevel);
             });
     }
@@ -750,21 +756,95 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         Assert.Collection(l,
             w =>
             {
-                Assert.Equal("Aspire version: {Version}", GetValue(w.State, "{OriginalFormat}"));
+                Assert.Equal("Aspire version: {Version}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
             },
             w =>
             {
-                Assert.Equal("Now listening on: {DashboardUri}", GetValue(w.State, "{OriginalFormat}"));
+                Assert.Equal("Now listening on: {DashboardUri}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
             },
             w =>
             {
-                Assert.Equal("MCP listening on: {McpEndpointUri}", GetValue(w.State, "{OriginalFormat}"));
+                Assert.Equal("MCP listening on: {McpEndpointUri}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
             },
             w =>
             {
-                Assert.Equal("MCP server is unsecured. Untrusted apps can access sensitive information.", GetValue(w.State, "{OriginalFormat}"));
+                Assert.Equal("MCP server is unsecured. Untrusted apps can access sensitive information.", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
+                Assert.Equal(LogLevel.Warning, w.LogLevel);
+            },
+            w =>
+            {
+                Assert.Equal("Dashboard API is unsecured. Untrusted apps can access sensitive telemetry data.", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
                 Assert.Equal(LogLevel.Warning, w.LogLevel);
             });
+    }
+
+    [Fact]
+    public async Task LogOutput_McpDisabled_NoMcpWarningLog()
+    {
+        // Arrange
+        var testSink = new TestSink();
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
+            additionalConfiguration: data =>
+            {
+                data[DashboardConfigNames.DashboardMcpDisableName.ConfigKey] = "true";
+            },
+            testSink: testSink);
+
+        // Act
+        await app.StartAsync().DefaultTimeout();
+
+        // Assert
+        var l = testSink.Writes.Where(w => w.LoggerName == typeof(DashboardWebApplication).FullName && w.LogLevel >= LogLevel.Warning).ToList();
+
+        // Should have no MCP unsecured warning when MCP is disabled
+        Assert.DoesNotContain(l, w => LogTestHelpers.GetValue(w, "{OriginalFormat}")?.ToString()?.Contains("MCP server is unsecured") == true);
+    }
+
+    [Theory]
+    [InlineData(null, HttpStatusCode.NotFound)]
+    [InlineData(true, HttpStatusCode.OK)]
+    [InlineData(false, HttpStatusCode.NotFound)]
+    public async Task ApiEnabled_ReturnsExpectedStatusAndWarning(bool? enabled, HttpStatusCode expectedStatusCode)
+    {
+        const string ApiUnsecuredWarning = "Dashboard API is unsecured. Untrusted apps can access sensitive telemetry data.";
+
+        // Arrange
+        var testSink = new TestSink();
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
+            additionalConfiguration: config =>
+            {
+                if (enabled is not null)
+                {
+                    config[DashboardConfigNames.DashboardApiEnabledName.ConfigKey] = enabled.Value.ToString();
+                }
+                else
+                {
+                    config.Remove(DashboardConfigNames.DashboardApiEnabledName.ConfigKey);
+                }
+            },
+            testSink: testSink);
+        await app.StartAsync().DefaultTimeout();
+
+        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
+
+        // Act
+        var response = await httpClient.GetAsync("/api/telemetry/spans").DefaultTimeout();
+
+        // Assert
+        Assert.Equal(expectedStatusCode, response.StatusCode);
+
+        var warnings = testSink.Writes
+            .Where(w => w.LoggerName == typeof(DashboardWebApplication).FullName && w.LogLevel >= LogLevel.Warning)
+            .ToList();
+
+        if (enabled == true)
+        {
+            Assert.Contains(warnings, w => LogTestHelpers.GetValue(w, "{OriginalFormat}")?.ToString() == ApiUnsecuredWarning);
+        }
+        else
+        {
+            Assert.DoesNotContain(warnings, w => LogTestHelpers.GetValue(w, "{OriginalFormat}")?.ToString() == ApiUnsecuredWarning);
+        }
     }
 
     [Fact]
@@ -821,46 +901,51 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         Assert.Collection(l,
             w =>
             {
-                Assert.Equal("Aspire version: {Version}", GetValue(w.State, "{OriginalFormat}"));
+                Assert.Equal("Aspire version: {Version}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
             },
             w =>
             {
-                Assert.Equal("Now listening on: {DashboardUri}", GetValue(w.State, "{OriginalFormat}"));
+                Assert.Equal("Now listening on: {DashboardUri}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
 
-                var uri = new Uri((string)GetValue(w.State, "DashboardUri")!);
+                var uri = new Uri((string)LogTestHelpers.GetValue(w, "DashboardUri")!);
                 Assert.Equal("https", uri.Scheme);
                 Assert.Equal("localhost", uri.Host);
                 Assert.Equal(frontendPort1, uri.Port);
             },
             w =>
             {
-                Assert.Equal("OTLP/gRPC listening on: {OtlpEndpointUri}", GetValue(w.State, "{OriginalFormat}"));
+                Assert.Equal("OTLP/gRPC listening on: {OtlpEndpointUri}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
 
-                var uri = new Uri((string)GetValue(w.State, "OtlpEndpointUri")!);
+                var uri = new Uri((string)LogTestHelpers.GetValue(w, "OtlpEndpointUri")!);
                 Assert.Equal(otlpGrpcPort, uri.Port);
             },
             w =>
             {
-                Assert.Equal("OTLP/HTTP listening on: {OtlpEndpointUri}", GetValue(w.State, "{OriginalFormat}"));
+                Assert.Equal("OTLP/HTTP listening on: {OtlpEndpointUri}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
 
-                var uri = new Uri((string)GetValue(w.State, "OtlpEndpointUri")!);
+                var uri = new Uri((string)LogTestHelpers.GetValue(w, "OtlpEndpointUri")!);
                 Assert.Equal(otlpHttpPort, uri.Port);
             },
             w =>
             {
-                Assert.Equal("MCP listening on: {McpEndpointUri}", GetValue(w.State, "{OriginalFormat}"));
+                Assert.Equal("MCP listening on: {McpEndpointUri}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
 
-                var uri = new Uri((string)GetValue(w.State, "McpEndpointUri")!);
+                var uri = new Uri((string)LogTestHelpers.GetValue(w, "McpEndpointUri")!);
                 Assert.NotEqual(0, uri.Port); // Check that allocated port is in log message
             },
             w =>
             {
-                Assert.Equal("OTLP server is unsecured. Untrusted apps can send telemetry to the dashboard. For more information, visit https://go.microsoft.com/fwlink/?linkid=2267030", GetValue(w.State, "{OriginalFormat}"));
+                Assert.Equal("OTLP server is unsecured. Untrusted apps can send telemetry to the dashboard. For more information, visit https://go.microsoft.com/fwlink/?linkid=2267030", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
                 Assert.Equal(LogLevel.Warning, w.LogLevel);
             },
             w =>
             {
-                Assert.Equal("MCP server is unsecured. Untrusted apps can access sensitive information.", GetValue(w.State, "{OriginalFormat}"));
+                Assert.Equal("MCP server is unsecured. Untrusted apps can access sensitive information.", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
+                Assert.Equal(LogLevel.Warning, w.LogLevel);
+            },
+            w =>
+            {
+                Assert.Equal("Dashboard API is unsecured. Untrusted apps can access sensitive telemetry data.", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
                 Assert.Equal(LogLevel.Warning, w.LogLevel);
             });
     }
@@ -1084,11 +1169,5 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
                 next(app);
             };
         }
-    }
-
-    private static object? GetValue(object? values, string key)
-    {
-        var list = values as IReadOnlyList<KeyValuePair<string, object>>;
-        return list?.SingleOrDefault(kvp => kvp.Key == key).Value;
     }
 }

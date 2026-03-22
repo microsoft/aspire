@@ -104,7 +104,7 @@ When using a connection string from the `ConnectionStrings` configuration sectio
 builder.AddAzureKeyVaultClient("secretConnectionName");
 ```
 
-And then the vault URI will be retrieved from the `ConnectionStrings` configuration section. The vault URI which works with the `AzureSecurityKeyVaultSettings.Credential` property to establish a connection. If no credential is configured, the [DefaultAzureCredential](https://learn.microsoft.com/dotnet/api/azure.identity.defaultazurecredential) is used.
+And then the vault URI will be retrieved from the `ConnectionStrings` configuration section. The vault URI which works with the `AzureSecurityKeyVaultSettings.Credential` property to establish a connection. If no credential is configured, a [default TokenCredential is created based on the current environment](https://aka.ms/aspire/default-azure-credential).
 
 ```json
 {
@@ -182,8 +182,8 @@ builder.AddAzureKeyVaultClient("secrets");
 ## Additional documentation
 
 * https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/keyvault/Azure.Security.KeyVault.Secrets/README.md
-* https://github.com/dotnet/aspire/tree/main/src/Components/README.md
+* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

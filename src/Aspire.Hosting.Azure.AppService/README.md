@@ -120,4 +120,4 @@ var appServiceEnvironment = builder.AddAzureAppServiceEnvironment("env")
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

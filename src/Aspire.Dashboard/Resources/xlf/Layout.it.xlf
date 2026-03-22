@@ -42,6 +42,11 @@
         <target state="translated">Ricarica</target>
         <note />
       </trans-unit>
+      <trans-unit id="MessageUnsecuredEndpointApiBody">
+        <source>Untrusted apps can access telemetry data via the API.</source>
+        <target state="translated">Le app non attendibili possono accedere ai dati di telemetria tramite l’API.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MessageUnsecuredEndpointLink">
         <source>More information</source>
         <target state="translated">Altre informazioni</target>

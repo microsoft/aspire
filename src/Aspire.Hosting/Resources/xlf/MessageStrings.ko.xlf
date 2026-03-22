@@ -27,6 +27,46 @@
         <target state="translated">애플리케이션을 실행하려면 최신 버전의 Aspire.Hosting.AppHost 패키지가 필요합니다. 최소한 '{0}' 이상의 버전을 참조하고 있는지 확인하세요.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InstallationInstructions">
+        <source>Installation instructions</source>
+        <target state="translated">설치 지침</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MissingCommandNotificationTitle">
+        <source>Missing command</source>
+        <target state="translated">명령이 없음</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PersistentContainerWithoutUserSecrets">
+        <source>Resource '{0}' has a persistent lifetime but the AppHost project does not have user secrets configured. Generated parameter values (such as passwords) may change on each restart, causing persistent containers to be recreated. Run 'aspire secret set' to initialize user secrets.</source>
+        <target state="translated">리소스 '{0}'에 영구 수명이 있지만 AppHost 프로젝트에 사용자 암호가 구성되어 있지 않습니다. 생성된 매개 변수 값(예: 암호)은 다시 시작할 때마다 변경되어 영구 컨테이너가 다시 만들어질 수 있습니다. 'aspire secret set'를 실행하여 사용자 암호를 초기화하세요.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RequiredCommandNotFound">
+        <source>Required command '{0}' was not found on PATH or at the specified location.</source>
+        <target state="translated">PATH 또는 지정된 위치에서 필수 명령 '{0}'을(를) 찾을 수 없습니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RequiredCommandNotFoundWithLink">
+        <source>Required command '{0}' was not found on PATH or at the specified location. For installation instructions, see: {1}</source>
+        <target state="translated">PATH 또는 지정된 위치에서 필수 명령 '{0}'을(를) 찾을 수 없습니다. 설치 지침은 다음을 참조하세요. {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RequiredCommandValidationFailed">
+        <source>Command '{0}' validation failed: {1}</source>
+        <target state="translated">명령 '{0}' 유효성 검사가 실패함: {1}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RequiredCommandValidationFailedWithLink">
+        <source>Command '{0}' validation failed: {1}. For installation instructions, see: {2}</source>
+        <target state="translated">명령 '{0}' 유효성 검사가 실패했습니다. {1}. 설치 지침은 다음을 참조하세요. {2}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceMayFailToStart">
+        <source>Resource '{0}' may fail to start: {1}</source>
+        <target state="translated">리소스 '{0}'을(를) 시작하지 못할 수 있음: {1}</target>
+        <note />
+      </trans-unit>
     </body>
   </file>
 </xliff>

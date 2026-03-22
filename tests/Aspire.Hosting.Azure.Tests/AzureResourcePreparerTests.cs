@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning.Storage;
@@ -183,6 +185,38 @@ public class AzureResourcePreparerTests
     }
 
     [Fact]
+    public async Task PublishDeploymentTargetIncludesComputedPrerequisitesInReferences()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddAzureAppServiceEnvironment("env");
+
+        var vnet = builder.AddAzureVirtualNetwork("vnet");
+        var peSubnet = vnet.AddSubnet("pe-subnet", "10.0.1.0/24");
+
+        var storage = builder.AddAzureStorage("storage");
+        var blobs = storage.AddBlobs("blobs");
+        var queues = storage.AddBlobs("queues");
+
+        var blobPE = peSubnet.AddPrivateEndpoint(blobs);
+        var queuesPE = peSubnet.AddPrivateEndpoint(queues);
+
+        var api = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithReference(blobs)
+            .WithReference(queues);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var roleAssignmentResource = Assert.Single(model.Resources.OfType<AzureBicepResource>(), r => r.Name == "api-roles-storage");
+        var deploymentTarget = Assert.IsAssignableFrom<AzureBicepResource>(api.Resource.GetDeploymentTargetAnnotation()?.DeploymentTarget);
+
+        Assert.Contains(roleAssignmentResource, deploymentTarget.References);
+        Assert.Contains(blobPE.Resource, deploymentTarget.References);
+        Assert.Contains(queuesPE.Resource, deploymentTarget.References);
+    }
+
+    [Fact]
     public async Task NullEnvironmentVariableIsIgnored()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -295,6 +329,45 @@ public class AzureResourcePreparerTests
             n => Assert.Equal("api2", n),
             n => Assert.Equal("api-identity", n),
             n => Assert.Equal("api-roles-storage", n));
+    }
+
+    [Fact]
+    public async Task ViteAppDoesNotGetManagedIdentity()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddAzureContainerAppEnvironment("env");
+
+        var storage = builder.AddAzureStorage("storage");
+        var blobs = storage.AddBlobs("blobs");
+
+        var api = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithReference(blobs)
+            .WaitFor(blobs);
+
+        var frontend = builder.AddViteApp("frontend", "./frontend")
+            .WithReference(api)
+            .WithReference(blobs)
+            .WaitFor(blobs);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        Assert.Collection(model.Resources.Select(r => r.Name),
+            n => Assert.StartsWith("azure", n),
+            n => Assert.Equal("env-acr", n),
+            n => Assert.Equal("env", n),
+            n => Assert.Equal("storage", n),
+            n => Assert.Equal("blobs", n),
+            n => Assert.Equal("api", n),
+            n => Assert.Equal("frontend", n),
+            n => Assert.Equal("api-identity", n),
+            n => Assert.Equal("api-roles-storage", n));
+
+        // The ViteApp should NOT get a managed identity since it is a BuildOnlyContainer resource,
+        // even though it references the storage account. Only the API should get a managed identity.
+        Assert.DoesNotContain(model.Resources, r => r.Name == "frontend-identity");
     }
 
     private sealed class Project : IProjectMetadata

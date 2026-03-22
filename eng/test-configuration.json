@@ -1,9 +1,9 @@
 {
   "version": 2,
   "defaultOnFailure": "fail",
-  "localRerunCount": 1,
+  "localRerunCount": 0,
   "remoteRerunCount": 3,
   "retryOnRules": [
-    { "failureMessage" : { "regex" : "open.*docker.*GetImageBlob.*: no such file or directory" } }
+    { "failureMessage" : { "regex" : "No such image: .*testcontainers/ryuk:.*" } }
   ]
 }

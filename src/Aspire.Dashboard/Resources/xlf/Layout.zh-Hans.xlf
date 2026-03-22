@@ -42,6 +42,11 @@
         <target state="translated">重新加载</target>
         <note />
       </trans-unit>
+      <trans-unit id="MessageUnsecuredEndpointApiBody">
+        <source>Untrusted apps can access telemetry data via the API.</source>
+        <target state="translated">不受信任的应用可以通过 API 访问遥测数据。</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MessageUnsecuredEndpointLink">
         <source>More information</source>
         <target state="translated">详细信息</target>

@@ -361,6 +361,9 @@
   <data name="GenAIOutputHeaderText" xml:space="preserve">
     <value>Output</value>
   </data>
+  <data name="GenAILLMBadgeText" xml:space="preserve">
+    <value>LLM</value>
+  </data>
   <data name="GenAIMessageCategoryToolCalls" xml:space="preserve">
     <value>Tool calls</value>
   </data>
@@ -416,6 +419,12 @@
   <data name="GenAIToolRequiredParameter" xml:space="preserve">
     <value>Required parameter</value>
   </data>
+  <data name="GenAIToolCallButtonText" xml:space="preserve">
+    <value>Tool call</value>
+  </data>
+  <data name="GenAIToolDefinitionButtonText" xml:space="preserve">
+    <value>Tool definition</value>
+  </data>
   <data name="GenAIToolNoParameters" xml:space="preserve">
     <value>No parameters</value>
   </data>
@@ -431,6 +440,9 @@
   </data>
   <data name="GenAIDisplayErrorMessageText" xml:space="preserve">
     <value>Error displaying GenAI content:</value>
+  </data>
+  <data name="GenAIUnexpectedOrTruncatedContent" xml:space="preserve">
+    <value>Unexpected or truncated message content.</value>
   </data>
   <data name="McpServerDialogIntroduction" xml:space="preserve">
     <value>Aspire MCP connects AI assistants to Aspire app data. AI can use Aspire MCP to get information about app resources, health checks, commands, console logs and real-time telemetry.</value>
@@ -548,5 +560,17 @@
   </data>
   <data name="ManageDataResource" xml:space="preserve">
     <value>Resource</value>
+  </data>
+  <data name="SettingsDialogTimeFormat" xml:space="preserve">
+    <value>Time format</value>
+  </data>
+  <data name="SettingsDialogTimeFormatSystem" xml:space="preserve">
+    <value>System</value>
+  </data>
+  <data name="SettingsDialogTimeFormatTwelveHour" xml:space="preserve">
+    <value>12-hour</value>
+  </data>
+  <data name="SettingsDialogTimeFormatTwentyFourHour" xml:space="preserve">
+    <value>24-hour</value>
   </data>
 </root>

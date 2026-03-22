@@ -25,6 +25,7 @@ public static class OracleDatabaseBuilderExtensions
     /// <param name="password">The parameter used to provide the administrator password for the Oracle Server resource. If <see langword="null"/> a random password will be generated.</param>
     /// <param name="port">The host port for Oracle Server.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("addOracle", Description = "Adds an Oracle server resource to the distributed application model.")]
     public static IResourceBuilder<OracleDatabaseServerResource> AddOracle(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -73,6 +74,7 @@ public static class OracleDatabaseBuilderExtensions
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <param name="databaseName">The name of the database. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("addDatabase", Description = "Adds an Oracle database resource to an Oracle server resource.")]
     public static IResourceBuilder<OracleDatabaseResource> AddDatabase(
         this IResourceBuilder<OracleDatabaseServerResource> builder,
         [ResourceName] string name,
@@ -95,6 +97,7 @@ public static class OracleDatabaseBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="name">The name of the volume. Defaults to an auto-generated name based on the application and resource names.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("withDataVolume", Description = "Adds a persistent data volume to the Oracle server resource.")]
     public static IResourceBuilder<OracleDatabaseServerResource> WithDataVolume(this IResourceBuilder<OracleDatabaseServerResource> builder, string? name = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -108,6 +111,7 @@ public static class OracleDatabaseBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="source">The source directory on the host to mount into the container.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("withDataBindMount", Description = "Mounts a host directory as the Oracle data directory.")]
     public static IResourceBuilder<OracleDatabaseServerResource> WithDataBindMount(this IResourceBuilder<OracleDatabaseServerResource> builder, string source)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -137,6 +141,7 @@ public static class OracleDatabaseBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="source">The source file or directory on the host to copy into the container.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("withInitFiles", Description = "Copies initialization files into the Oracle container.")]
     public static IResourceBuilder<OracleDatabaseServerResource> WithInitFiles(this IResourceBuilder<OracleDatabaseServerResource> builder, string source)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -155,6 +160,7 @@ public static class OracleDatabaseBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="source">The source directory on the host to mount into the container.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("withDbSetupBindMount", Description = "Mounts a host directory as the Oracle DB setup directory.")]
     public static IResourceBuilder<OracleDatabaseServerResource> WithDbSetupBindMount(this IResourceBuilder<OracleDatabaseServerResource> builder, string source)
     {
         ArgumentNullException.ThrowIfNull(builder);

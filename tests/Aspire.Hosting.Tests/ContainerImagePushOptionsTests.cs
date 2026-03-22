@@ -5,6 +5,7 @@
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "2")]
 public class ContainerImagePushOptionsTests
 {
     [Fact]

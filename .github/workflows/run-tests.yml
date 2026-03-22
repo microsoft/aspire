@@ -39,6 +39,11 @@ on:
         required: false
         type: boolean
         default: false
+      # Controls whether to set CLI E2E environment variables (GH_TOKEN, GITHUB_PR_NUMBER, GITHUB_PR_HEAD_SHA)
+      requiresCliArchive:
+        required: false
+        type: boolean
+        default: false
       # Controls whether to install Playwright browsers during project build
       enablePlaywrightInstall:
         required: false
@@ -75,8 +80,8 @@ jobs:
       # from the repo always use restored dotnet. For tests run from outside
       # the repo we install system dotnet earlier in the build
 
-      - name: Setup vars (Linux)
-        if: ${{ inputs.os == 'ubuntu-latest' || inputs.os == 'macos-latest' }}
+      - name: Setup vars (Linux/macOS)
+        if: ${{ runner.os != 'Windows' }}
         run: |
           echo "DOTNET_SCRIPT=./dotnet.sh" >> $GITHUB_ENV
           echo "BUILD_SCRIPT=./build.sh" >> $GITHUB_ENV
@@ -84,7 +89,7 @@ jobs:
           echo ${{ github.workspace }}/.dotnet >> $GITHUB_PATH
 
       - name: Setup vars (Windows)
-        if: ${{ inputs.os == 'windows-latest' }}
+        if: ${{ runner.os == 'Windows' }}
         run: |
           echo "DOTNET_SCRIPT=.\dotnet.cmd" >> $env:GITHUB_ENV
           echo "BUILD_SCRIPT=.\build.cmd" >> $env:GITHUB_ENV
@@ -107,12 +112,22 @@ jobs:
           DOTNET_INSTALL_DIR: ${{ env.DOTNET_ROOT }}
 
       - name: Trust HTTPS development certificate (Linux)
-        if: inputs.os == 'ubuntu-latest'
-        run: ${{ env.DOTNET_SCRIPT }} dev-certs https --trust
+        if: runner.os == 'Linux'
+        # Allow the task to succeed on partial trust.
+        # Remove this workaround once https://github.com/dotnet/aspnetcore/pull/65392 has shipped
+        run: |
+          EXIT_CODE=0
+          ${{ env.DOTNET_SCRIPT }} dev-certs https --trust || EXIT_CODE=$?
+          if [ $EXIT_CODE -ne 0 ] && [ $EXIT_CODE -ne 4 ]; then
+            echo "dev-certs https --trust failed with exit code $EXIT_CODE"
+            exit $EXIT_CODE
+          fi
+        env:
+          WSL_INTEROP: ""
 
       - name: Verify Docker is running
         # nested docker containers not supported on windows
-        if: inputs.os == 'ubuntu-latest'
+        if: runner.os == 'Linux'
         run: docker info
 
       - name: Download built nugets
@@ -133,12 +148,12 @@ jobs:
         id: compute_rid
         shell: pwsh
         run: |
-          $os = "${{ inputs.os }}"
-          switch ($os) {
-            'ubuntu-latest' { $rid = 'linux-x64' }
-            'macos-latest'  { $rid = 'osx-arm64' }
-            'windows-latest'{ $rid = 'win-x64' }
-            Default { Write-Error "Unknown OS '$os' for RID mapping"; exit 1 }
+          $runnerOs = "${{ runner.os }}"
+          switch ($runnerOs) {
+            'Linux'   { $rid = 'linux-x64' }
+            'macOS'   { $rid = 'osx-arm64' }
+            'Windows' { $rid = 'win-x64' }
+            Default { Write-Error "Unknown runner.os '$runnerOs' for RID mapping"; exit 1 }
           }
           Write-Host "Using RID=$rid"
           "RID=$rid"    | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
@@ -180,7 +195,7 @@ jobs:
           /bl:${{ github.workspace }}/artifacts/log/Debug/InstallSdkForTesting.binlog
 
       - name: Install Azure Functions Core Tools
-        if: inputs.os == 'ubuntu-latest' && (inputs.testShortName == 'Playground' || inputs.testShortName == 'Azure')
+        if: runner.os == 'Linux' && (inputs.testShortName == 'Playground' || inputs.testShortName == 'Azure')
         run: |
           npm i -g azure-functions-core-tools@4 --unsafe-perm true
 
@@ -224,7 +239,8 @@ jobs:
         run: >
           ${{ env.BUILD_SCRIPT }} -restore -ci -build -projects ${{ env.TEST_PROJECT_PATH }}
           /p:PrepareForHelix=true
-          /bl:${{ github.workspace }}/artifacts/log/Debug/PrepareForHelix.binlog
+          /p:ArchiveTests=true
+          /bl:${{ github.workspace }}/artifacts/log/Debug/BuildAndArchive.binlog
           ${{ !inputs.enablePlaywrightInstall && '/p:InstallBrowsersForPlaywright=false' || '' }}
           ${{ inputs.versionOverrideArg }}
 
@@ -276,7 +292,7 @@ jobs:
         uses: ./.github/actions/unlock-macos-keychain
 
       - name: Run nuget dependent tests (Linux/macOS)
-        if: ${{ inputs.requiresNugets && (inputs.os == 'ubuntu-latest' || inputs.os == 'macos-latest') }}
+        if: ${{ inputs.requiresNugets && runner.os != 'Windows' }}
         working-directory: ${{ github.workspace }}/run-tests/
         env:
           ASPIRE__TEST__DCPLOGBASEPATH: ${{ github.workspace }}/testresults/dcp
@@ -286,6 +302,10 @@ jobs:
           TEST_LOG_PATH: ${{ github.workspace }}/artifacts/log/test-logs
           TestsRunningOutsideOfRepo: true
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
+          # PR metadata and token for CLI E2E tests that download artifacts from a PR
+          GITHUB_PR_NUMBER: ${{ inputs.requiresCliArchive && github.event.pull_request.number || '' }}
+          GITHUB_PR_HEAD_SHA: ${{ inputs.requiresCliArchive && github.event.pull_request.head.sha || '' }}
+          GH_TOKEN: ${{ inputs.requiresCliArchive && github.token || '' }}
         run: |
           # Start heartbeat monitor in background
           ${{ github.workspace }}/${{ env.DOTNET_SCRIPT }} ${{ github.workspace }}/tools/scripts/Heartbeat.cs &
@@ -313,7 +333,7 @@ jobs:
           exit $TEST_EXIT_CODE
 
       - name: Run nuget dependent tests (Windows)
-        if: ${{ inputs.requiresNugets && inputs.os == 'windows-latest' }}
+        if: ${{ inputs.requiresNugets && runner.os == 'Windows' }}
         working-directory: ${{ github.workspace }}/run-tests/
         shell: pwsh
         env:
@@ -324,6 +344,10 @@ jobs:
           TEST_LOG_PATH: ${{ github.workspace }}/artifacts/log/test-logs
           TestsRunningOutsideOfRepo: true
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
+          # PR metadata and token for CLI E2E tests that download artifacts from a PR
+          GITHUB_PR_NUMBER: ${{ inputs.requiresCliArchive && github.event.pull_request.number || '' }}
+          GITHUB_PR_HEAD_SHA: ${{ inputs.requiresCliArchive && github.event.pull_request.head.sha || '' }}
+          GH_TOKEN: ${{ inputs.requiresCliArchive && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (output goes to console directly)
           $heartbeatProcess = Start-Process -FilePath "dotnet" `
@@ -354,7 +378,7 @@ jobs:
           }
 
       - name: Run tests (Linux/macOS)
-        if: ${{ ! inputs.requiresNugets && (inputs.os == 'ubuntu-latest' || inputs.os == 'macos-latest') }}
+        if: ${{ ! inputs.requiresNugets && runner.os != 'Windows' }}
         id: run-tests-unix
         env:
           ASPIRE__TEST__DCPLOGBASEPATH: ${{ github.workspace }}/testresults/dcp
@@ -364,12 +388,10 @@ jobs:
           NUGET_PACKAGES: ${{ github.workspace }}/.packages
           PLAYWRIGHT_INSTALLED: ${{ !inputs.enablePlaywrightInstall && 'false' || 'true' }}
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
-          # PR number for CLI E2E tests that download artifacts from a PR
-          GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
-          # PR head SHA for version verification (not the merge commit SHA)
-          GITHUB_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          # GitHub token for CLI E2E tests to download artifacts
-          GH_TOKEN: ${{ github.token }}
+          # PR metadata and token for CLI E2E tests that download artifacts from a PR
+          GITHUB_PR_NUMBER: ${{ inputs.requiresCliArchive && github.event.pull_request.number || '' }}
+          GITHUB_PR_HEAD_SHA: ${{ inputs.requiresCliArchive && github.event.pull_request.head.sha || '' }}
+          GH_TOKEN: ${{ inputs.requiresCliArchive && github.token || '' }}
         run: |
           # Start heartbeat monitor in background
           ${{ env.DOTNET_SCRIPT }} ${{ github.workspace }}/tools/scripts/Heartbeat.cs &
@@ -400,7 +422,7 @@ jobs:
           exit $TEST_EXIT_CODE
 
       - name: Run tests (Windows)
-        if: ${{ ! inputs.requiresNugets && inputs.os == 'windows-latest' }}
+        if: ${{ ! inputs.requiresNugets && runner.os == 'Windows' }}
         id: run-tests-windows
         shell: pwsh
         env:
@@ -408,12 +430,10 @@ jobs:
           NUGET_PACKAGES: ${{ github.workspace }}/.packages
           PLAYWRIGHT_INSTALLED: ${{ !inputs.enablePlaywrightInstall && 'false' || 'true' }}
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
-          # PR number for CLI E2E tests that download artifacts from a PR
-          GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
-          # PR head SHA for version verification (not the merge commit SHA)
-          GITHUB_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          # GitHub token for CLI E2E tests to download artifacts
-          GH_TOKEN: ${{ github.token }}
+          # PR metadata and token for CLI E2E tests that download artifacts from a PR
+          GITHUB_PR_NUMBER: ${{ inputs.requiresCliArchive && github.event.pull_request.number || '' }}
+          GITHUB_PR_HEAD_SHA: ${{ inputs.requiresCliArchive && github.event.pull_request.head.sha || '' }}
+          GH_TOKEN: ${{ inputs.requiresCliArchive && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (output goes to console directly)
           $heartbeatProcess = Start-Process -FilePath "${{ env.DOTNET_SCRIPT }}" `
@@ -497,7 +517,7 @@ jobs:
           Write-Host "✓ Test execution completed successfully (found $validFileCount valid .trx file(s))"
 
       - name: Dump docker info
-        if: ${{ always() && inputs.os == 'ubuntu-latest' }}
+        if: ${{ always() && runner.os == 'Linux' }}
         run: |
           docker container ls --all
           docker container ls --all --format json
@@ -515,6 +535,25 @@ jobs:
             testresults/**
             artifacts/bin/Aspire.Templates.Tests/Debug/net8.0/logs/**
             artifacts/log/test-logs/**
+
+      - name: Copy CLI E2E recordings for upload
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p cli-e2e-recordings
+          find testresults -name "*.cast" -exec cp {} cli-e2e-recordings/ \; 2>/dev/null || true
+          if [ -n "$(ls -A cli-e2e-recordings 2>/dev/null)" ]; then
+            echo "Found recordings:"
+            ls -la cli-e2e-recordings/
+          fi
+
+      - name: Upload CLI E2E recordings
+        if: always()
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        with:
+          name: cli-e2e-recordings-${{ inputs.testShortName }}
+          path: cli-e2e-recordings/*.cast
+          if-no-files-found: ignore
 
       - name: Generate test results summary
         if: always()

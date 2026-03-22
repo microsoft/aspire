@@ -23,6 +23,11 @@ public partial class TextVisualizerDialog : ComponentBase
     public HashSet<string?> EnabledOptions { get; } = [];
     internal bool? ShowSecretsWarning { get; private set; }
 
+    /// <summary>
+    /// Returns true if the dialog has a fixed format that cannot be changed by the user.
+    /// </summary>
+    internal bool HasFixedFormat => Content.FixedFormat is not null;
+
     [Parameter, EditorRequired]
     public required TextVisualizerDialogViewModel Content { get; set; }
 
@@ -58,15 +63,23 @@ public partial class TextVisualizerDialog : ComponentBase
             new SelectViewModel<string> { Id = DashboardUIHelpers.XmlFormat, Name = Loc[nameof(Resources.Dialogs.TextVisualizerDialogXmlFormat)] }
         ];
 
-        TextVisualizerViewModel = new TextVisualizerViewModel(Content.Text, indentText: true);
-
-        if (TextVisualizerViewModel.FormatKind == DashboardUIHelpers.JsonFormat)
+        // If a fixed format is specified, use it directly without auto-detection.
+        if (Content.FixedFormat is not null)
         {
-            EnabledOptions.Add(DashboardUIHelpers.JsonFormat);
+            TextVisualizerViewModel = new TextVisualizerViewModel(Content.Text, indentText: true, Content.FixedFormat);
         }
-        else if (TextVisualizerViewModel.FormatKind == DashboardUIHelpers.XmlFormat)
+        else
         {
-            EnabledOptions.Add(DashboardUIHelpers.XmlFormat);
+            TextVisualizerViewModel = new TextVisualizerViewModel(Content.Text, indentText: true);
+
+            if (TextVisualizerViewModel.FormatKind == DashboardUIHelpers.JsonFormat)
+            {
+                EnabledOptions.Add(DashboardUIHelpers.JsonFormat);
+            }
+            else if (TextVisualizerViewModel.FormatKind == DashboardUIHelpers.XmlFormat)
+            {
+                EnabledOptions.Add(DashboardUIHelpers.XmlFormat);
+            }
         }
     }
 
@@ -104,7 +117,7 @@ public partial class TextVisualizerDialog : ComponentBase
         };
 
         await options.DialogService.ShowDialogAsync<TextVisualizerDialog>(
-            new TextVisualizerDialogViewModel(options.Value, options.ValueDescription, options.ContainsSecret, options.DownloadFileName), parameters);
+            new TextVisualizerDialogViewModel(options.Value, options.ValueDescription, options.ContainsSecret, options.DownloadFileName, options.FixedFormat), parameters);
     }
 
     private async Task DownloadAsync()

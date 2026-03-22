@@ -21,11 +21,11 @@ cd "$WORK_DIR"
 
 # Initialize Go AppHost
 echo "Creating Go apphost project..."
-aspire init -l go --non-interactive
+aspire init --language go --non-interactive -d
 
 # Add Redis integration
 echo "Adding Redis integration..."
-aspire add Aspire.Hosting.Redis --non-interactive 2>&1 || {
+aspire add Aspire.Hosting.Redis --non-interactive -d 2>&1 || {
     echo "aspire add failed, manually updating settings.json..."
     PKG_VERSION=$(aspire --version | grep -oP '\d+\.\d+\.\d+-.*' | head -1)
     if [ -f ".aspire/settings.json" ]; then
@@ -40,7 +40,7 @@ aspire add Aspire.Hosting.Redis --non-interactive 2>&1 || {
 # Insert Redis code into apphost.go
 echo "Configuring apphost.go with Redis..."
 if grep -q "builder.Build()" apphost.go; then
-    sed -i '/builder.Build()/i\// Add Redis cache resource\n\t_, err = builder.AddRedis("cache", 0, nil)\n\tif err != nil {\n\t\tlog.Fatalf("Failed to add Redis: %v", err)\n\t}' apphost.go
+    sed -i '/builder.Build()/i\// Add Redis cache resource\n\tredisPort := 0.0\n\tredis, err := builder.AddRedis("cache", \&redisPort, nil)\n\tif err != nil {\n\t\tlog.Fatalf("Failed to add Redis: %v", err)\n\t}\n\t_, err = redis.WithImageRegistry("netaspireci.azurecr.io")\n\tif err != nil {\n\t\tlog.Fatalf("Failed to set image registry: %v", err)\n\t}' apphost.go
     echo "✅ Redis configuration added to apphost.go"
 fi
 

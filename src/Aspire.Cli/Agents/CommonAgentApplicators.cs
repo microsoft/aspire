@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Agents.Playwright;
+
 namespace Aspire.Cli.Agents;
 
 /// <summary>
@@ -20,7 +22,7 @@ internal static class CommonAgentApplicators
     /// <param name="workspaceRoot">The workspace root directory.</param>
     /// <param name="skillRelativePath">The relative path to the skill file from workspace root (e.g., ".github/skills/aspire/SKILL.md").</param>
     /// <param name="description">The description to show in the applicator prompt.</param>
-    /// <returns>True if the applicator was added, false if it was already added or the file exists.</returns>
+    /// <returns>True if the applicator was added, false if it was already added.</returns>
     public static bool TryAddSkillFileApplicator(
         AgentEnvironmentScanContext context,
         DirectoryInfo workspaceRoot,
@@ -38,9 +40,27 @@ internal static class CommonAgentApplicators
         // Mark this skill path as having an applicator (whether file exists or not)
         context.MarkSkillFileApplicatorAdded(skillRelativePath);
 
-        // Don't add applicator if the skill file already exists
+        // Check if the skill file already exists
         if (File.Exists(skillFilePath))
         {
+            // Read existing content and check if it differs from current content
+            // Normalize line endings for comparison to handle cross-platform differences
+            var existingContent = File.ReadAllText(skillFilePath);
+            var normalizedExisting = NormalizeLineEndings(existingContent);
+            var normalizedExpected = NormalizeLineEndings(SkillFileContent);
+
+            if (!string.Equals(normalizedExisting, normalizedExpected, StringComparison.Ordinal))
+            {
+                // Content differs, offer to update
+                context.AddApplicator(new AgentEnvironmentApplicator(
+                    $"{description} (update - content has changed)",
+                    ct => UpdateSkillFileAsync(skillFilePath, ct),
+                    promptGroup: McpInitPromptGroup.SkillFiles,
+                    priority: 0));
+                return true;
+            }
+
+            // File exists and content is the same, nothing to do
             return false;
         }
 
@@ -48,24 +68,27 @@ internal static class CommonAgentApplicators
         context.AddApplicator(new AgentEnvironmentApplicator(
             description,
             ct => CreateSkillFileAsync(skillFilePath, ct),
-            promptGroup: McpInitPromptGroup.AdditionalOptions,
+            promptGroup: McpInitPromptGroup.SkillFiles,
             priority: 0));
 
         return true;
     }
 
     /// <summary>
-    /// Tracks a detected environment and adds a single Playwright applicator if not already added.
-    /// This should be called by each scanner that detects an environment supporting Playwright.
+    /// Adds a single Playwright CLI installation applicator if not already added.
+    /// Called by scanners that detect an environment supporting Playwright.
+    /// The applicator uses <see cref="PlaywrightCliInstaller"/> to securely install the CLI and generate skill files.
     /// </summary>
     /// <param name="context">The scan context.</param>
-    /// <param name="configurationCallback">The callback to configure Playwright for this specific environment.</param>
-    public static void AddPlaywrightConfigurationCallback(
+    /// <param name="installer">The Playwright CLI installer that handles secure installation.</param>
+    /// <param name="skillBaseDirectory">The relative path to the skill base directory for this agent environment (e.g., ".claude/skills", ".github/skills").</param>
+    public static void AddPlaywrightCliApplicator(
         AgentEnvironmentScanContext context,
-        Func<CancellationToken, Task> configurationCallback)
+        PlaywrightCliInstaller installer,
+        string skillBaseDirectory)
     {
-        // Add this environment's Playwright configuration callback
-        context.AddPlaywrightConfigurationCallback(configurationCallback);
+        // Register the skill base directory so skill files can be mirrored to all environments
+        context.AddSkillBaseDirectory(skillBaseDirectory);
 
         // Only add the Playwright applicator prompt once across all environments
         if (context.PlaywrightApplicatorAdded)
@@ -75,16 +98,9 @@ internal static class CommonAgentApplicators
 
         context.PlaywrightApplicatorAdded = true;
         context.AddApplicator(new AgentEnvironmentApplicator(
-            "Configure Playwright MCP server",
-            async ct =>
-            {
-                // Execute all registered Playwright configuration callbacks
-                foreach (var callback in context.PlaywrightConfigurationCallbacks)
-                {
-                    await callback(ct);
-                }
-            },
-            promptGroup: McpInitPromptGroup.AdditionalOptions,
+            "Install Playwright CLI (Recommended for browser automation)",
+            ct => installer.InstallAsync(context, ct),
+            promptGroup: McpInitPromptGroup.Tools,
             priority: 1));
     }
 
@@ -108,107 +124,118 @@ internal static class CommonAgentApplicators
     }
 
     /// <summary>
+    /// Updates an existing skill file at the specified path with the latest content.
+    /// </summary>
+    private static async Task UpdateSkillFileAsync(string skillFilePath, CancellationToken cancellationToken)
+    {
+        await File.WriteAllTextAsync(skillFilePath, SkillFileContent, cancellationToken);
+    }
+
+    /// <summary>
+    /// Normalizes line endings to LF for consistent comparison across platforms.
+    /// </summary>
+    private static string NormalizeLineEndings(string content)
+    {
+        return content.ReplaceLineEndings("\n");
+    }
+
+    /// <summary>
     /// Gets the content for the Aspire skill file.
     /// </summary>
     internal const string SkillFileContent =
         """
+        ---
+        name: aspire
+        description: "Orchestrates Aspire distributed applications using the Aspire CLI for running, debugging, and managing distributed apps. USE FOR: aspire start, aspire stop, start aspire app, aspire describe, list aspire integrations, debug aspire issues, view aspire logs, add aspire resource, aspire dashboard, update aspire apphost. DO NOT USE FOR: non-Aspire .NET apps (use dotnet CLI), container-only deployments (use docker/podman), Azure deployment after local testing (use azure-deploy skill). INVOKES: Aspire CLI commands (aspire start, aspire describe, aspire otel logs, aspire docs search, aspire add), bash. FOR SINGLE OPERATIONS: Use Aspire CLI commands directly for quick resource status or doc lookups."
+        ---
+
         # Aspire Skill
 
-        This repository is set up to use Aspire. Aspire is an orchestrator for the entire application and will take care of configuring dependencies, building, and running the application. The resources that make up the application are defined in `apphost.cs` including application code and external dependencies.
+        This repository uses Aspire to orchestrate its distributed application. Resources are defined in the AppHost project (`apphost.cs` or `apphost.ts`).
 
-        ## General recommendations for working with Aspire
+        ## CLI command reference
 
-        1. Before making any changes always run the apphost using `aspire run` and inspect the state of resources to make sure you are building from a known state.
-        2. Changes to the _apphost.cs_ file will require a restart of the application to take effect.
-        3. Make changes incrementally and run the aspire application using the `aspire run` command to validate changes.
-        4. Use the Aspire MCP tools to check the status of resources and debug issues.
+        | Task | Command |
+        |---|---|
+        | Start the app | `aspire start` |
+        | Start isolated (worktrees) | `aspire start --isolated` |
+        | Restart the app | `aspire start` (stops previous automatically) |
+        | Wait for resource healthy | `aspire wait <resource>` |
+        | Stop the app | `aspire stop` |
+        | List resources | `aspire describe` or `aspire resources` |
+        | Run resource command | `aspire resource <resource> <command>` |
+        | Start/stop/restart resource | `aspire resource <resource> start|stop|restart` |
+        | View console logs | `aspire logs [resource]` |
+        | View structured logs | `aspire otel logs [resource]` |
+        | View traces | `aspire otel traces [resource]` |
+        | Logs for a trace | `aspire otel logs --trace-id <id>` |
+        | Add an integration | `aspire add` |
+        | List running AppHosts | `aspire ps` |
+        | Update AppHost packages | `aspire update` |
+        | Search docs | `aspire docs search <query>` |
+        | Get doc page | `aspire docs get <slug>` |
+        | List doc pages | `aspire docs list` |
+        | Environment diagnostics | `aspire doctor` |
+        | List resource MCP tools | `aspire mcp tools` |
+        | Call resource MCP tool | `aspire mcp call <resource> <tool> --input <json>` |
 
-        ## Running Aspire in agent environments
+        Most commands support `--format Json` for machine-readable output. Use `--apphost <path>` to target a specific AppHost.
 
-        Agent environments may terminate foreground processes when a command finishes. Use detached mode:
+        ## Key workflows
 
-        ```bash
-        aspire run --detach
-        ```
+        ### Running in agent environments
 
-        This starts the AppHost in the background and returns immediately. The CLI will:
-        - Automatically stop any existing running instance before starting a new one
-        - Display a summary with the Dashboard URL and resource endpoints
-
-        ### Stopping the application
-
-        To stop a running AppHost:
-
-        ```bash
-        aspire stop
-        ```
-
-        This will scan for running AppHosts and stop them gracefully.
-
-        ### Relaunch rules
-
-        - If AppHost code changes, run `aspire run --detach` again to restart with the new code.
-        - Relaunching is safe: starting a new instance will automatically stop the previous instance.
-        - Do not attempt to keep multiple instances running.
-
-        ## Running the application
-
-        To run the application run the following command:
+        Use `aspire start` to run the AppHost in the background. When working in a git worktree, use `--isolated` to avoid port conflicts and to prevent sharing user secrets or other local state with other running instances:
 
         ```bash
-        aspire run
+        aspire start --isolated
         ```
 
-        If there is already an instance of the application running it will prompt to stop the existing instance. You only need to restart the application if code in `apphost.cs` is changed, but if you experience problems it can be useful to reset everything to the starting state.
-
-        ## Checking resources
-
-        To check the status of resources defined in the app model use the _list resources_ tool. This will show you the current state of each resource and if there are any issues. If a resource is not running as expected you can use the _execute resource command_ tool to restart it or perform other actions.
-
-        ## Listing integrations
-
-        IMPORTANT! When a user asks you to add a resource to the app model you should first use the _list integrations_ tool to get a list of the current versions of all the available integrations. You should try to use the version of the integration which aligns with the version of the Aspire.AppHost.Sdk. Some integration versions may have a preview suffix. Once you have identified the correct integration you should always use the _get integration docs_ tool to fetch the latest documentation for the integration and follow the links to get additional guidance.
-
-        ## Debugging issues
-
-        IMPORTANT! Aspire is designed to capture rich logs and telemetry for all resources defined in the app model. Use the following diagnostic tools when debugging issues with the application before making changes to make sure you are focusing on the right things.
-
-        1. _list structured logs_; use this tool to get details about structured logs.
-        2. _list console logs_; use this tool to get details about console logs.
-        3. _list traces_; use this tool to get details about traces.
-        4. _list trace structured logs_; use this tool to get logs related to a trace
-
-        ## Other Aspire MCP tools
-
-        1. _select apphost_; use this tool if working with multiple app hosts within a workspace.
-        2. _list apphosts_; use this tool to get details about active app hosts.
-
-        ## Playwright MCP server
-
-        The playwright MCP server has also been configured in this repository and you should use it to perform functional investigations of the resources defined in the app model as you work on the codebase. To get endpoints that can be used for navigation using the playwright MCP server use the list resources tool.
-
-        ## Updating the app host
-
-        The user may request that you update the Aspire apphost. You can do this using the `aspire update` command. This will update the apphost to the latest version and some of the Aspire specific packages in referenced projects, however you may need to manually update other packages in the solution to ensure compatibility. You can consider using the `dotnet-outdated` with the users consent. To install the `dotnet-outdated` tool use the following command:
+        Use `aspire wait <resource>` to block until a resource is healthy before interacting with it:
 
         ```bash
-        dotnet tool install --global dotnet-outdated-tool
+        aspire start --isolated
+        aspire wait myapi
         ```
 
-        ## Persistent containers
+        Relaunching is safe — `aspire start` automatically stops any previous instance. Re-run `aspire start` whenever changes are made to the AppHost project.
 
-        IMPORTANT! Consider avoiding persistent containers early during development to avoid creating state management issues when restarting the app.
+        ### Debugging issues
 
-        ## Aspire workload
+        Before making code changes, inspect the app state:
 
-        IMPORTANT! The aspire workload is obsolete. You should never attempt to install or use the Aspire workload.
+        1. `aspire describe` — check resource status
+        2. `aspire otel logs <resource>` — view structured logs
+        3. `aspire logs <resource>` — view console output
+        4. `aspire otel traces <resource>` — view distributed traces
 
-        ## Official documentation
+        ### Adding integrations
 
-        IMPORTANT! Always prefer official documentation when available. The following sites contain the official documentation for Aspire and related components
+        Use `aspire docs search` to find integration documentation, then `aspire docs get` to read the full guide. Use `aspire add` to add the integration package to the AppHost.
 
-        1. https://aspire.dev
-        2. https://learn.microsoft.com/dotnet/aspire
-        3. https://nuget.org (for specific integration package details)
+        After adding an integration, restart the app with `aspire start` for the new resource to take effect.
+
+        ### Using resource MCP tools
+
+        Some resources expose MCP tools (e.g. `WithPostgresMcp()` adds SQL query tools). Discover and call them via CLI:
+
+        ```bash
+        aspire mcp tools                                              # list available tools
+        aspire mcp tools --format Json                                # includes input schemas
+        aspire mcp call <resource> <tool> --input '{"key":"value"}'   # invoke a tool
+        ```
+
+        ## Important rules
+
+        - **Always start the app first** (`aspire start`) before making changes to verify the starting state.
+        - **To restart, just run `aspire start` again** — it automatically stops the previous instance. NEVER use `aspire stop` then `aspire run`. NEVER use `aspire run` at all.
+        - Use `--isolated` when working in a worktree.
+        - **Avoid persistent containers** early in development to prevent state management issues.
+        - **Never install the Aspire workload** — it is obsolete.
+        - Prefer `aspire.dev` and `learn.microsoft.com/microsoft/aspire` for official documentation.
+
+        ## Playwright CLI
+
+        If configured, use Playwright CLI for functional testing of resources. Get endpoints via `aspire describe`. Run `playwright-cli --help` for available commands.
         """;
 }

@@ -9,6 +9,8 @@ export const codespacesUrl = (url: string) => vscode.l10n.t('Codespaces: {0}', u
 export const directLink = vscode.l10n.t('Open local URL');
 export const codespacesLink = vscode.l10n.t('Open codespaces URL');
 export const openAspireDashboard = vscode.l10n.t('Launch Aspire Dashboard');
+export const settingsLabel = vscode.l10n.t('Settings');
+export const aspireDashboard = vscode.l10n.t('Aspire Dashboard');
 export const noWorkspaceOpen = vscode.l10n.t('No workspace is open. Please open a folder or workspace before running this command.');
 export const failedToShowPromptEmpty = vscode.l10n.t('Failed to show prompt, text was empty.');
 export const rpcServerAddressError = vscode.l10n.t('Failed to get RPC server address. The extension may not function correctly.');
@@ -41,6 +43,7 @@ export const failedToStartPythonProgram = (errorMessage: string) => vscode.l10n.
 export const csharpSupportNotEnabled = vscode.l10n.t('C# support is not enabled in this workspace. This project should have started through the Aspire CLI.');
 export const failedToStartProject = (errorMessage: string) => vscode.l10n.t('Failed to start project: {0}.', errorMessage);
 export const dcpServerNotInitialized = vscode.l10n.t('DCP server not initialized - cannot forward debug output.');
+export const appHostSessionTerminated = vscode.l10n.t('The apphost process has terminated. To view console output, select the apphost session from the debug console dropdown.');
 export const invalidTokenProvided = vscode.l10n.t('Invalid token provided.');
 export const noWorkspaceFolder = vscode.l10n.t('No workspace folder found.');
 export const aspireConfigExists = vscode.l10n.t('Aspire launch configuration already exists in launch.json.');
@@ -48,8 +51,30 @@ export const failedToConfigureLaunchJson = (error: any) => vscode.l10n.t('Failed
 export const defaultConfigurationName = vscode.l10n.t('Aspire: Launch default apphost');
 export const debugSessionAlreadyExists = (id: string) => vscode.l10n.t('A debug session is already active for id {0}.', id);
 export const processExceptionOccurred = (error: string, command: string) => vscode.l10n.t('Encountered an exception ({0}) while running the following command: {1}.', error, command);
+
+// Aspire panel strings
+export const pidDescription = (pid: number) => vscode.l10n.t('PID: {0}', pid);
+export const dashboardLabel = vscode.l10n.t('Dashboard');
+export const cliPidLabel = (pid: number) => vscode.l10n.t('CLI PID: {0}', pid);
+export const appHostPidLabel = (pid: number) => vscode.l10n.t('Apphost PID: {0}', pid);
+export const errorFetchingAppHosts = (error: string) => vscode.l10n.t('Error fetching running apphosts: {0}', error);
+export const resourcesGroupLabel = vscode.l10n.t('Resources');
+export const resourceStateLabel = (name: string, state: string) => vscode.l10n.t('{0} — {1}', name, state);
+export const noCommandsAvailable = vscode.l10n.t('No commands available for this resource.');
+export const selectCommandPlaceholder = vscode.l10n.t('Select a command to execute');
+export const workspaceAppHostLabel = vscode.l10n.t('Workspace apphost');
+export const resourceCountDescription = (count: number) => vscode.l10n.t('({0} resources)', count);
+export const tooltipType = (type: string) => vscode.l10n.t('Type: {0}', type);
+export const tooltipState = (state: string) => vscode.l10n.t('State: {0}', state);
+export const tooltipHealth = (health: string) => vscode.l10n.t('Health: {0}', health);
+export const tooltipEndpoints = vscode.l10n.t('Endpoints:');
 export const failedToStartDebugSession = vscode.l10n.t('Failed to start debug session.');
+export const failedToGetConfigInfo = (exitCode: number) => vscode.l10n.t('Failed to get Aspire config info (exit code: {0}). Try updating the Aspire CLI with: aspire update', exitCode);
+export const failedToParseConfigInfo = (error: any) => vscode.l10n.t('Failed to parse Aspire config info: {0}. Try updating the Aspire CLI with: aspire update', error);
+export const errorGettingConfigInfo = (error: any) => vscode.l10n.t('Error getting Aspire config info: {0}. Try updating the Aspire CLI with: aspire update', error);
 export const invalidLaunchConfiguration = (projectPath: string) => vscode.l10n.t('Invalid launch configuration for {0}.', projectPath);
+export const browserDisplayName = (url: string) => vscode.l10n.t('Browser: {0}', url);
+export const browserLabel = vscode.l10n.t('Browser');
 export const dontShowAgainLabel = vscode.l10n.t("Don't Show Again");
 export const doYouWantToSetDefaultApphost = (appHost: string) => vscode.l10n.t('Do you want to set {0} as the default apphost for this workspace?', appHost);
 export const doYouWantToSelectDefaultApphost = vscode.l10n.t('Do you want to select the default apphost for this workspace?');
@@ -68,3 +93,7 @@ export const csharpDevKitNotInstalled = vscode.l10n.t('C# Dev Kit is not install
 export const dismissLabel = vscode.l10n.t('Dismiss');
 export const openCliInstallInstructions = vscode.l10n.t('See CLI installation instructions');
 export const cliNotAvailable = vscode.l10n.t('Aspire CLI is not available on PATH. Please install it and restart VS Code.');
+export const cliFoundAtDefaultPath = (path: string) => vscode.l10n.t('Aspire CLI found at {0}. The extension will use this path.', path);
+export const selectDirectoryTitle = vscode.l10n.t('Select directory');
+export const selectFileTitle = vscode.l10n.t('Select file');
+export const enterPipelineStep = vscode.l10n.t('Enter the pipeline step to execute');

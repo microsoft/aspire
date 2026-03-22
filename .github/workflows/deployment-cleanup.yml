@@ -1,0 +1,186 @@
+# Cleanup workflow for deployment test resources
+#
+# Uses a mark-and-sweep approach:
+# 1. Mark: Tag untagged deployment test RGs with 'deployment-test-first-seen' timestamp
+# 2. Sweep: Delete RGs where 'deployment-test-first-seen' is older than threshold
+#
+# Targets resource groups with prefixes:
+# - rg-aspire-* (legacy naming)
+# - e2e-* (current naming)
+#
+# This ensures RGs are only deleted after they've been seen for the full retention period.
+#
+name: Deployment Environment Cleanup
+
+on:
+  schedule:
+    # Run every hour
+    - cron: '0 * * * *'
+
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (list but do not delete)'
+        required: false
+        type: boolean
+        default: false
+      max_age_hours:
+        description: 'Delete RGs older than this many hours'
+        required: false
+        type: number
+        default: 3
+
+# OIDC permissions for Azure login
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  cleanup:
+    name: Cleanup Azure Resources
+    runs-on: ubuntu-latest
+    if: ${{ github.repository_owner == 'microsoft' }}
+    environment: deployment-testing
+
+    steps:
+      - name: Azure Login (OIDC)
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_DEPLOYMENT_TEST_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_DEPLOYMENT_TEST_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_DEPLOYMENT_TEST_SUBSCRIPTION_ID }}
+        with:
+          script: |
+            const token = await core.getIDToken('api://AzureADTokenExchange');
+            core.setSecret(token);
+            
+            // Login directly - token never leaves this step
+            await exec.exec('az', [
+              'login', '--service-principal',
+              '--username', process.env.AZURE_CLIENT_ID,
+              '--tenant', process.env.AZURE_TENANT_ID,
+              '--federated-token', token,
+              '--allow-no-subscriptions'
+            ]);
+            
+            await exec.exec('az', [
+              'account', 'set',
+              '--subscription', process.env.AZURE_SUBSCRIPTION_ID
+            ]);
+
+      - name: Cleanup old resource groups
+        id: cleanup
+        env:
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          MAX_AGE_HOURS: ${{ inputs.max_age_hours || '3' }}
+          TAG_NAME: deployment-test-first-seen
+        run: |
+          echo "## Deployment Environment Cleanup (Mark & Sweep)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Max Age:** ${MAX_AGE_HOURS} hours" >> $GITHUB_STEP_SUMMARY
+          echo "**Dry Run:** ${DRY_RUN}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Get current time
+          NOW=$(date +%s)
+          NOW_ISO=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          MAX_AGE_SECONDS=$((MAX_AGE_HOURS * 3600))
+
+          # List all resource groups matching deployment test prefixes
+          # Current naming: e2e-* (e.g., e2e-starter-12345678-1)
+          # Legacy naming: rg-aspire-* (may still exist from older tests)
+          RG_LIST=$(az group list --query "[?starts_with(name, 'e2e-') || starts_with(name, 'rg-aspire-')].name" -o tsv || echo "")
+
+          if [ -z "$RG_LIST" ]; then
+            echo "No resource groups found matching deployment test prefixes (e2e-* or rg-aspire-*)."
+            echo "✅ No resource groups found." >> $GITHUB_STEP_SUMMARY
+            echo "marked_count=0" >> $GITHUB_OUTPUT
+            echo "deleted_count=0" >> $GITHUB_OUTPUT
+            echo "kept_count=0" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          MARKED_COUNT=0
+          DELETED_COUNT=0
+          KEPT_COUNT=0
+          DELETED_LIST=""
+
+          echo "### Resource Groups Processed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Resource Group | First Seen | Age | Action |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------------|------------|-----|--------|" >> $GITHUB_STEP_SUMMARY
+
+          for RG in $RG_LIST; do
+            echo "Processing: $RG"
+
+            # Check if RG has the first-seen tag
+            FIRST_SEEN=$(az group show -n "$RG" --query "tags.\"${TAG_NAME}\"" -o tsv 2>/dev/null || echo "")
+
+            if [ -z "$FIRST_SEEN" ] || [ "$FIRST_SEEN" = "None" ]; then
+              # MARK: Tag this RG with current timestamp
+              if [ "$DRY_RUN" = "true" ]; then
+                echo "  🏷️ Would mark: $RG with $TAG_NAME=$NOW_ISO"
+                echo "| $RG | (untagged) | new | 🏷️ Would mark (dry run) |" >> $GITHUB_STEP_SUMMARY
+              else
+                echo "  🏷️ Marking: $RG with $TAG_NAME=$NOW_ISO"
+                az group update -n "$RG" --set "tags.${TAG_NAME}=$NOW_ISO" -o none 2>/dev/null || echo "  ⚠️ Failed to tag $RG"
+                echo "| $RG | $NOW_ISO | new | 🏷️ Marked |" >> $GITHUB_STEP_SUMMARY
+              fi
+              MARKED_COUNT=$((MARKED_COUNT + 1))
+            else
+              # SWEEP: Check if tag is older than threshold
+              FIRST_SEEN_EPOCH=$(date -u -d "$FIRST_SEEN" +%s 2>/dev/null || echo "0")
+              
+              if [ "$FIRST_SEEN_EPOCH" = "0" ]; then
+                echo "  ⚠️ Invalid timestamp in tag: $FIRST_SEEN (skipping)"
+                echo "| $RG | $FIRST_SEEN | invalid | ⚠️ Skipped |" >> $GITHUB_STEP_SUMMARY
+                KEPT_COUNT=$((KEPT_COUNT + 1))
+                continue
+              fi
+
+              AGE_SECONDS=$((NOW - FIRST_SEEN_EPOCH))
+              AGE_HOURS=$((AGE_SECONDS / 3600))
+              AGE_MINS=$(((AGE_SECONDS % 3600) / 60))
+              AGE_DISPLAY="${AGE_HOURS}h ${AGE_MINS}m"
+
+              if [ $AGE_SECONDS -gt $MAX_AGE_SECONDS ]; then
+                # Old enough to delete
+                if [ "$DRY_RUN" = "true" ]; then
+                  echo "  🔍 Would delete: $RG (age: $AGE_DISPLAY)"
+                  echo "| $RG | $FIRST_SEEN | $AGE_DISPLAY | 🔍 Would delete (dry run) |" >> $GITHUB_STEP_SUMMARY
+                else
+                  echo "  🗑️ Deleting: $RG (age: $AGE_DISPLAY)"
+                  az group delete --name "$RG" --yes --no-wait || echo "  ⚠️ Failed to delete $RG"
+                  echo "| $RG | $FIRST_SEEN | $AGE_DISPLAY | 🗑️ Deleted |" >> $GITHUB_STEP_SUMMARY
+                fi
+                DELETED_COUNT=$((DELETED_COUNT + 1))
+                DELETED_LIST="${DELETED_LIST}${RG}\n"
+              else
+                echo "  ✅ Keeping: $RG (age: $AGE_DISPLAY, under threshold)"
+                echo "| $RG | $FIRST_SEEN | $AGE_DISPLAY | ✅ Kept |" >> $GITHUB_STEP_SUMMARY
+                KEPT_COUNT=$((KEPT_COUNT + 1))
+              fi
+            fi
+          done
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "- **Would mark:** $MARKED_COUNT resource groups" >> $GITHUB_STEP_SUMMARY
+            echo "- **Would delete:** $DELETED_COUNT resource groups" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Marked:** $MARKED_COUNT resource groups" >> $GITHUB_STEP_SUMMARY
+            echo "- **Deleted:** $DELETED_COUNT resource groups" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "- **Kept:** $KEPT_COUNT resource groups" >> $GITHUB_STEP_SUMMARY
+
+          echo "marked_count=$MARKED_COUNT" >> $GITHUB_OUTPUT
+          echo "deleted_count=$DELETED_COUNT" >> $GITHUB_OUTPUT
+          echo "kept_count=$KEPT_COUNT" >> $GITHUB_OUTPUT
+          echo "deleted_list<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$DELETED_LIST" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      # Cleanup results are available in the GitHub Actions step summary.
+      # No PR posting - this runs on schedule without PR context.

@@ -37,7 +37,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
 
     public abstract Task<bool> CheckIfRunningAsync(CancellationToken cancellationToken);
 
-    public abstract Task BuildImageAsync(string contextPath, string dockerfilePath, ContainerImageBuildOptions? options, Dictionary<string, string?> buildArguments, Dictionary<string, string?> buildSecrets, string? stage, CancellationToken cancellationToken);
+    public abstract Task BuildImageAsync(string contextPath, string dockerfilePath, ContainerImageBuildOptions? options, Dictionary<string, string?> buildArguments, Dictionary<string, BuildImageSecretValue> buildSecrets, string? stage, CancellationToken cancellationToken);
 
     public virtual async Task TagImageAsync(string localImageName, string targetImageName, CancellationToken cancellationToken)
     {
@@ -241,18 +241,22 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
     /// <param name="buildSecrets">The build secrets to include.</param>
     /// <param name="requireValue">Whether to require a non-null value for secrets (default: false).</param>
     /// <returns>A string containing the formatted build secrets.</returns>
-    protected static string BuildSecretsString(Dictionary<string, string?> buildSecrets, bool requireValue = false)
+    internal static string BuildSecretsString(Dictionary<string, BuildImageSecretValue> buildSecrets, bool requireValue = false)
     {
         var result = string.Empty;
         foreach (var buildSecret in buildSecrets)
         {
-            if (requireValue && buildSecret.Value is null)
+            if (buildSecret.Value.Type == BuildImageSecretType.File)
             {
-                result += $" --secret \"id={buildSecret.Key}\"";
+                result += $" --secret \"id={buildSecret.Key},type=file,src={buildSecret.Value.Value}\"";
+            }
+            else if (requireValue && buildSecret.Value.Value is null)
+            {
+                result += $" --secret \"id={buildSecret.Key},type=env\"";
             }
             else
             {
-                result += $" --secret \"id={buildSecret.Key},env={buildSecret.Key.ToUpperInvariant()}\"";
+                result += $" --secret \"id={buildSecret.Key},type=env,env={buildSecret.Key.ToUpperInvariant()}\"";
             }
         }
         return result;

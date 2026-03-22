@@ -15,12 +15,6 @@ var ghGenerator = new GitHubModelClassGenerator();
 var ghCode = GitHubModelClassGenerator.GenerateCode("Aspire.Hosting.GitHub", ghModels);
 File.WriteAllText(Path.Combine("..", "GitHubModel.Generated.cs"), ghCode);
 Console.WriteLine("Generated GitHub model descriptors written to GitHubModel.Generated.cs");
-Console.WriteLine("\nGitHub Model data:");
-Console.WriteLine(JsonSerializer.Serialize(ghModels, new JsonSerializerOptions
-{
-    WriteIndented = true,
-    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-}));
 
 public sealed class GitHubModel
 {
@@ -82,8 +76,11 @@ internal partial class GitHubModelClassGenerator
         sb.AppendLine("/// </summary>");
         sb.AppendLine("public partial class GitHubModel");
         sb.AppendLine("{");
-        var groups = models.Where(m => !string.IsNullOrEmpty(m.Publisher) && !string.IsNullOrEmpty(m.Name))
-                           .GroupBy(m => m.Publisher)
+        var validModels = models.Where(m => !string.IsNullOrEmpty(m.Publisher) && !string.IsNullOrEmpty(m.Name))
+                           .OrderBy(m => m.Publisher, StringComparer.OrdinalIgnoreCase)
+                           .ThenBy(m => m.Name, StringComparer.OrdinalIgnoreCase)
+                           .ToList();
+        var groups = validModels.GroupBy(m => m.Publisher)
                            .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase);
         var firstClass = true;
         foreach (var g in groups)
@@ -120,6 +117,47 @@ internal partial class GitHubModelClassGenerator
                 sb.AppendLine(CultureInfo.InvariantCulture, $"        public static readonly GitHubModel {prop} = new() {{ Id = \"{Esc(m.Id)}\" }};");
             }
             sb.AppendLine("    }");
+        }
+        sb.AppendLine();
+
+        // Generate internal conversion method
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine("    /// Gets the model identifier string for the specified <see cref=\"GitHubModelName\"/>.");
+        sb.AppendLine("    /// </summary>");
+        sb.AppendLine("    internal static string GetModelId(GitHubModelName name) => name switch");
+        sb.AppendLine("    {");
+        foreach (var m in validModels)
+        {
+            var prop = ToPascalCase(m.Name);
+            sb.AppendLine(CultureInfo.InvariantCulture, $"        GitHubModelName.{prop} => \"{Esc(m.Id)}\",");
+        }
+        sb.AppendLine("        _ => throw new System.ArgumentOutOfRangeException(nameof(name), name, \"Unknown GitHub model name.\")");
+        sb.AppendLine("    };");
+        sb.AppendLine("}");
+        sb.AppendLine();
+
+        // Generate internal enum
+        sb.AppendLine("/// <summary>");
+        sb.AppendLine("/// Enumerates known GitHub model names for polyglot app host support.");
+        sb.AppendLine("/// </summary>");
+        sb.AppendLine("internal enum GitHubModelName");
+        sb.AppendLine("{");
+        var firstEnum = true;
+        foreach (var m in validModels)
+        {
+            if (!firstEnum)
+            {
+                sb.AppendLine();
+            }
+
+            firstEnum = false;
+
+            var prop = ToPascalCase(m.Name);
+            var desc = EscapeXml(Clean(m.Summary ?? $"Descriptor for {m.Name}"));
+            sb.AppendLine("    /// <summary>");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"    /// {desc}");
+            sb.AppendLine("    /// </summary>");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"    {prop},");
         }
         sb.AppendLine("}");
         return sb.ToString();

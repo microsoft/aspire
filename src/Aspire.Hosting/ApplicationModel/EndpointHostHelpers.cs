@@ -107,4 +107,37 @@ public static class EndpointHostHelpers
     {
         return uri?.Host is not null && IsLocalhostOrLocalhostTld(uri.Host);
     }
+
+    /// <summary>
+    /// Gets the URL of the endpoint, adjusting for localhost TLD if configured.
+    /// </summary>
+    /// <remarks>
+    /// When the endpoint's <see cref="EndpointAnnotation.TargetHost"/> is a localhost TLD
+    /// (e.g., aspire-dashboard.dev.localhost), the allocated endpoint address will be "localhost"
+    /// since that's what the service actually binds to. This method returns the URL with the
+    /// configured TLD hostname instead, which is what users expect to see and use in browsers.
+    /// </remarks>
+    /// <param name="endpoint">The endpoint reference.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The URL with the appropriate hostname.</returns>
+    internal static async ValueTask<string?> GetUrlWithTargetHostAsync(EndpointReference endpoint, CancellationToken cancellationToken = default)
+    {
+        var allocatedUrl = await endpoint.GetValueAsync(cancellationToken).ConfigureAwait(false);
+
+        if (string.IsNullOrEmpty(allocatedUrl))
+        {
+            return allocatedUrl;
+        }
+
+        // If the configured TargetHost is a localhost TLD (e.g., aspire-dashboard.dev.localhost),
+        // we need to use that instead of the allocated address (localhost) since the TLD hostname
+        // is what the user expects to see and use in the browser.
+        var targetHost = endpoint.EndpointAnnotation.TargetHost;
+        if (IsLocalhostTld(targetHost) && Uri.TryCreate(allocatedUrl, UriKind.Absolute, out var uri))
+        {
+            return $"{uri.Scheme}://{targetHost}:{uri.Port}";
+        }
+
+        return allocatedUrl;
+    }
 }

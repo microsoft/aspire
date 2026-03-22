@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Configuration;
+
 namespace Aspire.Cli.Projects;
 
 /// <summary>
@@ -9,12 +11,9 @@ namespace Aspire.Cli.Projects;
 /// </summary>
 /// <remarks>
 /// This implementation provides a static list of supported languages.
-/// Future implementations could discover languages from:
-/// - Configuration files (~/.aspire/languages.json)
-/// - NuGet search (Aspire.Hosting.Language.* packages)
-/// - Remote service endpoints
+/// Experimental languages (Go, Java, Rust) are filtered based on per-language feature flags.
 /// </remarks>
-internal sealed class DefaultLanguageDiscovery : ILanguageDiscovery
+internal sealed class DefaultLanguageDiscovery(IFeatures features) : ILanguageDiscovery
 {
     private static readonly LanguageInfo[] s_allLanguages =
     [
@@ -38,34 +37,46 @@ internal sealed class DefaultLanguageDiscovery : ILanguageDiscovery
             PackageName: "Aspire.Hosting.CodeGeneration.Python",
             DetectionPatterns: ["apphost.py"],
             CodeGenerator: "Python",
-            AppHostFileName: "apphost.py"),
+            AppHostFileName: "apphost.py",
+            IsExperimental: true),
         new LanguageInfo(
             LanguageId: new LanguageId(KnownLanguageId.Go),
             DisplayName: KnownLanguageId.GoDisplayName,
             PackageName: "Aspire.Hosting.CodeGeneration.Go",
             DetectionPatterns: ["apphost.go"],
             CodeGenerator: "Go",
-            AppHostFileName: "apphost.go"),
+            AppHostFileName: "apphost.go",
+            IsExperimental: true),
         new LanguageInfo(
             LanguageId: new LanguageId(KnownLanguageId.Java),
             DisplayName: KnownLanguageId.JavaDisplayName,
             PackageName: "Aspire.Hosting.CodeGeneration.Java",
             DetectionPatterns: ["AppHost.java"],
             CodeGenerator: "Java",
-            AppHostFileName: "AppHost.java"),
+            AppHostFileName: "AppHost.java",
+            IsExperimental: true),
         new LanguageInfo(
             LanguageId: new LanguageId(KnownLanguageId.Rust),
             DisplayName: KnownLanguageId.RustDisplayName,
             PackageName: "Aspire.Hosting.CodeGeneration.Rust",
             DetectionPatterns: ["apphost.rs"],
             CodeGenerator: "Rust",
-            AppHostFileName: "apphost.rs"),
+            AppHostFileName: "apphost.rs",
+            IsExperimental: true),
     ];
+
+    private static readonly Dictionary<string, string> s_experimentalFeatureFlags = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [KnownLanguageId.Python] = KnownFeatures.ExperimentalPolyglotPython,
+        [KnownLanguageId.Go] = KnownFeatures.ExperimentalPolyglotGo,
+        [KnownLanguageId.Java] = KnownFeatures.ExperimentalPolyglotJava,
+        [KnownLanguageId.Rust] = KnownFeatures.ExperimentalPolyglotRust,
+    };
 
     /// <inheritdoc />
     public Task<IEnumerable<LanguageInfo>> GetAvailableLanguagesAsync(CancellationToken cancellationToken = default)
     {
-        return Task.FromResult<IEnumerable<LanguageInfo>>(s_allLanguages);
+        return Task.FromResult(s_allLanguages.Where(IsLanguageEnabled));
     }
 
     /// <inheritdoc />
@@ -80,7 +91,7 @@ internal sealed class DefaultLanguageDiscovery : ILanguageDiscovery
     /// <inheritdoc />
     public Task<LanguageId?> DetectLanguageAsync(DirectoryInfo directory, CancellationToken cancellationToken = default)
     {
-        foreach (var language in s_allLanguages)
+        foreach (var language in s_allLanguages.Where(IsLanguageEnabled))
         {
             foreach (var pattern in language.DetectionPatterns)
             {
@@ -102,25 +113,49 @@ internal sealed class DefaultLanguageDiscovery : ILanguageDiscovery
         var match = s_allLanguages.FirstOrDefault(l =>
             string.Equals(l.LanguageId.Value, languageId.Value, StringComparison.OrdinalIgnoreCase));
 
-        if (match is not null)
-        {
-            return match;
-        }
-
         // Try alias match (e.g., "typescript" -> "typescript/nodejs")
-        return languageId.Value switch
+        match ??= languageId.Value switch
         {
             KnownLanguageId.TypeScriptAlias => s_allLanguages.FirstOrDefault(l =>
                 string.Equals(l.LanguageId.Value, KnownLanguageId.TypeScript, StringComparison.OrdinalIgnoreCase)),
             _ => null
         };
+
+        if (match is not null && !IsLanguageEnabled(match))
+        {
+            return null;
+        }
+
+        return match;
     }
 
     /// <inheritdoc />
     public LanguageInfo? GetLanguageByFile(FileInfo file)
     {
-        return s_allLanguages.FirstOrDefault(l =>
+        var match = s_allLanguages.FirstOrDefault(l =>
             l.DetectionPatterns.Any(p => MatchesPattern(file.Name, p)));
+
+        if (match is not null && !IsLanguageEnabled(match))
+        {
+            return null;
+        }
+
+        return match;
+    }
+
+    private bool IsLanguageEnabled(LanguageInfo language)
+    {
+        if (!language.IsExperimental)
+        {
+            return true;
+        }
+
+        if (s_experimentalFeatureFlags.TryGetValue(language.LanguageId.Value, out var featureFlag))
+        {
+            return features.IsFeatureEnabled(featureFlag, false);
+        }
+
+        return true;
     }
 
     private static bool MatchesPattern(string fileName, string pattern)

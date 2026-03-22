@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.AppConfiguration;
@@ -27,6 +29,7 @@ public static class AzureAppConfigurationExtensions
     ///
     /// These can be replaced by calling <see cref="WithRoleAssignments{T}(IResourceBuilder{T}, IResourceBuilder{AzureAppConfigurationResource}, AppConfigurationBuiltInRole[])"/>.
     /// </remarks>
+    [AspireExport("addAzureAppConfiguration", Description = "Adds an Azure App Configuration resource")]
     public static IResourceBuilder<AzureAppConfigurationResource> AddAzureAppConfiguration(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -36,6 +39,11 @@ public static class AzureAppConfigurationExtensions
 
         var configureInfrastructure = (AzureResourceInfrastructure infrastructure) =>
         {
+            var azureResource = (AzureAppConfigurationResource)infrastructure.AspireResource;
+
+            // Check if this App Configuration has a private endpoint (via annotation)
+            var hasPrivateEndpoint = azureResource.HasAnnotationOfType<PrivateEndpointTargetAnnotation>();
+
             var store = AzureProvisioningResource.CreateExistingOrNewProvisionableResource(infrastructure,
                 (identifier, name) =>
                 {
@@ -43,17 +51,31 @@ public static class AzureAppConfigurationExtensions
                     resource.Name = name;
                     return resource;
                 },
-                (infrastructure) => new AppConfigurationStore(infrastructure.AspireResource.GetBicepIdentifier())
+                (infrastructure) =>
                 {
-                    SkuName = "standard",
-                    DisableLocalAuth = true,
-                    Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
+                    var appConfig = new AppConfigurationStore(infrastructure.AspireResource.GetBicepIdentifier())
+                    {
+                        SkuName = "standard",
+                        DisableLocalAuth = true,
+                        Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
+                    };
+
+                    // When using private endpoints, disable public network access.
+                    if (hasPrivateEndpoint)
+                    {
+                        appConfig.PublicNetworkAccess = AppConfigurationPublicNetworkAccess.Disabled;
+                    }
+
+                    return appConfig;
                 });
 
             infrastructure.Add(new ProvisioningOutput("appConfigEndpoint", typeof(string)) { Value = store.Endpoint.ToBicepExpression() });
 
             // We need to output name to externalize role assignments.
             infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = store.Name.ToBicepExpression() });
+
+            // Output the resource id for private endpoint support.
+            infrastructure.Add(new ProvisioningOutput("id", typeof(string)) { Value = store.Id.ToBicepExpression() });
         };
 
         var resource = new AzureAppConfigurationResource(name, configureInfrastructure);
@@ -71,6 +93,7 @@ public static class AzureAppConfigurationExtensions
     /// <param name="builder">The Azure App Configuration resource builder.</param>
     /// <param name="configureEmulator">Callback that exposes underlying container used for emulation to allow for customization.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("runAsEmulator", Description = "Configures Azure App Configuration to run with the local emulator", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureAppConfigurationResource> RunAsEmulator(this IResourceBuilder<AzureAppConfigurationResource> builder, Action<IResourceBuilder<AzureAppConfigurationEmulatorResource>>? configureEmulator = null)
     {
         if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
@@ -104,6 +127,7 @@ public static class AzureAppConfigurationExtensions
     /// <param name="builder">The builder for the <see cref="AzureAppConfigurationEmulatorResource"/>.</param>
     /// <param name="path">Relative path to the AppHost where emulator storage is persisted between runs. Defaults to the path '.aace'</param>
     /// <returns>A builder for the <see cref="AzureAppConfigurationEmulatorResource"/>.</returns>
+    [AspireExport("withDataBindMount", Description = "Adds a data bind mount for the App Configuration emulator")]
     public static IResourceBuilder<AzureAppConfigurationEmulatorResource> WithDataBindMount(this IResourceBuilder<AzureAppConfigurationEmulatorResource> builder, string? path = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -117,6 +141,7 @@ public static class AzureAppConfigurationExtensions
     /// <param name="builder">The builder for the <see cref="AzureAppConfigurationEmulatorResource"/>.</param>
     /// <param name="name">The name of the volume. Defaults to an auto-generated name based on the application and resource names.</param>
     /// <returns>A builder for the <see cref="AzureAppConfigurationEmulatorResource"/>.</returns>
+    [AspireExport("withDataVolume", Description = "Adds a data volume for the App Configuration emulator")]
     public static IResourceBuilder<AzureAppConfigurationEmulatorResource> WithDataVolume(this IResourceBuilder<AzureAppConfigurationEmulatorResource> builder, string? name = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -130,6 +155,7 @@ public static class AzureAppConfigurationExtensions
     /// <param name="builder">Builder for the Azure App Configuration emulator container</param>
     /// <param name="port">The port to bind on the host. If <see langword="null"/> is used, a random port will be assigned.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("withHostPort", Description = "Sets the host port for the App Configuration emulator")]
     public static IResourceBuilder<AzureAppConfigurationEmulatorResource> WithHostPort(this IResourceBuilder<AzureAppConfigurationEmulatorResource> builder, int? port)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -149,6 +175,7 @@ public static class AzureAppConfigurationExtensions
     /// <param name="roles">The built-in App Configuration roles to be assigned.</param>
     /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
     /// <remarks>
+    /// This overload is not available in polyglot app hosts. Use <see cref="WithRoleAssignments{T}(IResourceBuilder{T}, IResourceBuilder{AzureAppConfigurationResource}, AzureAppConfigurationRole[])"/> instead.
     /// <example>
     /// Assigns the AppConfigurationDataReader role to the 'Projects.Api' project.
     /// <code lang="csharp">
@@ -162,6 +189,7 @@ public static class AzureAppConfigurationExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExportIgnore(Reason = "AppConfigurationBuiltInRole is an Azure.Provisioning type not compatible with ATS. Use the AzureAppConfigurationRole-based overload instead.")]
     public static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureAppConfigurationResource> target,
@@ -169,6 +197,41 @@ public static class AzureAppConfigurationExtensions
         where T : IResource
     {
         return builder.WithRoleAssignments(target, AppConfigurationBuiltInRole.GetBuiltInRoleName, roles);
+    }
+
+    /// <summary>
+    /// Assigns the specified roles to the given resource, granting it the necessary permissions
+    /// on the target Azure App Configuration resource. This replaces the default role assignments for the resource.
+    /// </summary>
+    /// <param name="builder">The resource to which the specified roles will be assigned.</param>
+    /// <param name="target">The target Azure App Configuration resource.</param>
+    /// <param name="roles">The App Configuration roles to be assigned.</param>
+    /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
+    /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="AzureAppConfigurationRole"/> value.</exception>
+    [AspireExport("withAppConfigurationRoleAssignments", Description = "Assigns App Configuration roles to a resource")]
+    internal static IResourceBuilder<T> WithRoleAssignments<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<AzureAppConfigurationResource> target,
+        params AzureAppConfigurationRole[] roles)
+        where T : IResource
+    {
+        if (roles is null || roles.Length == 0)
+        {
+            return builder.WithRoleAssignments(target, Array.Empty<AppConfigurationBuiltInRole>());
+        }
+
+        var builtInRoles = new AppConfigurationBuiltInRole[roles.Length];
+        for (var i = 0; i < roles.Length; i++)
+        {
+            builtInRoles[i] = roles[i] switch
+            {
+                AzureAppConfigurationRole.AppConfigurationDataOwner => AppConfigurationBuiltInRole.AppConfigurationDataOwner,
+                AzureAppConfigurationRole.AppConfigurationDataReader => AppConfigurationBuiltInRole.AppConfigurationDataReader,
+                _ => throw new ArgumentException($"Role '{roles[i]}' at index {i} is not a valid {nameof(AzureAppConfigurationRole)} value.", nameof(roles))
+            };
+        }
+
+        return builder.WithRoleAssignments(target, builtInRoles);
     }
 
     /// <summary>

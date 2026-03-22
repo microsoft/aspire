@@ -21,4 +21,9 @@ internal static class ExitCodeConstants
     public const int FailedToUpgradeProject = 13;
     public const int CentralPackageManagementNotSupported = 14;
     public const int SingleFileAppHostNotSupported = 15;
+    public const int FailedToExecuteResourceCommand = 16;
+    public const int WaitTimeout = 17;
+    public const int WaitResourceFailed = 18;
+    public const int FailedToLoadConfiguration = 19;
+    public const int FailedToStartCli = 20;
 }

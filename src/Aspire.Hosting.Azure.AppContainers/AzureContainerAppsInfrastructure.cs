@@ -45,6 +45,13 @@ internal sealed class AzureContainerAppsInfrastructure(
 
             foreach (var r in @event.Model.GetComputeResources())
             {
+                // Skip resources that are explicitly targeted to a different compute environment
+                var resourceComputeEnvironment = r.GetComputeEnvironment();
+                if (resourceComputeEnvironment is not null && resourceComputeEnvironment != environment)
+                {
+                    continue;
+                }
+
                 var containerApp = await containerAppEnvironmentContext.CreateContainerAppAsync(r, options.Value, cancellationToken).ConfigureAwait(false);
 
                 // Capture information about the container registry used by the
@@ -56,6 +63,9 @@ internal sealed class AzureContainerAppsInfrastructure(
                     ComputeEnvironment = environment
                 });
             }
+
+            // Log once about all HTTP endpoints upgraded to HTTPS
+            containerAppEnvironmentContext.LogHttpsUpgradeIfNeeded();
         }
     }
 

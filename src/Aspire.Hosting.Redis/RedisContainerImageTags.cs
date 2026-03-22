@@ -11,8 +11,8 @@ internal static class RedisContainerImageTags
     /// <remarks>library/redis</remarks>
     public const string Image = "library/redis";
 
-    /// <remarks>8.2</remarks>
-    public const string Tag = "8.2";
+    /// <remarks>8.6</remarks>
+    public const string Tag = "8.6";
 
     /// <remarks>RedisCommanderRegistry</remarks>
     public const string RedisCommanderRegistry = "docker.io";
@@ -29,6 +29,6 @@ internal static class RedisContainerImageTags
     /// <remarks>redis/redisinsight</remarks>
     public const string RedisInsightImage = "redis/redisinsight";
 
-    /// <remarks>2.70</remarks>
-    public const string RedisInsightTag = "2.70";
+    /// <remarks>3.0</remarks>
+    public const string RedisInsightTag = "3.0";
 }

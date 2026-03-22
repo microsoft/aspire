@@ -39,7 +39,6 @@ public sealed class ResourceMenuBuilder
     private readonly IStringLocalizer<Resources.Resources> _loc;
     private readonly IStringLocalizer<Resources.AIAssistant> _aiAssistantLoc;
     private readonly IStringLocalizer<Resources.AIPrompts> _aiPromptsLoc;
-    private readonly IStringLocalizer<Commands> _commandsLoc;
     private readonly IconResolver _iconResolver;
     private readonly DashboardDialogService _dialogService;
 
@@ -54,7 +53,6 @@ public sealed class ResourceMenuBuilder
         IStringLocalizer<Resources.Resources> loc,
         IStringLocalizer<Resources.AIAssistant> aiAssistantLoc,
         IStringLocalizer<Resources.AIPrompts> aiPromptsLoc,
-        IStringLocalizer<Commands> commandsLoc,
         IconResolver iconResolver,
         DashboardDialogService dialogService)
     {
@@ -65,7 +63,6 @@ public sealed class ResourceMenuBuilder
         _loc = loc;
         _aiAssistantLoc = aiAssistantLoc;
         _aiPromptsLoc = aiPromptsLoc;
-        _commandsLoc = commandsLoc;
         _iconResolver = iconResolver;
         _dialogService = dialogService;
     }
@@ -76,7 +73,7 @@ public sealed class ResourceMenuBuilder
     public void AddMenuItems(
         List<MenuButtonItem> menuItems,
         ResourceViewModel resource,
-        Func<ResourceViewModel, string> getResourceName,
+        IDictionary<string, ResourceViewModel> resourceByName,
         EventCallback onViewDetails,
         EventCallback<CommandViewModel> commandSelected,
         Func<ResourceViewModel, CommandViewModel, bool> isCommandExecuting,
@@ -102,7 +99,7 @@ public sealed class ResourceMenuBuilder
                 Icon = s_consoleLogsIcon,
                 OnClick = () =>
                 {
-                    _navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: getResourceName(resource)));
+                    _navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: ResourceViewModel.GetResourceName(resource, resourceByName)));
                     return Task.CompletedTask;
                 }
             });
@@ -114,19 +111,20 @@ public sealed class ResourceMenuBuilder
             Icon = s_bracesIcon,
             OnClick = async () =>
             {
-                var result = ExportHelpers.GetResourceAsJson(resource, getResourceName);
+                var result = ExportHelpers.GetResourceAsJson(resource, resourceByName);
                 await TextVisualizerDialog.OpenDialogAsync(new OpenTextVisualizerDialogOptions
                 {
                     DialogService = _dialogService,
                     ValueDescription = result.FileName,
                     Value = result.Content,
                     DownloadFileName = result.FileName,
-                    ContainsSecret = true
+                    ContainsSecret = true,
+                    FixedFormat = DashboardUIHelpers.JsonFormat
                 }).ConfigureAwait(false);
             }
         });
 
-        if (resource.Environment.Length > 0)
+        if (resource.Environment.Any(e => e.FromSpec))
         {
             menuItems.Add(new MenuButtonItem
             {
@@ -134,14 +132,15 @@ public sealed class ResourceMenuBuilder
                 Icon = s_exportEnvIcon,
                 OnClick = async () =>
                 {
-                    var result = ExportHelpers.GetEnvironmentVariablesAsEnvFile(resource, getResourceName);
+                    var result = ExportHelpers.GetEnvironmentVariablesAsEnvFile(resource, resourceByName);
                     await TextVisualizerDialog.OpenDialogAsync(new OpenTextVisualizerDialogOptions
                     {
                         DialogService = _dialogService,
                         ValueDescription = result.FileName,
                         Value = result.Content,
                         DownloadFileName = result.FileName,
-                        ContainsSecret = true
+                        ContainsSecret = true,
+                        FixedFormat = DashboardUIHelpers.PropertiesFormat
                     }).ConfigureAwait(false);
                 }
             });
@@ -164,7 +163,7 @@ public sealed class ResourceMenuBuilder
             });
         }
 
-        AddTelemetryMenuItems(menuItems, resource, getResourceName);
+        AddTelemetryMenuItems(menuItems, resource, resourceByName);
 
         AddCommandMenuItems(menuItems, resource, commandSelected, isCommandExecuting);
 
@@ -231,7 +230,7 @@ public sealed class ResourceMenuBuilder
         };
     }
 
-    private void AddTelemetryMenuItems(List<MenuButtonItem> menuItems, ResourceViewModel resource, Func<ResourceViewModel, string> getResourceName)
+    private void AddTelemetryMenuItems(List<MenuButtonItem> menuItems, ResourceViewModel resource, IDictionary<string, ResourceViewModel> resourceByName)
     {
         // Show telemetry menu items if there is telemetry for the resource.
         var telemetryResource = _telemetryRepository.GetResourceByCompositeName(resource.Name);
@@ -248,7 +247,7 @@ public sealed class ResourceMenuBuilder
                     Icon = s_structuredLogsIcon,
                     OnClick = () =>
                     {
-                        _navigationManager.NavigateTo(DashboardUrls.StructuredLogsUrl(resource: getResourceName(resource)));
+                        _navigationManager.NavigateTo(DashboardUrls.StructuredLogsUrl(resource: ResourceViewModel.GetResourceName(resource, resourceByName)));
                         return Task.CompletedTask;
                     }
                 });
@@ -261,7 +260,7 @@ public sealed class ResourceMenuBuilder
                 Icon = s_tracesIcon,
                 OnClick = () =>
                 {
-                    _navigationManager.NavigateTo(DashboardUrls.TracesUrl(resource: getResourceName(resource)));
+                    _navigationManager.NavigateTo(DashboardUrls.TracesUrl(resource: ResourceViewModel.GetResourceName(resource, resourceByName)));
                     return Task.CompletedTask;
                 }
             });
@@ -275,7 +274,7 @@ public sealed class ResourceMenuBuilder
                     Icon = s_metricsIcon,
                     OnClick = () =>
                     {
-                        _navigationManager.NavigateTo(DashboardUrls.MetricsUrl(resource: getResourceName(resource)));
+                        _navigationManager.NavigateTo(DashboardUrls.MetricsUrl(resource: ResourceViewModel.GetResourceName(resource, resourceByName)));
                         return Task.CompletedTask;
                     }
                 });
@@ -338,8 +337,8 @@ public sealed class ResourceMenuBuilder
 
             return new MenuButtonItem
             {
-                Text = command.GetDisplayName(_commandsLoc),
-                Tooltip = command.GetDisplayDescription(_commandsLoc),
+                Text = command.GetDisplayName(),
+                Tooltip = command.GetDisplayDescription(),
                 Icon = icon,
                 OnClick = () => commandSelected.InvokeAsync(command),
                 IsDisabled = command.State == CommandViewModelState.Disabled || isCommandExecuting(resource, command)

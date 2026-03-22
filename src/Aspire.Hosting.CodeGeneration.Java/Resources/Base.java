@@ -37,14 +37,40 @@ class ResourceBuilderBase extends HandleWrapperBase {
 
 /**
  * ReferenceExpression represents a reference expression.
+ * Supports value mode (format + args) and conditional mode (condition + whenTrue + whenFalse).
  */
 class ReferenceExpression {
+    // Value mode fields
     private final String format;
     private final Object[] args;
 
+    // Conditional mode fields
+    private final Object condition;
+    private final ReferenceExpression whenTrue;
+    private final ReferenceExpression whenFalse;
+    private final String matchValue;
+    private final boolean isConditional;
+
+    // Value mode constructor
     ReferenceExpression(String format, Object... args) {
         this.format = format;
         this.args = args;
+        this.condition = null;
+        this.whenTrue = null;
+        this.whenFalse = null;
+        this.matchValue = null;
+        this.isConditional = false;
+    }
+
+    // Conditional mode constructor
+    private ReferenceExpression(Object condition, String matchValue, ReferenceExpression whenTrue, ReferenceExpression whenFalse) {
+        this.condition = condition;
+        this.whenTrue = whenTrue;
+        this.whenFalse = whenFalse;
+        this.matchValue = matchValue != null ? matchValue : "True";
+        this.isConditional = true;
+        this.format = null;
+        this.args = null;
     }
 
     String getFormat() {
@@ -56,6 +82,18 @@ class ReferenceExpression {
     }
 
     Map<String, Object> toJson() {
+        if (isConditional) {
+            var condPayload = new java.util.HashMap<String, Object>();
+            condPayload.put("condition", AspireClient.serializeValue(condition));
+            condPayload.put("whenTrue", whenTrue.toJson());
+            condPayload.put("whenFalse", whenFalse.toJson());
+            condPayload.put("matchValue", matchValue);
+
+            var result = new java.util.HashMap<String, Object>();
+            result.put("$refExpr", condPayload);
+            return result;
+        }
+
         Map<String, Object> refExpr = new HashMap<>();
         refExpr.put("format", format);
         refExpr.put("args", Arrays.asList(args));
@@ -70,6 +108,13 @@ class ReferenceExpression {
      */
     static ReferenceExpression refExpr(String format, Object... args) {
         return new ReferenceExpression(format, args);
+    }
+
+    /**
+     * Creates a conditional reference expression from its parts.
+     */
+    static ReferenceExpression createConditional(Object condition, String matchValue, ReferenceExpression whenTrue, ReferenceExpression whenFalse) {
+        return new ReferenceExpression(condition, matchValue, whenTrue, whenFalse);
     }
 }
 

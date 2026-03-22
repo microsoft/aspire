@@ -1,0 +1,82 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="zh-Hans" original="../AgentCommandStrings.resx">
+    <body>
+      <trans-unit id="ConfigUpdatesSelectPrompt">
+        <source>The following agent configurations use the deprecated 'mcp start' command. Update them?</source>
+        <target state="translated">以下智能体配置使用已弃用的 "mcp start" 命令。是否更新它们?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeprecatedConfigFix">
+        <source>Run 'aspire agent init' to update configuration</source>
+        <target state="translated">运行 "aspire agent init" 以更新配置</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeprecatedConfigUpdate_Description">
+        <source>Update {0} config to use new 'agent mcp' command</source>
+        <target state="translated">更新 {0} 配置以使用新的 "agent mcp" 命令</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeprecatedConfigWarning">
+        <source>{0} config uses deprecated 'mcp start' command</source>
+        <target state="translated">{0} 配置使用弃用的 "mcp start" 命令</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Description">
+        <source>Manage AI agent environment configuration</source>
+        <target state="needs-review-translation">管理 AI 智能体集成。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_ConfigureMcpServer">
+        <source>Install Aspire MCP server</source>
+        <target state="new">Install Aspire MCP server</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_Description">
+        <source>Initialize agent environment configuration for detected agents</source>
+        <target state="needs-review-translation">初始化检测到的智能体的智能体环境配置。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_InstallSkillFile">
+        <source>Install Aspire skill file (Recommended)</source>
+        <target state="new">Install Aspire skill file (Recommended)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_NothingSelected">
+        <source>No options selected. Nothing to configure.</source>
+        <target state="new">No options selected. Nothing to configure.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_WhatToConfigure">
+        <source>What would you like to configure? [dim](Enter to skip, Ctrl+C to cancel)[/]</source>
+        <target state="new">What would you like to configure? [dim](Enter to skip, Ctrl+C to cancel)[/]</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MalformedConfigFileError">
+        <source>The configuration file '{0}' contains malformed JSON. Please fix the file manually and re-run the command.</source>
+        <target state="translated">配置文件 "{0}" 包含格式错误的 JSON。请手动修复文件，然后重新运行该命令。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="McpCommand_Description">
+        <source>Start the MCP (Model Context Protocol) server</source>
+        <target state="needs-review-translation">启动 MCP (模型上下文协议)服务器。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkipNoneDescription">
+        <source>None — skip</source>
+        <target state="new">None — skip</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkippedMalformedConfigFile">
+        <source>Skipping update of '{0}'.</source>
+        <target state="translated">正在跳过 "{0}" 的更新。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigurationCompletedWithErrors">
+        <source>Configuration completed with errors. Please fix the reported issues and re-run the command.</source>
+        <target state="translated">配置已完成，但出现错误。请修复报告的问题，然后重新运行该命令。</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

@@ -23,7 +23,7 @@ They download the correct build artifacts for your OS/architecture, install the 
 
 Notes:
 - On Alpine and other musl-based distros, use `--os linux-musl` (Bash) or `-OS linux-musl` (PowerShell).
-- You can target a fork by setting `ASPIRE_REPO=owner/repo` in your environment. Defaults to `dotnet/aspire`.
+- You can target a fork by setting `ASPIRE_REPO=owner/repo` in your environment. Defaults to `microsoft/aspire`.
 
 ## What gets installed
 
@@ -47,14 +47,14 @@ Pick one of the approaches below.
 
 - Run remotely (downloads and executes the script from main):
   ```bash
-  curl -fsSL https://raw.githubusercontent.com/dotnet/aspire/main/eng/scripts/get-aspire-cli-pr.sh | bash -s -- 1234
+  curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.sh | bash -s -- 1234
   ```
 
 ### One-liner (PowerShell)
 
 - Run remotely in PowerShell:
   ```powershell
-  iex "& { $(irm https://raw.githubusercontent.com/dotnet/aspire/main/eng/scripts/get-aspire-cli-pr.ps1) } 1234"
+  iex "& { $(irm https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.ps1) } 1234"
   ```
 
 ### From a local clone (Bash)
@@ -116,7 +116,7 @@ The scripts auto-detect your OS and architecture and locate the latest `ci.yml` 
   - Bash: `-v/--verbose`, `-k/--keep-archive`, `--dry-run`
   - PowerShell: `-Verbose`, `-WhatIf` (PowerShell's dry-run), or provide equivalent parameters if present
 
-- Target a fork instead of `dotnet/aspire`:
+- Target a fork instead of `microsoft/aspire`:
   - Bash:
     ```bash
     ASPIRE_REPO=myfork/aspire ./eng/scripts/get-aspire-cli-pr.sh 1234

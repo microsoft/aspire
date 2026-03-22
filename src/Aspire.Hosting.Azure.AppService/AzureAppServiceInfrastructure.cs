@@ -56,6 +56,13 @@ internal sealed class AzureAppServiceInfrastructure(
                     continue;
                 }
 
+                // Skip resources that are explicitly targeted to a different compute environment
+                var resourceComputeEnvironment = resource.GetComputeEnvironment();
+                if (resourceComputeEnvironment is not null && resourceComputeEnvironment != appServiceEnvironment)
+                {
+                    continue;
+                }
+
                 var website = await appServiceEnvironmentContext.CreateAppServiceAsync(resource, provisioningOptions.Value, cancellationToken).ConfigureAwait(false);
 
                 resource.Annotations.Add(new DeploymentTargetAnnotation(website)

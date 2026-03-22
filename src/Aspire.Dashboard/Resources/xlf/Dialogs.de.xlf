@@ -137,6 +137,11 @@
         <target state="translated">Eingabetoken: {0}</target>
         <note>{0} is the number of tokens</note>
       </trans-unit>
+      <trans-unit id="GenAILLMBadgeText">
+        <source>LLM</source>
+        <target state="new">LLM</target>
+        <note />
+      </trans-unit>
       <trans-unit id="GenAIMessageCategoryMessage">
         <source>Message</source>
         <target state="translated">Nachricht</target>
@@ -247,6 +252,16 @@
         <target state="translated">Token</target>
         <note />
       </trans-unit>
+      <trans-unit id="GenAIToolCallButtonText">
+        <source>Tool call</source>
+        <target state="new">Tool call</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="GenAIToolDefinitionButtonText">
+        <source>Tool definition</source>
+        <target state="new">Tool definition</target>
+        <note />
+      </trans-unit>
       <trans-unit id="GenAIToolNoParameters">
         <source>No parameters</source>
         <target state="translated">Keine Parameter</target>
@@ -275,6 +290,11 @@
       <trans-unit id="GenAIToolsTabText">
         <source>Tools</source>
         <target state="translated">Tools</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="GenAIUnexpectedOrTruncatedContent">
+        <source>Unexpected or truncated message content.</source>
+        <target state="new">Unexpected or truncated message content.</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogCategoryNavigation">
@@ -419,7 +439,7 @@
       </trans-unit>
       <trans-unit id="ManageDataResource">
         <source>Resource</source>
-        <target state="new">Resource</target>
+        <target state="translated">Ressource</target>
         <note />
       </trans-unit>
       <trans-unit id="ManageDataStructuredLogs">
@@ -559,7 +579,7 @@
       </trans-unit>
       <trans-unit id="McpServerDialogVisualStudioApiKeyInstructions">
         <source>You need to add the API key to Aspire MCP before you can use it. In GitHub Copilot Chat, select the Tools button, then the Aspire MCP server. Enter the API key below in the text box.</source>
-        <target state="translated">Sie müssen den API-Schlüssel zu Aspire MCP hinzufügen, bevor Sie ihn verwenden können. Wählen Sie im GitHub Copilot-Chat die Schaltfläche „Tools“ und dann den Aspire MCP-Server aus. Geben Sie unten den API-Schlüssel in das Textfeld ein.</target>
+        <target state="translated">Sie müssen Aspire MCP den API-Schlüssel hinzufügen, bevor Sie ihn verwenden können. Wählen Sie im GitHub Copilot Chat die Schaltfläche „Tools“ und dann den Aspire MCP-Server aus. Geben Sie unten den API-Schlüssel in das Textfeld ein.</target>
         <note />
       </trans-unit>
       <trans-unit id="McpServerDialogVisualStudioTab">
@@ -635,6 +655,26 @@
       <trans-unit id="SettingsDialogTheme">
         <source>Theme</source>
         <target state="translated">Design</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SettingsDialogTimeFormat">
+        <source>Time format</source>
+        <target state="new">Time format</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SettingsDialogTimeFormatSystem">
+        <source>System</source>
+        <target state="new">System</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SettingsDialogTimeFormatTwelveHour">
+        <source>12-hour</source>
+        <target state="new">12-hour</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SettingsDialogTimeFormatTwentyFourHour">
+        <source>24-hour</source>
+        <target state="new">24-hour</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogVersion">

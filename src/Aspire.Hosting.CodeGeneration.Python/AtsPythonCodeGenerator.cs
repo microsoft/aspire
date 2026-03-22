@@ -5,8 +5,7 @@ using System.Globalization;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
-using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Ats;
+using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.Python;
 
@@ -432,9 +431,12 @@ public sealed class AtsPythonCodeGenerator : ICodeGenerator
                     }
                 }
             }
+            // Also include expanded target types (concrete types discovered via interface expansion)
+            foreach (var expandedType in capability.ExpandedTargetTypes)
+            {
+                AddHandleTypeIfNeeded(handleTypeIds, expandedType);
+            }
         }
-
-        _classNames.Clear();
         foreach (var typeId in handleTypeIds)
         {
             _classNames[typeId] = CreateClassName(typeId);
@@ -447,8 +449,7 @@ public sealed class AtsPythonCodeGenerator : ICodeGenerator
             var isResourceBuilder = false;
             if (handleTypeMap.TryGetValue(typeId, out var typeInfo))
             {
-                isResourceBuilder = typeInfo.ClrType is not null &&
-                    typeof(IResource).IsAssignableFrom(typeInfo.ClrType);
+                isResourceBuilder = typeInfo.IsResourceBuilder;
             }
 
             results.Add(new PythonHandleType(typeId, _classNames[typeId], isResourceBuilder));
@@ -573,7 +574,7 @@ public sealed class AtsPythonCodeGenerator : ICodeGenerator
 
         if (typeRef.TypeId == AtsConstants.ReferenceExpressionTypeId)
         {
-            return nameof(ReferenceExpression);
+            return "ReferenceExpression";
         }
 
         return typeRef.Category switch

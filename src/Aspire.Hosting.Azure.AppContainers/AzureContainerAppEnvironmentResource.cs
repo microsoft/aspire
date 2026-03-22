@@ -3,7 +3,9 @@
 
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREAZURE001
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
+using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Azure.Provisioning;
@@ -17,9 +19,12 @@ namespace Aspire.Hosting.Azure.AppContainers;
 /// </summary>
 #pragma warning disable CS0618 // Type or member is obsolete
 public class AzureContainerAppEnvironmentResource :
-    AzureProvisioningResource, IAzureComputeEnvironmentResource, IAzureContainerRegistry
+    AzureProvisioningResource, IAzureComputeEnvironmentResource, IAzureContainerRegistry, IAzureDelegatedSubnetResource
 #pragma warning restore CS0618 // Type or member is obsolete
 {
+    /// <inheritdoc />
+    string IAzureDelegatedSubnetResource.DelegatedSubnetServiceName => "Microsoft.App/environments";
+
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureContainerAppEnvironmentResource"/> class.
     /// </summary>
@@ -127,6 +132,8 @@ public class AzureContainerAppEnvironmentResource :
 
         var dashboardUrl = $"https://aspire-dashboard.ext.{domainValue}";
 
+        context.Summary.Add("📊 Dashboard", dashboardUrl);
+
         await context.ReportingStep.CompleteAsync(
             $"Dashboard available at [{dashboardUrl}]({dashboardUrl})",
             CompletionState.Completed,
@@ -134,11 +141,19 @@ public class AzureContainerAppEnvironmentResource :
     }
     internal bool UseAzdNamingConvention { get; set; }
 
+    internal bool UseCompactResourceNaming { get; set; }
+
     /// <summary>
     /// Gets or sets a value indicating whether the Aspire dashboard should be included in the container app environment.
     /// Default is true.
     /// </summary>
     internal bool EnableDashboard { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether HTTP endpoints should be preserved as HTTP instead of being upgraded to HTTPS.
+    /// Default is false (HTTP endpoints are upgraded to HTTPS).
+    /// </summary>
+    internal bool PreserveHttpEndpoints { get; set; }
 
     /// <summary>
     /// Gets the unique identifier of the Container App Environment.
@@ -225,7 +240,9 @@ public class AzureContainerAppEnvironmentResource :
     ReferenceExpression IAzureContainerRegistry.ManagedIdentityId => ReferenceExpression.Create($"{ContainerRegistryManagedIdentityId}");
 #pragma warning restore CS0618 // Type or member is obsolete
 
-    ReferenceExpression IComputeEnvironmentResource.GetHostAddressExpression(EndpointReference endpointReference)
+    /// <inheritdoc/>
+    [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference)
     {
         var resource = endpointReference.Resource;
 

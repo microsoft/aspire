@@ -61,11 +61,20 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Manage MCP (Model Context Protocol) server..
+        ///   Looks up a localized string similar to Interact with MCP (Model Context Protocol) tools exposed by Aspire resources..
         /// </summary>
         internal static string Description {
             get {
                 return ResourceManager.GetString("Description", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Warning: &apos;aspire mcp&apos; commands are deprecated and will be removed in a future release. Please use &apos;aspire agent&apos; instead..
+        /// </summary>
+        internal static string DeprecatedCommandWarning {
+            get {
+                return ResourceManager.GetString("DeprecatedCommandWarning", resourceCulture);
             }
         }
         
@@ -97,7 +106,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Pre-configure Playwright MCP server?.
+        ///   Looks up a localized string similar to Install Playwright CLI for browser automation?.
         /// </summary>
         internal static string InitCommand_ConfigurePlaywrightPrompt {
             get {
@@ -115,7 +124,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Initialize MCP server configuration for detected agent environments..
+        ///   Looks up a localized string similar to Initialize MCP server configuration for detected agent environments. (deprecated, use &apos;agent init&apos;).
         /// </summary>
         internal static string InitCommand_Description {
             get {
@@ -169,11 +178,47 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Start the MCP (Model Context Protocol) server..
+        ///   Looks up a localized string similar to Start the MCP (Model Context Protocol) server. (deprecated, use &apos;agent mcp&apos;).
         /// </summary>
         internal static string StartCommand_Description {
             get {
                 return ResourceManager.GetString("StartCommand_Description", resourceCulture);
+            }
+        }
+        
+        internal static string CallCommand_Description {
+            get {
+                return ResourceManager.GetString("CallCommand_Description", resourceCulture);
+            }
+        }
+        
+        internal static string CallCommand_ResourceArgumentDescription {
+            get {
+                return ResourceManager.GetString("CallCommand_ResourceArgumentDescription", resourceCulture);
+            }
+        }
+        
+        internal static string CallCommand_ToolArgumentDescription {
+            get {
+                return ResourceManager.GetString("CallCommand_ToolArgumentDescription", resourceCulture);
+            }
+        }
+        
+        internal static string CallCommand_InputOptionDescription {
+            get {
+                return ResourceManager.GetString("CallCommand_InputOptionDescription", resourceCulture);
+            }
+        }
+        
+        internal static string ToolsCommand_Description {
+            get {
+                return ResourceManager.GetString("ToolsCommand_Description", resourceCulture);
+            }
+        }
+        
+        internal static string ToolsCommand_FormatOptionDescription {
+            get {
+                return ResourceManager.GetString("ToolsCommand_FormatOptionDescription", resourceCulture);
             }
         }
     }

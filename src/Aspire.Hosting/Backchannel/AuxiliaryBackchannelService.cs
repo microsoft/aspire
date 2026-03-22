@@ -22,11 +22,20 @@ internal sealed class AuxiliaryBackchannelService(
     : BackgroundService
 {
     private Socket? _serverSocket;
+    private readonly TaskCompletionSource _listeningTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     /// <summary>
     /// Gets the Unix socket path where the auxiliary backchannel is listening.
     /// </summary>
     public string? SocketPath { get; private set; }
+
+    /// <summary>
+    /// Gets a task that completes when the server socket is bound and listening for connections.
+    /// </summary>
+    /// <remarks>
+    /// Used by tests to wait until the backchannel is ready before attempting to connect.
+    /// </remarks>
+    internal Task ListeningTask => _listeningTcs.Task;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -34,14 +43,14 @@ internal sealed class AuxiliaryBackchannelService(
         {
             // Create the socket path
             SocketPath = GetAuxiliaryBackchannelSocketPath(configuration);
-            
-            logger.LogInformation("Starting auxiliary backchannel service on socket path: {SocketPath}", SocketPath);
+
+            logger.LogDebug("Starting auxiliary backchannel service on socket path: {SocketPath}", SocketPath);
 
             // Ensure the directory exists
             var directory = Path.GetDirectoryName(SocketPath);
             if (directory != null && !Directory.Exists(directory))
             {
-                logger.LogInformation("Creating backchannels directory: {Directory}", directory);
+                logger.LogDebug("Creating backchannels directory: {Directory}", directory);
                 Directory.CreateDirectory(directory);
             }
 
@@ -53,25 +62,26 @@ internal sealed class AuxiliaryBackchannelService(
                 var orphansDeleted = BackchannelConstants.CleanupOrphanedSockets(directory!, hash, Environment.ProcessId);
                 if (orphansDeleted > 0)
                 {
-                    logger.LogInformation("Cleaned up {Count} orphaned socket(s) from previous instances", orphansDeleted);
+                    logger.LogDebug("Cleaned up {Count} orphaned socket(s) from previous instances.", orphansDeleted);
                 }
             }
 
             // Clean up any existing socket file (shouldn't exist with PID in name, but just in case)
             if (File.Exists(SocketPath))
             {
-                logger.LogInformation("Deleting existing socket file: {SocketPath}", SocketPath);
+                logger.LogDebug("Deleting existing socket file: {SocketPath}", SocketPath);
                 File.Delete(SocketPath);
             }
 
             // Create and bind the server socket
-            logger.LogInformation("Creating and binding server socket...");
+            logger.LogDebug("Creating and binding server socket...");
             _serverSocket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
             var endpoint = new UnixDomainSocketEndPoint(SocketPath);
             _serverSocket.Bind(endpoint);
             _serverSocket.Listen(backlog: 10); // Allow multiple pending connections
 
-            logger.LogInformation("Auxiliary backchannel listening on {SocketPath}", SocketPath);
+            logger.LogDebug("Auxiliary backchannel listening on {SocketPath}", SocketPath);
+            _listeningTcs.TrySetResult();
 
             // Accept connections in a loop (supporting multiple concurrent connections)
             while (!stoppingToken.IsCancellationRequested)
@@ -79,7 +89,7 @@ internal sealed class AuxiliaryBackchannelService(
                 try
                 {
                     var clientSocket = await _serverSocket.AcceptAsync(stoppingToken).ConfigureAwait(false);
-                    
+
                     // Handle each connection on a separate task
                     _ = Task.Run(async () => await HandleClientConnectionAsync(clientSocket, stoppingToken).ConfigureAwait(false), stoppingToken);
                 }
@@ -90,7 +100,7 @@ internal sealed class AuxiliaryBackchannelService(
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "Error accepting client connection on auxiliary backchannel");
+                    logger.LogError(ex, "Error accepting client connection on auxiliary backchannel.");
                 }
             }
         }
@@ -100,7 +110,7 @@ internal sealed class AuxiliaryBackchannelService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error in auxiliary backchannel service");
+            logger.LogError(ex, "Error in auxiliary backchannel service.");
         }
         finally
         {
@@ -124,7 +134,7 @@ internal sealed class AuxiliaryBackchannelService(
     {
         try
         {
-            logger.LogInformation("Client connected to auxiliary backchannel");
+            logger.LogDebug("Client connected to auxiliary backchannel.");
 
             // Publish the connected event
             var connectedEvent = new AuxiliaryBackchannelConnectedEvent(serviceProvider, SocketPath!, clientSocket);
@@ -143,8 +153,13 @@ internal sealed class AuxiliaryBackchannelService(
 
             // Create JSON-RPC connection with proper System.Text.Json formatter so it doesn't use Newtonsoft.Json
             // and handles correct MCP SDK type serialization
-
+            // Configure to use camelCase naming to match CLI's MCP SDK options
             var formatter = new SystemTextJsonFormatter();
+            formatter.JsonSerializerOptions = new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+            };
 
             var handler = new HeaderDelimitedMessageHandler(stream, formatter);
             using var rpc = new JsonRpc(handler, rpcTarget);
@@ -159,6 +174,12 @@ internal sealed class AuxiliaryBackchannelService(
         {
             logger.LogDebug("Client connection handler was cancelled");
         }
+        catch (IOException ex) when (ex.InnerException is SocketException { SocketErrorCode: SocketError.ConnectionReset })
+        {
+            // IOException wrapping a ConnectionReset SocketException is expected when the client
+            // disconnects abruptly (e.g., process exit). This is a normal condition and not an error.
+            logger.LogDebug(ex, "Client disconnected from auxiliary backchannel");
+        }
         catch (Exception ex)
         {
             logger.LogError(ex, "Error handling client connection on auxiliary backchannel");
@@ -171,17 +192,17 @@ internal sealed class AuxiliaryBackchannelService(
     private static string GetAuxiliaryBackchannelSocketPath(IConfiguration configuration)
     {
         var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        
+
         // Use AppHost:FilePath or AppHost:Path from configuration for consistent hashing
         // This matches the logic in AuxiliaryBackchannelRpcTarget.GetAppHostInformationAsync
         var appHostPath = configuration["AppHost:FilePath"] ?? configuration["AppHost:Path"];
-        
+
         if (!string.IsNullOrEmpty(appHostPath))
         {
             // Use shared helper for consistent socket naming with PID
             return BackchannelConstants.ComputeSocketPath(appHostPath, homeDirectory, Environment.ProcessId);
         }
-        
+
         // Fallback: Generate socket path using process ID as the "hash" (rare edge case)
         var backchannelsDir = BackchannelConstants.GetBackchannelsDirectory(homeDirectory);
         var fallbackHash = BackchannelConstants.ComputeHash(Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));

@@ -5,6 +5,7 @@ using Aspire.Hosting.Testing;
 
 namespace Aspire.Hosting.Tests.Backchannel.Exec;
 
+[Trait("Partition", "4")]
 public class ProjectResourceExecTests : ExecTestsBase
 {
     public ProjectResourceExecTests(ITestOutputHelper outputHelper)
@@ -33,7 +34,7 @@ public class ProjectResourceExecTests : ExecTestsBase
     }
 
     [Fact]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/11158")]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/11158")]
     public async Task Exec_DotnetBuildFail_ProducesLogs_Fail()
     {
         string[] args = [
@@ -77,7 +78,7 @@ public class ProjectResourceExecTests : ExecTestsBase
     }
 
     [Fact]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/11143", TestPlatforms.Windows)]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/11143", TestPlatforms.Windows)]
     public async Task Exec_DotnetInfo_ProducesLogs_Success()
     {
         string[] args = [

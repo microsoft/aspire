@@ -3,11 +3,12 @@
 
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Commands;
 
-internal abstract class BaseConfigSubCommand(string name, string description, IFeatures features, ICliUpdateNotifier updateNotifier, IConfigurationService configurationService, CliExecutionContext executionContext, IInteractionService interactionService) : BaseCommand(name, description, features, updateNotifier, executionContext, interactionService)
+internal abstract class BaseConfigSubCommand(string name, string description, IFeatures features, ICliUpdateNotifier updateNotifier, IConfigurationService configurationService, CliExecutionContext executionContext, IInteractionService interactionService, AspireCliTelemetry telemetry) : BaseCommand(name, description, features, updateNotifier, executionContext, interactionService, telemetry)
 {
     protected IConfigurationService ConfigurationService { get; } = configurationService;
 

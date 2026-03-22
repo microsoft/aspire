@@ -27,7 +27,7 @@ internal sealed class DcpNameGenerator
 
     public void EnsureDcpInstancesPopulated(IResource resource)
     {
-        if (resource.TryGetLastAnnotation<DcpInstancesAnnotation>(out _))
+        if (resource.TryGetInstances(out _))
         {
             return;
         }

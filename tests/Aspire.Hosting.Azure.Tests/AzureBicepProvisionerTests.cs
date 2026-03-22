@@ -109,6 +109,37 @@ public class AzureBicepProvisionerTests
     }
 
     [Fact]
+    public async Task GetOrCreateResourceAsync_InPublishMode_ThrowsForUnknownPrincipalParameters()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.Services.AddSingleton<IDeploymentStateManager>(new MockDeploymentStateManager());
+        using var services = builder.Services.BuildServiceProvider();
+
+        var resource = new AzureBicepResource("storage-roles", templateString: "output id string = 'ok'");
+        resource.Parameters[AzureBicepResource.KnownParameters.PrincipalId] = null;
+        resource.Parameters[AzureBicepResource.KnownParameters.PrincipalName] = null;
+        resource.Parameters[AzureBicepResource.KnownParameters.PrincipalType] = null;
+
+        var provisioner = new BicepProvisioner(
+            services.GetRequiredService<ResourceNotificationService>(),
+            services.GetRequiredService<ResourceLoggerService>(),
+            new TestBicepCliExecutor(),
+            new TestSecretClientProvider(),
+            services.GetRequiredService<IDeploymentStateManager>(),
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish),
+            services.GetRequiredService<IFileSystemService>(),
+            NullLogger<BicepProvisioner>.Instance);
+
+        var context = ProvisioningTestHelpers.CreateTestProvisioningContext(
+            executionContext: new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            provisioner.GetOrCreateResourceAsync(resource, context, CancellationToken.None));
+
+        Assert.Contains("Azure principal parameter was not supplied", exception.Message);
+    }
+
+    [Fact]
     public async Task BicepCliExecutor_CompilesBicepToArm()
     {
         // Test the mock bicep executor behavior

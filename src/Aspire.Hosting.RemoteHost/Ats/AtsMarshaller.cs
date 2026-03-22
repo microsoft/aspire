@@ -2,9 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections;
-using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
+using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.RemoteHost.Ats;
 
@@ -14,7 +16,7 @@ namespace Aspire.Hosting.RemoteHost.Ats;
 internal sealed class AtsMarshaller
 {
     private readonly HandleRegistry _handles;
-    private readonly Hosting.Ats.AtsContext _context;
+    private readonly AtsContext _context;
     private readonly CancellationTokenRegistry _cancellationTokenRegistry;
     private readonly Lazy<AtsCallbackProxyFactory> _callbackProxyFactory;
 
@@ -27,7 +29,7 @@ internal sealed class AtsMarshaller
     /// <param name="callbackProxyFactory">Lazy callback proxy factory to break circular dependency.</param>
     public AtsMarshaller(
         HandleRegistry handles,
-        Hosting.Ats.AtsContext context,
+        AtsContext context,
         CancellationTokenRegistry cancellationTokenRegistry,
         Lazy<AtsCallbackProxyFactory> callbackProxyFactory)
     {
@@ -46,10 +48,19 @@ internal sealed class AtsMarshaller
         public string? ParameterName { get; init; }
     }
 
+    // NOTE: ReferenceHandler.IgnoreCycles prevents JsonException when serializing DTOs
+    // with circular references (e.g. parent/child back-references). Cycles are broken by
+    // writing null for back-edges. This means the TypeScript side will receive null for
+    // cycle-broken properties. During DTO writeback, those null values will overwrite the
+    // original non-null references on the C# side — this is intentional, since TypeScript
+    // cannot represent object cycles and the writeback reflects what TypeScript observed.
     private static readonly JsonSerializerOptions s_jsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Converters = { new JsonStringEnumConverter() },
+        ReferenceHandler = ReferenceHandler.IgnoreCycles,
+        TypeInfoResolver = new DefaultJsonTypeInfoResolver()
     };
 
     /// <summary>
@@ -117,28 +128,33 @@ internal sealed class AtsMarshaller
     /// <param name="value">The value to marshal.</param>
     /// <param name="typeRef">The type metadata from the scanner.</param>
     /// <returns>The JSON representation, or null if the value is null.</returns>
-    public JsonNode? MarshalToJson(object? value, Hosting.Ats.AtsTypeRef typeRef)
+    public JsonNode? MarshalToJson(object? value, AtsTypeRef typeRef)
     {
         if (value == null)
         {
             return null;
         }
 
+        if (typeRef.TypeId == AtsConstants.CancellationToken && value is CancellationToken cancellationToken)
+        {
+            return SerializeCancellationToken(cancellationToken);
+        }
+
         // Handle 'any' type - fall back to runtime type inspection
-        if (typeRef.TypeId == Hosting.Ats.AtsConstants.Any)
+        if (typeRef.TypeId == TypeSystem.AtsConstants.Any)
         {
             return MarshalToJson(value);
         }
 
         return typeRef.Category switch
         {
-            Hosting.Ats.AtsTypeCategory.Handle => _handles.Marshal(value, typeRef.TypeId),
-            Hosting.Ats.AtsTypeCategory.Primitive => SerializePrimitive(value),
-            Hosting.Ats.AtsTypeCategory.Enum => JsonValue.Create(value.ToString()),
-            Hosting.Ats.AtsTypeCategory.Dto => SerializeDto(value),
-            Hosting.Ats.AtsTypeCategory.Array => SerializeArray(value, typeRef.ElementType),
-            Hosting.Ats.AtsTypeCategory.List => _handles.Marshal(value, typeRef.TypeId),
-            Hosting.Ats.AtsTypeCategory.Dict => _handles.Marshal(value, typeRef.TypeId),
+            AtsTypeCategory.Handle => _handles.Marshal(value, typeRef.TypeId),
+            AtsTypeCategory.Primitive => SerializePrimitive(value),
+            AtsTypeCategory.Enum => JsonValue.Create(value.ToString()),
+            AtsTypeCategory.Dto => SerializeDto(value),
+            AtsTypeCategory.Array => SerializeArray(value, typeRef.ElementType),
+            AtsTypeCategory.List => _handles.Marshal(value, typeRef.TypeId),
+            AtsTypeCategory.Dict => _handles.Marshal(value, typeRef.TypeId),
             _ => throw new InvalidOperationException($"Unknown type category: {typeRef.Category}")
         };
     }
@@ -174,7 +190,7 @@ internal sealed class AtsMarshaller
         return JsonNode.Parse(json);
     }
 
-    private JsonNode? SerializeArray(object value, Hosting.Ats.AtsTypeRef? elementType)
+    private JsonNode? SerializeArray(object value, AtsTypeRef? elementType)
     {
         var jsonArray = new JsonArray();
         foreach (var item in (IEnumerable)value)
@@ -205,18 +221,23 @@ internal sealed class AtsMarshaller
         }
 
         var type = value.GetType();
+        if (type == typeof(CancellationToken))
+        {
+            return SerializeCancellationToken((CancellationToken)value);
+        }
+
         var category = _context.GetCategory(type);
 
         return category switch
         {
-            Hosting.Ats.AtsTypeCategory.Primitive => SerializePrimitive(value),
-            Hosting.Ats.AtsTypeCategory.Enum => JsonValue.Create(value.ToString()),
-            Hosting.Ats.AtsTypeCategory.Dto => SerializeDto(value),
-            Hosting.Ats.AtsTypeCategory.Array => SerializeArrayRuntime(value),
-            Hosting.Ats.AtsTypeCategory.List => MarshalListHandle(value, type),
-            Hosting.Ats.AtsTypeCategory.Dict => MarshalDictHandle(value, type),
-            Hosting.Ats.AtsTypeCategory.Handle => _handles.Marshal(value, Hosting.Ats.AtsTypeMapping.DeriveTypeId(type)),
-            _ => _handles.Marshal(value, Hosting.Ats.AtsTypeMapping.DeriveTypeId(type))
+            AtsTypeCategory.Primitive => SerializePrimitive(value),
+            AtsTypeCategory.Enum => JsonValue.Create(value.ToString()),
+            AtsTypeCategory.Dto => SerializeDto(value),
+            AtsTypeCategory.Array => SerializeArrayRuntime(value),
+            AtsTypeCategory.List => MarshalListHandle(value, type),
+            AtsTypeCategory.Dict => MarshalDictHandle(value, type),
+            AtsTypeCategory.Handle => _handles.Marshal(value, AtsTypeMapping.DeriveTypeId(type)),
+            _ => _handles.Marshal(value, AtsTypeMapping.DeriveTypeId(type))
         };
     }
 
@@ -228,6 +249,17 @@ internal sealed class AtsMarshaller
             jsonArray.Add(MarshalToJson(item));
         }
         return jsonArray;
+    }
+
+    private JsonNode? SerializeCancellationToken(CancellationToken cancellationToken)
+    {
+        if (cancellationToken == CancellationToken.None)
+        {
+            return null;
+        }
+
+        var (tokenId, _) = _cancellationTokenRegistry.CreateLinked(cancellationToken);
+        return JsonValue.Create(tokenId);
     }
 
     private JsonNode? MarshalListHandle(object value, Type type)
@@ -242,7 +274,7 @@ internal sealed class AtsMarshaller
             }
         }
         // Fallback for non-generic lists
-        return _handles.Marshal(value, Hosting.Ats.AtsTypeMapping.DeriveTypeId(type));
+        return _handles.Marshal(value, AtsTypeMapping.DeriveTypeId(type));
     }
 
     private JsonNode? MarshalDictHandle(object value, Type type)
@@ -257,7 +289,7 @@ internal sealed class AtsMarshaller
             }
         }
         // Fallback for non-generic dicts
-        return _handles.Marshal(value, Hosting.Ats.AtsTypeMapping.DeriveTypeId(type));
+        return _handles.Marshal(value, AtsTypeMapping.DeriveTypeId(type));
     }
 
     /// <summary>
@@ -272,6 +304,11 @@ internal sealed class AtsMarshaller
     {
         if (node == null)
         {
+            if (targetType == typeof(CancellationToken))
+            {
+                return CancellationToken.None;
+            }
+
             return null;
         }
 
@@ -289,8 +326,9 @@ internal sealed class AtsMarshaller
             return handleObj;
         }
 
-        // Check for reference expression (similar to handle, but constructs a ReferenceExpression)
-        // Format: { "$expr": { "format": "...", "valueProviders": [...] } }
+        // Check for reference expression (value or conditional)
+        // Value format: { "$expr": { "format": "...", "valueProviders": [...] } }
+        // Conditional format: { "$expr": { "condition": <handle>, "whenTrue": <$expr>, "whenFalse": <$expr> } }
         var exprRef = ReferenceExpressionRef.FromJsonNode(node);
         if (exprRef != null)
         {
@@ -423,8 +461,7 @@ internal sealed class AtsMarshaller
             }
 
             // DTOs - must have [AspireDto] attribute
-            var dtoAttr = targetType.GetCustomAttribute<AspireDtoAttribute>();
-            if (dtoAttr == null)
+            if (!AttributeDataReader.HasAspireDtoData(targetType))
             {
                 throw CapabilityException.InvalidArgument(
                     capabilityId, paramName,
@@ -525,5 +562,77 @@ internal sealed class AtsMarshaller
         }
 
         return JsonSerializer.Deserialize(value.ToJsonString(), targetType, s_jsonOptions);
+    }
+
+    /// <summary>
+    /// Checks if a type is a DTO type (marked with [AspireDto] and registered in the context).
+    /// </summary>
+    /// <param name="type">The type to check.</param>
+    /// <returns><c>true</c> if the type is a DTO type; otherwise, <c>false</c>.</returns>
+    public bool IsDtoType(Type type)
+    {
+        return _context.GetCategory(type) == AtsTypeCategory.Dto;
+    }
+
+    /// <summary>
+    /// Applies property values from a JSON object to an existing DTO instance.
+    /// Used for applying mutations made in callbacks back to the original objects.
+    /// Only writable properties and public fields whose types can be deserialized
+    /// from the JSON are updated. Properties with complex types that lack a
+    /// parameterless constructor (e.g. <c>EndpointReference</c>) are silently skipped.
+    /// </summary>
+    /// <param name="source">The JSON object containing the updated values.</param>
+    /// <param name="target">The existing DTO instance to update.</param>
+    /// <param name="targetType">The CLR type of the target object.</param>
+    /// <remarks>
+    /// <para>
+    /// Nested DTO properties are deserialized as new instances, not patched in-place.
+    /// External references to the original nested object will not see the mutations.
+    /// </para>
+    /// <para>
+    /// When <c>ReferenceHandler.IgnoreCycles</c> is active, cycle-broken properties
+    /// arrive as <c>null</c> and will overwrite the original non-null reference.
+    /// </para>
+    /// </remarks>
+    // Instance method for consistency with IsDtoType and future extensibility.
+#pragma warning disable CA1822 // Member does not access instance data
+    public void ApplyDtoProperties(JsonObject source, object target, Type targetType)
+#pragma warning restore CA1822
+    {
+        // Use JsonTypeInfo metadata instead of raw reflection so that
+        // [JsonPropertyName], [JsonIgnore], the naming policy, and field
+        // inclusion configuration are all respected automatically.
+        var typeInfo = s_jsonOptions.GetTypeInfo(targetType);
+
+        foreach (var prop in typeInfo.Properties)
+        {
+            if (prop.Set is null)
+            {
+                continue;
+            }
+
+            if (!source.TryGetPropertyValue(prop.Name, out var jsonValue))
+            {
+                continue;
+            }
+
+            try
+            {
+                prop.Set(target, jsonValue.Deserialize(prop.PropertyType, s_jsonOptions));
+            }
+            catch (NotSupportedException)
+            {
+                // Silently skip properties whose types can't be deserialized by
+                // System.Text.Json (e.g. EndpointReference with no parameterless
+                // constructor). This is expected for DTO types that carry complex
+                // navigation properties alongside simple writable data.
+            }
+            catch (JsonException)
+            {
+                // Silently skip properties where the JSON value is incompatible
+                // with the CLR property type (e.g. string sent for an int field).
+                // This is a best-effort writeback — partial updates are acceptable.
+            }
+        }
     }
 }

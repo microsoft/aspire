@@ -12,6 +12,7 @@ namespace Aspire.Hosting.Kubernetes;
 /// <summary>
 /// Represents a compute resource for Kubernetes.
 /// </summary>
+[AspireExport(ExposeProperties = true)]
 public partial class KubernetesResource(string name, IResource resource, KubernetesEnvironmentResource kubernetesEnvironmentResource) : Resource(name), IResourceWithParent<KubernetesEnvironmentResource>
 {
     /// <inheritdoc/>
@@ -22,6 +23,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
     internal Dictionary<string, HelmValue> EnvironmentVariables { get; } = [];
     internal Dictionary<string, HelmValue> Secrets { get; } = [];
     internal Dictionary<string, HelmValue> Parameters { get; } = [];
+    internal Dictionary<string, HelmValue> AdditionalConfigValues { get; } = [];
     internal Dictionary<string, string> Labels { get; private set; } = [];
     internal List<string> Commands { get; } = [];
     internal List<VolumeMountV1> Volumes { get; } = [];
@@ -171,7 +173,26 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
             if (resolved.TargetPort.Value is null)
             {
-                // Default endpoint for ProjectResource - deployment tool assigns port
+                // Default endpoint for ProjectResource - deployment tool assigns port.
+                // Skip the default https endpoint — the container won't listen on HTTPS.
+                // In Kubernetes, TLS termination is handled by ingress or service mesh.
+                // We still create an EndpointMapping (needed for service discovery env vars)
+                // but reuse the http endpoint's HelmValue so no duplicate K8s port is generated.
+                // This matches the core framework's SetBothPortsEnvVariables() behavior,
+                // which skips DefaultHttpsEndpoint when setting HTTPS_PORTS.
+                // See: https://github.com/microsoft/aspire/issues/14029
+                if (resource is ProjectResource projectResource &&
+                    endpoint == projectResource.DefaultHttpsEndpoint)
+                {
+                    // Find the existing http endpoint's HelmValue to share it
+                    var httpMapping = EndpointMappings.Values.FirstOrDefault(m => m.Scheme == "http");
+                    if (httpMapping is not null)
+                    {
+                        EndpointMappings[endpoint.Name] = new(endpoint.UriScheme, GetKubernetesProtocolName(endpoint.Protocol), resource.Name.ToServiceName(), httpMapping.Port, endpoint.Name);
+                        continue;
+                    }
+                }
+
                 GenerateDefaultProjectEndpointMapping(endpoint);
                 continue;
             }
@@ -268,7 +289,10 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
     {
         if (resource.TryGetAnnotationsOfType<CommandLineArgsCallbackAnnotation>(out var commandLineArgsCallbackAnnotations))
         {
-            var context = new CommandLineArgsCallbackContext([], resource, cancellationToken: cancellationToken);
+            var context = new CommandLineArgsCallbackContext([], resource, cancellationToken: cancellationToken)
+            {
+                ExecutionContext = executionContext
+            };
 
             foreach (var c in commandLineArgsCallbackAnnotations)
             {
@@ -407,6 +431,25 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
             if (value is ReferenceExpression expr)
             {
+                if (expr.IsConditional)
+                {
+                    // When the condition is a parameter, use Helm flow control to defer
+                    // evaluation to helm install/upgrade time.
+                    if (expr.Condition is ParameterResource conditionParam)
+                    {
+                        return await BuildHelmConditional(context, executionContext, expr, conditionParam, embedded).ConfigureAwait(false);
+                    }
+
+                    // For non-parameter conditions, resolve statically at generation time.
+                    var conditionContext = new ValueProviderContext { ExecutionContext = executionContext };
+                    var conditionStr = await expr.Condition!.GetValueAsync(conditionContext, default).ConfigureAwait(false);
+
+                    var branch = string.Equals(conditionStr, expr.MatchValue, StringComparison.OrdinalIgnoreCase)
+                        ? expr.WhenTrue!
+                        : expr.WhenFalse!;
+                    return await ProcessValueAsync(context, executionContext, branch, embedded).ConfigureAwait(false);
+                }
+
                 if (expr is { Format: "{0}", ValueProviders.Count: 1 })
                 {
                     return (await ProcessValueAsync(context, executionContext, expr.ValueProviders[0], true).ConfigureAwait(false)).ToString() ?? string.Empty;
@@ -433,6 +476,69 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
             }
 
             throw new NotSupportedException($"Unsupported value type: {value.GetType().Name}");
+        }
+    }
+
+    private async Task<object> BuildHelmConditional(KubernetesEnvironmentContext context, DistributedApplicationExecutionContext executionContext, ReferenceExpression expr, ParameterResource conditionParam, bool embedded)
+    {
+        // Process both branches to get their rendered values.
+        var whenTrueResult = await ProcessValueAsync(context, executionContext, expr.WhenTrue!, embedded).ConfigureAwait(false);
+        var whenFalseResult = await ProcessValueAsync(context, executionContext, expr.WhenFalse!, embedded).ConfigureAwait(false);
+
+        var whenTrueStr = whenTrueResult.ToString() ?? string.Empty;
+        var whenFalseStr = whenFalseResult.ToString() ?? string.Empty;
+
+        // Allocate the condition parameter into values.yaml under the parameters section.
+        var formattedName = conditionParam.Name.ToHelmValuesSectionName();
+        var paramExpression = formattedName.ToHelmParameterExpression(TargetResource.Name);
+
+        if (!Parameters.ContainsKey(formattedName))
+        {
+            Parameters[formattedName] = conditionParam.Default is null || conditionParam.Secret
+                ? new HelmValue(paramExpression, (string?)null)
+                : new HelmValue(paramExpression, conditionParam);
+        }
+
+        // Ensure parameter values referenced in branches are populated in values.yaml.
+        AllocateBranchParameters(expr.WhenTrue!);
+        AllocateBranchParameters(expr.WhenFalse!);
+
+        // Extract the values path (e.g., .Values.parameters.myapp.enable_tls) from {{ expression }}.
+        // Pipe through | lower for case-insensitive comparison, matching .NET's
+        // StringComparison.OrdinalIgnoreCase used in other execution/publish paths.
+        var conditionPath = $"({HelmExtensions.ScalarExpressionPattern().Match(paramExpression).Value.Trim()} | lower)";
+        var escapedMatch = (expr.MatchValue ?? string.Empty).ToLowerInvariant().Replace("\\", "\\\\").Replace("\"", "\\\"");
+
+        var ifElseExpression = $"{{{{ if eq {conditionPath} \"{escapedMatch}\" }}}}{whenTrueStr}{{{{ else }}}}{whenFalseStr}{{{{ end }}}}";
+        return HelmValue.Literal(ifElseExpression);
+    }
+
+    /// <summary>
+    /// Ensures that any <see cref="ParameterResource"/> instances referenced in a branch's
+    /// value providers are allocated in the appropriate dictionary (EnvironmentVariables or
+    /// Secrets) so their values flow to values.yaml via <c>AddValuesToHelmSectionAsync</c>.
+    /// </summary>
+    private void AllocateBranchParameters(ReferenceExpression branch)
+    {
+        foreach (var vp in branch.ValueProviders)
+        {
+            if (vp is ParameterResource branchParam)
+            {
+                var helmValue = AllocateParameter(branchParam, TargetResource);
+                var key = branchParam.Name.ToHelmValuesSectionName();
+
+                // Store in AdditionalConfigValues rather than EnvironmentVariables to avoid
+                // case-insensitive key collisions in ToConfigMap's processedKeys. These values
+                // flow to the config section of values.yaml but do not appear as env vars.
+                if (helmValue.ExpressionContainsHelmSecretExpression)
+                {
+                    Secrets.TryAdd(key, helmValue);
+                }
+                else
+                {
+                    AdditionalConfigValues.TryAdd(key, helmValue);
+                }
+            }
         }
     }
 

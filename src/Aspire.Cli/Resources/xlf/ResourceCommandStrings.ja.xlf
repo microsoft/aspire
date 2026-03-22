@@ -1,0 +1,27 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="ja" original="../ResourceCommandStrings.resx">
+    <body>
+      <trans-unit id="CommandDescription">
+        <source>Execute a command on a resource (e.g. start, stop, restart)</source>
+        <target state="needs-review-translation">リソースでコマンドを実行します。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CommandNameArgumentDescription">
+        <source>The name of the command to execute (e.g. start, stop, restart)</source>
+        <target state="needs-review-translation">実行するコマンドの名前。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CommandResourceArgumentDescription">
+        <source>The name of the resource to execute the command on</source>
+        <target state="needs-review-translation">コマンドを実行する対象のリソースの名前。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SelectAppHostAction">
+        <source>connect to</source>
+        <target state="translated">接続先</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

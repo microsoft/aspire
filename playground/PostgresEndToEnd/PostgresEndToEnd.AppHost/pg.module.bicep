@@ -49,4 +49,6 @@ output connectionString string = 'Host=${pg.properties.fullyQualifiedDomainName}
 
 output name string = pg.name
 
+output id string = pg.id
+
 output hostName string = pg.properties.fullyQualifiedDomainName

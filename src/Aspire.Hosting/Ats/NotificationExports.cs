@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Ats;
 
@@ -11,11 +12,24 @@ namespace Aspire.Hosting.Ats;
 internal static class NotificationExports
 {
     /// <summary>
+    /// Gets the resource notification service from the service provider.
+    /// </summary>
+    /// <param name="serviceProvider">The service provider handle.</param>
+    /// <returns>A resource notification service handle.</returns>
+    [AspireExport("getResourceNotificationService", Description = "Gets the resource notification service from the service provider")]
+    public static ResourceNotificationService GetResourceNotificationService(this IServiceProvider serviceProvider)
+    {
+        ArgumentNullException.ThrowIfNull(serviceProvider);
+
+        return serviceProvider.GetRequiredService<ResourceNotificationService>();
+    }
+
+    /// <summary>
     /// Waits for a resource to reach a specified state.
     /// </summary>
     [AspireExport("waitForResourceState", Description = "Waits for a resource to reach a specified state")]
     public static Task WaitForResourceState(
-        ResourceNotificationService notificationService,
+        this ResourceNotificationService notificationService,
         string resourceName,
         string? targetState = null)
     {
@@ -27,7 +41,7 @@ internal static class NotificationExports
     /// </summary>
     [AspireExport("waitForResourceStates", Description = "Waits for a resource to reach one of the specified states")]
     public static Task<string> WaitForResourceStates(
-        ResourceNotificationService notificationService,
+        this ResourceNotificationService notificationService,
         string resourceName,
         string[] targetStates)
     {
@@ -39,7 +53,7 @@ internal static class NotificationExports
     /// </summary>
     [AspireExport("waitForResourceHealthy", Description = "Waits for a resource to become healthy")]
     public static async Task<ResourceEventDto> WaitForResourceHealthy(
-        ResourceNotificationService notificationService,
+        this ResourceNotificationService notificationService,
         string resourceName)
     {
         var resourceEvent = await notificationService.WaitForResourceHealthyAsync(resourceName).ConfigureAwait(false);
@@ -51,7 +65,7 @@ internal static class NotificationExports
     /// </summary>
     [AspireExport("waitForDependencies", Description = "Waits for all dependencies of a resource to be ready")]
     public static Task WaitForDependencies(
-        ResourceNotificationService notificationService,
+        this ResourceNotificationService notificationService,
         IResourceBuilder<IResource> resource)
     {
         return notificationService.WaitForDependenciesAsync(resource.Resource, CancellationToken.None);
@@ -62,7 +76,7 @@ internal static class NotificationExports
     /// </summary>
     [AspireExport("tryGetResourceState", Description = "Tries to get the current state of a resource")]
     public static ResourceEventDto? TryGetResourceState(
-        ResourceNotificationService notificationService,
+        this ResourceNotificationService notificationService,
         string resourceName)
     {
         if (notificationService.TryGetCurrentState(resourceName, out var resourceEvent))
@@ -77,7 +91,7 @@ internal static class NotificationExports
     /// </summary>
     [AspireExport("publishResourceUpdate", Description = "Publishes an update for a resource's state")]
     public static Task PublishResourceUpdate(
-        ResourceNotificationService notificationService,
+        this ResourceNotificationService notificationService,
         IResourceBuilder<IResource> resource,
         string? state = null,
         string? stateStyle = null)

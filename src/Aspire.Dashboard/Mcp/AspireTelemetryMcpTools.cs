@@ -9,6 +9,7 @@ using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
 
@@ -20,7 +21,7 @@ namespace Aspire.Dashboard.Mcp;
 internal sealed class AspireTelemetryMcpTools
 {
     private readonly TelemetryRepository _telemetryRepository;
-    private readonly IEnumerable<IOutgoingPeerResolver> _outgoingPeerResolvers;
+    private readonly IOutgoingPeerResolver[] _outgoingPeerResolvers;
     private readonly IOptionsMonitor<DashboardOptions> _dashboardOptions;
     private readonly IDashboardClient _dashboardClient;
     private readonly ILogger<AspireTelemetryMcpTools> _logger;
@@ -32,7 +33,7 @@ internal sealed class AspireTelemetryMcpTools
         ILogger<AspireTelemetryMcpTools> logger)
     {
         _telemetryRepository = telemetryRepository;
-        _outgoingPeerResolvers = outgoingPeerResolvers;
+        _outgoingPeerResolvers = outgoingPeerResolvers.ToArray();
         _dashboardOptions = dashboardOptions;
         _dashboardClient = dashboardClient;
         _logger = logger;
@@ -70,13 +71,13 @@ internal sealed class AspireTelemetryMcpTools
             }
         }
 
+        var otlpData = TelemetryExportService.ConvertLogsToOtlpJson(logs);
         var resources = _telemetryRepository.GetResources();
-
         var (logsData, limitMessage) = AIHelpers.GetStructuredLogsJson(
-            logs,
+            otlpData,
             _dashboardOptions.CurrentValue,
             includeDashboardUrl: true,
-            getResourceName: r => OtlpResource.GetResourceName(r, resources));
+            getResourceName: r => OtlpHelpers.GetResourceName(r, resources));
 
         var response = $"""
             Always format log_id in the response as code like this: `log_id: 123`.
@@ -123,12 +124,10 @@ internal sealed class AspireTelemetryMcpTools
 
         var resources = _telemetryRepository.GetResources();
 
-        var (tracesData, limitMessage) = AIHelpers.GetTracesJson(
-            traces,
-            _outgoingPeerResolvers,
-            _dashboardOptions.CurrentValue,
-            includeDashboardUrl: true,
-            getResourceName: r => OtlpResource.GetResourceName(r, resources));
+        var (tracesData, limitMessage) = SharedAIHelpers.GetTracesJson(
+            TelemetryExportService.ConvertTracesToOtlpJson(traces, _outgoingPeerResolvers).ResourceSpans,
+            getResourceName: r => OtlpHelpers.GetResourceName(r, resources),
+            AIHelpers.GetDashboardUrl(_dashboardOptions.CurrentValue));
 
         var response = $"""
             {limitMessage}
@@ -165,13 +164,13 @@ internal sealed class AspireTelemetryMcpTools
             Filters = [traceIdFilter]
         });
 
+        var otlpData = TelemetryExportService.ConvertLogsToOtlpJson(logs.Items);
         var resources = _telemetryRepository.GetResources();
-
         var (logsData, limitMessage) = AIHelpers.GetStructuredLogsJson(
-            logs.Items,
+            otlpData,
             _dashboardOptions.CurrentValue,
             includeDashboardUrl: true,
-            getResourceName: r => OtlpResource.GetResourceName(r, resources));
+            getResourceName: r => OtlpHelpers.GetResourceName(r, resources));
 
         var response = $"""
             {limitMessage}

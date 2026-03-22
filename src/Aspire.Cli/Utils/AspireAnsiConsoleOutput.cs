@@ -120,6 +120,13 @@ internal sealed class AspireAnsiConsoleOutput : IAnsiConsoleOutput
                 return IsTerminal ? 80 : 160;
             }
 
+            // When BufferWidth returns 80 (historical default) but we're not in a real terminal,
+            // use 160 to avoid awkward line breaks. Some CI systems report 80 even without a terminal.
+            if (width == 80 && !IsTerminal)
+            {
+                return 160;
+            }
+
             return width;
         }
         catch (IOException)

@@ -3,15 +3,24 @@
 
 #pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only
 
+using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Hosting.JavaScript.Tests;
 
 public class AddNodeAppTests
 {
+    private static readonly MethodInfo s_polyglotWithReferenceMethod = typeof(ResourceBuilderExtensions)
+        .GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
+        .Single(m => m.Name == nameof(ResourceBuilderExtensions.WithReference)
+            && m.IsGenericMethodDefinition
+            && m.GetParameters() is { Length: 5 } parameters
+            && parameters[1].ParameterType == typeof(IResourceBuilder<IResource>));
+
     [Fact]
     public async Task VerifyManifest()
     {
@@ -107,39 +116,39 @@ public class AddNodeAppTests
         var expectedDockerfile = includePackageJson ?
             """
             FROM node:22-alpine AS build
-            
+
             WORKDIR /app
             COPY package*.json ./
             RUN --mount=type=cache,target=/root/.npm npm ci
             COPY . .
-            
+
             FROM node:22-alpine AS runtime
-            
+
             WORKDIR /app
             COPY --from=build /app /app
-            
+
             ENV NODE_ENV=production
-            
+
             USER node
-            
+
             ENTRYPOINT ["node","app.js"]
 
             """.Replace("\r\n", "\n") :
             """
             FROM node:22-alpine AS build
-            
+
             WORKDIR /app
             COPY . .
-            
+
             FROM node:22-alpine AS runtime
-            
+
             WORKDIR /app
             COPY --from=build /app /app
-            
+
             ENV NODE_ENV=production
-            
+
             USER node
-            
+
             ENTRYPOINT ["node","app.js"]
 
             """.Replace("\r\n", "\n");
@@ -418,4 +427,166 @@ public class AddNodeAppTests
 
     private sealed class MyFilesContainer(string name, string command, string workingDirectory)
         : ExecutableResource(name, command, workingDirectory), IResourceWithContainerFiles;
+
+#pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only
+
+    [Fact]
+    public void NodeApp_WithVSCodeDebugging_AddsSupportsDebuggingAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var tempDir = new TestTempDirectory();
+
+        var nodeApp = builder.AddNodeApp("nodeapp", tempDir.Path, "app.js");
+
+        var annotation = nodeApp.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
+        Assert.NotNull(annotation);
+        Assert.Equal("node", annotation.LaunchConfigurationType);
+    }
+
+    [Fact]
+    public void NodeApp_WithVSCodeDebugging_DoesNotAddAnnotationInPublishMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var tempDir = new TestTempDirectory();
+
+        var nodeApp = builder.AddNodeApp("nodeapp", tempDir.Path, "app.js");
+
+        var annotation = nodeApp.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
+        Assert.Null(annotation);
+    }
+
+    [Fact]
+    public void ViteApp_WithVSCodeDebugging_AddsSupportsDebuggingAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var tempDir = new TestTempDirectory();
+
+        var viteApp = builder.AddViteApp("viteapp", tempDir.Path);
+
+        var annotation = viteApp.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
+        Assert.NotNull(annotation);
+        Assert.Equal("node", annotation.LaunchConfigurationType);
+    }
+
+    [Fact]
+    public void ViteApp_WithBrowserDebugger_CreatesChildResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var tempDir = new TestTempDirectory();
+
+        var viteApp = builder.AddViteApp("viteapp", tempDir.Path)
+            .WithBrowserDebugger();
+
+        using var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var browserDebuggerResource = appModel.Resources.OfType<BrowserDebuggerResource>().SingleOrDefault();
+        Assert.NotNull(browserDebuggerResource);
+        Assert.Equal("viteapp-browser", browserDebuggerResource.Name);
+
+        // Verify parent relationship
+        Assert.True(browserDebuggerResource.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relationships));
+        var parentRelationship = Assert.Single(relationships, r => r.Type == "Parent");
+        Assert.Same(viteApp.Resource, parentRelationship.Resource);
+
+        // Verify supports debugging annotation
+        var annotation = browserDebuggerResource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
+        Assert.NotNull(annotation);
+        Assert.Equal("browser", annotation.LaunchConfigurationType);
+    }
+
+    [Fact]
+    public void ViteApp_WithBrowserDebugger_DefaultsToEdgeBrowser()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var tempDir = new TestTempDirectory();
+
+        var viteApp = builder.AddViteApp("viteapp", tempDir.Path)
+            .WithBrowserDebugger();
+
+        using var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var browserDebuggerResource = appModel.Resources.OfType<BrowserDebuggerResource>().Single();
+        // The BrowserDebuggerResource's command is the browser name
+        Assert.Equal("msedge", browserDebuggerResource.Command);
+    }
+
+    [Fact]
+    public void ViteApp_WithBrowserDebugger_UsesSpecifiedBrowser()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var tempDir = new TestTempDirectory();
+
+        var viteApp = builder.AddViteApp("viteapp", tempDir.Path)
+            .WithBrowserDebugger(browser: "chrome");
+
+        using var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var browserDebuggerResource = appModel.Resources.OfType<BrowserDebuggerResource>().Single();
+        Assert.Equal("chrome", browserDebuggerResource.Command);
+    }
+
+    [Fact]
+    public void ViteApp_WithBrowserDebugger_WithoutEndpoint_DeferredValidation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var tempDir = new TestTempDirectory();
+
+        // Create a minimal JavaScriptAppResource without endpoints
+        var resource = new JavaScriptAppResource("jsapp", "npm", tempDir.Path);
+        var jsApp = builder.AddResource(resource);
+
+        // WithBrowserDebugger no longer throws immediately; endpoint validation is deferred
+        // to when the launch configuration callback is actually invoked at debug time
+        jsApp.WithBrowserDebugger();
+
+        using var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // The browser debugger resource should still be created
+        var browserDebuggerResource = appModel.Resources.OfType<BrowserDebuggerResource>().SingleOrDefault();
+        Assert.NotNull(browserDebuggerResource);
+    }
+
+    [Fact]
+    public async Task WithReferenceDispatchesNodeAppServiceReference()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+        using var tempDir = new TestTempDirectory();
+
+        File.WriteAllText(Path.Combine(tempDir.Path, "app.js"), "console.log('hello');");
+
+        var nodeApp = builder.AddNodeApp("nodeapp", tempDir.Path, "app.js")
+            .WithHttpEndpoint(port: 5031, env: "PORT")
+            .WithEndpoint("http", e =>
+            {
+                e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 5031);
+                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "nodeapp.dev.internal", 5031, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+            });
+        var consumer = builder.AddContainer("consumer", "fake");
+
+        InvokeWithReference(consumer, nodeApp, name: "custom-name");
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(consumer.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+
+        Assert.Equal("http://nodeapp.dev.internal:5031", config["services__custom-name__http__0"]);
+        Assert.Equal("http://nodeapp.dev.internal:5031", config["custom_name_HTTP"]);
+    }
+
+    private static IResourceBuilder<TDestination> InvokeWithReference<TDestination>(
+        IResourceBuilder<TDestination> builder,
+        IResourceBuilder<IResource> source,
+        string? connectionName = null,
+        bool optional = false,
+        string? name = null)
+        where TDestination : IResourceWithEnvironment
+    {
+        return (IResourceBuilder<TDestination>)s_polyglotWithReferenceMethod
+            .MakeGenericMethod(typeof(TDestination))
+            .Invoke(null, [builder, source, connectionName, optional, name])!;
+    }
+
+#pragma warning restore ASPIREEXTENSION001 // Type is for evaluation purposes only
 }

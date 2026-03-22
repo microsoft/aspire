@@ -4,6 +4,7 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Aspire.Shared.Model.Serialization;
 
 namespace Aspire.Dashboard.Model.Serialization;
 
@@ -18,10 +19,10 @@ namespace Aspire.Dashboard.Model.Serialization;
 [JsonSerializable(typeof(ResourceJson))]
 [JsonSerializable(typeof(ResourceUrlJson))]
 [JsonSerializable(typeof(ResourceVolumeJson))]
-[JsonSerializable(typeof(ResourceEnvironmentVariableJson))]
-[JsonSerializable(typeof(ResourceHealthReportJson))]
-[JsonSerializable(typeof(ResourcePropertyJson))]
+[JsonSerializable(typeof(Dictionary<string, string?>))]
+[JsonSerializable(typeof(Dictionary<string, ResourceHealthReportJson>))]
 [JsonSerializable(typeof(ResourceRelationshipJson))]
+[JsonSerializable(typeof(Dictionary<string, ResourceCommandJson>))]
 internal sealed partial class ResourceJsonSerializerContext : JsonSerializerContext
 {
     /// <summary>

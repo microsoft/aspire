@@ -1,0 +1,8 @@
+{
+  "appHostPath": "../apphost.ts",
+  "language": "typescript/nodejs",
+  "packages": {
+    "Aspire.Hosting.Azure.AppContainers": "",
+    "Aspire.Hosting.Azure.OperationalInsights": ""
+  }
+}

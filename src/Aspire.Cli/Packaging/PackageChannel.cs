@@ -8,7 +8,7 @@ using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Packaging;
 
-internal class PackageChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null)
+internal class PackageChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null)
 {
     public string Name { get; } = name;
     public PackageChannelQuality Quality { get; } = quality;
@@ -16,6 +16,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
     public PackageChannelType Type { get; } = mappings is null ? PackageChannelType.Implicit : PackageChannelType.Explicit;
     public bool ConfigureGlobalPackagesFolder { get; } = configureGlobalPackagesFolder;
     public string? CliDownloadBaseUrl { get; } = cliDownloadBaseUrl;
+    public string? PinnedVersion { get; } = pinnedVersion;
     
     public string SourceDetails { get; } = ComputeSourceDetails(mappings);
     
@@ -41,6 +42,11 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
     public async Task<IEnumerable<NuGetPackage>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
+        if (PinnedVersion is not null)
+        {
+            return [new NuGetPackage { Id = "Aspire.ProjectTemplates", Version = PinnedVersion, Source = SourceDetails }];
+        }
+
         var tasks = new List<Task<IEnumerable<NuGetPackage>>>();
 
         using var tempNuGetConfig = Type is PackageChannelType.Explicit ? await TemporaryNuGetConfig.CreateAsync(Mappings!) : null;
@@ -106,11 +112,23 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             _ => false
         });
 
+        // When pinned to a specific version, override the version on each discovered package
+        // so the correct version gets installed regardless of what the feed reports as latest.
+        if (PinnedVersion is not null)
+        {
+            return filteredPackages.Select(p => new NuGetPackage { Id = p.Id, Version = PinnedVersion, Source = p.Source });
+        }
+
         return filteredPackages;
     }
 
     public async Task<IEnumerable<NuGetPackage>> GetPackagesAsync(string packageId, DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
+        if (PinnedVersion is not null)
+        {
+            return [new NuGetPackage { Id = packageId, Version = PinnedVersion, Source = SourceDetails }];
+        }
+
         var tasks = new List<Task<IEnumerable<NuGetPackage>>>();
 
         using var tempNuGetConfig = Type is PackageChannelType.Explicit ? await TemporaryNuGetConfig.CreateAsync(Mappings!) : null;
@@ -175,9 +193,9 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         return filteredPackages;
     }
 
-    public static PackageChannel CreateExplicitChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null)
+    public static PackageChannel CreateExplicitChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null)
     {
-        return new PackageChannel(name, quality, mappings, nuGetPackageCache, configureGlobalPackagesFolder, cliDownloadBaseUrl);
+        return new PackageChannel(name, quality, mappings, nuGetPackageCache, configureGlobalPackagesFolder, cliDownloadBaseUrl, pinnedVersion);
     }
 
     public static PackageChannel CreateImplicitChannel(INuGetPackageCache nuGetPackageCache)

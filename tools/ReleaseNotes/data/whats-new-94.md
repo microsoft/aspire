@@ -12,7 +12,7 @@ ms.date: 07/29/2025
 - .NET 9.0 Standard Term Support (STS)
 - .NET 10.0 Preview 6
 
-If you have feedback, questions, or want to contribute to Aspire, collaborate with us on [:::image type="icon" source="../media/github-mark.svg" border="false"::: GitHub](https://github.com/dotnet/aspire) or join us on our new [:::image type="icon" source="../media/discord-icon.svg" border="false"::: Discord](https://aka.ms/aspire-discord) to chat with the team and other community members.
+If you have feedback, questions, or want to contribute to Aspire, collaborate with us on [:::image type="icon" source="../media/github-mark.svg" border="false"::: GitHub](https://github.com/microsoft/aspire) or join us on our new [:::image type="icon" source="../media/discord-icon.svg" border="false"::: Discord](https://aka.ms/aspire-discord) to chat with the team and other community members.
 
 It's important to note that Aspire releases out-of-band from .NET releases. While major versions of Aspire align with major .NET versions, minor versions are released more frequently. For more information on .NET and Aspire version support, see:
 
@@ -29,7 +29,7 @@ Moving between minor releases of Aspire is simple:
     <Sdk Name="Aspire.AppHost.Sdk" Version="9.4.0" />
     ```
 
-    For more information, see [Aspire SDK](xref:dotnet/aspire/sdk).
+    For more information, see [Aspire SDK](xref:microsoft/aspire/sdk).
 
 1. Check for any NuGet package updates, either using the NuGet Package Manager in Visual Studio or the **Update NuGet Package** command from C# Dev Kit in VS Code.
 1. Update to the latest [Aspire templates](../fundamentals/aspire-sdk-templates.md) by running the following .NET command line:
@@ -913,7 +913,7 @@ When a newer version is detected, a friendly notification appears in the Aspire 
 
 :::image type="content" source="media/dashboard-update-notification.png" lightbox="media/dashboard-update-notification.png" alt-text="Screenshot of dashboard showing an update notification.":::
 
-Aspire only shows notifications when a newer version is available, and the checks happen in the background without impacting application startup or performance. The upgrade check system can be disable by setting the `ASPIRE_VERSION_CHECK_DISABLED` environment variable to `true`. For more information, see [App host configuration](/dotnet/aspire/app-host/configuration).
+Aspire only shows notifications when a newer version is available, and the checks happen in the background without impacting application startup or performance. The upgrade check system can be disable by setting the `ASPIRE_VERSION_CHECK_DISABLED` environment variable to `true`. For more information, see [App host configuration](/microsoft/aspire/app-host/configuration).
 
 ### 📋 Parameters and connection strings visible in dashboard
 
@@ -931,7 +931,7 @@ External parameters are no longer hidden. The parameter state and value is visib
 
 :::image type="content" source="media/dashboard-parameters.png" lightbox="media/dashboard-parameters.png" alt-text="Screenshot of dashboard showing parameters.":::
 
-For more information, see [external parameters](/dotnet/aspire/fundamentals/external-parameters).
+For more information, see [external parameters](/microsoft/aspire/fundamentals/external-parameters).
 
 ### 🔗 Enhanced dashboard peer visualization for uninstrumented resources
 
@@ -954,7 +954,7 @@ Aspire 9.4 introduces a new toggle option in the dashboard console logs to contr
 
 :::image type="content" source="media/dashboard-console-logs-wrapping.gif" lightbox="media/dashboard-console-logs-wrapping.gif" alt-text="Recording of toggling line wrapping on console logs page.":::
 
-Some Aspire users have run into trouble with viewing large console logs, which is tracked in this GitHub issue: [Console logs not showing, plus browser window size affecting displayed logs #7969](https://github.com/dotnet/aspire/issues/7969). If you're having trouble with logs please try experimenting with disabling wrapping and see whether it improves your user experience. Feedback on this issue would be very helpful.
+Some Aspire users have run into trouble with viewing large console logs, which is tracked in this GitHub issue: [Console logs not showing, plus browser window size affecting displayed logs #7969](https://github.com/microsoft/aspire/issues/7969). If you're having trouble with logs please try experimenting with disabling wrapping and see whether it improves your user experience. Feedback on this issue would be very helpful.
 
 ### 👁️ Show/hide hidden resources in dashboard
 
@@ -1820,7 +1820,7 @@ var resource = builder.AddAzureInfrastructure("custom", infra =>
 });
 ```
 
-**Migration impact**: Replace auto-injected parameters with explicit resource modeling for better resource graph representation and support for multiple Azure compute environments. See [Azure resource customization docs](https://learn.microsoft.com/dotnet/aspire/azure/customize-azure-resources) for more details.
+**Migration impact**: Replace auto-injected parameters with explicit resource modeling for better resource graph representation and support for multiple Azure compute environments. See [Azure resource customization docs](https://learn.microsoft.com/microsoft/aspire/azure/customize-azure-resources) for more details.
 
 ### 🔧 ParameterResource.Value synchronous behavior change
 
@@ -1867,6 +1867,6 @@ With every release, we strive to make Aspire better. However, some changes may b
 
 ## 🎯 Upgrade today
 
-Follow the directions outlined in the [Upgrade to Aspire 9.4](#️-upgrade-to-net-aspire-94) section to make the switch to 9.4 and take advantage of all these new features today! As always, we're listening for your feedback on [GitHub](https://github.com/dotnet/aspire/issues)—and looking out for what you want to see in 9.5 ☺️.
+Follow the directions outlined in the [Upgrade to Aspire 9.4](#️-upgrade-to-net-aspire-94) section to make the switch to 9.4 and take advantage of all these new features today! As always, we're listening for your feedback on [GitHub](https://github.com/microsoft/aspire/issues)—and looking out for what you want to see in 9.5 ☺️.
 
-For a complete list of issues addressed in this release, see [Aspire GitHub repository—9.4 milestone](https://github.com/dotnet/aspire/issues?q=is%3Aissue%20state%3Aclosed%20milestone%3A9.4%20).
+For a complete list of issues addressed in this release, see [Aspire GitHub repository—9.4 milestone](https://github.com/microsoft/aspire/issues?q=is%3Aissue%20state%3Aclosed%20milestone%3A9.4%20).

@@ -370,4 +370,40 @@ internal sealed class AspireEventSource : EventSource
             WriteEvent(42, kind, resourceName);
         }
     }
+
+    [Event(43, Level = EventLevel.Informational, Message = "Development certificate trust check is starting...")]
+    public void DevelopmentCertificateTrustCheckStart()
+    {
+        if (IsEnabled())
+        {
+            WriteEvent(43);
+        }
+    }
+
+    [Event(44, Level = EventLevel.Informational, Message = "Development certificate trust check completed")]
+    public void DevelopmentCertificateTrustCheckStop()
+    {
+        if (IsEnabled())
+        {
+            WriteEvent(44);
+        }
+    }
+
+    [Event(45, Level = EventLevel.Informational, Message = "DCP Service object preparation starting...")]
+    public void DcpServiceObjectPreparationStart()
+    {
+        if (IsEnabled())
+        {
+            WriteEvent(45);
+        }
+    }
+
+    [Event(46, Level = EventLevel.Informational, Message = "DCP Service object preparation completed")]
+    public void DcpServiceObjectPreparationStop()
+    {
+        if (IsEnabled())
+        {
+            WriteEvent(46);
+        }
+    }
 }

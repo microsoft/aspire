@@ -200,12 +200,38 @@ public sealed class AzurePublishingContext(
             return FormattableStringFactory.Create(expr.Format, args);
         }
 
+        object EvalConditionalExpr(ReferenceExpression expr)
+        {
+            var conditionVal = Eval(expr.Condition!);
+
+            // If the condition resolves to a static string, evaluate at publish time
+            if (conditionVal is string staticCondition)
+            {
+                var branch = string.Equals(staticCondition, expr.MatchValue, StringComparison.OrdinalIgnoreCase)
+                    ? expr.WhenTrue!
+                    : expr.WhenFalse!;
+                return Eval(branch);
+            }
+
+            // Condition is a Bicep parameter/output — emit a ternary expression
+            var whenTrueVal = ResolveValue(Eval(expr.WhenTrue!));
+            var whenFalseVal = ResolveValue(Eval(expr.WhenFalse!));
+
+            var conditional = new ConditionalExpression(
+                new BinaryExpression(ResolveValue(conditionVal).Compile(), BinaryBicepOperator.Equal, new StringLiteralExpression(expr.MatchValue!)),
+                whenTrueVal.Compile(),
+                whenFalseVal.Compile());
+
+            return new BicepValue<string>(conditional);
+        }
+
         object Eval(object? value) => value switch
         {
             BicepOutputReference b => GetOutputs(moduleMap[b.Resource], b.Name),
             ParameterResource p => ParameterLookup[p],
             ConnectionStringReference r => Eval(r.Resource.ConnectionStringExpression),
             IResourceWithConnectionString cs => Eval(cs.ConnectionStringExpression),
+            ReferenceExpression { IsConditional: true } re => EvalConditionalExpr(re),
             ReferenceExpression re => EvalExpr(re),
             string s => s,
             _ => ""

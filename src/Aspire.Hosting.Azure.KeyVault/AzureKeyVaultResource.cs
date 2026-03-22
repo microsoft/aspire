@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using Aspire.Hosting.ApplicationModel;
 using Azure.Provisioning.KeyVault;
 using Azure.Provisioning.Primitives;
@@ -13,7 +15,7 @@ namespace Aspire.Hosting.Azure;
 /// <param name="name">The name of the resource.</param>
 /// <param name="configureInfrastructure">Callback to configure the Azure resources.</param>
 public class AzureKeyVaultResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
-    : AzureProvisioningResource(name, configureInfrastructure), IResourceWithEndpoints, IResourceWithConnectionString, IAzureKeyVaultResource
+    : AzureProvisioningResource(name, configureInfrastructure), IResourceWithEndpoints, IResourceWithConnectionString, IAzureKeyVaultResource, IAzurePrivateEndpointTarget
 {
     /// <summary>
     /// The secrets for this Key Vault.
@@ -28,6 +30,11 @@ public class AzureKeyVaultResource(string name, Action<AzureResourceInfrastructu
     /// Gets the "name" output reference for the Azure Key Vault resource.
     /// </summary>
     public BicepOutputReference NameOutputReference => new("name", this);
+
+    /// <summary>
+    /// Gets the "id" output reference for the Azure Key Vault resource.
+    /// </summary>
+    public BicepOutputReference Id => new("id", this);
 
     /// <summary>
     /// Gets a value indicating whether the Azure Key Vault resource is running in the local emulator.
@@ -139,4 +146,10 @@ public class AzureKeyVaultResource(string name, Action<AzureResourceInfrastructu
     {
         yield return new("Uri", UriExpression);
     }
+
+    BicepOutputReference IAzurePrivateEndpointTarget.Id => Id;
+
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["vault"];
+
+    string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() => "privatelink.vaultcore.azure.net";
 }

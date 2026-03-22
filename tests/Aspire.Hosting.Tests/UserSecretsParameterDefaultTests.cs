@@ -6,14 +6,15 @@
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Text;
-using Aspire.Hosting.Pipelines.Internal;
 using Aspire.Hosting.Publishing;
+using Aspire.Shared.UserSecrets;
 using Aspire.Hosting.UserSecrets;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.UserSecrets;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "2")]
 public class UserSecretsParameterDefaultTests
 {
     private static readonly ConstructorInfo s_userSecretsIdAttrCtor = typeof(UserSecretsIdAttribute).GetConstructor([typeof(string)])!;

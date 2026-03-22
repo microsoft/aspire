@@ -8,7 +8,7 @@ using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
-using Aspire.Hosting.ConsoleLogs;
+using Aspire.Shared.ConsoleLogs;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Microsoft.AspNetCore.Components;
@@ -171,7 +171,8 @@ public partial class ConsoleLogsTests : DashboardTestContext
     public void ToggleHiddenResources_HiddenResourceVisibilityAndSelection_WorksCorrectly()
     {
         // Arrange
-        var regularResource = ModelTestHelpers.CreateResource(resourceName: "regular-resource", state: KnownResourceState.Running);
+        var regularResource1 = ModelTestHelpers.CreateResource(resourceName: "regular-resource1", state: KnownResourceState.Running);
+        var regularResource2 = ModelTestHelpers.CreateResource(resourceName: "regular-resource2", state: KnownResourceState.Running);
         var hiddenResource = ModelTestHelpers.CreateResource(resourceName: "hidden-resource", state: KnownResourceState.Running, hidden: true);
 
         var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
@@ -180,7 +181,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
             isEnabled: true,
             consoleLogsChannelProvider: name => consoleLogsChannel,
             resourceChannelProvider: () => resourceChannel,
-            initialResources: [regularResource, hiddenResource]);
+            initialResources: [regularResource1, regularResource2, hiddenResource]);
 
         SetupConsoleLogsServices(dashboardClient);
 
@@ -203,8 +204,8 @@ public partial class ConsoleLogsTests : DashboardTestContext
             var selectElement = resourceSelect.Find("fluent-select");
             var selectOptions = selectElement.QuerySelectorAll("fluent-option");
 
-            // Should have at least 1 option (regular resource) when resources are loaded
-            Assert.True(selectOptions.Length >= 1);
+            // Should have "All" + 2 regular resources when resources are loaded
+            Assert.Equal(3, selectOptions.Length);
         });
 
         // Initially, hidden resources should not be shown
@@ -212,10 +213,11 @@ public partial class ConsoleLogsTests : DashboardTestContext
         var selectElement = resourceSelect.Find("fluent-select");
         var selectOptions = selectElement.QuerySelectorAll("fluent-option");
 
-        // Should only have regular resource (hidden resource filtered out)
-        Assert.Equal(1, selectOptions.Length); // regular-resource
+        // Should have "All" + 2 regular resources (hidden resource filtered out)
+        Assert.Equal(3, selectOptions.Length);
         var optionValues = selectOptions.Select(opt => opt.GetAttribute("value")).ToList();
-        Assert.Contains("regular-resource", optionValues);
+        Assert.Contains("regular-resource1", optionValues);
+        Assert.Contains("regular-resource2", optionValues);
         Assert.DoesNotContain("hidden-resource", optionValues);
 
         // Act & Assert 2: Click the settings menu button to show the menu, then click "Show hidden resources"
@@ -235,21 +237,16 @@ public partial class ConsoleLogsTests : DashboardTestContext
         cut.WaitForAssertion(() =>
         {
             var updatedOptions = selectElement.QuerySelectorAll("fluent-option");
-            // Should now have both resources
-            Assert.Equal(3, updatedOptions.Length); // "None" + regular-resource + hidden-resource
+            // Should now have "All" + all three resources
+            Assert.Equal(4, updatedOptions.Length);
             var updatedOptionValues = updatedOptions.Select(opt => opt.GetAttribute("value")).ToList();
-            Assert.Contains("regular-resource", updatedOptionValues);
+            Assert.Contains("regular-resource1", updatedOptionValues);
+            Assert.Contains("regular-resource2", updatedOptionValues);
             Assert.Contains("hidden-resource", updatedOptionValues);
         });
 
-        // Act & Assert 3: Select the hidden resource
-        var hiddenResourceOption = selectElement.QuerySelector("fluent-option[value='hidden-resource']");
-        Assert.NotNull(hiddenResourceOption);
-        selectElement.Change("hidden-resource");
-
-        cut.WaitForState(() => instance.PageViewModel.SelectedResource?.Name == "hidden-resource");
-
-        // Act & Assert 4: Click the settings menu button again and click "Hide hidden resources" to hide them again
+        // Act & Assert 3: Click the settings menu button again and click "Hide hidden resources" to hide them again
+        // Note: We stay on "All" view to test the hide functionality
         settingsMenuButton.Click();
 
         cut.WaitForAssertion(() =>
@@ -259,19 +256,70 @@ public partial class ConsoleLogsTests : DashboardTestContext
             hideHiddenMenuItem.Click();
         });
 
-        // Wait for UI to update - hidden resource should be filtered out and selection should be cleared
+        // Wait for UI to update - hidden resource should be filtered out
         cut.WaitForAssertion(() =>
         {
             var finalOptions = selectElement.QuerySelectorAll("fluent-option");
-            // Should be back to regular resource only
-            Assert.Equal(1, finalOptions.Length); // regular-resource
+            // Should be back to "All" + 2 regular resources only
+            Assert.Equal(3, finalOptions.Length);
             var finalOptionValues = finalOptions.Select(opt => opt.GetAttribute("value")).ToList();
-            Assert.Contains("regular-resource", finalOptionValues);
+            Assert.Contains("regular-resource1", finalOptionValues);
+            Assert.Contains("regular-resource2", finalOptionValues);
             Assert.DoesNotContain("hidden-resource", finalOptionValues);
         });
+    }
 
-        // Selection should be cleared since selected resource is now hidden
-        cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == regularResource.Name);
+    [Fact]
+    public void ToggleHiddenResourcesMenuItem_WhenSingleResourceSelected_NotShown()
+    {
+        // Arrange
+        var testResource = ModelTestHelpers.CreateResource(resourceName: "test-resource", state: KnownResourceState.Running);
+        var hiddenResource = ModelTestHelpers.CreateResource(resourceName: "hidden-resource", state: KnownResourceState.Running, hidden: true);
+
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: name => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [testResource, hiddenResource]);
+
+        SetupConsoleLogsServices(dashboardClient);
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        // Act: Render component with a specific resource selected
+        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, viewport);
+            builder.Add(p => p.ResourceName, "test-resource");
+        });
+
+        var instance = cut.Instance;
+
+        // Wait for resources to load and specific resource to be selected
+        cut.WaitForState(() => instance.PageViewModel.SelectedResource?.Id?.InstanceId == "test-resource");
+
+        // Act: Click the settings menu button
+        var settingsMenuButton = cut.Find("fluent-button[title='" + Resources.ConsoleLogs.ConsoleLogsSettings + "']");
+        Assert.NotNull(settingsMenuButton);
+        settingsMenuButton.Click();
+
+        // Assert: The "Show hidden resources" / "Hide hidden resources" menu item should NOT be present
+        cut.WaitForAssertion(() =>
+        {
+            var menuItems = cut.FindAll("fluent-menu-item");
+            var hiddenResourcesMenuItems = menuItems.Where(item =>
+            {
+                var text = item.TextContent;
+                return text.Contains(Resources.ControlsStrings.ShowHiddenResources) ||
+                       text.Contains(Resources.ControlsStrings.HideHiddenResources);
+            }).ToList();
+
+            Assert.Empty(hiddenResourcesMenuItems);
+        });
     }
 
     [Fact]

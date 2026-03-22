@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text.Json.Nodes;
@@ -85,7 +86,7 @@ internal sealed class AtsCallbackProxyFactory : IDisposable
 
         // Build the body expression
         Expression body;
-        var argsExpr = parameters.Length == 0 || (parameters.Length == 1 && ctParamIndex == 0)
+        var argsExpr = parameters.Length == 0
             ? null
             : BuildMarshalArgs(paramExprs, parameters);
 
@@ -93,22 +94,26 @@ internal sealed class AtsCallbackProxyFactory : IDisposable
         {
             if (!hasResult)
             {
-                body = BuildAsyncVoidCall(callbackId, argsExpr, ctExpr);
+                body = HasDtoParameters(parameters)
+                    ? BuildAsyncVoidCallWithDtoWriteback(callbackId, argsExpr, ctExpr, ctParamIndex, paramExprs, parameters)
+                    : BuildAsyncVoidCall(callbackId, argsExpr, ctExpr, ctParamIndex);
             }
             else
             {
-                body = BuildAsyncResultCall(callbackId, resultType!, argsExpr, ctExpr);
+                body = BuildAsyncResultCall(callbackId, resultType!, argsExpr, ctExpr, ctParamIndex);
             }
         }
         else
         {
             if (!hasResult)
             {
-                body = BuildSyncVoidCall(callbackId, argsExpr, ctExpr);
+                body = HasDtoParameters(parameters)
+                    ? BuildSyncVoidCallWithDtoWriteback(callbackId, argsExpr, ctExpr, ctParamIndex, paramExprs, parameters)
+                    : BuildSyncVoidCall(callbackId, argsExpr, ctExpr, ctParamIndex);
             }
             else
             {
-                body = BuildSyncResultCall(callbackId, resultType!, argsExpr, ctExpr);
+                body = BuildSyncResultCall(callbackId, resultType!, argsExpr, ctExpr, ctParamIndex);
             }
         }
 
@@ -132,15 +137,15 @@ internal sealed class AtsCallbackProxyFactory : IDisposable
         var jsonObjVar = Expression.Variable(jsonObjectType, "args");
         expressions.Add(Expression.Assign(jsonObjVar, newJsonObject));
 
-        var paramIndex = 0; // Track positional index (excludes CancellationToken)
+        var paramIndex = 0;
         for (int i = 0; i < parameters.Length; i++)
         {
             var param = parameters[i];
             var paramExpr = paramExprs[i];
 
-            // Skip CancellationToken for now (handled separately)
             if (param.ParameterType == typeof(CancellationToken))
             {
+                paramIndex++;
                 continue;
             }
 
@@ -169,7 +174,7 @@ internal sealed class AtsCallbackProxyFactory : IDisposable
         return _marshaller.MarshalToJson(value);
     }
 
-    private Expression BuildSyncVoidCall(string callbackId, Expression? argsExpr, Expression? ctExpr)
+    private Expression BuildSyncVoidCall(string callbackId, Expression? argsExpr, Expression? ctExpr, int ctParamIndex)
     {
         var invokeMethod = typeof(AtsCallbackProxyFactory).GetMethod(
             nameof(InvokeSyncVoid),
@@ -180,10 +185,11 @@ internal sealed class AtsCallbackProxyFactory : IDisposable
             invokeMethod,
             Expression.Constant(callbackId),
             argsExpr ?? Expression.Constant(null, typeof(JsonObject)),
-            ctExpr ?? Expression.Constant(CancellationToken.None, typeof(CancellationToken)));
+            ctExpr ?? Expression.Constant(CancellationToken.None, typeof(CancellationToken)),
+            Expression.Constant(ctParamIndex));
     }
 
-    private Expression BuildSyncResultCall(string callbackId, Type resultType, Expression? argsExpr, Expression? ctExpr)
+    private Expression BuildSyncResultCall(string callbackId, Type resultType, Expression? argsExpr, Expression? ctExpr, int ctParamIndex)
     {
         var invokeMethod = typeof(AtsCallbackProxyFactory).GetMethod(
             nameof(InvokeSyncResult),
@@ -194,10 +200,11 @@ internal sealed class AtsCallbackProxyFactory : IDisposable
             invokeMethod,
             Expression.Constant(callbackId),
             argsExpr ?? Expression.Constant(null, typeof(JsonObject)),
-            ctExpr ?? Expression.Constant(CancellationToken.None, typeof(CancellationToken)));
+            ctExpr ?? Expression.Constant(CancellationToken.None, typeof(CancellationToken)),
+            Expression.Constant(ctParamIndex));
     }
 
-    private Expression BuildAsyncVoidCall(string callbackId, Expression? argsExpr, Expression? ctExpr)
+    private Expression BuildAsyncVoidCall(string callbackId, Expression? argsExpr, Expression? ctExpr, int ctParamIndex)
     {
         var invokeMethod = typeof(AtsCallbackProxyFactory).GetMethod(
             nameof(InvokeAsyncVoid),
@@ -208,10 +215,11 @@ internal sealed class AtsCallbackProxyFactory : IDisposable
             invokeMethod,
             Expression.Constant(callbackId),
             argsExpr ?? Expression.Constant(null, typeof(JsonObject)),
-            ctExpr ?? Expression.Constant(CancellationToken.None, typeof(CancellationToken)));
+            ctExpr ?? Expression.Constant(CancellationToken.None, typeof(CancellationToken)),
+            Expression.Constant(ctParamIndex));
     }
 
-    private Expression BuildAsyncResultCall(string callbackId, Type resultType, Expression? argsExpr, Expression? ctExpr)
+    private Expression BuildAsyncResultCall(string callbackId, Type resultType, Expression? argsExpr, Expression? ctExpr, int ctParamIndex)
     {
         var invokeMethod = typeof(AtsCallbackProxyFactory).GetMethod(
             nameof(InvokeAsyncResult),
@@ -222,31 +230,46 @@ internal sealed class AtsCallbackProxyFactory : IDisposable
             invokeMethod,
             Expression.Constant(callbackId),
             argsExpr ?? Expression.Constant(null, typeof(JsonObject)),
-            ctExpr ?? Expression.Constant(CancellationToken.None, typeof(CancellationToken)));
+            ctExpr ?? Expression.Constant(CancellationToken.None, typeof(CancellationToken)),
+            Expression.Constant(ctParamIndex));
     }
 
-    private void InvokeSyncVoid(string callbackId, JsonObject? args, CancellationToken cancellationToken)
+    private void InvokeSyncVoid(string callbackId, JsonObject? args, CancellationToken cancellationToken, int ctParamIndex)
     {
-        AddCancellationTokenToArgs(ref args, cancellationToken);
+        AddCancellationTokenToArgs(ref args, cancellationToken, ctParamIndex);
         _invoker.InvokeAsync<JsonNode?>(callbackId, args, cancellationToken).GetAwaiter().GetResult();
     }
 
-    private T? InvokeSyncResult<T>(string callbackId, JsonObject? args, CancellationToken cancellationToken)
+    private void InvokeSyncVoidWithDtoWriteback(string callbackId, JsonObject? args, object?[] originalArgs, Type[] argTypes, CancellationToken cancellationToken, int ctParamIndex)
     {
-        AddCancellationTokenToArgs(ref args, cancellationToken);
+        AddCancellationTokenToArgs(ref args, cancellationToken, ctParamIndex);
+        var result = _invoker.InvokeAsync<JsonNode?>(callbackId, args, cancellationToken).GetAwaiter().GetResult();
+        ApplyDtoWriteback(result, originalArgs, argTypes);
+    }
+
+    private T? InvokeSyncResult<T>(string callbackId, JsonObject? args, CancellationToken cancellationToken, int ctParamIndex)
+    {
+        AddCancellationTokenToArgs(ref args, cancellationToken, ctParamIndex);
         var result = _invoker.InvokeAsync<JsonNode?>(callbackId, args, cancellationToken).GetAwaiter().GetResult();
         return UnmarshalResult<T>(result, callbackId);
     }
 
-    private async Task InvokeAsyncVoid(string callbackId, JsonObject? args, CancellationToken cancellationToken)
+    private async Task InvokeAsyncVoid(string callbackId, JsonObject? args, CancellationToken cancellationToken, int ctParamIndex)
     {
-        AddCancellationTokenToArgs(ref args, cancellationToken);
+        AddCancellationTokenToArgs(ref args, cancellationToken, ctParamIndex);
         await _invoker.InvokeAsync<JsonNode?>(callbackId, args, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<T?> InvokeAsyncResult<T>(string callbackId, JsonObject? args, CancellationToken cancellationToken)
+    private async Task InvokeAsyncVoidWithDtoWriteback(string callbackId, JsonObject? args, object?[] originalArgs, Type[] argTypes, CancellationToken cancellationToken, int ctParamIndex)
     {
-        AddCancellationTokenToArgs(ref args, cancellationToken);
+        AddCancellationTokenToArgs(ref args, cancellationToken, ctParamIndex);
+        var result = await _invoker.InvokeAsync<JsonNode?>(callbackId, args, cancellationToken).ConfigureAwait(false);
+        ApplyDtoWriteback(result, originalArgs, argTypes);
+    }
+
+    private async Task<T?> InvokeAsyncResult<T>(string callbackId, JsonObject? args, CancellationToken cancellationToken, int ctParamIndex)
+    {
+        AddCancellationTokenToArgs(ref args, cancellationToken, ctParamIndex);
         var result = await _invoker.InvokeAsync<JsonNode?>(callbackId, args, cancellationToken).ConfigureAwait(false);
         return UnmarshalResult<T>(result, callbackId);
     }
@@ -267,13 +290,121 @@ internal sealed class AtsCallbackProxyFactory : IDisposable
         return (T?)_marshaller.UnmarshalFromJson(result, typeof(T), context);
     }
 
-    private void AddCancellationTokenToArgs(ref JsonObject? args, CancellationToken cancellationToken)
+    private void AddCancellationTokenToArgs(ref JsonObject? args, CancellationToken cancellationToken, int ctParamIndex)
     {
         if (cancellationToken != CancellationToken.None)
         {
             var (tokenId, _) = _cancellationTokenRegistry.CreateLinked(cancellationToken);
             args ??= new JsonObject();
+            if (ctParamIndex >= 0)
+            {
+                args[$"p{ctParamIndex}"] = tokenId;
+            }
             args["$cancellationToken"] = tokenId;
+        }
+    }
+
+    private bool HasDtoParameters(ParameterInfo[] parameters)
+    {
+        return parameters.Any(p =>
+            p.ParameterType != typeof(CancellationToken) &&
+            _marshaller.IsDtoType(p.ParameterType));
+    }
+
+    private Expression BuildSyncVoidCallWithDtoWriteback(string callbackId, Expression? argsExpr, Expression? ctExpr, int ctParamIndex, ParameterExpression[] paramExprs, ParameterInfo[] parameters)
+    {
+        var (originalsExpr, typesExpr) = BuildOriginalArgsArrays(paramExprs, parameters);
+
+        var invokeMethod = typeof(AtsCallbackProxyFactory).GetMethod(
+            nameof(InvokeSyncVoidWithDtoWriteback),
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+        return Expression.Call(
+            Expression.Constant(this),
+            invokeMethod,
+            Expression.Constant(callbackId),
+            argsExpr ?? Expression.Constant(null, typeof(JsonObject)),
+            originalsExpr,
+            typesExpr,
+            ctExpr ?? Expression.Constant(CancellationToken.None, typeof(CancellationToken)),
+            Expression.Constant(ctParamIndex));
+    }
+
+    private Expression BuildAsyncVoidCallWithDtoWriteback(string callbackId, Expression? argsExpr, Expression? ctExpr, int ctParamIndex, ParameterExpression[] paramExprs, ParameterInfo[] parameters)
+    {
+        var (originalsExpr, typesExpr) = BuildOriginalArgsArrays(paramExprs, parameters);
+
+        var invokeMethod = typeof(AtsCallbackProxyFactory).GetMethod(
+            nameof(InvokeAsyncVoidWithDtoWriteback),
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+        return Expression.Call(
+            Expression.Constant(this),
+            invokeMethod,
+            Expression.Constant(callbackId),
+            argsExpr ?? Expression.Constant(null, typeof(JsonObject)),
+            originalsExpr,
+            typesExpr,
+            ctExpr ?? Expression.Constant(CancellationToken.None, typeof(CancellationToken)),
+            Expression.Constant(ctParamIndex));
+    }
+
+    private static (Expression Originals, Expression Types) BuildOriginalArgsArrays(ParameterExpression[] paramExprs, ParameterInfo[] parameters)
+    {
+        var nonCtParams = new List<(ParameterExpression Expr, Type Type)>();
+        for (int i = 0; i < parameters.Length; i++)
+        {
+            if (parameters[i].ParameterType != typeof(CancellationToken))
+            {
+                nonCtParams.Add((paramExprs[i], parameters[i].ParameterType));
+            }
+        }
+
+        var originalsExpr = Expression.NewArrayInit(typeof(object),
+            nonCtParams.Select(p => Expression.Convert(p.Expr, typeof(object))));
+
+        var typesExpr = Expression.NewArrayInit(typeof(Type),
+            nonCtParams.Select(p => (Expression)Expression.Constant(p.Type, typeof(Type))));
+
+        return (originalsExpr, typesExpr);
+    }
+
+    private void ApplyDtoWriteback(JsonNode? result, object?[] originalArgs, Type[] argTypes)
+    {
+        Debug.Assert(originalArgs.Length == argTypes.Length, "originalArgs and argTypes must have the same length");
+
+        if (result is not JsonObject returnedArgs)
+        {
+            return;
+        }
+
+        for (int i = 0; i < originalArgs.Length; i++)
+        {
+            if (originalArgs[i] is null)
+            {
+                continue;
+            }
+
+            if (!_marshaller.IsDtoType(argTypes[i]))
+            {
+                continue;
+            }
+
+            // Value types (structs) are boxed into the originalArgs array, so mutations
+            // via ApplyDtoProperties would modify the boxed copy, not the caller's variable.
+            // Skip writeback for value types to avoid silent no-op behavior.
+            if (argTypes[i].IsValueType)
+            {
+                continue;
+            }
+
+            // Positional key matches the convention used in BuildMarshalArgs and the
+            // TypeScript extraction loop in transport.ts registerCallback.
+            var key = $"p{i}";
+            if (returnedArgs[key] is JsonObject modifiedDto)
+            {
+                _marshaller.ApplyDtoProperties(modifiedDto, originalArgs[i]!, argTypes[i]);
+            }
         }
     }
 

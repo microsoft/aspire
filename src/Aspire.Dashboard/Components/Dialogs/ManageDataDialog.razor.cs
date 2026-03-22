@@ -341,7 +341,7 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
 
     private string GetResourceName(ResourceViewModel resource) => ResourceViewModel.GetResourceName(resource, _resourceByName);
 
-    private string GetOtlpResourceName(OtlpResource resource) => OtlpResource.GetResourceName(resource, TelemetryRepository.GetResources());
+    private string GetOtlpResourceName(OtlpResource resource) => OtlpHelpers.GetResourceName(resource, TelemetryRepository.GetResources());
 
     private string GetDataTypeDisplayName(AspireDataType dataType) => dataType switch
     {
@@ -658,7 +658,7 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
 
     private void RemoveAllSelectionsForResource(string resourceName)
     {
-        _selectedRows.RemoveWhere(r => StringComparers.ResourceName.Equals(r.ResourceName, resourceName));
+        _selectedRows.RemoveWhere(r => string.Equals(r.ResourceName, resourceName, StringComparisons.ResourceName));
     }
 
     public async ValueTask DisposeAsync()

@@ -28,10 +28,33 @@ parameters:
   - name: dockerCliVersion
     type: string
     default: '28.0.0'
+  - name: publishVSCodeExtension
+    type: boolean
+    default: false
+  - name: vscePublishToken
+    type: string
+    default: ''
+  - name: vscePublishPreRelease
+    type: boolean
+    default: false
 
 steps:
   # Internal pipeline: Build with pack+sign
   - ${{ if ne(parameters.runAsPublic, 'true') }}:
+    # Build bundle payload (aspire-managed) for each target RID before the main build
+    - ${{ each targetRid in parameters.targetRids }}:
+      - script: ${{ parameters.dotnetScript }}
+                msbuild
+                $(Build.SourcesDirectory)/eng/Bundle.proj
+                /restore
+                /p:Configuration=${{ parameters.buildConfig }}
+                /p:TargetRid=${{ targetRid }}
+                /p:BundleVersion=ci-bundlepayload
+                /p:SkipNativeBuild=true
+                /p:ContinuousIntegrationBuild=true
+                /bl:${{ parameters.repoLogPath }}/BundlePayload-${{ targetRid }}.binlog
+        displayName: 🟣Build bundle payload (${{ targetRid }})
+
     - script: ${{ parameters.buildScript }}
               -restore -build
               -pack
@@ -45,6 +68,136 @@ steps:
               /p:SkipTestProjects=true
               /p:BuildExtension=true
       displayName: 🟣Build
+
+    # Log MicroBuild environment for debugging
+    # MicroBuildOutputFolderOverride is set by the MicroBuildSigningPlugin task in eng/common/templates-official/job/onelocbuild.yml
+    # which is installed via the Arcade SDK's install-microbuild.yml template that runs before our build steps.
+    # This environment variable points to where MicroBuild plugins are installed on the build agent.
+    - pwsh: |
+        Write-Host "=== MicroBuild Environment Check ==="
+        Write-Host "MicroBuildOutputFolderOverride: $env:MicroBuildOutputFolderOverride"
+        if ($env:MicroBuildOutputFolderOverride) {
+          $pluginPath = Join-Path $env:MicroBuildOutputFolderOverride "MicroBuild.Plugins.Signing"
+          if (Test-Path $pluginPath) {
+            Write-Host "✅ MicroBuild.Plugins.Signing found at: $pluginPath"
+            Get-ChildItem $pluginPath -Recurse | Select-Object FullName | Format-Table
+          } else {
+            Write-Host "##[warning]MicroBuild.Plugins.Signing NOT found at: $pluginPath"
+            Write-Host "Contents of MicroBuildOutputFolderOverride:"
+            Get-ChildItem $env:MicroBuildOutputFolderOverride -Recurse -ErrorAction SilentlyContinue | Select-Object FullName | Format-Table
+          }
+        } else {
+          Write-Host "##[warning]MicroBuildOutputFolderOverride environment variable is not set!"
+        }
+        Write-Host "=== End MicroBuild Environment Check ==="
+      displayName: 🟣Check MicroBuild environment
+      condition: and(succeeded(), eq(variables['_SignType'], 'real'))
+
+    # Sign the VS Code extension .signature.p7s file using MicroBuild with VSCodePublisher certificate
+    # This must happen after the main build (which creates the manifest) but before publishing
+    # MicroBuild is already installed by the install-microbuild.yml step that runs before our build
+    # Pass MicroBuildOutputFolderOverride as a property to ensure MSBuild can find the signing plugin
+    - script: ${{ parameters.dotnetScript }}
+              build
+              extension/signing/signVsix.proj
+              -c ${{ parameters.buildConfig }}
+              /bl:${{ parameters.repoLogPath }}/signVsix.binlog
+              /p:SignType=$(_SignType)
+              "/p:MicroBuildOutputFolderOverride=%MicroBuildOutputFolderOverride%"
+      displayName: 🟣Sign VS Code extension
+      condition: and(succeeded(), eq(variables['_SignType'], 'real'))
+
+    # Verify the VS Code extension signature using vsce verify-signature
+    - pwsh: |
+        $vsixDir = '${{ parameters.repoArtifactsPath }}/packages/Release/vscode'
+        $vsixFiles = Get-ChildItem -Path "$vsixDir/*.vsix" -ErrorAction SilentlyContinue
+        if ($vsixFiles.Count -eq 0) {
+          Write-Host "##[warning]No .vsix files found - VS Code extension may not have been built"
+          exit 0
+        }
+        foreach ($vsix in $vsixFiles) {
+          $baseName = [System.IO.Path]::GetFileNameWithoutExtension($vsix.FullName)
+          $manifestPath = Join-Path $vsixDir "$baseName.manifest"
+          $signaturePath = Join-Path $vsixDir "$baseName.signature.p7s"
+          
+          if (-not (Test-Path $manifestPath)) {
+            Write-Host "##[error]Manifest file not found: $manifestPath"
+            exit 1
+          }
+          if (-not (Test-Path $signaturePath)) {
+            Write-Host "##[error]Signature file not found: $signaturePath"
+            exit 1
+          }
+          
+          # First verify the .signature.p7s is in PKCS#7 format (binary)
+          $bytes = [System.IO.File]::ReadAllBytes($signaturePath)
+          if ($bytes.Length -eq 0 -or $bytes[0] -ne 0x30) {
+            $firstByte = if ($bytes.Length -gt 0) { "0x{0:X2}" -f $bytes[0] } else { "empty" }
+            Write-Host "##[error]$baseName.signature.p7s does NOT appear to be signed. First byte: $firstByte (expected 0x30 for PKCS#7)"
+            exit 1
+          }
+          
+          Write-Host "Verifying signature for $($vsix.Name)..."
+          npx vsce verify-signature --packagePath $vsix.FullName --manifestPath $manifestPath --signaturePath $signaturePath
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "##[error]Signature verification failed for $($vsix.Name)"
+            exit 1
+          }
+          Write-Host "✅ $($vsix.Name) signature verified successfully"
+        }
+      displayName: 🟣Verify VS Code extension signature
+      condition: and(succeeded(), eq(variables['_SignType'], 'real'))
+
+    # Publish the signed VS Code extension to the Marketplace
+    # Requires vscePublishToken parameter to be set with a Personal Access Token for the VS Marketplace
+    - ${{ if and(eq(parameters.publishVSCodeExtension, true), ne(parameters.vscePublishToken, '')) }}:
+      # Verify the PAT is valid before attempting to publish
+      - pwsh: |
+          Write-Host "Verifying VS Code Marketplace PAT..."
+          $publisher = "microsoft-aspire"
+          npx vsce verify-pat $publisher
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "##[error]PAT verification failed for publisher '$publisher'. Ensure the token has 'Marketplace: Manage' scope."
+            exit 1
+          }
+          Write-Host "✅ PAT verified successfully for publisher '$publisher'"
+        displayName: 🟣Verify VS Code Marketplace PAT
+        condition: and(succeeded(), eq(variables['_SignType'], 'real'))
+        env:
+          VSCE_PAT: ${{ parameters.vscePublishToken }}
+
+      - pwsh: |
+          $vsixDir = '${{ parameters.repoArtifactsPath }}/packages/Release/vscode'
+          $preRelease = '${{ parameters.vscePublishPreRelease }}'
+          $vsixFiles = Get-ChildItem -Path "$vsixDir/*.vsix" -ErrorAction SilentlyContinue
+          if ($vsixFiles.Count -eq 0) {
+            Write-Host "##[error]No .vsix files found to publish"
+            exit 1
+          }
+          foreach ($vsix in $vsixFiles) {
+            $baseName = [System.IO.Path]::GetFileNameWithoutExtension($vsix.FullName)
+            $manifestPath = Join-Path $vsixDir "$baseName.manifest"
+            $signaturePath = Join-Path $vsixDir "$baseName.signature.p7s"
+            
+            $publishArgs = @("vsce", "publish", "--packagePath", $vsix.FullName, "--manifestPath", $manifestPath, "--signaturePath", $signaturePath)
+            if ($preRelease -eq 'True') {
+              $publishArgs += "--pre-release"
+              Write-Host "Publishing $($vsix.Name) to VS Code Marketplace as PRE-RELEASE..."
+            } else {
+              Write-Host "Publishing $($vsix.Name) to VS Code Marketplace..."
+            }
+            
+            & npx @publishArgs
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "##[error]Failed to publish $($vsix.Name)"
+              exit 1
+            }
+            Write-Host "✅ $($vsix.Name) published successfully"
+          }
+        displayName: 🟣Publish VS Code extension to Marketplace
+        condition: and(succeeded(), eq(variables['_SignType'], 'real'))
+        env:
+          VSCE_PAT: ${{ parameters.vscePublishToken }}
 
     - task: 1ES.PublishBuildArtifacts@1
       displayName: 🟣Publish vscode extension
@@ -84,6 +237,7 @@ steps:
               -configuration ${{ parameters.buildConfig }}
               -pack
               /p:PrepareForHelix=${{ lower(eq(parameters.runHelixTests, 'true')) }}
+              /p:ArchiveTests=${{ lower(eq(parameters.runHelixTests, 'true')) }}
               /bl:${{ parameters.repoLogPath }}/build.binlog
               $(_OfficialBuildIdArgs)
       displayName: Build
@@ -121,7 +275,7 @@ steps:
               "${{ parameters.buildScript }} -testnobuild -test -configuration ${{ parameters.buildConfig }} /bl:${{ parameters.repoLogPath }}/tests.binlog /maxcpucount:1 /p:BuildInParallel=false $(_OfficialBuildIdArgs)"
       env:
         DOCKER_BUILDKIT: 1
-        # https://github.com/dotnet/aspire/issues/5195#issuecomment-2271687822
+        # https://github.com/microsoft/aspire/issues/5195#issuecomment-2271687822
         DOTNET_ASPIRE_DEPENDENCY_CHECK_TIMEOUT: 180
         ASPIRE__TEST__DCPLOGBASEPATH: $(Build.ArtifactStagingDirectory)/artifacts/log/dcp
         DOTNET_ROOT: $(Build.SourcesDirectory)/.dotnet

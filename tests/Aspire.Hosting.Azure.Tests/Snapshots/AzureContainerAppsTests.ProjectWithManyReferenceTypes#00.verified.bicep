@@ -1,4 +1,4 @@
-@description('The location for the resource(s) to be deployed.')
+﻿@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
 param env_outputs_azure_container_apps_environment_default_domain string
@@ -203,7 +203,7 @@ resource api 'Microsoft.App/containerApps@2025-02-02-preview' = {
             }
             {
               name: 'HTTP_EP'
-              value: 'http://api.internal.${env_outputs_azure_container_apps_environment_default_domain}'
+              value: 'https://api.internal.${env_outputs_azure_container_apps_environment_default_domain}'
             }
             {
               name: 'HTTPS_EP'
@@ -219,7 +219,7 @@ resource api 'Microsoft.App/containerApps@2025-02-02-preview' = {
             }
             {
               name: 'PORT'
-              value: '80'
+              value: '443'
             }
             {
               name: 'HOST'
@@ -227,11 +227,11 @@ resource api 'Microsoft.App/containerApps@2025-02-02-preview' = {
             }
             {
               name: 'HOSTANDPORT'
-              value: 'api.internal.${env_outputs_azure_container_apps_environment_default_domain}:80'
+              value: 'api.internal.${env_outputs_azure_container_apps_environment_default_domain}:443'
             }
             {
               name: 'SCHEME'
-              value: 'http'
+              value: 'https'
             }
             {
               name: 'INTERNAL_HOSTANDPORT'

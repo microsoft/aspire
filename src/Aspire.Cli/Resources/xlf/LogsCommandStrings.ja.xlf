@@ -1,0 +1,72 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="ja" original="../LogsCommandStrings.resx">
+    <body>
+      <trans-unit id="Description">
+        <source>Display logs from resources in a running apphost</source>
+        <target state="needs-review-translation">実行中の Aspire apphost のリソースからログを表示します。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FollowOptionDescription">
+        <source>Stream logs in real-time as they are written</source>
+        <target state="needs-review-translation">ログが書き込まれると同時にリアルタイムでストリームします。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="JsonOptionDescription">
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">ログを JSON 形式 (NDJSON) で出力します。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoResourcesFound">
+        <source>No resources found.</source>
+        <target state="translated">リソースが見つかりませんでした。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceArgumentDescription">
+        <source>The name of the resource to get logs for. If not specified, logs from all resources are shown.</source>
+        <target state="needs-review-translation">ログ取得の対象とするリソースの名前。指定しない場合は、すべてのリソースのログが表示されます。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceNotFound">
+        <source>Resource '{0}' was not found.</source>
+        <target state="translated">リソース '{0}' が見つかりませんでした。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceRequiredWithoutFollow">
+        <source>A resource name is required when not using --follow. Use --follow to stream logs from all resources.</source>
+        <target state="translated">--follow を使わない場合はリソース名の指定が必須です。--follow を使う場合、すべてのリソースのログがストリーミングされます。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SelectAppHostAction">
+        <source>stream logs from</source>
+        <target state="translated">次からログをストリーミングする</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TailMustBePositive">
+        <source>The --tail value must be a positive number.</source>
+        <target state="translated">--tail の値は正の数値である必要があります。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TailOptionDescription">
+        <source>Number of lines to show from the end of logs (default: all)</source>
+        <target state="needs-review-translation">表示するログの行数を、ログの末尾から数えた行数で指定します (既定値: すべて)。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TailRequiresResource">
+        <source>The --tail option requires a resource name to be specified.</source>
+        <target state="translated">--tail オプションにはリソース名の指定が必須です。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TimestampsOptionDescription">
+        <source>Show timestamps for each log line</source>
+        <target state="new">Show timestamps for each log line</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="GettingLogs">
+        <source>Getting logs...</source>
+        <target state="translated">ログを取得しています...</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

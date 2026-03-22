@@ -57,7 +57,7 @@ internal class NuGetConfigPrompter
             if (string.Equals(choice, TemplatingStrings.Yes, StringComparisons.CliInputOrOutput))
             {
                 await NuGetConfigMerger.CreateOrUpdateAsync(targetDirectory, channel, cancellationToken: cancellationToken);
-                _interactionService.DisplayMessage("package", TemplatingStrings.NuGetConfigCreatedConfirmationMessage);
+                _interactionService.DisplayMessage(KnownEmojis.Package, TemplatingStrings.NuGetConfigCreatedConfirmationMessage);
             }
         }
         else if (hasMissingSources)
@@ -71,7 +71,7 @@ internal class NuGetConfigPrompter
             if (string.Equals(updateChoice, TemplatingStrings.Yes, StringComparisons.CliInputOrOutput))
             {
                 await NuGetConfigMerger.CreateOrUpdateAsync(targetDirectory, channel, cancellationToken: cancellationToken);
-                _interactionService.DisplayMessage("package", "Updated NuGet.config with required package sources.");
+                _interactionService.DisplayMessage(KnownEmojis.Package, "Updated NuGet.config with required package sources.");
             }
         }
     }
@@ -100,6 +100,6 @@ internal class NuGetConfigPrompter
         }
 
         await NuGetConfigMerger.CreateOrUpdateAsync(targetDirectory, channel, cancellationToken: cancellationToken);
-        _interactionService.DisplayMessage("package", "Created or updated NuGet.config in the project directory with required package sources.");
+        _interactionService.DisplayMessage(KnownEmojis.Package, "Created or updated NuGet.config in the project directory with required package sources.");
     }
 }

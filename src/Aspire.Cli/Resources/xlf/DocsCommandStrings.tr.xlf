@@ -1,0 +1,107 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="tr" original="../DocsCommandStrings.resx">
+    <body>
+      <trans-unit id="Description">
+        <source>Browse and search Aspire documentation from aspire.dev</source>
+        <target state="needs-review-translation">aspire.dev adresinden Aspire belgelerini tarayın ve arayın.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DocumentNotFound">
+        <source>Documentation page '{0}' not found. Use 'aspire docs list' to see available pages.</source>
+        <target state="translated">Belge sayfası ‘{0}’ bulunamadı. Kullanılabilir sayfaları görmek için ‘aspire docs list’ komutunu kullanın.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FormatOptionDescription">
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">Çıktı biçimi (Tablo veya Json).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FoundDocumentationPages">
+        <source>Found {0} documentation pages.</source>
+        <target state="translated">{0} belge sayfası bulundu.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FoundSearchResults">
+        <source>Found {0} results for '{1}'.</source>
+        <target state="translated">‘{1}’ için {0} sonuç bulundu.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="GetDescription">
+        <source>Get the full content of a documentation page by its slug</source>
+        <target state="needs-review-translation">Bir belge sayfasının tüm içeriğini özel bilgi alanı ile alın.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderScore">
+        <source>Score</source>
+        <target state="translated">Puan</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderSection">
+        <source>Section</source>
+        <target state="translated">Bölüm</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderSlug">
+        <source>Slug</source>
+        <target state="translated">Özel bilgi alanı</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderSummary">
+        <source>Summary</source>
+        <target state="translated">Özet</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderTitle">
+        <source>Title</source>
+        <target state="translated">Başlık</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LimitOptionDescription">
+        <source>Maximum number of search results to return (default: 5, max: 10)</source>
+        <target state="needs-review-translation">Döndürülecek maksimum arama sonucu sayısı (varsayılan: 5, maksimum: 10).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ListDescription">
+        <source>List all available Aspire documentation pages</source>
+        <target state="needs-review-translation">Mevcut tüm Aspire belge sayfalarını listeleyin.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LoadingDocumentation">
+        <source>Loading documentation...</source>
+        <target state="translated">Belgeler yükleniyor...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoDocumentationAvailable">
+        <source>No documentation available. The aspire.dev docs may not have loaded correctly.</source>
+        <target state="translated">Kullanılabilir belge yok. aspire.dev belgeleri doğru şekilde yüklenmemiş olabilir.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoResultsFound">
+        <source>No results found for '{0}'. Try different search terms.</source>
+        <target state="translated">‘{0}’ için sonuç bulunamadı. Farklı arama terimleri deneyin.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="QueryArgumentDescription">
+        <source>The search query</source>
+        <target state="needs-review-translation">Arama sorgusu.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SearchDescription">
+        <source>Search Aspire documentation by keywords</source>
+        <target state="needs-review-translation">Aspire belgelerini anahtar kelimelerle arayın.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SectionOptionDescription">
+        <source>Return only the specified section of the page</source>
+        <target state="needs-review-translation">Sayfanın yalnızca belirtilen bölümünü döndür.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SlugArgumentDescription">
+        <source>The slug of the documentation page (e.g., 'redis-integration')</source>
+        <target state="needs-review-translation">Belge sayfasının başlığı (örneğin, ‘redis-integration’).</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

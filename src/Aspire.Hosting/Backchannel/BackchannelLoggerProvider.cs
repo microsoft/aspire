@@ -2,64 +2,81 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Threading.Channels;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Backchannel;
 
 internal class BackchannelLoggerProvider : ILoggerProvider
 {
-    private readonly Channel<BackchannelLogEntry> _channel = Channel.CreateUnbounded<BackchannelLogEntry>();
-    private readonly IServiceProvider _serviceProvider;
-    private readonly object _channelRegisteredLock = new();
-    private readonly CancellationTokenSource _backgroundChannelRegistrationCts = new();
-    private Task? _backgroundChannelRegistrationTask;
+    private readonly Queue<BackchannelLogEntry> _replayBuffer = new();
+    private readonly object _lock = new();
+    private readonly Dictionary<int, Channel<BackchannelLogEntry>> _subscribers = [];
+    private int _nextSubscriberId;
+    private const int MaxReplayEntries = 1000;
 
-    public BackchannelLoggerProvider(IServiceProvider serviceProvider)
+    /// <summary>
+    /// Gets a snapshot of buffered log entries and subscribes for new entries.
+    /// The returned channel receives all future log entries until disposed.
+    /// </summary>
+    internal (List<BackchannelLogEntry> Snapshot, int SubscriberId, Channel<BackchannelLogEntry> Channel) Subscribe()
     {
-        ArgumentNullException.ThrowIfNull(serviceProvider);
-        _serviceProvider = serviceProvider;
+        var channel = Channel.CreateUnbounded<BackchannelLogEntry>();
+        lock (_lock)
+        {
+            var id = _nextSubscriberId++;
+            _subscribers[id] = channel;
+            // Snapshot under lock so no entries are missed between snapshot and subscribe
+            return ([.. _replayBuffer], id, channel);
+        }
     }
 
-    private void RegisterLogChannel()
+    internal void Unsubscribe(int subscriberId)
     {
-        // Why do we execute this on a background task? This method is spawned on a background
-        // task by the CreateLogger method. The CreateLogger method is called when creating many
-        // of the services registered in DI - but registering the log channel requires that we
-        // can resolve the AppHostRpcTarget service (thus creating a circular dependency). To resolve
-        // this we take a dependency on IServiceProvider so that on a separate background task we
-        // can resolve AppHostRpcTarget which in turn would have taken a dependency on a logger
-        // from this provider.
-        var target = _serviceProvider.GetRequiredService<AppHostRpcTarget>();
-        target.RegisterLogChannel(_channel);
+        lock (_lock)
+        {
+            if (_subscribers.Remove(subscriberId, out var channel))
+            {
+                channel.Writer.TryComplete();
+            }
+        }
+    }
+
+    internal void WriteEntry(BackchannelLogEntry entry)
+    {
+        lock (_lock)
+        {
+            if (_replayBuffer.Count >= MaxReplayEntries)
+            {
+                _replayBuffer.Dequeue();
+            }
+            _replayBuffer.Enqueue(entry);
+
+            foreach (var subscriber in _subscribers.Values)
+            {
+                subscriber.Writer.TryWrite(entry);
+            }
+        }
     }
 
     public ILogger CreateLogger(string categoryName)
     {
-        if (_backgroundChannelRegistrationTask == null)
-        {
-            lock (_channelRegisteredLock)
-            {
-                if (_backgroundChannelRegistrationTask == null)
-                {
-                    _backgroundChannelRegistrationTask = Task.Run(
-                        RegisterLogChannel,
-                        _backgroundChannelRegistrationCts.Token);
-                }
-            }
-        }
-
-        return new BackchannelLogger(categoryName, _channel);
+        return new BackchannelLogger(categoryName, this);
     }
 
     public void Dispose()
     {
-        _backgroundChannelRegistrationCts.Cancel();
-        _channel.Writer.Complete();
+        lock (_lock)
+        {
+            foreach (var subscriber in _subscribers.Values)
+            {
+                subscriber.Writer.TryComplete();
+            }
+            _subscribers.Clear();
+        }
     }
 }
 
-internal class BackchannelLogger(string categoryName, Channel<BackchannelLogEntry> channel) : ILogger
+internal class BackchannelLogger(string categoryName, BackchannelLoggerProvider provider) : ILogger
 {
     public IDisposable? BeginScope<TState>(TState state) where TState : notnull
     {
@@ -84,7 +101,7 @@ internal class BackchannelLogger(string categoryName, Channel<BackchannelLogEntr
                 Message = formatter(state, exception),
             };
 
-            channel.Writer.TryWrite(entry);
+            provider.WriteEntry(entry);
         }
     }
 }

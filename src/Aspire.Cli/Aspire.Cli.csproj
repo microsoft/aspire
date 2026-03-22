@@ -6,11 +6,20 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <EnablePackageValidation>false</EnablePackageValidation>
     <AssemblyName>aspire</AssemblyName>
     <RootNamespace>Aspire.Cli</RootNamespace>
-    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <!-- MCPEXP001: The MCP SDK 0.8.0 added experimental types (ToolExecution, ToolTaskSupport) to its default
+         serialization graph. We don't reference these types directly, but the System.Text.Json source generator
+         emits code that touches them when we combine our serializer context with McpJsonUtilities.DefaultOptions
+         in BackchannelJsonSerializerContext.cs. Suppress until MCP graduates these types. -->
+    <NoWarn>$(NoWarn);CS1591;MCPEXP001</NoWarn>
     <PublishAot>true</PublishAot>
+    <!-- Sigstore and Tuf packages are not strong-named. Aspire.Cli is an executable tool,
+         not a library referenced by strong-named assemblies, so this is safe. -->
+    <SignAssembly>false</SignAssembly>
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
     <OptimizationPreference>Size</OptimizationPreference>
     <DefineConstants>$(DefineConstants);CLI</DefineConstants>
     <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
@@ -37,31 +46,84 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Azure.Monitor.OpenTelemetry.Exporter" />
     <PackageReference Include="Spectre.Console" />
     <PackageReference Include="System.CommandLine" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
     <PackageReference Include="StreamJsonRpc" VersionOverride="$(StreamJsonRpcPackageVersionForCli)" />
+    <PackageReference Include="OpenTelemetry.Exporter.Console" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <PackageReference Include="Semver" />
+    <PackageReference Include="Sigstore" />
+    <PackageReference Include="Tuf" />
     <PackageReference Include="ModelContextProtocol" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Aspire.TypeSystem\Aspire.TypeSystem.csproj" />
+  </ItemGroup>
+
+  <!-- When BundlePayloadPath is set (by Bundle.proj), embed the tar.gz as a resource.
+       Inner-loop builds without this property produce an unbundled CLI. -->
+  <ItemGroup Condition="'$(BundlePayloadPath)' != '' and Exists('$(BundlePayloadPath)')">
+    <EmbeddedResource Include="$(BundlePayloadPath)" LogicalName="bundle.tar.gz" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Layout\BundleDiscovery.cs" />
+    <Compile Include="$(SharedDir)EnumerableExtensions.cs" Link="Utils\EnumerableExtensions.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />
+    <Compile Include="$(SharedDir)KnownOtelConfigNames.cs" Link="Utils\KnownOtelConfigNames.cs" />
+    <Compile Include="$(SharedDir)KnownFormats.cs" Link="Utils\KnownFormats.cs" />
     <Compile Include="$(SharedDir)PathNormalizer.cs" Link="Utils\PathNormalizer.cs" />
     <Compile Include="$(SharedDir)CircularBuffer.cs" Link="Utils\CircularBuffer.cs" />
+    <Compile Include="$(SharedDir)ColorGenerator.cs" Link="Utils\ColorGenerator.cs" />
     <Compile Include="$(SharedDir)StringComparers.cs" Link="Utils\StringComparers.cs" />
     <Compile Include="$(SharedDir)LocaleHelpers.cs" Link="Utils\LocaleHelpers.cs" />
     <Compile Include="$(SharedDir)DurationFormatter.cs" Link="Utils\DurationFormatter.cs" />
+    <Compile Include="$(SharedDir)IConfigurationExtensions.cs" Link="Utils\IConfigurationExtensions.cs" />
     <Compile Include="$(RepoRoot)src\Aspire.Hosting\Backchannel\BackchannelDataTypes.cs" Link="Backchannel\CliBackchannelDataTypes.cs" />
-    <Compile Include="$(RepoRoot)src\Aspire.Hosting\Ats\RuntimeSpec.cs" Link="Ats\RuntimeSpec.cs" />
+    <Compile Include="$(RepoRoot)src\Aspire.Hosting\ApplicationModel\KnownResourceCommands.cs" Link="Utils\KnownResourceCommands.cs" />
     <Compile Include="$(SharedDir)PackageUpdateHelpers.cs" Link="Utils\PackageUpdateHelpers.cs" />
     <Compile Include="$(SharedDir)PathLookupHelper.cs" Link="Utils\PathLookupHelper.cs" />
     <Compile Include="$(SharedDir)BackchannelConstants.cs" Link="Backchannel\BackchannelConstants.cs" />
     <Compile Include="$(SharedDir)Mcp\McpIconHelper.cs" Link="Mcp\McpIconHelper.cs" />
-    <Compile Include="$(RepoRoot)src\Aspire.Hosting\Utils\X509Certificate2Extensions.cs" Link="Utils\X509Certificate2Extensions.cs" />
+    <Compile Include="$(SharedDir)X509Certificate2Extensions.cs" Link="Utils\X509Certificate2Extensions.cs" />
+    <Compile Include="$(SharedDir)Model\Serialization\ResourceJson.cs" Link="Model\Serialization\ResourceJson.cs" />
+    <Compile Include="$(SharedDir)Model\KnownProperties.cs" Link="Model\KnownProperties.cs" />
+    <Compile Include="$(SharedDir)Model\KnownResourceTypes.cs" Link="Model\KnownResourceTypes.cs" />
+    <Compile Include="$(SharedDir)Model\ResourceSourceViewModel.cs" Link="Model\ResourceSourceViewModel.cs" />
+    <Compile Include="$(SharedDir)DashboardUrls.cs" Link="Utils\DashboardUrls.cs" />
+    <Compile Include="$(SharedDir)FormatHelpers.cs" Link="Utils\FormatHelpers.cs" />
+    <Compile Include="$(SharedDir)DateFormatStringsHelpers.cs" Link="Utils\DateFormatStringsHelpers.cs" />
+    <Compile Include="$(SharedDir)TimeProviderExtensions.cs" Link="Extensions\TimeProviderExtensions.cs" />
+    <Compile Include="$(SharedDir)UserSecrets\UserSecretsPathHelper.cs" Link="Utils\UserSecretsPathHelper.cs" />
+    <Compile Include="$(SharedDir)UserSecrets\IsolatedUserSecretsHelper.cs" Link="Utils\IsolatedUserSecretsHelper.cs" />
+    <Compile Include="$(SharedDir)UserSecrets\SecretsStore.cs" Link="Secrets\SecretsStore.cs" />
+    <Compile Include="$(SharedDir)Json\JsonFlattener.cs" Link="Utils\JsonFlattener.cs" />
+    <Compile Include="$(SharedDir)Otlp\OtlpHelpers.cs" Link="Otlp\OtlpHelpers.cs" />
+    <Compile Include="$(SharedDir)Otlp\IOtlpResource.cs" Link="Otlp\IOtlpResource.cs" />
+    <Compile Include="$(SharedDir)Otlp\Serialization\OtlpCommonJson.cs" Link="Otlp\OtlpCommonJson.cs" />
+    <Compile Include="$(SharedDir)Otlp\Serialization\OtlpResourceJson.cs" Link="Otlp\OtlpResourceJson.cs" />
+    <Compile Include="$(SharedDir)Otlp\Serialization\OtlpLogsJson.cs" Link="Otlp\OtlpLogsJson.cs" />
+    <Compile Include="$(SharedDir)Otlp\Serialization\OtlpTraceJson.cs" Link="Otlp\OtlpTraceJson.cs" />
+    <Compile Include="$(SharedDir)Otlp\Serialization\OtlpMetricsJson.cs" Link="Otlp\OtlpMetricsJson.cs" />
+    <Compile Include="$(SharedDir)Otlp\Serialization\OtlpJsonSerializerContext.cs" Link="Otlp\OtlpJsonSerializerContext.cs" />
+    <Compile Include="$(SharedDir)Otlp\Serialization\TelemetryApiResponse.cs" Link="Otlp\TelemetryApiResponse.cs" />
+    <Compile Include="$(SharedDir)Otlp\Serialization\ResourceInfoJson.cs" Link="Otlp\ResourceInfoJson.cs" />
+    <Compile Include="$(SharedDir)Export\ExportArchive.cs" Link="Export\ExportArchive.cs" />
+    <Compile Include="$(SharedDir)ConsoleLogs\AnsiParser.cs" Link="ConsoleLogs\AnsiParser.cs" />
+    <Compile Include="$(SharedDir)ConsoleLogs\LogEntries.cs" Link="ConsoleLogs\LogEntries.cs" />
+    <Compile Include="$(SharedDir)ConsoleLogs\LogEntry.cs" Link="ConsoleLogs\LogEntry.cs" />
+    <Compile Include="$(SharedDir)ConsoleLogs\LogParser.cs" Link="ConsoleLogs\LogParser.cs" />
+    <Compile Include="$(SharedDir)ConsoleLogs\LogPauseViewModel.cs" Link="ConsoleLogs\LogPauseViewModel.cs" />
+    <Compile Include="$(SharedDir)ConsoleLogs\PromptContext.cs" Link="ConsoleLogs\PromptContext.cs" />
+    <Compile Include="$(SharedDir)ConsoleLogs\SharedAIHelpers.cs" Link="ConsoleLogs\SharedAIHelpers.cs" />
+    <Compile Include="$(SharedDir)ConsoleLogs\TimestampParser.cs" Link="ConsoleLogs\TimestampParser.cs" />
+    <Compile Include="$(SharedDir)ConsoleLogs\UrlParser.cs" Link="ConsoleLogs\UrlParser.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -78,6 +140,11 @@
       <DesignTime>True</DesignTime>
       <AutoGen>True</AutoGen>
       <DependentUpon>InteractionServiceStrings.resx</DependentUpon>
+    </Compile>
+    <Compile Update="Resources\RestoreCommandStrings.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>RestoreCommandStrings.resx</DependentUpon>
     </Compile>
     <Compile Update="Resources\TemplatingStrings.Designer.cs">
       <DesignTime>True</DesignTime>
@@ -129,11 +196,24 @@
       <AutoGen>True</AutoGen>
       <DependentUpon>McpCommandStrings.resx</DependentUpon>
     </Compile>
+    <Compile Update="Resources\ExportCommandStrings.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>ExportCommandStrings.resx</DependentUpon>
+    </Compile>
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Resources\dotnet-install.sh" />
-    <EmbeddedResource Include="Resources\dotnet-install.ps1" />
+    <Compile Remove="Templating\Templates\empty-apphost\**\*.cs" />
+    <EmbeddedResource Include="Templating\Templates\empty-apphost\**\*" LogicalName="empty-apphost.%(RecursiveDir)%(Filename)%(Extension)">
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Templating\Templates\ts-starter\**\*" LogicalName="ts-starter.%(RecursiveDir)%(Filename)%(Extension)">
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
     <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-16.png" Link="Mcp\Resources\aspire-16.png" />
     <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-256.png" Link="Mcp\Resources\aspire-256.png" />
     <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-32.png" Link="Mcp\Resources\aspire-32.png" />
@@ -223,6 +303,20 @@
       <SubType>Designer</SubType>
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>McpCommandStrings.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Resources\RestoreCommandStrings.resx">
+      <XlfSourceFormat>Resx</XlfSourceFormat>
+      <XlfOutputItem>EmbeddedResource</XlfOutputItem>
+      <SubType>Designer</SubType>
+      <Generator>PublicResXFileCodeGenerator</Generator>
+      <LastGenOutput>RestoreCommandStrings.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Resources\ExportCommandStrings.resx">
+      <XlfSourceFormat>Resx</XlfSourceFormat>
+      <XlfOutputItem>EmbeddedResource</XlfOutputItem>
+      <SubType>Designer</SubType>
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>ExportCommandStrings.Designer.cs</LastGenOutput>
     </EmbeddedResource>
   </ItemGroup>
 </Project>

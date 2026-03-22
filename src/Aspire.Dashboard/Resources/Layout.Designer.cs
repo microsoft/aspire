@@ -151,6 +151,15 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Untrusted apps can access telemetry data via the API..
+        /// </summary>
+        public static string MessageUnsecuredEndpointApiBody {
+            get {
+                return ResourceManager.GetString("MessageUnsecuredEndpointApiBody", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Untrusted apps can send telemetry to the dashboard..
         /// </summary>
         public static string MessageUnsecuredEndpointTelemetryBody {

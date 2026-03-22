@@ -53,7 +53,9 @@ public static class ContainerAppExtensions
     ///        });
     /// </code>
     /// </example>
+    /// <para>This method is not available in polyglot app hosts.</para>
     /// </remarks>
+    [AspireExportIgnore(Reason = "Extends ContainerApp (Azure.Provisioning type) which is not an IResourceBuilder<T> target, so the ATS codegen cannot generate a wrapper class for it.")]
     [Experimental("ASPIREACADOMAINS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static void ConfigureCustomDomain(this ContainerApp app, IResourceBuilder<ParameterResource> customDomain, IResourceBuilder<ParameterResource> certificateName)
     {
@@ -147,7 +149,9 @@ public static class ContainerAppExtensions
     /// });
     /// </code>
     /// </example>
+    /// <para>This overload allows custom configuration of the container app job via a callback.</para>
     /// </remarks>
+    [AspireExport("publishAsConfiguredAzureContainerAppJob", Description = "Configures the compute resource as an Azure Container App Job with custom configuration")]
     [Experimental("ASPIREAZURE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<T> PublishAsAzureContainerAppJob<T>(this IResourceBuilder<T> resource, Action<AzureResourceInfrastructure, ContainerAppJob> configure)
         where T : IComputeResource
@@ -185,6 +189,7 @@ public static class ContainerAppExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExport("publishAsAzureContainerAppJob", Description = "Configures the compute resource as a manually triggered Azure Container App Job")]
     [Experimental("ASPIREAZURE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<T> PublishAsAzureContainerAppJob<T>(this IResourceBuilder<T> resource)
         where T : IComputeResource
@@ -216,7 +221,9 @@ public static class ContainerAppExtensions
     ///        .PublishAsScheduledAzureContainerAppJob("0 0 * * *"); // Run every day at midnight
     /// </code>
     /// </example>
+    /// <para>This overload allows custom configuration of the scheduled container app job via a callback.</para>
     /// </remarks>
+    [AspireExport("publishAsConfiguredScheduledAzureContainerAppJob", Description = "Configures the compute resource as a scheduled Azure Container App Job with custom configuration")]
     [Experimental("ASPIREAZURE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<T> PublishAsScheduledAzureContainerAppJob<T>(this IResourceBuilder<T> resource, string cronExpression, Action<AzureResourceInfrastructure, ContainerAppJob>? configure = null)
         where T : IComputeResource
@@ -231,5 +238,23 @@ public static class ContainerAppExtensions
 
             configure?.Invoke(infrastructure, job);
         });
+    }
+
+    /// <summary>
+    /// Configures the specified compute resource as a scheduled Azure Container App Job with the provided cron expression.
+    /// </summary>
+    /// <typeparam name="T">The type of the compute resource.</typeparam>
+    /// <param name="resource">The compute resource builder.</param>
+    /// <param name="cronExpression">The cron expression that defines the schedule for the job.</param>
+    /// <returns>The updated compute resource builder.</returns>
+    /// <remarks>
+    /// This method is a convenience wrapper that configures the job with a schedule trigger using the specified cron expression.
+    /// </remarks>
+    [AspireExport("publishAsScheduledAzureContainerAppJob", Description = "Configures the compute resource as a scheduled Azure Container App Job")]
+    [Experimental("ASPIREAZURE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    internal static IResourceBuilder<T> PublishAsScheduledAzureContainerAppJob<T>(this IResourceBuilder<T> resource, string cronExpression)
+        where T : IComputeResource
+    {
+        return resource.PublishAsScheduledAzureContainerAppJob(cronExpression, configure: null);
     }
 }

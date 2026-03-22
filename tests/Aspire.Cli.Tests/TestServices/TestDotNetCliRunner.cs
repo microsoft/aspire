@@ -3,7 +3,6 @@
 
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
-using Aspire.Cli.Certificates;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Utils;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
@@ -12,25 +11,24 @@ namespace Aspire.Cli.Tests.TestServices;
 
 internal sealed class TestDotNetCliRunner : IDotNetCliRunner
 {
-    public Func<FileInfo, string, string, string?, DotNetCliRunnerInvocationOptions, CancellationToken, int>? AddPackageAsyncCallback { get; set; }
+    public Func<FileInfo, string, string, string?, bool, DotNetCliRunnerInvocationOptions, CancellationToken, int>? AddPackageAsyncCallback { get; set; }
     public Func<FileInfo, FileInfo, DotNetCliRunnerInvocationOptions, CancellationToken, int>? AddProjectToSolutionAsyncCallback { get; set; }
-    public Func<FileInfo, DotNetCliRunnerInvocationOptions, CancellationToken, int>? BuildAsyncCallback { get; set; }
-    public Func<DotNetCliRunnerInvocationOptions, CancellationToken, (int ExitCode, CertificateTrustResult? Result)>? CheckHttpCertificateMachineReadableAsyncCallback { get; set; }
+    public Func<FileInfo, bool, DotNetCliRunnerInvocationOptions, CancellationToken, int>? BuildAsyncCallback { get; set; }
+    public Func<FileInfo, DotNetCliRunnerInvocationOptions, CancellationToken, int>? RestoreAsyncCallback { get; set; }
     public Func<FileInfo, DotNetCliRunnerInvocationOptions, CancellationToken, (int ExitCode, bool IsAspireHost, string? AspireHostingVersion)>? GetAppHostInformationAsyncCallback { get; set; }
     public Func<DirectoryInfo, DotNetCliRunnerInvocationOptions, CancellationToken, (int ExitCode, string[] ConfigPaths)>? GetNuGetConfigPathsAsyncCallback { get; set; }
     public Func<FileInfo, string[], string[], DotNetCliRunnerInvocationOptions, CancellationToken, (int ExitCode, JsonDocument? Output)>? GetProjectItemsAndPropertiesAsyncCallback { get; set; }
     public Func<string, string, string?, bool, DotNetCliRunnerInvocationOptions, CancellationToken, (int ExitCode, string? TemplateVersion)>? InstallTemplateAsyncCallback { get; set; }
     public Func<string, string, string, DotNetCliRunnerInvocationOptions, CancellationToken, int>? NewProjectAsyncCallback { get; set; }
-    public Func<FileInfo, bool, bool, string[], IDictionary<string, string>?, TaskCompletionSource<IAppHostCliBackchannel>?, DotNetCliRunnerInvocationOptions, CancellationToken, Task<int>>? RunAsyncCallback { get; set; }
+    public Func<FileInfo, bool, bool, bool, string[], IDictionary<string, string>?, TaskCompletionSource<IAppHostCliBackchannel>?, DotNetCliRunnerInvocationOptions, CancellationToken, Task<int>>? RunAsyncCallback { get; set; }
     public Func<DirectoryInfo, string, bool, int, int, FileInfo?, bool, DotNetCliRunnerInvocationOptions, CancellationToken, (int ExitCode, NuGetPackage[]? Packages)>? SearchPackagesAsyncCallback { get; set; }
-    public Func<DotNetCliRunnerInvocationOptions, CancellationToken, int>? TrustHttpCertificateAsyncCallback { get; set; }
     public Func<FileInfo, DotNetCliRunnerInvocationOptions, CancellationToken, (int ExitCode, IReadOnlyList<FileInfo> Projects)>? GetSolutionProjectsAsyncCallback { get; set; }
     public Func<FileInfo, FileInfo, DotNetCliRunnerInvocationOptions, CancellationToken, int>? AddProjectReferenceAsyncCallback { get; set; }
 
-    public Task<int> AddPackageAsync(FileInfo projectFilePath, string packageName, string packageVersion, string? nugetSource, DotNetCliRunnerInvocationOptions options, CancellationToken cancellationToken)
+    public Task<int> AddPackageAsync(FileInfo projectFilePath, string packageName, string packageVersion, string? nugetSource, bool noRestore, DotNetCliRunnerInvocationOptions options, CancellationToken cancellationToken)
     {
         return AddPackageAsyncCallback != null
-            ? Task.FromResult(AddPackageAsyncCallback(projectFilePath, packageName, packageVersion, nugetSource, options, cancellationToken))
+            ? Task.FromResult(AddPackageAsyncCallback(projectFilePath, packageName, packageVersion, nugetSource, noRestore, options, cancellationToken))
             : throw new NotImplementedException();
     }
 
@@ -41,28 +39,18 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
             : Task.FromResult(0); // If not overridden, just return success.
     }
 
-    public Task<int> BuildAsync(FileInfo projectFilePath, DotNetCliRunnerInvocationOptions options, CancellationToken cancellationToken)
+    public Task<int> BuildAsync(FileInfo projectFilePath, bool noRestore, DotNetCliRunnerInvocationOptions options, CancellationToken cancellationToken)
     {
         return BuildAsyncCallback != null
-            ? Task.FromResult(BuildAsyncCallback(projectFilePath, options, cancellationToken))
+            ? Task.FromResult(BuildAsyncCallback(projectFilePath, noRestore, options, cancellationToken))
             : throw new NotImplementedException();
     }
 
-    public Task<(int ExitCode, CertificateTrustResult? Result)> CheckHttpCertificateMachineReadableAsync(DotNetCliRunnerInvocationOptions options, CancellationToken cancellationToken)
+    public Task<int> RestoreAsync(FileInfo projectFilePath, DotNetCliRunnerInvocationOptions options, CancellationToken cancellationToken)
     {
-        if (CheckHttpCertificateMachineReadableAsyncCallback != null)
-        {
-            return Task.FromResult(CheckHttpCertificateMachineReadableAsyncCallback(options, cancellationToken));
-        }
-
-        // Default: Return a fully trusted certificate result
-        var result = new CertificateTrustResult
-        {
-            HasCertificates = true,
-            TrustLevel = DevCertTrustLevel.Full,
-            Certificates = []
-        };
-        return Task.FromResult<(int, CertificateTrustResult?)>((0, result));
+        return RestoreAsyncCallback != null
+            ? Task.FromResult(RestoreAsyncCallback(projectFilePath, options, cancellationToken))
+            : throw new NotImplementedException();
     }
 
     public Task<(int ExitCode, bool IsAspireHost, string? AspireHostingVersion)> GetAppHostInformationAsync(FileInfo projectFile, DotNetCliRunnerInvocationOptions options, CancellationToken cancellationToken)
@@ -111,10 +99,10 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
             : Task.FromResult(0); // If not overridden, just return success.
     }
 
-    public Task<int> RunAsync(FileInfo projectFile, bool watch, bool noBuild, string[] args, IDictionary<string, string>? env, TaskCompletionSource<IAppHostCliBackchannel>? backchannelCompletionSource, DotNetCliRunnerInvocationOptions options, CancellationToken cancellationToken)
+    public Task<int> RunAsync(FileInfo projectFile, bool watch, bool noBuild, bool noRestore, string[] args, IDictionary<string, string>? env, TaskCompletionSource<IAppHostCliBackchannel>? backchannelCompletionSource, DotNetCliRunnerInvocationOptions options, CancellationToken cancellationToken)
     {
         return RunAsyncCallback != null
-            ? RunAsyncCallback(projectFile, watch, noBuild, args, env, backchannelCompletionSource, options, cancellationToken)
+            ? RunAsyncCallback(projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken)
             : throw new NotImplementedException();
     }
 
@@ -122,13 +110,6 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
     {
         return SearchPackagesAsyncCallback != null
             ? Task.FromResult(SearchPackagesAsyncCallback(workingDirectory, query, prerelease, take, skip, nugetConfigFile, useCache, options, cancellationToken))
-            : throw new NotImplementedException();
-    }
-
-    public Task<int> TrustHttpCertificateAsync(DotNetCliRunnerInvocationOptions options, CancellationToken cancellationToken)
-    {
-        return TrustHttpCertificateAsyncCallback != null
-            ? Task.FromResult(TrustHttpCertificateAsyncCallback(options, cancellationToken))
             : throw new NotImplementedException();
     }
 
@@ -145,4 +126,7 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
             ? Task.FromResult(AddProjectReferenceAsyncCallback(projectFile, referencedProject, options, cancellationToken))
             : Task.FromResult(0);
     }
+
+    public Task<int> InitUserSecretsAsync(FileInfo projectFile, DotNetCliRunnerInvocationOptions options, CancellationToken cancellationToken)
+        => Task.FromResult(0);
 }

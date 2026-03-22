@@ -25,6 +25,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "2")]
 public class ProjectResourceTests
 {
     [Fact]

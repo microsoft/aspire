@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREAZURE001
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.AppService;
@@ -144,6 +145,11 @@ public class AzureAppServiceEnvironmentResource :
     {
         var dashboardUri = await DashboardUriReference.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
 
+        if (!string.IsNullOrEmpty(dashboardUri))
+        {
+            context.Summary.Add("📊 Dashboard", dashboardUri);
+        }
+
         await context.ReportingStep.CompleteAsync(
             $"Dashboard available at [{dashboardUri}]({dashboardUri})",
             CompletionState.Completed,
@@ -193,7 +199,7 @@ public class AzureAppServiceEnvironmentResource :
             // Report each error through the activity reporter for user-friendly display
             foreach (var error in errors)
             {
-                context.ReportingStep.Log(LogLevel.Error, error, enableMarkdown: false);
+                context.ReportingStep.Log(LogLevel.Error, error);
             }
 
             await context.ReportingStep.CompleteAsync(
@@ -381,7 +387,9 @@ public class AzureAppServiceEnvironmentResource :
     ReferenceExpression IAzureContainerRegistry.ManagedIdentityId => ReferenceExpression.Create($"{ContainerRegistryManagedIdentityId}");
 #pragma warning restore CS0618 // Type or member is obsolete
 
-    ReferenceExpression IComputeEnvironmentResource.GetHostAddressExpression(EndpointReference endpointReference)
+    /// <inheritdoc/>
+    [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference)
     {
         var resource = endpointReference.Resource;
         return ReferenceExpression.Create($"{resource.Name.ToLowerInvariant()}-{WebSiteSuffix}.azurewebsites.net");

@@ -129,6 +129,9 @@
   <data name="AspireEmpty_Description" xml:space="preserve">
     <value>AppHost and service defaults</value>
   </data>
+  <data name="AspireEmptyDotNetTemplate_Description" xml:space="preserve">
+    <value>Empty (C# AppHost, dotnet template)</value>
+  </data>
   <data name="AspireAppHost_Description" xml:space="preserve">
     <value>AppHost</value>
   </data>
@@ -199,8 +202,8 @@
     <value>Getting templates...</value>
   </data>
   <data name="TemplateInstallationFailed" xml:space="preserve">
-    <value>The template installation failed with exit code {0}. For more information run with --debug switch.</value>
-    <comment>{0} is a number, --debug should not be localized</comment>
+    <value>The template installation failed with exit code {0}. See logs at {1}</value>
+    <comment>{0} is a number, {1} is the log file path</comment>
   </data>
   <data name="UsingProjectTemplatesVersion" xml:space="preserve">
     <value>Using project templates version: {0}</value>
@@ -209,8 +212,8 @@
     <value>Creating new Aspire project...</value>
   </data>
   <data name="ProjectCreationFailed" xml:space="preserve">
-    <value>Project creation failed with exit code {0}. For more information run with --debug switch.</value>
-    <comment>{0} is a number, --debug should not be localized</comment>
+    <value>Project creation failed with exit code {0}. See logs at {1}</value>
+    <comment>{0} is a number, {1} is the log file path</comment>
   </data>
   <data name="ProjectCreatedSuccessfully" xml:space="preserve">
     <value>Project created successfully in {0}.</value>
@@ -246,5 +249,12 @@
   </data>
   <data name="UseLocalhostTld_Description" xml:space="preserve">
     <value>Configures whether to use *.dev.localhost URLs for local development.</value>
+  </data>
+  <data name="RunCdThenAspireRun" xml:space="preserve">
+    <value>Run 'cd "{0}"' and then 'aspire run' to start your apphost.</value>
+    <comment>{0} is the relative path to the project directory</comment>
+  </data>
+  <data name="RunAspireRun" xml:space="preserve">
+    <value>Run 'aspire run' to start your apphost.</value>
   </data>
 </root>

@@ -154,12 +154,12 @@
       </trans-unit>
       <trans-unit id="ExportEnv">
         <source>Export .env</source>
-        <target state="new">Export .env</target>
+        <target state="translated">Eksportuj .env</target>
         <note />
       </trans-unit>
       <trans-unit id="ExportJson">
         <source>Export JSON</source>
-        <target state="new">Export JSON</target>
+        <target state="translated">Eksportuj plik JSON</target>
         <note />
       </trans-unit>
       <trans-unit id="FilterPlaceholder">

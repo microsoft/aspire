@@ -15,6 +15,7 @@ namespace Aspire.Hosting.Azure;
 /// <remarks>
 /// Use <see cref="AzureProvisioningResourceExtensions.ConfigureInfrastructure{T}(ApplicationModel.IResourceBuilder{T}, Action{AzureResourceInfrastructure})"/> to configure specific <see cref="Azure.Provisioning"/> properties.
 /// </remarks>
+[AspireDto]
 public class AzureServiceBusRule(string name)
 {
     private string _name = ThrowIfNullOrEmpty(name);

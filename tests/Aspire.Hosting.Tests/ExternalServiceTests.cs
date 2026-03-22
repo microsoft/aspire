@@ -9,6 +9,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "2")]
 public class ExternalServiceTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]

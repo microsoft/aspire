@@ -18,7 +18,8 @@
                       PrivateAssets="all"
                       ReferenceOutputAssembly="false"
                       OutputItemType="Analyzer"
-                      SetTargetFramework="TargetFramework=netstandard2.0" />
+                      SetTargetFramework="TargetFramework=netstandard2.0"
+                      GlobalPropertiesToRemove="RuntimeIdentifier;PlatformTarget;SelfContained" />
   </ItemGroup>
 
   <!-- Import only when in-repo. For the out-of-repo case a parent Directory.Build.targets does the import -->

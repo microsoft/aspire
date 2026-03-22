@@ -90,12 +90,7 @@ internal sealed class ReportingStep : IReportingStep
         return maxState;
     }
 
-    /// <summary>
-    /// Creates a new task within this step.
-    /// </summary>
-    /// <param name="statusText">The initial status text for the task.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The created task.</returns>
+    /// <inheritdoc />
     public async Task<IReportingTask> CreateTaskAsync(string statusText, CancellationToken cancellationToken = default)
     {
         if (Reporter is null)
@@ -103,16 +98,26 @@ internal sealed class ReportingStep : IReportingStep
             throw new InvalidOperationException("Cannot create task: Reporter is not set.");
         }
 
-        return await Reporter.CreateTaskAsync(this, statusText, cancellationToken).ConfigureAwait(false);
+        return await Reporter.CreateTaskAsync(this, statusText, enableMarkdown: false, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Logs a message at the specified level within this step.
-    /// </summary>
-    /// <param name="logLevel">The log level for the message.</param>
-    /// <param name="message">The message to log.</param>
-    /// <param name="enableMarkdown">The enableMarkdown</param>
+    /// <inheritdoc />
+    public async Task<IReportingTask> CreateTaskAsync(MarkdownString statusText, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(statusText);
+
+        if (Reporter is null)
+        {
+            throw new InvalidOperationException("Cannot create task: Reporter is not set.");
+        }
+
+        return await Reporter.CreateTaskAsync(this, statusText.Value, enableMarkdown: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+#pragma warning disable CS0618 // Type or member is obsolete
     public void Log(LogLevel logLevel, string message, bool enableMarkdown = true)
+#pragma warning restore CS0618
     {
         if (Reporter is null)
         {
@@ -122,12 +127,31 @@ internal sealed class ReportingStep : IReportingStep
         Reporter.Log(this, logLevel, message, enableMarkdown);
     }
 
-    /// <summary>
-    /// Completes the step with the specified completion text and state.
-    /// </summary>
-    /// <param name="completionText">The completion text for the step.</param>
-    /// <param name="completionState">The completion state for the step.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <inheritdoc />
+    public void Log(LogLevel logLevel, string message)
+    {
+        if (Reporter is null)
+        {
+            return;
+        }
+
+        Reporter.Log(this, logLevel, message, enableMarkdown: false);
+    }
+
+    /// <inheritdoc />
+    public void Log(LogLevel logLevel, MarkdownString message)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+
+        if (Reporter is null)
+        {
+            return;
+        }
+
+        Reporter.Log(this, logLevel, message.Value, enableMarkdown: true);
+    }
+
+    /// <inheritdoc />
     public async Task CompleteAsync(string completionText, CompletionState completionState = CompletionState.Completed, CancellationToken cancellationToken = default)
     {
         if (Reporter is null)
@@ -135,7 +159,20 @@ internal sealed class ReportingStep : IReportingStep
             throw new InvalidOperationException("Cannot complete step: Reporter is not set.");
         }
 
-        await Reporter.CompleteStepAsync(this, completionText, completionState, cancellationToken).ConfigureAwait(false);
+        await Reporter.CompleteStepAsync(this, completionText, completionState, enableMarkdown: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task CompleteAsync(MarkdownString completionText, CompletionState completionState = CompletionState.Completed, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(completionText);
+
+        if (Reporter is null)
+        {
+            throw new InvalidOperationException("Cannot complete step: Reporter is not set.");
+        }
+
+        await Reporter.CompleteStepAsync(this, completionText.Value, completionState, enableMarkdown: true, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -168,6 +205,6 @@ internal sealed class ReportingStep : IReportingStep
             }
             : CompletionText;
 
-        await Reporter.CompleteStepAsync(this, completionText, finalState, CancellationToken.None).ConfigureAwait(false);
+        await Reporter.CompleteStepAsync(this, completionText, finalState, enableMarkdown: false, cancellationToken: CancellationToken.None).ConfigureAwait(false);
     }
 }

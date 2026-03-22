@@ -21,11 +21,11 @@ cd "$WORK_DIR"
 
 # Initialize Java AppHost
 echo "Creating Java apphost project..."
-aspire init -l java --non-interactive
+aspire init --language java --non-interactive -d
 
 # Add Redis integration
 echo "Adding Redis integration..."
-aspire add Aspire.Hosting.Redis --non-interactive 2>&1 || {
+aspire add Aspire.Hosting.Redis --non-interactive -d 2>&1 || {
     echo "aspire add failed, manually updating settings.json..."
     PKG_VERSION=$(aspire --version | grep -oP '\d+\.\d+\.\d+-.*' | head -1)
     if [ -f ".aspire/settings.json" ]; then
@@ -40,7 +40,7 @@ aspire add Aspire.Hosting.Redis --non-interactive 2>&1 || {
 # Insert Redis code into AppHost.java
 echo "Configuring AppHost.java with Redis..."
 if grep -q "builder.build()" AppHost.java; then
-    sed -i '/builder.build()/i\            // Add Redis cache resource\n            builder.addRedis("cache", null, null);' AppHost.java
+    sed -i '/builder.build()/i\            // Add Redis cache resource\n            builder.addRedis("cache", null, null).withImageRegistry("netaspireci.azurecr.io");' AppHost.java
     echo "✅ Redis configuration added to AppHost.java"
 fi
 

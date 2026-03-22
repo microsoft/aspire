@@ -40,6 +40,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// <param name="builder">The distributed application builder.</param>
     /// <param name="name">The name of the resource.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
+    [AspireExport("addAzureAppServiceEnvironment", Description = "Adds an Azure App Service environment resource")]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> AddAzureAppServiceEnvironment(this IDistributedApplicationBuilder builder, string name)
     {
         builder.AddAzureAppServiceInfrastructureCore();
@@ -230,7 +231,8 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// </summary>
     /// <param name="builder">The <see cref="IResourceBuilder{AzureAppServiceEnvironmentResource}"/> to configure.</param>
     /// <param name="enable">Whether to include the Aspire dashboard. Default is true.</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining additional configuration."/></returns>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining additional configuration.</returns>
+    [AspireExport("withDashboard", Description = "Configures whether the Aspire dashboard is included in the Azure App Service environment")]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithDashboard(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder, bool enable = true)
     {
         builder.Resource.EnableDashboard = enable;
@@ -242,6 +244,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// </summary>
     /// <param name="builder">The AzureAppServiceEnvironmentResource to configure.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
+    [AspireExport("withAzureApplicationInsights", Description = "Enables Azure Application Insights for the Azure App Service environment")]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithAzureApplicationInsights(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -255,6 +258,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// <param name="builder">The AzureAppServiceEnvironmentResource to configure.</param>
     /// <param name="applicationInsightsLocation">The location for Application Insights.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
+    [AspireExport("withAzureApplicationInsightsLocation", Description = "Enables Azure Application Insights for the Azure App Service environment with a specific location")]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithAzureApplicationInsights(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder, string applicationInsightsLocation)
     {
         builder.WithAzureApplicationInsights();
@@ -268,6 +272,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// <param name="builder">The AzureAppServiceEnvironmentResource to configure.</param>
     /// <param name="applicationInsightsLocation">The location parameter for Application Insights.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
+    [AspireExport("withAzureApplicationInsightsLocationParameter", Description = "Enables Azure Application Insights for the Azure App Service environment using a location parameter")]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithAzureApplicationInsights(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder, IResourceBuilder<ParameterResource> applicationInsightsLocation)
     {
         builder.WithAzureApplicationInsights();
@@ -281,6 +286,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// <param name="builder">The AzureAppServiceEnvironmentResource builder to configure.</param>
     /// <param name="applicationInsightsBuilder">The Application Insights resource builder.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
+    [AspireExport("withAzureApplicationInsightsResource", Description = "Enables Azure Application Insights for the Azure App Service environment using an existing Application Insights resource")]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithAzureApplicationInsights(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder, IResourceBuilder<AzureApplicationInsightsResource> applicationInsightsBuilder)
     {
         builder.WithAzureApplicationInsights();
@@ -294,6 +300,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// <param name="builder">The AzureAppServiceEnvironmentResource to configure.</param>
     /// <param name="deploymentSlot">The deployment slot parameter for all App Services in the App Service Environment.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
+    [AspireExport("withDeploymentSlotParameter", Description = "Configures the deployment slot for all Azure App Services in the environment using a parameter")]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithDeploymentSlot(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder, IResourceBuilder<ParameterResource> deploymentSlot)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -309,6 +316,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// <param name="builder">The AzureAppServiceEnvironmentResource to configure.</param>
     /// <param name="deploymentSlot">The deployment slot for all App Services in the App Service Environment.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
+    [AspireExport("withDeploymentSlot", Description = "Configures the deployment slot for all Azure App Services in the environment")]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithDeploymentSlot(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder, string deploymentSlot)
     {
         ArgumentNullException.ThrowIfNull(builder);

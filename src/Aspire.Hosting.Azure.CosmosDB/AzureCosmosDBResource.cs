@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
@@ -18,7 +20,8 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
     : AzureProvisioningResource(name, configureInfrastructure),
     IResourceWithConnectionString,
     IResourceWithEndpoints,
-    IResourceWithAzureFunctionsConfig
+    IResourceWithAzureFunctionsConfig,
+    IAzurePrivateEndpointTarget
 {
     internal List<AzureCosmosDBDatabaseResource> Databases { get; } = [];
 
@@ -67,6 +70,11 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
     public BicepOutputReference NameOutputReference => new("name", this);
 
     /// <summary>
+    /// Gets the "id" output reference for the resource.
+    /// </summary>
+    public BicepOutputReference Id => new("id", this);
+
+    /// <summary>
     /// Gets a value indicating whether the resource uses access key authentication.
     /// </summary>
     [MemberNotNullWhen(true, nameof(ConnectionStringSecretOutput))]
@@ -78,9 +86,14 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
     /// </summary>
     public bool IsEmulator => this.IsContainer();
 
-    internal bool IsPreviewEmulator =>
-        this.TryGetContainerImageName(out var imageName) &&
-        imageName == $"{CosmosDBEmulatorContainerImageTags.Registry}/{CosmosDBEmulatorContainerImageTags.Image}:{CosmosDBEmulatorContainerImageTags.TagVNextPreview}";
+    /// <summary>
+    /// Is this instance running a preview emulator version?
+    /// </summary>
+    internal bool IsPreviewEmulator
+    {
+        get => IsEmulator && field;
+        set => field = value;
+    }
 
     /// <summary>
     /// Gets the account endpoint URI expression for the Cosmos DB account.
@@ -90,9 +103,7 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
     /// </remarks>
     public ReferenceExpression UriExpression =>
         IsEmulator ?
-            IsPreviewEmulator ?
-                ReferenceExpression.Create($"{EmulatorEndpoint.Property(EndpointProperty.Url)}") :
-                ReferenceExpression.Create($"https://{EmulatorEndpoint.Property(EndpointProperty.IPV4Host)}:{EmulatorEndpoint.Property(EndpointProperty.Port)}") :
+            ReferenceExpression.Create($"{EmulatorEndpoint.Property(EndpointProperty.Url)}") :
             ReferenceExpression.Create($"{ConnectionStringOutput}");
 
     /// <summary>
@@ -251,4 +262,10 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
             yield return new("ConnectionString", ConnectionStringExpression);
         }
     }
+
+    BicepOutputReference IAzurePrivateEndpointTarget.Id => Id;
+
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["Sql"];
+
+    string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() => "privatelink.documents.azure.com";
 }

@@ -8,8 +8,8 @@
         <note />
       </trans-unit>
       <trans-unit id="AppHostNotCompatibleConsiderUpgrading">
-        <source>The AppHost version is not compatible. Please upgrade the apphost or Aspire CLI.</source>
-        <target state="translated">Wersja hosta AppHost jest niezgodna. Uaktualnij hosta AppHost lub interfejs wiersza polecenia platformy Aspire.</target>
+        <source>The apphost version is not compatible. Please upgrade the apphost or Aspire CLI.</source>
+        <target state="needs-review-translation">Wersja hosta AppHost jest niezgodna. Uaktualnij hosta AppHost lub interfejs wiersza polecenia platformy Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireCLIVersion">
@@ -83,8 +83,8 @@
         <note>Do not translate [dim] and [link]. Also leave [/] as-is. {0} is a URL</note>
       </trans-unit>
       <trans-unit id="NewCliVersionAvailable">
-        <source>[yellow]A new version of the Aspire CLI is available: {0}[/]</source>
-        <target state="translated">[yellow]Dostępna jest nowa wersja interfejsu wiersza polecenia Aspire: {0}[/]</target>
+        <source>[yellow]A new version of Aspire is available: {0}[/]</source>
+        <target state="new">[yellow]A new version of Aspire is available: {0}[/]</target>
         <note>Do not translate [yellow] and also leave [/] as-is. {0} is the version number</note>
       </trans-unit>
       <trans-unit id="NoItemsAvailableForSelection">
@@ -98,18 +98,18 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeBuilt">
-        <source>The project could not be built. For more information run with --debug switch.</source>
-        <target state="translated">Nie można skompilować projektu. Aby uzyskać więcej informacji, uruchom polecenie przełącznika --debug.</target>
+        <source>The project could not be built. See logs at {0}</source>
+        <target state="translated">Nie można skompilować projektu. Zobacz dzienniki pod adresem {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionDoesntExist">
-        <source>The --project option specified a project that does not exist.</source>
-        <target state="translated">Opcja --project określiła projekt, który nie istnieje.</target>
+        <source>The --apphost option specified a project that does not exist.</source>
+        <target state="translated">Opcja --apphost określiła projekt, który nie istnieje.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionNotSpecifiedMultipleAppHostsFound">
-        <source>The --project option was not specified and multiple app host project files were detected.</source>
-        <target state="translated">Nie określono opcji --project i wykryto wiele plików projektu hosta aplikacji.</target>
+        <source>The --apphost option was not specified and multiple app host project files were detected.</source>
+        <target state="translated">Nie określono opcji --apphost i wykryto wiele plików projektu hosta aplikacji.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionNotSpecifiedNoCsprojFound">
@@ -127,14 +127,19 @@
         <target state="translated">Trwa wyszukiwanie...</target>
         <note />
       </trans-unit>
+      <trans-unit id="SeeLogsAt">
+        <source>See logs at {0}</source>
+        <target state="translated">Zobacz dzienniki pod adresem {0}</target>
+        <note>{0} is the log file path</note>
+      </trans-unit>
       <trans-unit id="SelectAppHostToUse">
         <source>Select an apphost to use:</source>
         <target state="translated">Wybierz hosta AppHost do użycia:</target>
         <note />
       </trans-unit>
       <trans-unit id="SpecifiedProjectFileNotAppHostProject">
-        <source>The specified project file is not an Aspire AppHost project.</source>
-        <target state="translated">Określony plik projektu nie jest projektem hosta AppHost platformy Aspire.</target>
+        <source>The specified project file is not an Aspire apphost project.</source>
+        <target state="needs-review-translation">Określony plik projektu nie jest projektem hosta AppHost platformy Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="StoppingAspire">
@@ -161,6 +166,11 @@
         <source>An unexpected error occurred: {0}</source>
         <target state="translated">Wystąpił nieoczekiwany błąd: {0}</target>
         <note>{0} is the exception message</note>
+      </trans-unit>
+      <trans-unit id="UpdatedSettingsFile">
+        <source>Updated settings file at {0}.</source>
+        <target state="new">Updated settings file at {0}.</target>
+        <note>{0} is a path</note>
       </trans-unit>
       <trans-unit id="WaitingForDebuggerToAttachToAppHost">
         <source>Waiting for debugger to attach to app host process</source>

@@ -45,7 +45,7 @@ extends:
     sdl:
       sourceAnalysisPool:
         name: NetCore1ESPool-Internal
-        image: windows.vs2022preview.amd64
+        image: windows.vs2026preview.scout.amd64
         os: windows
     containers:
       linux_x64:
@@ -135,7 +135,7 @@ extends:
 
             pool:
               name: NetCore1ESPool-Internal
-              image: windows.vs2022preview.amd64
+              image: windows.vs2026preview.scout.amd64
               os: windows
 
             variables:
@@ -161,6 +161,40 @@ extends:
                   targetType: 'inline'
                   script: |
                     Get-ChildItem -Path "$(Build.SourcesDirectory)\artifacts\packages" -File -Recurse | Select-Object FullName, @{Name="Size(MB)";Expression={[math]::Round($_.Length/1MB,2)}} | Format-Table -AutoSize
+
+              - task: NodeTool@0
+                displayName: 🟣Install node.js
+                inputs:
+                  versionSpec: '20.x'
+
+              - task: npmAuthenticate@0
+                displayName: 🟣NPM authenticate
+                inputs:
+                  workingFile: $(Build.SourcesDirectory)\.npmrc
+
+              - task: PowerShell@2
+                displayName: 🟣Set .npmrc environment
+                inputs:
+                  targetType: 'inline'
+                  script: Write-Host "##vso[task.setvariable variable=NPM_CONFIG_USERCONFIG]$(Build.SourcesDirectory)\.npmrc"
+
+              - task: PowerShell@2
+                displayName: 🟣Install yarn
+                inputs:
+                  targetType: 'inline'
+                  script: |
+                    npm install -g yarn@1.22.22
+                    yarn --version
+                  workingDirectory: '$(Build.SourcesDirectory)'
+
+              - task: PowerShell@2
+                displayName: 🟣Install vsce
+                inputs:
+                  targetType: 'inline'
+                  script: |
+                    npm install -g @vscode/vsce@3.7.1
+                    vsce --version
+                  workingDirectory: '$(Build.SourcesDirectory)'
 
               - template: /eng/pipelines/templates/BuildAndTest.yml
                 parameters:

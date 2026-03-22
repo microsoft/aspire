@@ -3,7 +3,6 @@
 
 using System.Text.Json;
 using Azure.Core;
-using Azure.Identity;
 using Npgsql;
 
 namespace Aspire;
@@ -18,7 +17,7 @@ internal static class ManagedIdentityTokenCredentialHelpers
 
     public static bool ConfigureEntraIdAuthentication(this NpgsqlDataSourceBuilder dataSourceBuilder, TokenCredential? credential)
     {
-        credential ??= new DefaultAzureCredential();
+        credential ??= AzureCredentialHelper.CreateDefaultAzureCredential();
         var configuredAuth = false;
 
         // The connection string requires the username to be provided. Since it will depend on the Managed Identity that is used

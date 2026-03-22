@@ -154,7 +154,7 @@
       </trans-unit>
       <trans-unit id="ExportEnv">
         <source>Export .env</source>
-        <target state="new">Export .env</target>
+        <target state="translated">.env のエクスポート</target>
         <note />
       </trans-unit>
       <trans-unit id="ExportJson">

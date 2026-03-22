@@ -38,6 +38,7 @@ public static class MilvusBuilderExtensions
     /// <param name="apiKey">The parameter used to provide the auth key/token user for the Milvus resource.</param>
     /// <param name="grpcPort">The host port of gRPC endpoint of Milvus database.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{MilvusServerResource}"/>.</returns>
+    [AspireExport("addMilvus", Description = "Adds a Milvus server resource to the distributed application model.")]
     public static IResourceBuilder<MilvusServerResource> AddMilvus(this IDistributedApplicationBuilder builder,
         string name,
         IResourceBuilder<ParameterResource>? apiKey = null,
@@ -92,6 +93,7 @@ public static class MilvusBuilderExtensions
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <param name="databaseName">The name of the database. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("addDatabase", Description = "Adds a Milvus database resource to a Milvus server resource.")]
     public static IResourceBuilder<MilvusDatabaseResource> AddDatabase(this IResourceBuilder<MilvusServerResource> builder, [ResourceName] string name, string? databaseName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -128,6 +130,7 @@ public static class MilvusBuilderExtensions
     /// <param name="configureContainer">Configuration callback for Attu container resource.</param>
     /// <param name="containerName">The name of the container (Optional).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("withAttu", Description = "Adds the Attu administration tool for Milvus.", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<T> WithAttu<T>(this IResourceBuilder<T> builder, Action<IResourceBuilder<AttuResource>>? configureContainer = null, string? containerName = null) where T : MilvusServerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -154,6 +157,7 @@ public static class MilvusBuilderExtensions
     /// <param name="name">The name of the volume. Defaults to an auto-generated name based on the resource name.</param>
     /// <param name="isReadOnly">A flag that indicates if this is a read-only volume.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("withDataVolume", Description = "Adds a persistent data volume to the Milvus server resource.")]
     public static IResourceBuilder<MilvusServerResource> WithDataVolume(this IResourceBuilder<MilvusServerResource> builder, string? name = null, bool isReadOnly = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -168,6 +172,7 @@ public static class MilvusBuilderExtensions
     /// <param name="source">The source directory on the host to mount into the container.</param>
     /// <param name="isReadOnly">A flag that indicates if this is a read-only mount.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("withDataBindMount", Description = "Mounts a host directory as the Milvus data directory.")]
     public static IResourceBuilder<MilvusServerResource> WithDataBindMount(this IResourceBuilder<MilvusServerResource> builder, string source, bool isReadOnly = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -197,6 +202,7 @@ public static class MilvusBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="configurationFilePath">The configuration file on the host to copy into the container.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("withConfigurationFile", Description = "Copies a Milvus configuration file into the container.")]
     public static IResourceBuilder<MilvusServerResource> WithConfigurationFile(this IResourceBuilder<MilvusServerResource> builder, string configurationFilePath)
     {
         ArgumentNullException.ThrowIfNull(builder);

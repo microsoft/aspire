@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRECERTIFICATES001 // WithoutHttpsCertificate is experimental
+
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -83,7 +85,8 @@ public class TestProgram : IDisposable
             if (!resourcesToSkip.HasFlag(TestResourceNames.redis))
             {
                 var redis = AppBuilder.AddRedis($"{testPrefix}redis")
-                    .WithImageRegistry(AspireTestContainerRegistry);
+                    .WithImageRegistry(AspireTestContainerRegistry)
+                    .WithoutHttpsCertificate();
                 IntegrationServiceABuilder = IntegrationServiceABuilder.WithReference(redis);
             }
             if (!resourcesToSkip.HasFlag(TestResourceNames.postgres) || !resourcesToSkip.HasFlag(TestResourceNames.efnpgsql))

@@ -1,0 +1,12 @@
+---
+apiVersion: "v1"
+kind: "ConfigMap"
+metadata:
+  name: "gateway-config"
+  labels:
+    app.kubernetes.io/name: "aspire-hosting-tests"
+    app.kubernetes.io/component: "gateway"
+    app.kubernetes.io/instance: "{{ .Release.Name }}"
+data:
+  API_HTTP: "{{ .Values.config.gateway.API_HTTP }}"
+  services__api__http__0: "{{ .Values.config.gateway.services__api__http__0 }}"

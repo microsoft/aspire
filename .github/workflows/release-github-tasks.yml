@@ -1,0 +1,568 @@
+# Release GitHub Tasks Workflow
+#
+# This workflow handles GitHub-specific release tasks:
+# 1. Creates a Git tag for the release
+# 2. Creates a GitHub Release with release notes
+# 3. Creates a PR to merge release branch back to main
+# 4. Creates a PR to update PackageValidationBaselineVersion
+#
+# Designed for idempotency - safe to re-run after partial failures.
+#
+# For full documentation, see: docs/release-process.md
+
+name: Release GitHub Tasks
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Release version (e.g., 13.2.0)'
+        required: true
+        type: string
+      commit_sha:
+        description: 'Commit SHA to tag (from the signed build)'
+        required: true
+        type: string
+      release_branch:
+        description: 'Release branch name (e.g., release/9.2)'
+        required: true
+        type: string
+      is_prerelease:
+        description: 'Is this a preview/prerelease?'
+        required: false
+        type: boolean
+        default: false
+      dry_run:
+        description: 'Dry run mode - validate and log actions without making changes'
+        required: false
+        type: boolean
+        default: false
+      # Idempotency flags for re-running after partial failures
+      skip_tagging:
+        description: 'Skip tag creation (set true if already completed)'
+        required: false
+        type: boolean
+        default: false
+      skip_github_release:
+        description: 'Skip GitHub Release creation (set true if already completed)'
+        required: false
+        type: boolean
+        default: false
+      skip_merge_pr:
+        description: 'Skip merge-back PR creation (set true if already completed)'
+        required: false
+        type: boolean
+        default: false
+      skip_baseline_pr:
+        description: 'Skip baseline version PR creation (set true if already completed)'
+        required: false
+        type: boolean
+        default: false
+
+# Limit to one release at a time
+concurrency:
+  group: release-github-tasks
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  authorize:
+    name: Authorize
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if user is authorized
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Checking if ${{ github.actor }} is authorized to run releases..."
+          
+          # Get the user's permission level for this repo
+          PERMISSION=$(gh api repos/${{ github.repository }}/collaborators/${{ github.actor }}/permission --jq '.permission')
+          
+          echo "User permission level: $PERMISSION"
+          
+          # Only allow admin or maintain permission levels
+          if [[ "$PERMISSION" != "admin" && "$PERMISSION" != "maintain" ]]; then
+            echo "❌ ERROR: User ${{ github.actor }} does not have sufficient permissions."
+            echo "Required: 'admin' or 'maintain' permission level."
+            echo "Current: '$PERMISSION'"
+            exit 1
+          fi
+          
+          echo "✓ User ${{ github.actor }} is authorized (permission: $PERMISSION)"
+
+  validate:
+    name: Validate Inputs
+    needs: authorize
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print Parameters
+        run: |
+          echo "=== Release Workflow Parameters ==="
+          echo "Release Version: ${{ inputs.release_version }}"
+          echo "Commit SHA: ${{ inputs.commit_sha }}"
+          echo "Release Branch: ${{ inputs.release_branch }}"
+          echo "Is Prerelease: ${{ inputs.is_prerelease }}"
+          echo "Dry Run: ${{ inputs.dry_run }}"
+          echo "Skip Tagging: ${{ inputs.skip_tagging }}"
+          echo "Skip GitHub Release: ${{ inputs.skip_github_release }}"
+          echo "Skip Merge PR: ${{ inputs.skip_merge_pr }}"
+          echo "Skip Baseline PR: ${{ inputs.skip_baseline_pr }}"
+          echo "==================================="
+          
+          if [ "${{ inputs.dry_run }}" == "true" ]; then
+            echo ""
+            echo "⚠️  DRY RUN MODE ENABLED"
+            echo "   All operations will be simulated - no actual changes will be made."
+            echo ""
+          fi
+
+      - name: Validate Version Format
+        run: |
+          VERSION="${{ inputs.release_version }}"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?$ ]]; then
+            echo "❌ Invalid version format: $VERSION"
+            echo "Expected format: major.minor.patch[-prerelease]"
+            exit 1
+          fi
+          echo "✓ Version format is valid: $VERSION"
+
+      - name: Validate Commit SHA
+        run: |
+          SHA="${{ inputs.commit_sha }}"
+          if [[ ! "$SHA" =~ ^[a-f0-9]{40}$ ]]; then
+            echo "❌ Invalid commit SHA format: $SHA"
+            echo "Expected a 40-character hex string"
+            exit 1
+          fi
+          echo "✓ Commit SHA format is valid: $SHA"
+
+  create-tag:
+    name: Create Git Tag
+    needs: validate
+    if: ${{ inputs.skip_tagging != true }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if Tag Exists
+        id: check-tag
+        run: |
+          TAG_NAME="v${{ inputs.release_version }}"
+          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+            EXISTING_SHA=$(git rev-parse "$TAG_NAME")
+            if [ "$EXISTING_SHA" == "${{ inputs.commit_sha }}" ]; then
+              echo "✓ Tag $TAG_NAME already exists and points to the correct commit"
+              echo "tag_exists=true" >> $GITHUB_OUTPUT
+              echo "tag_matches=true" >> $GITHUB_OUTPUT
+            else
+              echo "⚠️ Tag $TAG_NAME exists but points to different commit!"
+              echo "   Existing: $EXISTING_SHA"
+              echo "   Expected: ${{ inputs.commit_sha }}"
+              echo "tag_exists=true" >> $GITHUB_OUTPUT
+              echo "tag_matches=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "Tag $TAG_NAME does not exist yet"
+            echo "tag_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Fail if Tag Exists with Different SHA
+        if: steps.check-tag.outputs.tag_exists == 'true' && steps.check-tag.outputs.tag_matches == 'false'
+        run: |
+          echo "❌ Tag already exists but points to a different commit!"
+          echo "This requires manual resolution."
+          exit 1
+
+      - name: Create and Push Tag
+        if: steps.check-tag.outputs.tag_exists != 'true'
+        run: |
+          TAG_NAME="v${{ inputs.release_version }}"
+          DRY_RUN="${{ inputs.dry_run }}"
+          
+          if [ "$DRY_RUN" == "true" ]; then
+            echo "🔍 [DRY RUN] Would create and push tag:"
+            echo "   Tag name: $TAG_NAME"
+            echo "   Target commit: ${{ inputs.commit_sha }}"
+            echo "   Command: git tag \"$TAG_NAME\" \"${{ inputs.commit_sha }}\""
+            echo "   Command: git push origin \"$TAG_NAME\""
+          else
+            git tag "$TAG_NAME" "${{ inputs.commit_sha }}"
+            git push origin "$TAG_NAME"
+            echo "✓ Created and pushed tag: $TAG_NAME"
+          fi
+
+  create-release:
+    name: Create GitHub Release
+    needs: [validate, create-tag]
+    if: |
+      always() &&
+      needs.validate.result == 'success' &&
+      (needs.create-tag.result == 'success' || needs.create-tag.result == 'skipped') &&
+      inputs.skip_github_release != true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Check if Release Exists
+        id: check-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG_NAME="v${{ inputs.release_version }}"
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            echo "✓ Release $TAG_NAME already exists"
+            echo "release_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Release $TAG_NAME does not exist yet"
+            echo "release_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate Release Notes
+        if: steps.check-release.outputs.release_exists != 'true'
+        id: release-notes
+        run: |
+          VERSION="${{ inputs.release_version }}"
+          TAG_NAME="v$VERSION"
+          IS_PRERELEASE="${{ inputs.is_prerelease }}"
+
+          # Create release notes
+          cat << EOF > release_notes.md
+          ## What's New in Aspire $VERSION
+
+          See the full changelog and documentation at:
+          - 📖 [Documentation](https://learn.microsoft.com/microsoft/aspire/)
+          - 🐛 [Known Issues](https://github.com/microsoft/aspire/issues?q=is%3Aissue+is%3Aopen+label%3A%22known-issue%22)
+
+          ### Installation
+
+          \`\`\`bash
+          dotnet new install Aspire.ProjectTemplates::$VERSION
+          \`\`\`
+
+          Or update your existing projects:
+
+          \`\`\`bash
+          dotnet workload update
+          \`\`\`
+
+          ### Package Downloads
+
+          All packages are available on [NuGet.org](https://www.nuget.org/packages?q=owner%3Adotnet+aspire).
+
+          ---
+          *Full commit: [${{ inputs.commit_sha }}](https://github.com/${{ github.repository }}/commit/${{ inputs.commit_sha }})*
+          EOF
+
+          echo "Release notes generated"
+
+      - name: Create GitHub Release
+        if: steps.check-release.outputs.release_exists != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG_NAME="v${{ inputs.release_version }}"
+          DRY_RUN="${{ inputs.dry_run }}"
+          PRERELEASE_FLAG=""
+          if [ "${{ inputs.is_prerelease }}" == "true" ]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+
+          if [ "$DRY_RUN" == "true" ]; then
+            echo "🔍 [DRY RUN] Would create GitHub Release:"
+            echo "   Tag: $TAG_NAME"
+            echo "   Title: Aspire ${{ inputs.release_version }}"
+            echo "   Target: ${{ inputs.commit_sha }}"
+            echo "   Prerelease: ${{ inputs.is_prerelease }}"
+            echo ""
+            echo "   Release notes content:"
+            echo "   ─────────────────────────────────────"
+            cat release_notes.md
+            echo "   ─────────────────────────────────────"
+          else
+            gh release create "$TAG_NAME" \
+              --title "Aspire ${{ inputs.release_version }}" \
+              --notes-file release_notes.md \
+              --target "${{ inputs.commit_sha }}" \
+              $PRERELEASE_FLAG
+
+            echo "✓ Created GitHub Release: $TAG_NAME"
+          fi
+
+  create-merge-pr:
+    name: Create Merge-Back PR
+    needs: [validate, create-release]
+    if: |
+      always() &&
+      needs.validate.result == 'success' &&
+      (needs.create-release.result == 'success' || needs.create-release.result == 'skipped') &&
+      inputs.skip_merge_pr != true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
+        with:
+          app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+
+      - name: Checkout Repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for Existing PR
+        id: check-pr
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          RELEASE_BRANCH="${{ inputs.release_branch }}"
+          EXISTING_PR=$(gh pr list --head "$RELEASE_BRANCH" --base main --json number --jq '.[0].number // empty')
+
+          if [ -n "$EXISTING_PR" ]; then
+            echo "✓ Merge PR already exists: #$EXISTING_PR"
+            echo "pr_exists=true" >> $GITHUB_OUTPUT
+            echo "pr_number=$EXISTING_PR" >> $GITHUB_OUTPUT
+          else
+            echo "No existing merge PR found"
+            echo "pr_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Dry Run - Show Merge PR Details
+        if: steps.check-pr.outputs.pr_exists != 'true' && inputs.dry_run == true
+        run: |
+          echo "🔍 [DRY RUN] Would create merge PR:"
+          echo "   Title: Merge ${{ inputs.release_branch }} to main after v${{ inputs.release_version }} release"
+          echo "   Head branch: ${{ inputs.release_branch }}"
+          echo "   Base branch: main"
+          echo "   Labels: area-infrastructure, release-automation"
+          echo ""
+          echo "   PR body:"
+          echo "   ─────────────────────────────────────"
+          echo "   This PR merges the \`${{ inputs.release_branch }}\` branch back to \`main\` after the v${{ inputs.release_version }} release."
+          echo ""
+          echo "   ## Checklist"
+          echo "   - [ ] Verify all release-specific changes are appropriate for main"
+          echo "   - [ ] Resolve any merge conflicts"
+          echo "   - [ ] Ensure CI passes"
+          echo "   ─────────────────────────────────────"
+
+      - name: Create Merge PR
+        if: steps.check-pr.outputs.pr_exists != 'true' && inputs.dry_run != true
+        uses: dotnet/actions-create-pull-request@e8d799aa1f8b17f324f9513832811b0a62f1e0b1 # v1
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          title: "Merge ${{ inputs.release_branch }} to main after v${{ inputs.release_version }} release"
+          body: |
+            This PR merges the `${{ inputs.release_branch }}` branch back to `main` after the v${{ inputs.release_version }} release.
+
+            ## Checklist
+            - [ ] Verify all release-specific changes are appropriate for main
+            - [ ] Resolve any merge conflicts
+            - [ ] Ensure CI passes
+
+            ---
+            *Created automatically by the release workflow.*
+          branch: ${{ inputs.release_branch }}
+          base: main
+          labels: |
+            area-infrastructure
+            release-automation
+
+  create-baseline-pr:
+    name: Create Baseline Version PR
+    needs: [validate, create-release]
+    if: |
+      always() &&
+      needs.validate.result == 'success' &&
+      (needs.create-release.result == 'success' || needs.create-release.result == 'skipped') &&
+      inputs.skip_baseline_pr != true &&
+      inputs.is_prerelease != true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
+        with:
+          app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+
+      - name: Checkout Repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          ref: main
+          fetch-depth: 1
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Check for Existing PR
+        id: check-pr
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          BRANCH_NAME="update-baseline-${{ inputs.release_version }}"
+          EXISTING_PR=$(gh pr list --head "$BRANCH_NAME" --json number --jq '.[0].number // empty')
+
+          if [ -n "$EXISTING_PR" ]; then
+            echo "✓ Baseline update PR already exists: #$EXISTING_PR"
+            echo "pr_exists=true" >> $GITHUB_OUTPUT
+            echo "pr_number=$EXISTING_PR" >> $GITHUB_OUTPUT
+          else
+            echo "No existing baseline update PR found"
+            echo "pr_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update PackageValidationBaselineVersion
+        if: steps.check-pr.outputs.pr_exists != 'true'
+        run: |
+          VERSION="${{ inputs.release_version }}"
+          FILE="src/Directory.Build.props"
+
+          echo "Updating PackageValidationBaselineVersion to $VERSION in $FILE"
+
+          # Use sed to update the version - pattern matches the actual format in Directory.Build.props
+          # Format: <PackageValidationBaselineVersion Condition="'$(EnablePackageValidation)' == 'true' and '$(PackageValidationBaselineVersion)' == ''">VERSION</PackageValidationBaselineVersion>
+          sed -i -E "s#(<PackageValidationBaselineVersion[^>]*>)[^<]*(</PackageValidationBaselineVersion>)#\1$VERSION\2#" "$FILE"
+
+          echo "✓ Updated $FILE"
+          echo ""
+          echo "Changes made:"
+          if git diff --quiet "$FILE"; then
+            echo "::error::No changes detected in $FILE - PackageValidationBaselineVersion element may be missing or pattern did not match"
+            exit 1
+          fi
+          git diff "$FILE"
+
+      - name: Dry Run - Show Baseline PR Details
+        if: steps.check-pr.outputs.pr_exists != 'true' && inputs.dry_run == true
+        run: |
+          VERSION="${{ inputs.release_version }}"
+          BRANCH_NAME="update-baseline-$VERSION"
+          
+          echo "🔍 [DRY RUN] Would create baseline version PR:"
+          echo "   Title: Update PackageValidationBaselineVersion to $VERSION"
+          echo "   Branch: $BRANCH_NAME"
+          echo "   Base: main"
+          echo "   Labels: area-infrastructure, release-automation"
+          echo ""
+          echo "   File changes (src/Directory.Build.props):"
+          echo "   ─────────────────────────────────────"
+          git diff src/Directory.Build.props || echo "   (diff shown above)"
+          echo "   ─────────────────────────────────────"
+          echo ""
+          echo "   Commit message: Update PackageValidationBaselineVersion to $VERSION"
+
+      - name: Create Branch and Commit
+        if: steps.check-pr.outputs.pr_exists != 'true' && inputs.dry_run != true
+        run: |
+          BRANCH_NAME="update-baseline-${{ inputs.release_version }}"
+          VERSION="${{ inputs.release_version }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git checkout -b "$BRANCH_NAME"
+          git add src/Directory.Build.props
+          git commit -m "Update PackageValidationBaselineVersion to $VERSION"
+          git push origin "$BRANCH_NAME"
+
+          echo "✓ Created branch: $BRANCH_NAME"
+
+      - name: Create Baseline PR
+        if: steps.check-pr.outputs.pr_exists != 'true' && inputs.dry_run != true
+        uses: dotnet/actions-create-pull-request@e8d799aa1f8b17f324f9513832811b0a62f1e0b1 # v1
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          title: "Update PackageValidationBaselineVersion to ${{ inputs.release_version }}"
+          body: |
+            This PR updates the `PackageValidationBaselineVersion` to `${{ inputs.release_version }}` after the release.
+
+            This ensures that future builds validate API compatibility against this release.
+
+            ## Changes
+            - Updated `src/Directory.Build.props` with new baseline version
+
+            ---
+            *Created automatically by the release workflow.*
+          branch: update-baseline-${{ inputs.release_version }}
+          base: main
+          labels: |
+            area-infrastructure
+            release-automation
+
+  summary:
+    name: Release Summary
+    needs: [authorize, validate, create-tag, create-release, create-merge-pr, create-baseline-pr]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print Summary
+        run: |
+          echo ""
+          if [ "${{ inputs.dry_run }}" == "true" ]; then
+            echo "╔═══════════════════════════════════════════════════════════════╗"
+            echo "║          🔍 DRY RUN - NO CHANGES WERE MADE 🔍                 ║"
+            echo "╠═══════════════════════════════════════════════════════════════╣"
+          else
+            echo "╔═══════════════════════════════════════════════════════════════╗"
+            echo "║                  GITHUB RELEASE SUMMARY                       ║"
+            echo "╠═══════════════════════════════════════════════════════════════╣"
+          fi
+          echo "║ Version:        ${{ inputs.release_version }}"
+          echo "║ Commit SHA:     ${{ inputs.commit_sha }}"
+          echo "║ Release Branch: ${{ inputs.release_branch }}"
+          echo "║ Is Prerelease:  ${{ inputs.is_prerelease }}"
+          echo "║ Dry Run:        ${{ inputs.dry_run }}"
+          echo "╠═══════════════════════════════════════════════════════════════╣"
+          echo "║ Job Results:"
+          echo "║   Authorization:  ${{ needs.authorize.result }}"
+          echo "║   Validation:     ${{ needs.validate.result }}"
+          echo "║   Create Tag:     ${{ needs.create-tag.result }}"
+          echo "║   Create Release: ${{ needs.create-release.result }}"
+          echo "║   Merge PR:       ${{ needs.create-merge-pr.result }}"
+          echo "║   Baseline PR:    ${{ needs.create-baseline-pr.result }}"
+          echo "╚═══════════════════════════════════════════════════════════════╝"
+          echo ""
+
+      - name: Create Summary
+        run: |
+          DRY_RUN_BANNER=""
+          if [ "${{ inputs.dry_run }}" == "true" ]; then
+            DRY_RUN_BANNER="## 🔍 DRY RUN MODE - No changes were made
+
+          This was a dry run execution. All validations and checks were performed, but no tags, releases, or PRs were created.
+
+          ---
+
+          "
+          fi
+          
+          cat << EOF >> $GITHUB_STEP_SUMMARY
+          # Release Summary: v${{ inputs.release_version }}
+          
+          ${DRY_RUN_BANNER}| Task | Status |
+          |------|--------|
+          | Authorization | ${{ needs.authorize.result == 'success' && '✅' || '❌' }} ${{ needs.authorize.result }} |
+          | Validation | ${{ needs.validate.result == 'success' && '✅' || '❌' }} ${{ needs.validate.result }} |
+          | Create Tag | ${{ needs.create-tag.result == 'success' && '✅' || (needs.create-tag.result == 'skipped' && '⏭️' || '❌') }} ${{ needs.create-tag.result }} |
+          | Create Release | ${{ needs.create-release.result == 'success' && '✅' || (needs.create-release.result == 'skipped' && '⏭️' || '❌') }} ${{ needs.create-release.result }} |
+          | Merge PR | ${{ needs.create-merge-pr.result == 'success' && '✅' || (needs.create-merge-pr.result == 'skipped' && '⏭️' || '❌') }} ${{ needs.create-merge-pr.result }} |
+          | Baseline PR | ${{ needs.create-baseline-pr.result == 'success' && '✅' || (needs.create-baseline-pr.result == 'skipped' && '⏭️' || '❌') }} ${{ needs.create-baseline-pr.result }} |
+
+          ## Details
+          - **Tag**: v${{ inputs.release_version }}
+          - **Commit**: \`${{ inputs.commit_sha }}\`
+          - **Branch**: ${{ inputs.release_branch }}
+          - **Prerelease**: ${{ inputs.is_prerelease }}
+          - **Dry Run**: ${{ inputs.dry_run }}
+
+          ## Links
+          - [Release](https://github.com/${{ github.repository }}/releases/tag/v${{ inputs.release_version }})
+          - [Tag](https://github.com/${{ github.repository }}/tree/v${{ inputs.release_version }})
+          EOF

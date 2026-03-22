@@ -61,6 +61,16 @@ internal static partial class MarkdownToSpectreConverter
         return result;
     }
 
+    /// <summary>
+    /// Converts markdown links to plain text.
+    /// </summary>
+    /// <param name="markdown">The markdown text to convert.</param>
+    /// <returns>The text with markdown links converted to the plain text format <c>text (url)</c>.</returns>
+    public static string ConvertLinksToPlainText(string markdown)
+    {
+        return LinkRegex().Replace(markdown, "$1 ($2)");
+    }
+
     private static string ConvertHeaders(string text)
     {
         // Convert ###### Header 6 (most specific first)

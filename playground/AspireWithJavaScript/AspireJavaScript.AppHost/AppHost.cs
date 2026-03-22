@@ -10,13 +10,16 @@ builder.AddJavaScriptApp("angular", "../AspireJavaScript.Angular", runScriptName
     .WithExternalHttpEndpoints()
     .PublishAsDockerFile();
 
+#pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 builder.AddJavaScriptApp("react", "../AspireJavaScript.React", runScriptName: "start")
     .WithReference(weatherApi)
     .WaitFor(weatherApi)
     .WithEnvironment("BROWSER", "none") // Disable opening browser on npm start
     .WithHttpEndpoint(env: "PORT")
     .WithExternalHttpEndpoints()
-    .PublishAsDockerFile();
+    .PublishAsDockerFile()
+    .WithBrowserDebugger();
+#pragma warning restore ASPIREEXTENSION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 builder.AddJavaScriptApp("vue", "../AspireJavaScript.Vue")
     .WithRunScript("start")
@@ -27,10 +30,12 @@ builder.AddJavaScriptApp("vue", "../AspireJavaScript.Vue")
     .WithExternalHttpEndpoints()
     .PublishAsDockerFile();
 
+#pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 var reactvite = builder.AddViteApp("reactvite", "../AspireJavaScript.Vite")
     .WithReference(weatherApi)
     .WithEnvironment("BROWSER", "none")
     .WithExternalHttpEndpoints();
+#pragma warning restore ASPIREEXTENSION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 builder.AddNodeApp("node", "../AspireJavaScript.NodeApp", "app.js")
     .WithRunScript("dev") // Use 'npm run dev' for development

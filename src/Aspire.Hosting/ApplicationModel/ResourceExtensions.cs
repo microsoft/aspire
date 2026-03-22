@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Dashboard.Model;
 using Microsoft.Extensions.DependencyInjection;
@@ -475,7 +476,9 @@ public static class ResourceExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="callback">A callback to configure container build options.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>This method is not available in polyglot app hosts.</remarks>
     [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "ContainerBuildOptionsCallbackContext exposes IResource and IServiceProvider — .NET runtime types not usable from polyglot hosts.")]
     public static IResourceBuilder<T> WithContainerBuildOptions<T>(
         this IResourceBuilder<T> builder,
         Action<ContainerBuildOptionsCallbackContext> callback)
@@ -494,7 +497,9 @@ public static class ResourceExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="callback">An async callback to configure container build options.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>This method is not available in polyglot app hosts.</remarks>
     [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "ContainerBuildOptionsCallbackContext exposes IResource and IServiceProvider — .NET runtime types not usable from polyglot hosts.")]
     public static IResourceBuilder<T> WithContainerBuildOptions<T>(
         this IResourceBuilder<T> builder,
         Func<ContainerBuildOptionsCallbackContext, Task> callback)
@@ -697,7 +702,7 @@ public static class ResourceExtensions
     public static EndpointReference GetEndpoint(this IResourceWithEndpoints resource, string endpointName)
     {
         var endpoint = resource.TryGetEndpoints(out var endpoints) ?
-            endpoints.FirstOrDefault(e => StringComparers.EndpointAnnotationName.Equals(e.Name, endpointName)) :
+            endpoints.FirstOrDefault(e => string.Equals(e.Name, endpointName, StringComparisons.EndpointAnnotationName)) :
             null;
         if (endpoint is null)
         {
@@ -720,7 +725,7 @@ public static class ResourceExtensions
     {
 
         var endpoint = resource.TryGetEndpoints(out var endpoints) ?
-            endpoints.FirstOrDefault(e => StringComparers.EndpointAnnotationName.Equals(e.Name, endpointName)) :
+            endpoints.FirstOrDefault(e => string.Equals(e.Name, endpointName, StringComparisons.EndpointAnnotationName)) :
             null;
         if (endpoint is null)
         {
@@ -929,6 +934,20 @@ public static class ResourceExtensions
     }
 
     /// <summary>
+    /// Gets the compute environment that the resource is explicitly bound to, if any.
+    /// </summary>
+    /// <param name="resource">The resource to get the compute environment for.</param>
+    /// <returns>The compute environment the resource is bound to, or <c>null</c> if the resource is not bound to any specific compute environment.</returns>
+    public static IComputeEnvironmentResource? GetComputeEnvironment(this IResource resource)
+    {
+        if (resource.TryGetLastAnnotation<ComputeEnvironmentAnnotation>(out var computeEnvironmentAnnotation))
+        {
+            return computeEnvironmentAnnotation.ComputeEnvironment;
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Gets the deployment target for the specified resource, if any. Throws an exception if
     /// there are multiple compute environments and a compute environment is not explicitly specified.
     /// </summary>
@@ -1048,15 +1067,33 @@ public static class ResourceExtensions
     }
 
     /// <summary>
+    /// Attempts to get the DCP instances for the specified resource.
+    /// </summary>
+    /// <param name="resource">The resource to get the DCP instances from.</param>
+    /// <param name="instances">When this method returns, contains the DCP instances if found and not empty; otherwise, an empty array.</param>
+    /// <returns><see langword="true"/> if the resource has a non-empty DCP instances annotation; otherwise, <see langword="false"/>.</returns>
+    internal static bool TryGetInstances(this IResource resource, out ImmutableArray<DcpInstance> instances)
+    {
+        if (resource.TryGetLastAnnotation<DcpInstancesAnnotation>(out var annotation) && !annotation.Instances.IsEmpty)
+        {
+            instances = annotation.Instances;
+            return true;
+        }
+
+        instances = [];
+        return false;
+    }
+
+    /// <summary>
     /// Gets resolved names for the specified resource.
     /// DCP resources are given a unique suffix as part of the complete name. We want to use that value.
     /// Also, a DCP resource could have multiple instances. All instance names are returned for a resource.
     /// </summary>
     internal static string[] GetResolvedResourceNames(this IResource resource)
     {
-        if (resource.TryGetLastAnnotation<DcpInstancesAnnotation>(out var replicaAnnotation) && !replicaAnnotation.Instances.IsEmpty)
+        if (resource.TryGetInstances(out var instances))
         {
-            return replicaAnnotation.Instances.Select(i => i.Name).ToArray();
+            return instances.Select(i => i.Name).ToArray();
         }
         else
         {
@@ -1221,39 +1258,89 @@ public static class ResourceExtensions
     /// This method invokes environment variable and command-line argument callbacks to discover all references. The context resource (<paramref name="resource"/>) is not considered a dependency (even if it is transitively referenced).
     /// </para>
     /// </remarks>
-    public static async Task<IReadOnlySet<IResource>> GetResourceDependenciesAsync(
+    public static Task<IReadOnlySet<IResource>> GetResourceDependenciesAsync(
         this IResource resource,
+        DistributedApplicationExecutionContext executionContext,
+        ResourceDependencyDiscoveryMode mode = ResourceDependencyDiscoveryMode.Recursive,
+        CancellationToken cancellationToken = default)
+    {
+        return GetDependenciesAsync([resource], executionContext, mode, cancellationToken);
+    }
+
+    /// <summary>
+    /// Efficiently computes the set of resources that the specified source set of resources depends on.
+    /// </summary>
+    /// <param name="resources">The source set of resources to compute dependencies for.</param>
+    /// <param name="executionContext">The execution context for resolving environment variables and arguments.</param>
+    /// <param name="mode">Specifies whether to discover only direct dependencies or the full transitive closure.</param>
+    /// <param name="cancellationToken">A cancellation token to observe while computing dependencies.</param>
+    /// <returns>A set of all resources that the specified resource depends on.</returns>
+    /// <remarks>
+    /// <para>
+    /// Dependencies are computed from multiple sources:
+    /// <list type="bullet">
+    /// <item>Parent resources via <see cref="IResourceWithParent"/></item>
+    /// <item>Wait dependencies via <see cref="WaitAnnotation"/></item>
+    /// <item>Connection string redirects via <see cref="ConnectionStringRedirectAnnotation"/></item>
+    /// <item>References to endpoints in environment variables and command-line arguments (via <see cref="IValueWithReferences"/>)</item>
+    /// </list>
+    /// </para>
+    /// <para>
+    /// When <paramref name="mode"/> is <see cref="ResourceDependencyDiscoveryMode.DirectOnly"/>, only the immediate
+    /// dependencies are returned. When <paramref name="mode"/> is <see cref="ResourceDependencyDiscoveryMode.Recursive"/>,
+    /// all transitive dependencies are included.
+    /// </para>
+    /// <para>
+    /// This method invokes environment variable and command-line argument callbacks to discover all references.
+    /// </para>
+    /// </remarks>
+    internal static async Task<IReadOnlySet<IResource>> GetDependenciesAsync(
+        IEnumerable<IResource> resources,
         DistributedApplicationExecutionContext executionContext,
         ResourceDependencyDiscoveryMode mode = ResourceDependencyDiscoveryMode.Recursive,
         CancellationToken cancellationToken = default)
     {
         var dependencies = new HashSet<IResource>();
         var newDependencies = new HashSet<IResource>();
-        await GatherDirectDependenciesAsync(resource, dependencies, newDependencies, executionContext, cancellationToken).ConfigureAwait(false);
+        var toProcess = new Queue<IResource>();
 
-        if (mode == ResourceDependencyDiscoveryMode.Recursive)
+        foreach (var resource in resources)
         {
-            // Compute transitive closure by recursively processing dependencies
-            var toProcess = new Queue<IResource>(dependencies);
-            while (toProcess.Count > 0)
+            newDependencies.Clear();
+            await GatherDirectDependenciesAsync(resource, dependencies, newDependencies, executionContext, cancellationToken).ConfigureAwait(false);
+
+            if (mode == ResourceDependencyDiscoveryMode.Recursive)
             {
-                var dep = toProcess.Dequeue();
-                newDependencies.Clear();
+                // Compute transitive closure by recursively processing dependencies
 
-                await GatherDirectDependenciesAsync(dep, dependencies, newDependencies, executionContext, cancellationToken).ConfigureAwait(false);
-
-                foreach (var newDep in newDependencies)
+                foreach(var nd in newDependencies)
                 {
-                    if (newDep != resource)
+                    toProcess.Enqueue(nd);
+                }
+
+                while (toProcess.Count > 0)
+                {
+                    var dep = toProcess.Dequeue();
+                    newDependencies.Clear();
+
+                    await GatherDirectDependenciesAsync(dep, dependencies, newDependencies, executionContext, cancellationToken).ConfigureAwait(false);
+
+                    foreach (var newDep in newDependencies)
                     {
-                        toProcess.Enqueue(newDep);
+                        if (newDep != resource)
+                        {
+                            toProcess.Enqueue(newDep);
+                        }
                     }
                 }
             }
         }
 
-        // Ensure the input resource is not in its own dependency set, even if referenced transitively.
-        dependencies.Remove(resource);
+        // Ensure the input resources are not in its own dependency set, even if referenced transitively.
+        foreach (var resource in resources)
+        {
+            dependencies.Remove(resource);
+        }
 
         return dependencies;
     }
@@ -1261,9 +1348,11 @@ public static class ResourceExtensions
     /// <summary>
     /// Gathers direct dependencies of a given resource.
     /// </summary>
-    /// <returns>
-    /// Newly discovered dependencies (not already in <paramref name="dependencies"/>).
-    /// </returns>
+    /// <param name="resource">The resource to gather dependencies for.</param>
+    /// <param name="dependencies">The set of dependencies (where dependency resources will be placed).</param>
+    /// <param name="newDependencies">The set of newly discovered dependencies in this invocation (not present in <paramref name="dependencies"/> at the moment of invocation).</param>
+    /// <param name="executionContext">The execution context for resolving environment variables and arguments.</param>
+    /// <param name="cancellationToken">A cancellation token to observe while gathering dependencies.</param>
     private static async Task GatherDirectDependenciesAsync(
         IResource resource,
         HashSet<IResource> dependencies,
@@ -1383,7 +1472,6 @@ public static class ResourceExtensions
             {
                 newDependencies.Add(resource);
             }
-            CollectAnnotationDependencies(resource, dependencies, newDependencies);
         }
 
         // Resource builder wrapping a resource
@@ -1393,7 +1481,6 @@ public static class ResourceExtensions
             {
                 newDependencies.Add(resourceBuilder.Resource);
             }
-            CollectAnnotationDependencies(resourceBuilder.Resource, dependencies, newDependencies);
             value = resourceBuilder.Resource;
         }
 

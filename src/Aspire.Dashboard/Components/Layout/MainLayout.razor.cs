@@ -112,7 +112,14 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
         var result = await JS.InvokeAsync<BrowserInfo>("window.getBrowserInfo");
         TimeProvider.SetBrowserTimeZone(result.TimeZone);
+        TimeProvider.SetBrowserTimeFormat(result.Is24HourTime ? TimeFormat.TwentyFourHour : TimeFormat.TwelveHour);
         TelemetryContextProvider.SetBrowserUserAgent(result.UserAgent);
+
+        var timeFormatResult = await LocalStorage.GetAsync<TimeFormat>(BrowserStorageKeys.TimeFormat);
+        if (timeFormatResult.Success)
+        {
+            TimeProvider.SetConfiguredTimeFormat(timeFormatResult.Value);
+        }
 
         await DisplayUnsecuredEndpointsMessageAsync();
 
@@ -129,6 +136,10 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         if (ShouldShowUnsecuredMcpMessage())
         {
             unsecuredEndpointsMessage.AppendLine(Loc[nameof(Resources.Layout.MessageUnsecuredEndpointMcpBody)]);
+        }
+        if (ShouldShowUnsecuredApiMessage())
+        {
+            unsecuredEndpointsMessage.AppendLine(Loc[nameof(Resources.Layout.MessageUnsecuredEndpointApiBody)]);
         }
 
         if (unsecuredEndpointsMessage.Length > 0)
@@ -179,10 +190,18 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     private bool ShouldShowUnsecuredMcpMessage()
     {
-        // Only show warning if MCP endpoint is configured
+        // Only show warning if MCP endpoint is configured and MCP is not disabled
         return Options.CurrentValue.Mcp.GetEndpointAddress() != null &&
+               !Options.CurrentValue.Mcp.Disabled.GetValueOrDefault() &&
                Options.CurrentValue.Mcp.AuthMode == McpAuthMode.Unsecured &&
                !Options.CurrentValue.Mcp.SuppressUnsecuredMessage;
+    }
+
+    private bool ShouldShowUnsecuredApiMessage()
+    {
+        // Only show warning if API is enabled and unsecured
+        return Options.CurrentValue.Api.Enabled.GetValueOrDefault() &&
+               Options.CurrentValue.Api.AuthMode == ApiAuthMode.Unsecured;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

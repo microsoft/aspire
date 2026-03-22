@@ -20,7 +20,7 @@ permissions:
 jobs:
   check-docs-needed:
     # Only run on the dotnet org to avoid running on forks
-    if: (github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch') && github.repository_owner == 'dotnet'
+    if: (github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch') && github.repository_owner == 'microsoft'
     runs-on: ubuntu-latest
 
     steps:
@@ -157,7 +157,7 @@ jobs:
         run: |
           ISSUE_BODY="## Documentation Update Required
 
-          This issue was automatically created based on changes from dotnet/aspire PR #${{ steps.pr.outputs.number }}.
+          This issue was automatically created based on changes from microsoft/aspire PR #${{ steps.pr.outputs.number }}.
 
           **PR Title:** ${{ steps.pr_details.outputs.title }}
           **PR Author:** @${{ steps.pr_details.outputs.author }}
@@ -170,7 +170,7 @@ jobs:
 
           ISSUE_URL=$(gh issue create \
             --repo microsoft/aspire.dev \
-            --title "Docs update for dotnet/aspire#${{ steps.pr.outputs.number }}: ${{ steps.pr_details.outputs.title }}" \
+            --title "Docs update for microsoft/aspire#${{ steps.pr.outputs.number }}: ${{ steps.pr_details.outputs.title }}" \
             --body "$ISSUE_BODY" \
             --label "docs-from-code")
           

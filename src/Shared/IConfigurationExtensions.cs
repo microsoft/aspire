@@ -8,6 +8,7 @@ namespace Aspire;
 
 internal static class IConfigurationExtensions
 {
+#if !CLI
     public static T GetValue<T>(this IConfiguration configuration, string primaryKey, string secondaryKey, T defaultValue)
     {
         var primaryValue = configuration.GetValue(typeof(T), primaryKey, null);
@@ -24,6 +25,7 @@ internal static class IConfigurationExtensions
 
         return defaultValue;
     }
+#endif
 
     public static bool? GetBool(this IConfiguration configuration, string primaryKey, string secondaryKey)
     {
@@ -33,16 +35,16 @@ internal static class IConfigurationExtensions
 
     public static string? GetString(this IConfiguration configuration, string primaryKey, string secondaryKey, bool fallbackOnEmpty = false)
     {
-        var primaryValue = configuration.GetValue(typeof(string), primaryKey, null);
-        if (primaryValue is not null && !fallbackOnEmpty || primaryValue is string { Length: > 0 })
+        var primaryValue = configuration[primaryKey];
+        if (primaryValue is not null && !fallbackOnEmpty || primaryValue is { Length: > 0 })
         {
-            return (string)primaryValue;
+            return primaryValue;
         }
 
-        var secondaryValue = configuration.GetValue(typeof(string), secondaryKey, null);
-        if (secondaryValue is not null && !fallbackOnEmpty || secondaryValue is string { Length: > 0 })
+        var secondaryValue = configuration[secondaryKey];
+        if (secondaryValue is not null && !fallbackOnEmpty || secondaryValue is { Length: > 0 })
         {
-            return (string)secondaryValue;
+            return secondaryValue;
         }
 
         return null;

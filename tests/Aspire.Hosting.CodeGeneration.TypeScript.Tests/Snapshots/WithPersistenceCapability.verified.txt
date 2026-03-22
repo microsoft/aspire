@@ -57,5 +57,6 @@
     }
   ],
   ReturnsBuilder: true,
-  SourceLocation: Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestExtensions.WithPersistence
+  SourceLocation: Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestExtensions.WithPersistence,
+  RunSyncOnBackgroundThread: false
 }

@@ -48,19 +48,20 @@ public static class McpExtensions
         }
 
         builder
-            .AddListToolsFilter((next) => async (RequestContext<ListToolsRequestParams> request, CancellationToken cancellationToken) =>
-            {
-                // Calls here are via the tools/list endpoint. See https://modelcontextprotocol.info/docs/concepts/tools/
-                // There is no tool name so we hardcode name to list_tools here so we can reuse the same event.
-                //
-                // We want to track when users list tools as it's an indicator of whether Aspire MCP is configured (client tools refresh tools via it).
-                // It's called even if no Aspire tools end up being used.
-                return await RecordCallToolNameAsync<ListToolsRequestParams, ListToolsResult>(next, request, "list_tools", cancellationToken).ConfigureAwait(false);
-            })
-            .AddCallToolFilter((next) => async (RequestContext<CallToolRequestParams> request, CancellationToken cancellationToken) =>
-            {
-                return await RecordCallToolNameAsync<CallToolRequestParams, CallToolResult>(next, request, request.Params?.Name, cancellationToken).ConfigureAwait(false);
-            });
+            .WithRequestFilters(filters => filters
+                .AddListToolsFilter((next) => async (RequestContext<ListToolsRequestParams> request, CancellationToken cancellationToken) =>
+                {
+                    // Calls here are via the tools/list endpoint. See https://modelcontextprotocol.info/docs/concepts/tools/
+                    // There is no tool name so we hardcode name to list_tools here so we can reuse the same event.
+                    //
+                    // We want to track when users list tools as it's an indicator of whether Aspire MCP is configured (client tools refresh tools via it).
+                    // It's called even if no Aspire tools end up being used.
+                    return await RecordCallToolNameAsync<ListToolsRequestParams, ListToolsResult>(next, request, "list_tools", cancellationToken).ConfigureAwait(false);
+                })
+                .AddCallToolFilter((next) => async (RequestContext<CallToolRequestParams> request, CancellationToken cancellationToken) =>
+                {
+                    return await RecordCallToolNameAsync<CallToolRequestParams, CallToolResult>(next, request, request.Params?.Name, cancellationToken).ConfigureAwait(false);
+                }));
 
         return builder;
     }

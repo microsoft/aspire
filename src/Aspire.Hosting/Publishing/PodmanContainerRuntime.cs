@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES003
+#pragma warning disable ASPIRECONTAINERRUNTIME001
 
 using Microsoft.Extensions.Logging;
 
@@ -15,7 +16,7 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
 
     protected override string RuntimeExecutable => "podman";
     public override string Name => "Podman";
-    private async Task<int> RunPodmanBuildAsync(string contextPath, string dockerfilePath, ContainerImageBuildOptions? options, Dictionary<string, string?> buildArguments, Dictionary<string, string?> buildSecrets, string? stage, CancellationToken cancellationToken)
+    private async Task<int> RunPodmanBuildAsync(string contextPath, string dockerfilePath, ContainerImageBuildOptions? options, Dictionary<string, string?> buildArguments, Dictionary<string, BuildImageSecretValue> buildSecrets, string? stage, CancellationToken cancellationToken)
     {
         var imageName = !string.IsNullOrEmpty(options?.Tag)
             ? $"{options.ImageName}:{options.Tag}"
@@ -60,13 +61,13 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
 
         arguments += $" \"{contextPath}\"";
 
-        // Prepare environment variables for build secrets
+        // Prepare environment variables for build secrets (only for environment-type secrets)
         var environmentVariables = new Dictionary<string, string>();
         foreach (var buildSecret in buildSecrets)
         {
-            if (buildSecret.Value is not null)
+            if (buildSecret.Value.Type == BuildImageSecretType.Environment && buildSecret.Value.Value is not null)
             {
-                environmentVariables[buildSecret.Key.ToUpperInvariant()] = buildSecret.Value;
+                environmentVariables[buildSecret.Key.ToUpperInvariant()] = buildSecret.Value.Value;
             }
         }
 
@@ -79,7 +80,7 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
             environmentVariables).ConfigureAwait(false);
     }
 
-    public override async Task BuildImageAsync(string contextPath, string dockerfilePath, ContainerImageBuildOptions? options, Dictionary<string, string?> buildArguments, Dictionary<string, string?> buildSecrets, string? stage, CancellationToken cancellationToken)
+    public override async Task BuildImageAsync(string contextPath, string dockerfilePath, ContainerImageBuildOptions? options, Dictionary<string, string?> buildArguments, Dictionary<string, BuildImageSecretValue> buildSecrets, string? stage, CancellationToken cancellationToken)
     {
         var exitCode = await RunPodmanBuildAsync(
             contextPath,

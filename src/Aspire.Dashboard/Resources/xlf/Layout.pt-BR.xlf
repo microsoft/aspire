@@ -42,6 +42,11 @@
         <target state="translated">Recarregar</target>
         <note />
       </trans-unit>
+      <trans-unit id="MessageUnsecuredEndpointApiBody">
+        <source>Untrusted apps can access telemetry data via the API.</source>
+        <target state="translated">Aplicativos não confiáveis podem acessar dados de telemetria por meio da API.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MessageUnsecuredEndpointLink">
         <source>More information</source>
         <target state="translated">Mais informações</target>

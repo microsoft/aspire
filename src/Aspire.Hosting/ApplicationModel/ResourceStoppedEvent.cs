@@ -14,6 +14,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <remarks>
 /// This event allows for cleanup or unregistration logic when a resource is stopped by an orchestrator.
 /// </remarks>
+[AspireExport(ExposeProperties = true)]
 public class ResourceStoppedEvent(IResource resource, IServiceProvider services, ResourceEvent resourceEvent) : IDistributedApplicationResourceEvent
 {
     /// <inheritdoc />

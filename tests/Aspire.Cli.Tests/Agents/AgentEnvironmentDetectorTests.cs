@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Microsoft.AspNetCore.InternalTesting;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Tests.Utils;
 
@@ -19,7 +20,7 @@ public class AgentEnvironmentDetectorTests(ITestOutputHelper outputHelper)
             RepositoryRoot = workspace.WorkspaceRoot,
         };
 
-        var applicators = await detector.DetectAsync(context, CancellationToken.None);
+        var applicators = await detector.DetectAsync(context, CancellationToken.None).DefaultTimeout();
 
         Assert.Empty(applicators);
     }
@@ -36,7 +37,7 @@ public class AgentEnvironmentDetectorTests(ITestOutputHelper outputHelper)
             RepositoryRoot = workspace.WorkspaceRoot,
         };
 
-        var applicators = await detector.DetectAsync(context, CancellationToken.None);
+        var applicators = await detector.DetectAsync(context, CancellationToken.None).DefaultTimeout();
 
         Assert.True(scanner.WasScanned);
         Assert.Equal(workspace.WorkspaceRoot.FullName, scanner.ScanContext?.WorkingDirectory.FullName);
@@ -60,7 +61,7 @@ public class AgentEnvironmentDetectorTests(ITestOutputHelper outputHelper)
             RepositoryRoot = workspace.WorkspaceRoot,
         };
 
-        var applicators = await detector.DetectAsync(context, CancellationToken.None);
+        var applicators = await detector.DetectAsync(context, CancellationToken.None).DefaultTimeout();
 
         Assert.Single(applicators);
         Assert.Equal("Test Environment", applicators[0].Description);
@@ -89,7 +90,7 @@ public class AgentEnvironmentDetectorTests(ITestOutputHelper outputHelper)
             RepositoryRoot = workspace.WorkspaceRoot,
         };
 
-        var applicators = await detector.DetectAsync(context, CancellationToken.None);
+        var applicators = await detector.DetectAsync(context, CancellationToken.None).DefaultTimeout();
 
         Assert.True(scanner1.WasScanned);
         Assert.True(scanner2.WasScanned);
@@ -108,7 +109,7 @@ public class AgentEnvironmentDetectorTests(ITestOutputHelper outputHelper)
             RepositoryRoot = workspace.WorkspaceRoot,
         };
 
-        var applicators = await detector.DetectAsync(context, CancellationToken.None);
+        var applicators = await detector.DetectAsync(context, CancellationToken.None).DefaultTimeout();
 
         Assert.True(scanner.WasScanned);
     }

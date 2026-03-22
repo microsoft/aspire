@@ -12,6 +12,22 @@ namespace Aspire.Hosting.MongoDB.Tests;
 public class AddMongoDBTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
+    public void AddMongoDBAddsHealthCheckAnnotationToResource()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var mongo = builder.AddMongoDB("mongodb");
+        Assert.Single(mongo.Resource.Annotations, a => a is HealthCheckAnnotation hca && hca.Key == "mongodb_check");
+    }
+
+    [Fact]
+    public void AddDatabaseAddsHealthCheckAnnotationToResource()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var db = builder.AddMongoDB("mongodb").AddDatabase("mydb");
+        Assert.Single(db.Resource.Annotations, a => a is HealthCheckAnnotation hca && hca.Key == "mydb_check");
+    }
+
+    [Fact]
     public void AddMongoDBContainerWithDefaultsAddsAnnotationMetadata()
     {
         var appBuilder = DistributedApplication.CreateBuilder();

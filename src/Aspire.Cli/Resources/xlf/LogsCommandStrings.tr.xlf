@@ -1,0 +1,72 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="tr" original="../LogsCommandStrings.resx">
+    <body>
+      <trans-unit id="Description">
+        <source>Display logs from resources in a running apphost</source>
+        <target state="needs-review-translation">Çalışan bir Aspire apphost'taki kaynakların günlüklerini görüntüle.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FollowOptionDescription">
+        <source>Stream logs in real-time as they are written</source>
+        <target state="needs-review-translation">Günlükleri yazıldıkça gerçek zamanlı olarak akışla aktar.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="JsonOptionDescription">
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">Günlükleri JSON biçiminde (NDJSON) çıkar.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoResourcesFound">
+        <source>No resources found.</source>
+        <target state="translated">Kaynak bulunamadı.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceArgumentDescription">
+        <source>The name of the resource to get logs for. If not specified, logs from all resources are shown.</source>
+        <target state="needs-review-translation">Günlükleri alınacak kaynağın adı. Belirtilmezse tüm kaynakların günlükleri gösterilir.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceNotFound">
+        <source>Resource '{0}' was not found.</source>
+        <target state="translated">'{0}' kaynağı bulunamadı.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceRequiredWithoutFollow">
+        <source>A resource name is required when not using --follow. Use --follow to stream logs from all resources.</source>
+        <target state="translated">--follow kullanılmadığında kaynak adı gereklidir. Tüm kaynaklardan günlük akışı yapmak için --follow kullanın.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SelectAppHostAction">
+        <source>stream logs from</source>
+        <target state="translated">akış günlüklerinin kaynağı</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TailMustBePositive">
+        <source>The --tail value must be a positive number.</source>
+        <target state="translated">--tail değeri, pozitif bir sayı olmalıdır.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TailOptionDescription">
+        <source>Number of lines to show from the end of logs (default: all)</source>
+        <target state="needs-review-translation">Günlüklerin sonundan gösterilecek satır sayısı (varsayılan: tümü).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TailRequiresResource">
+        <source>The --tail option requires a resource name to be specified.</source>
+        <target state="translated">--tail seçeneği için bir kaynak adı belirtilmelidir.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TimestampsOptionDescription">
+        <source>Show timestamps for each log line</source>
+        <target state="new">Show timestamps for each log line</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="GettingLogs">
+        <source>Getting logs...</source>
+        <target state="translated">Günlükler alınıyor...</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

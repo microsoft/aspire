@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 
@@ -100,32 +101,27 @@ internal sealed class AppHostServerSessionFactory : IAppHostServerSessionFactory
     public async Task<AppHostServerSessionResult> CreateAsync(
         string appHostPath,
         string sdkVersion,
-        IEnumerable<(string PackageId, string Version)> packages,
+        IEnumerable<IntegrationReference> integrations,
         Dictionary<string, string>? launchSettingsEnvVars,
         bool debug,
         CancellationToken cancellationToken)
     {
-        var appHostServerProject = _projectFactory.Create(appHostPath);
-        var socketPath = appHostServerProject.GetSocketPath();
+        var appHostServerProject = await _projectFactory.CreateAsync(appHostPath, cancellationToken);
 
-        // Create project files and get channel info
-        var (_, channelName) = await appHostServerProject.CreateProjectFilesAsync(sdkVersion, packages, cancellationToken);
-
-        // Build the project
-        var (buildSuccess, buildOutput) = await appHostServerProject.BuildAsync(cancellationToken);
-        if (!buildSuccess)
+        // Prepare the server (create files + build for dev mode, restore packages for prebuilt mode)
+        var prepareResult = await appHostServerProject.PrepareAsync(sdkVersion, integrations, cancellationToken);
+        if (!prepareResult.Success)
         {
             return new AppHostServerSessionResult(
                 Success: false,
                 Session: null,
-                BuildOutput: buildOutput,
-                ChannelName: channelName);
+                BuildOutput: prepareResult.Output,
+                ChannelName: prepareResult.ChannelName);
         }
 
         // Start the server process
         var currentPid = Environment.ProcessId;
-        var (serverProcess, serverOutput) = appHostServerProject.Run(
-            socketPath,
+        var (socketPath, serverProcess, serverOutput) = appHostServerProject.Run(
             currentPid,
             launchSettingsEnvVars,
             debug: debug);
@@ -140,7 +136,7 @@ internal sealed class AppHostServerSessionFactory : IAppHostServerSessionFactory
         return new AppHostServerSessionResult(
             Success: true,
             Session: session,
-            BuildOutput: buildOutput,
-            ChannelName: channelName);
+            BuildOutput: prepareResult.Output,
+            ChannelName: prepareResult.ChannelName);
     }
 }

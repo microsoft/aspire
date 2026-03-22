@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 using System.Diagnostics;
 using System.Globalization;
+using System.IO.Hashing;
 using System.Runtime.CompilerServices;
 using System.Text;
 using Aspire.Hosting.Utils;
@@ -12,6 +13,18 @@ namespace Aspire.Hosting.ApplicationModel;
 /// Represents an expression that might be made up of multiple resource properties. For example,
 /// a connection string might be made up of a host, port, and password from different endpoints.
 /// </summary>
+/// <remarks>
+/// <para>
+/// A <see cref="ReferenceExpression"/> operates in one of two modes:
+/// </para>
+/// <list type="bullet">
+///   <item><b>Value mode</b> — a format string with interpolated <see cref="IValueProvider"/> parameters
+///   (e.g., <c>"redis://{0}:{1}"</c>).</item>
+///   <item><b>Conditional mode</b> — a ternary-style expression that selects between two branch
+///   expressions based on the string value of a <see cref="Condition"/>. Created via
+///   <see cref="CreateConditional"/>.</item>
+/// </list>
+/// </remarks>
 [AspireExport]
 [DebuggerDisplay("ReferenceExpression = {ValueExpression}, Providers = {ValueProviders.Count}")]
 public class ReferenceExpression : IManifestExpressionProvider, IValueProvider, IValueWithReferences
@@ -22,9 +35,15 @@ public class ReferenceExpression : IManifestExpressionProvider, IValueProvider, 
     /// <remarks>Use this field to represent a default or uninitialized reference expression. The instance has
     /// an empty name and contains no value providers or arguments.</remarks>
     public static readonly ReferenceExpression Empty = Create(string.Empty, [], [], []);
-
     private readonly string[] _manifestExpressions;
     private readonly string?[] _stringFormats;
+
+    // Conditional mode fields (null when in value mode)
+    private readonly IValueProvider? _condition;
+    private readonly ReferenceExpression? _whenTrue;
+    private readonly ReferenceExpression? _whenFalse;
+    private readonly string? _matchValue;
+    private readonly string? _name;
 
     private ReferenceExpression(string format, IValueProvider[] valueProviders, string[] manifestExpressions, string?[] stringFormats)
     {
@@ -36,6 +55,28 @@ public class ReferenceExpression : IManifestExpressionProvider, IValueProvider, 
         ValueProviders = valueProviders;
         _manifestExpressions = manifestExpressions;
         _stringFormats = stringFormats;
+    }
+
+    private ReferenceExpression(IValueProvider condition, string matchValue, ReferenceExpression whenTrue, ReferenceExpression whenFalse)
+    {
+        ArgumentNullException.ThrowIfNull(condition);
+        ArgumentNullException.ThrowIfNull(whenTrue);
+        ArgumentNullException.ThrowIfNull(whenFalse);
+        ArgumentException.ThrowIfNullOrEmpty(matchValue);
+
+        _condition = condition;
+        _whenTrue = whenTrue;
+        _whenFalse = whenFalse;
+        _matchValue = matchValue;
+        _name = GenerateConditionalName(condition, matchValue, whenTrue, whenFalse);
+
+        // Expose the union of both branches' value providers so that callers
+        // iterating ValueProviders (e.g., publish contexts) can discover all
+        // parameters and resources referenced by the conditional.
+        Format = string.Empty;
+        ValueProviders = whenTrue.ValueProviders.Concat(whenFalse.ValueProviders).ToArray();
+        _manifestExpressions = [];
+        _stringFormats = [];
     }
 
     /// <summary>
@@ -58,13 +99,87 @@ public class ReferenceExpression : IManifestExpressionProvider, IValueProvider, 
     /// </summary>
     public IReadOnlyList<IValueProvider> ValueProviders { get; }
 
-    IEnumerable<object> IValueWithReferences.References => ValueProviders;
+    /// <summary>
+    /// Gets a value indicating whether this expression is a conditional expression that selects
+    /// between two branches based on a condition.
+    /// </summary>
+    public bool IsConditional => _condition is not null;
+
+    /// <summary>
+    /// Gets the condition value provider whose result is compared to <see cref="MatchValue"/>,
+    /// or <see langword="null"/> when <see cref="IsConditional"/> is <see langword="false"/>.
+    /// </summary>
+    public IValueProvider? Condition => _condition;
+
+    /// <summary>
+    /// Gets the expression to evaluate when <see cref="Condition"/> evaluates to <see cref="MatchValue"/>,
+    /// or <see langword="null"/> when <see cref="IsConditional"/> is <see langword="false"/>.
+    /// </summary>
+    public ReferenceExpression? WhenTrue => _whenTrue;
+
+    /// <summary>
+    /// Gets the expression to evaluate when <see cref="Condition"/> does not evaluate to <see cref="MatchValue"/>,
+    /// or <see langword="null"/> when <see cref="IsConditional"/> is <see langword="false"/>.
+    /// </summary>
+    public ReferenceExpression? WhenFalse => _whenFalse;
+
+    /// <summary>
+    /// Gets the value that <see cref="Condition"/> is compared against to select the <see cref="WhenTrue"/> branch,
+    /// or <see langword="null"/> when <see cref="IsConditional"/> is <see langword="false"/>.
+    /// </summary>
+    public string? MatchValue => _matchValue;
+
+    /// <summary>
+    /// Gets the name of this conditional expression, used as the manifest resource name for the <c>value.v0</c> entry,
+    /// or <see langword="null"/> when <see cref="IsConditional"/> is <see langword="false"/>.
+    /// </summary>
+    internal string? Name => _name;
+
+    IEnumerable<object> IValueWithReferences.References
+    {
+        get
+        {
+            if (IsConditional)
+            {
+                // Yield the condition itself so dependency tracking discovers it as an IResource,
+                // then yield its sub-references if it implements IValueWithReferences.
+                yield return _condition!;
+
+                if (_condition is IValueWithReferences conditionRefs)
+                {
+                    foreach (var reference in conditionRefs.References)
+                    {
+                        yield return reference;
+                    }
+                }
+
+                foreach (var reference in ((IValueWithReferences)_whenTrue!).References)
+                {
+                    yield return reference;
+                }
+
+                foreach (var reference in ((IValueWithReferences)_whenFalse!).References)
+                {
+                    yield return reference;
+                }
+
+                yield break;
+            }
+
+            foreach (var vp in ValueProviders)
+            {
+                yield return vp;
+            }
+        }
+    }
 
     /// <summary>
     /// The value expression for the format string.
     /// </summary>
     public string ValueExpression =>
-        string.Format(CultureInfo.InvariantCulture, Format, _manifestExpressions);
+        IsConditional
+            ? $"{{{_name}.connectionString}}"
+            : string.Format(CultureInfo.InvariantCulture, Format, _manifestExpressions);
 
     /// <summary>
     /// Gets the value of the expression. The final string value after evaluating the format string and its parameters.
@@ -73,6 +188,13 @@ public class ReferenceExpression : IManifestExpressionProvider, IValueProvider, 
     /// <param name="cancellationToken">A <see cref="CancellationToken"/>.</param>
     public async ValueTask<string?> GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken)
     {
+        if (IsConditional)
+        {
+            var conditionValue = await _condition!.GetValueAsync(context, cancellationToken).ConfigureAwait(false);
+            var branch = string.Equals(conditionValue, _matchValue, StringComparison.OrdinalIgnoreCase) ? _whenTrue! : _whenFalse!;
+            return await branch.GetValueAsync(context, cancellationToken).ConfigureAwait(false);
+        }
+
         // NOTE: any logical changes to this method should also be made to ExpressionResolver.EvalExpressionAsync
         if (Format.Length == 0)
         {
@@ -99,6 +221,7 @@ public class ReferenceExpression : IManifestExpressionProvider, IValueProvider, 
     /// Gets the value of the expression. The final string value after evaluating the format string and its parameters.
     /// </summary>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/>.</param>
+    [AspireExport("getValue", Description = "Gets the resolved string value of the reference expression asynchronously")]
     public ValueTask<string?> GetValueAsync(CancellationToken cancellationToken)
     {
         return this.GetValueAsync(new(), cancellationToken);
@@ -117,6 +240,77 @@ public class ReferenceExpression : IManifestExpressionProvider, IValueProvider, 
     public static ReferenceExpression Create(in ExpressionInterpolatedStringHandler handler)
     {
         return handler.GetExpression();
+    }
+
+    /// <summary>
+    /// Creates a conditional <see cref="ReferenceExpression"/> that selects between two branch expressions
+    /// based on the string value of a condition.
+    /// </summary>
+    /// <param name="condition">A value provider whose result is compared to <paramref name="matchValue"/>
+    /// to determine which branch to evaluate.</param>
+    /// <param name="matchValue">The string value that <paramref name="condition"/> is compared against.
+    /// When the condition's value equals this (case-insensitive), the <paramref name="whenTrue"/> branch is selected.</param>
+    /// <param name="whenTrue">The expression to evaluate when the condition matches <paramref name="matchValue"/>.</param>
+    /// <param name="whenFalse">The expression to evaluate when the condition does not match <paramref name="matchValue"/>.</param>
+    /// <returns>A new conditional <see cref="ReferenceExpression"/>.</returns>
+    public static ReferenceExpression CreateConditional(IValueProvider condition, string matchValue, ReferenceExpression whenTrue, ReferenceExpression whenFalse)
+    {
+        return new ReferenceExpression(condition, matchValue, whenTrue, whenFalse);
+    }
+
+    private static string GenerateConditionalName(IValueProvider condition, string matchValue, ReferenceExpression whenTrue, ReferenceExpression whenFalse)
+    {
+        string baseName;
+
+        if (condition is IManifestExpressionProvider expressionProvider)
+        {
+            var expression = expressionProvider.ValueExpression;
+            var sanitized = SanitizeExpression(expression);
+            baseName = sanitized.Length > 0 ? $"cond-{sanitized}" : "cond-expr";
+        }
+        else
+        {
+            baseName = "cond-expr";
+        }
+
+        var hash = ComputeConditionalHash(condition, whenTrue, whenFalse, matchValue);
+        return $"{baseName}-{hash}";
+    }
+
+    private static string ComputeConditionalHash(IValueProvider condition, ReferenceExpression whenTrue, ReferenceExpression whenFalse, string matchValue)
+    {
+        var xxHash = new XxHash32();
+
+        var conditionExpr = condition is IManifestExpressionProvider mep ? mep.ValueExpression : condition.GetType().Name;
+        xxHash.Append(Encoding.UTF8.GetBytes(conditionExpr));
+        xxHash.Append(Encoding.UTF8.GetBytes(whenTrue.ValueExpression));
+        xxHash.Append(Encoding.UTF8.GetBytes(whenFalse.ValueExpression));
+        xxHash.Append(Encoding.UTF8.GetBytes(matchValue));
+
+        var hashBytes = xxHash.GetCurrentHash();
+        return Convert.ToHexString(hashBytes).ToLowerInvariant();
+    }
+
+    private static string SanitizeExpression(string expression)
+    {
+        var builder = new StringBuilder(expression.Length);
+        var lastWasSeparator = false;
+
+        foreach (var ch in expression)
+        {
+            if (char.IsLetterOrDigit(ch))
+            {
+                builder.Append(char.ToLowerInvariant(ch));
+                lastWasSeparator = false;
+            }
+            else if (!lastWasSeparator && builder.Length > 0)
+            {
+                builder.Append('-');
+                lastWasSeparator = true;
+            }
+        }
+
+        return builder.ToString().TrimEnd('-');
     }
 
     /// <summary>
@@ -287,6 +481,7 @@ public class ReferenceExpression : IManifestExpressionProvider, IValueProvider, 
 /// <summary>
 /// A builder for creating <see cref="ReferenceExpression"/> instances.
 /// </summary>
+[AspireExport(ExposeProperties = true)]
 public class ReferenceExpressionBuilder
 {
     private readonly StringBuilder _builder = new();
@@ -311,6 +506,7 @@ public class ReferenceExpressionBuilder
     /// Appends a literal value to the expression.
     /// </summary>
     /// <param name="value">The literal string value to be appended to the interpolated string.</param>
+    [AspireExport("appendLiteral", Description = "Appends a literal string to the reference expression")]
     public void AppendLiteral(string value)
     {
         _builder.Append(value);
@@ -330,7 +526,8 @@ public class ReferenceExpressionBuilder
     /// </summary>
     /// <param name="value">The formatted string to be appended to the interpolated string.</param>
     /// <param name="format">The format to be applied to the value. e.g., "uri"</param>
-    public void AppendFormatted(string? value, string? format)
+    [AspireExport("appendFormatted", Description = "Appends a formatted string value to the reference expression")]
+    public void AppendFormatted(string? value, string? format = null)
     {
         if (value is not null)
         {
@@ -389,6 +586,7 @@ public class ReferenceExpressionBuilder
     /// <param name="valueProvider">An object that implements both interfaces, or an IResourceBuilder wrapping such an object.</param>
     /// <param name="format">Optional format specifier.</param>
     /// <exception cref="ArgumentException">Thrown if the object doesn't implement the required interfaces.</exception>
+    [AspireExport("appendValueProvider", Description = "Appends a value provider to the reference expression")]
     public void AppendValueProvider(object valueProvider, string? format = null)
     {
         // Unwrap IResourceBuilder<T> to get the underlying resource (covariant interface)
@@ -414,6 +612,7 @@ public class ReferenceExpressionBuilder
     /// <summary>
     /// Builds the <see cref="ReferenceExpression"/>.
     /// </summary>
+    [AspireExport("build", Description = "Builds the reference expression")]
     public ReferenceExpression Build() =>
         ReferenceExpression.Create(_builder.ToString(), [.. _valueProviders], [.. _manifestExpressions], [.. _stringFormats]);
 

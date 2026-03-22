@@ -14,6 +14,9 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Tests.Dashboard;
 
+#pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only
+
+[Trait("Partition", "3")]
 public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
 {
     [Theory]
@@ -51,7 +54,6 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
 
         Assert.NotNull(dashboard);
         Assert.Equal("aspire-dashboard", dashboard.Name);
-        // dotnet exec --runtimeconfig <temp runtimeconfig.json> <dashboardPath>.dll
         Assert.Equal("dotnet", dashboard.Command);
         Assert.Equal(args[3], $"{dashboardPath}.dll");
         Assert.True(initialSnapshot.InitialSnapshot.IsHidden);
@@ -119,6 +121,11 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
         Assert.Collection(config,
             e =>
             {
+                Assert.Equal(KnownConfigNames.DashboardApiEnabled, e.Key);
+                Assert.Equal("true", e.Value);
+            },
+            e =>
+            {
                 Assert.Equal(KnownConfigNames.DashboardMcpEndpointUrl, e.Key);
                 Assert.Equal("http://localhost:5004", e.Value);
             },
@@ -141,6 +148,11 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
             {
                 Assert.Equal(KnownConfigNames.AspNetCoreUrls, e.Key);
                 Assert.Equal("http://localhost:5003", e.Value);
+            },
+            e =>
+            {
+                Assert.Equal("DASHBOARD__API__AUTHMODE", e.Key);
+                Assert.Equal("Unsecured", e.Value);
             },
             e =>
             {
@@ -256,7 +268,7 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("dotnet", dashboard.Command);
         Assert.Equal("exec", args[0]);
         Assert.Equal("--runtimeconfig", args[1]);
-        Assert.EndsWith(".json", args[2]); // Generated temp runtimeconfig.json path
+        Assert.EndsWith(".json", args[2]);
         Assert.Equal(dashboardPath, args[3]);
     }
 
@@ -455,6 +467,33 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
 
         Assert.DoesNotContain(config, e => e.Key == DashboardConfigNames.DashboardOtlpCorsAllowedOriginsKeyName.EnvVarName);
         Assert.DoesNotContain(config, e => e.Key == DashboardConfigNames.DashboardOtlpCorsAllowedHeadersKeyName.EnvVarName);
+    }
+
+    [Fact]
+    public async Task DashboardResource_HttpsEndpoint_ConfiguresKestrelCertificateCallback()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(options =>
+        {
+            options.DisableDashboard = false;
+            options.TrustDeveloperCertificate = true;
+        }, testOutputHelper: testOutputHelper);
+
+        builder.Configuration.Sources.Clear();
+
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [KnownConfigNames.AspNetCoreUrls] = "https://localhost",
+            [KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = "http://localhost"
+        });
+
+        using var app = builder.Build();
+
+        await app.ExecuteBeforeStartHooksAsync(default).DefaultTimeout();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dashboard = Assert.Single(model.Resources, r => r.Name == "aspire-dashboard");
+
+        Assert.True(dashboard.HasAnnotationOfType<HttpsCertificateConfigurationCallbackAnnotation>());
     }
 
     [Fact]
@@ -688,11 +727,11 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
     {
         foreach (var endpoint in dashboard.Annotations.OfType<EndpointAnnotation>())
         {
-            if (endpoint.Name == DashboardEventHandlers.OtlpGrpcEndpointName)
+            if (endpoint.Name == KnownEndpointNames.OtlpGrpcEndpointName)
             {
                 endpoint.AllocatedEndpoint = new(endpoint, "localhost", otlpGrpcPort, targetPortExpression: otlpGrpcPort.ToString());
             }
-            else if (endpoint.Name == DashboardEventHandlers.OtlpHttpEndpointName)
+            else if (endpoint.Name == KnownEndpointNames.OtlpHttpEndpointName)
             {
                 endpoint.AllocatedEndpoint = new(endpoint, "localhost", otlpHttpPort, targetPortExpression: otlpHttpPort.ToString());
             }

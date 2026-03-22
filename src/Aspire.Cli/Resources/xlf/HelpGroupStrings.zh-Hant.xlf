@@ -1,0 +1,57 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="zh-Hant" original="../HelpGroupStrings.resx">
+    <body>
+      <trans-unit id="AppCommands">
+        <source>App commands:</source>
+        <target state="translated">應用程式命令:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Deployment">
+        <source>Deployment:</source>
+        <target state="translated">部署:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpHint">
+        <source>Use "aspire &lt;command&gt; --help" for more information about a command.</source>
+        <target state="translated">使用 "aspire &lt;command&gt; --help" 取得命令的詳細資訊。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Monitoring">
+        <source>Monitoring:</source>
+        <target state="translated">監控:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Options">
+        <source>Options:</source>
+        <target state="translated">選項:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OtherCommands">
+        <source>Other commands:</source>
+        <target state="translated">其他命令:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceManagement">
+        <source>Resource management:</source>
+        <target state="translated">資源管理:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ToolsAndConfiguration">
+        <source>Tools &amp; configuration:</source>
+        <target state="translated">工具與設定：</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Usage">
+        <source>Usage:</source>
+        <target state="translated">使用方式:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UsageSyntax">
+        <source>aspire &lt;command&gt; [options]</source>
+        <target state="translated">aspire &lt;command&gt; [選項]</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

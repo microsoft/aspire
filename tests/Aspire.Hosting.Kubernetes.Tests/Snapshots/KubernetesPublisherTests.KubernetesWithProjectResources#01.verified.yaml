@@ -1,7 +1,6 @@
-parameters:
+﻿parameters:
   project1:
     port_http: 8080
-    port_https: 8080
     project1_image: "project1:latest"
 secrets: {}
 config:
@@ -10,10 +9,10 @@ config:
     ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
   api:
     PROJECT1_CUSTOM1: "http://project1-service:8000"
-    services__project1__custom1__0: "http://project1-service:8000"
+    services__project1__http__1: "http://project1-service:8000"
     PROJECT1_CUSTOM2: "http://project1-service:8001"
-    services__project1__custom2__0: "http://project1-service:8001"
+    services__project1__http__2: "http://project1-service:8001"
     PROJECT1_CUSTOM3: "http://project1-service:7002"
-    services__project1__custom3__0: "http://project1-service:7002"
+    services__project1__http__3: "http://project1-service:7002"
     PROJECT1_CUSTOM4: "http://project1-service:7004"
-    services__project1__custom4__0: "http://project1-service:7004"
+    services__project1__http__4: "http://project1-service:7004"

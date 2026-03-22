@@ -3,12 +3,12 @@
 
 using System.Threading.Channels;
 using Aspire.DashboardService.Proto.V1;
-using Aspire.Hosting.ConsoleLogs;
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Tests.Helpers;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Tests.Utils.Grpc;
 using Aspire.Hosting.Utils;
+using Aspire.Shared.ConsoleLogs;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
@@ -24,6 +24,7 @@ namespace Aspire.Hosting.Tests.Dashboard;
 
 #pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
+[Trait("Partition", "3")]
 public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]

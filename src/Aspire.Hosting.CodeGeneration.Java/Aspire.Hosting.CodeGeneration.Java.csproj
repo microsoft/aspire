@@ -23,7 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Aspire.Hosting\Aspire.Hosting.csproj" />
+    <ProjectReference Include="..\Aspire.TypeSystem\Aspire.TypeSystem.csproj" />
   </ItemGroup>
 
 </Project>

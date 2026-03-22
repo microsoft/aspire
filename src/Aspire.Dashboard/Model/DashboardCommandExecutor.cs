@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
@@ -17,7 +16,6 @@ public sealed class DashboardCommandExecutor(
     IDialogService dialogService,
     IToastService toastService,
     IStringLocalizer<Dashboard.Resources.Resources> loc,
-    IStringLocalizer<Commands> commandsLoc,
     NavigationManager navigationManager,
     DashboardTelemetryService telemetryService)
 {
@@ -107,7 +105,7 @@ public sealed class DashboardCommandExecutor(
         {
             Id = Guid.NewGuid().ToString(),
             Intent = ToastIntent.Progress,
-            Title = string.Format(CultureInfo.InvariantCulture, loc[nameof(Dashboard.Resources.Resources.ResourceCommandStarting)], messageResourceName, command.GetDisplayName(commandsLoc)),
+            Title = string.Format(CultureInfo.InvariantCulture, loc[nameof(Dashboard.Resources.Resources.ResourceCommandStarting)], messageResourceName, command.GetDisplayName()),
             Content = new CommunicationToastContent(),
             Timeout = 0 // App logic will handle closing the toast
         };
@@ -147,7 +145,7 @@ public sealed class DashboardCommandExecutor(
         // Update toast with the result;
         if (response.Kind == ResourceCommandResponseKind.Succeeded)
         {
-            toastParameters.Title = string.Format(CultureInfo.InvariantCulture, loc[nameof(Dashboard.Resources.Resources.ResourceCommandSuccess)], messageResourceName, command.GetDisplayName(commandsLoc));
+            toastParameters.Title = string.Format(CultureInfo.InvariantCulture, loc[nameof(Dashboard.Resources.Resources.ResourceCommandSuccess)], messageResourceName, command.GetDisplayName());
             toastParameters.Intent = ToastIntent.Success;
             toastParameters.Icon = GetIntentIcon(ToastIntent.Success);
         }
@@ -162,7 +160,7 @@ public sealed class DashboardCommandExecutor(
         }
         else
         {
-            toastParameters.Title = string.Format(CultureInfo.InvariantCulture, loc[nameof(Dashboard.Resources.Resources.ResourceCommandFailed)], messageResourceName, command.GetDisplayName(commandsLoc));
+            toastParameters.Title = string.Format(CultureInfo.InvariantCulture, loc[nameof(Dashboard.Resources.Resources.ResourceCommandFailed)], messageResourceName, command.GetDisplayName());
             toastParameters.Intent = ToastIntent.Error;
             toastParameters.Icon = GetIntentIcon(ToastIntent.Error);
             toastParameters.Content.Details = response.ErrorMessage;

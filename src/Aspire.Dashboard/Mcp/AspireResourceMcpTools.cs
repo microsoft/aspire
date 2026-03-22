@@ -3,10 +3,9 @@
 
 using System.ComponentModel;
 using Aspire.Dashboard.Configuration;
-using Aspire.Dashboard.ConsoleLogs;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Assistant;
-using Aspire.Hosting.ConsoleLogs;
+using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
@@ -72,7 +71,7 @@ internal sealed class AspireResourceMcpTools
     }
 
     [McpServerTool(Name = "list_console_logs")]
-    [Description("List console logs for a resource. The console logs includes standard output from resources and resource commands. Known resource commands are 'resource-start', 'resource-stop' and 'resource-restart' which are used to start and stop resources. Don't print the full console logs in the response to the user. Console logs should be examined when determining why a resource isn't running.")]
+    [Description("List console logs for a resource. The console logs includes standard output from resources and resource commands. Known resource commands are 'start', 'stop' and 'restart' which are used to start and stop resources. Don't print the full console logs in the response to the user. Console logs should be examined when determining why a resource isn't running.")]
     public async Task<string> ListConsoleLogsAsync(
         [Description("The resource name.")]
         string resourceName,
@@ -92,7 +91,7 @@ internal sealed class AspireResourceMcpTools
             return $"Unable to find a resource named '{resourceName}'.";
         }
 
-        var logParser = new LogParser(ConsoleColor.Black);
+        var logParser = new LogParser(ConsoleColor.Black, encodeForHtml: true);
         var logEntries = new LogEntries(maximumEntryCount: AIHelpers.ConsoleLogsLimit) { BaseLineNumber = 1 };
 
         // Add a timeout for getting all console logs.
@@ -116,14 +115,15 @@ internal sealed class AspireResourceMcpTools
 
         var entries = logEntries.GetEntries().ToList();
         var totalLogsCount = entries.Count == 0 ? 0 : entries.Last().LineNumber;
-        var (trimmedItems, limitMessage) = AIHelpers.GetLimitFromEndWithSummary<LogEntry>(
+        var (trimmedItems, limitMessage) = SharedAIHelpers.GetLimitFromEndWithSummary(
             entries,
             totalLogsCount,
             AIHelpers.ConsoleLogsLimit,
             "console log",
-            AIHelpers.SerializeLogEntry,
-            logEntry => AIHelpers.EstimateTokenCount((string)logEntry));
-        var consoleLogsText = AIHelpers.SerializeConsoleLogs(trimmedItems.Cast<string>().ToList());
+            "console logs",
+            SharedAIHelpers.SerializeLogEntry,
+            SharedAIHelpers.EstimateTokenCount);
+        var consoleLogsText = SharedAIHelpers.SerializeConsoleLogs(trimmedItems);
 
         var consoleLogsData = $"""
             {limitMessage}
@@ -167,9 +167,9 @@ internal sealed class AspireResourceMcpTools
 
         if (command.State == CommandViewModelState.Disabled)
         {
-            if (command.Name == "resource-restart" && resource.Commands.Any(c => c.Name == "resource-start" && c.State == CommandViewModelState.Enabled))
+            if (command.Name == CommandViewModel.RestartCommand && resource.Commands.Any(c => c.Name == CommandViewModel.StartCommand && c.State == CommandViewModelState.Enabled))
             {
-                throw new McpProtocolException($"Resource '{resourceName}' is stopped. Use the 'resource-start' command instead of 'resource-restart'.", McpErrorCode.InvalidParams);
+                throw new McpProtocolException($"Resource '{resourceName}' is stopped. Use the '{CommandViewModel.StartCommand}' command instead of '{CommandViewModel.RestartCommand}'.", McpErrorCode.InvalidParams);
             }
 
             throw new McpProtocolException($"Command '{commandName}' is currently disabled for resource '{resourceName}'.", McpErrorCode.InvalidParams);

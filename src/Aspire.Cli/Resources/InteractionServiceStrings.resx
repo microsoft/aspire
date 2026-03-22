@@ -122,7 +122,7 @@
     <comment>{0} is the original selection prompt text.</comment>
   </data>
   <data name="AppHostNotCompatibleConsiderUpgrading" xml:space="preserve">
-    <value>The AppHost version is not compatible. Please upgrade the apphost or Aspire CLI.</value>
+    <value>The apphost version is not compatible. Please upgrade the apphost or Aspire CLI.</value>
   </data>
   <data name="AspireHostingSDKVersion" xml:space="preserve">
     <value>Aspire.Hosting Version</value>
@@ -172,23 +172,27 @@
     <value>Created settings file at {0}.</value>
     <comment>{0} is a path</comment>
   </data>
+  <data name="UpdatedSettingsFile" xml:space="preserve">
+    <value>Updated settings file at {0}.</value>
+    <comment>{0} is a path</comment>
+  </data>
   <data name="ProjectOptionDoesntExist" xml:space="preserve">
-    <value>The --project option specified a project that does not exist.</value>
+    <value>The --apphost option specified a project that does not exist.</value>
   </data>
   <data name="ProjectOptionNotSpecifiedMultipleAppHostsFound" xml:space="preserve">
-    <value>The --project option was not specified and multiple app host project files were detected.</value>
+    <value>The --apphost option was not specified and multiple app host project files were detected.</value>
   </data>
   <data name="ProjectOptionNotSpecifiedNoCsprojFound" xml:space="preserve">
     <value>The project argument was not specified and no app host project files were detected.</value>
   </data>
   <data name="ProjectCouldNotBeBuilt" xml:space="preserve">
-    <value>The project could not be built. For more information run with --debug switch.</value>
+    <value>The project could not be built. See logs at {0}</value>
   </data>
   <data name="OperationCancelled" xml:space="preserve">
     <value>The operation was canceled.</value>
   </data>
   <data name="SpecifiedProjectFileNotAppHostProject" xml:space="preserve">
-    <value>The specified project file is not an Aspire AppHost project.</value>
+    <value>The specified project file is not an Aspire apphost project.</value>
   </data>
   <data name="ErrorConnectingToAppHost" xml:space="preserve">
     <value>An error occurred while connecting to the app host. The app host possibly crashed before it was available: {0}.</value>
@@ -200,11 +204,15 @@
     <value>An unexpected error occurred: {0}</value>
     <comment>{0} is the exception message</comment>
   </data>
+  <data name="SeeLogsAt" xml:space="preserve">
+    <value>See logs at {0}</value>
+    <comment>{0} is the log file path</comment>
+  </data>
   <data name="WaitingForDebuggerToAttachToAppHost" xml:space="preserve">
     <value>Waiting for debugger to attach to app host process</value>
   </data>
   <data name="NewCliVersionAvailable" xml:space="preserve">
-    <value>[yellow]A new version of the Aspire CLI is available: {0}[/]</value>
+    <value>[yellow]A new version of Aspire is available: {0}[/]</value>
     <comment>Do not translate [yellow] and also leave [/] as-is. {0} is the version number</comment>
   </data>
   <data name="MoreInfoNewCliVersion" xml:space="preserve">

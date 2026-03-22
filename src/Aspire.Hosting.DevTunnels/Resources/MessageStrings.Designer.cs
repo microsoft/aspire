@@ -151,15 +151,6 @@ namespace Aspire.Hosting.DevTunnels.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Installation instructions.
-        /// </summary>
-        internal static string InstallationInstructions {
-            get {
-                return ResourceManager.GetString("InstallationInstructions", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Login with GitHub.
         /// </summary>
         internal static string LoginWithGitHub {
@@ -174,33 +165,6 @@ namespace Aspire.Hosting.DevTunnels.Resources {
         internal static string LoginWithMicrosoft {
             get {
                 return ResourceManager.GetString("LoginWithMicrosoft", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Required command &apos;{0}&apos; was not found on PATH or at a specified location..
-        /// </summary>
-        internal static string RequiredCommandNotification {
-            get {
-                return ResourceManager.GetString("RequiredCommandNotification", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Required command &apos;{0}&apos; was not found. See installation instructions for more details..
-        /// </summary>
-        internal static string RequiredCommandNotificationWithLink {
-            get {
-                return ResourceManager.GetString("RequiredCommandNotificationWithLink", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to {0} See installation instructions for more details..
-        /// </summary>
-        internal static string RequiredCommandNotificationWithValidation {
-            get {
-                return ResourceManager.GetString("RequiredCommandNotificationWithValidation", resourceCulture);
             }
         }
     }

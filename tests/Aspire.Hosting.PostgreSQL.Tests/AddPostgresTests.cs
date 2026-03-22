@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net.Sockets;
+using System.Reflection;
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Postgres;
@@ -183,6 +184,29 @@ public class AddPostgresTests
 
         Assert.Equal("{postgres.connectionString};Database=db", postgresDatabaseResource.ConnectionStringExpression.ValueExpression);
         Assert.Equal(postgresConnectionString + ";Database=db", dbConnectionString);
+    }
+
+    [Fact]
+    public async Task WithReferenceDispatchesPostgresDatabaseReference()
+    {
+        using var appBuilder = TestDistributedApplicationBuilder.Create();
+
+        var postgres = appBuilder.AddPostgres("postgres")
+            .WithEndpoint("tcp", e =>
+            {
+                e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 2000);
+                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "postgres.dev.internal", 2000, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+            });
+        var database = postgres.AddDatabase("db");
+        var consumer = appBuilder.AddContainer("consumer", "fake");
+
+        InvokeWithReference(consumer, database);
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(consumer.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+
+#pragma warning disable CS0618 // Type or member is obsolete
+        Assert.Equal($"Host=postgres.dev.internal;Port=2000;Username=postgres;Password={postgres.Resource.PasswordParameter.Value};Database=db", config["ConnectionStrings__db"]);
+#pragma warning restore CS0618 // Type or member is obsolete
     }
 
     [Fact]
@@ -705,5 +729,190 @@ public class AddPostgresTests
             Assert.True(config2.ContainsKey(kvp.Key), $"Key {kvp.Key} should exist in second call");
             Assert.Equal(kvp.Value, config2[kvp.Key]);
         });
+    }
+
+    private static readonly MethodInfo s_polyglotWithReferenceMethod = typeof(ResourceBuilderExtensions)
+        .GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
+        .Single(m => m.Name == nameof(ResourceBuilderExtensions.WithReference)
+            && m.IsGenericMethodDefinition
+            && m.GetParameters() is { Length: 5 } parameters
+            && parameters[1].ParameterType == typeof(IResourceBuilder<IResource>));
+
+    private static IResourceBuilder<TDestination> InvokeWithReference<TDestination>(
+        IResourceBuilder<TDestination> builder,
+        IResourceBuilder<IResource> source,
+        string? connectionName = null,
+        bool optional = false,
+        string? name = null)
+        where TDestination : IResourceWithEnvironment
+    {
+        return (IResourceBuilder<TDestination>)s_polyglotWithReferenceMethod
+            .MakeGenericMethod(typeof(TDestination))
+            .Invoke(null, [builder, source, connectionName, optional, name])!;
+    }
+
+    [Theory]
+    [InlineData("17.6", 17)]
+    [InlineData("18.1", 18)]
+    [InlineData("18", 18)]
+    [InlineData("18-alpine", 18)]
+    [InlineData("17.6-bookworm", 17)]
+    [InlineData("16.0", 16)]
+    [InlineData("9.6", 9)]
+    public void TryParsePostgresMajorVersionReturnsTrueForValidTags(string tag, int expectedMajorVersion)
+    {
+        var result = PostgresBuilderExtensions.TryParsePostgresMajorVersion(tag, out var majorVersion);
+
+        Assert.True(result);
+        Assert.Equal(expectedMajorVersion, majorVersion);
+    }
+
+    [Theory]
+    [InlineData("latest")]
+    [InlineData("alpine")]
+    [InlineData("")]
+    [InlineData("  ")]
+    [InlineData("abc")]
+    public void TryParsePostgresMajorVersionReturnsFalseForInvalidTags(string tag)
+    {
+        var result = PostgresBuilderExtensions.TryParsePostgresMajorVersion(tag, out var majorVersion);
+
+        Assert.False(result);
+        Assert.Equal(0, majorVersion);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void WithDataVolumeUsesLegacyPathForPostgres17(bool? isReadOnly)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var postgres = builder.AddPostgres("myPostgres");
+
+        // Default image is v17.x, so should use legacy path
+        if (isReadOnly.HasValue)
+        {
+            postgres.WithDataVolume(isReadOnly: isReadOnly.Value);
+        }
+        else
+        {
+            postgres.WithDataVolume();
+        }
+
+        var volumeAnnotation = postgres.Resource.Annotations.OfType<ContainerMountAnnotation>().Single();
+
+        Assert.Equal($"{builder.GetVolumePrefix()}-myPostgres-data", volumeAnnotation.Source);
+        Assert.Equal("/var/lib/postgresql/data", volumeAnnotation.Target);
+        Assert.Equal(ContainerMountType.Volume, volumeAnnotation.Type);
+        Assert.Equal(isReadOnly ?? false, volumeAnnotation.IsReadOnly);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void WithDataVolumeUsesNewPathForPostgres18(bool? isReadOnly)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var postgres = builder.AddPostgres("myPostgres")
+            .WithImage("postgres", "18.1");
+
+        if (isReadOnly.HasValue)
+        {
+            postgres.WithDataVolume(isReadOnly: isReadOnly.Value);
+        }
+        else
+        {
+            postgres.WithDataVolume();
+        }
+
+        var volumeAnnotation = postgres.Resource.Annotations.OfType<ContainerMountAnnotation>().Single();
+
+        Assert.Equal($"{builder.GetVolumePrefix()}-myPostgres-data", volumeAnnotation.Source);
+        Assert.Equal("/var/lib/postgresql", volumeAnnotation.Target);
+        Assert.Equal(ContainerMountType.Volume, volumeAnnotation.Type);
+        Assert.Equal(isReadOnly ?? false, volumeAnnotation.IsReadOnly);
+    }
+
+    [Fact]
+    public void WithDataVolumeUsesNewPathForPostgres18Alpine()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var postgres = builder.AddPostgres("myPostgres")
+            .WithImage("postgres", "18-alpine")
+            .WithDataVolume();
+
+        var volumeAnnotation = postgres.Resource.Annotations.OfType<ContainerMountAnnotation>().Single();
+
+        Assert.Equal("/var/lib/postgresql", volumeAnnotation.Target);
+    }
+
+    [Fact]
+    public void WithDataVolumeUsesLegacyPathForUnparsableTag()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var postgres = builder.AddPostgres("myPostgres")
+            .WithImage("postgres", "latest")
+            .WithDataVolume();
+
+        var volumeAnnotation = postgres.Resource.Annotations.OfType<ContainerMountAnnotation>().Single();
+
+        // When tag can't be parsed, fall back to legacy path for safety
+        Assert.Equal("/var/lib/postgresql/data", volumeAnnotation.Target);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void WithDataBindMountUsesLegacyPathForPostgres17(bool? isReadOnly)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var postgres = builder.AddPostgres("myPostgres");
+
+        // Default image is v17.x, so should use legacy path
+        if (isReadOnly.HasValue)
+        {
+            postgres.WithDataBindMount("mydata", isReadOnly: isReadOnly.Value);
+        }
+        else
+        {
+            postgres.WithDataBindMount("mydata");
+        }
+
+        var volumeAnnotation = postgres.Resource.Annotations.OfType<ContainerMountAnnotation>().Single();
+
+        Assert.Equal(Path.Combine(builder.AppHostDirectory, "mydata"), volumeAnnotation.Source);
+        Assert.Equal("/var/lib/postgresql/data", volumeAnnotation.Target);
+        Assert.Equal(ContainerMountType.BindMount, volumeAnnotation.Type);
+        Assert.Equal(isReadOnly ?? false, volumeAnnotation.IsReadOnly);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void WithDataBindMountUsesNewPathForPostgres18(bool? isReadOnly)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var postgres = builder.AddPostgres("myPostgres")
+            .WithImage("postgres", "18.1");
+
+        if (isReadOnly.HasValue)
+        {
+            postgres.WithDataBindMount("mydata", isReadOnly: isReadOnly.Value);
+        }
+        else
+        {
+            postgres.WithDataBindMount("mydata");
+        }
+
+        var volumeAnnotation = postgres.Resource.Annotations.OfType<ContainerMountAnnotation>().Single();
+
+        Assert.Equal(Path.Combine(builder.AppHostDirectory, "mydata"), volumeAnnotation.Source);
+        Assert.Equal("/var/lib/postgresql", volumeAnnotation.Target);
+        Assert.Equal(ContainerMountType.BindMount, volumeAnnotation.Type);
+        Assert.Equal(isReadOnly ?? false, volumeAnnotation.IsReadOnly);
     }
 }

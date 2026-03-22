@@ -63,12 +63,16 @@ public sealed class PostConfigureDashboardOptions : IPostConfigureOptions<Dashbo
             options.Frontend.AuthMode = FrontendAuthMode.Unsecured;
             options.Otlp.AuthMode = OtlpAuthMode.Unsecured;
             options.Mcp.AuthMode = McpAuthMode.Unsecured;
+            options.Api.AuthMode = ApiAuthMode.Unsecured;
         }
         else
         {
             options.Frontend.AuthMode ??= FrontendAuthMode.BrowserToken;
             options.Otlp.AuthMode ??= OtlpAuthMode.Unsecured;
-            options.Mcp.AuthMode ??= McpAuthMode.Unsecured;
+
+            // If an API key is configured, default to ApiKey auth mode instead of Unsecured.
+            options.Mcp.AuthMode ??= string.IsNullOrEmpty(options.Mcp.PrimaryApiKey) ? McpAuthMode.Unsecured : McpAuthMode.ApiKey;
+            options.Api.AuthMode ??= string.IsNullOrEmpty(options.Api.PrimaryApiKey) ? ApiAuthMode.Unsecured : ApiAuthMode.ApiKey;
         }
 
         if (options.Frontend.AuthMode == FrontendAuthMode.BrowserToken && string.IsNullOrEmpty(options.Frontend.BrowserToken))
@@ -82,6 +86,21 @@ public sealed class PostConfigureDashboardOptions : IPostConfigureOptions<Dashbo
         }
 
         options.AI.Disabled = _configuration.GetBool(DashboardConfigNames.DashboardAIDisabledName.ConfigKey);
+
+        options.Api.Enabled ??= _configuration.GetBool(DashboardConfigNames.DashboardAspireApiEnabledName.ConfigKey);
+
+        // Normalize API keys: Api is canonical, falls back to Mcp if not set.
+        // Api -> Mcp fallback only (not bidirectional).
+        if (string.IsNullOrEmpty(options.Mcp.PrimaryApiKey) && !string.IsNullOrEmpty(options.Api.PrimaryApiKey))
+        {
+            _logger.LogDebug("Defaulting Mcp.PrimaryApiKey from Api.PrimaryApiKey.");
+            options.Mcp.PrimaryApiKey = options.Api.PrimaryApiKey;
+        }
+
+        if (string.IsNullOrEmpty(options.Mcp.SecondaryApiKey) && !string.IsNullOrEmpty(options.Api.SecondaryApiKey))
+        {
+            options.Mcp.SecondaryApiKey = options.Api.SecondaryApiKey;
+        }
 
         if (_configuration.GetBool(DashboardConfigNames.Legacy.DashboardOtlpSuppressUnsecuredTelemetryMessageName.ConfigKey) is { } suppressUnsecuredTelemetryMessage)
         {

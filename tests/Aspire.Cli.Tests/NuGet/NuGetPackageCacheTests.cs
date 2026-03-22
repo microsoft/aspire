@@ -6,6 +6,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
+using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.NuGet;
 
@@ -36,7 +37,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
         var provider = services.BuildServiceProvider();
 
         var nuGetPackageCache = provider.GetRequiredService<INuGetPackageCache>();
-        var packages = await nuGetPackageCache.GetCliPackagesAsync(workspace.WorkspaceRoot, prerelease: true, nugetConfigFile: null, CancellationToken.None).WaitAsync(CliTestConstants.DefaultTimeout);
+        var packages = await nuGetPackageCache.GetCliPackagesAsync(workspace.WorkspaceRoot, prerelease: true, nugetConfigFile: null, CancellationToken.None).DefaultTimeout();
 
         Assert.Collection(
             packages,
@@ -70,7 +71,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
         var provider = services.BuildServiceProvider();
 
         var nuGetPackageCache = provider.GetRequiredService<INuGetPackageCache>();
-        var packages = await nuGetPackageCache.GetPackagesAsync(workspace.WorkspaceRoot, "Aspire.Hosting", null, prerelease: false, nugetConfigFile: null, useCache: true, CancellationToken.None).WaitAsync(CliTestConstants.DefaultTimeout);
+        var packages = await nuGetPackageCache.GetPackagesAsync(workspace.WorkspaceRoot, "Aspire.Hosting", null, prerelease: false, nugetConfigFile: null, useCache: true, CancellationToken.None).DefaultTimeout();
 
         // Should include regular packages but exclude deprecated Dapr package
         var packageIds = packages.Select(p => p.Id).ToList();
@@ -108,7 +109,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
         var provider = services.BuildServiceProvider();
 
         var nuGetPackageCache = provider.GetRequiredService<INuGetPackageCache>();
-        var packages = await nuGetPackageCache.GetPackagesAsync(workspace.WorkspaceRoot, "Aspire.Hosting", null, prerelease: false, nugetConfigFile: null, useCache: true, CancellationToken.None).WaitAsync(CliTestConstants.DefaultTimeout);
+        var packages = await nuGetPackageCache.GetPackagesAsync(workspace.WorkspaceRoot, "Aspire.Hosting", null, prerelease: false, nugetConfigFile: null, useCache: true, CancellationToken.None).DefaultTimeout();
 
         // Should include all packages including deprecated Dapr package when showing deprecated is enabled
         var packageIds = packages.Select(p => p.Id).ToList();
@@ -152,7 +153,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
             prerelease: false, 
             nugetConfigFile: null, 
             useCache: true,
-            CancellationToken.None).WaitAsync(CliTestConstants.DefaultTimeout);
+            CancellationToken.None).DefaultTimeout();
 
         // Custom filter should bypass deprecated package filtering
         var packageIds = packages.Select(p => p.Id).ToList();
@@ -187,7 +188,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
         var provider = services.BuildServiceProvider();
 
         var nuGetPackageCache = provider.GetRequiredService<INuGetPackageCache>();
-        var packages = await nuGetPackageCache.GetPackagesAsync(workspace.WorkspaceRoot, "Aspire.Hosting", null, prerelease: false, nugetConfigFile: null, useCache: true, CancellationToken.None).WaitAsync(CliTestConstants.DefaultTimeout);
+        var packages = await nuGetPackageCache.GetPackagesAsync(workspace.WorkspaceRoot, "Aspire.Hosting", null, prerelease: false, nugetConfigFile: null, useCache: true, CancellationToken.None).DefaultTimeout();
 
         // Should filter out all case variations of deprecated package
         var packageIds = packages.Select(p => p.Id).ToList();

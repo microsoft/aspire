@@ -20,6 +20,7 @@ public static class AzureApplicationInsightsExtensions
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureApplicationInsightsResource}"/>.</returns>
+    [AspireExport("addAzureApplicationInsights", Description = "Adds an Azure Application Insights resource")]
     public static IResourceBuilder<AzureApplicationInsightsResource> AddAzureApplicationInsights(this IDistributedApplicationBuilder builder, [ResourceName] string name)
         => AddAzureApplicationInsights(builder, name, logAnalyticsWorkspace: null);
 
@@ -30,6 +31,8 @@ public static class AzureApplicationInsightsExtensions
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <param name="logAnalyticsWorkspace">A resource builder for the log analytics workspace.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureApplicationInsightsResource}"/>.</returns>
+    /// <remarks>This overload is not available in polyglot app hosts. Use <see cref="AddAzureApplicationInsights(IDistributedApplicationBuilder, string)"/> and <see cref="WithLogAnalyticsWorkspace(IResourceBuilder{AzureApplicationInsightsResource}, IResourceBuilder{AzureLogAnalyticsWorkspaceResource})"/> instead.</remarks>
+    [AspireExportIgnore(Reason = "logAnalyticsWorkspace parameter cannot be made optional in ATS. Use the single-parameter overload with WithLogAnalyticsWorkspace instead.")]
     public static IResourceBuilder<AzureApplicationInsightsResource> AddAzureApplicationInsights(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -103,6 +106,9 @@ public static class AzureApplicationInsightsExtensions
 
             // Add name output for the resource to externalize role assignments
             infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = appInsights.Name.ToBicepExpression() });
+
+            // Add id output for the resource for AI Foundry connections
+            infrastructure.Add(new ProvisioningOutput("id", typeof(string)) { Value = appInsights.Id.ToBicepExpression() });
         };
 
         var resource = new AzureApplicationInsightsResource(name, configureInfrastructure);
@@ -124,6 +130,8 @@ public static class AzureApplicationInsightsExtensions
     /// <param name="builder">The resource builder for <see cref="AzureApplicationInsightsResource"/>.</param>
     /// <param name="workspaceId">The <see cref="BicepOutputReference"/> for the Log Analytics Workspace resource id.</param>
     /// <returns>The <see cref="IResourceBuilder{AzureApplicationInsightsResource}"/> for chaining.</returns>
+    /// <remarks>This overload is not available in polyglot app hosts. Use the overload that accepts an <see cref="IResourceBuilder{AzureLogAnalyticsWorkspaceResource}"/> instead.</remarks>
+    [AspireExportIgnore(Reason = "BicepOutputReference is not ATS-compatible. Use the IResourceBuilder<AzureLogAnalyticsWorkspaceResource> overload instead.")]
     public static IResourceBuilder<AzureApplicationInsightsResource> WithLogAnalyticsWorkspace(
         this IResourceBuilder<AzureApplicationInsightsResource> builder,
         BicepOutputReference workspaceId)
@@ -137,6 +145,7 @@ public static class AzureApplicationInsightsExtensions
     /// <param name="builder">The resource builder for <see cref="AzureApplicationInsightsResource"/>.</param>
     /// <param name="logAnalyticsWorkspace">The resource builder for the <see cref="AzureLogAnalyticsWorkspaceResource"/>.</param>
     /// <returns>The <see cref="IResourceBuilder{AzureApplicationInsightsResource}"/> for chaining.</returns>
+    [AspireExport("withLogAnalyticsWorkspace", Description = "Configures the Application Insights resource to use a Log Analytics Workspace")]
     public static IResourceBuilder<AzureApplicationInsightsResource> WithLogAnalyticsWorkspace(
         this IResourceBuilder<AzureApplicationInsightsResource> builder,
         IResourceBuilder<AzureLogAnalyticsWorkspaceResource> logAnalyticsWorkspace)

@@ -10,4 +10,5 @@ namespace Aspire.Dashboard.Model;
 /// <param name="Description">The description/title for the dialog.</param>
 /// <param name="ContainsSecret">Whether the text contains sensitive data.</param>
 /// <param name="DownloadFileName">Optional file name for downloading the content. If null, download is disabled.</param>
-public record TextVisualizerDialogViewModel(string Text, string Description, bool ContainsSecret, string? DownloadFileName = null);
+/// <param name="FixedFormat">If set, the dialog will use this format and hide the format dropdown.</param>
+public record TextVisualizerDialogViewModel(string Text, string Description, bool ContainsSecret, string? DownloadFileName = null, string? FixedFormat = null);

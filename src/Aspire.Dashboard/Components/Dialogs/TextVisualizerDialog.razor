@@ -12,19 +12,22 @@
             @Content.Description
         </FluentLabel>
 
-        <div Style="grid-area: dialog-format;">
-            <FluentMenuButton id="@_openSelectFormatButtonId"
-                              ButtonAppearance="Appearance.Stealth"
-                              IconEnd="@(new Icons.Regular.Size24.SlideTextEdit())"
-                              Text="@(_selectedFormat ?? Loc[nameof(Dialogs.TextVisualizerSelectFormatType)])"
-                              aria-label="@Loc[nameof(Dialogs.TextVisualizerSelectFormatType)]"
-                              OnMenuChanged="@OnFormatOptionChanged">
-                @foreach (var option in _options)
-                {
-                    <FluentMenuItem Class="overflow-fluent-menu-item" Id="@option.Id" Disabled="@(!EnabledOptions.Contains(option.Id))" Value="@option.Id" title="@option.Name">@option.Name</FluentMenuItem>
-                }
-            </FluentMenuButton>
-        </div>
+        @if (!HasFixedFormat)
+        {
+            <div Style="grid-area: dialog-format;">
+                <FluentMenuButton id="@_openSelectFormatButtonId"
+                                  ButtonAppearance="Appearance.Stealth"
+                                  IconEnd="@(new Icons.Regular.Size24.SlideTextEdit())"
+                                  Text="@(_selectedFormat ?? Loc[nameof(Dialogs.TextVisualizerSelectFormatType)])"
+                                  aria-label="@Loc[nameof(Dialogs.TextVisualizerSelectFormatType)]"
+                                  OnMenuChanged="@OnFormatOptionChanged">
+                    @foreach (var option in _options)
+                    {
+                        <FluentMenuItem Class="overflow-fluent-menu-item" Id="@option.Id" Disabled="@(!EnabledOptions.Contains(option.Id))" Value="@option.Id" title="@option.Name">@option.Name</FluentMenuItem>
+                    }
+                </FluentMenuButton>
+            </div>
+        }
     </div>
 </FluentDialogHeader>
 

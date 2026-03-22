@@ -433,6 +433,20 @@ app.MapGet("/genai-trace", async () =>
     if (activity != null)
     {
         activity.SetTag("gen_ai.system", "gpt");
+        activity.SetTag("gen_ai.operation.name", "chat");
+        activity.SetTag("gen_ai.provider.name", "openai");
+        activity.SetTag("gen_ai.response.model", "gpt-4o");
+        activity.SetTag("gen_ai.usage.input_tokens", 350);
+        activity.SetTag("gen_ai.usage.output_tokens", 120);
+        activity.SetTag("gen_ai.response.id", "chatcmpl-test-12345");
+        activity.SetTag("gen_ai.system_instructions", """
+            [
+              {
+                "type": "text",
+                "content": "You are a helpful assistant that provides accurate and concise information. Always respond in a friendly and professional tone."
+              }
+            ]
+            """);
         activity.SetTag("gen_ai.input.messages", """
             [
               {
@@ -490,6 +504,16 @@ app.MapGet("/genai-trace", async () =>
                   {
                     "type": "text",
                     "content": "Assistant content"
+                  },
+                  {
+                    "type": "tool_call",
+                    "name": "get_weather",
+                    "id": "call_abc123",
+                    "arguments": "{\"location\": \"東京\", \"unit\": \"celsius\"}"
+                  },
+                  {
+                    "type": "reasoning",
+                    "content": "The user is asking about something that requires weather data. I should call the get_weather tool to retrieve current conditions for Tokyo before formulating my response."
                   }
                 ]
               },
@@ -498,7 +522,30 @@ app.MapGet("/genai-trace", async () =>
                 "parts": [
                   {
                     "type": "tool_call_response",
-                    "response": "- First\r\n- Second"
+                    "id": "call_abc123",
+                    "response": "- First (最初)\r\n- Second (二番目)\r\n- 天気予報: 東京は晴れ、気温25度です。"
+                  }
+                ]
+              },
+              {
+                "role": "assistant",
+                "parts": [
+                  {
+                    "type": "refusal",
+                    "content": "I'm sorry, but I cannot provide medical advice. Please consult a licensed healthcare professional for medical concerns."
+                  }
+                ]
+              },
+              {
+                "role": "user",
+                "parts": [
+                  {
+                    "type": "custom_sensor_data",
+                    "sensor_id": "temp-sensor-42",
+                    "readings": [22.5, 23.1, 22.8],
+                    "unit": "celsius",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                    "payload": {"description": "温度センサーからのリアルタイム測定データ"}
                   }
                 ]
               },
@@ -518,8 +565,62 @@ app.MapGet("/genai-trace", async () =>
             ]
             """);
 
+        activity.SetTag("gen_ai.output.messages", """
+            [
+              {
+                "role": "assistant",
+                "finish_reason": "stop",
+                "parts": [
+                  {
+                    "type": "reasoning",
+                    "content": "The user asked about the weather in Tokyo. I used the get_weather tool and received the current conditions. I'll summarize the results in a friendly response."
+                  },
+                  {
+                    "type": "text",
+                    "content": "The weather in Tokyo is currently sunny with a temperature of 25°C. It's a beautiful day!"
+                  },
+                  {
+                    "type": "tool_call",
+                    "name": "get_weather",
+                    "id": "call_def456",
+                    "arguments": "{\"location\": \"Osaka\", \"unit\": \"celsius\"}"
+                  },
+                  {
+                    "type": "refusal",
+                    "content": "I cannot provide a long-term climate forecast as that requires specialized meteorological models beyond my capabilities."
+                  },
+                  {
+                    "type": "custom_analysis_result",
+                    "confidence": 0.95,
+                    "category": "weather_inquiry",
+                    "metadata": {"processed": true, "version": "2.1"}
+                  }
+                ]
+              }
+            ]
+            """);
+
         activity.SetTag("gen_ai.tool.definitions", """
             [
+              { "type": "function", "name": "analyze_sentiment" },
+              { "type": "function", "name": "calculate_distance" },
+              { "type": "function", "name": "compress_image" },
+              { "type": "function", "name": "convert_currency" },
+              { "type": "function", "name": "create_thumbnail" },
+              { "type": "function", "name": "detect_language" },
+              { "type": "function", "name": "encrypt_data" },
+              { "type": "function", "name": "extract_keywords" },
+              { "type": "function", "name": "format_date" },
+              { "type": "function", "name": "generate_hash" },
+              { "type": "function", "name": "evaluate_expression" },
+              { "type": "function", "name": "fetch_resource" },
+              { "type": "function", "name": "filter_records" },
+              { "type": "function", "name": "flatten_json" },
+              { "type": "function", "name": "gauge_performance" },
+              { "type": "function", "name": "generate_report" },
+              { "type": "function", "name": "geocode_address" },
+              { "type": "function", "name": "get_diagnostics" },
+              { "type": "function", "name": "get_schema" },
               {
                 "type": "function",
                 "name": "get_weather",

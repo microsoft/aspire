@@ -104,5 +104,77 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("DcpVersionCheckTooLowMessage", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Installation instructions.
+        /// </summary>
+        internal static string InstallationInstructions {
+            get {
+                return ResourceManager.GetString("InstallationInstructions", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Missing command.
+        /// </summary>
+        internal static string MissingCommandNotificationTitle {
+            get {
+                return ResourceManager.GetString("MissingCommandNotificationTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Required command &apos;{0}&apos; was not found on PATH or at the specified location..
+        /// </summary>
+        internal static string RequiredCommandNotFound {
+            get {
+                return ResourceManager.GetString("RequiredCommandNotFound", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Required command &apos;{0}&apos; was not found on PATH or at the specified location. For installation instructions, see: {1}.
+        /// </summary>
+        internal static string RequiredCommandNotFoundWithLink {
+            get {
+                return ResourceManager.GetString("RequiredCommandNotFoundWithLink", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Command &apos;{0}&apos; validation failed: {1}.
+        /// </summary>
+        internal static string RequiredCommandValidationFailed {
+            get {
+                return ResourceManager.GetString("RequiredCommandValidationFailed", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Command &apos;{0}&apos; validation failed: {1}. For installation instructions, see: {2}.
+        /// </summary>
+        internal static string RequiredCommandValidationFailedWithLink {
+            get {
+                return ResourceManager.GetString("RequiredCommandValidationFailedWithLink", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Resource &apos;{0}&apos; has a persistent lifetime but the AppHost project does not have user secrets configured. Generated parameter values (such as passwords) may change on each restart, causing persistent containers to be recreated. Run &apos;aspire secret set&apos; to initialize user secrets..
+        /// </summary>
+        internal static string PersistentContainerWithoutUserSecrets {
+            get {
+                return ResourceManager.GetString("PersistentContainerWithoutUserSecrets", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Resource &apos;{0}&apos; may fail to start: {1}.
+        /// </summary>
+        internal static string ResourceMayFailToStart {
+            get {
+                return ResourceManager.GetString("ResourceMayFailToStart", resourceCulture);
+            }
+        }
     }
 }

@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 
 internal static class InteractionCommands
 {
+    [AspireExportIgnore(Reason = "Uses interaction service callbacks and command handlers that are not ATS-compatible.")]
     public static IResourceBuilder<T> AddInteractionCommands<T>(this IResourceBuilder<T> resource) where T : IResource
     {
         resource

@@ -63,7 +63,8 @@
                                                 ThreeState="true"
                                                 ShowIndeterminate="false"
                                                 ThreeStateOrderUncheckToIntermediate="true"
-                                                @bind-CheckState="context.AreAllValuesSelected"/>
+                                                @bind-CheckState:get="context.AreAllValuesSelected"
+                                                @bind-CheckState:set="@(v => OnAllValuesSelectionChangedAsync(context, v))"/>
                                 @foreach (var tag in context.Values.OrderBy(v => v.Text))
                                 {
                                     var isChecked = context.SelectedValues.Contains(tag);
@@ -71,7 +72,7 @@
                                                     title="@tag.Text"
                                                     @key=tag
                                                     @bind-Value:get="isChecked"
-                                                    @bind-Value:set="c => context.OnTagSelectionChanged(tag, c)"/>
+                                                    @bind-Value:set="c => OnTagSelectionChangedAsync(context, tag, c)"/>
                                 }
                             </FluentStack>
                             </Body>

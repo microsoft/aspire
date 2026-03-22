@@ -250,6 +250,15 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Unexpected or truncated message content..
+        /// </summary>
+        public static string GenAIUnexpectedOrTruncatedContent {
+            get {
+                return ResourceManager.GetString("GenAIUnexpectedOrTruncatedContent", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Duration.
         /// </summary>
         public static string GenAIDurationLabel {
@@ -300,6 +309,15 @@ namespace Aspire.Dashboard.Resources {
         public static string GenAIInputTokensText {
             get {
                 return ResourceManager.GetString("GenAIInputTokensText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to LLM.
+        /// </summary>
+        public static string GenAILLMBadgeText {
+            get {
+                return ResourceManager.GetString("GenAILLMBadgeText", resourceCulture);
             }
         }
         
@@ -498,6 +516,24 @@ namespace Aspire.Dashboard.Resources {
         public static string GenAITokensLabel {
             get {
                 return ResourceManager.GetString("GenAITokensLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Tool call.
+        /// </summary>
+        public static string GenAIToolCallButtonText {
+            get {
+                return ResourceManager.GetString("GenAIToolCallButtonText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Tool definition.
+        /// </summary>
+        public static string GenAIToolDefinitionButtonText {
+            get {
+                return ResourceManager.GetString("GenAIToolDefinitionButtonText", resourceCulture);
             }
         }
         
@@ -1317,6 +1353,42 @@ namespace Aspire.Dashboard.Resources {
         public static string TextVisualizerSelectFormatType {
             get {
                 return ResourceManager.GetString("TextVisualizerSelectFormatType", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Time format.
+        /// </summary>
+        public static string SettingsDialogTimeFormat {
+            get {
+                return ResourceManager.GetString("SettingsDialogTimeFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to System.
+        /// </summary>
+        public static string SettingsDialogTimeFormatSystem {
+            get {
+                return ResourceManager.GetString("SettingsDialogTimeFormatSystem", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 12-hour.
+        /// </summary>
+        public static string SettingsDialogTimeFormatTwelveHour {
+            get {
+                return ResourceManager.GetString("SettingsDialogTimeFormatTwelveHour", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 24-hour.
+        /// </summary>
+        public static string SettingsDialogTimeFormatTwentyFourHour {
+            get {
+                return ResourceManager.GetString("SettingsDialogTimeFormatTwentyFourHour", resourceCulture);
             }
         }
     }

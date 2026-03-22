@@ -100,7 +100,7 @@ internal sealed class DockerComposePublishingContext(
                     File.Copy(dockerfileBuildAnnotation.DockerfilePath, resourceDockerfilePath, overwrite: true);
                 }
 
-                var composeService = serviceResource.BuildComposeService();
+                var composeService = await serviceResource.BuildComposeServiceAsync().ConfigureAwait(false);
 
                 HandleComposeFileVolumes(serviceResource, composeFile);
 

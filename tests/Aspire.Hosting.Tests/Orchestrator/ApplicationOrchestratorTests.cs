@@ -22,6 +22,7 @@ using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Tests.Orchestrator;
 
+[Trait("Partition", "3")]
 public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]

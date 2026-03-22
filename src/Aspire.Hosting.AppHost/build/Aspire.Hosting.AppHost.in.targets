@@ -190,8 +190,6 @@ namespace Projects%3B
       <DcpDir>$([MSBuild]::EnsureTrailingSlash('$(DcpDir)'))</DcpDir>
       <DcpExtensionsDir Condition=" '$(DcpExtensionsDir)' == '' ">$([MSBuild]::NormalizePath($(DcpDir), 'ext'))</DcpExtensionsDir>
       <DcpExtensionsDir>$([MSBuild]::EnsureTrailingSlash('$(DcpExtensionsDir)'))</DcpExtensionsDir>
-      <DcpBinDir Condition=" '$(DcpBinDir)' == '' ">$([MSBuild]::NormalizePath($(DcpExtensionsDir), 'bin'))</DcpBinDir>
-      <DcpBinDir>$([MSBuild]::EnsureTrailingSlash('$(DcpBinDir)'))</DcpBinDir>
       <DcpCliPath Condition=" '$(DcpCliPath)'  == '' ">$([MSBuild]::NormalizePath($(DcpDir), 'dcp'))</DcpCliPath>
       <DcpCliPath Condition=" '$(OS)' == 'Windows_NT' and !$(DcpCliPath.EndsWith('.exe')) ">$(DcpCliPath).exe</DcpCliPath>
     </PropertyGroup>
@@ -204,10 +202,6 @@ namespace Projects%3B
       <AssemblyAttribute Include="System.Reflection.AssemblyMetadata">
         <_Parameter1>dcpextensionpaths</_Parameter1>
         <_Parameter2>$(DcpExtensionsDir)</_Parameter2>
-      </AssemblyAttribute>
-      <AssemblyAttribute Include="System.Reflection.AssemblyMetadata">
-        <_Parameter1>dcpbinpath</_Parameter1>
-        <_Parameter2>$(DcpBinDir)</_Parameter2>
       </AssemblyAttribute>
       <AssemblyAttribute Include="System.Reflection.AssemblyMetadata">
         <_Parameter1>apphostprojectpath</_Parameter1>

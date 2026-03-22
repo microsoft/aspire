@@ -14,6 +14,34 @@
     ]
   },
   {
+    CapabilityId: Aspire.Hosting/excludeFromManifest,
+    MethodName: excludeFromManifest,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/excludeFromMcp,
+    MethodName: excludeFromMcp,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
     CapabilityId: Aspire.Hosting/getEndpoint,
     MethodName: getEndpoint,
     TargetType: {
@@ -42,6 +70,104 @@
     ]
   },
   {
+    CapabilityId: Aspire.Hosting/onBeforeResourceStarted,
+    MethodName: onBeforeResourceStarted,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/onInitializeResource,
+    MethodName: onInitializeResource,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/onResourceEndpointsAllocated,
+    MethodName: onResourceEndpointsAllocated,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/onResourceReady,
+    MethodName: onResourceReady,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/onResourceStopped,
+    MethodName: onResourceStopped,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/publishAsConnectionString,
+    MethodName: publishAsConnectionString,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+      IsInterface: false
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/publishAsContainer,
+    MethodName: publishAsContainer,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+      IsInterface: false
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
     CapabilityId: Aspire.Hosting/waitFor,
     MethodName: waitFor,
     TargetType: {
@@ -58,6 +184,48 @@
   {
     CapabilityId: Aspire.Hosting/waitForCompletion,
     MethodName: waitForCompletion,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithWaitSupport,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/waitForStart,
+    MethodName: waitForStart,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithWaitSupport,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/waitForStartWithBehavior,
+    MethodName: waitForStartWithBehavior,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithWaitSupport,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/waitForWithBehavior,
+    MethodName: waitForWithBehavior,
     TargetType: {
       TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithWaitSupport,
       IsInterface: true
@@ -126,6 +294,62 @@
     ]
   },
   {
+    CapabilityId: Aspire.Hosting/withBuildArg,
+    MethodName: withBuildArg,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+      IsInterface: false
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/withBuildSecret,
+    MethodName: withBuildSecret,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+      IsInterface: false
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/withCertificateTrustScope,
+    MethodName: withCertificateTrustScope,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/withChildRelationship,
+    MethodName: withChildRelationship,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
     CapabilityId: Aspire.Hosting/withCommand,
     MethodName: withCommand,
     TargetType: {
@@ -154,6 +378,34 @@
     ]
   },
   {
+    CapabilityId: Aspire.Hosting/withContainerNetworkAlias,
+    MethodName: withContainerNetworkAlias,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+      IsInterface: false
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/withContainerRegistry,
+    MethodName: withContainerRegistry,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
     CapabilityId: Aspire.Hosting/withContainerRuntimeArgs,
     MethodName: withContainerRuntimeArgs,
     TargetType: {
@@ -168,11 +420,67 @@
     ]
   },
   {
+    CapabilityId: Aspire.Hosting/withDeveloperCertificateTrust,
+    MethodName: withDeveloperCertificateTrust,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/withDockerfile,
+    MethodName: withDockerfile,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+      IsInterface: false
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/withDockerfileBaseImage,
+    MethodName: withDockerfileBaseImage,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
     CapabilityId: Aspire.Hosting/withEndpoint,
     MethodName: withEndpoint,
     TargetType: {
       TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints,
       IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/withEndpointProxySupport,
+    MethodName: withEndpointProxySupport,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+      IsInterface: false
     },
     ExpandedTargetTypes: [
       {
@@ -238,8 +546,50 @@
     ]
   },
   {
+    CapabilityId: Aspire.Hosting/withEnvironmentConnectionString,
+    MethodName: withEnvironmentConnectionString,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/withEnvironmentEndpoint,
+    MethodName: withEnvironmentEndpoint,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
     CapabilityId: Aspire.Hosting/withEnvironmentExpression,
     MethodName: withEnvironmentExpression,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/withEnvironmentParameter,
+    MethodName: withEnvironmentParameter,
     TargetType: {
       TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment,
       IsInterface: true
@@ -322,10 +672,52 @@
     ]
   },
   {
+    CapabilityId: Aspire.Hosting/withHttpProbe,
+    MethodName: withHttpProbe,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/withHttpsDeveloperCertificate,
+    MethodName: withHttpsDeveloperCertificate,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
     CapabilityId: Aspire.Hosting/withHttpsEndpoint,
     MethodName: withHttpsEndpoint,
     TargetType: {
       TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/withIconName,
+    MethodName: withIconName,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
       IsInterface: true
     },
     ExpandedTargetTypes: [
@@ -378,6 +770,20 @@
     ]
   },
   {
+    CapabilityId: Aspire.Hosting/withImageSHA256,
+    MethodName: withImageSHA256,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+      IsInterface: false
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
     CapabilityId: Aspire.Hosting/withImageTag,
     MethodName: withImageTag,
     TargetType: {
@@ -406,8 +812,106 @@
     ]
   },
   {
+    CapabilityId: Aspire.Hosting/withMcpServer,
+    MethodName: withMcpServer,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/withOtlpExporter,
+    MethodName: withOtlpExporter,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/withOtlpExporterProtocol,
+    MethodName: withOtlpExporterProtocol,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/withoutHttpsCertificate,
+    MethodName: withoutHttpsCertificate,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
     CapabilityId: Aspire.Hosting/withParentRelationship,
     MethodName: withParentRelationship,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/withPipelineConfiguration,
+    MethodName: withPipelineConfiguration,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/withPipelineConfigurationAsync,
+    MethodName: withPipelineConfigurationAsync,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/withPipelineStepFactory,
+    MethodName: withPipelineStepFactory,
     TargetType: {
       TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
       IsInterface: true
@@ -434,10 +938,80 @@
     ]
   },
   {
-    CapabilityId: Aspire.Hosting/withServiceReference,
-    MethodName: withServiceReference,
+    CapabilityId: Aspire.Hosting/withReferenceEndpoint,
+    MethodName: withReferenceEndpoint,
     TargetType: {
       TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/withReferenceExternalService,
+    MethodName: withReferenceExternalService,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/withReferenceUri,
+    MethodName: withReferenceUri,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/withRemoteImageName,
+    MethodName: withRemoteImageName,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/withRemoteImageTag,
+    MethodName: withRemoteImageTag,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/withRequiredCommand,
+    MethodName: withRequiredCommand,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
       IsInterface: true
     },
     ExpandedTargetTypes: [

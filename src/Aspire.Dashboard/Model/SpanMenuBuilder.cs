@@ -35,6 +35,7 @@ public sealed class SpanMenuBuilder
     private readonly IAIContextProvider _aiContextProvider;
     private readonly DashboardDialogService _dialogService;
     private readonly TelemetryRepository _telemetryRepository;
+    private readonly IOutgoingPeerResolver[] _outgoingPeerResolvers;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SpanMenuBuilder"/> class.
@@ -46,7 +47,8 @@ public sealed class SpanMenuBuilder
         NavigationManager navigationManager,
         IAIContextProvider aiContextProvider,
         DashboardDialogService dialogService,
-        TelemetryRepository telemetryRepository)
+        TelemetryRepository telemetryRepository,
+        IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers)
     {
         _controlsLoc = controlsLoc;
         _aiAssistantLoc = aiAssistantLoc;
@@ -55,6 +57,7 @@ public sealed class SpanMenuBuilder
         _aiContextProvider = aiContextProvider;
         _dialogService = dialogService;
         _telemetryRepository = telemetryRepository;
+        _outgoingPeerResolvers = outgoingPeerResolvers.ToArray();
     }
 
     /// <summary>
@@ -109,13 +112,14 @@ public sealed class SpanMenuBuilder
             Icon = s_bracesIcon,
             OnClick = async () =>
             {
-                var result = ExportHelpers.GetSpanAsJson(span, _telemetryRepository);
+                var result = ExportHelpers.GetSpanAsJson(span, _telemetryRepository, _outgoingPeerResolvers);
                 await TextVisualizerDialog.OpenDialogAsync(new OpenTextVisualizerDialogOptions
                 {
                     DialogService = _dialogService,
                     ValueDescription = result.FileName,
                     Value = result.Content,
-                    DownloadFileName = result.FileName
+                    DownloadFileName = result.FileName,
+                    FixedFormat = DashboardUIHelpers.JsonFormat
                 }).ConfigureAwait(false);
             }
         });

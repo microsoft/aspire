@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECERTIFICATES001
@@ -32,6 +32,7 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "1")]
 public class DistributedApplicationTests
 {
     private readonly ITestOutputHelper _testOutputHelper;
@@ -616,7 +617,7 @@ public class DistributedApplicationTests
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/dotnet/aspire/issues/9340")]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/9340")]
     public async Task TestServicesWithMultipleReplicas()
     {
         var replicaCount = 3;
@@ -1495,17 +1496,18 @@ public class DistributedApplicationTests
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/dotnet/aspire/issues/8728")]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/8728")]
     public async Task ProxylessEndpointWorks()
     {
         const string testName = "proxyless-endpoint-works";
         using var testProgram = CreateTestProgram(testName);
 
+        var port = await Network.GetAvailablePortAsync();
         testProgram.ServiceABuilder
             .WithEndpoint("http", e =>
             {
-                e.Port = 1234;
-                e.TargetPort = 1234;
+                e.Port = port;
+                e.TargetPort = port;
                 e.IsProxied = false;
             });
 
@@ -1537,11 +1539,12 @@ public class DistributedApplicationTests
         const string testName = "proxyless-and-proxied-endpoints";
         using var testProgram = CreateTestProgram(testName);
 
+        var port = await Network.GetAvailablePortAsync();
         testProgram.ServiceABuilder
             .WithEndpoint("http", e =>
             {
-                e.Port = 1234;
-                e.TargetPort = 1234;
+                e.Port = port;
+                e.TargetPort = port;
                 e.IsProxied = false;
             }, createIfNotExists: false)
             .WithEndpoint("https", e =>
@@ -1607,7 +1610,8 @@ public class DistributedApplicationTests
         const string testName = "proxyless-container";
         using var builder = TestDistributedApplicationBuilder.Create(_testOutputHelper);
 
-        var redis = builder.AddRedis($"{testName}-redis", 1234).WithEndpoint("tcp", endpoint =>
+        var port = await Network.GetAvailablePortAsync();
+        var redis = builder.AddRedis($"{testName}-redis", port).WithEndpoint("tcp", endpoint =>
         {
             endpoint.IsProxied = false;
         });
@@ -1638,7 +1642,7 @@ public class DistributedApplicationTests
         var env = Assert.Single(service.Spec.Env!, e => e.Name == $"ConnectionStrings__{testName}-redis");
         var sslVal = redis.Resource.TlsEnabled ? ",ssl=true" : string.Empty;
 #pragma warning disable CS0618 // Type or member is obsolete
-        Assert.Equal($"localhost:1234,password={redis.Resource.PasswordParameter?.Value}{sslVal}", env.Value);
+        Assert.Equal($"localhost:{port},password={redis.Resource.PasswordParameter?.Value}{sslVal}", env.Value);
 #pragma warning restore CS0618 // Type or member is obsolete
 
         var list = await s.ListAsync<Container>().DefaultTimeout();
@@ -1646,11 +1650,11 @@ public class DistributedApplicationTests
         if (redis.Resource.TlsEnabled)
         {
             Assert.Equal(2, redisContainer.Spec.Ports!.Count);
-            Assert.Contains(redisContainer.Spec.Ports!, p => p.HostPort == 1234);
+            Assert.Contains(redisContainer.Spec.Ports!, p => p.HostPort == port);
         }
         else
         {
-            Assert.Equal(1234, Assert.Single(redisContainer.Spec.Ports!).HostPort);
+            Assert.Equal(port, Assert.Single(redisContainer.Spec.Ports!).HostPort);
         }
 
         var otherRedisEnv = Assert.Single(service.Spec.Env!, e => e.Name == $"ConnectionStrings__{testName}-redisNoPort");
@@ -1680,7 +1684,8 @@ public class DistributedApplicationTests
         const string testName = "endpoint-proxy-support";
         using var builder = TestDistributedApplicationBuilder.Create(_testOutputHelper);
 
-        var redis = builder.AddRedis($"{testName}-redis", 1234).WithEndpointProxySupport(false);
+        var port = await Network.GetAvailablePortAsync();
+        var redis = builder.AddRedis($"{testName}-redis", port).WithEndpointProxySupport(false);
 
         // Since port is not specified, this instance will use the container target port (6379) as the host port.
         var redisNoPort = builder.AddRedis($"{testName}-redisNoPort").WithEndpointProxySupport(false);
@@ -1710,7 +1715,7 @@ public class DistributedApplicationTests
         var env = Assert.Single(service.Spec.Env!, e => e.Name == $"ConnectionStrings__{testName}-redis");
         var sslVal = redis.Resource.TlsEnabled ? ",ssl=true" : string.Empty;
 #pragma warning disable CS0618 // Type or member is obsolete
-        Assert.Equal($"localhost:1234,password={redis.Resource.PasswordParameter!.Value}{sslVal}", env.Value);
+        Assert.Equal($"localhost:{port},password={redis.Resource.PasswordParameter!.Value}{sslVal}", env.Value);
 #pragma warning restore CS0618 // Type or member is obsolete
 
         var list = await s.ListAsync<Container>().DefaultTimeout();
@@ -1718,11 +1723,11 @@ public class DistributedApplicationTests
         if (redis.Resource.TlsEnabled)
         {
             Assert.Equal(2, redisContainer.Spec.Ports!.Count);
-            Assert.Contains(redisContainer.Spec.Ports!, p => p.HostPort == 1234);
+            Assert.Contains(redisContainer.Spec.Ports!, p => p.HostPort == port);
         }
         else
         {
-            Assert.Equal(1234, Assert.Single(redisContainer.Spec.Ports!).HostPort);
+            Assert.Equal(port, Assert.Single(redisContainer.Spec.Ports!).HostPort);
         }
 
         var otherRedisEnv = Assert.Single(service.Spec.Env!, e => e.Name == $"ConnectionStrings__{testName}-redisNoPort");

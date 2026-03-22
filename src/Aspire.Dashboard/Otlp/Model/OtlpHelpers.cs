@@ -16,7 +16,7 @@ using OpenTelemetry.Proto.Resource.V1;
 
 namespace Aspire.Dashboard.Otlp.Model;
 
-public static class OtlpHelpers
+public static partial class OtlpHelpers
 {
     // Reduce size of JSON data by not indenting. Dashboard UI supports formatting JSON values when they're displayed.
     private static readonly JsonSerializerOptions s_jsonSerializerOptions = new JsonSerializerOptions
@@ -24,7 +24,7 @@ public static class OtlpHelpers
         WriteIndented = false
     };
 
-    public const int ShortenedIdLength = 7;
+    // Note: ShortenedIdLength is defined in the shared OtlpHelpers.cs
 
     public static ResourceKey GetResourceKey(this Resource resource)
     {
@@ -64,7 +64,8 @@ public static class OtlpHelpers
         return new ResourceKey(serviceName, serviceInstanceId);
     }
 
-    public static string ToShortenedId(string id) => TruncateString(id, maxLength: ShortenedIdLength);
+    // ToShortenedId is defined in the shared OtlpHelpers.cs
+    // TruncateString is defined in the shared OtlpHelpers.cs
 
     public static string ToHexString(ReadOnlyMemory<byte> bytes)
     {
@@ -83,11 +84,6 @@ public static class OtlpHelpers
                 ToCharsBuffer(data[pos], chars, pos * 2);
             }
         });
-    }
-
-    public static string TruncateString(string value, int maxLength)
-    {
-        return value.Length > maxLength ? value[..maxLength] : value;
     }
 
     public static string ToHexString(this ByteString bytes)
@@ -168,26 +164,9 @@ public static class OtlpHelpers
         buffer[startingIndex] = (char)(packedResult >> 8);
     }
 
-    public static DateTime UnixNanoSecondsToDateTime(ulong unixTimeNanoseconds)
-    {
-        var ticks = NanosecondsToTicks(unixTimeNanoseconds);
-
-        return DateTime.UnixEpoch.AddTicks(ticks);
-    }
-
-    /// <summary>
-    /// Converts a DateTime to Unix nanoseconds.
-    /// </summary>
-    public static ulong DateTimeToUnixNanoseconds(DateTime dateTime)
-    {
-        var timeSinceEpoch = dateTime.ToUniversalTime() - DateTime.UnixEpoch;
-        return (ulong)timeSinceEpoch.Ticks * TimeSpan.NanosecondsPerTick;
-    }
-
-    private static long NanosecondsToTicks(ulong nanoseconds)
-    {
-        return (long)(nanoseconds / TimeSpan.NanosecondsPerTick);
-    }
+    // UnixNanoSecondsToDateTime is defined in the shared OtlpHelpers.cs
+    // DateTimeToUnixNanoseconds is defined in the shared OtlpHelpers.cs
+    // NanosecondsToTicks is defined in the shared OtlpHelpers.cs
 
     public static KeyValuePair<string, string>[] ToKeyValuePairs(this RepeatedField<KeyValue> attributes, OtlpContext context)
     {

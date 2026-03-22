@@ -4,6 +4,8 @@
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
@@ -44,7 +46,7 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
         Assert.Null(endpoint.Port);
         Assert.Equal(ProtocolType.Tcp, endpoint.Protocol);
         Assert.Equal("tcp", endpoint.Transport);
-        Assert.Equal("tcp", endpoint.UriScheme);
+        Assert.Equal("redis", endpoint.UriScheme);
 
         var containerAnnotation = Assert.Single(containerResource.Annotations.OfType<ContainerImageAnnotation>());
         Assert.Equal(RedisContainerImageTags.Tag, containerAnnotation.Tag);
@@ -72,7 +74,7 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(9813, endpoint.Port);
         Assert.Equal(ProtocolType.Tcp, endpoint.Protocol);
         Assert.Equal("tcp", endpoint.Transport);
-        Assert.Equal("tcp", endpoint.UriScheme);
+        Assert.Equal("redis", endpoint.UriScheme);
 
         var containerAnnotation = Assert.Single(containerResource.Annotations.OfType<ContainerImageAnnotation>());
         Assert.Equal(RedisContainerImageTags.Tag, containerAnnotation.Tag);
@@ -94,7 +96,9 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
 
         var connectionStringResource = Assert.Single(appModel.Resources.OfType<IResourceWithConnectionString>());
-        Assert.Equal("{myRedis.bindings.tcp.host}:{myRedis.bindings.tcp.port},password={pass.value}", connectionStringResource.ConnectionStringExpression.ValueExpression);
+        var valueExpression = connectionStringResource.ConnectionStringExpression.ValueExpression;
+        Assert.StartsWith("{myRedis.bindings.tcp.host}:{myRedis.bindings.tcp.port},password={pass.value}", valueExpression);
+        AssertContainsConditionalReference(valueExpression);
     }
 
     [Fact]
@@ -111,7 +115,9 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
 
         var connectionStringResource = Assert.Single(appModel.Resources.OfType<IResourceWithConnectionString>());
-        Assert.Equal("{myRedis.bindings.tcp.host}:{myRedis.bindings.tcp.port},password={pass.value}", connectionStringResource.ConnectionStringExpression.ValueExpression);
+        var valueExpression = connectionStringResource.ConnectionStringExpression.ValueExpression;
+        Assert.StartsWith("{myRedis.bindings.tcp.host}:{myRedis.bindings.tcp.port},password={pass.value}", valueExpression);
+        AssertContainsConditionalReference(valueExpression);
     }
 
     [Fact]
@@ -127,7 +133,9 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
 
         var connectionStringResource = Assert.Single(appModel.Resources.OfType<IResourceWithConnectionString>());
         var connectionString = await connectionStringResource.GetConnectionStringAsync(default);
-        Assert.Equal("{myRedis.bindings.tcp.host}:{myRedis.bindings.tcp.port},password={myRedis-password.value}", connectionStringResource.ConnectionStringExpression.ValueExpression);
+        var valueExpression = connectionStringResource.ConnectionStringExpression.ValueExpression;
+        Assert.StartsWith("{myRedis.bindings.tcp.host}:{myRedis.bindings.tcp.port},password={myRedis-password.value}", valueExpression);
+        AssertContainsConditionalReference(valueExpression);
         Assert.StartsWith("localhost:2000", connectionString);
     }
 
@@ -137,32 +145,23 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
         var redis = builder.AddRedis("redis");
 
-        var manifest = await ManifestUtils.GetManifest(redis.Resource);
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var fullManifest = await ManifestUtils.GetManifestForModel(model);
+        var resources = fullManifest["resources"]!;
+        var manifest = resources["redis"]!;
 
-        var expectedManifest = $$"""
-            {
-              "type": "container.v0",
-              "connectionString": "{redis.bindings.tcp.host}:{redis.bindings.tcp.port},password={redis-password.value}",
-              "image": "{{RedisContainerImageTags.Registry}}/{{RedisContainerImageTags.Image}}:{{RedisContainerImageTags.Tag}}",
-              "entrypoint": "/bin/sh",
-              "args": [
-                "-c",
-                "redis-server --requirepass $REDIS_PASSWORD"
-              ],
-              "env": {
-                "REDIS_PASSWORD": "{redis-password.value}"
-              },
-              "bindings": {
-                "tcp": {
-                  "scheme": "tcp",
-                  "protocol": "tcp",
-                  "transport": "tcp",
-                  "targetPort": 6379
-                }
-              }
-            }
-            """;
-        Assert.Equal(expectedManifest, manifest.ToString());
+        Assert.Equal("container.v0", manifest["type"]!.GetValue<string>());
+        var connectionString = manifest["connectionString"]!.GetValue<string>();
+        Assert.StartsWith("{redis.bindings.tcp.host}:{redis.bindings.tcp.port},password={redis-password.value}", connectionString);
+        var creName = AssertContainsConditionalReference(connectionString);
+        AssertConditionalExpressionInManifest(resources, creName);
+
+        Assert.Equal($"{RedisContainerImageTags.Registry}/{RedisContainerImageTags.Image}:{RedisContainerImageTags.Tag}", manifest["image"]!.GetValue<string>());
+        Assert.Equal("/bin/sh", manifest["entrypoint"]!.GetValue<string>());
+        Assert.Equal("{redis-password.value}", manifest["env"]!["REDIS_PASSWORD"]!.GetValue<string>());
+        Assert.Equal("redis", manifest["bindings"]!["tcp"]!["scheme"]!.GetValue<string>());
+        Assert.Equal(6379, manifest["bindings"]!["tcp"]!["targetPort"]!.GetValue<int>());
     }
 
     [Fact]
@@ -171,29 +170,22 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
         var redis = builder.AddRedis("redis").WithPassword(null);
 
-        var manifest = await ManifestUtils.GetManifest(redis.Resource);
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var fullManifest = await ManifestUtils.GetManifestForModel(model);
+        var resources = fullManifest["resources"]!;
+        var manifest = resources["redis"]!;
 
-        var expectedManifest = $$"""
-            {
-              "type": "container.v0",
-              "connectionString": "{redis.bindings.tcp.host}:{redis.bindings.tcp.port}",
-              "image": "{{RedisContainerImageTags.Registry}}/{{RedisContainerImageTags.Image}}:{{RedisContainerImageTags.Tag}}",
-              "entrypoint": "/bin/sh",
-              "args": [
-                "-c",
-                "redis-server"
-              ],
-              "bindings": {
-                "tcp": {
-                  "scheme": "tcp",
-                  "protocol": "tcp",
-                  "transport": "tcp",
-                  "targetPort": 6379
-                }
-              }
-            }
-            """;
-        Assert.Equal(expectedManifest, manifest.ToString());
+        Assert.Equal("container.v0", manifest["type"]!.GetValue<string>());
+        var connectionString = manifest["connectionString"]!.GetValue<string>();
+        Assert.StartsWith("{redis.bindings.tcp.host}:{redis.bindings.tcp.port}", connectionString);
+        var creName = AssertContainsConditionalReference(connectionString);
+        AssertConditionalExpressionInManifest(resources, creName);
+
+        Assert.Equal($"{RedisContainerImageTags.Registry}/{RedisContainerImageTags.Image}:{RedisContainerImageTags.Tag}", manifest["image"]!.GetValue<string>());
+        Assert.Equal("/bin/sh", manifest["entrypoint"]!.GetValue<string>());
+        Assert.Equal("redis", manifest["bindings"]!["tcp"]!["scheme"]!.GetValue<string>());
+        Assert.Equal(6379, manifest["bindings"]!["tcp"]!["targetPort"]!.GetValue<int>());
     }
 
     [Fact]
@@ -206,32 +198,23 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
 
         var pass = builder.AddParameter("pass");
         var redis = builder.AddRedis("redis", password: pass);
-        var manifest = await ManifestUtils.GetManifest(redis.Resource);
 
-        var expectedManifest = $$"""
-            {
-              "type": "container.v0",
-              "connectionString": "{redis.bindings.tcp.host}:{redis.bindings.tcp.port},password={pass.value}",
-              "image": "{{RedisContainerImageTags.Registry}}/{{RedisContainerImageTags.Image}}:{{RedisContainerImageTags.Tag}}",
-              "entrypoint": "/bin/sh",
-              "args": [
-                "-c",
-                "redis-server --requirepass $REDIS_PASSWORD"
-              ],
-              "env": {
-                "REDIS_PASSWORD": "{pass.value}"
-              },
-              "bindings": {
-                "tcp": {
-                  "scheme": "tcp",
-                  "protocol": "tcp",
-                  "transport": "tcp",
-                  "targetPort": 6379
-                }
-              }
-            }
-            """;
-        Assert.Equal(expectedManifest, manifest.ToString());
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var fullManifest = await ManifestUtils.GetManifestForModel(model);
+        var resources = fullManifest["resources"]!;
+        var manifest = resources["redis"]!;
+
+        Assert.Equal("container.v0", manifest["type"]!.GetValue<string>());
+        var connectionString = manifest["connectionString"]!.GetValue<string>();
+        Assert.StartsWith("{redis.bindings.tcp.host}:{redis.bindings.tcp.port},password={pass.value}", connectionString);
+        var creName = AssertContainsConditionalReference(connectionString);
+        AssertConditionalExpressionInManifest(resources, creName);
+
+        Assert.Equal($"{RedisContainerImageTags.Registry}/{RedisContainerImageTags.Image}:{RedisContainerImageTags.Tag}", manifest["image"]!.GetValue<string>());
+        Assert.Equal("{pass.value}", manifest["env"]!["REDIS_PASSWORD"]!.GetValue<string>());
+        Assert.Equal("redis", manifest["bindings"]!["tcp"]!["scheme"]!.GetValue<string>());
+        Assert.Equal(6379, manifest["bindings"]!["tcp"]!["targetPort"]!.GetValue<int>());
     }
 
     [Fact]
@@ -241,32 +224,23 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
 
         var pass = builder.AddParameter("pass");
         var redis = builder.AddRedis("redis", password: pass);
-        var manifest = await ManifestUtils.GetManifest(redis.Resource);
 
-        var expectedManifest = $$"""
-            {
-              "type": "container.v0",
-              "connectionString": "{redis.bindings.tcp.host}:{redis.bindings.tcp.port},password={pass.value}",
-              "image": "{{RedisContainerImageTags.Registry}}/{{RedisContainerImageTags.Image}}:{{RedisContainerImageTags.Tag}}",
-              "entrypoint": "/bin/sh",
-              "args": [
-                "-c",
-                "redis-server --requirepass $REDIS_PASSWORD"
-              ],
-              "env": {
-                "REDIS_PASSWORD": "{pass.value}"
-              },
-              "bindings": {
-                "tcp": {
-                  "scheme": "tcp",
-                  "protocol": "tcp",
-                  "transport": "tcp",
-                  "targetPort": 6379
-                }
-              }
-            }
-            """;
-        Assert.Equal(expectedManifest, manifest.ToString());
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var fullManifest = await ManifestUtils.GetManifestForModel(model);
+        var resources = fullManifest["resources"]!;
+        var manifest = resources["redis"]!;
+
+        Assert.Equal("container.v0", manifest["type"]!.GetValue<string>());
+        var connectionString = manifest["connectionString"]!.GetValue<string>();
+        Assert.StartsWith("{redis.bindings.tcp.host}:{redis.bindings.tcp.port},password={pass.value}", connectionString);
+        var creName = AssertContainsConditionalReference(connectionString);
+        AssertConditionalExpressionInManifest(resources, creName);
+
+        Assert.Equal($"{RedisContainerImageTags.Registry}/{RedisContainerImageTags.Image}:{RedisContainerImageTags.Tag}", manifest["image"]!.GetValue<string>());
+        Assert.Equal("{pass.value}", manifest["env"]!["REDIS_PASSWORD"]!.GetValue<string>());
+        Assert.Equal("redis", manifest["bindings"]!["tcp"]!["scheme"]!.GetValue<string>());
+        Assert.Equal(6379, manifest["bindings"]!["tcp"]!["targetPort"]!.GetValue<int>());
     }
 
     [Fact]
@@ -301,8 +275,21 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
         using var app = builder.Build();
 
         // Add fake allocated endpoints.
-        redis1.WithEndpoint("tcp", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 5001));
-        redis2.WithEndpoint("tcp", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 5002));
+        redis1.WithEndpoint("tcp", e =>
+        {
+            e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 5001);
+            e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "myredis1.dev.internal", 5001, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+        });
+        redis2.WithEndpoint("tcp", e =>
+        {
+            e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 5002);
+            e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "myredis2.dev.internal", 5002, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+        });
+        redis3.WithEndpoint("tcp", e =>
+        {
+            e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 5003);
+            e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "myredis3.dev.internal", 5003, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+        });
 
         var redisInsight = Assert.Single(builder.Resources.OfType<RedisInsightResource>());
         var envs = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(redisInsight);
@@ -367,7 +354,6 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
                 Assert.Equal("RI_REDIS_ALIAS3", item.Key);
                 Assert.Equal(redis3.Resource.Name, item.Value);
             });
-
     }
 
     [Fact]
@@ -474,14 +460,16 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
 
         var connectionStringResource = Assert.Single(appModel.Resources.OfType<IResourceWithConnectionString>());
         var connectionString = await connectionStringResource.GetConnectionStringAsync(default);
+        var valueExpression = connectionStringResource.ConnectionStringExpression.ValueExpression;
+        AssertContainsConditionalReference(valueExpression);
         if (withPassword)
         {
-            Assert.Equal("{myRedis.bindings.tcp.host}:{myRedis.bindings.tcp.port},password={pass.value}", connectionStringResource.ConnectionStringExpression.ValueExpression);
+            Assert.StartsWith("{myRedis.bindings.tcp.host}:{myRedis.bindings.tcp.port},password={pass.value}", valueExpression);
             Assert.Equal($"localhost:5001,password={password}", connectionString);
         }
         else
         {
-            Assert.Equal("{myRedis.bindings.tcp.host}:{myRedis.bindings.tcp.port}", connectionStringResource.ConnectionStringExpression.ValueExpression);
+            Assert.StartsWith("{myRedis.bindings.tcp.host}:{myRedis.bindings.tcp.port}", valueExpression);
             Assert.Equal($"localhost:5001", connectionString);
         }
     }
@@ -703,7 +691,9 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
 
         var connectionStringResource = Assert.Single(appModel.Resources.OfType<IResourceWithConnectionString>());
         var connectionString = await connectionStringResource.GetConnectionStringAsync(default);
-        Assert.Equal("{myRedis.bindings.tcp.host}:{myRedis.bindings.tcp.port},password={pass.value}", connectionStringResource.ConnectionStringExpression.ValueExpression);
+        var valueExpression = connectionStringResource.ConnectionStringExpression.ValueExpression;
+        Assert.StartsWith("{myRedis.bindings.tcp.host}:{myRedis.bindings.tcp.port},password={pass.value}", valueExpression);
+        AssertContainsConditionalReference(valueExpression);
         Assert.StartsWith($"localhost:5001,password={password}", connectionString);
     }
 
@@ -713,7 +703,11 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
         using var appBuilder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
 
         var redis = appBuilder.AddRedis("redis")
-            .WithEndpoint("tcp", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 6379))
+            .WithEndpoint("tcp", e =>
+            {
+                e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 6379);
+                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "redis.dev.internal", 6379, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+            })
             .WithRedisInsight();
 
         using var app = appBuilder.Build();
@@ -819,6 +813,69 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
         await builder.Eventing.PublishAsync(beforeStartEvent);
 
         Assert.True(redis.Resource.TlsEnabled);
+
+        // The connection string expression uses a conditional reference for TLS
+        var connectionStringExpression = redis.Resource.ConnectionStringExpression;
+        AssertContainsConditionalReference(connectionStringExpression.ValueExpression);
+
+        // The resolved value should include ,ssl=true after TLS is enabled
+        redis.WithEndpoint("tcp", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 6379));
+        var resolved = await connectionStringExpression.GetValueAsync(default(CancellationToken));
+        Assert.NotNull(resolved);
+        Assert.Contains(",ssl=true", resolved);
+
+        // Verify the endpoint annotation also has TlsEnabled
+        var endpoint = Assert.Single(redis.Resource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "tcp");
+        Assert.True(endpoint.TlsEnabled);
+        Assert.Equal("rediss", endpoint.UriScheme);
+
+        // Verify the URI expression uses the endpoint scheme
+        var uriExpression = redis.Resource.UriExpression;
+        Assert.Contains("{myredis.bindings.tcp.scheme}", uriExpression.ValueExpression);
+    }
+
+    [Fact]
+    public async Task RedisConnectionStringResolvesWithTlsDynamically()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+        using var cert = CreateTestCertificate();
+
+        var redis = builder.AddRedis("myredis")
+            .WithHttpsCertificate(cert)
+            .WithEndpoint("tcp", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 6379));
+
+        // Before BeforeStartEvent, TLS is not yet enabled
+        Assert.False(redis.Resource.TlsEnabled);
+
+        // The manifest expression uses a conditional reference (not literal ,ssl=true)
+        var expressionBeforeTls = redis.Resource.ConnectionStringExpression;
+        AssertContainsConditionalReference(expressionBeforeTls.ValueExpression);
+        Assert.DoesNotContain(",ssl=true", expressionBeforeTls.ValueExpression);
+
+        // Resolve the runtime value — should NOT have ssl=true yet
+        var resolvedBeforeTls = await expressionBeforeTls.GetValueAsync(default(CancellationToken));
+        Assert.NotNull(resolvedBeforeTls);
+        Assert.DoesNotContain(",ssl=true", resolvedBeforeTls);
+
+        using var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // Simulate the BeforeStartEvent to enable TLS
+        var beforeStartEvent = new BeforeStartEvent(app.Services, appModel);
+        await builder.Eventing.PublishAsync(beforeStartEvent);
+
+        // Now TLS is enabled
+        Assert.True(redis.Resource.TlsEnabled);
+
+        // The deferred value provider resolves dynamically — the SAME captured expression
+        // now resolves with ssl=true because the callback reads current TlsEnabled state
+        var resolvedAfterTls = await expressionBeforeTls.GetValueAsync(default(CancellationToken));
+        Assert.NotNull(resolvedAfterTls);
+        Assert.Contains(",ssl=true", resolvedAfterTls);
+
+        // The new expression from the getter also has a conditional reference
+        var expressionAfterTls = redis.Resource.ConnectionStringExpression;
+        AssertContainsConditionalReference(expressionAfterTls.ValueExpression);
     }
 
     [Fact]
@@ -834,6 +891,11 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
         // Simulate the BeforeStartEvent
         var beforeStartEvent = new BeforeStartEvent(app.Services, appModel);
         Assert.False(redis.Resource.TlsEnabled);
+
+        // Verify the connection string expression uses a conditional reference (not literal ssl=true)
+        var connectionStringExpression = redis.Resource.ConnectionStringExpression;
+        AssertContainsConditionalReference(connectionStringExpression.ValueExpression);
+        Assert.DoesNotContain(",ssl=true", connectionStringExpression.ValueExpression);
     }
 
     private static X509Certificate2 CreateTestCertificate()
@@ -852,5 +914,19 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
         var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
 
         return certificate;
+    }
+
+    private static string AssertContainsConditionalReference(string valueExpression)
+    {
+        var match = Regex.Match(valueExpression, @"\{(cond-[^.]+)\.connectionString\}");
+        Assert.True(match.Success, $"Expected value expression to contain a conditional reference '{{cond-*.connectionString}}', but got: {valueExpression}");
+        return match.Groups[1].Value;
+    }
+
+    private static void AssertConditionalExpressionInManifest(JsonNode resources, string creName)
+    {
+        var creEntry = resources[creName];
+        Assert.NotNull(creEntry);
+        Assert.Equal("value.v0", creEntry["type"]!.GetValue<string>());
     }
 }

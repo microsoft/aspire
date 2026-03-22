@@ -70,7 +70,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Execute commands in the context of an Aspire application resource. Starts the AppHost, waits for resources to initialize, then runs the specified command in the target resource&apos;s environment. (Preview)
+        ///   Looks up a localized string similar to Execute commands in the context of an Aspire application resource. Starts the apphost, waits for resources to initialize, then runs the specified command in the target resource&apos;s environment. (Preview)
         ///
         ///Examples:
         ///  aspire exec --resource api dotnet build
@@ -103,7 +103,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to The path to the Aspire AppHost project file. If not specified, searches for a project file in the current directory..
+        ///   Looks up a localized string similar to The path to the Aspire apphost project file. If not specified, searches for a project file in the current directory..
         /// </summary>
         internal static string ProjectArgumentDescription {
             get {
@@ -130,7 +130,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Stopping app host....
+        ///   Looks up a localized string similar to Stopping apphost....
         /// </summary>
         internal static string StoppingAppHost {
             get {
@@ -139,7 +139,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to The name of the target resource to execute the command against. The command will be executed as soon as the AppHost starts, without waiting for the resource to be ready..
+        ///   Looks up a localized string similar to The name of the target resource to execute the command against. The command will be executed as soon as the apphost starts, without waiting for the resource to be ready..
         /// </summary>
         internal static string TargetResourceArgumentDescription {
             get {

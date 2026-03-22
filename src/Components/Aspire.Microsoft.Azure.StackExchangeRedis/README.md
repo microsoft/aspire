@@ -73,7 +73,7 @@ builder.AddRedisClientBuilder("cache")
 
 ### Configure Azure AD authentication
 
-Use the `WithAzureAuthentication` method to establish a connection using Azure AD authentication. If no credential is provided, the [DefaultAzureCredential](https://learn.microsoft.com/dotnet/api/azure.identity.defaultazurecredential) is used.
+Use the `WithAzureAuthentication` method to establish a connection using Azure AD authentication. If no credential is provided, a [default TokenCredential is created based on the current environment](https://aka.ms/aspire/default-azure-credential).
 
 ```csharp
 builder.AddRedisClientBuilder("cache")
@@ -113,6 +113,6 @@ This will also require your Azure environment to be configured by following [the
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire
 
 _*Redis is a registered trademark of Redis Ltd. Any rights therein are reserved to Redis Ltd._

@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using Aspire.Cli.Backchannel;
 using Aspire.Shared;
 using Spectre.Console;
 
@@ -40,6 +41,7 @@ internal sealed class ConsoleActivityLogger
 
     private string? _finalStatusHeader;
     private bool _pipelineSucceeded;
+    private IReadOnlyList<BackchannelPipelineSummaryItem>? _pipelineSummary;
 
     // No raw ANSI escape codes; rely on Spectre.Console markup tokens.
 
@@ -256,7 +258,7 @@ internal sealed class ConsoleActivityLogger
                     };
                     var name = rec.DisplayName.EscapeMarkup();
                     var reason = rec.State == ActivityState.Failure && !string.IsNullOrEmpty(rec.FailureReason)
-                        ? ( _enableColor ? $" [red]— {HighlightMessage(rec.FailureReason!)}[/]" : $" — {rec.FailureReason}" )
+                        ? ( _enableColor ? $" [red]— {HighlightMessage(rec.FailureReason!.EscapeMarkup())}[/]" : $" — {rec.FailureReason!.EscapeMarkup()}" )
                         : string.Empty;
                     var lineSb = new StringBuilder();
                     lineSb.Append("  ")
@@ -274,6 +276,19 @@ internal sealed class ConsoleActivityLogger
             {
                 _console.MarkupLine(_finalStatusHeader!);
                 
+                // Display pipeline summary if available (for successful deployments)
+                // Store in local variable to avoid potential threading issues
+                var pipelineSummary = _pipelineSummary;
+                if (_pipelineSucceeded && pipelineSummary is { Count: > 0 })
+                {
+                    _console.WriteLine();
+                    foreach (var item in pipelineSummary)
+                    {
+                        var formattedLine = FormatPipelineSummaryItem(item);
+                        _console.MarkupLine(formattedLine);
+                    }
+                }
+                
                 // If pipeline failed and not already in debug/trace mode, show help message about using --log-level debug
                 if (!_pipelineSucceeded && !_isDebugOrTraceLoggingEnabled)
                 {
@@ -289,12 +304,40 @@ internal sealed class ConsoleActivityLogger
     }
 
     /// <summary>
-    /// Sets the final deployment result lines to be displayed in the summary (e.g., DEPLOYMENT FAILED ...).
+    /// Formats a pipeline summary item for display.
+    /// Values with Markdown enabled are converted to Spectre markup; plain-text values are escaped.
+    /// </summary>
+    private string FormatPipelineSummaryItem(BackchannelPipelineSummaryItem item)
+    {
+        if (_enableColor)
+        {
+            var escapedKey = item.Key.EscapeMarkup();
+            var convertedValue = item.EnableMarkdown
+                ? MarkdownToSpectreConverter.ConvertToSpectre(item.Value)
+                : item.Value.EscapeMarkup();
+            convertedValue = HighlightMessage(convertedValue);
+            return $"  [blue]{escapedKey}[/]: {convertedValue}";
+        }
+        else
+        {
+            var plainKey = item.Key.EscapeMarkup();
+            var plainValue = item.EnableMarkdown
+                ? MarkdownToSpectreConverter.ConvertLinksToPlainText(item.Value).EscapeMarkup()
+                : item.Value.EscapeMarkup();
+            return $"  {plainKey}: {plainValue}";
+        }
+    }
+
+    /// <summary>
+    /// Sets the final pipeline result lines to be displayed in the summary (e.g., PIPELINE FAILED ...).
     /// Optional usage so existing callers remain compatible.
     /// </summary>
-    public void SetFinalResult(bool succeeded)
+    /// <param name="succeeded">Whether the pipeline succeeded.</param>
+    /// <param name="pipelineSummary">Optional pipeline summary as key-value pairs to display after the result. The list preserves insertion order.</param>
+    public void SetFinalResult(bool succeeded, IReadOnlyList<BackchannelPipelineSummaryItem>? pipelineSummary = null)
     {
         _pipelineSucceeded = succeeded;
+        _pipelineSummary = pipelineSummary;
         // Always show only a single final header line with symbol; no per-step duplication.
         if (succeeded)
         {

@@ -83,7 +83,7 @@ public partial class McpServerDialog
 
                 if (DashboardOptions.Value.Mcp.AuthMode == McpAuthMode.ApiKey)
                 {
-                    _mcpConfigProperties.Add(new McpConfigPropertyViewModel { Name = $"{McpApiKeyAuthenticationHandler.ApiKeyHeaderName} (header)", Value = DashboardOptions.Value.Mcp.PrimaryApiKey! });
+                    _mcpConfigProperties.Add(new McpConfigPropertyViewModel { Name = $"{McpApiKeyAuthenticationHandler.McpApiKeyHeaderName} (header)", Value = DashboardOptions.Value.Mcp.PrimaryApiKey! });
                 }
             }
         }
@@ -111,7 +111,7 @@ public partial class McpServerDialog
             // Use input reference instead of hardcoded API key
             headers = new Dictionary<string, string>
             {
-                [McpApiKeyAuthenticationHandler.ApiKeyHeaderName] = "${input:aspire_mcp_api_key}"
+                [McpApiKeyAuthenticationHandler.McpApiKeyHeaderName] = "${input:aspire_mcp_api_key}"
             };
 
             // Define the input for the API key

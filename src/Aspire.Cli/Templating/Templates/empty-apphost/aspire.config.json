@@ -1,0 +1,28 @@
+{
+  "appHost": {
+    "path": "apphost.cs"
+  },
+  "profiles": {
+    "https": {
+      "applicationUrl": "https://{{hostName}}:{{httpsPort}};http://{{hostName}}:{{httpPort}}",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development",
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://{{hostName}}:{{otlpHttpsPort}}",
+        "ASPIRE_DASHBOARD_MCP_ENDPOINT_URL": "https://{{hostName}}:{{mcpHttpsPort}}",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://{{hostName}}:{{resourceHttpsPort}}"
+      }
+    },
+    "http": {
+      "applicationUrl": "http://{{hostName}}:{{httpPort}}",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development",
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://{{hostName}}:{{otlpHttpPort}}",
+        "ASPIRE_DASHBOARD_MCP_ENDPOINT_URL": "http://{{hostName}}:{{mcpHttpPort}}",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://{{hostName}}:{{resourceHttpPort}}",
+        "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true"
+      }
+    }
+  }
+}

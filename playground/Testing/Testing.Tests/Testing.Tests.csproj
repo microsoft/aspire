@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <IsTestProject>true</IsTestProject>
     <IsAspireHost>true</IsAspireHost>
-    <SkipTests Condition="'$(IsAzdoCIRunner)' == 'true' or '$(IsGitHubActionsRunner)' == 'true'">true</SkipTests>
+    <SkipTests Condition="'$(ContinuousIntegrationBuild)' == 'true'">true</SkipTests>
   </PropertyGroup>
 
   <ItemGroup>

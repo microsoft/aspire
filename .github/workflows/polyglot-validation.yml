@@ -1,7 +1,7 @@
 # Polyglot SDK Validation Tests (Reusable)
 # Validates Python, Go, Java, Rust, and TypeScript AppHost SDKs with Redis integration
 # Uses Dockerfiles from .github/workflows/polyglot-validation/ for reproducible environments
-# Uses locally built CLI and NuGet packages from the workflow artifacts
+# Uses locally built bundle and NuGet packages from the workflow artifacts
 name: Polyglot SDK Validation
 
 on:
@@ -23,7 +23,7 @@ jobs:
         uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
         with:
           name: cli-native-archives-linux-x64
-          path: ${{ github.workspace }}/artifacts/cli
+          path: ${{ github.workspace }}/artifacts/cli-archive
 
       - name: Download NuGet packages
         uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
@@ -36,6 +36,21 @@ jobs:
         with:
           name: built-nugets-for-linux-x64
           path: ${{ github.workspace }}/artifacts/nugets-rid
+
+      - name: Extract CLI artifact
+        run: |
+          set -euo pipefail
+
+          echo "=== Extracting bundle-backed CLI from archive ==="
+          archive=$(find "${{ github.workspace }}/artifacts/cli-archive" -type f -name 'aspire-cli-linux-x64*.tar.gz' | head -n 1)
+          if [ -z "$archive" ]; then
+            echo "ERROR: CLI archive not found in ${{ github.workspace }}/artifacts/cli-archive"
+            find "${{ github.workspace }}/artifacts/cli-archive" -maxdepth 5 -type f || true
+            exit 1
+          fi
+
+          mkdir -p "${{ github.workspace }}/artifacts/bundle"
+          tar -xzf "$archive" -C "${{ github.workspace }}/artifacts/bundle"
 
       - name: Build Python validation image
         run: |
@@ -62,7 +77,7 @@ jobs:
         uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
         with:
           name: cli-native-archives-linux-x64
-          path: ${{ github.workspace }}/artifacts/cli
+          path: ${{ github.workspace }}/artifacts/cli-archive
 
       - name: Download NuGet packages
         uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
@@ -75,6 +90,21 @@ jobs:
         with:
           name: built-nugets-for-linux-x64
           path: ${{ github.workspace }}/artifacts/nugets-rid
+
+      - name: Extract CLI artifact
+        run: |
+          set -euo pipefail
+
+          echo "=== Extracting bundle-backed CLI from archive ==="
+          archive=$(find "${{ github.workspace }}/artifacts/cli-archive" -type f -name 'aspire-cli-linux-x64*.tar.gz' | head -n 1)
+          if [ -z "$archive" ]; then
+            echo "ERROR: CLI archive not found in ${{ github.workspace }}/artifacts/cli-archive"
+            find "${{ github.workspace }}/artifacts/cli-archive" -maxdepth 5 -type f || true
+            exit 1
+          fi
+
+          mkdir -p "${{ github.workspace }}/artifacts/bundle"
+          tar -xzf "$archive" -C "${{ github.workspace }}/artifacts/bundle"
 
       - name: Build Go validation image
         run: |
@@ -101,7 +131,7 @@ jobs:
         uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
         with:
           name: cli-native-archives-linux-x64
-          path: ${{ github.workspace }}/artifacts/cli
+          path: ${{ github.workspace }}/artifacts/cli-archive
 
       - name: Download NuGet packages
         uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
@@ -114,6 +144,21 @@ jobs:
         with:
           name: built-nugets-for-linux-x64
           path: ${{ github.workspace }}/artifacts/nugets-rid
+
+      - name: Extract CLI artifact
+        run: |
+          set -euo pipefail
+
+          echo "=== Extracting bundle-backed CLI from archive ==="
+          archive=$(find "${{ github.workspace }}/artifacts/cli-archive" -type f -name 'aspire-cli-linux-x64*.tar.gz' | head -n 1)
+          if [ -z "$archive" ]; then
+            echo "ERROR: CLI archive not found in ${{ github.workspace }}/artifacts/cli-archive"
+            find "${{ github.workspace }}/artifacts/cli-archive" -maxdepth 5 -type f || true
+            exit 1
+          fi
+
+          mkdir -p "${{ github.workspace }}/artifacts/bundle"
+          tar -xzf "$archive" -C "${{ github.workspace }}/artifacts/bundle"
 
       - name: Build Java validation image
         run: |
@@ -142,7 +187,7 @@ jobs:
         uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
         with:
           name: cli-native-archives-linux-x64
-          path: ${{ github.workspace }}/artifacts/cli
+          path: ${{ github.workspace }}/artifacts/cli-archive
 
       - name: Download NuGet packages
         uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
@@ -155,6 +200,21 @@ jobs:
         with:
           name: built-nugets-for-linux-x64
           path: ${{ github.workspace }}/artifacts/nugets-rid
+
+      - name: Extract CLI artifact
+        run: |
+          set -euo pipefail
+
+          echo "=== Extracting bundle-backed CLI from archive ==="
+          archive=$(find "${{ github.workspace }}/artifacts/cli-archive" -type f -name 'aspire-cli-linux-x64*.tar.gz' | head -n 1)
+          if [ -z "$archive" ]; then
+            echo "ERROR: CLI archive not found in ${{ github.workspace }}/artifacts/cli-archive"
+            find "${{ github.workspace }}/artifacts/cli-archive" -maxdepth 5 -type f || true
+            exit 1
+          fi
+
+          mkdir -p "${{ github.workspace }}/artifacts/bundle"
+          tar -xzf "$archive" -C "${{ github.workspace }}/artifacts/bundle"
 
       - name: Build Rust validation image
         run: |
@@ -181,7 +241,7 @@ jobs:
         uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
         with:
           name: cli-native-archives-linux-x64
-          path: ${{ github.workspace }}/artifacts/cli
+          path: ${{ github.workspace }}/artifacts/cli-archive
 
       - name: Download NuGet packages
         uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
@@ -194,6 +254,21 @@ jobs:
         with:
           name: built-nugets-for-linux-x64
           path: ${{ github.workspace }}/artifacts/nugets-rid
+
+      - name: Extract CLI artifact
+        run: |
+          set -euo pipefail
+
+          echo "=== Extracting bundle-backed CLI from archive ==="
+          archive=$(find "${{ github.workspace }}/artifacts/cli-archive" -type f -name 'aspire-cli-linux-x64*.tar.gz' | head -n 1)
+          if [ -z "$archive" ]; then
+            echo "ERROR: CLI archive not found in ${{ github.workspace }}/artifacts/cli-archive"
+            find "${{ github.workspace }}/artifacts/cli-archive" -maxdepth 5 -type f || true
+            exit 1
+          fi
+
+          mkdir -p "${{ github.workspace }}/artifacts/bundle"
+          tar -xzf "$archive" -C "${{ github.workspace }}/artifacts/bundle"
 
       - name: Build TypeScript validation image
         run: |
@@ -241,6 +316,6 @@ jobs:
           if [ "${{ needs.validate_rust.result }}" == "failure" ]; then
             echo "⚠️ Rust SDK validation failed (known issues - not blocking)"
           fi
-      
+
       - name: All validations passed
         run: echo "✅ All required polyglot SDK validations passed!"

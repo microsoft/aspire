@@ -2,8 +2,11 @@
 // README at: https://github.com/devcontainers/templates/tree/main/src/dotnet
 {
 	"name": "Aspire - Contribute",
-	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
-	"image": "mcr.microsoft.com/devcontainers/dotnet:10.0-noble",
+	// Use Dockerfile to work around Yarn GPG key expiration issue
+	// See: https://github.com/yarnpkg/yarn/issues/9218
+	"build": {
+		"dockerfile": "Dockerfile"
+	},
 	"features": {
 		"ghcr.io/devcontainers/features/azure-cli:1": {},
 		"ghcr.io/azure/azure-dev/azd:0": {},
@@ -19,7 +22,9 @@
 			"version": "latest",
 			"helm": "latest",
 			"minikube": "latest"
-		}
+		},
+		"ghcr.io/devcontainers/features/sshd:1": {},
+		"ghcr.io/devcontainers/features/copilot-cli:1": {}
 	},
 
 	"hostRequirements": {

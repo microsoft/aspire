@@ -2,54 +2,54 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="it" original="../StopCommandStrings.resx">
     <body>
+      <trans-unit id="AllOptionDescription">
+        <source>Stop all running apphosts</source>
+        <target state="new">Stop all running apphosts</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AppHostStoppedSuccessfully">
-        <source>AppHost stopped successfully.</source>
-        <target state="new">AppHost stopped successfully.</target>
+        <source>Apphost stopped successfully.</source>
+        <target state="needs-review-translation">AppHost è stato interrotto.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Stop a running Aspire apphost.</source>
-        <target state="new">Stop a running Aspire apphost.</target>
+        <source>Stop a running apphost</source>
+        <target state="needs-review-translation">Arrestare un apphost Aspire in esecuzione.</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedToStopAppHost">
-        <source>Failed to stop the AppHost.</source>
-        <target state="new">Failed to stop the AppHost.</target>
+        <source>Failed to stop the apphost.</source>
+        <target state="needs-review-translation">Non è possibile arrestare AppHost.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MultipleAppHostsNonInteractive">
+        <source>Multiple apphosts are running. Use {0} to specify which one to stop, or use {1} to stop all of them.</source>
+        <target state="new">Multiple apphosts are running. Use {0} to specify which one to stop, or use {1} to stop all of them.</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleAppHostsRunning">
-        <source>Multiple AppHosts are running. Use --project to specify which one to stop, or select one:</source>
-        <target state="new">Multiple AppHosts are running. Use --project to specify which one to stop, or select one:</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="NoInScopeAppHostsShowingAll">
-        <source>No running AppHosts found in the current directory. Showing all running AppHosts:</source>
-        <target state="new">No running AppHosts found in the current directory. Showing all running AppHosts:</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="NoRunningAppHostsFound">
-        <source>No running AppHosts found in scope.</source>
-        <target state="new">No running AppHosts found in scope.</target>
+        <source>Multiple apphosts are running. Use --apphost to specify which one to stop, or select one:</source>
+        <target state="needs-review-translation">Sono in esecuzione più AppHost. Usare --apphost per specificare quale interrompere o selezionarne uno:</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="new">The path to the Aspire AppHost project file.</target>
+        <source>The path to the Aspire apphost project file</source>
+        <target state="needs-review-translation">Percorso del file di un progetto AppHost di Aspire.</target>
         <note />
       </trans-unit>
-      <trans-unit id="ScanningForRunningAppHosts">
-        <source>Scanning for running AppHosts...</source>
-        <target state="new">Scanning for running AppHosts...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SelectAppHostToStop">
-        <source>Select an AppHost to stop:</source>
-        <target state="new">Select an AppHost to stop:</target>
+      <trans-unit id="SelectAppHostAction">
+        <source>stop</source>
+        <target state="translated">arresta</target>
         <note />
       </trans-unit>
       <trans-unit id="StoppingAppHost">
         <source>Stopping Aspire apphost...</source>
-        <target state="new">Stopping Aspire apphost...</target>
+        <target state="translated">Arresto dell'apphost Aspire in corso...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AllAndProjectMutuallyExclusive">
+        <source>The {0} and {1} options cannot be used together.</source>
+        <target state="translated">Le opzioni {0} e {1} non possono essere usate insieme.</target>
         <note />
       </trans-unit>
     </body>

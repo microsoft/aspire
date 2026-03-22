@@ -1,0 +1,205 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://json.schemastore.org/aspire-settings.json",
+  "type": "object",
+  "title": "Aspire Local Settings",
+  "description": "Aspire CLI local configuration file (.aspire/settings.json)",
+  "properties": {
+    "appHostPath": {
+      "description": "The path to the AppHost entry point file (e.g., \"Program.cs\", \"app.ts\"). Relative to the directory containing .aspire/settings.json.",
+      "type": "string"
+    },
+    "channel": {
+      "description": "The Aspire channel to use for package resolution (e.g., \"stable\", \"preview\", \"staging\"). Used by aspire add to determine which NuGet feed to use.",
+      "type": "string"
+    },
+    "features": {
+      "description": "Feature flags for enabling/disabling experimental or optional features. Key is feature name, value is enabled (true) or disabled (false).",
+      "type": "object",
+      "properties": {
+        "defaultWatchEnabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "Enable or disable watch mode by default when running Aspire applications for automatic restarts on file changes",
+          "default": false
+        },
+        "execCommandEnabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "Enable or disable the 'aspire exec' command for executing commands inside running resources",
+          "default": false
+        },
+        "experimentalPolyglot:go": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "Enable or disable experimental Go language support for polyglot Aspire applications",
+          "default": false
+        },
+        "experimentalPolyglot:java": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "Enable or disable experimental Java language support for polyglot Aspire applications",
+          "default": false
+        },
+        "experimentalPolyglot:python": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "Enable or disable experimental Python language support for polyglot Aspire applications",
+          "default": false
+        },
+        "experimentalPolyglot:rust": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "Enable or disable experimental Rust language support for polyglot Aspire applications",
+          "default": false
+        },
+        "showAllTemplates": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "Show all available templates including experimental ones in 'aspire new' and 'aspire init' commands",
+          "default": false
+        },
+        "showDeprecatedPackages": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "Show or hide deprecated packages in 'aspire add' search results",
+          "default": false
+        },
+        "stagingChannelEnabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "Enable or disable access to the staging channel for early access to preview features and packages",
+          "default": false
+        },
+        "updateNotificationsEnabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "Check if update notifications are disabled and set version check environment variable",
+          "default": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "language": {
+      "description": "The language identifier for this AppHost (e.g., \"typescript\", \"python\"). Used to determine which runtime to use for execution.",
+      "type": "string"
+    },
+    "packages": {
+      "description": "Package references as an object literal (like npm's package.json). Key is package name, value is version.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "description": "Package version"
+      }
+    },
+    "sdkVersion": {
+      "description": "The Aspire SDK version used for this polyglot AppHost project. Determines the version of Aspire.Hosting packages to use.",
+      "type": "string"
+    },
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference"
+    }
+  },
+  "additionalProperties": false
+}

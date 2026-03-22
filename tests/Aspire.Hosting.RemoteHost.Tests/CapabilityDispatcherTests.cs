@@ -2,8 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Nodes;
-using Aspire.Hosting.Ats;
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.RemoteHost.Ats;
+using Aspire.TypeSystem;
 using Xunit;
 
 namespace Aspire.Hosting.RemoteHost.Tests;
@@ -277,6 +278,29 @@ public class CapabilityDispatcherTests
     }
 
     [Fact]
+    public void Invoke_CancellationTokenPropertyResultCanBePassedToCapability()
+    {
+        var handles = new HandleRegistry();
+        var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles), [typeof(TestCancellationTokenContext).Assembly]);
+        using var cts = new CancellationTokenSource();
+
+        var context = new TestCancellationTokenContext { CancellationToken = cts.Token };
+        var handleId = handles.Register(context, "Aspire.Hosting.RemoteHost.Tests/Aspire.Hosting.RemoteHost.Tests.TestCancellationTokenContext");
+        var getArgs = new JsonObject { ["context"] = new JsonObject { ["$handle"] = handleId } };
+
+        var tokenResult = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/TestCancellationTokenContext.cancellationToken", getArgs);
+
+        Assert.NotNull(tokenResult);
+        cts.Cancel();
+
+        var invokeArgs = new JsonObject { ["cancellationToken"] = tokenResult };
+        var result = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/canObserveCancellation", invokeArgs);
+
+        Assert.NotNull(result);
+        Assert.True(result.GetValue<bool>());
+    }
+
+    [Fact]
     public void Constructor_RegistersVersionedContextTypeProperties()
     {
         var dispatcher = CreateDispatcher(typeof(VersionedContextType).Assembly);
@@ -543,6 +567,38 @@ public class CapabilityDispatcherTests
     }
 
     [Fact]
+    public void Invoke_ValueTaskInstanceMethod()
+    {
+        var handles = new HandleRegistry();
+        var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles), [typeof(TestTypeWithMethods).Assembly]);
+
+        var context = new TestTypeWithMethods();
+        var handleId = handles.Register(context, "Aspire.Hosting.RemoteHost.Tests/Aspire.Hosting.RemoteHost.Tests.TestTypeWithMethods");
+        var args = new JsonObject
+        {
+            ["context"] = new JsonObject { ["$handle"] = handleId },
+            ["input"] = "value-task"
+        };
+
+        var result = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/TestTypeWithMethods.processValueTaskAsync", args);
+
+        Assert.NotNull(result);
+        Assert.Equal("VALUE-TASK", result.GetValue<string>());
+    }
+
+    [Fact]
+    public void Invoke_StaticValueTaskMethod()
+    {
+        var dispatcher = CreateDispatcher(typeof(TestCapabilities).Assembly);
+        var args = new JsonObject { ["value"] = "value-task" };
+
+        var result = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/asyncValueTaskWithResult", args);
+
+        Assert.NotNull(result);
+        Assert.Equal("VALUE-TASK", result.GetValue<string>());
+    }
+
+    [Fact]
     public void Constructor_SkipsNonPublicMethods()
     {
         var dispatcher = CreateDispatcher(typeof(TestTypeWithMethods).Assembly);
@@ -651,6 +707,55 @@ public class CapabilityDispatcherTests
 
         Assert.NotNull(result);
         Assert.Equal(42, result.GetValue<int>());
+    }
+
+    [Fact]
+    public void Invoke_SyncCapabilityWithoutBackgroundThreadOptIn_RunsInline()
+    {
+        var dispatcher = CreateDispatcher(typeof(TestCapabilitiesWithBackgroundThreadDispatch).Assembly);
+        var callerThreadId = Environment.CurrentManagedThreadId;
+
+        var result = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/syncInlineThreadProbe", null);
+
+        Assert.NotNull(result);
+        Assert.Equal(callerThreadId, result.GetValue<int>());
+    }
+
+    [Fact]
+    public void Invoke_SyncCapabilityWithBackgroundThreadOptIn_RunsOnBackgroundThread()
+    {
+        var dispatcher = CreateDispatcher(typeof(TestCapabilitiesWithBackgroundThreadDispatch).Assembly);
+        var callerThreadId = Environment.CurrentManagedThreadId;
+
+        var result = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/syncBackgroundThreadProbe", null);
+
+        Assert.NotNull(result);
+        Assert.NotEqual(callerThreadId, result.GetValue<int>());
+    }
+
+    [Fact]
+    public void Invoke_ValueTaskCapabilityWithBackgroundThreadOptIn_RunsInline()
+    {
+        var dispatcher = CreateDispatcher(typeof(TestCapabilitiesWithBackgroundThreadDispatch).Assembly);
+        var callerThreadId = Environment.CurrentManagedThreadId;
+
+        var result = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/valueTaskBackgroundThreadProbe", null);
+
+        Assert.NotNull(result);
+        Assert.Equal(callerThreadId, result.GetValue<int>());
+    }
+
+    [Fact]
+    public void Invoke_NonGenericValueTaskCapabilityWithBackgroundThreadOptIn_RunsInline()
+    {
+        var dispatcher = CreateDispatcher(typeof(TestCapabilitiesWithBackgroundThreadDispatch).Assembly);
+        var callerThreadId = Environment.CurrentManagedThreadId;
+
+        TestCapabilitiesWithBackgroundThreadDispatch.ResetLastObservedThreadId();
+
+        dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/nonGenericValueTaskBackgroundThreadProbe", null);
+
+        Assert.Equal(callerThreadId, TestCapabilitiesWithBackgroundThreadDispatch.LastObservedThreadId);
     }
 
     [Fact]
@@ -1153,6 +1258,167 @@ public class CapabilityDispatcherTests
         Assert.Equal("No value", result.GetValue<string>());
     }
 
+    [Fact]
+    public void GetDto_DeserializesEnumPropertyFromString()
+    {
+        var args = new JsonObject
+        {
+            ["dto"] = new JsonObject
+            {
+                ["label"] = "test-item",
+                ["status"] = "ValueB"
+            }
+        };
+
+        var result = args.GetDto<TestDtoWithEnum>("dto");
+
+        Assert.NotNull(result);
+        Assert.Equal("test-item", result.Label);
+        Assert.Equal(TestDispatchEnum.ValueB, result.Status);
+    }
+
+    [Fact]
+    public void GetDto_DeserializesEnumPropertyFromStringCaseInsensitive()
+    {
+        var args = new JsonObject
+        {
+            ["dto"] = new JsonObject
+            {
+                ["label"] = "item",
+                ["status"] = "valuec"
+            }
+        };
+
+        var result = args.GetDto<TestDtoWithEnum>("dto");
+
+        Assert.NotNull(result);
+        Assert.Equal(TestDispatchEnum.ValueC, result.Status);
+    }
+
+    [Fact]
+    public void GetDto_ReturnsNullWhenPropertyMissing()
+    {
+        var args = new JsonObject();
+
+        var result = args.GetDto<TestDtoWithEnum>("dto");
+
+        Assert.Null(result);
+    }
+
+    // Builder-to-resource unwrapping tests
+    // These test the scenario where a handle contains an IResourceBuilder<T> but the
+    // property/method being invoked is declared on the resource type T.
+    // This happens in TypeScript polyglot apps when ATS maps both IResourceBuilder<T>
+    // and T to the same type ID.
+    [Fact]
+    public void Invoke_PropertyGetter_ResolvesBuilderToResource()
+    {
+        var handles = new HandleRegistry();
+        var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles), [typeof(TestResourceWithProperties).Assembly]);
+
+        // Create a resource and wrap it in a builder, but register the BUILDER in the handle registry
+        var resource = new TestResourceWithProperties("test-resource") { Color = "blue" };
+        var builder = new TestResourceBuilder<TestResourceWithProperties>(resource);
+        var handleId = handles.Register(builder, "Aspire.Hosting.RemoteHost.Tests/Aspire.Hosting.RemoteHost.Tests.TestResourceWithProperties");
+        var args = new JsonObject { ["context"] = new JsonObject { ["$handle"] = handleId } };
+
+        // Invoke the property getter - the property is on TestResourceWithProperties, but handle contains the builder
+        var result = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/TestResourceWithProperties.color", args);
+
+        Assert.NotNull(result);
+        Assert.Equal("blue", result.GetValue<string>());
+    }
+
+    [Fact]
+    public void Invoke_PropertySetter_ResolvesBuilderToResource()
+    {
+        var handles = new HandleRegistry();
+        var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles), [typeof(TestResourceWithProperties).Assembly]);
+
+        var resource = new TestResourceWithProperties("test-resource") { Color = "red" };
+        var builder = new TestResourceBuilder<TestResourceWithProperties>(resource);
+        var handleId = handles.Register(builder, "Aspire.Hosting.RemoteHost.Tests/Aspire.Hosting.RemoteHost.Tests.TestResourceWithProperties");
+        var args = new JsonObject
+        {
+            ["context"] = new JsonObject { ["$handle"] = handleId },
+            ["value"] = "green"
+        };
+
+        dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/TestResourceWithProperties.setColor", args);
+
+        Assert.Equal("green", resource.Color);
+    }
+
+    [Fact]
+    public void Invoke_InstanceMethod_ResolvesBuilderToResource()
+    {
+        var handles = new HandleRegistry();
+        var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles), [typeof(TestResourceWithMethods).Assembly]);
+
+        var resource = new TestResourceWithMethods("test-resource");
+        var builder = new TestResourceBuilder<TestResourceWithMethods>(resource);
+        var handleId = handles.Register(builder, "Aspire.Hosting.RemoteHost.Tests/Aspire.Hosting.RemoteHost.Tests.TestResourceWithMethods");
+        var args = new JsonObject
+        {
+            ["context"] = new JsonObject { ["$handle"] = handleId },
+            ["prefix"] = "hello"
+        };
+
+        var result = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/TestResourceWithMethods.greet", args);
+
+        Assert.NotNull(result);
+        Assert.Equal("hello, test-resource!", result.GetValue<string>());
+    }
+
+    [Fact]
+    public void Invoke_PropertyGetter_WorksDirectlyOnResource()
+    {
+        var handles = new HandleRegistry();
+        var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles), [typeof(TestResourceWithProperties).Assembly]);
+
+        // When the handle contains the resource directly (not wrapped in a builder), it should still work
+        var resource = new TestResourceWithProperties("test-resource") { Color = "yellow" };
+        var handleId = handles.Register(resource, "Aspire.Hosting.RemoteHost.Tests/Aspire.Hosting.RemoteHost.Tests.TestResourceWithProperties");
+        var args = new JsonObject { ["context"] = new JsonObject { ["$handle"] = handleId } };
+
+        var result = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/TestResourceWithProperties.color", args);
+
+        Assert.NotNull(result);
+        Assert.Equal("yellow", result.GetValue<string>());
+    }
+
+    [Fact]
+    public void Invoke_PropertyGetter_ResolvesInheritedPropertyViaBuilder()
+    {
+        var handles = new HandleRegistry();
+        var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles), [typeof(TestResourceWithProperties).Assembly]);
+
+        var resource = new TestResourceWithProperties("my-resource") { Color = "red" };
+        var builder = new TestResourceBuilder<TestResourceWithProperties>(resource);
+        var handleId = handles.Register(builder, "Aspire.Hosting.RemoteHost.Tests/Aspire.Hosting.RemoteHost.Tests.TestResourceWithProperties");
+        var args = new JsonObject { ["context"] = new JsonObject { ["$handle"] = handleId } };
+
+        var result = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/TestResourceWithProperties.name", args);
+
+        Assert.NotNull(result);
+        Assert.Equal("my-resource", result.GetValue<string>());
+    }
+
+    [Fact]
+    public void Invoke_PropertyGetter_ThrowsWhenHandleIsUnrelatedType()
+    {
+        var handles = new HandleRegistry();
+        var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles), [typeof(TestResourceWithProperties).Assembly]);
+
+        var handleId = handles.Register("not-a-resource", "Aspire.Hosting.RemoteHost.Tests/Aspire.Hosting.RemoteHost.Tests.TestResourceWithProperties");
+        var args = new JsonObject { ["context"] = new JsonObject { ["$handle"] = handleId } };
+
+        var ex = Assert.Throws<CapabilityException>(() =>
+            dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/TestResourceWithProperties.color", args));
+
+        Assert.Equal(AtsErrorCodes.InternalError, ex.Error.Code);
+    }
+
     private static CapabilityDispatcher CreateDispatcher(params System.Reflection.Assembly[] assemblies)
     {
         var handles = new HandleRegistry();
@@ -1212,11 +1478,24 @@ internal static class TestCapabilities
         return value.ToUpperInvariant();
     }
 
+    [AspireExport("asyncValueTaskWithResult", Description = "Async method returning ValueTask<T>")]
+    public static async ValueTask<string> AsyncValueTaskWithResult(string value)
+    {
+        await Task.Delay(1);
+        return value.ToUpperInvariant();
+    }
+
     [AspireExport("asyncThrows", Description = "Async method that throws")]
     public static async Task<string> AsyncThrows(string value)
     {
         await Task.Delay(1);
         throw new InvalidOperationException("Async error: " + value);
+    }
+
+    [AspireExport("canObserveCancellation", Description = "Tests cancellation token round-tripping")]
+    public static bool CanObserveCancellation(CancellationToken cancellationToken)
+    {
+        return cancellationToken.IsCancellationRequested;
     }
 }
 
@@ -1232,6 +1511,12 @@ internal sealed class TestContextType
 
     // This property should be skipped - IDisposable is not ATS-compatible
     public IDisposable? NonAtsProperty { get; set; }
+}
+
+[AspireExport(ExposeProperties = true)]
+internal sealed class TestCancellationTokenContext
+{
+    public CancellationToken CancellationToken { get; set; }
 }
 
 /// <summary>
@@ -1299,6 +1584,12 @@ internal sealed class TestTypeWithMethods
         return input.ToUpperInvariant();
     }
 
+    public async ValueTask<string> ProcessValueTaskAsync(string input)
+    {
+        await Task.Delay(1);
+        return input.ToUpperInvariant();
+    }
+
     // This should NOT be exposed - private method
 #pragma warning disable IDE0051 // Remove unused private member - testing that private methods are not exposed
     private void PrivateMethod()
@@ -1349,6 +1640,41 @@ internal static class TestCapabilitiesWithCallback
     public static int WithAsyncCallback(Func<Task<int>> callback)
     {
         return callback().GetAwaiter().GetResult();
+    }
+}
+
+internal static class TestCapabilitiesWithBackgroundThreadDispatch
+{
+    public static int LastObservedThreadId { get; private set; }
+
+    public static void ResetLastObservedThreadId()
+    {
+        LastObservedThreadId = 0;
+    }
+
+    [AspireExport("syncInlineThreadProbe", Description = "Captures the current thread for inline sync invocation")]
+    public static int SyncInlineThreadProbe()
+    {
+        return Environment.CurrentManagedThreadId;
+    }
+
+    [AspireExport("syncBackgroundThreadProbe", Description = "Captures the current thread for background-thread sync invocation", RunSyncOnBackgroundThread = true)]
+    public static int SyncBackgroundThreadProbe()
+    {
+        return Environment.CurrentManagedThreadId;
+    }
+
+    [AspireExport("valueTaskBackgroundThreadProbe", Description = "Captures the current thread for ValueTask<T> invocation", RunSyncOnBackgroundThread = true)]
+    public static ValueTask<int> ValueTaskBackgroundThreadProbe()
+    {
+        return ValueTask.FromResult(Environment.CurrentManagedThreadId);
+    }
+
+    [AspireExport("nonGenericValueTaskBackgroundThreadProbe", Description = "Captures the current thread for ValueTask invocation", RunSyncOnBackgroundThread = true)]
+    public static ValueTask NonGenericValueTaskBackgroundThreadProbe()
+    {
+        LastObservedThreadId = Environment.CurrentManagedThreadId;
+        return ValueTask.CompletedTask;
     }
 }
 
@@ -1429,5 +1755,56 @@ internal static class TestEnumCapabilities
     public static string AcceptOptionalEnum(TestDispatchEnum? value = null)
     {
         return value.HasValue ? $"Received: {value.Value}" : "No value";
+    }
+}
+
+/// <summary>
+/// Test DTO with an enum property for GetDto deserialization tests.
+/// </summary>
+internal sealed class TestDtoWithEnum
+{
+    public string? Label { get; set; }
+    public TestDispatchEnum Status { get; set; }
+}
+
+/// <summary>
+/// A minimal IResourceBuilder implementation for testing builder-to-resource unwrapping.
+/// </summary>
+internal sealed class TestResourceBuilder<T> : IResourceBuilder<T> where T : IResource
+{
+    public TestResourceBuilder(T resource)
+    {
+        Resource = resource;
+    }
+
+    public T Resource { get; }
+    public IDistributedApplicationBuilder ApplicationBuilder => throw new NotImplementedException();
+
+    public IResourceBuilder<T> WithAnnotation<TAnnotation>(TAnnotation annotation, ResourceAnnotationMutationBehavior behavior = ResourceAnnotationMutationBehavior.Append) where TAnnotation : IResourceAnnotation
+        => throw new NotImplementedException();
+}
+
+/// <summary>
+/// Test resource type with properties that should be accessible via builder handles.
+/// </summary>
+[AspireExport(ExposeProperties = true)]
+internal sealed class TestResourceWithProperties : Resource
+{
+    public TestResourceWithProperties(string name) : base(name) { }
+
+    public string Color { get; set; } = "default";
+}
+
+/// <summary>
+/// Test resource type with instance methods that should be accessible via builder handles.
+/// </summary>
+[AspireExport(ExposeMethods = true)]
+internal sealed class TestResourceWithMethods : Resource
+{
+    public TestResourceWithMethods(string name) : base(name) { }
+
+    public string Greet(string prefix)
+    {
+        return $"{prefix}, {Name}!";
     }
 }

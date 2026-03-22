@@ -24,6 +24,7 @@ public sealed class DashboardTelemetryService
 
         _defaultProperties = new Dictionary<string, AspireTelemetryProperty>
         {
+            // This is consistent with CLI version data.
             { TelemetryPropertyKeys.DashboardVersion, new AspireTelemetryProperty(typeof(DashboardWebApplication).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? string.Empty) },
             { TelemetryPropertyKeys.DashboardBuildId, new AspireTelemetryProperty(typeof(DashboardWebApplication).Assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version ?? string.Empty) },
         };

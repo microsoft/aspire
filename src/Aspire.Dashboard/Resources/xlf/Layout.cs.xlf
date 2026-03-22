@@ -42,6 +42,11 @@
         <target state="translated">Načíst znovu</target>
         <note />
       </trans-unit>
+      <trans-unit id="MessageUnsecuredEndpointApiBody">
+        <source>Untrusted apps can access telemetry data via the API.</source>
+        <target state="translated">Nedůvěryhodné aplikace mohou přistupovat k telemetrickým datům přes rozhraní API.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MessageUnsecuredEndpointLink">
         <source>More information</source>
         <target state="translated">Další informace</target>

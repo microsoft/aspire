@@ -52,11 +52,6 @@
         <target state="translated">설치된 devtunnel CLI 버전 {0}은(는) 지원되지 않습니다. 버전 {1} 이상이 필요합니다.</target>
         <note />
       </trans-unit>
-      <trans-unit id="InstallationInstructions">
-        <source>Installation instructions</source>
-        <target state="translated">설치 지침</target>
-        <note />
-      </trans-unit>
       <trans-unit id="LoginWithGitHub">
         <source>Login with GitHub</source>
         <target state="translated">GitHub로 로그인</target>
@@ -65,21 +60,6 @@
       <trans-unit id="LoginWithMicrosoft">
         <source>Login with Microsoft</source>
         <target state="translated">Microsoft로 로그인</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RequiredCommandNotification">
-        <source>Required command '{0}' was not found on PATH or at a specified location.</source>
-        <target state="translated">PATH 또는 지정된 위치에서 필수 명령 '{0}'을(를) 찾을 수 없습니다.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RequiredCommandNotificationWithLink">
-        <source>Required command '{0}' was not found. See installation instructions for more details.</source>
-        <target state="translated">필수 명령 '{0}'을(를) 찾을 수 없습니다. 자세한 내용은 설치 지침을 참조하세요.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RequiredCommandNotificationWithValidation">
-        <source>{0} See installation instructions for more details.</source>
-        <target state="translated">{0} 자세한 내용은 설치 지침을 참조하세요.</target>
         <note />
       </trans-unit>
     </body>

@@ -31,6 +31,7 @@ public static class AzureContainerAppContainerExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExport("publishContainerAsAzureContainerApp", MethodName = "publishAsAzureContainerApp", Description = "Configures the container resource to be published as an Azure Container App")]
     public static IResourceBuilder<T> PublishAsAzureContainerApp<T>(this IResourceBuilder<T> container, Action<AzureResourceInfrastructure, ContainerApp> configure)
         where T : ContainerResource
     {

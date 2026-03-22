@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net.Sockets;
+using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
@@ -13,6 +14,12 @@ public class AddQdrantTests(ITestOutputHelper testOutputHelper)
 {
     private const int QdrantPortGrpc = 6334;
     private const int QdrantPortHttp = 6333;
+    private static readonly MethodInfo s_polyglotWithReferenceMethod = typeof(ResourceBuilderExtensions)
+        .GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
+        .Single(m => m.Name == nameof(ResourceBuilderExtensions.WithReference)
+            && m.IsGenericMethodDefinition
+            && m.GetParameters() is { Length: 5 } parameters
+            && parameters[1].ParameterType == typeof(IResourceBuilder<IResource>));
 
     [Fact]
     public void AddQdrantAddsGeneratedApiKeyParameterWithUserSecretsParameterDefaultInRunMode()
@@ -169,8 +176,16 @@ public class AddQdrantTests(ITestOutputHelper testOutputHelper)
         var pass = appBuilder.AddParameter("pass", "pass");
 
         var qdrant = appBuilder.AddQdrant("my-qdrant", pass)
-            .WithEndpoint("grpc", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 6334))
-            .WithEndpoint("http", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 6333));
+            .WithEndpoint("grpc", e =>
+            {
+                e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 6334);
+                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "my-qdrant.dev.internal", 6334, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+            })
+            .WithEndpoint("http", e =>
+            {
+                e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 6333);
+                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "my-qdrant.dev.internal", 6333, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+            });
 
         var projectA = appBuilder.AddProject<ProjectA>("projecta", o => o.ExcludeLaunchProfile = true)
             .WithReference(qdrant);
@@ -195,6 +210,34 @@ public class AddQdrantTests(ITestOutputHelper testOutputHelper)
 
         Assert.Contains(containerConfig, kvp => kvp.Key == "ConnectionStrings__my-qdrant" && kvp.Value == "Endpoint=http://my-qdrant.dev.internal:6334;Key=pass");
         Assert.Contains(containerConfig, kvp => kvp.Key == "ConnectionStrings__my-qdrant_http" && kvp.Value == "Endpoint=http://my-qdrant.dev.internal:6333;Key=pass");
+    }
+
+    [Fact]
+    public async Task WithReferenceDispatchesQdrantReference()
+    {
+        using var appBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var pass = appBuilder.AddParameter("pass", "pass");
+
+        var qdrant = appBuilder.AddQdrant("my-qdrant", pass)
+            .WithEndpoint("grpc", e =>
+            {
+                e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 6334);
+                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "my-qdrant.dev.internal", 6334, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+            })
+            .WithEndpoint("http", e =>
+            {
+                e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 6333);
+                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "my-qdrant.dev.internal", 6333, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+            });
+        var consumer = appBuilder.AddContainer("consumer", "fake");
+
+        InvokeWithReference(consumer, qdrant);
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(consumer.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+
+        Assert.Equal("Endpoint=http://my-qdrant.dev.internal:6334;Key=pass", config["ConnectionStrings__my-qdrant"]);
+        Assert.Equal("Endpoint=http://my-qdrant.dev.internal:6333;Key=pass", config["ConnectionStrings__my-qdrant_http"]);
     }
 
     [Fact]
@@ -302,6 +345,19 @@ public class AddQdrantTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(ProtocolType.Tcp, httpEndpoint.Protocol);
         Assert.Equal("http", httpEndpoint.Transport);
         Assert.Equal("http", httpEndpoint.UriScheme);
+    }
+
+    private static IResourceBuilder<TDestination> InvokeWithReference<TDestination>(
+        IResourceBuilder<TDestination> builder,
+        IResourceBuilder<IResource> source,
+        string? connectionName = null,
+        bool optional = false,
+        string? name = null)
+        where TDestination : IResourceWithEnvironment
+    {
+        return (IResourceBuilder<TDestination>)s_polyglotWithReferenceMethod
+            .MakeGenericMethod(typeof(TDestination))
+            .Invoke(null, [builder, source, connectionName, optional, name])!;
     }
 
     private sealed class ProjectA : IProjectMetadata

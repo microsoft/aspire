@@ -18,6 +18,8 @@ public static class DistributedApplicationEventingExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="callback">A callback to handle the event.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>This method is not available in polyglot app hosts.</remarks>
+    [AspireExportIgnore(Reason = "Complex generic delegates with event/CancellationToken types — not ATS-compatible.")]
     public static IResourceBuilder<T> OnBeforeResourceStarted<T>(this IResourceBuilder<T> builder, Func<T, BeforeResourceStartedEvent, CancellationToken, Task> callback)
         where T : IResource
         => builder.OnEvent(callback);
@@ -29,6 +31,8 @@ public static class DistributedApplicationEventingExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="callback">A callback to handle the event.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>This method is not available in polyglot app hosts.</remarks>
+    [AspireExportIgnore(Reason = "Complex generic delegates with event/CancellationToken types — not ATS-compatible.")]
     public static IResourceBuilder<T> OnResourceStopped<T>(this IResourceBuilder<T> builder, Func<T, ResourceStoppedEvent, CancellationToken, Task> callback)
         where T : IResource
         => builder.OnEvent(callback);
@@ -40,6 +44,8 @@ public static class DistributedApplicationEventingExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="callback">A callback to handle the event.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>This method is not available in polyglot app hosts.</remarks>
+    [AspireExportIgnore(Reason = "Complex generic delegates with event/CancellationToken types — not ATS-compatible.")]
     public static IResourceBuilder<T> OnConnectionStringAvailable<T>(this IResourceBuilder<T> builder, Func<T, ConnectionStringAvailableEvent, CancellationToken, Task> callback)
         where T : IResourceWithConnectionString
         => builder.OnEvent(callback);
@@ -51,6 +57,8 @@ public static class DistributedApplicationEventingExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="callback">A callback to handle the event.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>This method is not available in polyglot app hosts.</remarks>
+    [AspireExportIgnore(Reason = "Complex generic delegates with event/CancellationToken types — not ATS-compatible.")]
     public static IResourceBuilder<T> OnInitializeResource<T>(this IResourceBuilder<T> builder, Func<T, InitializeResourceEvent, CancellationToken, Task> callback)
         where T : IResource
         => builder.OnEvent(callback);
@@ -62,6 +70,8 @@ public static class DistributedApplicationEventingExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="callback">A callback to handle the event.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>This method is not available in polyglot app hosts.</remarks>
+    [AspireExportIgnore(Reason = "Complex generic delegates with event/CancellationToken types — not ATS-compatible.")]
     public static IResourceBuilder<T> OnResourceEndpointsAllocated<T>(this IResourceBuilder<T> builder, Func<T, ResourceEndpointsAllocatedEvent, CancellationToken, Task> callback)
         where T : IResourceWithEndpoints
         => builder.OnEvent(callback);
@@ -73,6 +83,8 @@ public static class DistributedApplicationEventingExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="callback">A callback to handle the event.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>This method is not available in polyglot app hosts.</remarks>
+    [AspireExportIgnore(Reason = "Complex generic delegates with event/CancellationToken types — not ATS-compatible.")]
     public static IResourceBuilder<T> OnResourceReady<T>(this IResourceBuilder<T> builder, Func<T, ResourceReadyEvent, CancellationToken, Task> callback)
         where T : IResource
         => builder.OnEvent(callback);

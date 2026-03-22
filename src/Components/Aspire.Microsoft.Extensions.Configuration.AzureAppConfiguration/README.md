@@ -91,7 +91,7 @@ When using a connection string from the `ConnectionStrings` configuration sectio
 builder.AddAzureAppConfiguration("appConfigConnectionName");
 ```
 
-And then the App Configuration endpoint will be retrieved from the `ConnectionStrings` configuration section. The App Configuration store URI works with the `AzureAppConfigurationSettings.Credential` property to establish a connection. If no credential is configured, the [DefaultAzureCredential](https://learn.microsoft.com/dotnet/api/azure.identity.defaultazurecredential) is used.
+And then the App Configuration endpoint will be retrieved from the `ConnectionStrings` configuration section. The App Configuration store URI works with the `AzureAppConfigurationSettings.Credential` property to establish a connection. If no credential is configured, a [default TokenCredential is created based on the current environment](https://aka.ms/aspire/default-azure-credential).
 
 ```json
 {
@@ -158,8 +158,8 @@ builder.AddAzureAppConfiguration("appConfig");
 ## Additional documentation
 
 * https://learn.microsoft.com/azure/azure-app-configuration/
-* https://github.com/dotnet/aspire/tree/main/src/Components/README.md
+* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

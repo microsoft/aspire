@@ -1,0 +1,82 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="ko" original="../AgentCommandStrings.resx">
+    <body>
+      <trans-unit id="ConfigUpdatesSelectPrompt">
+        <source>The following agent configurations use the deprecated 'mcp start' command. Update them?</source>
+        <target state="translated">다음 에이전트 구성에서 더 이상 사용되지 않는 'mcp start' 명령을 사용하고 있습니다. 업데이트하시겠습니까?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeprecatedConfigFix">
+        <source>Run 'aspire agent init' to update configuration</source>
+        <target state="translated">구성을 업데이트하도록 'agent init' 명령 실행</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeprecatedConfigUpdate_Description">
+        <source>Update {0} config to use new 'agent mcp' command</source>
+        <target state="translated">새 'agent mcp' 명령을 사용하도록 {0} 구성 업데이트</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeprecatedConfigWarning">
+        <source>{0} config uses deprecated 'mcp start' command</source>
+        <target state="translated">{0} config에서 더 이상 사용되지 않는 'mcp start' 명령을 사용하고 있습니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Description">
+        <source>Manage AI agent environment configuration</source>
+        <target state="needs-review-translation">AI 에이전트 통합을 관리합니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_ConfigureMcpServer">
+        <source>Install Aspire MCP server</source>
+        <target state="new">Install Aspire MCP server</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_Description">
+        <source>Initialize agent environment configuration for detected agents</source>
+        <target state="needs-review-translation">감지된 에이전트에 대한 에이전트 환경 구성을 초기화합니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_InstallSkillFile">
+        <source>Install Aspire skill file (Recommended)</source>
+        <target state="new">Install Aspire skill file (Recommended)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_NothingSelected">
+        <source>No options selected. Nothing to configure.</source>
+        <target state="new">No options selected. Nothing to configure.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_WhatToConfigure">
+        <source>What would you like to configure? [dim](Enter to skip, Ctrl+C to cancel)[/]</source>
+        <target state="new">What would you like to configure? [dim](Enter to skip, Ctrl+C to cancel)[/]</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MalformedConfigFileError">
+        <source>The configuration file '{0}' contains malformed JSON. Please fix the file manually and re-run the command.</source>
+        <target state="translated">구성 파일 '{0}'에 잘못된 형식의 JSON이 포함되어 있습니다. 파일을 직접 수정하고 명령을 다시 실행하세요.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="McpCommand_Description">
+        <source>Start the MCP (Model Context Protocol) server</source>
+        <target state="needs-review-translation">MCP(모델 컨텍스트 프로토콜) 서버를 시작합니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkipNoneDescription">
+        <source>None — skip</source>
+        <target state="new">None — skip</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkippedMalformedConfigFile">
+        <source>Skipping update of '{0}'.</source>
+        <target state="translated">'{0}'의 업데이트를 건너뛰는 중입니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigurationCompletedWithErrors">
+        <source>Configuration completed with errors. Please fix the reported issues and re-run the command.</source>
+        <target state="translated">구성이 완료되었지만 오류가 발생했습니다. 보고된 문제를 해결하고 명령을 다시 실행하세요.</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

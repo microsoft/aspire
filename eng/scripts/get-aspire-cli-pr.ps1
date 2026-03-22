@@ -71,7 +71,7 @@
 
 .EXAMPLE
     Piped execution
-    iex "& { $(irm https://raw.githubusercontent.com/dotnet/aspire/main/eng/scripts/get-aspire-cli-pr.ps1) } <PR_NUMBER>
+    iex "& { $(irm https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.ps1) } <PR_NUMBER>
 
 .NOTES
     Requires GitHub CLI (gh) to be installed and authenticated
@@ -79,7 +79,7 @@
     VS Code extension installation requires VS Code CLI (code) to be available in PATH
 
 .PARAMETER ASPIRE_REPO (environment variable)
-    Override repository (owner/name). Default: dotnet/aspire
+    Override repository (owner/name). Default: microsoft/aspire
     Example: $env:ASPIRE_REPO = 'myfork/aspire'
 #>
 
@@ -128,7 +128,7 @@ $Script:AspireCliArtifactNamePrefix = "aspire-cli"
 $Script:ExtensionArtifactName = "aspire-extension"
 $Script:IsModernPowerShell = $PSVersionTable.PSVersion.Major -ge 6 -and $PSVersionTable.PSEdition -eq "Core"
 $Script:HostOS = "unset"
-$Script:Repository = if ($env:ASPIRE_REPO -and $env:ASPIRE_REPO.Trim()) { $env:ASPIRE_REPO.Trim() } else { 'dotnet/aspire' }
+$Script:Repository = if ($env:ASPIRE_REPO -and $env:ASPIRE_REPO.Trim()) { $env:ASPIRE_REPO.Trim() } else { 'microsoft/aspire' }
 $Script:GHReposBase = "repos/$($Script:Repository)"
 
 # True if the script is executed from a file (pwsh -File … or .\get-aspire-cli-pr.ps1)
@@ -299,11 +299,11 @@ function Get-MachineArchitecture {
                                 { @("x86_64", "amd64") -contains $_ } { return "x64" }
                                 { @("aarch64", "arm64") -contains $_ } { return "arm64" }
                                 default {
-                                    throw "Architecture '$unameArch' not supported. If you think this is a bug, report it at https://github.com/dotnet/aspire/issues"
+                                    throw "Architecture '$unameArch' not supported. If you think this is a bug, report it at https://github.com/microsoft/aspire/issues"
                                 }
                             }
                         } else {
-                            throw "Architecture '$runtimeArch' not supported (uname unavailable). If you think this is a bug, report it at https://github.com/dotnet/aspire/issues"
+                            throw "Architecture '$runtimeArch' not supported (uname unavailable). If you think this is a bug, report it at https://github.com/microsoft/aspire/issues"
                         }
                     }
                 }
@@ -313,7 +313,7 @@ function Get-MachineArchitecture {
             }
         }
 
-        throw "Architecture detection failed (no supported detection path). If you think this is a bug, report it at https://github.com/dotnet/aspire/issues"
+        throw "Architecture detection failed (no supported detection path). If you think this is a bug, report it at https://github.com/microsoft/aspire/issues"
     }
     catch {
         throw "Architecture detection failed: $($_.Exception.Message)"
@@ -343,7 +343,7 @@ function Get-CLIArchitectureFromArchitecture {
             return "arm64"
         }
         default {
-            throw "Architecture '$Architecture' not supported. If you think this is a bug, report it at https://github.com/dotnet/aspire/issues"
+            throw "Architecture '$Architecture' not supported. If you think this is a bug, report it at https://github.com/microsoft/aspire/issues"
         }
     }
 }
@@ -369,6 +369,98 @@ function Get-RuntimeIdentifier {
     return "${computedTargetOS}-${computedTargetArch}"
 }
 
+# Function to get the CLI executable path based on host OS
+function Get-CliExecutablePath {
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$DestinationPath
+    )
+
+    $exeName = if ($Script:HostOS -eq "win") { "aspire.exe" } else { "aspire" }
+    return Join-Path $DestinationPath $exeName
+}
+
+# Function to backup existing CLI executable before overwriting
+# This allows installation to proceed even when the CLI is running
+# The running process still has a handle to the old file, but the file can be renamed
+function Backup-ExistingCliExecutable {
+    [CmdletBinding(SupportsShouldProcess)]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$TargetExePath
+    )
+    
+    if (Test-Path $TargetExePath) {
+        $unixTimestamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+        $backupPath = "$TargetExePath.old.$unixTimestamp"
+        
+        if ($PSCmdlet.ShouldProcess($TargetExePath, "Backup to $backupPath")) {
+            Write-Message "Backing up existing CLI: $TargetExePath -> $backupPath" -Level Verbose
+            
+            # Rename existing executable to .old.[timestamp]
+            Move-Item -Path $TargetExePath -Destination $backupPath -Force
+            return $backupPath
+        }
+    }
+    
+    return $null
+}
+
+# Function to restore CLI executable from backup if installation fails
+function Restore-CliExecutableFromBackup {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$BackupPath,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$TargetExePath
+    )
+    
+    if ($PSCmdlet.ShouldProcess($BackupPath, "Restore to $TargetExePath")) {
+        Write-Message "Restoring CLI from backup: $BackupPath -> $TargetExePath" -Level Warning
+        
+        if (Test-Path $TargetExePath) {
+            Remove-Item -Path $TargetExePath -Force -ErrorAction SilentlyContinue
+        }
+        
+        Move-Item -Path $BackupPath -Destination $TargetExePath -Force
+    }
+}
+
+# Function to clean up old backup files (aspire.exe.old.* or aspire.old.*)
+function Remove-OldCliBackupFiles {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$TargetExePath
+    )
+    
+    $directory = Split-Path -Parent $TargetExePath
+    if ([string]::IsNullOrEmpty($directory)) {
+        return
+    }
+    
+    $exeName = Split-Path -Leaf $TargetExePath
+    $searchPattern = "$exeName.old.*"
+    
+    $oldBackupFiles = Get-ChildItem -Path $directory -Filter $searchPattern -ErrorAction SilentlyContinue
+    foreach ($backupFile in $oldBackupFiles) {
+        if ($PSCmdlet.ShouldProcess($backupFile.FullName, "Delete old backup")) {
+            try {
+                Remove-Item -Path $backupFile.FullName -Force
+                Write-Message "Deleted old backup file: $($backupFile.FullName)" -Level Verbose
+            }
+            catch {
+                Write-Message "Failed to delete old backup file: $($backupFile.FullName) - $($_.Exception.Message)" -Level Verbose
+            }
+        }
+    }
+}
+
 function Expand-AspireCliArchive {
     [CmdletBinding(SupportsShouldProcess)]
     param(
@@ -382,50 +474,68 @@ function Expand-AspireCliArchive {
 
     Write-Message "Unpacking archive to: $DestinationPath" -Level Verbose
 
-    # Create destination directory if it doesn't exist
-    if (-not (Test-Path $DestinationPath)) {
-        Write-Message "Creating destination directory: $DestinationPath" -Level Verbose
-        New-Item -ItemType Directory -Path $DestinationPath -Force | Out-Null
-    }
+    # Get the target executable path using shared function
+    $targetExePath = Get-CliExecutablePath -DestinationPath $DestinationPath
+    $backupPath = $null
 
-    Write-Message "Extracting archive: $ArchiveFile" -Level Verbose
-    # Check archive format based on file extension and extract accordingly
-    if ($ArchiveFile -match "\.zip$") {
-        # Use Expand-Archive for ZIP files
-        if (-not (Get-Command Expand-Archive -ErrorAction SilentlyContinue)) {
-            throw "Expand-Archive cmdlet not found. Please use PowerShell 5.0 or later to extract ZIP files."
+    try {
+        # Create destination directory if it doesn't exist
+        if (-not (Test-Path $DestinationPath)) {
+            Write-Message "Creating destination directory: $DestinationPath" -Level Verbose
+            New-Item -ItemType Directory -Path $DestinationPath -Force | Out-Null
+        }
+        else {
+            # Backup existing executable before extraction
+            # This allows installation to proceed even when the CLI is running
+            $backupPath = Backup-ExistingCliExecutable -TargetExePath $targetExePath
         }
 
-        try {
+        Write-Message "Extracting archive: $ArchiveFile" -Level Verbose
+        # Check archive format based on file extension and extract accordingly
+        if ($ArchiveFile -match "\.zip$") {
+            # Use Expand-Archive for ZIP files
+            if (-not (Get-Command Expand-Archive -ErrorAction SilentlyContinue)) {
+                throw "Expand-Archive cmdlet not found. Please use PowerShell 5.0 or later to extract ZIP files."
+            }
+
             Expand-Archive -Path $ArchiveFile -DestinationPath $DestinationPath -Force
         }
-        catch {
-            throw "Failed to unpack archive: $($_.Exception.Message)"
-        }
-    }
-    elseif ($ArchiveFile -match "\.tar\.gz$") {
-        # Use tar for tar.gz files
-        if (-not (Get-Command tar -ErrorAction SilentlyContinue)) {
-            throw "tar command not found. Please install tar to extract tar.gz files."
-        }
+        elseif ($ArchiveFile -match "\.tar\.gz$") {
+            # Use tar for tar.gz files
+            if (-not (Get-Command tar -ErrorAction SilentlyContinue)) {
+                throw "tar command not found. Please install tar to extract tar.gz files."
+            }
 
-        $currentLocation = Get-Location
-        try {
-            Set-Location $DestinationPath
-            & tar -xzf $ArchiveFile
-            if ($LASTEXITCODE -ne 0) {
-                throw "Failed to extract tar.gz archive: $ArchiveFile. tar command returned exit code $LASTEXITCODE"
+            $currentLocation = Get-Location
+            try {
+                Set-Location $DestinationPath
+                & tar -xzf $ArchiveFile
+                if ($LASTEXITCODE -ne 0) {
+                    throw "Failed to extract tar.gz archive: $ArchiveFile. tar command returned exit code $LASTEXITCODE"
+                }
+            }
+            finally {
+                Set-Location $currentLocation
             }
         }
-        finally {
-            Set-Location $currentLocation
+        else {
+            throw "Unsupported archive format: $ArchiveFile. Only .zip and .tar.gz files are supported."
         }
-    }
-    else {
-        throw "Unsupported archive format: $ArchiveFile. Only .zip and .tar.gz files are supported."
-    }
 
-    Write-Message "Successfully unpacked archive" -Level Verbose
+        # Clean up old backup files on successful extraction
+        if ($backupPath -and (Test-Path $targetExePath)) {
+            Remove-OldCliBackupFiles -TargetExePath $targetExePath
+        }
+
+        Write-Message "Successfully unpacked archive" -Level Verbose
+    }
+    catch {
+        # If anything goes wrong and we have a backup, restore it
+        if ($backupPath -and (Test-Path $backupPath)) {
+            Restore-CliExecutableFromBackup -BackupPath $backupPath -TargetExePath $targetExePath
+        }
+        throw "Failed to unpack archive: $($_.Exception.Message)"
+    }
 }
 
 # Simplified installation path determination
@@ -798,7 +908,7 @@ function Find-WorkflowRun {
     $runId = Invoke-GitHubAPICall -Endpoint "$Script:GHReposBase/actions/workflows/ci.yml/runs?event=pull_request&head_sha=$HeadSHA" -JqFilter ".workflow_runs | sort_by(.created_at, .updated_at) | reverse | .[0].id" -ErrorMessage "Failed to query workflow runs for SHA: $HeadSHA"
 
     if ([string]::IsNullOrWhiteSpace($runId) -or $runId -eq "null") {
-        throw "No ci.yml workflow run found for PR SHA: $HeadSHA. This could mean no workflow has been triggered for this SHA $HeadSHA . Check at https://github.com/dotnet/aspire/actions/workflows/ci.yml"
+        throw "No ci.yml workflow run found for PR SHA: $HeadSHA. This could mean no workflow has been triggered for this SHA $HeadSHA . Check at https://github.com/microsoft/aspire/actions/workflows/ci.yml"
     }
 
     Write-Message "Found workflow run ID: $runId" -Level Verbose
@@ -828,7 +938,7 @@ function Invoke-ArtifactDownload {
 
         if ($LASTEXITCODE -ne 0) {
             Write-Message "gh run download command failed with exit code $LASTEXITCODE . Command: $($downloadCommand -join ' ')" -Level Verbose
-            throw "Failed to download artifact '$ArtifactName' from run: $RunId . If the workflow is still running then the artifact named '$ArtifactName' may not be available yet. Check at https://github.com/dotnet/aspire/actions/runs/$RunId#artifacts"
+            throw "Failed to download artifact '$ArtifactName' from run: $RunId . If the workflow is still running then the artifact named '$ArtifactName' may not be available yet. Check at https://github.com/microsoft/aspire/actions/runs/$RunId#artifacts"
         }
     }
 }

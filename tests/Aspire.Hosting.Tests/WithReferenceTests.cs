@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "5")]
 public class WithReferenceTests
 {
     [Theory]
@@ -27,7 +28,7 @@ public class WithReferenceTests
         // Call environment variable callbacks.
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectB.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
 
-        Assert.Equal("https://localhost:2000", config["services__projecta__mybinding__0"]);
+        Assert.Equal("https://localhost:2000", config["services__projecta__https__0"]);
         Assert.Equal("https://localhost:2000", config["PROJECTA_MYBINDING"]);
 
         Assert.True(projectB.Resource.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relationships));
@@ -50,9 +51,9 @@ public class WithReferenceTests
 
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectB.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
 
-        Assert.Equal("https://localhost:2000", config["services__project-a__mybinding__0"]);
+        Assert.Equal("https://localhost:2000", config["services__project-a__https__0"]);
         Assert.Equal("https://localhost:2000", config["PROJECT_A_MYBINDING"]);
-        Assert.DoesNotContain("services__project_a__mybinding__0", config.Keys);
+        Assert.DoesNotContain("services__project_a__https__0", config.Keys);
         Assert.DoesNotContain("PROJECT-A_MYBINDING", config.Keys);
     }
 
@@ -70,9 +71,9 @@ public class WithReferenceTests
 
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectB.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
 
-        Assert.Equal("https://localhost:2000", config["services__custom-name__mybinding__0"]);
+        Assert.Equal("https://localhost:2000", config["services__custom-name__https__0"]);
         Assert.Equal("https://localhost:2000", config["custom_name_MYBINDING"]);
-        Assert.DoesNotContain("services__custom_name__mybinding__0", config.Keys);
+        Assert.DoesNotContain("services__custom_name__https__0", config.Keys);
         Assert.DoesNotContain("custom-name_MYBINDING", config.Keys);
     }
 
@@ -103,28 +104,28 @@ public class WithReferenceTests
         switch (flags)
         {
             case ReferenceEnvironmentInjectionFlags.All:
-                Assert.Equal("https://localhost:2000", config["services__custom__mybinding__0"]);
+                Assert.Equal("https://localhost:2000", config["services__custom__https__0"]);
                 Assert.Equal("https://localhost:2000", config["custom_MYBINDING"]);
                 break;
             case ReferenceEnvironmentInjectionFlags.ConnectionProperties:
                 Assert.False(config.ContainsKey("custom_MYBINDING"));
-                Assert.False(config.ContainsKey("services__custom__mybinding__0"));
+                Assert.False(config.ContainsKey("services__custom__https__0"));
                 break;
             case ReferenceEnvironmentInjectionFlags.ConnectionString:
                 Assert.False(config.ContainsKey("custom_MYBINDING"));
-                Assert.False(config.ContainsKey("services__custom__mybinding__0"));
+                Assert.False(config.ContainsKey("services__custom__https__0"));
                 break;
             case ReferenceEnvironmentInjectionFlags.ServiceDiscovery:
                 Assert.False(config.ContainsKey("custom_MYBINDING"));
-                Assert.True(config.ContainsKey("services__custom__mybinding__0"));
+                Assert.True(config.ContainsKey("services__custom__https__0"));
                 break;
             case ReferenceEnvironmentInjectionFlags.Endpoints:
                 Assert.True(config.ContainsKey("custom_MYBINDING"));
-                Assert.False(config.ContainsKey("services__custom__mybinding__0"));
+                Assert.False(config.ContainsKey("services__custom__https__0"));
                 break;
             case ReferenceEnvironmentInjectionFlags.None:
                 Assert.False(config.ContainsKey("custom_MYBINDING"));
-                Assert.False(config.ContainsKey("services__custom__mybinding__0"));
+                Assert.False(config.ContainsKey("services__custom__https__0"));
                 break;
         }
     }
@@ -149,8 +150,8 @@ public class WithReferenceTests
         // Call environment variable callbacks.
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectB.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
 
-        Assert.Equal("https://localhost:2000", config["services__projecta__mybinding__0"]);
-        Assert.Equal("https://localhost:3000", config["services__projecta__myconflictingbinding__0"]);
+        Assert.Equal("https://localhost:2000", config["services__projecta__https__0"]);
+        Assert.Equal("https://localhost:3000", config["services__projecta__https__1"]);
 
         Assert.Equal("https://localhost:2000", config["PROJECTA_MYBINDING"]);
         Assert.Equal("https://localhost:3000", config["PROJECTA_MYCONFLICTINGBINDING"]);
@@ -177,8 +178,8 @@ public class WithReferenceTests
         // Call environment variable callbacks.
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectB.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
 
-        Assert.Equal("https://localhost:2000", config["services__projecta__mybinding__0"]);
-        Assert.Equal("http://localhost:3000", config["services__projecta__mynonconflictingbinding__0"]);
+        Assert.Equal("https://localhost:2000", config["services__projecta__https__0"]);
+        Assert.Equal("http://localhost:3000", config["services__projecta__http__0"]);
 
         Assert.Equal("https://localhost:2000", config["PROJECTA_MYBINDING"]);
         Assert.Equal("http://localhost:3000", config["PROJECTA_MYNONCONFLICTINGBINDING"]);
@@ -203,8 +204,8 @@ public class WithReferenceTests
         // Call environment variable callbacks.
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectB.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
 
-        Assert.Equal("https://localhost:2000", config["services__projecta__mybinding__0"]);
-        Assert.Equal("https://localhost:3000", config["services__projecta__mybinding2__0"]);
+        Assert.Equal("https://localhost:2000", config["services__projecta__https__0"]);
+        Assert.Equal("https://localhost:3000", config["services__projecta__https__1"]);
 
         Assert.Equal("https://localhost:2000", config["PROJECTA_MYBINDING"]);
         Assert.Equal("https://localhost:3000", config["PROJECTA_MYBINDING2"]);
@@ -232,8 +233,8 @@ public class WithReferenceTests
         // Call environment variable callbacks.
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectB.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
 
-        Assert.Equal("https://localhost:2000", config["services__projecta__mybinding__0"]);
-        Assert.Equal("http://localhost:3000", config["services__projecta__mybinding2__0"]);
+        Assert.Equal("https://localhost:2000", config["services__projecta__https__0"]);
+        Assert.Equal("http://localhost:3000", config["services__projecta__http__0"]);
 
         Assert.Equal("https://localhost:2000", config["PROJECTA_MYBINDING"]);
         Assert.Equal("http://localhost:3000", config["PROJECTA_MYBINDING2"]);
@@ -242,6 +243,51 @@ public class WithReferenceTests
         var r = Assert.Single(relationships);
         Assert.Equal("Reference", r.Type);
         Assert.Same(projectA.Resource, r.Resource);
+    }
+
+    [Fact]
+    public async Task InternalWithReferenceAddsConnectionStringAndServiceDiscoveryWhenResourceSupportsBoth()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var resource = builder.AddResource(new TestResourceWithConnectionStringAndServiceDiscovery("resource")
+        {
+            ConnectionString = "123"
+        })
+        .WithHttpEndpoint(1000, 2000, "http")
+        .WithEndpoint("http", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 2000));
+
+        var projectB = builder.AddProject<ProjectB>("projectb");
+
+        ResourceBuilderExtensions.WithReference(projectB, (IResourceBuilder<IResource>)resource, connectionName: "db", name: "api");
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectB.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+
+        Assert.Equal("123", config["ConnectionStrings__db"]);
+        Assert.Equal("http://localhost:2000", config["services__api__http__0"]);
+    }
+
+    [Fact]
+    public async Task InternalWithReferenceKeepsDefaultServiceDiscoveryNameWhenOnlyConnectionNameIsProvided()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var resource = builder.AddResource(new TestResourceWithConnectionStringAndServiceDiscovery("resource")
+        {
+            ConnectionString = "123"
+        })
+        .WithHttpEndpoint(1000, 2000, "http")
+        .WithEndpoint("http", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 2000));
+
+        var projectB = builder.AddProject<ProjectB>("projectb");
+
+        ResourceBuilderExtensions.WithReference(projectB, (IResourceBuilder<IResource>)resource, connectionName: "db");
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectB.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+
+        Assert.Equal("123", config["ConnectionStrings__db"]);
+        Assert.Equal("http://localhost:2000", config["services__resource__http__0"]);
+        Assert.DoesNotContain("services__db__http__0", config.Keys);
     }
 
     [Fact]
@@ -748,6 +794,14 @@ public class WithReferenceTests
     }
 
     private sealed class TestResource(string name) : Resource(name), IResourceWithConnectionString
+    {
+        public string? ConnectionString { get; set; }
+
+        public ReferenceExpression ConnectionStringExpression =>
+            ReferenceExpression.Create($"{ConnectionString}");
+    }
+
+    private sealed class TestResourceWithConnectionStringAndServiceDiscovery(string name) : ContainerResource(name), IResourceWithConnectionString, IResourceWithServiceDiscovery
     {
         public string? ConnectionString { get; set; }
 

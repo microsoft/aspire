@@ -52,6 +52,13 @@ internal sealed class DockerComposeInfrastructure(
 
             foreach (var r in @event.Model.GetComputeResources())
             {
+                // Skip resources that are explicitly targeted to a different compute environment
+                var resourceComputeEnvironment = r.GetComputeEnvironment();
+                if (resourceComputeEnvironment is not null && resourceComputeEnvironment != environment)
+                {
+                    continue;
+                }
+
                 // Configure OTLP for resources if dashboard is enabled (before creating the service resource)
                 if (environment.DashboardEnabled && environment.Dashboard?.Resource.OtlpGrpcEndpoint is EndpointReference otlpGrpcEndpoint)
                 {
@@ -109,9 +116,9 @@ internal sealed class DockerComposeInfrastructure(
             // Configure OTLP environment variables
             resourceWithEnv.Annotations.Add(new EnvironmentCallbackAnnotation(context =>
             {
-                context.EnvironmentVariables["OTEL_EXPORTER_OTLP_ENDPOINT"] = otlpEndpoint;
-                context.EnvironmentVariables["OTEL_EXPORTER_OTLP_PROTOCOL"] = "grpc";
-                context.EnvironmentVariables["OTEL_SERVICE_NAME"] = resource.Name;
+                context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpEndpoint] = otlpEndpoint;
+                context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpProtocol] = "grpc";
+                context.EnvironmentVariables[KnownOtelConfigNames.ServiceName] = resource.Name;
                 return Task.CompletedTask;
             }));
         }

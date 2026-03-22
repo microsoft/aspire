@@ -1,0 +1,72 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="zh-Hant" original="../LogsCommandStrings.resx">
+    <body>
+      <trans-unit id="Description">
+        <source>Display logs from resources in a running apphost</source>
+        <target state="needs-review-translation">顯示正在執行 Aspire Apphost 中的資源記錄。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FollowOptionDescription">
+        <source>Stream logs in real-time as they are written</source>
+        <target state="needs-review-translation">在寫入記錄時即時串流這些記錄。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="JsonOptionDescription">
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">輸出記錄採用 JSON 格式 (NDJSON)。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoResourcesFound">
+        <source>No resources found.</source>
+        <target state="translated">找不到任何資源。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceArgumentDescription">
+        <source>The name of the resource to get logs for. If not specified, logs from all resources are shown.</source>
+        <target state="needs-review-translation">要取得其記錄的資源名稱。如果未指定，則顯示所有資源的記錄。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceNotFound">
+        <source>Resource '{0}' was not found.</source>
+        <target state="translated">找不到資源 '{0}'。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceRequiredWithoutFollow">
+        <source>A resource name is required when not using --follow. Use --follow to stream logs from all resources.</source>
+        <target state="translated">當未使用 --follow 時，必須指定資源名稱。使用 --follow 從所有資源串流記錄。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SelectAppHostAction">
+        <source>stream logs from</source>
+        <target state="translated">串流來自以下位置的記錄</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TailMustBePositive">
+        <source>The --tail value must be a positive number.</source>
+        <target state="translated">--tail 值必須是正數。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TailOptionDescription">
+        <source>Number of lines to show from the end of logs (default: all)</source>
+        <target state="needs-review-translation">從記錄末端顯示的行數 (預設: 全部)。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TailRequiresResource">
+        <source>The --tail option requires a resource name to be specified.</source>
+        <target state="translated">--tail 選項需要指定資源名稱。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TimestampsOptionDescription">
+        <source>Show timestamps for each log line</source>
+        <target state="new">Show timestamps for each log line</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="GettingLogs">
+        <source>Getting logs...</source>
+        <target state="translated">正在取得記錄...</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

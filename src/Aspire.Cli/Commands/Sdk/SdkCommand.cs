@@ -5,6 +5,7 @@ using System.CommandLine;
 using System.CommandLine.Help;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Commands.Sdk;
@@ -21,12 +22,11 @@ internal sealed class SdkCommand : BaseCommand
         IFeatures features,
         ICliUpdateNotifier updateNotifier,
         CliExecutionContext executionContext,
-        IInteractionService interactionService)
-        : base("sdk", "Commands for generating SDKs for building Aspire integrations in other languages.", features, updateNotifier, executionContext, interactionService)
+        IInteractionService interactionService,
+        AspireCliTelemetry telemetry)
+        : base("sdk", "Commands for generating SDKs for building Aspire integrations in other languages.", features, updateNotifier, executionContext, interactionService, telemetry)
     {
-        ArgumentNullException.ThrowIfNull(generateCommand);
-        ArgumentNullException.ThrowIfNull(dumpCommand);
-
+        Hidden = true;
         Subcommands.Add(generateCommand);
         Subcommands.Add(dumpCommand);
     }

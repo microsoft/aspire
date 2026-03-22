@@ -33,9 +33,20 @@ internal sealed class AppHostProjectContext
     public bool NoBuild { get; init; }
 
     /// <summary>
+    /// Gets whether to skip restoring packages before running.
+    /// </summary>
+    public bool NoRestore { get; init; }
+
+    /// <summary>
     /// Gets whether to wait for a debugger to attach.
     /// </summary>
     public bool WaitForDebugger { get; init; }
+
+    /// <summary>
+    /// Gets whether to run in isolated mode.
+    /// In isolated mode, ports are randomized and user secrets are isolated.
+    /// </summary>
+    public bool Isolated { get; init; }
 
     /// <summary>
     /// Gets whether to start a debug session (for extension hosts).

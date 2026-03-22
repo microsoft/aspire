@@ -31,5 +31,8 @@ sealed class TestModuleInitializer
                         "Snapshots"),
                     typeName: type.Name,
                     methodName: method.Name));
+
+        // auto-accept baseline changes when running locally
+        VerifierSettings.AutoVerify(includeBuildServer: false, throwException: true);
     }
 }

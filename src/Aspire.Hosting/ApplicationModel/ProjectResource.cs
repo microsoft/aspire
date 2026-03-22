@@ -163,10 +163,13 @@ public class ProjectResource : Resource, IResourceWithEnvironment, IResourceWith
         // Add COPY --from: statements for each source
         stage.AddContainerFiles(this, containerWorkingDir, logger);
 
-        // Get the directory service to create temp Dockerfile
         var projectDir = Path.GetDirectoryName(projectMetadata.ProjectPath)!;
+
+        // Create a unique temporary Dockerfile path for this resource using the directory service.
+        // Passing a file name causes CreateTempFile to create the file in a new, empty subdirectory,
+        // which avoids Docker/buildx scanning the entire temporary directory.
         var directoryService = ctx.Services.GetRequiredService<IFileSystemService>();
-        var tempDockerfilePath = directoryService.TempDirectory.CreateTempFile().Path;
+        var tempDockerfilePath = directoryService.TempDirectory.CreateTempFile("Dockerfile").Path;
 
         var builtSuccessfully = false;
         try

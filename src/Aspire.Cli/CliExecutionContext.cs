@@ -5,12 +5,24 @@ using System.CommandLine;
 
 namespace Aspire.Cli;
 
-internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory, DirectoryInfo cacheDirectory, DirectoryInfo sdksDirectory, bool debugMode = false, IReadOnlyDictionary<string, string?>? environmentVariables = null, DirectoryInfo? homeDirectory = null)
+internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory, DirectoryInfo cacheDirectory, DirectoryInfo sdksDirectory, DirectoryInfo logsDirectory, string logFilePath, bool debugMode = false, IReadOnlyDictionary<string, string?>? environmentVariables = null, DirectoryInfo? homeDirectory = null)
 {
     public DirectoryInfo WorkingDirectory { get; } = workingDirectory;
     public DirectoryInfo HivesDirectory { get; } = hivesDirectory;
     public DirectoryInfo CacheDirectory { get; } = cacheDirectory;
     public DirectoryInfo SdksDirectory { get; } = sdksDirectory;
+
+    /// <summary>
+    /// Gets the directory where CLI log files are stored.
+    /// Used by cache clear command to clean up old log files.
+    /// </summary>
+    public DirectoryInfo LogsDirectory { get; } = logsDirectory;
+
+    /// <summary>
+    /// Gets the path to the current session's log file.
+    /// </summary>
+    public string LogFilePath { get; } = logFilePath;
+
     public DirectoryInfo HomeDirectory { get; } = homeDirectory ?? new DirectoryInfo(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
     public bool DebugMode { get; } = debugMode;
 

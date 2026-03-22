@@ -13,17 +13,22 @@ public static class KnownResourceCommands
     /// <summary>
     /// The command name for starting a resource.
     /// </summary>
-    public static readonly string StartCommand = "resource-start";
+    public static readonly string StartCommand = "start";
 
     /// <summary>
     /// The command name for stopping a resource.
     /// </summary>
-    public static readonly string StopCommand = "resource-stop";
+    public static readonly string StopCommand = "stop";
 
     /// <summary>
     /// The command name for restarting a resource.
     /// </summary>
-    public static readonly string RestartCommand = "resource-restart";
+    public static readonly string RestartCommand = "restart";
+
+    /// <summary>
+    /// The command name for rebuilding a project resource.
+    /// </summary>
+    public static readonly string RebuildCommand = "rebuild";
 
     /// <summary>
     /// The command name for setting a parameter value.
@@ -34,4 +39,8 @@ public static class KnownResourceCommands
     /// The command name for deleting a parameter value.
     /// </summary>
     public static readonly string DeleteParameterCommand = "parameter-delete";
+
+    internal const string LegacyStartCommand = "resource-start";
+    internal const string LegacyStopCommand = "resource-stop";
+    internal const string LegacyRestartCommand = "resource-restart";
 }

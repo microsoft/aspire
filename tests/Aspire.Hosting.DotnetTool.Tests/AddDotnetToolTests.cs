@@ -377,4 +377,30 @@ public class AddDotnetToolTests
 
         Assert.Equal(expectedManifest, manifest.ToString());
     }
+
+    [Theory]
+    [InlineData("11.1.0", true)]
+    [InlineData("10.0.0", true)]
+    [InlineData("9.0.999", false)]
+    public void ValidateDotnetSdkVersion_ValidatesVersionCorrectly(string versionString, bool isAllowed)
+    {
+        var version = Version.Parse(versionString);
+
+        if (isAllowed)
+        {
+            DotnetToolResourceExtensions.ValidateDotnetSdkVersion(version, "");
+        }
+        else
+        {
+            Assert.Throws<DistributedApplicationException>(() =>
+                DotnetToolResourceExtensions.ValidateDotnetSdkVersion(version, ""));
+        }
+    }
+
+    [Fact]
+    public void ValidateDotnetSdkVersion_WithNullVersion_DoesNotThrow()
+    {
+        // Should not throw - null is treated as "unable to determine version"
+        DotnetToolResourceExtensions.ValidateDotnetSdkVersion(null, "");
+    }
 }

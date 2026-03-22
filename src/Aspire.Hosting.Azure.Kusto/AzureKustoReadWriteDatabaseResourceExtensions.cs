@@ -16,6 +16,7 @@ internal static class AzureKustoReadWriteDatabaseResourceExtensions
     /// DATABASE_NAME is the database name and PERSISTENCE_PATH is <inheritdoc cref="AzureKustoEmulatorContainerDefaults.DefaultPersistencePath"/>.
     /// </remarks>
     /// <returns></returns>
+    [AspireExport("getDatabaseCreationScript", Description = "Gets the KQL script used to create the database.")]
     public static string GetDatabaseCreationScript(this AzureKustoReadWriteDatabaseResource databaseResource)
     {
         var scriptAnnotation = databaseResource.Annotations.OfType<AzureKustoCreateDatabaseScriptAnnotation>().LastOrDefault();

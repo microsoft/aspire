@@ -3,48 +3,43 @@
   <file datatype="xml" source-language="en" target-language="zh-Hans" original="../PsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>List running Aspire apphosts.</source>
-        <target state="new">List running Aspire apphosts.</target>
+        <source>List running apphosts</source>
+        <target state="needs-review-translation">列出正在运行的 Aspire AppHost。</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderCliPid">
-        <source>CLI_PID</source>
-        <target state="new">CLI_PID</target>
+        <source>CLI PID</source>
+        <target state="translated">CLI PID</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderDashboard">
-        <source>DASHBOARD</source>
-        <target state="new">DASHBOARD</target>
+        <source>Dashboard</source>
+        <target state="translated">仪表板</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderPath">
-        <source>PATH</source>
-        <target state="new">PATH</target>
+        <source>Path</source>
+        <target state="translated">路径</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderPid">
         <source>PID</source>
-        <target state="new">PID</target>
+        <target state="translated">PID</target>
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output in JSON format.</source>
-        <target state="new">Output in JSON format.</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">以 JSON 格式输出。</target>
         <note />
       </trans-unit>
-      <trans-unit id="NoRunningAppHostsFound">
-        <source>No running AppHosts found.</source>
-        <target state="new">No running AppHosts found.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ScanningForRunningAppHosts">
-        <source>Scanning for running AppHosts...</source>
-        <target state="new">Scanning for running AppHosts...</target>
+      <trans-unit id="ResourcesOptionDescription">
+        <source>Include resource details for each running apphost. Only applies to JSON output.</source>
+        <target state="new">Include resource details for each running apphost. Only applies to JSON output.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnknownPath">
         <source>Unknown</source>
-        <target state="new">Unknown</target>
+        <target state="translated">未知</target>
         <note />
       </trans-unit>
     </body>

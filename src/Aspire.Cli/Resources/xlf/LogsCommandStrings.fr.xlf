@@ -1,0 +1,72 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="fr" original="../LogsCommandStrings.resx">
+    <body>
+      <trans-unit id="Description">
+        <source>Display logs from resources in a running apphost</source>
+        <target state="needs-review-translation">Afficher les journaux des ressources dans un Apphost Aspire en cours d’exécution.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FollowOptionDescription">
+        <source>Stream logs in real-time as they are written</source>
+        <target state="needs-review-translation">Diffuser les journaux en temps réel au fur et à mesure de leur écriture.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="JsonOptionDescription">
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">Générer les journaux au format JSON (NDJSON).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoResourcesFound">
+        <source>No resources found.</source>
+        <target state="translated">Ressources introuvables.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceArgumentDescription">
+        <source>The name of the resource to get logs for. If not specified, logs from all resources are shown.</source>
+        <target state="needs-review-translation">Le nom de la ressource pour laquelle obtenir les journaux. Si aucun nom n’est spécifié, les journaux d’activité de toutes les ressources sont affichées.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceNotFound">
+        <source>Resource '{0}' was not found.</source>
+        <target state="translated">Ressource i» {0} »ntrouvable.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceRequiredWithoutFollow">
+        <source>A resource name is required when not using --follow. Use --follow to stream logs from all resources.</source>
+        <target state="translated">Un nom de ressource est requis si vous n’utilisez pas --follow. Utilisez --follow pour diffuser en continu les journaux de toutes les ressources.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SelectAppHostAction">
+        <source>stream logs from</source>
+        <target state="translated">transmettre les journaux de</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TailMustBePositive">
+        <source>The --tail value must be a positive number.</source>
+        <target state="translated">La valeur --tail doit être un nombre positif.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TailOptionDescription">
+        <source>Number of lines to show from the end of logs (default: all)</source>
+        <target state="needs-review-translation">Nombre de lignes à afficher à partir de la fin des journaux (par défaut : toutes).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TailRequiresResource">
+        <source>The --tail option requires a resource name to be specified.</source>
+        <target state="translated">L’option --tail requiert la spécification d’un nom de ressource.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TimestampsOptionDescription">
+        <source>Show timestamps for each log line</source>
+        <target state="new">Show timestamps for each log line</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="GettingLogs">
+        <source>Getting logs...</source>
+        <target state="translated">Récupération des journaux...</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

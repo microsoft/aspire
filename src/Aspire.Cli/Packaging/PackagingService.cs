@@ -41,9 +41,12 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
             var prHives = executionContext.HivesDirectory.GetDirectories();
             foreach (var prHive in prHives)
             {
+                // The packages subdirectory contains the actual .nupkg files
+                // Use forward slashes for cross-platform NuGet config compatibility
+                var packagesPath = Path.Combine(prHive.FullName, "packages").Replace('\\', '/');
                 var prChannel = PackageChannel.CreateExplicitChannel(prHive.Name, PackageChannelQuality.Prerelease, new[]
                 {
-                    new PackageMapping("Aspire*", prHive.FullName),
+                    new PackageMapping("Aspire*", packagesPath),
                     new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
                 }, nuGetPackageCache);
 
@@ -72,24 +75,34 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
 
     private PackageChannel? CreateStagingChannel()
     {
-        var stagingFeedUrl = GetStagingFeedUrl();
+        var stagingQuality = GetStagingQuality();
+        var hasExplicitFeedOverride = !string.IsNullOrEmpty(configuration["overrideStagingFeed"]);
+
+        // When quality is Prerelease or Both and no explicit feed override is set,
+        // use the shared daily feed instead of the SHA-specific feed. SHA-specific
+        // darc-pub-* feeds are only created for stable-quality builds, so a non-Stable
+        // quality without an explicit feed override can only work with the shared feed.
+        var useSharedFeed = !hasExplicitFeedOverride &&
+                            stagingQuality is not PackageChannelQuality.Stable;
+
+        var stagingFeedUrl = GetStagingFeedUrl(useSharedFeed);
         if (stagingFeedUrl is null)
         {
             return null;
         }
 
-        var stagingQuality = GetStagingQuality();
+        var pinnedVersion = GetStagingPinnedVersion(useSharedFeed);
 
         var stagingChannel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Staging, stagingQuality, new[]
         {
             new PackageMapping("Aspire*", stagingFeedUrl),
             new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
-        }, nuGetPackageCache, configureGlobalPackagesFolder: true, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/rc/daily");
+        }, nuGetPackageCache, configureGlobalPackagesFolder: !useSharedFeed, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/rc/daily", pinnedVersion: pinnedVersion);
 
         return stagingChannel;
     }
 
-    private string? GetStagingFeedUrl()
+    private string? GetStagingFeedUrl(bool useSharedFeed)
     {
         // Check for configuration override first
         var overrideFeed = configuration["overrideStagingFeed"];
@@ -102,6 +115,12 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
                 return overrideFeed;
             }
             // Invalid URL, fall through to default behavior
+        }
+
+        // Use the shared daily feed when builds aren't marked stable
+        if (useSharedFeed)
+        {
+            return "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json";
         }
 
         // Extract commit hash from assembly version to build staging feed URL
@@ -144,5 +163,20 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
 
         // Default to Stable if not specified or invalid
         return PackageChannelQuality.Stable;
+    }
+
+    private string? GetStagingPinnedVersion(bool useSharedFeed)
+    {
+        // Only pin versions when using the shared feed and the config flag is set
+        var pinToCliVersion = configuration["stagingPinToCliVersion"];
+        if (!useSharedFeed || !string.Equals(pinToCliVersion, "true", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        // Get the CLI's own version and strip build metadata (+hash)
+        var cliVersion = Utils.VersionHelper.GetDefaultTemplateVersion();
+        var plusIndex = cliVersion.IndexOf('+');
+        return plusIndex >= 0 ? cliVersion[..plusIndex] : cliVersion;
     }
 }

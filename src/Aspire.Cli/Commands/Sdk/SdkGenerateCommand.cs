@@ -5,9 +5,9 @@ using System.CommandLine;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
-using Spectre.Console;
 
 namespace Aspire.Cli.Commands.Sdk;
 
@@ -24,6 +24,21 @@ internal sealed class SdkGenerateCommand : BaseCommand
     private readonly IAppHostServerProjectFactory _appHostServerProjectFactory;
     private readonly ILogger<SdkGenerateCommand> _logger;
 
+    private static readonly Argument<FileInfo> s_integrationArgument = new("integration")
+    {
+        Description = "Path to the integration project (.csproj) to generate SDK from"
+    };
+    private static readonly Option<string> s_languageOption = new("--language", "-l")
+    {
+        Description = "Target language for SDK generation (e.g., typescript)",
+        Required = true
+    };
+    private static readonly Option<DirectoryInfo> s_outputOption = new("--output", "-o")
+    {
+        Description = "Output directory for generated SDK files",
+        Required = true
+    };
+
     public SdkGenerateCommand(
         ILanguageDiscovery languageDiscovery,
         IAppHostServerProjectFactory appHostServerProjectFactory,
@@ -31,40 +46,24 @@ internal sealed class SdkGenerateCommand : BaseCommand
         ICliUpdateNotifier updateNotifier,
         CliExecutionContext executionContext,
         IInteractionService interactionService,
-        ILogger<SdkGenerateCommand> logger)
-        : base("generate", "Generate typed SDKs from an Aspire integration library for use in other languages.", features, updateNotifier, executionContext, interactionService)
+        ILogger<SdkGenerateCommand> logger,
+        AspireCliTelemetry telemetry)
+        : base("generate", "Generate typed SDKs from an Aspire integration library for use in other languages.", features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _languageDiscovery = languageDiscovery;
         _appHostServerProjectFactory = appHostServerProjectFactory;
         _logger = logger;
 
-        // The integration project is the main input
-        var integrationArgument = new Argument<FileInfo>("integration")
-        {
-            Description = "Path to the integration project (.csproj) to generate SDK from"
-        };
-        Arguments.Add(integrationArgument);
-
-        var languageOption = new Option<string>("--language", "-l")
-        {
-            Description = "Target language for SDK generation (e.g., typescript)",
-            Required = true
-        };
-        Options.Add(languageOption);
-
-        var outputOption = new Option<DirectoryInfo>("--output", "-o")
-        {
-            Description = "Output directory for generated SDK files",
-            Required = true
-        };
-        Options.Add(outputOption);
+        Arguments.Add(s_integrationArgument);
+        Options.Add(s_languageOption);
+        Options.Add(s_outputOption);
     }
 
     protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
-        var integrationProject = parseResult.GetValue<FileInfo>("integration")!;
-        var language = parseResult.GetValue<string>("--language")!;
-        var outputDir = parseResult.GetValue<DirectoryInfo>("--output")!;
+        var integrationProject = parseResult.GetValue(s_integrationArgument)!;
+        var language = parseResult.GetValue(s_languageOption)!;
+        var outputDir = parseResult.GetValue(s_outputOption)!;
 
         // Validate the integration project exists
         if (!integrationProject.Exists)
@@ -94,8 +93,9 @@ internal sealed class SdkGenerateCommand : BaseCommand
         }
 
         return await InteractionService.ShowStatusAsync(
-            $":hammer: Generating {languageInfo.DisplayName} SDK from {integrationProject.Name}...",
-            async () => await GenerateSdkAsync(integrationProject, languageInfo, outputDir, cancellationToken));
+            $"Generating {languageInfo.DisplayName} SDK from {integrationProject.Name}...",
+            async () => await GenerateSdkAsync(integrationProject, languageInfo, outputDir, cancellationToken),
+            emoji: KnownEmojis.Hammer);
     }
 
     private async Task<LanguageInfo?> GetLanguageInfoAsync(string language, CancellationToken cancellationToken)
@@ -120,43 +120,47 @@ internal sealed class SdkGenerateCommand : BaseCommand
 
         try
         {
-            var appHostServerProject = _appHostServerProjectFactory.Create(tempDir);
-            var socketPath = appHostServerProject.GetSocketPath();
+            var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(tempDir, cancellationToken);
 
             // Get code generation package for the target language
             var codeGenPackage = await _languageDiscovery.GetPackageForLanguageAsync(languageInfo.LanguageId, cancellationToken);
 
-            // Build packages list - include the code generator
-            var packages = new List<(string Name, string Version)>();
+            // Build integrations list — the integration project brings Aspire.Hosting transitively;
+            // we only need to add the codegen package and the project reference itself.
+            var integrations = new List<IntegrationReference>();
             if (codeGenPackage is not null)
             {
-                packages.Add((codeGenPackage, AppHostServerProject.DefaultSdkVersion));
+                integrations.Add(IntegrationReference.FromPackage(codeGenPackage, VersionHelper.GetDefaultTemplateVersion()));
             }
+
+            // Add the integration project as a project reference
+            integrations.Add(IntegrationReference.FromProject(
+                Path.GetFileNameWithoutExtension(integrationProject.FullName),
+                integrationProject.FullName));
 
             _logger.LogDebug("Building AppHost server for SDK generation");
 
-            // Create project files with the integration project reference
-            await appHostServerProject.CreateProjectFilesAsync(
-                AppHostServerProject.DefaultSdkVersion,
-                packages,
-                cancellationToken,
-                additionalProjectReferences: [integrationProject.FullName]);
+            var prepareResult = await appHostServerProject.PrepareAsync(
+                VersionHelper.GetDefaultTemplateVersion(),
+                integrations,
+                cancellationToken);
 
-            var (buildSuccess, buildOutput) = await appHostServerProject.BuildAsync(cancellationToken);
-
-            if (!buildSuccess)
+            if (!prepareResult.Success)
             {
                 InteractionService.DisplayError("Failed to build SDK generation server.");
-                foreach (var (_, line) in buildOutput.GetLines())
+                if (prepareResult.Output is not null)
                 {
-                    InteractionService.DisplayMessage("wrench", line.EscapeMarkup());
+                    foreach (var (_, line) in prepareResult.Output.GetLines())
+                    {
+                        InteractionService.DisplayMessage(KnownEmojis.Wrench, line);
+                    }
                 }
                 return ExitCodeConstants.FailedToBuildArtifacts;
             }
 
             // Start the server
             var currentPid = Environment.ProcessId;
-            var (serverProcess, _) = appHostServerProject.Run(socketPath, currentPid, new Dictionary<string, string>());
+            var (socketPath, serverProcess, _) = appHostServerProject.Run(currentPid, new Dictionary<string, string>());
 
             try
             {

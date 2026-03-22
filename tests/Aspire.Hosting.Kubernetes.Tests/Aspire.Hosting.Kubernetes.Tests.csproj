@@ -6,8 +6,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Aspire.Hosting.AppHost\Aspire.Hosting.AppHost.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Docker\Aspire.Hosting.Docker.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Kubernetes\Aspire.Hosting.Kubernetes.csproj" />
     <ProjectReference Include="..\Aspire.Hosting.Tests\Aspire.Hosting.Tests.csproj" />
+    <ProjectReference Include="..\Aspire.TestUtilities\Aspire.TestUtilities.csproj" />
   </ItemGroup>
 
   <ItemGroup>

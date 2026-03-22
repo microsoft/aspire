@@ -1,78 +1,71 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.Json.Serialization;
+using System.Diagnostics.CodeAnalysis;
+using Microsoft.AspNetCore.Certificates.Generation;
 
 namespace Aspire.Cli.Certificates;
 
 /// <summary>
-/// Represents information about a development certificate from `dotnet dev-certs https --check-trust-machine-readable`.
+/// Represents information about an HTTPS development certificate.
 /// </summary>
 internal sealed class DevCertInfo
 {
-    [JsonPropertyName("Thumbprint")]
     public string? Thumbprint { get; set; }
 
-    [JsonPropertyName("Subject")]
     public string? Subject { get; set; }
 
-    [JsonPropertyName("X509SubjectAlternativeNameExtension")]
     public string[]? SubjectAlternativeNames { get; set; }
 
-    [JsonPropertyName("Version")]
     public int Version { get; set; }
 
-    [JsonPropertyName("ValidityNotBefore")]
     public DateTimeOffset ValidityNotBefore { get; set; }
 
-    [JsonPropertyName("ValidityNotAfter")]
     public DateTimeOffset ValidityNotAfter { get; set; }
 
-    [JsonPropertyName("IsHttpsDevelopmentCertificate")]
     public bool IsHttpsDevelopmentCertificate { get; set; }
 
-    [JsonPropertyName("IsExportable")]
     public bool IsExportable { get; set; }
 
-    [JsonPropertyName("TrustLevel")]
-    public string? TrustLevel { get; set; }
+    public CertificateManager.TrustLevel TrustLevel { get; set; }
 }
 
 /// <summary>
-/// Represents the trust level of a development certificate.
+/// The result of a certificate clean operation.
 /// </summary>
-internal static class DevCertTrustLevel
+internal sealed class CertificateCleanResult
 {
     /// <summary>
-    /// The certificate is fully trusted by all trust stores.
+    /// Gets whether the clean operation completed successfully.
     /// </summary>
-    public const string Full = "Full";
+    [MemberNotNullWhen(false, nameof(ErrorMessage))]
+    public required bool Success { get; init; }
 
     /// <summary>
-    /// The certificate is partially trusted (e.g., SSL_CERT_DIR not configured on Linux).
+    /// Gets whether the operation was cancelled by the user.
     /// </summary>
-    public const string Partial = "Partial";
+    public bool WasCancelled { get; init; }
 
     /// <summary>
-    /// The certificate is not trusted.
+    /// Gets the error message when the operation fails.
     /// </summary>
-    public const string None = "None";
+    public string? ErrorMessage { get; init; }
 }
 
 /// <summary>
-/// The result of checking certificate trust status using machine-readable output.
+/// The result of checking certificate trust status.
 /// </summary>
 internal sealed class CertificateTrustResult
 {
     /// <summary>
-    /// Gets whether any certificate information was returned.
+    /// Gets whether any valid certificate was found.
     /// </summary>
     public required bool HasCertificates { get; init; }
 
     /// <summary>
     /// Gets the trust level of the highest versioned valid certificate.
     /// </summary>
-    public required string? TrustLevel { get; init; }
+    public required CertificateManager.TrustLevel? TrustLevel { get; init; }
 
     /// <summary>
     /// Gets all certificate information returned by the check.
@@ -82,15 +75,15 @@ internal sealed class CertificateTrustResult
     /// <summary>
     /// Gets whether the certificate is fully trusted.
     /// </summary>
-    public bool IsFullyTrusted => string.Equals(TrustLevel, DevCertTrustLevel.Full, StringComparison.OrdinalIgnoreCase);
+    public bool IsFullyTrusted => TrustLevel == CertificateManager.TrustLevel.Full;
 
     /// <summary>
     /// Gets whether the certificate is partially trusted.
     /// </summary>
-    public bool IsPartiallyTrusted => string.Equals(TrustLevel, DevCertTrustLevel.Partial, StringComparison.OrdinalIgnoreCase);
+    public bool IsPartiallyTrusted => TrustLevel == CertificateManager.TrustLevel.Partial;
 
     /// <summary>
     /// Gets whether the certificate is not trusted at all.
     /// </summary>
-    public bool IsNotTrusted => !HasCertificates || string.Equals(TrustLevel, DevCertTrustLevel.None, StringComparison.OrdinalIgnoreCase);
+    public bool IsNotTrusted => !HasCertificates || TrustLevel == CertificateManager.TrustLevel.None;
 }

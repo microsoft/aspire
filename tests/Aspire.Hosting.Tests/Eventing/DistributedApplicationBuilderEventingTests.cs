@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests.Eventing;
 
+[Trait("Partition", "6")]
 public class DistributedApplicationBuilderEventingTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]

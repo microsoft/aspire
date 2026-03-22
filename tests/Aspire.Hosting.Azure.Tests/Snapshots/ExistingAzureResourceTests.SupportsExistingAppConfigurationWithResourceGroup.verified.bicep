@@ -10,3 +10,5 @@ resource appConfig 'Microsoft.AppConfiguration/configurationStores@2024-06-01' e
 output appConfigEndpoint string = appConfig.properties.endpoint
 
 output name string = appConfig.name
+
+output id string = appConfig.id

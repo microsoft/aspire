@@ -265,7 +265,7 @@ sealed partial class TestSummaryGenerator
                 reportBuilder.AppendLine(test.Output?.ErrorInfo?.InnerText);
                 if (test.Output?.StdOut is not null)
                 {
-                    const int halfLength = 25_000;
+                    const int halfLength = 5_000;
                     var stdOutSpan = test.Output.StdOut.AsSpan();
 
                     reportBuilder.AppendLine();

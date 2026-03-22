@@ -1,0 +1,82 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="tr" original="../AgentCommandStrings.resx">
+    <body>
+      <trans-unit id="ConfigUpdatesSelectPrompt">
+        <source>The following agent configurations use the deprecated 'mcp start' command. Update them?</source>
+        <target state="translated">Aşağıdaki aracı yapılandırmaları, kullanımdan kaldırılmış olan 'mcp start' komutunu kullanmaktadır. Güncellensin mi?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeprecatedConfigFix">
+        <source>Run 'aspire agent init' to update configuration</source>
+        <target state="translated">Yapılandırmayı güncellemek için 'aspire agent init' komutunu çalıştırın.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeprecatedConfigUpdate_Description">
+        <source>Update {0} config to use new 'agent mcp' command</source>
+        <target state="translated">{0} yapılandırmasını yeni 'agent mcp' komutunu kullanacak şekilde güncelleştirin</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeprecatedConfigWarning">
+        <source>{0} config uses deprecated 'mcp start' command</source>
+        <target state="translated">{0} yapılandırması kullanım dışı kalan 'mcp start' komutunu kullanıyor.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Description">
+        <source>Manage AI agent environment configuration</source>
+        <target state="needs-review-translation">AI detekli aracı entegrasyonlarınızı yönetin.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_ConfigureMcpServer">
+        <source>Install Aspire MCP server</source>
+        <target state="new">Install Aspire MCP server</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_Description">
+        <source>Initialize agent environment configuration for detected agents</source>
+        <target state="needs-review-translation">Tespit edilen aracılar için aracı ortam yapılandırmasını başlatın.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_InstallSkillFile">
+        <source>Install Aspire skill file (Recommended)</source>
+        <target state="new">Install Aspire skill file (Recommended)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_NothingSelected">
+        <source>No options selected. Nothing to configure.</source>
+        <target state="new">No options selected. Nothing to configure.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_WhatToConfigure">
+        <source>What would you like to configure? [dim](Enter to skip, Ctrl+C to cancel)[/]</source>
+        <target state="new">What would you like to configure? [dim](Enter to skip, Ctrl+C to cancel)[/]</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MalformedConfigFileError">
+        <source>The configuration file '{0}' contains malformed JSON. Please fix the file manually and re-run the command.</source>
+        <target state="translated">'{0}' yapılandırma dosyası hatalı biçimlendirilmiş JSON içeriyor. Lütfen dosyayı el ile düzeltin ve komutu yeniden çalıştırın.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="McpCommand_Description">
+        <source>Start the MCP (Model Context Protocol) server</source>
+        <target state="needs-review-translation">MCP (Model Bağlam Protokolü) sunucusunu başlat.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkipNoneDescription">
+        <source>None — skip</source>
+        <target state="new">None — skip</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkippedMalformedConfigFile">
+        <source>Skipping update of '{0}'.</source>
+        <target state="translated">'{0}' güncelleştirmesi atlanıyor.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigurationCompletedWithErrors">
+        <source>Configuration completed with errors. Please fix the reported issues and re-run the command.</source>
+        <target state="translated">Yapılandırma hatalarla tamamlandı. Lütfen bildirilen sorunları düzeltin ve komutu yeniden çalıştırın.</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

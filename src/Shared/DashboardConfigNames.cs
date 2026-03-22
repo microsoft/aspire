@@ -14,6 +14,7 @@ internal static class DashboardConfigNames
     public static readonly ConfigName DashboardConfigFilePathName = new(KnownConfigNames.DashboardConfigFilePath);
     public static readonly ConfigName DashboardFileConfigDirectoryName = new(KnownConfigNames.DashboardFileConfigDirectory);
     public static readonly ConfigName DashboardAIDisabledName = new(KnownConfigNames.DashboardAIDisabled);
+    public static readonly ConfigName DashboardAspireApiEnabledName = new(KnownConfigNames.DashboardApiEnabled);
     public static readonly ConfigName ResourceServiceUrlName = new(KnownConfigNames.ResourceServiceEndpointUrl);
     public static readonly ConfigName ForwardedHeaders = new(KnownConfigNames.DashboardForwardedHeadersEnabled);
 
@@ -25,6 +26,13 @@ internal static class DashboardConfigNames
     public static readonly ConfigName DashboardMcpPrimaryApiKeyName = new("Dashboard:Mcp:PrimaryApiKey", "DASHBOARD__MCP__PRIMARYAPIKEY");
     public static readonly ConfigName DashboardMcpDisableName = new("Dashboard:Mcp:Disabled", "DASHBOARD__MCP__DISABLED");
     public static readonly ConfigName DashboardMcpUseCliMcpName = new("Dashboard:Mcp:UseCliMcp", "DASHBOARD__MCP__USECLIMCP");
+
+    // Dashboard API Authentication - used for MCP and Telemetry API
+    public static readonly ConfigName DashboardApiEnabledName = new("Dashboard:Api:Enabled", "DASHBOARD__API__ENABLED");
+    public static readonly ConfigName DashboardApiAuthModeName = new("Dashboard:Api:AuthMode", "DASHBOARD__API__AUTHMODE");
+    public static readonly ConfigName DashboardApiPrimaryApiKeyName = new("Dashboard:Api:PrimaryApiKey", "DASHBOARD__API__PRIMARYAPIKEY");
+    public static readonly ConfigName DashboardApiSecondaryApiKeyName = new("Dashboard:Api:SecondaryApiKey", "DASHBOARD__API__SECONDARYAPIKEY");
+
     public static readonly ConfigName DashboardOtlpSuppressUnsecuredTelemetryMessageName = new("Dashboard:Otlp:SuppressUnsecuredTelemetryMessage", "DASHBOARD__OTLP__SUPPRESSUNSECUREDTELEMETRYMESSAGE");
     public static readonly ConfigName DashboardOtlpCorsAllowedOriginsKeyName = new("Dashboard:Otlp:Cors:AllowedOrigins", "DASHBOARD__OTLP__CORS__ALLOWEDORIGINS");
     public static readonly ConfigName DashboardOtlpCorsAllowedHeadersKeyName = new("Dashboard:Otlp:Cors:AllowedHeaders", "DASHBOARD__OTLP__CORS__ALLOWEDHEADERS");

@@ -31,7 +31,7 @@ internal static class DcpLogParser
         {
             // The log format is
             // <date>\t<level>\t<category>\t<log message>
-            // e.g. 2023-09-19T20:40:50.509-0700      info    dcpctrl.ServiceReconciler       service /apigateway is now in state Ready       {"ServiceName": {"name":"apigateway"}}
+            // e.g. 2023-09-19T20:40:50.509-0700      info    dcp.ServiceReconciler       service /apigateway is now in state Ready       {"ServiceName": {"name":"apigateway"}}
 
             var tab = line.IndexOf((byte)'\t');
             if (tab < 0)
@@ -41,22 +41,22 @@ internal static class DcpLogParser
 
             // Skip date
             line = line[(tab + 1)..];
-            
+
             tab = line.IndexOf((byte)'\t');
             if (tab < 0)
             {
                 return false;
             }
-            
+
             var level = line[..tab];
             line = line[(tab + 1)..];
-            
+
             tab = line.IndexOf((byte)'\t');
             if (tab < 0)
             {
                 return false;
             }
-            
+
             var categorySpan = line[..tab];
             line = line[(tab + 1)..];
 
@@ -124,7 +124,7 @@ internal static class DcpLogParser
     public static string FormatSystemLog(string message)
     {
         const string SystemLogPrefix = "[sys] ";
-        
+
         // Try to find JSON portion in the message (starts with a tab followed by '{')
         var jsonStart = message.IndexOf('\t');
         if (jsonStart < 0)
@@ -145,7 +145,7 @@ internal static class DcpLogParser
             // Build the formatted message
             var sb = new StringBuilder();
             sb.Append(SystemLogPrefix);
-            
+
             // Add the text part if it exists
             if (!string.IsNullOrWhiteSpace(textPart))
             {
@@ -195,7 +195,7 @@ internal static class DcpLogParser
                         {
                             sb.Append(hasAddedField ? ", " : ": ");
                         }
-                        
+
                         // Add field in format "Name = Value"
                         sb.Append(name);
                         sb.Append(" = ");

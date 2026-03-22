@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="$(SharedDir)PathNormalizer.cs" Link="Utils\PathNormalizer.cs" />
+    <InternalsVisibleTo Include="Aspire.Hosting.JavaScript.Tests" />
   </ItemGroup>
 
   <ItemGroup>

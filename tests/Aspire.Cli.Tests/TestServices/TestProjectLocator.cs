@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Microsoft.AspNetCore.InternalTesting;
 using Aspire.Cli.Projects;
 
 namespace Aspire.Cli.Tests.TestServices;
@@ -10,6 +11,8 @@ internal sealed class TestProjectLocator : IProjectLocator
     public Func<FileInfo?, bool, CancellationToken, Task<FileInfo?>>? UseOrFindAppHostProjectFileAsyncCallback { get; set; }
 
     public Func<FileInfo?, MultipleAppHostProjectsFoundBehavior, bool, CancellationToken, Task<AppHostProjectSearchResult>>? UseOrFindAppHostProjectFileWithBehaviorAsyncCallback { get; set; }
+
+    public Func<CancellationToken, Task<FileInfo?>>? GetAppHostFromSettingsAsyncCallback { get; set; }
 
     public async Task<FileInfo?> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, bool createSettingsFile, CancellationToken cancellationToken)
     {
@@ -36,13 +39,24 @@ internal sealed class TestProjectLocator : IProjectLocator
         }
 
         // Fallback behavior
-        var appHostFile = await UseOrFindAppHostProjectFileAsync(projectFile, createSettingsFile, cancellationToken);
+        var appHostFile = await UseOrFindAppHostProjectFileAsync(projectFile, createSettingsFile, cancellationToken).DefaultTimeout();
         if (appHostFile is null)
         {
             return new AppHostProjectSearchResult(null, []);
         }
 
         return new AppHostProjectSearchResult(appHostFile, [appHostFile]);
+    }
+
+    public async Task<FileInfo?> GetAppHostFromSettingsAsync(CancellationToken cancellationToken = default)
+    {
+        if (GetAppHostFromSettingsAsyncCallback != null)
+        {
+            return await GetAppHostFromSettingsAsyncCallback(cancellationToken);
+        }
+
+        // Default: no settings file found
+        return null;
     }
 }
 

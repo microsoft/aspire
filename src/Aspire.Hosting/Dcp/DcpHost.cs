@@ -10,12 +10,15 @@ using Aspire.Dashboard.Utils;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Resources;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Dcp;
 
 #pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 internal sealed class DcpHost
 {
@@ -29,6 +32,9 @@ internal sealed class DcpHost
     private readonly IInteractionService _interactionService;
     private readonly Locations _locations;
     private readonly TimeProvider _timeProvider;
+    private readonly IDeveloperCertificateService _developerCertificateService;
+    private readonly IFileSystemService _fileSystemService;
+    private readonly IConfiguration _configuration;
     private readonly CancellationTokenSource _shutdownCts = new();
     private Task? _logProcessorTask;
 
@@ -48,7 +54,10 @@ internal sealed class DcpHost
         IInteractionService interactionService,
         Locations locations,
         DistributedApplicationModel applicationModel,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IDeveloperCertificateService developerCertificateService,
+        IFileSystemService fileSystemService,
+        IConfiguration configuration)
     {
         _loggerFactory = loggerFactory;
         _logger = loggerFactory.CreateLogger<DcpHost>();
@@ -58,11 +67,15 @@ internal sealed class DcpHost
         _locations = locations;
         _applicationModel = applicationModel;
         _timeProvider = timeProvider;
+        _developerCertificateService = developerCertificateService;
+        _fileSystemService = fileSystemService;
+        _configuration = configuration;
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         await EnsureDcpContainerRuntimeAsync(cancellationToken).ConfigureAwait(false);
+        await EnsureDevelopmentCertificateTrustAsync(cancellationToken).ConfigureAwait(false);
         EnsureDcpHostRunning();
     }
 
@@ -111,7 +124,7 @@ internal sealed class DcpHost
             if (dcpInfo is not null)
             {
                 DcpDependencyCheck.CheckDcpInfoAndLogErrors(_logger, _dcpOptions, dcpInfo, throwIfUnhealthy: requireContainerRuntimeInitialization);
-                
+
                 // Show UI notification if container runtime is unhealthy
                 TryShowContainerRuntimeNotification(dcpInfo, cancellationToken);
             }
@@ -119,6 +132,63 @@ internal sealed class DcpHost
         finally
         {
             AspireEventSource.Instance.ContainerRuntimeHealthCheckStop();
+        }
+    }
+
+    internal async Task EnsureDevelopmentCertificateTrustAsync(CancellationToken cancellationToken)
+    {
+        AspireEventSource.Instance.DevelopmentCertificateTrustCheckStart();
+
+        try
+        {
+            // If no resources use HTTPS/TLS, there's no need to warn about untrusted dev certificates.
+            if (!_applicationModel.Resources.Any(ResourceUsesTls))
+            {
+                return;
+            }
+
+            // Check and warn if no trusted dev certs exist, or if a newer untrusted cert was detected
+            var hasNewerUntrustedCert = _developerCertificateService.LatestCertificateIsUntrusted;
+            var hasNoTrustedCerts = _developerCertificateService.Certificates.Count == 0;
+
+            if (hasNoTrustedCerts || hasNewerUntrustedCert)
+            {
+                string title;
+                string message;
+
+                if (hasNoTrustedCerts)
+                {
+                    title = InteractionStrings.NoDeveloperCertificateTrustedTitle;
+                    message = InteractionStrings.NoDeveloperCertificateTrustedMessage;
+                    _logger.LogWarning("No trusted Aspire development certificate was found. See https://aka.ms/aspire/devcerts for more information.");
+                }
+                else
+                {
+                    title = InteractionStrings.DeveloperCertificateNotFullyTrustedTitle;
+                    message = InteractionStrings.DeveloperCertificateNotFullyTrustedMessage;
+                    _logger.LogWarning("The most recent development certificate isn't fully trusted. See https://aka.ms/aspire/devcerts for more information.");
+                }
+
+                // Check if the interaction service is available (dashboard enabled)
+                if (!_interactionService.IsAvailable)
+                {
+                    return;
+                }
+
+                // Send notification to the dashboard
+                _ = _interactionService.PromptNotificationAsync(
+                    title: title,
+                    message: message,
+                    options: new NotificationInteractionOptions
+                    {
+                        Intent = MessageIntent.Error,
+                    },
+                    cancellationToken: cancellationToken);
+            }
+        }
+        finally
+        {
+            AspireEventSource.Instance.DevelopmentCertificateTrustCheckStop();
         }
     }
 
@@ -198,11 +268,6 @@ internal sealed class DcpHost
         if (!string.IsNullOrEmpty(_dcpOptions.ExtensionsPath))
         {
             dcpProcessSpec.EnvironmentVariables.Add("DCP_EXTENSIONS_PATH", _dcpOptions.ExtensionsPath);
-        }
-
-        if (!string.IsNullOrEmpty(_dcpOptions.BinPath))
-        {
-            dcpProcessSpec.EnvironmentVariables.Add("DCP_BIN_PATH", _dcpOptions.BinPath);
         }
 
         // Set an environment variable to contain session info that should be deleted when DCP is done
@@ -408,7 +473,7 @@ internal sealed class DcpHost
 
             // Create a cancellation token source that can be cancelled when runtime becomes healthy
             var notificationCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token);
-            
+
             // Single background task to show notification and poll for health updates
             _ = Task.Run(async () =>
             {
@@ -424,7 +489,7 @@ internal sealed class DcpHost
                         try
                         {
                             var dcpInfo = await _dependencyCheckService.GetDcpInfoAsync(force: true, cancellationToken: notificationCts.Token).ConfigureAwait(false);
-                            
+
                             if (dcpInfo is not null && IsContainerRuntimeHealthy(dcpInfo))
                             {
                                 // Container runtime is now healthy, exit the polling loop
@@ -442,10 +507,10 @@ internal sealed class DcpHost
                             _logger.LogDebug(ex, "Error while polling container runtime health for notification");
                         }
                     }
-                    
+
                     // Cancel the notification at the end of the loop
                     notificationCts.Cancel();
-                    
+
                     // Wait for notification task to complete
                     try
                     {
@@ -478,6 +543,38 @@ internal sealed class DcpHost
         var installed = dcpInfo.Containers?.Installed ?? false;
         var running = dcpInfo.Containers?.Running ?? false;
         return installed && running;
+    }
+
+    /// <summary>
+    /// Determines whether a resource uses HTTPS/TLS by checking for HTTPS endpoint annotations
+    /// or active HTTPS certificate configuration callbacks that haven't been disabled.
+    /// </summary>
+    private static bool ResourceUsesTls(IResource resource)
+    {
+        // Check if the resource has any HTTPS endpoints
+        if (resource.Annotations.OfType<EndpointAnnotation>().Any(e => e.UriScheme is "https"))
+        {
+            return true;
+        }
+
+        // Check if the resource has an HTTPS certificate configuration callback that hasn't been
+        // disabled via WithoutHttpsCertificate(). HttpsCertificateAnnotation has no effect without
+        // HttpsCertificateConfigurationCallbackAnnotation, so it's only checked as a filter here.
+        if (resource.Annotations.OfType<HttpsCertificateConfigurationCallbackAnnotation>().Any())
+        {
+            // The callback is present. Check if it's been disabled by WithoutHttpsCertificate()
+            // which sets UseDeveloperCertificate = false and Certificate = null.
+            if (resource.TryGetLastAnnotation<HttpsCertificateAnnotation>(out var certAnnotation)
+                && certAnnotation.UseDeveloperCertificate is false or null
+                && certAnnotation.Certificate is null)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        return false;
     }
 }
 

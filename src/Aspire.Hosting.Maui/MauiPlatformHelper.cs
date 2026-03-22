@@ -142,25 +142,25 @@ internal static class MauiPlatformHelper
 
             // Replace OTEL_SERVICE_NAME template with actual resource name
             // DCP would normally set this to the resource name, so we do the same
-            if (context.EnvironmentVariables.TryGetValue("OTEL_SERVICE_NAME", out var serviceName))
+            if (context.EnvironmentVariables.TryGetValue(KnownOtelConfigNames.ServiceName, out var serviceName))
             {
                 if (serviceName is string serviceNameStr && 
                     serviceNameStr.Contains("{{", StringComparison.Ordinal) && 
                     serviceNameStr.Contains("}}", StringComparison.Ordinal))
                 {
-                    context.EnvironmentVariables["OTEL_SERVICE_NAME"] = resource.Name;
+                    context.EnvironmentVariables[KnownOtelConfigNames.ServiceName] = resource.Name;
                 }
             }
 
             // Replace OTEL_RESOURCE_ATTRIBUTES template with unique instance ID
             // DCP would normally set this to a generated suffix, so we use a GUID
-            if (context.EnvironmentVariables.TryGetValue("OTEL_RESOURCE_ATTRIBUTES", out var resourceAttrs))
+            if (context.EnvironmentVariables.TryGetValue(KnownOtelConfigNames.ResourceAttributes, out var resourceAttrs))
             {
                 if (resourceAttrs is string resourceAttrsStr && 
                     resourceAttrsStr.Contains("{{", StringComparison.Ordinal) && 
                     resourceAttrsStr.Contains("}}", StringComparison.Ordinal))
                 {
-                    context.EnvironmentVariables["OTEL_RESOURCE_ATTRIBUTES"] = $"service.instance.id={instanceId}";
+                    context.EnvironmentVariables[KnownOtelConfigNames.ResourceAttributes] = $"service.instance.id={instanceId}";
                 }
             }
         });

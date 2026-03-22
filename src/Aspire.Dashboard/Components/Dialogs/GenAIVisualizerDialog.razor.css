@@ -13,6 +13,10 @@
     background: var(--main-container-background-color);
 }
 
+::deep .span-messages-container fluent-button.back-button::part(control):not(:hover) {
+    background: var(--main-container-background-color);
+}
+
 ::deep .span-messages-sidebar {
     height: 65vh;
     overflow-y: auto;
@@ -30,6 +34,8 @@
 
 ::deep .message-container .message-title {
     font-size: var(--type-ramp-plus-1-font-size);
+    display: flex;
+    align-items: center;
 }
 
 ::deep .section-title {
@@ -128,6 +134,10 @@
     height: 50px;
 }
 
+::deep .back-button {
+    margin-left: auto;
+}
+
 ::deep .message-header-details {
     display: flex;
     flex-flow: column;
@@ -174,6 +184,7 @@
     flex-direction: column;
     row-gap: 12px;
     width: 100%;
+    margin-bottom: 4px;
 }
 
 ::deep .span-details-layout, ::deep .property-grid-container {
@@ -216,6 +227,11 @@
     color: var(--error);
 }
 
+::deep .error-message-text {
+    color: var(--error);
+    font-weight: 500;
+}
+
 ::deep .display-error-content {
     white-space: pre-wrap;
     word-break: break-word;
@@ -249,6 +265,10 @@
     --fill-color: var(--property-grid-genai-dialog-background-color);
 }
 
+::deep .tab-container .tools-list fluent-accordion-item.tool-highlighted {
+    border: 2px solid var(--accent-fill-rest);
+}
+
 ::deep .tab-container .tools-list fluent-accordion-item,
 ::deep .tab-container .tools-list fluent-accordion-item::part(region) {
     background-color: var(--property-grid-genai-dialog-background-color);
@@ -279,8 +299,19 @@
     margin-right: 0.25rem;
 }
 
+::deep .tab-container .tool-description {
+    margin: 0 0 8px 4px;
+    font-size: small;
+}
+
+::deep .tab-container .tool-description * {
+    font-size: inherit;
+}
+
 ::deep .tab-container .tool-footer {
     padding-left: 4px;
+    font-weight: 500;
+    margin-bottom: 8px;
 }
 
 ::deep .tab-container .tool-parameters-table {

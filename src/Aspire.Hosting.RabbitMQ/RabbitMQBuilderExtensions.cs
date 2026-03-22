@@ -26,6 +26,7 @@ public static class RabbitMQBuilderExtensions
     /// <param name="password">The parameter used to provide the password for the RabbitMQ resource. If <see langword="null"/> a random password will be generated.</param>
     /// <param name="port">The host port that the underlying container is bound to when running locally.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("addRabbitMQ", Description = "Adds a RabbitMQ container resource")]
     public static IResourceBuilder<RabbitMQServerResource> AddRabbitMQ(this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
         IResourceBuilder<ParameterResource>? userName = null,
@@ -92,6 +93,7 @@ public static class RabbitMQBuilderExtensions
     /// <param name="name">The name of the volume. Defaults to an auto-generated name based on the application and resource names.</param>
     /// <param name="isReadOnly">A flag that indicates if this is a read-only volume.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("withDataVolume", Description = "Adds a data volume to the RabbitMQ container")]
     public static IResourceBuilder<RabbitMQServerResource> WithDataVolume(this IResourceBuilder<RabbitMQServerResource> builder, string? name = null, bool isReadOnly = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -107,6 +109,7 @@ public static class RabbitMQBuilderExtensions
     /// <param name="source">The source directory on the host to mount into the container.</param>
     /// <param name="isReadOnly">A flag that indicates if this is a read-only mount.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("withDataBindMount", Description = "Adds a data bind mount to the RabbitMQ container")]
     public static IResourceBuilder<RabbitMQServerResource> WithDataBindMount(this IResourceBuilder<RabbitMQServerResource> builder, string source, bool isReadOnly = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -127,6 +130,7 @@ public static class RabbitMQBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <exception cref="DistributedApplicationException">Thrown when the current container image and tag do not match the defaults for <see cref="RabbitMQServerResource"/>.</exception>
+    [AspireExport("withManagementPlugin", Description = "Enables the RabbitMQ management plugin")]
     public static IResourceBuilder<RabbitMQServerResource> WithManagementPlugin(this IResourceBuilder<RabbitMQServerResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -147,6 +151,7 @@ public static class RabbitMQBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExport("withManagementPluginWithPort", Description = "Enables the RabbitMQ management plugin with a specific port")]
     public static IResourceBuilder<RabbitMQServerResource> WithManagementPlugin(this IResourceBuilder<RabbitMQServerResource> builder, int? port)
     {
         ArgumentNullException.ThrowIfNull(builder);

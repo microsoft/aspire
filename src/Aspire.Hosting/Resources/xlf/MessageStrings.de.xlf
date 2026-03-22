@@ -27,6 +27,46 @@
         <target state="translated">Zum Ausführen der Anwendung ist eine neuere Version des Pakets „Aspire.Hosting.AppHost“ erforderlich. Stellen Sie sicher, dass Sie auf mindestens die Version „{0}“ verweisen.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InstallationInstructions">
+        <source>Installation instructions</source>
+        <target state="translated">Installationsanleitung</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MissingCommandNotificationTitle">
+        <source>Missing command</source>
+        <target state="translated">Fehlender Befehl</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PersistentContainerWithoutUserSecrets">
+        <source>Resource '{0}' has a persistent lifetime but the AppHost project does not have user secrets configured. Generated parameter values (such as passwords) may change on each restart, causing persistent containers to be recreated. Run 'aspire secret set' to initialize user secrets.</source>
+        <target state="translated">Die Ressource „{0}“ hat eine persistente Lebensdauer, aber im AppHost-Projekt sind keine Benutzergeheimnisse konfiguriert. Generierte Parameterwerte (wie Kennwörter) können sich bei jedem Neustart ändern, wodurch persistente Container neu erstellt werden. Führen Sie „aspire secret set“ aus, um Benutzergeheimnisse zu initialisieren.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RequiredCommandNotFound">
+        <source>Required command '{0}' was not found on PATH or at the specified location.</source>
+        <target state="translated">Der erforderliche Befehl „{0}“ wurde weder im PATH noch an dem angegebenen Speicherort gefunden.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RequiredCommandNotFoundWithLink">
+        <source>Required command '{0}' was not found on PATH or at the specified location. For installation instructions, see: {1}</source>
+        <target state="translated">Der erforderliche Befehl „{0}“ wurde weder im PATH noch an dem angegebenen Speicherort gefunden. Anleitungen für die Installation finden Sie unter: {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RequiredCommandValidationFailed">
+        <source>Command '{0}' validation failed: {1}</source>
+        <target state="translated">Fehler bei der Überprüfung des Befehls „{0}“: {1}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RequiredCommandValidationFailedWithLink">
+        <source>Command '{0}' validation failed: {1}. For installation instructions, see: {2}</source>
+        <target state="translated">Fehler bei der Überprüfung des Befehls „{0}“: {1}. Anleitungen für die Installation finden Sie unter: {2}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceMayFailToStart">
+        <source>Resource '{0}' may fail to start: {1}</source>
+        <target state="translated">Die Ressource „{0}“ kann möglicherweise nicht gestartet werden: {1}</target>
+        <note />
+      </trans-unit>
     </body>
   </file>
 </xliff>

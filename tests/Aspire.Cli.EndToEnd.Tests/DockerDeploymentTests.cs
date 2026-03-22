@@ -3,7 +3,6 @@
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Tests.Utils;
-using Hex1b;
 using Hex1b.Automation;
 using Xunit;
 
@@ -26,98 +25,47 @@ public sealed class DockerDeploymentTests(ITestOutputHelper output)
         var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
         var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
         var isCI = CliE2ETestHelpers.IsRunningInCI;
-        var recordingPath = CliE2ETestHelpers.GetTestResultsRecordingPath(nameof(CreateAndDeployToDockerCompose));
-
-        var builder = Hex1bTerminal.CreateBuilder()
-            .WithHeadless()
-            .WithAsciinemaRecording(recordingPath)
-            .WithPtyProcess("/bin/bash", ["--norc"]);
-
-        using var terminal = builder.Build();
+        using var terminal = CliE2ETestHelpers.CreateTestTerminal();
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
-        // Pattern searchers for template selection
-        var waitingForTemplateSelectionPrompt = new CellPatternSearcher()
-            .FindPattern("> Starter App");
-
-        // In CI, aspire add shows a version selection prompt (but aspire new does not when channel is set)
-        var waitingForAddVersionSelectionPrompt = new CellPatternSearcher()
-            .Find("(based on NuGet.config)");
-
-        var waitingForProjectNamePrompt = new CellPatternSearcher()
-            .Find($"Enter the project name ({workspace.WorkspaceRoot.Name}): ");
-
-        var waitingForOutputPathPrompt = new CellPatternSearcher()
-            .Find($"Enter the output path: (./{ProjectName}): ");
-
-        var waitingForUrlsPrompt = new CellPatternSearcher()
-            .Find($"Use *.dev.localhost URLs");
-
-        var waitingForRedisPrompt = new CellPatternSearcher()
-            .Find($"Use Redis Cache");
-
-        var waitingForTestPrompt = new CellPatternSearcher()
-            .Find($"Do you want to create a test project?");
-
         var counter = new SequenceCounter();
-        var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
-        sequenceBuilder.PrepareEnvironment(workspace, counter);
+        // PrepareEnvironment
+        await auto.PrepareEnvironmentAsync(workspace, counter);
 
         if (isCI)
         {
-            sequenceBuilder.InstallAspireCliFromPullRequest(prNumber, counter);
-            sequenceBuilder.SourceAspireCliEnvironment(counter);
-            sequenceBuilder.VerifyAspireCliVersion(commitSha, counter);
+            await auto.InstallAspireCliFromPullRequestAsync(prNumber, counter);
+            await auto.SourceAspireCliEnvironmentAsync(counter);
+            await auto.VerifyAspireCliVersionAsync(commitSha, counter);
         }
 
-        // Step 1: Create a new Aspire Starter App
-        // Note: When channel is set (CI), aspire new auto-selects version - no version prompt appears
-        sequenceBuilder.Type("aspire new")
-            .Enter()
-            .WaitUntil(s => waitingForTemplateSelectionPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(30))
-            .Enter() // select first template (Starter App)
-            .WaitUntil(s => waitingForProjectNamePrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .Type(ProjectName)
-            .Enter()
-            .WaitUntil(s => waitingForOutputPathPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .Enter() // accept default output path
-            .WaitUntil(s => waitingForUrlsPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .Enter() // select "No" for localhost URLs (default)
-            .WaitUntil(s => waitingForRedisPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            // For Redis prompt, default is "Yes" so we need to select "No" by pressing Down
-            .Key(Hex1b.Input.Hex1bKey.DownArrow)
-            .Enter() // select "No" for Redis Cache
-            .WaitUntil(s => waitingForTestPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            // For test project prompt, default is "No" so just press Enter to accept it
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        // Step 1: Create a new Aspire Starter App (no Redis cache)
+        await auto.AspireNewAsync(ProjectName, counter, useRedisCache: false);
 
         // Step 2: Navigate into the project directory
-        sequenceBuilder.Type($"cd {ProjectName}")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync($"cd {ProjectName}");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 3: Add Aspire.Hosting.Docker package using aspire add
         // Pass the package name directly as an argument to avoid interactive selection
-        sequenceBuilder.Type("aspire add Aspire.Hosting.Docker")
-            .Enter();
+        await auto.TypeAsync("aspire add Aspire.Hosting.Docker");
+        await auto.EnterAsync();
 
         // In CI, aspire add shows a version selection prompt (unlike aspire new which auto-selects when channel is set)
         if (isCI)
         {
-            sequenceBuilder
-                .WaitUntil(s => waitingForAddVersionSelectionPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(60))
-                .Enter(); // select first version (PR build)
+            await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
+            await auto.EnterAsync(); // select first version (PR build)
         }
 
-        sequenceBuilder.WaitForSuccessPrompt(counter, TimeSpan.FromSeconds(180));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
 
         // Step 4: Modify AppHost's main file to add Docker Compose environment
-        // We'll use a callback to modify the file during sequence execution
         // Note: Aspire templates use AppHost.cs as the main entry point, not Program.cs
-        sequenceBuilder.ExecuteCallback(() =>
         {
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, ProjectName);
             var appHostDir = Path.Combine(projectDir, $"{ProjectName}.AppHost");
@@ -140,56 +88,52 @@ builder.Build().Run();
             File.WriteAllText(appHostFilePath, content);
 
             output.WriteLine($"Modified AppHost.cs at: {appHostFilePath}");
-        });
+        }
 
         // Step 5: Create output directory for deployment artifacts
-        sequenceBuilder.Type("mkdir -p deploy-output")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("mkdir -p deploy-output");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 6: Unset ASPIRE_PLAYGROUND before deploy
         // ASPIRE_PLAYGROUND=true takes precedence over --non-interactive in CliHostEnvironment,
         // which causes Spectre.Console to try to show interactive spinners and prompts concurrently,
         // resulting in "Operations with dynamic displays cannot run at the same time" errors.
-        sequenceBuilder.Type("unset ASPIRE_PLAYGROUND")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("unset ASPIRE_PLAYGROUND");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 7: Run aspire deploy to deploy to Docker Compose
         // This will build the project, generate Docker Compose files, and start the containers
         // Use --non-interactive to avoid any prompts during deployment
-        sequenceBuilder.Type("aspire deploy -o deploy-output --non-interactive")
-            .Enter()
-            .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(5));
+        await auto.TypeAsync("aspire deploy -o deploy-output --non-interactive");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
 
         // Step 8: Capture the port from docker ps output for verification
         // We need to parse the port from docker ps to make a web request
-        sequenceBuilder.Type("docker ps --format '{{.Ports}}' | grep -oE '0\\.0\\.0\\.0:[0-9]+' | head -1 | cut -d: -f2")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("docker ps --format '{{.Ports}}' | grep -oE '0\\.0\\.0\\.0:[0-9]+' | head -1 | cut -d: -f2");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 9: Verify the deployment is running with docker ps
-        sequenceBuilder.Type("docker ps")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("docker ps");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 10: Make a web request to verify the application is working
         // We'll use curl to make the request
-        sequenceBuilder.Type("curl -s -o /dev/null -w '%{http_code}' http://localhost:$(docker ps --format '{{.Ports}}' --filter 'name=webfrontend' | grep -oE '0\\.0\\.0\\.0:[0-9]+->8080' | head -1 | cut -d: -f2 | cut -d'-' -f1) 2>/dev/null || echo 'request-failed'")
-            .Enter()
-            .WaitForSuccessPrompt(counter, TimeSpan.FromSeconds(30));
+        await auto.TypeAsync("curl -s -o /dev/null -w '%{http_code}' http://localhost:$(docker ps --format '{{.Ports}}' --filter 'name=webfrontend' | grep -oE '0\\.0\\.0\\.0:[0-9]+->8080' | head -1 | cut -d: -f2 | cut -d'-' -f1) 2>/dev/null || echo 'request-failed'");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
         // Step 11: Clean up - stop and remove containers
-        sequenceBuilder.Type("cd deploy-output && docker compose down --volumes --remove-orphans 2>/dev/null || true")
-            .Enter()
-            .WaitForSuccessPrompt(counter, TimeSpan.FromSeconds(60));
+        await auto.TypeAsync("cd deploy-output && docker compose down --volumes --remove-orphans 2>/dev/null || true");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
-        sequenceBuilder.Type("exit")
-            .Enter();
-
-        var sequence = sequenceBuilder.Build();
-
-        await sequence.ApplyAsync(terminal, TestContext.Current.CancellationToken);
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
 
         await pendingRun;
     }
@@ -202,98 +146,47 @@ builder.Build().Run();
         var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
         var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
         var isCI = CliE2ETestHelpers.IsRunningInCI;
-        var recordingPath = CliE2ETestHelpers.GetTestResultsRecordingPath(nameof(CreateAndDeployToDockerComposeInteractive));
-
-        var builder = Hex1bTerminal.CreateBuilder()
-            .WithHeadless()
-            .WithAsciinemaRecording(recordingPath)
-            .WithPtyProcess("/bin/bash", ["--norc"]);
-
-        using var terminal = builder.Build();
+        using var terminal = CliE2ETestHelpers.CreateTestTerminal();
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
-        // Pattern searchers for template selection
-        var waitingForTemplateSelectionPrompt = new CellPatternSearcher()
-            .FindPattern("> Starter App");
-
-        // In CI, aspire add shows a version selection prompt (but aspire new does not when channel is set)
-        var waitingForAddVersionSelectionPrompt = new CellPatternSearcher()
-            .Find("(based on NuGet.config)");
-
-        var waitingForProjectNamePrompt = new CellPatternSearcher()
-            .Find($"Enter the project name ({workspace.WorkspaceRoot.Name}): ");
-
-        var waitingForOutputPathPrompt = new CellPatternSearcher()
-            .Find($"Enter the output path: (./{ProjectName}): ");
-
-        var waitingForUrlsPrompt = new CellPatternSearcher()
-            .Find($"Use *.dev.localhost URLs");
-
-        var waitingForRedisPrompt = new CellPatternSearcher()
-            .Find($"Use Redis Cache");
-
-        var waitingForTestPrompt = new CellPatternSearcher()
-            .Find($"Do you want to create a test project?");
-
         var counter = new SequenceCounter();
-        var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
-        sequenceBuilder.PrepareEnvironment(workspace, counter);
+        // PrepareEnvironment
+        await auto.PrepareEnvironmentAsync(workspace, counter);
 
         if (isCI)
         {
-            sequenceBuilder.InstallAspireCliFromPullRequest(prNumber, counter);
-            sequenceBuilder.SourceAspireCliEnvironment(counter);
-            sequenceBuilder.VerifyAspireCliVersion(commitSha, counter);
+            await auto.InstallAspireCliFromPullRequestAsync(prNumber, counter);
+            await auto.SourceAspireCliEnvironmentAsync(counter);
+            await auto.VerifyAspireCliVersionAsync(commitSha, counter);
         }
 
-        // Step 1: Create a new Aspire Starter App
-        // Note: When channel is set (CI), aspire new auto-selects version - no version prompt appears
-        sequenceBuilder.Type("aspire new")
-            .Enter()
-            .WaitUntil(s => waitingForTemplateSelectionPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(30))
-            .Enter() // select first template (Starter App)
-            .WaitUntil(s => waitingForProjectNamePrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .Type(ProjectName)
-            .Enter()
-            .WaitUntil(s => waitingForOutputPathPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .Enter() // accept default output path
-            .WaitUntil(s => waitingForUrlsPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .Enter() // select "No" for localhost URLs (default)
-            .WaitUntil(s => waitingForRedisPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            // For Redis prompt, default is "Yes" so we need to select "No" by pressing Down
-            .Key(Hex1b.Input.Hex1bKey.DownArrow)
-            .Enter() // select "No" for Redis Cache
-            .WaitUntil(s => waitingForTestPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            // For test project prompt, default is "No" so just press Enter to accept it
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        // Step 1: Create a new Aspire Starter App (no Redis cache)
+        await auto.AspireNewAsync(ProjectName, counter, useRedisCache: false);
 
         // Step 2: Navigate into the project directory
-        sequenceBuilder.Type($"cd {ProjectName}")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync($"cd {ProjectName}");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 3: Add Aspire.Hosting.Docker package using aspire add
         // Pass the package name directly as an argument to avoid interactive selection
-        sequenceBuilder.Type("aspire add Aspire.Hosting.Docker")
-            .Enter();
+        await auto.TypeAsync("aspire add Aspire.Hosting.Docker");
+        await auto.EnterAsync();
 
         // In CI, aspire add shows a version selection prompt (unlike aspire new which auto-selects when channel is set)
         if (isCI)
         {
-            sequenceBuilder
-                .WaitUntil(s => waitingForAddVersionSelectionPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(60))
-                .Enter(); // select first version (PR build)
+            await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
+            await auto.EnterAsync(); // select first version (PR build)
         }
 
-        sequenceBuilder.WaitForSuccessPrompt(counter, TimeSpan.FromSeconds(180));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
 
         // Step 4: Modify AppHost's main file to add Docker Compose environment
-        // We'll use a callback to modify the file during sequence execution
         // Note: Aspire templates use AppHost.cs as the main entry point, not Program.cs
-        sequenceBuilder.ExecuteCallback(() =>
         {
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, ProjectName);
             var appHostDir = Path.Combine(projectDir, $"{ProjectName}.AppHost");
@@ -316,57 +209,53 @@ builder.Build().Run();
             File.WriteAllText(appHostFilePath, content);
 
             output.WriteLine($"Modified AppHost.cs at: {appHostFilePath}");
-        });
+        }
 
         // Step 5: Create output directory for deployment artifacts
-        sequenceBuilder.Type("mkdir -p deploy-output")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("mkdir -p deploy-output");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 6: Unset ASPIRE_PLAYGROUND before deploy
         // ASPIRE_PLAYGROUND=true takes precedence over --non-interactive in CliHostEnvironment,
         // which causes Spectre.Console to try to show interactive spinners and prompts concurrently,
         // resulting in "Operations with dynamic displays cannot run at the same time" errors.
-        sequenceBuilder.Type("unset ASPIRE_PLAYGROUND")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("unset ASPIRE_PLAYGROUND");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 7: Run aspire deploy to deploy to Docker Compose in INTERACTIVE MODE
         // This test specifically validates that the concurrent ShowStatusAsync fix works correctly
         // when interactive spinners are enabled (without --non-interactive flag).
         // The fix prevents nested ShowStatusAsync calls from causing Spectre.Console errors.
-        sequenceBuilder.Type("aspire deploy -o deploy-output")
-            .Enter()
-            .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(5));
+        await auto.TypeAsync("aspire deploy -o deploy-output");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
 
         // Step 8: Capture the port from docker ps output for verification
         // We need to parse the port from docker ps to make a web request
-        sequenceBuilder.Type("docker ps --format '{{.Ports}}' | grep -oE '0\\.0\\.0\\.0:[0-9]+' | head -1 | cut -d: -f2")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("docker ps --format '{{.Ports}}' | grep -oE '0\\.0\\.0\\.0:[0-9]+' | head -1 | cut -d: -f2");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 9: Verify the deployment is running with docker ps
-        sequenceBuilder.Type("docker ps")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("docker ps");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 10: Make a web request to verify the application is working
         // We'll use curl to make the request
-        sequenceBuilder.Type("curl -s -o /dev/null -w '%{http_code}' http://localhost:$(docker ps --format '{{.Ports}}' --filter 'name=webfrontend' | grep -oE '0\\.0\\.0\\.0:[0-9]+->8080' | head -1 | cut -d: -f2 | cut -d'-' -f1) 2>/dev/null || echo 'request-failed'")
-            .Enter()
-            .WaitForSuccessPrompt(counter, TimeSpan.FromSeconds(30));
+        await auto.TypeAsync("curl -s -o /dev/null -w '%{http_code}' http://localhost:$(docker ps --format '{{.Ports}}' --filter 'name=webfrontend' | grep -oE '0\\.0\\.0\\.0:[0-9]+->8080' | head -1 | cut -d: -f2 | cut -d'-' -f1) 2>/dev/null || echo 'request-failed'");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
         // Step 11: Clean up - stop and remove containers
-        sequenceBuilder.Type("cd deploy-output && docker compose down --volumes --remove-orphans 2>/dev/null || true")
-            .Enter()
-            .WaitForSuccessPrompt(counter, TimeSpan.FromSeconds(60));
+        await auto.TypeAsync("cd deploy-output && docker compose down --volumes --remove-orphans 2>/dev/null || true");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
-        sequenceBuilder.Type("exit")
-            .Enter();
-
-        var sequence = sequenceBuilder.Build();
-
-        await sequence.ApplyAsync(terminal, TestContext.Current.CancellationToken);
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
 
         await pendingRun;
     }

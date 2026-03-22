@@ -206,4 +206,25 @@ public sealed class AspireExportAttribute : Attribute
     /// </para>
     /// </remarks>
     public bool ExposeMethods { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether synchronous exported methods should be invoked on a background thread by the ATS dispatcher.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Set this to <see langword="true"/> for synchronous exports that may invoke synchronous callback delegates which in turn
+    /// re-enter the remote host through ATS. Running the export on a background thread allows the JSON-RPC request loop to
+    /// continue processing nested callback and capability invocations while the synchronous method waits for the callback to
+    /// complete.
+    /// </para>
+    /// <para>
+    /// This setting only affects synchronous exported methods. Async exports that already return <see cref="Task"/> or
+    /// <see cref="Task{TResult}"/> are awaited normally and do not use this option.
+    /// </para>
+    /// <para>
+    /// When applied to a type, this setting also applies to exported members discovered from that type unless an individual
+    /// member overrides it.
+    /// </para>
+    /// </remarks>
+    public bool RunSyncOnBackgroundThread { get; set; }
 }

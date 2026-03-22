@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Encodings.Web;
+using Aspire.Dashboard.Api;
 using Aspire.Dashboard.Configuration;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
@@ -14,7 +15,11 @@ public class McpApiKeyAuthenticationHandler : AuthenticationHandler<McpApiKeyAut
     public const string McpClaimName = "McpClaim";
 
     public const string AuthenticationScheme = "McpApiKey";
-    public const string ApiKeyHeaderName = "x-mcp-api-key";
+
+    /// <summary>
+    /// Legacy MCP-specific API key header (for backward compatibility).
+    /// </summary>
+    public const string McpApiKeyHeaderName = "x-mcp-api-key";
 
     private readonly IOptionsMonitor<DashboardOptions> _dashboardOptions;
 
@@ -27,25 +32,38 @@ public class McpApiKeyAuthenticationHandler : AuthenticationHandler<McpApiKeyAut
     {
         var options = _dashboardOptions.CurrentValue.Mcp;
 
-        if (Context.Request.Headers.TryGetValue(ApiKeyHeaderName, out var apiKey))
+        // Try the new x-api-key header first, then fall back to legacy x-mcp-api-key
+        string? headerName = null;
+        Microsoft.Extensions.Primitives.StringValues apiKey;
+
+        if (Context.Request.Headers.TryGetValue(ApiAuthenticationHandler.ApiKeyHeaderName, out apiKey))
+        {
+            headerName = ApiAuthenticationHandler.ApiKeyHeaderName;
+        }
+        else if (Context.Request.Headers.TryGetValue(McpApiKeyHeaderName, out apiKey))
+        {
+            headerName = McpApiKeyHeaderName;
+        }
+
+        if (headerName is not null)
         {
             // There must be only one header with the API key.
             if (apiKey.Count != 1)
             {
-                return Task.FromResult(AuthenticateResult.Fail($"Multiple '{ApiKeyHeaderName}' headers in request."));
+                return Task.FromResult(AuthenticateResult.Fail($"Multiple '{headerName}' headers in request."));
             }
 
             if (!CompareHelpers.CompareKey(options.GetPrimaryApiKeyBytes(), apiKey.ToString()))
             {
                 if (options.GetSecondaryApiKeyBytes() is not { } secondaryBytes || !CompareHelpers.CompareKey(secondaryBytes, apiKey.ToString()))
                 {
-                    return Task.FromResult(AuthenticateResult.Fail($"Incoming API key from '{ApiKeyHeaderName}' header doesn't match configured API key."));
+                    return Task.FromResult(AuthenticateResult.Fail($"Incoming API key from '{headerName}' header doesn't match configured API key."));
                 }
             }
         }
         else
         {
-            return Task.FromResult(AuthenticateResult.Fail($"API key from '{ApiKeyHeaderName}' header is missing."));
+            return Task.FromResult(AuthenticateResult.Fail($"API key header is missing. Use '{ApiAuthenticationHandler.ApiKeyHeaderName}' or '{McpApiKeyHeaderName}'."));
         }
 
         return Task.FromResult(AuthenticateResult.NoResult());

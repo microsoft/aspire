@@ -3,9 +3,9 @@
 
 using System.Net;
 using Aspire.Dashboard.Components.Dialogs;
-using Aspire.Dashboard.ConsoleLogs;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Resources;
+using Aspire.Shared.ConsoleLogs;
 using Microsoft.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;

@@ -42,6 +42,11 @@
         <target state="translated">再読み込み</target>
         <note />
       </trans-unit>
+      <trans-unit id="MessageUnsecuredEndpointApiBody">
+        <source>Untrusted apps can access telemetry data via the API.</source>
+        <target state="translated">信頼されていないアプリは、API を介してテレメトリ データにアクセスできます。</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MessageUnsecuredEndpointLink">
         <source>More information</source>
         <target state="translated">詳細情報</target>

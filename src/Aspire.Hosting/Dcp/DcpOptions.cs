@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Reflection;
+using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 
@@ -18,7 +19,7 @@ internal sealed class DcpOptions
     public string? CliPath { get; set; }
 
     /// <summary>
-    /// Optional path to a folder containing the DCP extension assemblies (dcpctrl, etc.).
+    /// Optional path to a folder containing the DCP extension assemblies.
     /// </summary>
     /// <example>
     /// C:\Program Files\dotnet\packs\Aspire.Hosting.Orchestration.win-x64\8.0.0-preview.1.23518.6\tools\ext\
@@ -32,14 +33,6 @@ internal sealed class DcpOptions
     /// When running the playground applications in this repo: <c>..\..\..\artifacts\bin\Aspire.Dashboard\Debug\net8.0\Aspire.Dashboard.dll</c>
     /// </example>
     public string? DashboardPath { get; set; }
-
-    /// <summary>
-    /// Optional path to a folder containing additional DCP binaries.
-    /// </summary>
-    /// <example>
-    /// C:\Program Files\dotnet\packs\Aspire.Hosting.Orchestration.win-x64\8.0.0-preview.1.23518.6\tools\ext\bin\
-    /// </example>
-    public string? BinPath { get; set; }
 
     /// <summary>
     /// Optional container runtime to override default runtime for DCP containers.
@@ -116,7 +109,7 @@ internal sealed class DcpOptions
     /// <summary>
     /// Enables Aspire container tunnel for container-to-host connectivity across all container orchestrators.
     /// </summary>
-    public bool EnableAspireContainerTunnel { get; set; }
+    public bool EnableAspireContainerTunnel { get; set; } = true;
 }
 
 internal class ValidateDcpOptions : IValidateOptions<DcpOptions>
@@ -145,7 +138,6 @@ internal class ConfigureDefaultDcpOptions(
 {
     private const string DcpCliPathMetadataKey = "DcpCliPath";
     private const string DcpExtensionsPathMetadataKey = "DcpExtensionsPath";
-    private const string DcpBinPathMetadataKey = "DcpBinPath";
     private const string DashboardPathMetadataKey = "aspiredashboardpath";
 
     public static string DcpPublisher = nameof(DcpPublisher);
@@ -155,30 +147,46 @@ internal class ConfigureDefaultDcpOptions(
         var dcpPublisherConfiguration = configuration.GetSection(DcpPublisher);
         var assemblyMetadata = appOptions.Assembly?.GetCustomAttributes<AssemblyMetadataAttribute>();
 
-        if (!string.IsNullOrEmpty(dcpPublisherConfiguration[nameof(options.CliPath)]))
+        // Priority 1: Check configuration first (env vars are automatically bound via IConfiguration)
+        // BundleDiscovery env vars: ASPIRE_DCP_PATH, ASPIRE_DASHBOARD_PATH
+        var configDcpPath = configuration[BundleDiscovery.DcpPathEnvVar];
+        var configDashboardPath = configuration[BundleDiscovery.DashboardPathEnvVar];
+
+        if (!string.IsNullOrEmpty(configDcpPath))
         {
-            // If an explicit path to DCP was provided from configuration, don't try to resolve via assembly attributes
+            // Configuration/environment variable override - set DCP paths from bundle
+            options.CliPath = BundleDiscovery.GetDcpExecutablePath(configDcpPath);
+            options.ExtensionsPath = Path.Combine(configDcpPath, "ext");
+        }
+        else if (!string.IsNullOrEmpty(dcpPublisherConfiguration[nameof(options.CliPath)]))
+        {
+            // If an explicit path to DCP was provided from configuration
             options.CliPath = dcpPublisherConfiguration[nameof(options.CliPath)];
             if (Path.GetDirectoryName(options.CliPath) is string dcpDir && !string.IsNullOrEmpty(dcpDir))
             {
                 options.ExtensionsPath = Path.Combine(dcpDir, "ext");
-                options.BinPath = Path.Combine(options.ExtensionsPath, "bin");
             }
         }
         else
         {
+            // Resolve via assembly metadata attributes (NuGet packages)
             options.CliPath = GetMetadataValue(assemblyMetadata, DcpCliPathMetadataKey);
             options.ExtensionsPath = GetMetadataValue(assemblyMetadata, DcpExtensionsPathMetadataKey);
-            options.BinPath = GetMetadataValue(assemblyMetadata, DcpBinPathMetadataKey);
         }
 
-        if (!string.IsNullOrEmpty(dcpPublisherConfiguration[nameof(options.DashboardPath)]))
+        if (!string.IsNullOrEmpty(configDashboardPath))
         {
-            // If an explicit path to DCP was provided from configuration, don't try to resolve via assembly attributes
+            // Configuration/environment variable override - set Dashboard path from bundle
+            options.DashboardPath = configDashboardPath;
+        }
+        else if (!string.IsNullOrEmpty(dcpPublisherConfiguration[nameof(options.DashboardPath)]))
+        {
+            // If an explicit path to Dashboard was provided from configuration
             options.DashboardPath = dcpPublisherConfiguration[nameof(options.DashboardPath)];
         }
         else
         {
+            // Resolve via assembly metadata attributes (NuGet packages)
             options.DashboardPath = GetMetadataValue(assemblyMetadata, DashboardPathMetadataKey);
         }
 

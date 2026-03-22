@@ -42,7 +42,7 @@
                 @foreach (var command in _highlightedCommands)
                 {
                     <FluentButton Appearance="Appearance.Lightweight"
-                                  Title="@(!string.IsNullOrEmpty(command.GetDisplayDescription(CommandsLoc)) ? command.GetDisplayDescription(CommandsLoc) : command.GetDisplayName(CommandsLoc))"
+                                  Title="@(!string.IsNullOrEmpty(command.GetDisplayDescription()) ? command.GetDisplayDescription() : command.GetDisplayName())"
                                   Disabled="@(command.State == CommandViewModelState.Disabled || DashboardCommandExecutor.IsExecuting(selectedResource.Name, command.Name))"
                                   OnClick="@(() => ExecuteResourceCommandAsync(command))"
                                   Class="highlighted-command">
@@ -52,7 +52,7 @@
                         }
                         else
                         {
-                            @command.GetDisplayName(CommandsLoc)
+                            @command.GetDisplayName()
                         }
                     </FluentButton>
                 }

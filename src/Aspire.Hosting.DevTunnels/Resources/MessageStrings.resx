@@ -147,22 +147,10 @@
   <data name="DevTunnelUnhealthy_PortInactive" xml:space="preserve">
     <value>Dev tunnel '{0}' port '{1}' is not active.</value>
   </data>
-  <data name="InstallationInstructions" xml:space="preserve">
-    <value>Installation instructions</value>
-  </data>
   <data name="LoginWithGitHub" xml:space="preserve">
     <value>Login with GitHub</value>
   </data>
   <data name="LoginWithMicrosoft" xml:space="preserve">
     <value>Login with Microsoft</value>
-  </data>
-  <data name="RequiredCommandNotification" xml:space="preserve">
-    <value>Required command '{0}' was not found on PATH or at a specified location.</value>
-  </data>
-  <data name="RequiredCommandNotificationWithLink" xml:space="preserve">
-    <value>Required command '{0}' was not found. See installation instructions for more details.</value>
-  </data>
-  <data name="RequiredCommandNotificationWithValidation" xml:space="preserve">
-    <value>{0} See installation instructions for more details.</value>
   </data>
 </root>

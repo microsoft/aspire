@@ -4,7 +4,7 @@
 using System.IO.Pipes;
 using System.Net.Sockets;
 using Aspire.Cli.Backchannel;
-using Aspire.Hosting.Ats;
+using Aspire.TypeSystem;
 using StreamJsonRpc;
 
 namespace Aspire.Cli.Projects;

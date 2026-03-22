@@ -59,7 +59,7 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
         return step;
     }
 
-    public async Task<ReportingTask> CreateTaskAsync(ReportingStep step, string statusText, CancellationToken cancellationToken)
+    public async Task<ReportingTask> CreateTaskAsync(ReportingStep step, string statusText, bool enableMarkdown, CancellationToken cancellationToken)
     {
         if (!_steps.TryGetValue(step.Id, out var parentStep))
         {
@@ -87,7 +87,8 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
                 Id = task.Id,
                 StatusText = statusText,
                 CompletionState = ToBackchannelCompletionState(CompletionState.InProgress),
-                StepId = step.Id
+                StepId = step.Id,
+                EnableMarkdown = enableMarkdown
             }
         };
 
@@ -95,7 +96,7 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
         return task;
     }
 
-    public async Task CompleteStepAsync(ReportingStep step, string completionText, CompletionState completionState, CancellationToken cancellationToken)
+    public async Task CompleteStepAsync(ReportingStep step, string completionText, CompletionState completionState, bool enableMarkdown, CancellationToken cancellationToken)
     {
         lock (step)
         {
@@ -117,14 +118,15 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
                 Id = step.Id,
                 StatusText = completionText,
                 CompletionState = ToBackchannelCompletionState(completionState),
-                StepId = null
+                StepId = null,
+                EnableMarkdown = enableMarkdown
             }
         };
 
         await ActivityItemUpdated.Writer.WriteAsync(state, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task UpdateTaskAsync(ReportingTask task, string statusText, CancellationToken cancellationToken)
+    public async Task UpdateTaskAsync(ReportingTask task, string statusText, bool enableMarkdown, CancellationToken cancellationToken)
     {
         if (!_steps.TryGetValue(task.StepId, out var parentStep))
         {
@@ -149,7 +151,8 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
                 Id = task.Id,
                 StatusText = statusText,
                 CompletionState = ToBackchannelCompletionState(CompletionState.InProgress),
-                StepId = task.StepId
+                StepId = task.StepId,
+                EnableMarkdown = enableMarkdown
             }
         };
 
@@ -189,7 +192,7 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
         ActivityItemUpdated.Writer.TryWrite(state);
     }
 
-    public async Task CompleteTaskAsync(ReportingTask task, CompletionState completionState, string? completionMessage, CancellationToken cancellationToken)
+    public async Task CompleteTaskAsync(ReportingTask task, CompletionState completionState, string? completionMessage, bool enableMarkdown, CancellationToken cancellationToken)
     {
         if (!_steps.TryGetValue(task.StepId, out var parentStep))
         {
@@ -222,17 +225,18 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
                 StatusText = task.StatusText,
                 CompletionState = ToBackchannelCompletionState(completionState),
                 StepId = task.StepId,
-                CompletionMessage = completionMessage
+                CompletionMessage = completionMessage,
+                EnableMarkdown = enableMarkdown
             }
         };
 
         await ActivityItemUpdated.Writer.WriteAsync(state, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task CompletePublishAsync(string? completionMessage = null, CompletionState? completionState = null, CancellationToken cancellationToken = default)
+    public async Task CompletePublishAsync(PublishCompletionOptions? options = null, CancellationToken cancellationToken = default)
     {
         // Use provided state or aggregate from all steps
-        var finalState = completionState ?? CalculateOverallAggregatedState();
+        var finalState = options?.CompletionState ?? CalculateOverallAggregatedState();
 
         var state = new PublishingActivity
         {
@@ -240,18 +244,34 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
             Data = new PublishingActivityData
             {
                 Id = PublishingActivityTypes.PublishComplete,
-                StatusText = completionMessage ?? finalState switch
+                StatusText = options?.CompletionMessage ?? finalState switch
                 {
                     CompletionState.Completed => "Pipeline completed successfully",
                     CompletionState.CompletedWithWarning => "Pipeline completed with warnings",
                     CompletionState.CompletedWithError => "Pipeline completed with errors",
                     _ => "Pipeline completed"
                 },
-                CompletionState = ToBackchannelCompletionState(finalState)
+                CompletionState = ToBackchannelCompletionState(finalState),
+                PipelineSummary = options?.PipelineSummary?.Select(item => new BackchannelPipelineSummaryItem
+                {
+                    Key = item.Key,
+                    Value = item.Value,
+                    EnableMarkdown = item.EnableMarkdown
+                }).ToList()
             }
         };
 
         await ActivityItemUpdated.Writer.WriteAsync(state, cancellationToken).ConfigureAwait(false);
+    }
+
+    [Obsolete("Use CompletePublishAsync(PublishCompletionOptions?, CancellationToken) instead.")]
+    public Task CompletePublishAsync(string? completionMessage = null, CompletionState? completionState = null, CancellationToken cancellationToken = default)
+    {
+        return CompletePublishAsync(new PublishCompletionOptions
+        {
+            CompletionMessage = completionMessage,
+            CompletionState = completionState
+        }, cancellationToken);
     }
 
     /// <summary>

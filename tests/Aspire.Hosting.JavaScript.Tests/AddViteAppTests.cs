@@ -242,8 +242,8 @@ public class AddViteAppTests
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
         var nodeResource = Assert.Single(appModel.Resources.OfType<ViteAppResource>());
 
-        // Get the command line args annotation to inspect the args callback
-        var commandLineArgsAnnotation = nodeResource.Annotations.OfType<CommandLineArgsCallbackAnnotation>().Single();
+        // Get the first command line args annotation (WithDebugSupport adds additional callbacks)
+        var commandLineArgsAnnotation = nodeResource.Annotations.OfType<CommandLineArgsCallbackAnnotation>().First();
         var args = new List<object>();
         var context = new CommandLineArgsCallbackContext(args, nodeResource);
         commandLineArgsAnnotation.Callback(context);
@@ -267,8 +267,8 @@ public class AddViteAppTests
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
         var nodeResource = Assert.Single(appModel.Resources.OfType<ViteAppResource>());
 
-        // Get the command line args annotation to inspect the args callback
-        var commandLineArgsAnnotation = nodeResource.Annotations.OfType<CommandLineArgsCallbackAnnotation>().Single();
+        // Get the first command line args annotation (WithDebugSupport adds additional callbacks)
+        var commandLineArgsAnnotation = nodeResource.Annotations.OfType<CommandLineArgsCallbackAnnotation>().First();
         var args = new List<object>();
         var context = new CommandLineArgsCallbackContext(args, nodeResource);
         commandLineArgsAnnotation.Callback(context);

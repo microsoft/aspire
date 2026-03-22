@@ -15,6 +15,8 @@ param funcstorage6662c_outputs_queueendpoint string
 
 param funcstorage6662c_outputs_tableendpoint string
 
+param funcstorage6662c_outputs_datalakeendpoint string
+
 param eventhubs_outputs_eventhubsendpoint string
 
 param messaging_outputs_servicebusendpoint string
@@ -94,6 +96,10 @@ resource func_app 'Microsoft.App/containerApps@2025-02-02-preview' = {
               value: funcstorage6662c_outputs_tableendpoint
             }
             {
+              name: 'AzureWebJobsStorage__dataLakeServiceUri'
+              value: funcstorage6662c_outputs_datalakeendpoint
+            }
+            {
               name: 'Aspire__Azure__Storage__Blobs__AzureWebJobsStorage__ServiceUri'
               value: funcstorage6662c_outputs_blobendpoint
             }
@@ -104,6 +110,10 @@ resource func_app 'Microsoft.App/containerApps@2025-02-02-preview' = {
             {
               name: 'Aspire__Azure__Data__Tables__AzureWebJobsStorage__ServiceUri'
               value: funcstorage6662c_outputs_tableendpoint
+            }
+            {
+              name: 'Aspire__Azure__Storage__Files__DataLake__AzureWebJobsStorage__ServiceUri'
+              value: funcstorage6662c_outputs_datalakeendpoint
             }
             {
               name: 'myhub__fullyQualifiedNamespace'

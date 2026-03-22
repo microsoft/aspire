@@ -1,10 +1,5 @@
-import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
-import { isWorkspaceOpen } from '../utils/workspace';
+import { AspireEditorCommandProvider } from '../editor/AspireEditorCommandProvider';
 
-export async function publishCommand(terminalProvider: AspireTerminalProvider) {
-    if (!isWorkspaceOpen()) {
-        return;
-    }
-
-    terminalProvider.sendAspireCommandToAspireTerminal('publish');
+export async function publishCommand(editorCommandProvider: AspireEditorCommandProvider) {
+    await editorCommandProvider.tryExecutePublishAppHost(false);
 }

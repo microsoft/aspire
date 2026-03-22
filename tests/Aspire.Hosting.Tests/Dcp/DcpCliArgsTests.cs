@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Tests.Dcp;
 
+[Trait("Partition", "4")]
 public class DcpCliArgsTests
 {
     [Fact]

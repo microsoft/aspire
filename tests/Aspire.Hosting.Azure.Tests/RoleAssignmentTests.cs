@@ -64,7 +64,7 @@ public class RoleAssignmentTests()
         return RoleAssignmentTest("ai",
             builder =>
             {
-                var openai = builder.AddAzureAIFoundry("ai");
+                var openai = builder.AddFoundry("ai");
 
                 builder.AddProject<Project>("api", launchProfileName: null)
                     .WithRoleAssignments(openai, CognitiveServicesBuiltInRole.CognitiveServicesFaceRecognizer);
@@ -299,6 +299,36 @@ public class RoleAssignmentTests()
         // Verify that explicit role assignments still work even after ClearDefaultRoleAssignments
         var projRoles = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(), r => r.Name == "api-roles-keyvault");
         Assert.NotNull(projRoles);
+    }
+
+    [Fact]
+    public async Task WaitForDoesNotCreateTransitiveRoleAssignments()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddAzureContainerAppEnvironment("env");
+
+        var cache = builder.AddAzureManagedRedis("cache");
+
+        var server = builder.AddProject<Project>("server", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithReference(cache)
+            .WaitFor(cache);
+
+        builder.AddProject<Project>("webfrontend", launchProfileName: null)
+            .WithReference(server)
+            .WaitFor(server);
+
+        var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        // The server should have a role assignment to the cache since it directly references it
+        Assert.Single(model.Resources.OfType<AzureProvisioningResource>(), r => r.Name == "server-roles-cache");
+
+        // The webfrontend should NOT have a role assignment to the cache since it only references the server
+        Assert.DoesNotContain(model.Resources, r => r.Name == "webfrontend-roles-cache");
     }
 
     private static async Task RoleAssignmentTest(

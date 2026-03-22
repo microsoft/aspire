@@ -6,7 +6,6 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Aspire.Dashboard.Components.Controls;
-using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Utils;
 using Google.Protobuf.WellKnownTypes;
 using Humanizer;
@@ -155,21 +154,16 @@ public sealed class ResourceViewModel
               ?? Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Unhealthy;
     }
 
-    public static string GetResourceName(ResourceViewModel resource, IDictionary<string, ResourceViewModel> allResources, bool showHiddenResources = false)
+    public static string GetResourceName(ResourceViewModel resource, IDictionary<string, ResourceViewModel> allResources)
     {
         return GetResourceName(resource, allResources.Values);
     }
 
-    public static string GetResourceName(ResourceViewModel resource, IEnumerable<ResourceViewModel> allResources, bool showHiddenResources = false)
+    public static string GetResourceName(ResourceViewModel resource, IEnumerable<ResourceViewModel> allResources)
     {
         var count = 0;
         foreach (var item in allResources)
         {
-            if (item.IsResourceHidden(showHiddenResources))
-            {
-                continue;
-            }
-
             if (string.Equals(item.DisplayName, resource.DisplayName, StringComparisons.ResourceName))
             {
                 count++;
@@ -215,14 +209,14 @@ public sealed class ResourceViewModelNameComparer : IComparer<ResourceViewModel>
         // Use display name by itself first.
         // This is to avoid the problem of using the full name where one resource is called "database" and another is called "database-admin".
         // The full names could end up "database-xyz" and "database-admin-xyz", which would put resources out of order.
-        var displayNameResult = StringComparers.ResourceName.Compare(x.DisplayName, y.DisplayName);
+        var displayNameResult = string.Compare(x.DisplayName, y.DisplayName, StringComparisons.ResourceName);
         if (displayNameResult != 0)
         {
             return displayNameResult;
         }
 
         // Display names are the same so compare with full names.
-        return StringComparers.ResourceName.Compare(x.Name, y.Name);
+        return string.Compare(x.Name, y.Name, StringComparisons.ResourceName);
     }
 }
 
@@ -231,9 +225,9 @@ public sealed class CommandViewModel
 {
     // Known resource command constants.
     // Keep in sync with KnownResourceCommands in Aspire.Hosting.
-    public const string StartCommand = "resource-start";
-    public const string StopCommand = "resource-stop";
-    public const string RestartCommand = "resource-restart";
+    public const string StartCommand = "start";
+    public const string StopCommand = "stop";
+    public const string RestartCommand = "restart";
     private static readonly string[] s_knownResourceCommands = [StartCommand, StopCommand, RestartCommand];
 
     public string Name { get; }
@@ -268,26 +262,14 @@ public sealed class CommandViewModel
         return s_knownResourceCommands.Contains(command);
     }
 
-    public string GetDisplayName(IStringLocalizer<Commands> loc)
+    public string GetDisplayName()
     {
-        return Name switch
-        {
-            StartCommand => loc[nameof(Commands.StartCommandDisplayName)],
-            StopCommand => loc[nameof(Commands.StopCommandDisplayName)],
-            RestartCommand => loc[nameof(Commands.RestartCommandDisplayName)],
-            _ => DisplayName
-        };
+        return DisplayName;
     }
 
-    public string? GetDisplayDescription(IStringLocalizer<Commands> loc)
+    public string? GetDisplayDescription()
     {
-        return Name switch
-        {
-            StartCommand => loc[nameof(Commands.StartCommandDisplayDescription)],
-            StopCommand => loc[nameof(Commands.StopCommandDisplayDescription)],
-            RestartCommand => loc[nameof(Commands.RestartCommandDisplayDescription)],
-            _ => DisplayDescription is { Length: > 0 } ? DisplayDescription : null
-        };
+        return DisplayDescription is { Length: > 0 } ? DisplayDescription : null;
     }
 }
 
@@ -313,7 +295,7 @@ public sealed class EnvironmentVariableViewModel : IPropertyGridItem
     {
         // Name should always have a value, but somehow an empty/whitespace name can reach this point.
         // Better to allow the dashboard to run with an env var with no name than break when loading resources.
-        // https://github.com/dotnet/aspire/issues/5309
+        // https://github.com/microsoft/aspire/issues/5309
         Name = name;
         Value = value;
         FromSpec = fromSpec;

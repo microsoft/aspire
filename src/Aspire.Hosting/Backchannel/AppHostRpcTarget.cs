@@ -2,17 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Runtime.CompilerServices;
-using System.Threading.Channels;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Dashboard;
-using Aspire.Hosting.Devcontainers.Codespaces;
 using Aspire.Hosting.Exec;
 using Aspire.Hosting.Pipelines;
-using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Backchannel;
 
@@ -24,14 +19,7 @@ internal class AppHostRpcTarget(
     IHostApplicationLifetime lifetime,
     DistributedApplicationOptions options)
 {
-    private readonly TaskCompletionSource<Channel<BackchannelLogEntry>> _logChannelTcs = new();
     private readonly CancellationTokenSource _shutdownCts = new();
-
-    public void RegisterLogChannel(Channel<BackchannelLogEntry> channel)
-    {
-        ArgumentNullException.ThrowIfNull(channel);
-        _logChannelTcs.TrySetResult(channel);
-    }
 
     public async IAsyncEnumerable<BackchannelLogEntry> GetAppHostLogEntriesAsync([EnumeratorCancellation] CancellationToken cancellationToken)
     {
@@ -39,30 +27,32 @@ internal class AppHostRpcTarget(
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token);
         var linkedToken = linkedCts.Token;
 
-        Channel<BackchannelLogEntry>? channel = null;
-        
-        try
+        var loggerProvider = serviceProvider.GetService<BackchannelLoggerProvider>();
+        if (loggerProvider is null)
         {
-            channel = await _logChannelTcs.Task.WaitAsync(linkedToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (_shutdownCts.Token.IsCancellationRequested)
-        {
-            // Gracefully handle cancellation due to shutdown
-            logger.LogDebug("Log entries stream cancelled due to AppHost shutdown before channel was ready");
             yield break;
         }
 
-        var logEntries = channel.Reader.ReadAllAsync(linkedToken);
+        // Subscribe atomically: snapshot + channel for new entries, no gap
+        var (snapshot, subscriberId, channel) = loggerProvider.Subscribe();
 
-        await foreach (var logEntry in logEntries.WithCancellation(linkedToken).ConfigureAwait(false))
+        try
         {
-            // If the log entry is null, terminate the stream
-            if (logEntry == null)
+            // Replay buffered entries first so late-connecting clients see history
+            foreach (var entry in snapshot)
             {
-                yield break;
+                yield return entry;
             }
 
-            yield return logEntry;
+            // Stream live entries
+            await foreach (var entry in channel.Reader.ReadAllAsync(linkedToken).ConfigureAwait(false))
+            {
+                yield return entry;
+            }
+        }
+        finally
+        {
+            loggerProvider.Unsubscribe(subscriberId);
         }
     }
 
@@ -166,65 +156,7 @@ internal class AppHostRpcTarget(
             throw new InvalidOperationException("Dashboard URL requested but dashboard is disabled.");
         }
 
-        // Wait for the dashboard to be healthy before returning the URL. This is to ensure that the
-        // endpoint for the resource is available and the dashboard is ready to be used. This helps
-        // avoid some issues with port forwarding in devcontainer/codespaces scenarios.
-        try
-        {
-            await resourceNotificationService.WaitForResourceHealthyAsync(
-                KnownResourceNames.AspireDashboard,
-                WaitBehavior.StopOnResourceUnavailable,
-                cancellationToken).ConfigureAwait(false);
-        }
-        catch (DistributedApplicationException ex)
-        {
-            logger.LogWarning(ex, "An error occurred while waiting for the Aspire Dashboard to become healthy.");
-
-            return new DashboardUrlsState
-            {
-                DashboardHealthy = false,
-                BaseUrlWithLoginToken = null,
-                CodespacesUrlWithLoginToken = null
-            };
-        }
-
-        var dashboardOptions = serviceProvider.GetService<IOptions<DashboardOptions>>();
-
-        if (dashboardOptions is null)
-        {
-            logger.LogWarning("Dashboard options not found.");
-            throw new InvalidOperationException("Dashboard options not found.");
-        }
-
-        if (!StringUtils.TryGetUriFromDelimitedString(dashboardOptions.Value.DashboardUrl, ";", out var dashboardUri))
-        {
-            logger.LogWarning("Dashboard URL could not be parsed from dashboard options.");
-            throw new InvalidOperationException("Dashboard URL could not be parsed from dashboard options.");
-        }
-
-        var codespacesUrlRewriter = serviceProvider.GetService<CodespacesUrlRewriter>();
-
-        var baseUrlWithLoginToken = $"{dashboardUri.GetLeftPart(UriPartial.Authority)}/login?t={dashboardOptions.Value.DashboardToken}";
-        var codespacesUrlWithLoginToken = codespacesUrlRewriter?.RewriteUrl(baseUrlWithLoginToken);
-
-        if (baseUrlWithLoginToken == codespacesUrlWithLoginToken)
-        {
-            return new DashboardUrlsState
-            {
-                DashboardHealthy = true,
-                BaseUrlWithLoginToken = baseUrlWithLoginToken,
-                CodespacesUrlWithLoginToken = null
-            };
-        }
-        else
-        {
-            return new DashboardUrlsState
-            {
-                DashboardHealthy = true,
-                BaseUrlWithLoginToken = baseUrlWithLoginToken,
-                CodespacesUrlWithLoginToken = codespacesUrlWithLoginToken
-            };
-        }
+        return await DashboardUrlsHelper.GetDashboardUrlsAsync(serviceProvider, logger, cancellationToken).ConfigureAwait(false);
     }
 
     public async IAsyncEnumerable<CommandOutput> ExecAsync([EnumeratorCancellation] CancellationToken cancellationToken)

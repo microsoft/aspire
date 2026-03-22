@@ -5,8 +5,7 @@ using System.Globalization;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
-using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Ats;
+using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.Rust;
 
@@ -397,6 +396,40 @@ public sealed class AtsRustCodeGenerator : ICodeGenerator
                 continue;
             }
 
+            // Handle-backed AspireList/AspireDict parameters: serialize via their handle
+            if (IsAspireListOrDictParam(parameter.Type))
+            {
+                if (parameter.IsOptional)
+                {
+                    WriteLine($"        if let Some(ref v) = {paramName} {{");
+                    WriteLine($"            args.insert(\"{parameter.Name}\".to_string(), v.handle().to_json());");
+                    WriteLine("        }");
+                }
+                else
+                {
+                    WriteLine($"        args.insert(\"{parameter.Name}\".to_string(), {paramName}.handle().to_json());");
+                }
+                continue;
+            }
+
+            // Collections of handle types: serialize each element via its handle
+            if (IsCollectionOfHandleTypes(parameter.Type))
+            {
+                if (parameter.IsOptional)
+                {
+                    WriteLine($"        if let Some(ref v) = {paramName} {{");
+                    WriteLine($"            let handles: Vec<Value> = v.iter().map(|item| item.handle().to_json()).collect();");
+                    WriteLine($"            args.insert(\"{parameter.Name}\".to_string(), Value::Array(handles));");
+                    WriteLine("        }");
+                }
+                else
+                {
+                    WriteLine($"        let handles: Vec<Value> = {paramName}.iter().map(|item| item.handle().to_json()).collect();");
+                    WriteLine($"        args.insert(\"{parameter.Name}\".to_string(), Value::Array(handles));");
+                }
+                continue;
+            }
+
             if (parameter.IsOptional)
             {
                 WriteLine($"        if let Some(ref v) = {paramName} {{");
@@ -439,6 +472,13 @@ public sealed class AtsRustCodeGenerator : ICodeGenerator
                 // Handle-backed AspireList
                 WriteLine($"        let handle: Handle = serde_json::from_value(result)?;");
                 WriteLine($"        Ok(AspireList::new(handle, self.client.clone()))");
+            }
+            else if (IsCollectionOfHandleTypes(returnTypeRef))
+            {
+                // Readonly list of handle types: deserialize as Vec<Handle> and wrap each
+                var elementType = MapTypeRefToRust(returnTypeRef!.ElementType, false);
+                WriteLine($"        let handles: Vec<Handle> = serde_json::from_value(result)?;");
+                WriteLine($"        Ok(handles.into_iter().map(|h| {elementType}::new(h, self.client.clone())).collect())");
             }
             else
             {
@@ -568,8 +608,9 @@ public sealed class AtsRustCodeGenerator : ICodeGenerator
         var handleTypeIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var handleType in context.HandleTypes)
         {
-            // Skip ReferenceExpression - it's defined in base.rs
-            if (handleType.AtsTypeId == AtsConstants.ReferenceExpressionTypeId)
+            // Skip ReferenceExpression and CancellationToken - they're defined in base.rs/transport.rs
+            if (handleType.AtsTypeId == AtsConstants.ReferenceExpressionTypeId
+                || IsCancellationTokenTypeId(handleType.AtsTypeId))
             {
                 continue;
             }
@@ -591,6 +632,11 @@ public sealed class AtsRustCodeGenerator : ICodeGenerator
                     }
                 }
             }
+            // Also include expanded target types (concrete types discovered via interface expansion)
+            foreach (var expandedType in capability.ExpandedTargetTypes)
+            {
+                AddHandleTypeIfNeeded(handleTypeIds, expandedType);
+            }
         }
 
         _structNames.Clear();
@@ -606,8 +652,7 @@ public sealed class AtsRustCodeGenerator : ICodeGenerator
             var isResourceBuilder = false;
             if (handleTypeMap.TryGetValue(typeId, out var typeInfo))
             {
-                isResourceBuilder = typeInfo.ClrType is not null &&
-                    typeof(IResource).IsAssignableFrom(typeInfo.ClrType);
+                isResourceBuilder = typeInfo.IsResourceBuilder;
             }
 
             results.Add(new RustHandleType(typeId, _structNames[typeId], isResourceBuilder));
@@ -804,10 +849,26 @@ public sealed class AtsRustCodeGenerator : ICodeGenerator
 
     private static bool IsHandleType(AtsTypeRef? typeRef) =>
         typeRef?.Category == AtsTypeCategory.Handle
-        && typeRef.TypeId != AtsConstants.ReferenceExpressionTypeId;
+        && typeRef.TypeId != AtsConstants.ReferenceExpressionTypeId
+        && !IsCancellationTokenTypeId(typeRef.TypeId);
+
+    private static bool IsCollectionOfHandleTypes(AtsTypeRef? typeRef) =>
+        typeRef is not null
+        && (typeRef.Category == AtsTypeCategory.Array || (typeRef.Category == AtsTypeCategory.List && typeRef.IsReadOnly))
+        && typeRef.ElementType is not null
+        && IsHandleType(typeRef.ElementType);
+
+    private static bool IsAspireListOrDictParam(AtsTypeRef? typeRef) =>
+        typeRef is not null
+        && ((typeRef.Category == AtsTypeCategory.List && !typeRef.IsReadOnly)
+            || (typeRef.Category == AtsTypeCategory.Dict && !typeRef.IsReadOnly));
 
     private static bool IsCancellationToken(AtsParameterInfo parameter) =>
-        parameter.Type?.TypeId == AtsConstants.CancellationToken;
+        IsCancellationTokenTypeId(parameter.Type?.TypeId);
+
+    private static bool IsCancellationTokenTypeId(string? typeId) =>
+        string.Equals(typeId, AtsConstants.CancellationToken, StringComparison.Ordinal)
+        || (typeId?.EndsWith("/System.Threading.CancellationToken", StringComparison.Ordinal) ?? false);
 
     private static void AddHandleTypeIfNeeded(HashSet<string> handleTypeIds, AtsTypeRef? typeRef)
     {
@@ -816,8 +877,9 @@ public sealed class AtsRustCodeGenerator : ICodeGenerator
             return;
         }
 
-        // Skip ReferenceExpression - it's defined in base.rs
-        if (typeRef.TypeId == AtsConstants.ReferenceExpressionTypeId)
+        // Skip ReferenceExpression and CancellationToken - they're defined in base.rs/transport.rs
+        if (typeRef.TypeId == AtsConstants.ReferenceExpressionTypeId
+            || IsCancellationTokenTypeId(typeRef.TypeId))
         {
             return;
         }

@@ -1,7 +1,7 @@
 ﻿@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
-resource openai 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
+resource openai 'Microsoft.CognitiveServices/accounts@2025-09-01' = {
   name: take('openai-${uniqueString(resourceGroup().id)}', 64)
   location: location
   kind: 'OpenAI'
@@ -18,7 +18,7 @@ resource openai 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
   }
 }
 
-resource mymodel 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
+resource mymodel 'Microsoft.CognitiveServices/accounts/deployments@2025-09-01' = {
   name: 'mymodel'
   properties: {
     model: {
@@ -34,7 +34,7 @@ resource mymodel 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' =
   parent: openai
 }
 
-resource embedding_model 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
+resource embedding_model 'Microsoft.CognitiveServices/accounts/deployments@2025-09-01' = {
   name: 'embedding-model'
   properties: {
     model: {

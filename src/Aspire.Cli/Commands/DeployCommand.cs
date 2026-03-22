@@ -9,6 +9,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -16,14 +17,16 @@ namespace Aspire.Cli.Commands;
 
 internal sealed class DeployCommand : PipelineCommandBase
 {
+    internal override HelpGroup HelpGroup => HelpGroup.Deployment;
+
     private readonly Option<bool> _clearCacheOption;
 
-    public DeployCommand(IDotNetCliRunner runner, IInteractionService interactionService, IProjectLocator projectLocator, AspireCliTelemetry telemetry, IDotNetSdkInstaller sdkInstaller, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, ILogger<DeployCommand> logger, IAnsiConsole ansiConsole)
-        : base("deploy", DeployCommandStrings.Description, runner, interactionService, projectLocator, telemetry, sdkInstaller, features, updateNotifier, executionContext, hostEnvironment, projectFactory, logger, ansiConsole)
+    public DeployCommand(IDotNetCliRunner runner, IInteractionService interactionService, IProjectLocator projectLocator, AspireCliTelemetry telemetry, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, IConfiguration configuration, ILogger<DeployCommand> logger, IAnsiConsole ansiConsole)
+        : base("deploy", DeployCommandStrings.Description, runner, interactionService, projectLocator, telemetry, features, updateNotifier, executionContext, hostEnvironment, projectFactory, configuration, logger, ansiConsole)
     {
         _clearCacheOption = new Option<bool>("--clear-cache")
         {
-            Description = "Clear the deployment cache associated with the current environment and do not save deployment state"
+            Description = DeployCommandStrings.ClearCacheOptionDescription
         };
         Options.Add(_clearCacheOption);
     }
@@ -32,7 +35,7 @@ internal sealed class DeployCommand : PipelineCommandBase
     protected override string OperationFailedPrefix => DeployCommandStrings.OperationFailedPrefix;
     protected override string GetOutputPathDescription() => DeployCommandStrings.OutputPathArgumentDescription;
 
-    protected override string[] GetRunArguments(string? fullyQualifiedOutputPath, string[] unmatchedTokens, ParseResult parseResult)
+    protected override Task<string[]> GetRunArgumentsAsync(string? fullyQualifiedOutputPath, string[] unmatchedTokens, ParseResult parseResult, CancellationToken cancellationToken)
     {
         var baseArgs = new List<string> { "--operation", "publish", "--step", "deploy" };
 
@@ -48,20 +51,20 @@ internal sealed class DeployCommand : PipelineCommandBase
         }
 
         // Add --log-level and --envionment flags if specified
-        var logLevel = parseResult.GetValue(_logLevelOption);
+        var logLevel = parseResult.GetValue(s_logLevelOption);
 
         if (!string.IsNullOrEmpty(logLevel))
         {
             baseArgs.AddRange(["--log-level", logLevel!]);
         }
 
-        var includeExceptionDetails = parseResult.GetValue(_includeExceptionDetailsOption);
+        var includeExceptionDetails = parseResult.GetValue(s_includeExceptionDetailsOption);
         if (includeExceptionDetails)
         {
             baseArgs.AddRange(["--include-exception-details", "true"]);
         }
 
-        var environment = parseResult.GetValue(_environmentOption);
+        var environment = parseResult.GetValue(s_environmentOption);
         if (!string.IsNullOrEmpty(environment))
         {
             baseArgs.AddRange(["--environment", environment!]);
@@ -69,7 +72,7 @@ internal sealed class DeployCommand : PipelineCommandBase
 
         baseArgs.AddRange(unmatchedTokens);
 
-        return [.. baseArgs];
+        return Task.FromResult<string[]>([.. baseArgs]);
     }
 
     protected override string GetCanceledMessage() => DeployCommandStrings.DeploymentCanceled;

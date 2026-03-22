@@ -12,7 +12,7 @@ public class CircularBufferTests
     [Fact]
     public void LargeData_AddWhenFull_KeepOrder()
     {
-        // The data here was reproduced from this issue: https://github.com/dotnet/aspire/issues/7854
+        // The data here was reproduced from this issue: https://github.com/microsoft/aspire/issues/7854
         var values = new long[10_000];
         for (var i = 0; i < values.Length; i++)
         {

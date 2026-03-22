@@ -10,7 +10,6 @@ using Aspire.Cli.Utils;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using StreamJsonRpc;
 
 namespace Aspire.Cli.Backchannel;
 
@@ -38,7 +37,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
     /// <summary>
     /// Gets all active AppHost connections, flattened from all hashes.
     /// </summary>
-    public IEnumerable<AppHostAuxiliaryBackchannel> Connections => 
+    public IEnumerable<IAppHostAuxiliaryBackchannel> Connections => 
         _connectionsByHash.Values.SelectMany(d => d.Values);
 
     /// <summary>
@@ -46,7 +45,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
     /// </summary>
     /// <param name="hash">The AppHost hash.</param>
     /// <returns>All connections for the given hash, or empty if none.</returns>
-    public IEnumerable<AppHostAuxiliaryBackchannel> GetConnectionsByHash(string hash) =>
+    public IEnumerable<IAppHostAuxiliaryBackchannel> GetConnectionsByHash(string hash) =>
         _connectionsByHash.TryGetValue(hash, out var connections) ? connections.Values : [];
 
     /// <summary>
@@ -57,7 +56,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
     /// <summary>
     /// Gets the currently selected AppHost connection based on the selection logic.
     /// </summary>
-    public AppHostAuxiliaryBackchannel? SelectedConnection
+    public IAppHostAuxiliaryBackchannel? SelectedConnection
     {
         get
         {
@@ -100,7 +99,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
     /// <summary>
     /// Gets all connections that are within the scope of the specified working directory.
     /// </summary>
-    public IReadOnlyList<AppHostAuxiliaryBackchannel> GetConnectionsForWorkingDirectory(DirectoryInfo workingDirectory)
+    public IReadOnlyList<IAppHostAuxiliaryBackchannel> GetConnectionsForWorkingDirectory(DirectoryInfo workingDirectory)
     {
         return Connections
             .Where(c => IsAppHostInScopeOfDirectory(c.AppHostInfo?.AppHostPath, workingDirectory.FullName))
@@ -401,24 +400,19 @@ internal sealed class AuxiliaryBackchannelMonitor(
 
         try
         {
-            // Create JSON-RPC connection with proper formatter
-            var stream = new NetworkStream(socket, ownsSocket: true);
-            var rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream, BackchannelJsonSerializerContext.CreateRpcMessageFormatter()));
-            rpc.StartListening();
-
-            // Get the AppHost information
-            var appHostInfo = await rpc.InvokeAsync<AppHostInformation?>("GetAppHostInformationAsync").ConfigureAwait(false);
-
-            // Get the MCP connection info
-            var mcpInfo = await rpc.InvokeAsync<DashboardMcpConnectionInfo?>("GetDashboardMcpConnectionInfoAsync").ConfigureAwait(false);
-
             // Determine if this AppHost is in scope of the MCP server's working directory
-            var isInScope = IsAppHostInScope(appHostInfo?.AppHostPath);
+            // We need to do a quick check before full connection to avoid unnecessary work
+            var isInScope = true; // Will be updated after we get appHostInfo
 
-            var connection = new AppHostAuxiliaryBackchannel(hash, socketPath, rpc, mcpInfo, appHostInfo, isInScope, logger);
+            // Use the centralized factory to create the connection
+            // This ensures capabilities are always fetched
+            var connection = await AppHostAuxiliaryBackchannel.CreateFromSocketAsync(hash, socketPath, isInScope, socket, logger, cancellationToken).ConfigureAwait(false);
+
+            // Update isInScope based on actual appHostInfo now that we have it
+            connection.IsInScope = IsAppHostInScope(connection.AppHostInfo?.AppHostPath);
 
             // Set up disconnect handler
-            rpc.Disconnected += (sender, args) =>
+            connection.Rpc!.Disconnected += (sender, args) =>
             {
                 logger.LogInformation("Disconnected from AppHost at {SocketPath}: {Reason}", socketPath, args.Reason);
                 if (_connectionsByHash.TryGetValue(hash, out var connectionsForHash) &&
@@ -447,15 +441,17 @@ internal sealed class AuxiliaryBackchannelMonitor(
                     "CLI PID: {CliPid}, " +
                     "Dashboard URL: {DashboardUrl}, " +
                     "Dashboard Token: {DashboardToken}, " +
-                    "In Scope: {InScope}",
+                    "In Scope: {InScope}, " +
+                    "Supports V2: {SupportsV2}",
                     socketPath,
                     hash,
-                    appHostInfo?.AppHostPath ?? "N/A",
-                    appHostInfo?.ProcessId.ToString(CultureInfo.InvariantCulture) ?? "N/A",
-                    appHostInfo?.CliProcessId?.ToString(CultureInfo.InvariantCulture) ?? "N/A",
-                    mcpInfo?.EndpointUrl ?? "N/A",
-                    mcpInfo?.ApiToken is not null ? "***" + mcpInfo.ApiToken[^4..] : "N/A",
-                    isInScope);
+                    connection.AppHostInfo?.AppHostPath ?? "N/A",
+                    connection.AppHostInfo?.ProcessId.ToString(CultureInfo.InvariantCulture) ?? "N/A",
+                    connection.AppHostInfo?.CliProcessId?.ToString(CultureInfo.InvariantCulture) ?? "N/A",
+                    connection.McpInfo?.EndpointUrl ?? "N/A",
+                    connection.McpInfo?.ApiToken is not null ? "***" + connection.McpInfo.ApiToken[^4..] : "N/A",
+                    connection.IsInScope,
+                    connection.SupportsV2);
             }
             else
             {
@@ -487,7 +483,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
         return !relativePath.StartsWith("..", StringComparison.Ordinal) && !Path.IsPathRooted(relativePath);
     }
 
-    private static async Task DisconnectAsync(AppHostAuxiliaryBackchannel connection)
+    private static async Task DisconnectAsync(IAppHostAuxiliaryBackchannel connection)
     {
         try
         {

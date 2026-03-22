@@ -8,16 +8,15 @@ using System.Globalization;
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Configuration;
-using Aspire.Dashboard.ConsoleLogs;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Model.Otlp;
+using Aspire.Shared.ConsoleLogs;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
-using Aspire.Hosting.ConsoleLogs;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
@@ -97,9 +96,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
     [Inject]
     public required IStringLocalizer<Dashboard.Resources.AIPrompts> AIPromptsLoc { get; init; }
-
-    [Inject]
-    public required IStringLocalizer<Commands> CommandsLoc { get; init; }
 
     [Inject]
     public required IStringLocalizer<ControlsStrings> ControlsStringsLoc { get; init; }
@@ -430,7 +426,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
     private bool IsAllSelected()
     {
-        return PageViewModel.SelectedResource == _allResource;
+        return PageViewModel?.SelectedResource is not null && PageViewModel.SelectedResource == _allResource;
     }
 
     private void UpdateMenuButtons()
@@ -454,27 +450,27 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
         var selectedResource = GetSelectedResource();
 
-        CommonMenuItems.AddToggleHiddenResourcesMenuItem(
-            _logsMenuItems,
-            ControlsStringsLoc,
-            _showHiddenResources,
-            _resourceByName.Values,
-            SessionStorage,
-            EventCallback.Factory.Create<bool>(this, async
-            value =>
-            {
-                _showHiddenResources = value;
-                UpdateResourcesList();
-                UpdateMenuButtons();
-
-                if (!_showHiddenResources && selectedResource?.IsResourceHidden(showHiddenResources: false) is true)
+        // Only show the "Hide hidden resources" menu item when viewing all resources
+        // Use IsAllSelected() instead of _isSubscribedToAll because UpdateMenuButtons()
+        // can be called before the subscription is established
+        if (IsAllSelected())
+        {
+            CommonMenuItems.AddToggleHiddenResourcesMenuItem(
+                _logsMenuItems,
+                ControlsStringsLoc,
+                _showHiddenResources,
+                _resourceByName.Values,
+                SessionStorage,
+                EventCallback.Factory.Create<bool>(this, async
+                value =>
                 {
-                    PageViewModel.SelectedResource = _allResource;
-                    await this.AfterViewModelChangedAsync(_contentLayout, false);
-                }
+                    _showHiddenResources = value;
+                    UpdateResourcesList();
+                    UpdateMenuButtons();
 
-                await this.RefreshIfMobileAsync(_contentLayout);
-            }));
+                    await this.RefreshIfMobileAsync(_contentLayout);
+                }));
+        }
 
         _logsMenuItems.Add(new()
         {
@@ -508,7 +504,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             ResourceMenuBuilder.AddMenuItems(
                 _resourceMenuItems,
                 selectedResource,
-                GetResourceName,
+                _resourceByName,
                 EventCallback.Factory.Create(this, () =>
                 {
                     NavigationManager.NavigateTo(DashboardUrls.ResourcesUrl(resource: selectedResource.Name));
@@ -781,9 +777,9 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                     }
                 }
 
-                var resourcePrefix = ResourceViewModel.GetResourceName(subscription.Resource, _resourceByName, _showHiddenResources);
+                var resourcePrefix = ResourceViewModel.GetResourceName(subscription.Resource, _resourceByName);
 
-                var logParser = new LogParser(ConsoleColor.Black);
+                var logParser = new LogParser(ConsoleColor.Black, encodeForHtml: true);
                 await foreach (var batch in logSubscription.ConfigureAwait(false))
                 {
                     subscription.CancellationToken.ThrowIfCancellationRequested();

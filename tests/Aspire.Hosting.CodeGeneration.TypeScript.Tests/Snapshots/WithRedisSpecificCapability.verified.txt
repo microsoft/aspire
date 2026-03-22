@@ -55,5 +55,6 @@
     }
   ],
   ReturnsBuilder: true,
-  SourceLocation: Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestExtensions.WithRedisSpecific
+  SourceLocation: Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestExtensions.WithRedisSpecific,
+  RunSyncOnBackgroundThread: false
 }

@@ -7,6 +7,7 @@ using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 using Aspire.TestUtilities;
+using Microsoft.Extensions.DependencyInjection;
 
 public class KubernetesEnvironmentResourceTests(ITestOutputHelper output)
 {
@@ -37,7 +38,7 @@ public class KubernetesEnvironmentResourceTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/11818", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/11818", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public async Task PublishAsKubernetesService_ThrowsIfNoEnvironment()
     {
         static async Task RunTest(Action<IDistributedApplicationBuilder> action)
@@ -69,7 +70,7 @@ public class KubernetesEnvironmentResourceTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/11818", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/11818", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public async Task MultipleKubernetesEnvironmentsSupported()
     {
         using var tempDir = new TestTempDirectory();
@@ -104,11 +105,76 @@ public class KubernetesEnvironmentResourceTests(ITestOutputHelper output)
             .AddProject<Projects.ServiceA>("project1", launchProfileName: null)
             .WithHttpEndpoint();
 
-        var endpointReferenceEx = ((IComputeEnvironmentResource)env.Resource).GetHostAddressExpression(project.GetEndpoint("http"));
+        var endpointReferenceEx = env.Resource.GetHostAddressExpression(project.GetEndpoint("http"));
         Assert.NotNull(endpointReferenceEx);
 
         Assert.Equal("project1-service", endpointReferenceEx.Format);
         Assert.Empty(endpointReferenceEx.ValueProviders);
+    }
+
+    [Fact]
+    public async Task MultipleComputeEnvironmentsOnlyProcessTargetedResources()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var kubernetes = builder.AddKubernetesEnvironment("kubernetes");
+        var dockerCompose = builder.AddDockerComposeEnvironment("docker-compose");
+
+        // Container targeted to Kubernetes
+        var containerForK8s = builder.AddContainer("containerk8s", "nginx")
+            .WithHttpEndpoint(port: 8080, targetPort: 80, name: "http")
+            .WithComputeEnvironment(kubernetes);
+
+        // Container targeted to Docker Compose
+        var containerForDocker = builder.AddContainer("containerdocker", "nginx")
+            .WithHttpEndpoint(port: 9090, targetPort: 80, name: "http")
+            .WithComputeEnvironment(dockerCompose);
+
+        // Project targeted to Kubernetes
+        var projectForK8s = builder.AddProject<Projects.ServiceA>("projectk8s", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithComputeEnvironment(kubernetes);
+
+        // Project targeted to Docker Compose
+        var projectForDocker = builder.AddProject<Projects.ServiceA>("projectdocker", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithComputeEnvironment(dockerCompose);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // Verify containerForK8s has a deployment target for Kubernetes
+        var containerK8sResource = model.Resources.First(r => r.Name == "containerk8s");
+        var containerK8sTarget = containerK8sResource.GetDeploymentTargetAnnotation(kubernetes.Resource);
+        Assert.NotNull(containerK8sTarget);
+        Assert.Same(kubernetes.Resource, containerK8sTarget.ComputeEnvironment);
+
+        // Verify containerForDocker has a deployment target for Docker Compose
+        var containerDockerResource = model.Resources.First(r => r.Name == "containerdocker");
+        var containerDockerTarget = containerDockerResource.GetDeploymentTargetAnnotation(dockerCompose.Resource);
+        Assert.NotNull(containerDockerTarget);
+        Assert.Same(dockerCompose.Resource, containerDockerTarget.ComputeEnvironment);
+
+        // Verify projectForK8s has a deployment target for Kubernetes
+        var projectK8sResource = model.Resources.First(r => r.Name == "projectk8s");
+        var projectK8sTarget = projectK8sResource.GetDeploymentTargetAnnotation(kubernetes.Resource);
+        Assert.NotNull(projectK8sTarget);
+        Assert.Same(kubernetes.Resource, projectK8sTarget.ComputeEnvironment);
+
+        // Verify projectForDocker has a deployment target for Docker Compose
+        var projectDockerResource = model.Resources.First(r => r.Name == "projectdocker");
+        var projectDockerTarget = projectDockerResource.GetDeploymentTargetAnnotation(dockerCompose.Resource);
+        Assert.NotNull(projectDockerTarget);
+        Assert.Same(dockerCompose.Resource, projectDockerTarget.ComputeEnvironment);
+
+        // Verify resources do NOT have deployment targets for other environments
+        Assert.Null(containerK8sResource.GetDeploymentTargetAnnotation(dockerCompose.Resource));
+        Assert.Null(containerDockerResource.GetDeploymentTargetAnnotation(kubernetes.Resource));
+        Assert.Null(projectK8sResource.GetDeploymentTargetAnnotation(dockerCompose.Resource));
+        Assert.Null(projectDockerResource.GetDeploymentTargetAnnotation(kubernetes.Resource));
     }
 
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]

@@ -4,8 +4,7 @@
 using System.Globalization;
 using System.Reflection;
 using System.Text;
-using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Ats;
+using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.Java;
 
@@ -501,8 +500,9 @@ public sealed class AtsJavaCodeGenerator : ICodeGenerator
         var handleTypeIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var handleType in context.HandleTypes)
         {
-            // Skip ReferenceExpression - it's defined in Base.java
-            if (handleType.AtsTypeId == AtsConstants.ReferenceExpressionTypeId)
+            // Skip ReferenceExpression and CancellationToken - they're defined in Base.java/Transport.java
+            if (handleType.AtsTypeId == AtsConstants.ReferenceExpressionTypeId
+                || IsCancellationTokenTypeId(handleType.AtsTypeId))
             {
                 continue;
             }
@@ -524,6 +524,11 @@ public sealed class AtsJavaCodeGenerator : ICodeGenerator
                     }
                 }
             }
+            // Also include expanded target types (concrete types discovered via interface expansion)
+            foreach (var expandedType in capability.ExpandedTargetTypes)
+            {
+                AddHandleTypeIfNeeded(handleTypeIds, expandedType);
+            }
         }
 
         _classNames.Clear();
@@ -539,8 +544,7 @@ public sealed class AtsJavaCodeGenerator : ICodeGenerator
             var isResourceBuilder = false;
             if (handleTypeMap.TryGetValue(typeId, out var typeInfo))
             {
-                isResourceBuilder = typeInfo.ClrType is not null &&
-                    typeof(IResource).IsAssignableFrom(typeInfo.ClrType);
+                isResourceBuilder = typeInfo.IsResourceBuilder;
             }
 
             results.Add(new JavaHandleType(typeId, _classNames[typeId], isResourceBuilder));
@@ -669,7 +673,11 @@ public sealed class AtsJavaCodeGenerator : ICodeGenerator
     };
 
     private static bool IsCancellationToken(AtsParameterInfo parameter) =>
-        parameter.Type?.TypeId == AtsConstants.CancellationToken;
+        IsCancellationTokenTypeId(parameter.Type?.TypeId);
+
+    private static bool IsCancellationTokenTypeId(string? typeId) =>
+        string.Equals(typeId, AtsConstants.CancellationToken, StringComparison.Ordinal)
+        || (typeId?.EndsWith("/System.Threading.CancellationToken", StringComparison.Ordinal) ?? false);
 
     private static void AddHandleTypeIfNeeded(HashSet<string> handleTypeIds, AtsTypeRef? typeRef)
     {
@@ -678,8 +686,9 @@ public sealed class AtsJavaCodeGenerator : ICodeGenerator
             return;
         }
 
-        // Skip ReferenceExpression - it's defined in Base.java
-        if (typeRef.TypeId == AtsConstants.ReferenceExpressionTypeId)
+        // Skip ReferenceExpression and CancellationToken - they're defined in Base.java/Transport.java
+        if (typeRef.TypeId == AtsConstants.ReferenceExpressionTypeId
+            || IsCancellationTokenTypeId(typeRef.TypeId))
         {
             return;
         }

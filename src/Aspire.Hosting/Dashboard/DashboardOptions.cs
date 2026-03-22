@@ -17,6 +17,7 @@ internal class DashboardOptions
     public string? OtlpApiKey { get; set; }
     public string? McpEndpointUrl { get; set; }
     public string? McpApiKey { get; set; }
+    public string? ApiKey { get; set; }
     public string AspNetCoreEnvironment { get; set; } = "Production";
     public bool? TelemetryOptOut { get; set; }
 }
@@ -34,6 +35,7 @@ internal class ConfigureDefaultDashboardOptions(IConfiguration configuration, IO
         options.McpEndpointUrl = configuration[KnownConfigNames.DashboardMcpEndpointUrl];
         options.OtlpApiKey = configuration["AppHost:OtlpApiKey"];
         options.McpApiKey = configuration["AppHost:McpApiKey"];
+        options.ApiKey = configuration["AppHost:DashboardApiKey"];
 
         options.AspNetCoreEnvironment = configuration["ASPNETCORE_ENVIRONMENT"] ?? "Production";
 

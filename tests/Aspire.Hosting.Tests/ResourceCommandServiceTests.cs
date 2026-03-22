@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "2")]
 public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
@@ -323,6 +324,48 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         Assert.False(result.Success);
         Assert.True(result.Canceled);
         Assert.Null(result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_LegacyCommandName_FallsBackToCurrentName()
+    {
+        // Arrange
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: KnownResourceCommands.StartCommand,
+                displayName: "Start",
+                executeCommand: _ => Task.FromResult(new ExecuteCommandResult { Success = true }));
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        // Act - use the legacy "resource-start" name
+        var result = await app.ResourceCommands.ExecuteCommandAsync(custom.Resource, "resource-start");
+
+        // Assert - should succeed via fallback
+        Assert.True(result.Success);
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_LegacyCommandName_ById_FallsBackToCurrentName()
+    {
+        // Arrange
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: KnownResourceCommands.StopCommand,
+                displayName: "Stop",
+                executeCommand: _ => Task.FromResult(new ExecuteCommandResult { Success = true }));
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        // Act - use the legacy "resource-stop" name via resource ID
+        var result = await app.ResourceCommands.ExecuteCommandAsync("myResource", "resource-stop");
+
+        // Assert - should succeed via fallback
+        Assert.True(result.Success);
     }
 
     private sealed class CustomResource(string name) : Resource(name), IResourceWithEndpoints, IResourceWithWaitSupport

@@ -42,6 +42,7 @@ public static class MauiProjectExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
+    [AspireExport("addMauiProject", Description = "Adds a .NET MAUI project to the application model.")]
     public static IResourceBuilder<MauiProjectResource> AddMauiProject(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,

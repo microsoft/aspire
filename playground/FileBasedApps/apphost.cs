@@ -7,8 +7,15 @@
 */
 #:property IsAspireHost=true
 #:property PublishAot=false
+#:property UserSecretsId=d858c770-3e70-4307-8be4-90d2f96bf595
 
 var builder = DistributedApplication.CreateBuilder(args);
+
+// Display the runtime UserSecretsId for debugging
+var userSecretsId = Environment.GetEnvironmentVariable("DOTNET_USER_SECRETS_ID")
+    ?? builder.Configuration["UserSecretsId"]
+    ?? "not set";
+Console.WriteLine($"UserSecretsId: {userSecretsId}");
 
 // C# File-based app
 // NOTE: This is in a sub-folder to ensure it doesn't pickup .razor files from the FrontEnd project

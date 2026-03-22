@@ -171,51 +171,56 @@ public class FrontendBrowserTokenAuthTests
         Assert.Collection(l,
             w =>
             {
-                Assert.Equal("Aspire version: {Version}", GetValue(w.State, "{OriginalFormat}"));
+                Assert.Equal("Aspire version: {Version}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
             },
             w =>
             {
-                Assert.Equal("Now listening on: {DashboardUri}", GetValue(w.State, "{OriginalFormat}"));
+                Assert.Equal("Now listening on: {DashboardUri}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
 
-                var uri = new Uri((string)GetValue(w.State, "DashboardUri")!);
+                var uri = new Uri((string)LogTestHelpers.GetValue(w, "DashboardUri")!);
                 Assert.NotEqual(0, uri.Port);
             },
             w =>
             {
-                Assert.Equal("OTLP/gRPC listening on: {OtlpEndpointUri}", GetValue(w.State, "{OriginalFormat}"));
+                Assert.Equal("OTLP/gRPC listening on: {OtlpEndpointUri}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
 
-                var uri = new Uri((string)GetValue(w.State, "OtlpEndpointUri")!);
+                var uri = new Uri((string)LogTestHelpers.GetValue(w, "OtlpEndpointUri")!);
                 Assert.NotEqual(0, uri.Port);
             },
             w =>
             {
-                Assert.Equal("OTLP/HTTP listening on: {OtlpEndpointUri}", GetValue(w.State, "{OriginalFormat}"));
+                Assert.Equal("OTLP/HTTP listening on: {OtlpEndpointUri}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
 
-                var uri = new Uri((string)GetValue(w.State, "OtlpEndpointUri")!);
+                var uri = new Uri((string)LogTestHelpers.GetValue(w, "OtlpEndpointUri")!);
                 Assert.NotEqual(0, uri.Port);
             },
             w =>
             {
-                Assert.Equal("MCP listening on: {McpEndpointUri}", GetValue(w.State, "{OriginalFormat}"));
+                Assert.Equal("MCP listening on: {McpEndpointUri}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
 
-                var uri = new Uri((string)GetValue(w.State, "McpEndpointUri")!);
+                var uri = new Uri((string)LogTestHelpers.GetValue(w, "McpEndpointUri")!);
                 Assert.NotEqual(0, uri.Port);
             },
             w =>
             {
-                Assert.Equal("OTLP server is unsecured. Untrusted apps can send telemetry to the dashboard. For more information, visit https://go.microsoft.com/fwlink/?linkid=2267030", GetValue(w.State, "{OriginalFormat}"));
+                Assert.Equal("OTLP server is unsecured. Untrusted apps can send telemetry to the dashboard. For more information, visit https://go.microsoft.com/fwlink/?linkid=2267030", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
                 Assert.Equal(LogLevel.Warning, w.LogLevel);
             },
             w =>
             {
-                Assert.Equal("MCP server is unsecured. Untrusted apps can access sensitive information.", GetValue(w.State, "{OriginalFormat}"));
+                Assert.Equal("MCP server is unsecured. Untrusted apps can access sensitive information.", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
                 Assert.Equal(LogLevel.Warning, w.LogLevel);
             },
             w =>
             {
-                Assert.Equal("Login to the dashboard at {DashboardLoginUrl}", GetValue(w.State, "{OriginalFormat}"));
+                Assert.Equal("Dashboard API is unsecured. Untrusted apps can access sensitive telemetry data.", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
+                Assert.Equal(LogLevel.Warning, w.LogLevel);
+            },
+            w =>
+            {
+                Assert.Equal("Login to the dashboard at {DashboardLoginUrl}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
 
-                var uri = new Uri((string)GetValue(w.State, "DashboardLoginUrl")!, UriKind.Absolute);
+                var uri = new Uri((string)LogTestHelpers.GetValue(w, "DashboardLoginUrl")!, UriKind.Absolute);
                 var queryString = HttpUtility.ParseQueryString(uri.Query);
                 Assert.NotNull(queryString["t"]);
             });
@@ -243,9 +248,9 @@ public class FrontendBrowserTokenAuthTests
         var l = testSink.Writes.Where(w => w.LoggerName == typeof(DashboardWebApplication).FullName).ToList();
 
         // Testing via the log template is kind of hacky. If this becomes a problem then consider adding proper log definitions and match via ID.
-        var loginLinkLog = l.Single(w => "Login to the dashboard at {DashboardLoginUrl}" == (string?)GetValue(w.State, "{OriginalFormat}"));
+        var loginLinkLog = l.Single(w => "Login to the dashboard at {DashboardLoginUrl}" == (string?)LogTestHelpers.GetValue(w, "{OriginalFormat}"));
 
-        var uri = new Uri((string)GetValue(loginLinkLog.State, "DashboardLoginUrl")!, UriKind.Absolute);
+        var uri = new Uri((string)LogTestHelpers.GetValue(loginLinkLog, "DashboardLoginUrl")!, UriKind.Absolute);
         var queryString = HttpUtility.ParseQueryString(uri.Query);
         Assert.NotNull(queryString["t"]);
 
@@ -270,12 +275,6 @@ public class FrontendBrowserTokenAuthTests
         var l = testSink.Writes.Where(w => w.LoggerName == typeof(DashboardWebApplication).FullName).ToList();
 
         // Testing via the log template is kind of hacky. If this becomes a problem then consider adding proper log definitions and match via ID.
-        Assert.Single(l, w => (string?)GetValue(w.State, "{OriginalFormat}") == "Login to the dashboard at {DashboardLoginUrl} . The URL may need changes depending on how network access to the container is configured.");
-    }
-
-    private static object? GetValue(object? values, string key)
-    {
-        var list = values as IReadOnlyList<KeyValuePair<string, object>>;
-        return list?.SingleOrDefault(kvp => kvp.Key == key).Value;
+        Assert.Single(l, w => (string?)LogTestHelpers.GetValue(w, "{OriginalFormat}") == "Login to the dashboard at {DashboardLoginUrl} . The URL may need changes depending on how network access to the container is configured.");
     }
 }

@@ -18,7 +18,9 @@ public static class DistributedApplicationHostingTestingExtensions
     /// <param name="app">The application.</param>
     /// <param name="resourceName">The resourceName of the resource.</param>
     /// <param name="endpointName">The resourceName of the endpoint on the resource to communicate with.</param>
+    /// <remarks>This method is not available in polyglot app hosts.</remarks>
     /// <returns>The <see cref="HttpClient"/>.</returns>
+    [AspireExportIgnore(Reason = "HttpClient is not ATS-compatible.")]
     public static HttpClient CreateHttpClient(this DistributedApplication app, string resourceName, string? endpointName = default)
     {
         ArgumentNullException.ThrowIfNull(app);
@@ -38,8 +40,10 @@ public static class DistributedApplicationHostingTestingExtensions
     /// <param name="app">The application.</param>
     /// <param name="resourceName">The resource name.</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/>.</param>
+    /// <remarks>This overload is not available in polyglot app hosts. Use the exported overload without a cancellation token instead.</remarks>
     /// <returns>The connection string for the specified resource.</returns>
     /// <exception cref="ArgumentException">The resource was not found or does not expose a connection string.</exception>
+    [AspireExportIgnore(Reason = "Use the exported getConnectionString overload without a cancellation token.")]
     public static ValueTask<string?> GetConnectionStringAsync(this DistributedApplication app, string resourceName, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(app);
@@ -55,6 +59,19 @@ public static class DistributedApplicationHostingTestingExtensions
     }
 
     /// <summary>
+    /// Gets the connection string for the specified resource.
+    /// </summary>
+    /// <param name="app">The application.</param>
+    /// <param name="resourceName">The resource name.</param>
+    /// <returns>The connection string for the specified resource.</returns>
+    /// <exception cref="ArgumentException">The resource was not found or does not expose a connection string.</exception>
+    [AspireExport("getConnectionString", Description = "Gets the connection string for the specified resource.")]
+    internal static Task<string?> GetConnectionStringAsyncExport(this DistributedApplication app, string resourceName)
+    {
+        return app.GetConnectionStringAsync(resourceName, default).AsTask();
+    }
+
+    /// <summary>
     /// Gets the endpoint for the specified resource.
     /// </summary>
     /// <param name="app">The application.</param>
@@ -63,6 +80,7 @@ public static class DistributedApplicationHostingTestingExtensions
     /// <returns>A URI representation of the endpoint.</returns>
     /// <exception cref="ArgumentException">The resource was not found, no matching endpoint was found, or multiple endpoints were found.</exception>
     /// <exception cref="InvalidOperationException">The resource has no endpoints.</exception>
+    [AspireExport("getEndpoint", Description = "Gets the endpoint for the specified resource.")]
     public static Uri GetEndpoint(this DistributedApplication app, string resourceName, string? endpointName = default)
     {
         ArgumentNullException.ThrowIfNull(app);
@@ -78,15 +96,33 @@ public static class DistributedApplicationHostingTestingExtensions
     /// <param name="resourceName">The resource name.</param>
     /// <param name="networkIdentifier">The optional network identifier. If none is specified, the default network is used.</param>
     /// <param name="endpointName">The optional endpoint name. If none are specified, the single defined endpoint is returned.</param>
+    /// <remarks>This overload is not available in polyglot app hosts. Use the exported overload that accepts a network identifier string instead.</remarks>
     /// <returns>A URI representation of the endpoint.</returns>
     /// <exception cref="ArgumentException">The resource was not found, no matching endpoint was found, or multiple endpoints were found.</exception>
     /// <exception cref="InvalidOperationException">The resource has no endpoints.</exception>
+    [AspireExportIgnore(Reason = "Use the ATS-friendly overload that accepts a network identifier string.")]
     public static Uri GetEndpointForNetwork(this DistributedApplication app, string resourceName, NetworkIdentifier? networkIdentifier, string? endpointName = default)
     {
         ArgumentNullException.ThrowIfNull(app);
         ArgumentException.ThrowIfNullOrEmpty(resourceName);
 
         return new(GetEndpointUriStringCore(app, resourceName, endpointName, networkIdentifier));
+    }
+
+    /// <summary>
+    /// Gets the endpoint for the specified resource in the specified network context.
+    /// </summary>
+    /// <param name="app">The application.</param>
+    /// <param name="resourceName">The resource name.</param>
+    /// <param name="networkIdentifier">The optional network identifier string. If none is specified, the default network is used.</param>
+    /// <param name="endpointName">The optional endpoint name. If none are specified, the single defined endpoint is returned.</param>
+    /// <returns>A URI representation of the endpoint.</returns>
+    /// <exception cref="ArgumentException">The resource was not found, no matching endpoint was found, or multiple endpoints were found.</exception>
+    /// <exception cref="InvalidOperationException">The resource has no endpoints.</exception>
+    [AspireExport("getEndpointForNetwork", Description = "Gets the endpoint for the specified resource in the specified network context.")]
+    internal static Uri GetEndpointForNetworkExport(this DistributedApplication app, string resourceName, string? networkIdentifier = default, string? endpointName = default)
+    {
+        return app.GetEndpointForNetwork(resourceName, networkIdentifier is null ? null : new NetworkIdentifier(networkIdentifier), endpointName);
     }
 
     static IResource GetResource(DistributedApplication app, string resourceName)

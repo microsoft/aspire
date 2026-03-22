@@ -9,6 +9,7 @@ namespace Aspire.Hosting;
 /// A resource that represents a Kafka broker.
 /// </summary>
 /// <param name="name">The name of the resource.</param>
+[AspireExport(ExposeProperties = true)]
 public class KafkaServerResource(string name) : ContainerResource(name), IResourceWithConnectionString, IResourceWithEnvironment
 {
     // This endpoint is used for host processes Kafka broker communication.
@@ -23,7 +24,7 @@ public class KafkaServerResource(string name) : ContainerResource(name), IResour
     /// Gets the primary endpoint for the Kafka broker. This endpoint is used for host processes to Kafka broker communication.
     /// To connect to the Kafka broker from a container, use <see cref="InternalEndpoint"/>.
     /// </summary>
-    public EndpointReference PrimaryEndpoint => _primaryEndpoint ??= new(this, PrimaryEndpointName);
+    public EndpointReference PrimaryEndpoint => _primaryEndpoint ??= new(this, PrimaryEndpointName, KnownNetworkIdentifiers.LocalhostNetwork);
 
     /// <summary>
     /// Gets the host endpoint reference for the primary endpoint.
@@ -39,7 +40,7 @@ public class KafkaServerResource(string name) : ContainerResource(name), IResour
     /// Gets the internal endpoint for the Kafka broker. This endpoint is used for container to broker communication.
     /// To connect to the Kafka broker from a host process, use <see cref="PrimaryEndpoint"/>.
     /// </summary>
-    public EndpointReference InternalEndpoint => _internalEndpoint ??= new(this, InternalEndpointName);
+    public EndpointReference InternalEndpoint => _internalEndpoint ??= new(this, InternalEndpointName, KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
 
     /// <summary>
     /// Gets the connection string expression for the Kafka broker.

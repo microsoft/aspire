@@ -17,7 +17,7 @@ on:
     # Run every 2 hours. Quarantined tests are run frequently to catch flaky tests with a low failure rate.
     - cron: '0 */2 * * *'
 
-  # TEMPORARILY DISABLED pull_request trigger due to #12143 (disk space issues): https://github.com/dotnet/aspire/issues/12143
+  # TEMPORARILY DISABLED pull_request trigger due to #12143 (disk space issues): https://github.com/microsoft/aspire/issues/12143
   # pull_request:
   #   paths:
   #     - '.github/actions/**'

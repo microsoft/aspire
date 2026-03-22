@@ -592,6 +592,24 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Showing &lt;strong&gt;{0} parameters&lt;/strong&gt;.
+        /// </summary>
+        public static string TotalItemsFooterParametersPluralText {
+            get {
+                return ResourceManager.GetString("TotalItemsFooterParametersPluralText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Showing &lt;strong&gt;{0} parameter&lt;/strong&gt;.
+        /// </summary>
+        public static string TotalItemsFooterParametersSingularText {
+            get {
+                return ResourceManager.GetString("TotalItemsFooterParametersSingularText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Waiting for health data....
         /// </summary>
         public static string WaitingForHealthDataMessage {

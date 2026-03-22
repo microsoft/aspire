@@ -80,9 +80,14 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
 
         var inProgressDataTime = PauseManager.AreMetricsPaused(out var pausedAt) ? pausedAt.Value : GetCurrentDataTime();
 
-        while (_currentDataStartTime.Add(_tickDuration) < inProgressDataTime)
+        // Only advance the time window when not paused. When paused, keep the chart's
+        // time axis stable so filter changes don't cause the x-axis to jump.
+        if (pausedAt is null)
         {
-            _currentDataStartTime = _currentDataStartTime.Add(_tickDuration);
+            while (_currentDataStartTime.Add(_tickDuration) < inProgressDataTime)
+            {
+                _currentDataStartTime = _currentDataStartTime.Add(_tickDuration);
+            }
         }
 
         var dimensionAttributes = InstrumentViewModel.MatchedDimensions.Select(d => d.Attributes).ToList();

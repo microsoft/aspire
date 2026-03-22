@@ -13,7 +13,7 @@ using OpenTelemetry.Proto.Metrics.V1;
 namespace Aspire.Dashboard.Otlp.Model;
 
 [DebuggerDisplay("ResourceName = {ResourceName}, InstanceId = {InstanceId}")]
-public class OtlpResource
+public class OtlpResource : IOtlpResource
 {
     public const string SERVICE_NAME = "service.name";
     public const string SERVICE_INSTANCE_ID = "service.instance.id";
@@ -281,45 +281,8 @@ public class OtlpResource
             .ToDictionary(grouping => grouping.Key, grouping => grouping.ToList());
     }
 
-    public static string GetResourceName(OtlpResourceView resource, List<OtlpResource> allResources) =>
-        GetResourceName(resource.Resource, allResources);
-
-    public static string GetResourceName(OtlpResource resource, List<OtlpResource> allResources)
-    {
-        var count = 0;
-        foreach (var item in allResources)
-        {
-            if (string.Equals(item.ResourceName, resource.ResourceName, StringComparisons.ResourceName))
-            {
-                count++;
-                if (count >= 2)
-                {
-                    var instanceId = resource.InstanceId;
-
-                    // Convert long GUID into a shorter, more human friendly format.
-                    // Before: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
-                    // After:  aaaaaaaa
-                    if (instanceId != null && Guid.TryParse(instanceId, out var guid))
-                    {
-                        Span<char> chars = stackalloc char[32];
-                        var result = guid.TryFormat(chars, charsWritten: out _, format: "N");
-                        Debug.Assert(result, "Guid.TryFormat not successful.");
-
-                        instanceId = chars.Slice(0, 8).ToString();
-                    }
-
-                    if (instanceId == null)
-                    {
-                        return item.ResourceName;
-                    }
-
-                    return $"{item.ResourceName}-{instanceId}";
-                }
-            }
-        }
-
-        return resource.ResourceName;
-    }
+    public static string GetResourceName(OtlpResourceView resource, IReadOnlyList<IOtlpResource> allResources) =>
+        OtlpHelpers.GetResourceName(resource.Resource, allResources);
 
     internal List<OtlpResourceView> GetViews() => _resourceViews.Values.ToList();
 

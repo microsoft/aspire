@@ -2,25 +2,38 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
-using Aspire.Cli.Commands;
 
 namespace Aspire.Cli.Templating;
 
-internal class CallbackTemplate(string name, string description, Func<string, string> pathDeriverCallback, Action<TemplateCommand> applyOptionsCallback, Func<CallbackTemplate, ParseResult, CancellationToken, Task<TemplateResult>> applyTemplateCallback) : ITemplate
+internal class CallbackTemplate(
+    string name,
+    string description,
+    Func<string, string> pathDeriverCallback,
+    Action<Command> applyOptionsCallback,
+    Func<CallbackTemplate, TemplateInputs, ParseResult, CancellationToken, Task<TemplateResult>> applyTemplateCallback,
+    TemplateRuntime runtime = TemplateRuntime.DotNet,
+    string? languageId = null,
+    bool isEmpty = false) : ITemplate
 {
     public string Name => name;
 
     public string Description => description;
 
+    public bool IsEmpty => isEmpty;
+
+    public TemplateRuntime Runtime => runtime;
+
     public Func<string, string> PathDeriver => pathDeriverCallback;
 
-    public void ApplyOptions(TemplateCommand command)
+    public string? LanguageId => languageId;
+
+    public void ApplyOptions(Command command)
     {
         applyOptionsCallback?.Invoke(command);
     }
 
-    public Task<TemplateResult> ApplyTemplateAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    public Task<TemplateResult> ApplyTemplateAsync(TemplateInputs inputs, ParseResult parseResult, CancellationToken cancellationToken)
     {
-        return applyTemplateCallback(this, parseResult, cancellationToken);
+        return applyTemplateCallback(this, inputs, parseResult, cancellationToken);
     }
 }

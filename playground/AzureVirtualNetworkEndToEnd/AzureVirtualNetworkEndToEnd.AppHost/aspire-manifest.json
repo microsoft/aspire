@@ -1,0 +1,241 @@
+{
+  "resources": {
+    "vnet": {
+      "type": "azure.bicep.v0",
+      "path": "vnet.module.bicep",
+      "params": {
+        "nat_outputs_id": "{nat.outputs.id}",
+        "container_apps_nsg_outputs_id": "{container-apps-nsg.outputs.id}",
+        "private_endpoints_nsg_outputs_id": "{private-endpoints-nsg.outputs.id}",
+        "sql_nsg_outputs_id": "{sql-nsg.outputs.id}"
+      }
+    },
+    "container-apps-nsg": {
+      "type": "azure.bicep.v0",
+      "path": "container-apps-nsg.module.bicep"
+    },
+    "nat": {
+      "type": "azure.bicep.v0",
+      "path": "nat.module.bicep"
+    },
+    "private-endpoints-nsg": {
+      "type": "azure.bicep.v0",
+      "path": "private-endpoints-nsg.module.bicep"
+    },
+    "env-acr": {
+      "type": "azure.bicep.v0",
+      "path": "env-acr.module.bicep"
+    },
+    "env": {
+      "type": "azure.bicep.v0",
+      "path": "env.module.bicep",
+      "params": {
+        "env_acr_outputs_name": "{env-acr.outputs.name}",
+        "vnet_outputs_container_apps_id": "{vnet.outputs.container_apps_Id}",
+        "userPrincipalId": ""
+      }
+    },
+    "storage": {
+      "type": "azure.bicep.v0",
+      "path": "storage.module.bicep"
+    },
+    "blobs": {
+      "type": "value.v0",
+      "connectionString": "{storage.outputs.blobEndpoint}"
+    },
+    "storage-blobs": {
+      "type": "value.v0",
+      "connectionString": "{storage.outputs.blobEndpoint}"
+    },
+    "mycontainer": {
+      "type": "value.v0",
+      "connectionString": "Endpoint={storage.outputs.blobEndpoint};ContainerName=mycontainer"
+    },
+    "queues": {
+      "type": "value.v0",
+      "connectionString": "{storage.outputs.queueEndpoint}"
+    },
+    "storage-queues": {
+      "type": "value.v0",
+      "connectionString": "{storage.outputs.queueEndpoint}"
+    },
+    "myqueue": {
+      "type": "value.v0",
+      "connectionString": "Endpoint={storage.outputs.queueEndpoint};QueueName=myqueue"
+    },
+    "privatelink-blob-core-windows-net": {
+      "type": "azure.bicep.v0",
+      "path": "privatelink-blob-core-windows-net.module.bicep",
+      "params": {
+        "vnet_outputs_id": "{vnet.outputs.id}"
+      }
+    },
+    "private-endpoints-blobs-pe": {
+      "type": "azure.bicep.v0",
+      "path": "private-endpoints-blobs-pe.module.bicep",
+      "params": {
+        "privatelink_blob_core_windows_net_outputs_name": "{privatelink-blob-core-windows-net.outputs.name}",
+        "vnet_outputs_private_endpoints_id": "{vnet.outputs.private_endpoints_Id}",
+        "storage_outputs_id": "{storage.outputs.id}"
+      }
+    },
+    "privatelink-queue-core-windows-net": {
+      "type": "azure.bicep.v0",
+      "path": "privatelink-queue-core-windows-net.module.bicep",
+      "params": {
+        "vnet_outputs_id": "{vnet.outputs.id}"
+      }
+    },
+    "private-endpoints-queues-pe": {
+      "type": "azure.bicep.v0",
+      "path": "private-endpoints-queues-pe.module.bicep",
+      "params": {
+        "privatelink_queue_core_windows_net_outputs_name": "{privatelink-queue-core-windows-net.outputs.name}",
+        "vnet_outputs_private_endpoints_id": "{vnet.outputs.private_endpoints_Id}",
+        "storage_outputs_id": "{storage.outputs.id}"
+      }
+    },
+    "sql": {
+      "type": "azure.bicep.v0",
+      "connectionString": "Server=tcp:{sql.outputs.sqlServerFqdn},1433;Encrypt=True;Authentication=\u0022Active Directory Default\u0022",
+      "path": "sql.module.bicep"
+    },
+    "privatelink-database-windows-net": {
+      "type": "azure.bicep.v0",
+      "path": "privatelink-database-windows-net.module.bicep",
+      "params": {
+        "vnet_outputs_id": "{vnet.outputs.id}"
+      }
+    },
+    "private-endpoints-sql-pe": {
+      "type": "azure.bicep.v0",
+      "path": "private-endpoints-sql-pe.module.bicep",
+      "params": {
+        "privatelink_database_windows_net_outputs_name": "{privatelink-database-windows-net.outputs.name}",
+        "vnet_outputs_private_endpoints_id": "{vnet.outputs.private_endpoints_Id}",
+        "sql_outputs_id": "{sql.outputs.id}"
+      }
+    },
+    "sql-store": {
+      "type": "azure.bicep.v0",
+      "path": "sql-store.module.bicep"
+    },
+    "sql-admin-identity": {
+      "type": "azure.bicep.v0",
+      "path": "sql-admin-identity.module.bicep",
+      "params": {
+        "sql_outputs_sqlserveradminname": "{sql.outputs.sqlServerAdminName}"
+      }
+    },
+    "sql-nsg": {
+      "type": "azure.bicep.v0",
+      "path": "sql-nsg.module.bicep"
+    },
+    "sqldb": {
+      "type": "value.v0",
+      "connectionString": "{sql.connectionString};Database=sqldb"
+    },
+    "api": {
+      "type": "project.v1",
+      "path": "../AzureVirtualNetworkEndToEnd.ApiService/AzureVirtualNetworkEndToEnd.ApiService.csproj",
+      "deployment": {
+        "type": "azure.bicep.v0",
+        "path": "api-containerapp.module.bicep",
+        "params": {
+          "env_outputs_azure_container_apps_environment_default_domain": "{env.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN}",
+          "env_outputs_azure_container_apps_environment_id": "{env.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_ID}",
+          "env_outputs_azure_container_registry_endpoint": "{env.outputs.AZURE_CONTAINER_REGISTRY_ENDPOINT}",
+          "env_outputs_azure_container_registry_managed_identity_id": "{env.outputs.AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID}",
+          "api_containerimage": "{api.containerImage}",
+          "api_identity_outputs_id": "{api-identity.outputs.id}",
+          "api_containerport": "{api.containerPort}",
+          "sql_outputs_sqlserverfqdn": "{sql.outputs.sqlServerFqdn}",
+          "storage_outputs_blobendpoint": "{storage.outputs.blobEndpoint}",
+          "storage_outputs_queueendpoint": "{storage.outputs.queueEndpoint}",
+          "api_identity_outputs_clientid": "{api-identity.outputs.clientId}"
+        }
+      },
+      "env": {
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
+        "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
+        "HTTP_PORTS": "{api.bindings.http.targetPort}",
+        "ConnectionStrings__sqldb": "{sqldb.connectionString}",
+        "SQLDB_HOST": "{sql.outputs.sqlServerFqdn}",
+        "SQLDB_PORT": "1433",
+        "SQLDB_URI": "mssql://{sql.outputs.sqlServerFqdn}:1433/sqldb",
+        "SQLDB_JDBCCONNECTIONSTRING": "jdbc:sqlserver://{sql.outputs.sqlServerFqdn}:1433;database=sqldb;encrypt=true;trustServerCertificate=false",
+        "SQLDB_DATABASENAME": "sqldb",
+        "ConnectionStrings__mycontainer": "{mycontainer.connectionString}",
+        "MYCONTAINER_URI": "{storage.outputs.blobEndpoint}",
+        "MYCONTAINER_BLOBCONTAINERNAME": "mycontainer",
+        "ConnectionStrings__myqueue": "{myqueue.connectionString}",
+        "MYQUEUE_URI": "{storage.outputs.queueEndpoint}",
+        "MYQUEUE_QUEUENAME": "myqueue"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "external": true
+        },
+        "https": {
+          "scheme": "https",
+          "protocol": "tcp",
+          "transport": "http",
+          "external": true
+        }
+      }
+    },
+    "privatelink-file-core-windows-net": {
+      "type": "azure.bicep.v0",
+      "path": "privatelink-file-core-windows-net.module.bicep",
+      "params": {
+        "vnet_outputs_id": "{vnet.outputs.id}"
+      }
+    },
+    "private-endpoints-files-pe": {
+      "type": "azure.bicep.v0",
+      "path": "private-endpoints-files-pe.module.bicep",
+      "params": {
+        "privatelink_file_core_windows_net_outputs_name": "{privatelink-file-core-windows-net.outputs.name}",
+        "vnet_outputs_private_endpoints_id": "{vnet.outputs.private_endpoints_Id}",
+        "sql_store_outputs_id": "{sql-store.outputs.id}"
+      }
+    },
+    "api-identity": {
+      "type": "azure.bicep.v0",
+      "path": "api-identity.module.bicep"
+    },
+    "api-roles-sql": {
+      "type": "azure.bicep.v0",
+      "path": "api-roles-sql.module.bicep",
+      "params": {
+        "sql_outputs_name": "{sql.outputs.name}",
+        "sql_outputs_sqlserveradminname": "{sql.outputs.sqlServerAdminName}",
+        "vnet_outputs_sql_aci_subnet_id": "{vnet.outputs.sql_aci_subnet_Id}",
+        "sql_store_outputs_name": "{sql-store.outputs.name}",
+        "principalId": "{api-identity.outputs.principalId}",
+        "principalName": "{api-identity.outputs.principalName}",
+        "private_endpoints_sql_pe_outputs_name": "{private-endpoints-sql-pe.outputs.name}",
+        "private_endpoints_files_pe_outputs_name": "{private-endpoints-files-pe.outputs.name}"
+      }
+    },
+    "api-roles-storage": {
+      "type": "azure.bicep.v0",
+      "path": "api-roles-storage.module.bicep",
+      "params": {
+        "storage_outputs_name": "{storage.outputs.name}",
+        "principalId": "{api-identity.outputs.principalId}"
+      }
+    },
+    "sql-admin-identity-roles-sql-store": {
+      "type": "azure.bicep.v0",
+      "path": "sql-admin-identity-roles-sql-store.module.bicep",
+      "params": {
+        "sql_store_outputs_name": "{sql-store.outputs.name}",
+        "principalId": "{sql-admin-identity.outputs.principalId}"
+      }
+    }
+  }
+}

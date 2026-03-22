@@ -113,9 +113,15 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
             _factory = factory;
         }
 
+        public bool IsUnsupported { get; set; }
         public string LanguageId => "csharp";
         public string DisplayName => "C# (.NET)";
         public string? AppHostFileName => "AppHost.csproj";
+
+        public bool IsUsingProjectReferences(FileInfo appHostFile)
+        {
+            return false;
+        }
 
         public Task<string[]> GetDetectionPatternsAsync(CancellationToken cancellationToken)
             => Task.FromResult(s_detectionPatterns);
@@ -148,6 +154,11 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
 
         public Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, CancellationToken cancellationToken)
         {
+            if (IsUnsupported)
+            {
+                return Task.FromResult(new AppHostValidationResult(IsValid: false, IsUnsupported: true));
+            }
+
             if (_factory.ValidateAppHostCallback is not null)
             {
                 return Task.FromResult(_factory.ValidateAppHostCallback(appHostFile));
@@ -168,8 +179,11 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
         public Task<UpdatePackagesResult> UpdatePackagesAsync(UpdatePackagesContext context, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<bool> CheckAndHandleRunningInstanceAsync(FileInfo appHostFile, DirectoryInfo homeDirectory, CancellationToken cancellationToken)
-            => Task.FromResult(true);
+        public Task<RunningInstanceResult> FindAndStopRunningInstanceAsync(FileInfo appHostFile, DirectoryInfo homeDirectory, CancellationToken cancellationToken)
+            => Task.FromResult(RunningInstanceResult.NoRunningInstance);
+
+        public Task<string?> GetUserSecretsIdAsync(FileInfo appHostFile, bool autoInit, CancellationToken cancellationToken)
+            => Task.FromResult<string?>(null);
 
         private static bool IsValidSingleFileAppHost(FileInfo candidateFile)
         {

@@ -1,0 +1,81 @@
+<Project Sdk="Microsoft.Build.NoTargets">
+  <!--
+    VS Code Extension Signature Signing Project
+    
+    This project signs the .signature.p7s file for the VS Code extension using MicroBuild.
+    The VS Code Marketplace requires extensions to be signed with a specific signature format:
+    1. A manifest file generated from the VSIX using 'vsce generate-manifest'
+    2. A .signature.p7s file containing a PKCS#7 signature of that manifest
+    
+    See: https://github.com/dotnet/vscode-csharp/blob/main/msbuild/signing/SIGNING.md
+  -->
+  <PropertyGroup>
+    <!-- Opt out of Central Package Management since we use a hardcoded MicroBuild.Core version -->
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <GenerateAssemblyVersionInfo>false</GenerateAssemblyVersionInfo>
+    <EnableDefaultSignFiles>false</EnableDefaultSignFiles>
+    <MicroBuild_DoNotStrongNameSign>true</MicroBuild_DoNotStrongNameSign>
+    <IsPackable>false</IsPackable>
+
+    <!-- 
+      VS Code extension artifacts are in artifacts/packages/<config>/vscode.
+      MicroBuild requires files to be under $(OutDir) to sign them, so set OutDir to point there.
+    -->
+    <VscodeOutputDir Condition="'$(VscodeOutputDir)' == ''">$(ArtifactsPackagesDir)vscode\</VscodeOutputDir>
+    <OutDir>$(VscodeOutputDir)</OutDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- MicroBuild signing plugin - this package provides the SignFiles target -->
+    <PackageReference Include="Microsoft.VisualStudioEng.MicroBuild.Core" Version="1.0.0" />
+  </ItemGroup>
+
+  <!-- Default to test signing if SignType is not specified -->
+  <PropertyGroup Condition="'$(SignType)' == ''">
+    <SignType>test</SignType>
+  </PropertyGroup>
+
+  <!-- Copies the manifest file to <name>.signature.p7s which is required to submit to the signing service -->
+  <Target Name="CopyManifestAsSignature" BeforeTargets="SignFiles">
+    <ItemGroup>
+      <ManifestFiles Include="$(OutDir)*.manifest" />
+    </ItemGroup>
+
+    <!-- Validate we have exactly 1 manifest file (we only produce one VSIX) -->
+    <Error
+        Text="Expected exactly 1 manifest file but found @(ManifestFiles->Count()). Ensure that the .manifest file has been generated. VscodeOutputDir=$(VscodeOutputDir)"
+        Condition="'@(ManifestFiles->Count())' != '1'" />
+
+    <Message Importance="high" Text="Found manifest file to sign: @(ManifestFiles)" />
+
+    <Copy SourceFiles="@(ManifestFiles)"
+          DestinationFiles="@(ManifestFiles->Replace('.manifest','.signature.p7s'))" />
+
+    <ItemGroup>
+      <FilesToSign Include="$(OutDir)*.signature.p7s">
+        <Authenticode>VSCodePublisher</Authenticode>
+      </FilesToSign>
+    </ItemGroup>
+
+    <!-- Validate we have exactly 1 signature file -->
+    <Error
+        Text="Expected exactly 1 .signature.p7s file but found @(FilesToSign->Count()). VscodeOutputDir=$(VscodeOutputDir)"
+        Condition="'@(FilesToSign->Count())' != '1'" />
+
+    <Message Importance="high" Text="Will sign with VSCodePublisher: @(FilesToSign)" />
+  </Target>
+
+  <!-- Validate signature file was properly signed after signing completes -->
+  <Target Name="ValidateSignature" AfterTargets="SignFiles">
+    <ItemGroup>
+      <SignedFiles Include="$(OutDir)*.signature.p7s" />
+    </ItemGroup>
+
+    <Error
+        Text="Expected exactly 1 .signature.p7s file after signing but found @(SignedFiles->Count()). VscodeOutputDir=$(VscodeOutputDir)"
+        Condition="'@(SignedFiles->Count())' != '1'" />
+
+    <Message Importance="high" Text="Signature file created: @(SignedFiles)" />
+  </Target>
+</Project>

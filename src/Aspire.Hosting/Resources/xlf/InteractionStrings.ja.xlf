@@ -50,8 +50,8 @@
       <trans-unit id="DeleteParameterMessageWithUserSecrets">
         <source>Are you sure you want to delete the value for parameter `{0}`?
 
-The value is currently saved in [user secrets](https://learn.microsoft.com/aspnet/core/security/app-secrets). You can choose to also delete it from there.</source>
-        <target state="translated">パラメーター `{0}` の値を削除しますか?
+The value is currently saved in [user secrets](https://aka.ms/aspire/user-secrets). You can choose to also delete it from there.</source>
+        <target state="needs-review-translation">パラメーター `{0}` の値を削除しますか?
 
 現在、値は [ユーザー シークレット](https://learn.microsoft.com/aspnet/core/security/app-secrets) に保存されています。そこから削除することもできます。</target>
         <note>Contains markdown. {0} is the parameter name.</note>
@@ -64,6 +64,26 @@ The value is currently saved in [user secrets](https://learn.microsoft.com/aspne
       <trans-unit id="DeleteParameterTitle">
         <source>Delete parameter value</source>
         <target state="translated">パラメーター値の削除</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeveloperCertificateNotFullyTrustedMessage">
+        <source>The most recent development certificate isn't fully trusted. See https://aka.ms/aspire/devcerts for more information.</source>
+        <target state="new">The most recent development certificate isn't fully trusted. See https://aka.ms/aspire/devcerts for more information.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeveloperCertificateNotFullyTrustedTitle">
+        <source>Development certificate not fully trusted</source>
+        <target state="new">Development certificate not fully trusted</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoDeveloperCertificateTrustedMessage">
+        <source>No trusted development certificate was found. See https://aka.ms/aspire/devcerts for more information.</source>
+        <target state="new">No trusted development certificate was found. See https://aka.ms/aspire/devcerts for more information.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoDeveloperCertificateTrustedTitle">
+        <source>No trusted development certificate</source>
+        <target state="new">No trusted development certificate</target>
         <note />
       </trans-unit>
       <trans-unit id="ParametersBarMessage">
@@ -107,8 +127,8 @@ The value is currently saved in [user secrets](https://learn.microsoft.com/aspne
         <note />
       </trans-unit>
       <trans-unit id="ParametersInputsRememberDescriptionNotConfigured">
-        <source>Requires a `UserSecretsId` to be configured in the AppHost project file. Run `dotnet user-secrets init` in the AppHost directory to configure.</source>
-        <target state="translated">AppHost プロジェクト ファイルで 'UserSecretsId' を構成する必要があります。AppHost ディレクトリで 'dotnet user-secrets init' を実行して構成します。</target>
+        <source>Requires user secrets to be configured for the AppHost. Run `aspire secret set &lt;key&gt; &lt;value&gt;` to initialize user secrets, or see [user secrets](https://aka.ms/aspire/user-secrets) for more information.</source>
+        <target state="new">Requires user secrets to be configured for the AppHost. Run `aspire secret set &lt;key&gt; &lt;value&gt;` to initialize user secrets, or see [user secrets](https://aka.ms/aspire/user-secrets) for more information.</target>
         <note />
       </trans-unit>
       <trans-unit id="ParametersInputsRememberLabel">
@@ -142,10 +162,10 @@ The value is currently saved in [user secrets](https://learn.microsoft.com/aspne
         <note />
       </trans-unit>
       <trans-unit id="SetParameterMessage">
-        <source>Please provide a value for the parameter. The parameter can be saved to [user secrets](https://learn.microsoft.com/aspnet/core/security/app-secrets) for future use.
+        <source>Please provide a value for the parameter. The parameter can be saved to [user secrets](https://aka.ms/aspire/user-secrets) for future use.
 
 New parameter values may not be used until dependent resources are restarted.</source>
-        <target state="translated">パラメーターの値を指定してください。パラメーターは、将来使用するために [ユーザー シークレット](https://learn.microsoft.com/aspnet/core/security/app-secrets) に保存できます。
+        <target state="needs-review-translation">パラメーターの値を指定してください。パラメーターは、将来使用するために [ユーザー シークレット](https://learn.microsoft.com/aspnet/core/security/app-secrets) に保存できます。
 
 依存するリソースが再起動されるまで、新しいパラメーター値は使用されない可能性があります。</target>
         <note>Contains markdown</note>

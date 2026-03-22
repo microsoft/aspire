@@ -4,8 +4,7 @@
 using System.Globalization;
 using System.Reflection;
 using System.Text;
-using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Ats;
+using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.Go;
 
@@ -349,13 +348,10 @@ public sealed class AtsGoCodeGenerator : ICodeGenerator
                 continue;
             }
 
-            // Only use nil checks for pointer types (types starting with *)
             var paramTypeStr = MapTypeRefToGo(parameter.Type, parameter.IsOptional);
-            var isPointerType = paramTypeStr.StartsWith("*", StringComparison.Ordinal) ||
-                               paramTypeStr == "any" ||
-                               paramTypeStr.StartsWith("func(", StringComparison.Ordinal);
+            var isNilableType = IsNilableGoType(paramTypeStr);
 
-            if (parameter.IsOptional && isPointerType)
+            if (parameter.IsOptional && isNilableType)
             {
                 WriteLine($"\tif {paramName} != nil {{");
                 WriteLine($"\t\treqArgs[\"{parameter.Name}\"] = SerializeValue({paramName})");
@@ -534,8 +530,9 @@ public sealed class AtsGoCodeGenerator : ICodeGenerator
         var handleTypeIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var handleType in context.HandleTypes)
         {
-            // Skip ReferenceExpression - it's defined in base.go
-            if (handleType.AtsTypeId == AtsConstants.ReferenceExpressionTypeId)
+            // Skip ReferenceExpression and CancellationToken - they're defined in base.go/transport.go
+            if (handleType.AtsTypeId == AtsConstants.ReferenceExpressionTypeId
+                || IsCancellationTokenTypeId(handleType.AtsTypeId))
             {
                 continue;
             }
@@ -557,6 +554,11 @@ public sealed class AtsGoCodeGenerator : ICodeGenerator
                     }
                 }
             }
+            // Also include expanded target types (concrete types discovered via interface expansion)
+            foreach (var expandedType in capability.ExpandedTargetTypes)
+            {
+                AddHandleTypeIfNeeded(handleTypeIds, expandedType);
+            }
         }
 
         _structNames.Clear();
@@ -572,8 +574,7 @@ public sealed class AtsGoCodeGenerator : ICodeGenerator
             var isResourceBuilder = false;
             if (handleTypeMap.TryGetValue(typeId, out var typeInfo))
             {
-                isResourceBuilder = typeInfo.ClrType is not null &&
-                    typeof(IResource).IsAssignableFrom(typeInfo.ClrType);
+                isResourceBuilder = typeInfo.IsResourceBuilder;
             }
 
             results.Add(new GoHandleType(typeId, _structNames[typeId], isResourceBuilder));
@@ -676,9 +677,20 @@ public sealed class AtsGoCodeGenerator : ICodeGenerator
             _ => "any"
         };
 
-        // In Go, pointers are already optional (can be nil), so we don't need to wrap
+        if (isOptional && !IsNilableGoType(baseType))
+        {
+            return $"*{baseType}";
+        }
+
         return baseType;
     }
+
+    private static bool IsNilableGoType(string typeName) =>
+        typeName.StartsWith("*", StringComparison.Ordinal) ||
+        typeName.StartsWith("[]", StringComparison.Ordinal) ||
+        typeName.StartsWith("map[", StringComparison.Ordinal) ||
+        typeName == "any" ||
+        typeName.StartsWith("func(", StringComparison.Ordinal);
 
     private string MapHandleType(string typeId) =>
         _structNames.TryGetValue(typeId, out var name) ? name : "Handle";
@@ -705,7 +717,11 @@ public sealed class AtsGoCodeGenerator : ICodeGenerator
     };
 
     private static bool IsCancellationToken(AtsParameterInfo parameter) =>
-        parameter.Type?.TypeId == AtsConstants.CancellationToken;
+        IsCancellationTokenTypeId(parameter.Type?.TypeId);
+
+    private static bool IsCancellationTokenTypeId(string? typeId) =>
+        string.Equals(typeId, AtsConstants.CancellationToken, StringComparison.Ordinal)
+        || (typeId?.EndsWith("/System.Threading.CancellationToken", StringComparison.Ordinal) ?? false);
 
     private static void AddHandleTypeIfNeeded(HashSet<string> handleTypeIds, AtsTypeRef? typeRef)
     {
@@ -714,8 +730,9 @@ public sealed class AtsGoCodeGenerator : ICodeGenerator
             return;
         }
 
-        // Skip ReferenceExpression - it's defined in base.go
-        if (typeRef.TypeId == AtsConstants.ReferenceExpressionTypeId)
+        // Skip ReferenceExpression and CancellationToken - they're defined in base.go/transport.go
+        if (typeRef.TypeId == AtsConstants.ReferenceExpressionTypeId
+            || IsCancellationTokenTypeId(typeRef.TypeId))
         {
             return;
         }

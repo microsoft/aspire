@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Tests.Pipelines;
 
+[Trait("Partition", "4")]
 public class PipelineLoggerProviderTests
 {
     [Fact]
@@ -132,7 +133,17 @@ public class FakeReportingStep : IReportingStep
         throw new NotImplementedException();
     }
 
+    public Task<IReportingTask> CreateTaskAsync(MarkdownString statusText, CancellationToken cancellationToken = default)
+    {
+        throw new NotImplementedException();
+    }
+
     public Task CompleteAsync(string statusText, CompletionState completionState, CancellationToken cancellationToken = default)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Task CompleteAsync(MarkdownString completionText, CompletionState completionState = CompletionState.Completed, CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException();
     }
@@ -142,8 +153,21 @@ public class FakeReportingStep : IReportingStep
         throw new NotImplementedException();
     }
 
+#pragma warning disable CS0618 // Type or member is obsolete
     public void Log(LogLevel logLevel, string message, bool enableMarkdown = false)
     {
         LoggedMessages.Add((logLevel, message));
+    }
+#pragma warning restore CS0618
+
+    public void Log(LogLevel logLevel, string message)
+    {
+        LoggedMessages.Add((logLevel, message));
+    }
+
+    public void Log(LogLevel logLevel, MarkdownString message)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        LoggedMessages.Add((logLevel, message.Value));
     }
 }

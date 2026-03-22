@@ -88,6 +88,12 @@ class IDistributedApplicationBuilder(HandleWrapperBase):
             args["port"] = serialize_value(port)
         return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/addTestRedis", args)
 
+    def add_test_vault(self, name: str) -> TestVaultResource:
+        """Adds a test vault resource"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["name"] = serialize_value(name)
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/addTestVault", args)
+
 
 class IResource(ResourceBuilderBase):
     def __init__(self, handle: Handle, client: AspireClient):
@@ -102,6 +108,12 @@ class IResourceWithConnectionString(ResourceBuilderBase):
     pass
 
 class IResourceWithEnvironment(HandleWrapperBase):
+    def __init__(self, handle: Handle, client: AspireClient):
+        super().__init__(handle, client)
+
+    pass
+
+class ITestVaultResource(ResourceBuilderBase):
     def __init__(self, handle: Handle, client: AspireClient):
         super().__init__(handle, client)
 
@@ -180,6 +192,118 @@ class TestCollectionContext(HandleWrapperBase):
         return self._metadata
 
 
+class TestDatabaseResource(ResourceBuilderBase):
+    def __init__(self, handle: Handle, client: AspireClient):
+        super().__init__(handle, client)
+
+    def with_optional_string(self, value: str | None = None, enabled: bool = True) -> IResource:
+        """Adds an optional string parameter"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        if value is not None:
+            args["value"] = serialize_value(value)
+        args["enabled"] = serialize_value(enabled)
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/withOptionalString", args)
+
+    def with_config(self, config: TestConfigDto) -> IResource:
+        """Configures the resource with a DTO"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["config"] = serialize_value(config)
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/withConfig", args)
+
+    def test_with_environment_callback(self, callback: Callable[[TestEnvironmentContext], None]) -> IResourceWithEnvironment:
+        """Configures environment with callback (test version)"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        callback_id = register_callback(callback) if callback is not None else None
+        if callback_id is not None:
+            args["callback"] = callback_id
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/testWithEnvironmentCallback", args)
+
+    def with_created_at(self, created_at: str) -> IResource:
+        """Sets the created timestamp"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["createdAt"] = serialize_value(created_at)
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/withCreatedAt", args)
+
+    def with_modified_at(self, modified_at: str) -> IResource:
+        """Sets the modified timestamp"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["modifiedAt"] = serialize_value(modified_at)
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/withModifiedAt", args)
+
+    def with_correlation_id(self, correlation_id: str) -> IResource:
+        """Sets the correlation ID"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["correlationId"] = serialize_value(correlation_id)
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/withCorrelationId", args)
+
+    def with_optional_callback(self, callback: Callable[[TestCallbackContext], None] | None = None) -> IResource:
+        """Configures with optional callback"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        callback_id = register_callback(callback) if callback is not None else None
+        if callback_id is not None:
+            args["callback"] = callback_id
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/withOptionalCallback", args)
+
+    def with_status(self, status: TestResourceStatus) -> IResource:
+        """Sets the resource status"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["status"] = serialize_value(status)
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/withStatus", args)
+
+    def with_nested_config(self, config: TestNestedDto) -> IResource:
+        """Configures with nested DTO"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["config"] = serialize_value(config)
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/withNestedConfig", args)
+
+    def with_validator(self, validator: Callable[[TestResourceContext], bool]) -> IResource:
+        """Adds validation callback"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        validator_id = register_callback(validator) if validator is not None else None
+        if validator_id is not None:
+            args["validator"] = validator_id
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/withValidator", args)
+
+    def test_wait_for(self, dependency: IResource) -> IResource:
+        """Waits for another resource (test version)"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["dependency"] = serialize_value(dependency)
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/testWaitFor", args)
+
+    def with_dependency(self, dependency: IResourceWithConnectionString) -> IResource:
+        """Adds a dependency on another resource"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["dependency"] = serialize_value(dependency)
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/withDependency", args)
+
+    def with_endpoints(self, endpoints: list[str]) -> IResource:
+        """Sets the endpoints"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["endpoints"] = serialize_value(endpoints)
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/withEndpoints", args)
+
+    def with_environment_variables(self, variables: dict[str, str]) -> IResourceWithEnvironment:
+        """Sets environment variables"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["variables"] = serialize_value(variables)
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/withEnvironmentVariables", args)
+
+    def with_cancellable_operation(self, operation: Callable[[CancellationToken], None]) -> IResource:
+        """Performs a cancellable operation"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        operation_id = register_callback(operation) if operation is not None else None
+        if operation_id is not None:
+            args["operation"] = operation_id
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/withCancellableOperation", args)
+
+    def with_data_volume(self, name: str | None = None) -> TestDatabaseResource:
+        """Adds a data volume"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        if name is not None:
+            args["name"] = serialize_value(name)
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/withDataVolume", args)
+
+
 class TestEnvironmentContext(HandleWrapperBase):
     def __init__(self, handle: Handle, client: AspireClient):
         super().__init__(handle, client)
@@ -221,6 +345,14 @@ class TestEnvironmentContext(HandleWrapperBase):
 class TestRedisResource(ResourceBuilderBase):
     def __init__(self, handle: Handle, client: AspireClient):
         super().__init__(handle, client)
+
+    def add_test_child_database(self, name: str, database_name: str | None = None) -> TestDatabaseResource:
+        """Adds a child database to a test Redis resource"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["name"] = serialize_value(name)
+        if database_name is not None:
+            args["databaseName"] = serialize_value(database_name)
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/addTestChildDatabase", args)
 
     def with_persistence(self, mode: TestPersistenceMode = None) -> TestRedisResource:
         """Configures the Redis resource with persistence"""
@@ -390,6 +522,22 @@ class TestRedisResource(ResourceBuilderBase):
             args["cancellationToken"] = cancellation_token_id
         return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/waitForReadyAsync", args)
 
+    def with_multi_param_handle_callback(self, callback: Callable[[TestCallbackContext, TestEnvironmentContext], None]) -> TestRedisResource:
+        """Tests multi-param callback destructuring"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        callback_id = register_callback(callback) if callback is not None else None
+        if callback_id is not None:
+            args["callback"] = callback_id
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/withMultiParamHandleCallback", args)
+
+    def with_data_volume(self, name: str | None = None, is_read_only: bool = False) -> TestRedisResource:
+        """Adds a data volume with persistence"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        if name is not None:
+            args["name"] = serialize_value(name)
+        args["isReadOnly"] = serialize_value(is_read_only)
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/withDataVolume", args)
+
 
 class TestResourceContext(HandleWrapperBase):
     def __init__(self, handle: Handle, client: AspireClient):
@@ -435,6 +583,117 @@ class TestResourceContext(HandleWrapperBase):
         return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.validateAsync", args)
 
 
+class TestVaultResource(ResourceBuilderBase):
+    def __init__(self, handle: Handle, client: AspireClient):
+        super().__init__(handle, client)
+
+    def with_optional_string(self, value: str | None = None, enabled: bool = True) -> IResource:
+        """Adds an optional string parameter"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        if value is not None:
+            args["value"] = serialize_value(value)
+        args["enabled"] = serialize_value(enabled)
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/withOptionalString", args)
+
+    def with_config(self, config: TestConfigDto) -> IResource:
+        """Configures the resource with a DTO"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["config"] = serialize_value(config)
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/withConfig", args)
+
+    def test_with_environment_callback(self, callback: Callable[[TestEnvironmentContext], None]) -> IResourceWithEnvironment:
+        """Configures environment with callback (test version)"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        callback_id = register_callback(callback) if callback is not None else None
+        if callback_id is not None:
+            args["callback"] = callback_id
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/testWithEnvironmentCallback", args)
+
+    def with_created_at(self, created_at: str) -> IResource:
+        """Sets the created timestamp"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["createdAt"] = serialize_value(created_at)
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/withCreatedAt", args)
+
+    def with_modified_at(self, modified_at: str) -> IResource:
+        """Sets the modified timestamp"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["modifiedAt"] = serialize_value(modified_at)
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/withModifiedAt", args)
+
+    def with_correlation_id(self, correlation_id: str) -> IResource:
+        """Sets the correlation ID"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["correlationId"] = serialize_value(correlation_id)
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/withCorrelationId", args)
+
+    def with_optional_callback(self, callback: Callable[[TestCallbackContext], None] | None = None) -> IResource:
+        """Configures with optional callback"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        callback_id = register_callback(callback) if callback is not None else None
+        if callback_id is not None:
+            args["callback"] = callback_id
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/withOptionalCallback", args)
+
+    def with_status(self, status: TestResourceStatus) -> IResource:
+        """Sets the resource status"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["status"] = serialize_value(status)
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/withStatus", args)
+
+    def with_nested_config(self, config: TestNestedDto) -> IResource:
+        """Configures with nested DTO"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["config"] = serialize_value(config)
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/withNestedConfig", args)
+
+    def with_validator(self, validator: Callable[[TestResourceContext], bool]) -> IResource:
+        """Adds validation callback"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        validator_id = register_callback(validator) if validator is not None else None
+        if validator_id is not None:
+            args["validator"] = validator_id
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/withValidator", args)
+
+    def test_wait_for(self, dependency: IResource) -> IResource:
+        """Waits for another resource (test version)"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["dependency"] = serialize_value(dependency)
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/testWaitFor", args)
+
+    def with_dependency(self, dependency: IResourceWithConnectionString) -> IResource:
+        """Adds a dependency on another resource"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["dependency"] = serialize_value(dependency)
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/withDependency", args)
+
+    def with_endpoints(self, endpoints: list[str]) -> IResource:
+        """Sets the endpoints"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["endpoints"] = serialize_value(endpoints)
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/withEndpoints", args)
+
+    def with_environment_variables(self, variables: dict[str, str]) -> IResourceWithEnvironment:
+        """Sets environment variables"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["variables"] = serialize_value(variables)
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/withEnvironmentVariables", args)
+
+    def with_cancellable_operation(self, operation: Callable[[CancellationToken], None]) -> IResource:
+        """Performs a cancellable operation"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        operation_id = register_callback(operation) if operation is not None else None
+        if operation_id is not None:
+            args["operation"] = operation_id
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/withCancellableOperation", args)
+
+    def with_vault_direct(self, option: str) -> ITestVaultResource:
+        """Configures vault using direct interface target"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["option"] = serialize_value(option)
+        return self._client.invoke_capability("Aspire.Hosting.CodeGeneration.Python.Tests/withVaultDirect", args)
+
+
 # ============================================================================
 # Handle wrapper registrations
 # ============================================================================
@@ -444,8 +703,11 @@ register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosti
 register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext", lambda handle, client: TestEnvironmentContext(handle, client))
 register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCollectionContext", lambda handle, client: TestCollectionContext(handle, client))
 register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource", lambda handle, client: TestRedisResource(handle, client))
+register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestDatabaseResource", lambda handle, client: TestDatabaseResource(handle, client))
 register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource", lambda handle, client: IResource(handle, client))
 register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString", lambda handle, client: IResourceWithConnectionString(handle, client))
+register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestVaultResource", lambda handle, client: TestVaultResource(handle, client))
+register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestVaultResource", lambda handle, client: ITestVaultResource(handle, client))
 register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder", lambda handle, client: IDistributedApplicationBuilder(handle, client))
 register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression", lambda handle, client: ReferenceExpression(handle, client))
 register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment", lambda handle, client: IResourceWithEnvironment(handle, client))

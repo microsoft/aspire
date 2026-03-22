@@ -17,3 +17,5 @@ output eventHubsEndpoint string = eventhubs.properties.serviceBusEndpoint
 output eventHubsHostName string = split(replace(eventhubs.properties.serviceBusEndpoint, 'https://', ''), ':')[0]
 
 output name string = eventhubs.name
+
+output id string = eventhubs.id

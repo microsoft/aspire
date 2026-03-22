@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 
 static class TestResourceExtensions
 {
+    [AspireExportIgnore(Reason = "Stress playground helper; not part of the supported ATS surface.")]
     public static IResourceBuilder<TestResource> AddTestResource(this IDistributedApplicationBuilder builder, string name)
     {
         builder.Services.TryAddEventingSubscriber<TestResourceLifecycle>();
@@ -28,6 +29,7 @@ static class TestResourceExtensions
         return rb;
     }
 
+    [AspireExportIgnore(Reason = "Stress playground helper; not part of the supported ATS surface.")]
     public static IResourceBuilder<TestNestedResource> AddNestedResource(this IDistributedApplicationBuilder builder, string name, IResource parent)
     {
         var rb = builder.AddResource(new TestNestedResource(name, parent))

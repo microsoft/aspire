@@ -36,7 +36,7 @@ public class McpConfigurationTests
                     Url = "http://localhost:23052/mcp",
                     Headers = new Dictionary<string, string>
                     {
-                        [McpApiKeyAuthenticationHandler.ApiKeyHeaderName] = "${input:x_mcp_api_key}"
+                        [McpApiKeyAuthenticationHandler.McpApiKeyHeaderName] = "${input:x_mcp_api_key}"
                     }
                 }
             }
@@ -100,7 +100,7 @@ public class McpConfigurationTests
             Url = "http://localhost:23052/mcp",
             Headers = new Dictionary<string, string>
             {
-                [McpApiKeyAuthenticationHandler.ApiKeyHeaderName] = "${input:x_mcp_api_key}"
+                [McpApiKeyAuthenticationHandler.McpApiKeyHeaderName] = "${input:x_mcp_api_key}"
             }
         };
 

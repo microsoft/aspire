@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Hosting.Ats;
+using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.TypeScript;
 
@@ -50,27 +50,59 @@ public sealed class TypeScriptLanguageSupport : ILanguageSupport
             """;
 
         // Create package.json
+        // NOTE: The engines.node constraint must match ESLint 10's own requirement
+        // (^20.19.0 || ^22.13.0 || >=24) to avoid install/runtime failures on unsupported Node versions.
         var packageName = request.ProjectName?.ToLowerInvariant() ?? "aspire-apphost";
         files["package.json"] = $$"""
             {
               "name": "{{packageName}}",
-              "version": "1.0.0",
+              "private": true,
               "type": "module",
               "scripts": {
-                "start": "aspire run",
+                "lint": "eslint apphost.ts",
+                "predev": "npm run lint",
+                "dev": "aspire run",
+                "prebuild": "npm run lint",
                 "build": "tsc",
-                "dev": "tsc --watch"
+                "watch": "tsc --watch"
               },
               "dependencies": {
                 "vscode-jsonrpc": "^8.2.0"
               },
+              "engines": {
+                "node": "^20.19.0 || ^22.13.0 || >=24"
+              },
               "devDependencies": {
-                "@types/node": "^20.0.0",
-                "nodemon": "^3.1.11",
-                "tsx": "^4.19.0",
-                "typescript": "^5.3.0"
+                "@types/node": "^22.0.0",
+                "eslint": "^10.0.3",
+                "nodemon": "^3.1.14",
+                "tsx": "^4.21.0",
+                "typescript": "^5.9.3",
+                "typescript-eslint": "^8.57.1"
               }
             }
+            """;
+
+        // Create eslint.config.mjs for catching unawaited promises in apphost.ts
+        files["eslint.config.mjs"] = """
+            // @ts-check
+
+            import { defineConfig } from 'eslint/config';
+            import tseslint from 'typescript-eslint';
+
+            export default defineConfig({
+              files: ['apphost.ts'],
+              extends: [tseslint.configs.base],
+              languageOptions: {
+                parserOptions: {
+                  projectService: true,
+                  tsconfigRootDir: import.meta.dirname,
+                },
+              },
+              rules: {
+                '@typescript-eslint/no-floating-promises': ['error', { checkThenables: true }],
+              },
+            });
             """;
 
         // Create tsconfig.json for TypeScript configuration
@@ -109,8 +141,6 @@ public sealed class TypeScriptLanguageSupport : ILanguageSupport
                 "https": {
                   "applicationUrl": "https://localhost:{{httpsPort}};http://localhost:{{httpPort}}",
                   "environmentVariables": {
-                    "ASPNETCORE_ENVIRONMENT": "Development",
-                    "DOTNET_ENVIRONMENT": "Development",
                     "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:{{otlpPort}}",
                     "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:{{resourceServicePort}}"
                   }
@@ -154,6 +184,7 @@ public sealed class TypeScriptLanguageSupport : ILanguageSupport
             DisplayName = LanguageDisplayName,
             CodeGenLanguage = CodeGenTarget,
             DetectionPatterns = s_detectionPatterns,
+            ExtensionLaunchCapability = "node",
             InstallDependencies = new CommandSpec
             {
                 Command = "npm",

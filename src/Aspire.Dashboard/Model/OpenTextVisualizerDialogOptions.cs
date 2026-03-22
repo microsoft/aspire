@@ -13,4 +13,9 @@ public sealed class OpenTextVisualizerDialogOptions
     public required string Value { get; init; }
     public bool ContainsSecret { get; init; }
     public string? DownloadFileName { get; init; }
+
+    /// <summary>
+    /// If set, the dialog will use this format and hide the format dropdown.
+    /// </summary>
+    public string? FixedFormat { get; init; }
 }

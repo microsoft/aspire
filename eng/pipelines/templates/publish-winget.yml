@@ -1,0 +1,182 @@
+# Reusable template for submitting WinGet manifests via wingetcreate.
+# Used by both the prerelease flow (azure-pipelines.yml) and the release flow (release-publish-nuget.yml).
+
+parameters:
+  - name: manifestArtifactPath
+    type: string
+    displayName: 'Path to the directory containing WinGet manifest .yaml files'
+  - name: version
+    type: string
+    default: ''
+    displayName: 'Package version (used in PR title). If empty, extracted from manifest directory structure.'
+  - name: packageIdentifier
+    type: string
+    displayName: 'WinGet package identifier (e.g. Microsoft.Aspire or Microsoft.Aspire.Prerelease)'
+  - name: dryRun
+    type: boolean
+    default: false
+    displayName: 'Skip actual submit (for testing)'
+
+steps:
+  - powershell: |
+      $ErrorActionPreference = 'Stop'
+      $manifestRoot = '${{ parameters.manifestArtifactPath }}'
+
+      Write-Host "=== WinGet Manifests ==="
+      Get-ChildItem -Path $manifestRoot -Recurse | Format-Table FullName
+      Write-Host "========================"
+
+      # Find the versioned manifest directory (deepest directory containing .yaml files)
+      $manifestDir = Get-ChildItem -Path $manifestRoot -Filter "*.yaml" -Recurse |
+        Select-Object -First 1 -ExpandProperty DirectoryName
+
+      if (-not $manifestDir) {
+        Write-Error "No .yaml manifest files found in: $manifestRoot"
+        exit 1
+      }
+
+      Write-Host "Manifest directory: $manifestDir"
+      Write-Host "##vso[task.setvariable variable=WinGetManifestDir]$manifestDir"
+
+      # Extract version from manifest directory name (e.g., .../Microsoft.Aspire/13.2.0/)
+      $version = '${{ parameters.version }}'
+      if ([string]::IsNullOrWhiteSpace($version)) {
+        $version = Split-Path $manifestDir -Leaf
+        Write-Host "Extracted version from directory: $version"
+      } else {
+        Write-Host "Using provided version: $version"
+      }
+      Write-Host "##vso[task.setvariable variable=WinGetVersion]$version"
+
+      Write-Host ""
+      Write-Host "=== Manifest files ==="
+      Get-ChildItem -Path $manifestDir | ForEach-Object {
+        $sizeKB = [math]::Round($_.Length / 1KB, 2)
+        Write-Host "  $($_.Name) ($sizeKB KB)"
+      }
+      Write-Host "======================"
+    displayName: '🟣Locate WinGet manifest directory'
+
+  - powershell: |
+      $ErrorActionPreference = 'Stop'
+      $manifestDir = '$(WinGetManifestDir)'
+
+      Write-Host "Validating installer URLs from WinGet manifest..."
+
+      # Find the installer yaml file
+      $installerYaml = Get-ChildItem -Path $manifestDir -Filter "*.installer.yaml" | Select-Object -First 1
+      if (-not $installerYaml) {
+        Write-Error "No *.installer.yaml found in $manifestDir"
+        exit 1
+      }
+
+      Write-Host "Parsing URLs from: $($installerYaml.Name)"
+
+      # Extract InstallerUrl values
+      $urls = Select-String -Path $installerYaml.FullName -Pattern 'InstallerUrl:\s*(.+)' |
+        ForEach-Object { $_.Matches[0].Groups[1].Value.Trim() }
+
+      if (-not $urls -or $urls.Count -eq 0) {
+        Write-Error "No InstallerUrl entries found in $($installerYaml.Name)"
+        exit 1
+      }
+
+      $failed = $false
+      foreach ($url in $urls) {
+        try {
+          $response = Invoke-WebRequest -Uri $url -Method Head -MaximumRedirection 5 -TimeoutSec 15 -UseBasicParsing
+          $code = $response.StatusCode
+          Write-Host "  OK ($code): $url"
+        }
+        catch {
+          $code = 'ERR'
+          if ($_.Exception.Response) { $code = $_.Exception.Response.StatusCode.value__ }
+          Write-Host "##[error]FAILED ($code): $url — $($_.Exception.Message)"
+          $failed = $true
+        }
+      }
+
+      if ($failed) {
+        Write-Error "One or more installer URLs are not accessible. Aborting before PR submission."
+        exit 1
+      }
+      Write-Host "All installer URLs are accessible."
+    displayName: '🟣Validate installer URLs from manifest'
+
+  - powershell: |
+      $ErrorActionPreference = 'Stop'
+      $manifestDir = '$(WinGetManifestDir)'
+
+      Write-Host "Validating ReleaseNotesUrl from locale manifest..."
+
+      $localeYaml = Get-ChildItem -Path $manifestDir -Filter "*.locale.*.yaml" | Select-Object -First 1
+      if (-not $localeYaml) {
+        Write-Error "No *.locale.*.yaml found in $manifestDir"
+        exit 1
+      }
+
+      $match = Select-String -Path $localeYaml.FullName -Pattern 'ReleaseNotesUrl:\s*(.+)' | Select-Object -First 1
+      if (-not $match) {
+        Write-Error "No ReleaseNotesUrl found in $($localeYaml.Name)"
+        exit 1
+      }
+
+      $releaseNotesUrl = $match.Matches[0].Groups[1].Value.Trim()
+      Write-Host "  URL: $releaseNotesUrl"
+
+      try {
+        $response = Invoke-WebRequest -Uri $releaseNotesUrl -Method Head -MaximumRedirection 5 -TimeoutSec 15 -UseBasicParsing
+        Write-Host "  OK ($($response.StatusCode))"
+      }
+      catch {
+        $code = 'ERR'
+        if ($_.Exception.Response) { $code = $_.Exception.Response.StatusCode.value__ }
+        Write-Error "ReleaseNotesUrl is not accessible ($code): $releaseNotesUrl — $($_.Exception.Message)"
+        exit 1
+      }
+
+      Write-Host "ReleaseNotesUrl is valid."
+    displayName: '🟣Validate ReleaseNotesUrl'
+
+  - powershell: |
+      $ErrorActionPreference = 'Stop'
+      Write-Host "Downloading wingetcreate..."
+      Invoke-WebRequest -Uri "https://aka.ms/wingetcreate/latest" -OutFile "$(Build.StagingDirectory)/wingetcreate.exe"
+      Write-Host "wingetcreate downloaded successfully"
+    displayName: '🟣Install wingetcreate'
+
+  - powershell: |
+      $ErrorActionPreference = 'Stop'
+      $manifestDir = '$(WinGetManifestDir)'
+      $version = '$(WinGetVersion)'
+      $packageId = '${{ parameters.packageIdentifier }}'
+      $token = $env:WINGET_CREATE_GITHUB_TOKEN
+
+      if ([string]::IsNullOrWhiteSpace($token)) {
+        Write-Error "WINGET_CREATE_GITHUB_TOKEN is not set or empty"
+        exit 1
+      }
+
+      Write-Host "Submitting WinGet manifests for $packageId version $version"
+      Write-Host "Manifest directory: $manifestDir"
+      Write-Host "Manifest files:"
+      Get-ChildItem -Path $manifestDir -Filter "*.yaml" | ForEach-Object { Write-Host "  - $($_.Name)" }
+
+      $output = & "$(Build.StagingDirectory)/wingetcreate.exe" submit $manifestDir `
+        --token $token `
+        --prtitle "Update $packageId to version $version" 2>&1
+
+      $exitCode = $LASTEXITCODE
+      $outputText = ($output -join "`n").Replace($token, '***')
+      Write-Host $outputText
+
+      if ($exitCode -ne 0) {
+        Write-Error "wingetcreate submit failed with exit code $exitCode"
+        exit $exitCode
+      }
+
+      Write-Host "Successfully submitted WinGet manifest for $packageId $version"
+    displayName: '🟣Submit to WinGet'
+    condition: and(succeeded(), eq('${{ parameters.dryRun }}', 'false'))
+    env:
+      WINGET_CREATE_GITHUB_TOKEN: $(aspire-winget-bot-pat)

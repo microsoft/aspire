@@ -4,9 +4,12 @@
 #pragma warning disable ASPIREDOCKERFILEBUILDER001
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIRECERTIFICATES001
+#pragma warning disable ASPIREEXTENSION001
 
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.ApplicationModel.Docker;
 using Aspire.Hosting.JavaScript;
@@ -24,6 +27,7 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class JavaScriptHostingExtensions
 {
+    private const string BrowserCapability = "browser";
     private const string DefaultNodeVersion = "22";
 
     // This is the order of config files that Vite will look for by default
@@ -258,6 +262,8 @@ public static class JavaScriptHostingExtensions
             resourceBuilder.WithNpm();
         }
 
+        resourceBuilder.WithVSCodeDebugging(scriptPath);
+
         if (builder.ExecutionContext.IsRunMode)
         {
             builder.Eventing.Subscribe<BeforeStartEvent>((_, _) =>
@@ -278,6 +284,7 @@ public static class JavaScriptHostingExtensions
 
     private static IResourceBuilder<TResource> WithNodeDefaults<TResource>(this IResourceBuilder<TResource> builder) where TResource : JavaScriptAppResource =>
         builder.WithOtlpExporter()
+            .WithRequiredCommand("node", "https://nodejs.org/en/download/")
             .WithEnvironment("NODE_ENV", builder.ApplicationBuilder.Environment.IsDevelopment() ? "development" : "production")
             .WithCertificateTrustConfiguration((ctx) =>
             {
@@ -459,6 +466,8 @@ public static class JavaScriptHostingExtensions
             .WithBuildScript("build")
             .WithRunScript(runScriptName);
 
+        resourceBuilder.WithVSCodeDebugging();
+
         // ensure the package manager command is set before starting the resource
         if (builder.ExecutionContext.IsRunMode)
         {
@@ -630,33 +639,11 @@ public static class JavaScriptHostingExtensions
 
         if (builder.ExecutionContext.IsRunMode)
         {
-            builder.Eventing.Subscribe<BeforeStartEvent>((@event, _) =>
+            // Vite only supports a single endpoint, so we have to modify the existing endpoint to use HTTPS instead of
+            // adding a new one.
+            resourceBuilder.SubscribeHttpsEndpointsUpdate(ctx =>
             {
-                var developerCertificateService = @event.Services.GetRequiredService<IDeveloperCertificateService>();
-
-                bool addHttps = false;
-                if (!resourceBuilder.Resource.TryGetLastAnnotation<HttpsCertificateAnnotation>(out var annotation))
-                {
-                    if (developerCertificateService.UseForHttps)
-                    {
-                        // If no certificate is configured, and the developer certificate service supports container trust,
-                        // configure the resource to use the developer certificate for its key pair.
-                        addHttps = true;
-                    }
-                }
-                else if (annotation.UseDeveloperCertificate.GetValueOrDefault(developerCertificateService.UseForHttps) || annotation.Certificate is not null)
-                {
-                    addHttps = true;
-                }
-
-                if (addHttps)
-                {
-                    // Vite only supports a single endpoint, so we have to modify the existing endpoint to use HTTPS instead of
-                    // adding a new one.
-                    resourceBuilder.WithEndpoint("http", ep => ep.UriScheme = "https");
-                }
-
-                return Task.CompletedTask;
+                resourceBuilder.WithEndpoint("http", ep => ep.UriScheme = "https");
             });
         }
 
@@ -680,6 +667,7 @@ public static class JavaScriptHostingExtensions
     ///     .WithViteConfig("./vite.production.config.js");
     /// </code>
     /// </example>
+    [AspireExport("withViteConfig", Description = "Configures a custom Vite configuration file")]
     public static IResourceBuilder<ViteAppResource> WithViteConfig(this IResourceBuilder<ViteAppResource> builder, string configPath)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -710,7 +698,8 @@ public static class JavaScriptHostingExtensions
             {
                 PackageFilesPatterns = { new CopyFilePattern("package*.json", "./") }
             })
-            .WithAnnotation(new JavaScriptInstallCommandAnnotation([installCommand, .. installArgs ?? []]));
+            .WithAnnotation(new JavaScriptInstallCommandAnnotation([installCommand, .. installArgs ?? []]))
+            .WithRequiredCommand("npm", "https://docs.npmjs.com/downloading-and-installing-node-js-and-npm");
 
         AddInstaller(resource, install);
         return resource;
@@ -741,6 +730,7 @@ public static class JavaScriptHostingExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
+    [AspireExport("withBun", Description = "Configures Bun as the package manager")]
     public static IResourceBuilder<TResource> WithBun<TResource>(this IResourceBuilder<TResource> resource, bool install = true, string[]? installArgs = null) where TResource : JavaScriptAppResource
     {
         ArgumentNullException.ThrowIfNull(resource);
@@ -768,7 +758,8 @@ public static class JavaScriptHostingExtensions
                 // bun supports passing script flags without the `--` separator.
                 CommandSeparator = null,
             })
-            .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs]));
+            .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs]))
+            .WithRequiredCommand("bun", "https://bun.sh/docs/installation");
 
         if (!resource.Resource.TryGetLastAnnotation<DockerfileBaseImageAnnotation>(out _))
         {
@@ -803,6 +794,7 @@ public static class JavaScriptHostingExtensions
     /// <param name="install">When true (default), automatically installs packages before the application starts. When false, only sets the package manager annotation without creating an installer resource.</param>
     /// <param name="installArgs">The command-line arguments passed to "yarn install".</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("withYarn", Description = "Configures yarn as the package manager")]
     public static IResourceBuilder<TResource> WithYarn<TResource>(this IResourceBuilder<TResource> resource, bool install = true, string[]? installArgs = null) where TResource : JavaScriptAppResource
     {
         ArgumentNullException.ThrowIfNull(resource);
@@ -841,7 +833,8 @@ public static class JavaScriptHostingExtensions
 
         resource
             .WithAnnotation(packageManager)
-            .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs]));
+            .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs]))
+            .WithRequiredCommand("yarn", "https://yarnpkg.com/getting-started/install");
 
         AddInstaller(resource, install);
         return resource;
@@ -870,12 +863,13 @@ public static class JavaScriptHostingExtensions
     }
 
     /// <summary>
-    /// Configures the Node.js resource to use pnmp as the package manager and optionally installs packages before the application starts.
+    /// Configures the Node.js resource to use pnpm as the package manager and optionally installs packages before the application starts.
     /// </summary>
     /// <param name="resource">The NodeAppResource.</param>
     /// <param name="install">When true (default), automatically installs packages before the application starts. When false, only sets the package manager annotation without creating an installer resource.</param>
     /// <param name="installArgs">The command-line arguments passed to "pnpm install".</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("withPnpm", Description = "Configures pnpm as the package manager")]
     public static IResourceBuilder<TResource> WithPnpm<TResource>(this IResourceBuilder<TResource> resource, bool install = true, string[]? installArgs = null) where TResource : JavaScriptAppResource
     {
         ArgumentNullException.ThrowIfNull(resource);
@@ -900,7 +894,8 @@ public static class JavaScriptHostingExtensions
                 // pnpm is not included in the Node.js Docker image by default, so we need to enable it via corepack
                 InitializeDockerBuildStage = stage => stage.Run("corepack enable pnpm")
             })
-            .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs]));
+            .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs]))
+            .WithRequiredCommand("pnpm", "https://pnpm.io/installation");
 
         AddInstaller(resource, install);
         return resource;
@@ -946,6 +941,170 @@ public static class JavaScriptHostingExtensions
     public static IResourceBuilder<TResource> WithRunScript<TResource>(this IResourceBuilder<TResource> resource, string scriptName, string[]? args = null) where TResource : JavaScriptAppResource
     {
         return resource.WithAnnotation(new JavaScriptRunScriptAnnotation(scriptName, args));
+    }
+
+    [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    internal static IResourceBuilder<T> WithVSCodeDebugging<T>(this IResourceBuilder<T> builder, string scriptPath)
+        where T : NodeAppResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(scriptPath);
+
+        var resource = builder.Resource;
+        var workingDirectory = Path.GetFullPath(resource.WorkingDirectory);
+
+        return builder.WithDebugSupport(
+            mode =>
+            {
+                // Compute at run time so the launch config reflects the final annotation state
+                var hasRunScript = resource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out _);
+                var hasPackageManager = resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var pmAnnotation);
+                var runtimeExecutable = hasRunScript && hasPackageManager ? pmAnnotation!.ExecutableName : "node";
+
+                return new NodeLaunchConfiguration
+                {
+                    ScriptPath = Path.GetFullPath(scriptPath, workingDirectory),
+                    Mode = mode,
+                    RuntimeExecutable = runtimeExecutable,
+                    WorkingDirectory = workingDirectory
+                };
+            },
+            "node");
+    }
+
+    [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    internal static IResourceBuilder<T> WithVSCodeDebugging<T>(this IResourceBuilder<T> builder)
+        where T : JavaScriptAppResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        var resource = builder.Resource;
+        var workingDirectory = Path.GetFullPath(resource.WorkingDirectory);
+
+        return builder.WithDebugSupport(
+            mode =>
+            {
+                // Compute at run time so the launch config reflects the final annotation state
+                var packageManager = "npm";
+                if (resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var pmAnnotation))
+                {
+                    packageManager = pmAnnotation.ExecutableName;
+                }
+
+                return new NodeLaunchConfiguration
+                {
+                    ScriptPath = string.Empty,
+                    Mode = mode,
+                    RuntimeExecutable = packageManager,
+                    WorkingDirectory = workingDirectory
+                };
+            },
+            "node");
+    }
+
+    /// <summary>
+    /// Configures a browser debugger for the JavaScript application resource, enabling browser-based debugging
+    /// through a child resource that launches when the parent application is ready.
+    /// </summary>
+    /// <typeparam name="T">The type of the JavaScript application resource.</typeparam>
+    /// <param name="builder">The resource builder for the JavaScript application.</param>
+    /// <param name="browser">The browser to use for debugging. Defaults to <c>"msedge"</c>. Supported values include <c>"msedge"</c> and <c>"chrome"</c>.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining additional configuration.</returns>
+    /// <remarks>
+    /// This method creates a child <see cref="BrowserDebuggerResource"/> that waits for the parent JavaScript
+    /// application to start, then launches a browser debug session targeting the parent's HTTP or HTTPS endpoint.
+    /// The parent resource must have at least one HTTP or HTTPS endpoint configured.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when the parent resource does not have an HTTP or HTTPS endpoint, or when the IDE extension
+    /// does not support browser debugging.
+    /// </exception>
+    /// <example>
+    /// Add browser debugging to a JavaScript application:
+    /// <code>
+    /// var builder = DistributedApplication.CreateBuilder(args);
+    /// builder.AddViteApp("frontend", "./frontend")
+    ///     .WithBrowserDebugger();
+    /// </code>
+    /// </example>
+    [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport("withBrowserDebugger", Description = "Configures a browser debugger for the JavaScript application")]
+    public static IResourceBuilder<T> WithBrowserDebugger<T>(
+        this IResourceBuilder<T> builder,
+        string browser = "msedge")
+        where T : JavaScriptAppResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        // Validate that the extension supports browser debugging if we're running in an extension context
+        ValidateBrowserCapability(builder);
+
+        var parentResource = builder.Resource;
+        var debuggerResourceName = $"{parentResource.Name}-browser";
+
+        var debuggerResource = new BrowserDebuggerResource(debuggerResourceName, browser, parentResource.WorkingDirectory);
+
+        builder.ApplicationBuilder.AddResource(debuggerResource)
+            .WithParentRelationship(parentResource)
+            .WaitFor(builder)
+            .ExcludeFromManifest()
+            .WithDebugSupport(
+                mode =>
+                {
+                    // Resolve endpoint at run time so dynamically added endpoints are reflected
+                    EndpointAnnotation? endpointAnnotation = null;
+                    if (parentResource.TryGetAnnotationsOfType<EndpointAnnotation>(out var endpoints))
+                    {
+                        endpointAnnotation = endpoints.FirstOrDefault(e => e.UriScheme == "https")
+                            ?? endpoints.FirstOrDefault(e => e.UriScheme == "http");
+                    }
+
+                    if (endpointAnnotation is null)
+                    {
+                        throw new InvalidOperationException(
+                            $"Resource '{parentResource.Name}' does not have an HTTP or HTTPS endpoint. Browser debugging requires an endpoint to navigate to.");
+                    }
+
+                    var endpointReference = parentResource.GetEndpoint(endpointAnnotation.Name);
+
+                    return new BrowserLaunchConfiguration
+                    {
+                        Mode = mode,
+                        Url = endpointReference.Url,
+                        WebRoot = parentResource.WorkingDirectory,
+                        Browser = browser
+                    };
+                },
+                BrowserCapability);
+
+        return builder;
+    }
+
+    private static void ValidateBrowserCapability<T>(IResourceBuilder<T> builder) where T : IResource
+    {
+        var configuration = builder.ApplicationBuilder.Configuration;
+
+        try
+        {
+            if (configuration["DEBUG_SESSION_INFO"] is { } debugSessionInfoJson
+                && JsonSerializer.Deserialize<DebugSessionCapabilities>(debugSessionInfoJson) is { } info
+                && info.SupportedLaunchConfigurations is not null
+                && !info.SupportedLaunchConfigurations.Contains(BrowserCapability))
+            {
+                throw new InvalidOperationException(
+                    "This version of the Aspire extension does not support browser debugging. Please update the Aspire extension to use browser debugging support with WithBrowserDebugger().");
+            }
+        }
+        catch (JsonException)
+        {
+            // If we can't parse the debug session info, skip validation
+        }
+    }
+
+    private sealed class DebugSessionCapabilities
+    {
+        [JsonPropertyName("supported_launch_configurations")]
+        public string[]? SupportedLaunchConfigurations { get; set; }
     }
 
     private static void AddInstaller<TResource>(IResourceBuilder<TResource> resource, bool install) where TResource : JavaScriptAppResource

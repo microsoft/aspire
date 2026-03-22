@@ -54,7 +54,7 @@
       </trans-unit>
       <trans-unit id="ChatRequestErrorForbiddenVSCode">
         <source>Sign into VS Code with a GitHub account that has a Copilot subscription. Follow the steps in &lt;a href="{0}" target="_blank"&gt;Set up GitHub Copilot in VS Code&lt;/a&gt;.</source>
-        <target state="translated">Přihlaste se k VS Code pomocí účtu GitHub, který má předplatné Copilotu. Postupujte podle pokynů v tématu věnovaném &lt;a href="{0}" target="_blank"&gt;porovnání nastavení GitHub Copilotu ve VS Code&lt;/a&gt;.</target>
+        <target state="translated">Přihlaste se k VS Code pomocí účtu GitHub, který má předplatné Copilota. Postupujte podle pokynů v tématu věnovaném &lt;a href="{0}" target="_blank"&gt;porovnání nastavení GitHub Copilota ve VS Code&lt;/a&gt;.</target>
         <note>{0} is a link</note>
       </trans-unit>
       <trans-unit id="ChatRequestErrorForbiddenVisualStudio">
@@ -109,7 +109,7 @@
       </trans-unit>
       <trans-unit id="DialogTitle">
         <source>GitHub Copilot chat</source>
-        <target state="translated">Chat s GitHub Copilotem</target>
+        <target state="translated">Copilot Chat na GitHubu</target>
         <note />
       </trans-unit>
       <trans-unit id="DislikeMessageButtonText">
@@ -164,7 +164,7 @@
       </trans-unit>
       <trans-unit id="SidebarTitle">
         <source>GitHub Copilot chat</source>
-        <target state="translated">Chat s GitHub Copilotem</target>
+        <target state="translated">Copilot Chat na GitHubu</target>
         <note />
       </trans-unit>
       <trans-unit id="ToolNotificationConsoleLogs">

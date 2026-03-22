@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>aspire-managed</AssemblyName>
+
+    <!-- Not a shippable package -->
+    <IsPackable>false</IsPackable>
+    <EnablePackageValidation>false</EnablePackageValidation>
+    <UsePublicApiAnalyzers>false</UsePublicApiAnalyzers>
+
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+
+    <!-- Don't generate web.config or include IIS hosting -->
+    <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
+
+    <!-- Self-contained single-file publish settings (applied only during publish via Bundle.proj) -->
+    <PublishSingleFile>true</PublishSingleFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Aspire.Dashboard\Aspire.Dashboard.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.RemoteHost\Aspire.Hosting.RemoteHost.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NuGet.Commands" />
+    <PackageReference Include="NuGet.Protocol" />
+    <PackageReference Include="NuGet.Resolver" />
+    <PackageReference Include="System.CommandLine" />
+  </ItemGroup>
+
+  <!-- Exclude unwanted files from publish output -->
+  <Target Name="RemoveUnwantedPublishFiles" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(RelativePath)' == 'appsettings.json'" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="$([System.String]::Copy('%(RelativePath)').StartsWith('appsettings.'))" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Extension)' == '.xml'" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(RelativePath)' == 'web.config'" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(RelativePath)' == 'aspnetcorev2_inprocess.dll'" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="$([System.String]::Copy('%(RelativePath)').EndsWith('.runtimeconfig.json'))" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="$([System.String]::Copy('%(RelativePath)').EndsWith('.staticwebassets.endpoints.json'))" />
+    </ItemGroup>
+  </Target>
+
+</Project>

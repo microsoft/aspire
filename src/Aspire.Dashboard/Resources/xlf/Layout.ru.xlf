@@ -42,6 +42,11 @@
         <target state="translated">Перезагрузить</target>
         <note />
       </trans-unit>
+      <trans-unit id="MessageUnsecuredEndpointApiBody">
+        <source>Untrusted apps can access telemetry data via the API.</source>
+        <target state="translated">Недоверенные приложения могут получать доступ к данным телеметрии через API.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MessageUnsecuredEndpointLink">
         <source>More information</source>
         <target state="translated">Подробнее</target>

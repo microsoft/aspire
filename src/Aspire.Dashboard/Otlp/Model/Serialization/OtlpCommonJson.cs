@@ -6,179 +6,65 @@ using System.Text.Json.Serialization;
 namespace Aspire.Dashboard.Otlp.Model.Serialization;
 
 /// <summary>
-/// Represents any type of attribute value following the OTLP protojson format.
-/// Only one value property should be set at a time (oneof semantics).
+/// Represents the export trace service response.
 /// </summary>
-internal sealed class OtlpAnyValueJson
+internal sealed class OtlpExportTraceServiceResponseJson
 {
     /// <summary>
-    /// String value.
+    /// The details of a partially successful export request.
     /// </summary>
-    [JsonPropertyName("stringValue")]
-    public string? StringValue { get; set; }
-
-    /// <summary>
-    /// Boolean value.
-    /// </summary>
-    [JsonPropertyName("boolValue")]
-    public bool? BoolValue { get; set; }
-
-    /// <summary>
-    /// Integer value. Serialized as string per protojson spec for int64.
-    /// </summary>
-    [JsonPropertyName("intValue")]
-    [JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)]
-    public long? IntValue { get; set; }
-
-    /// <summary>
-    /// Double value.
-    /// </summary>
-    [JsonPropertyName("doubleValue")]
-    public double? DoubleValue { get; set; }
-
-    /// <summary>
-    /// Array value.
-    /// </summary>
-    [JsonPropertyName("arrayValue")]
-    public OtlpArrayValueJson? ArrayValue { get; set; }
-
-    /// <summary>
-    /// Key-value list value.
-    /// </summary>
-    [JsonPropertyName("kvlistValue")]
-    public OtlpKeyValueListJson? KvlistValue { get; set; }
-
-    /// <summary>
-    /// Bytes value. Serialized as base64 per protojson spec.
-    /// </summary>
-    [JsonPropertyName("bytesValue")]
-    public string? BytesValue { get; set; }
+    [JsonPropertyName("partialSuccess")]
+    public OtlpExportTracePartialSuccessJson? PartialSuccess { get; set; }
 }
 
 /// <summary>
-/// Represents an array of AnyValue messages.
+/// Represents partial success information for trace export.
 /// </summary>
-internal sealed class OtlpArrayValueJson
+internal sealed class OtlpExportTracePartialSuccessJson
 {
     /// <summary>
-    /// Array of values.
+    /// The number of rejected spans. Serialized as string per protojson spec for int64.
     /// </summary>
-    [JsonPropertyName("values")]
-    public OtlpAnyValueJson[]? Values { get; set; }
-}
-
-/// <summary>
-/// Represents a list of KeyValue messages.
-/// </summary>
-internal sealed class OtlpKeyValueListJson
-{
-    /// <summary>
-    /// Collection of key/value pairs.
-    /// </summary>
-    [JsonPropertyName("values")]
-    public OtlpKeyValueJson[]? Values { get; set; }
-}
-
-/// <summary>
-/// Represents a key-value pair used to store attributes.
-/// </summary>
-internal sealed class OtlpKeyValueJson
-{
-    /// <summary>
-    /// The key name of the pair.
-    /// </summary>
-    [JsonPropertyName("key")]
-    public string? Key { get; set; }
-
-    /// <summary>
-    /// The value of the pair.
-    /// </summary>
-    [JsonPropertyName("value")]
-    public OtlpAnyValueJson? Value { get; set; }
-}
-
-/// <summary>
-/// Represents instrumentation scope information.
-/// </summary>
-internal sealed class OtlpInstrumentationScopeJson
-{
-    /// <summary>
-    /// A name denoting the instrumentation scope.
-    /// </summary>
-    [JsonPropertyName("name")]
-    public string? Name { get; set; }
-
-    /// <summary>
-    /// The version of the instrumentation scope.
-    /// </summary>
-    [JsonPropertyName("version")]
-    public string? Version { get; set; }
-
-    /// <summary>
-    /// Additional attributes that describe the scope.
-    /// </summary>
-    [JsonPropertyName("attributes")]
-    public OtlpKeyValueJson[]? Attributes { get; set; }
-
-    /// <summary>
-    /// The number of attributes that were discarded.
-    /// </summary>
-    [JsonPropertyName("droppedAttributesCount")]
+    [JsonPropertyName("rejectedSpans")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public uint DroppedAttributesCount { get; set; }
+    [JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)]
+    public long RejectedSpans { get; set; }
+
+    /// <summary>
+    /// A developer-facing human-readable error message.
+    /// </summary>
+    [JsonPropertyName("errorMessage")]
+    public string? ErrorMessage { get; set; }
 }
 
 /// <summary>
-/// Represents a reference to an entity.
+/// Represents the export logs service response.
 /// </summary>
-internal sealed class OtlpEntityRefJson
+internal sealed class OtlpExportLogsServiceResponseJson
 {
     /// <summary>
-    /// The Schema URL, if known.
+    /// The details of a partially successful export request.
     /// </summary>
-    [JsonPropertyName("schemaUrl")]
-    public string? SchemaUrl { get; set; }
-
-    /// <summary>
-    /// Defines the type of the entity.
-    /// </summary>
-    [JsonPropertyName("type")]
-    public string? Type { get; set; }
-
-    /// <summary>
-    /// Attribute keys that identify the entity.
-    /// </summary>
-    [JsonPropertyName("idKeys")]
-    public string[]? IdKeys { get; set; }
-
-    /// <summary>
-    /// Descriptive (non-identifying) attribute keys of the entity.
-    /// </summary>
-    [JsonPropertyName("descriptionKeys")]
-    public string[]? DescriptionKeys { get; set; }
+    [JsonPropertyName("partialSuccess")]
+    public OtlpExportLogsPartialSuccessJson? PartialSuccess { get; set; }
 }
 
 /// <summary>
-/// Represents the combined telemetry data in OTLP JSON format.
-/// This type can contain logs, traces, and/or metrics data.
+/// Represents partial success information for logs export.
 /// </summary>
-internal sealed class OtlpTelemetryDataJson
+internal sealed class OtlpExportLogsPartialSuccessJson
 {
     /// <summary>
-    /// An array of ResourceSpans.
+    /// The number of rejected log records. Serialized as string per protojson spec for int64.
     /// </summary>
-    [JsonPropertyName("resourceSpans")]
-    public OtlpResourceSpansJson[]? ResourceSpans { get; set; }
+    [JsonPropertyName("rejectedLogRecords")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    [JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)]
+    public long RejectedLogRecords { get; set; }
 
     /// <summary>
-    /// An array of ResourceLogs.
+    /// A developer-facing human-readable error message.
     /// </summary>
-    [JsonPropertyName("resourceLogs")]
-    public OtlpResourceLogsJson[]? ResourceLogs { get; set; }
-
-    /// <summary>
-    /// An array of ResourceMetrics.
-    /// </summary>
-    [JsonPropertyName("resourceMetrics")]
-    public OtlpResourceMetricsJson[]? ResourceMetrics { get; set; }
+    [JsonPropertyName("errorMessage")]
+    public string? ErrorMessage { get; set; }
 }

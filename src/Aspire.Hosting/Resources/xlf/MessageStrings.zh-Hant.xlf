@@ -27,6 +27,46 @@
         <target state="translated">執行應用程式需要較新版本的 Aspire.Hosting.AppHost 套件。請確保您參考的版本至少為 '{0}'。</target>
         <note />
       </trans-unit>
+      <trans-unit id="InstallationInstructions">
+        <source>Installation instructions</source>
+        <target state="translated">安裝指示</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MissingCommandNotificationTitle">
+        <source>Missing command</source>
+        <target state="translated">遺漏命令</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PersistentContainerWithoutUserSecrets">
+        <source>Resource '{0}' has a persistent lifetime but the AppHost project does not have user secrets configured. Generated parameter values (such as passwords) may change on each restart, causing persistent containers to be recreated. Run 'aspire secret set' to initialize user secrets.</source>
+        <target state="translated">資源 '{0}' 具有持久生命週期，但 AppHost 專案尚未設定使用者祕密。產生的參數值 (例如密碼) 可能會在每次重啟時變更，導致持久容器被重新建立。請執行 'aspire secret set' 以初始化使用者祕密。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RequiredCommandNotFound">
+        <source>Required command '{0}' was not found on PATH or at the specified location.</source>
+        <target state="translated">在 PATH 或指定的位置找不到必要的命令 '{0}'。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RequiredCommandNotFoundWithLink">
+        <source>Required command '{0}' was not found on PATH or at the specified location. For installation instructions, see: {1}</source>
+        <target state="translated">在 PATH 或指定的位置找不到必要的命令 '{0}'。如需安裝指示，請參閱: {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RequiredCommandValidationFailed">
+        <source>Command '{0}' validation failed: {1}</source>
+        <target state="translated">命令 '{0}' 驗證失敗: {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RequiredCommandValidationFailedWithLink">
+        <source>Command '{0}' validation failed: {1}. For installation instructions, see: {2}</source>
+        <target state="translated">命令 '{0}' 驗證失敗: {1}。如需安裝指示，請參閱: {2}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceMayFailToStart">
+        <source>Resource '{0}' may fail to start: {1}</source>
+        <target state="translated">資源 '{0}' 可能無法啟動: {1}</target>
+        <note />
+      </trans-unit>
     </body>
   </file>
 </xliff>

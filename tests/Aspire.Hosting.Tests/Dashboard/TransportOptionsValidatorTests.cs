@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Hosting.Tests.Dashboard;
 
+[Trait("Partition", "3")]
 public class TransportOptionsValidatorTests
 {
     [Fact]

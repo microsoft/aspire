@@ -86,7 +86,7 @@ stages:
 
           pool:
             name: $(DncEngPublicBuildPool)
-            demands: ImageOverride -equals windows.vs2022preview.amd64.open
+            demands: ImageOverride -equals windows.vs2026preview.scout.amd64.open
 
           variables:
             - name: _buildScript
@@ -119,7 +119,7 @@ stages:
 
           pool:
             name: $(DncEngPublicBuildPool)
-            demands: ImageOverride -equals build.ubuntu.2204.amd64.open
+            demands: ImageOverride -equals Build.Ubuntu.2204.Amd64.Open
 
           variables:
             - name: _buildScript

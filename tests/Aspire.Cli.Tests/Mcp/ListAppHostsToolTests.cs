@@ -1,8 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Microsoft.AspNetCore.InternalTesting;
 using Aspire.Cli.Backchannel;
-using Aspire.Cli.Mcp;
+using Aspire.Cli.Mcp.Tools;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using StreamJsonRpc;
@@ -19,7 +20,7 @@ public class ListAppHostsToolTests(ITestOutputHelper outputHelper)
         var executionContext = CreateCliExecutionContext(workspace.WorkspaceRoot);
 
         var tool = new ListAppHostsTool(monitor, executionContext);
-        var result = await tool.CallToolAsync(null!, null, CancellationToken.None);
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
 
         Assert.Null(result.IsError);
         Assert.NotNull(result.Content);
@@ -54,7 +55,7 @@ public class ListAppHostsToolTests(ITestOutputHelper outputHelper)
         monitor.AddConnection("hash1", "socket.hash1", connection);
 
         var tool = new ListAppHostsTool(monitor, executionContext);
-        var result = await tool.CallToolAsync(null!, null, CancellationToken.None);
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
 
         Assert.Null(result.IsError);
         var textContent = result.Content[0] as ModelContextProtocol.Protocol.TextContentBlock;
@@ -86,7 +87,7 @@ public class ListAppHostsToolTests(ITestOutputHelper outputHelper)
         monitor.AddConnection("hash2", "socket.hash2", connection);
 
         var tool = new ListAppHostsTool(monitor, executionContext);
-        var result = await tool.CallToolAsync(null!, null, CancellationToken.None);
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
 
         Assert.Null(result.IsError);
         var textContent = result.Content[0] as ModelContextProtocol.Protocol.TextContentBlock;
@@ -129,7 +130,7 @@ public class ListAppHostsToolTests(ITestOutputHelper outputHelper)
         monitor.AddConnection("hash2", "socket.hash2", outOfScopeConnection);
 
         var tool = new ListAppHostsTool(monitor, executionContext);
-        var result = await tool.CallToolAsync(null!, null, CancellationToken.None);
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
 
         Assert.Null(result.IsError);
         var textContent = result.Content[0] as ModelContextProtocol.Protocol.TextContentBlock;
@@ -153,12 +154,12 @@ public class ListAppHostsToolTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, monitor.ScanCallCount);
 
         var tool = new ListAppHostsTool(monitor, executionContext);
-        await tool.CallToolAsync(null!, null, CancellationToken.None);
+        await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(1, monitor.ScanCallCount);
 
         // Call again to verify it scans each time
-        await tool.CallToolAsync(null!, null, CancellationToken.None);
+        await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(2, monitor.ScanCallCount);
     }
@@ -167,7 +168,7 @@ public class ListAppHostsToolTests(ITestOutputHelper outputHelper)
     {
         var hivesDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "hives"));
         var cacheDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "cache"));
-        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-sdks")));
+        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-sdks")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
     }
 
     private static AppHostAuxiliaryBackchannel CreateAppHostConnection(string hash, string socketPath, AppHostInformation appHostInfo, bool isInScope)
@@ -177,3 +178,4 @@ public class ListAppHostsToolTests(ITestOutputHelper outputHelper)
         return new AppHostAuxiliaryBackchannel(hash, socketPath, rpc, mcpInfo: null, appHostInfo, isInScope);
     }
 }
+

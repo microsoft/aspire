@@ -53,7 +53,7 @@ internal sealed class AppHostCliBackchannel(ILogger<AppHostCliBackchannel> logge
         // of the AppHost process. The AppHost process will then trigger the shutdown
         // which will allow the CLI to await the pending run.
 
-        using var activity = telemetry.ActivitySource.StartActivity();
+        using var activity = telemetry.StartDiagnosticActivity();
         var rpc = await GetRpcTaskAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
 
         logger.LogDebug("Requesting stop");
@@ -66,7 +66,7 @@ internal sealed class AppHostCliBackchannel(ILogger<AppHostCliBackchannel> logge
 
     public async Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken)
     {
-        using var activity = telemetry.ActivitySource.StartActivity();
+        using var activity = telemetry.StartDiagnosticActivity();
         var rpc = await GetRpcTaskAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
 
         logger.LogDebug("Requesting dashboard URL");
@@ -85,7 +85,7 @@ internal sealed class AppHostCliBackchannel(ILogger<AppHostCliBackchannel> logge
             IAsyncEnumerable<BackchannelLogEntry>? logEntries = null;
             try
             {
-                using var activity = telemetry.ActivitySource.StartActivity();
+                using var activity = telemetry.StartDiagnosticActivity();
                 var rpc = await GetRpcTaskAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
 
                 logger.LogDebug("Requesting AppHost log entries");
@@ -121,7 +121,7 @@ internal sealed class AppHostCliBackchannel(ILogger<AppHostCliBackchannel> logge
             IAsyncEnumerable<RpcResourceState>? resourceStates = null;
             try
             {
-                using var activity = telemetry.ActivitySource.StartActivity();
+                using var activity = telemetry.StartDiagnosticActivity();
                 var rpc = await GetRpcTaskAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
 
                 logger.LogDebug("Requesting resource states");
@@ -252,7 +252,7 @@ internal sealed class AppHostCliBackchannel(ILogger<AppHostCliBackchannel> logge
     {
         try
         {
-            using var activity = telemetry.ActivitySource.StartActivity();
+            using var activity = telemetry.StartDiagnosticActivity();
 
             lock (_lock)
             {
@@ -386,7 +386,7 @@ internal sealed class AppHostCliBackchannel(ILogger<AppHostCliBackchannel> logge
 
     public async IAsyncEnumerable<PublishingActivity> GetPublishingActivitiesAsync([EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        using var activity = telemetry.ActivitySource.StartActivity();
+        using var activity = telemetry.StartDiagnosticActivity();
         var rpc = await GetRpcTaskAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
 
         logger.LogDebug("Requesting publishing activities.");
@@ -406,7 +406,7 @@ internal sealed class AppHostCliBackchannel(ILogger<AppHostCliBackchannel> logge
 
     public async Task<string[]> GetCapabilitiesAsync(CancellationToken cancellationToken)
     {
-        using var activity = telemetry.ActivitySource.StartActivity();
+        using var activity = telemetry.StartDiagnosticActivity();
         var rpc = await GetRpcTaskAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
 
         logger.LogDebug("Requesting capabilities");
@@ -421,7 +421,7 @@ internal sealed class AppHostCliBackchannel(ILogger<AppHostCliBackchannel> logge
 
     public async Task CompletePromptResponseAsync(string promptId, PublishingPromptInputAnswer[] answers, CancellationToken cancellationToken)
     {
-        using var activity = telemetry.ActivitySource.StartActivity();
+        using var activity = telemetry.StartDiagnosticActivity();
         var rpc = await GetRpcTaskAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
 
         logger.LogDebug("Providing prompt responses for prompt ID {PromptId}", promptId);
@@ -434,7 +434,7 @@ internal sealed class AppHostCliBackchannel(ILogger<AppHostCliBackchannel> logge
 
     public async Task UpdatePromptResponseAsync(string promptId, PublishingPromptInputAnswer[] answers, CancellationToken cancellationToken)
     {
-        using var activity = telemetry.ActivitySource.StartActivity();
+        using var activity = telemetry.StartDiagnosticActivity();
         var rpc = await GetRpcTaskAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
 
         logger.LogDebug("Providing prompt responses for prompt ID {PromptId}", promptId);
@@ -447,7 +447,7 @@ internal sealed class AppHostCliBackchannel(ILogger<AppHostCliBackchannel> logge
 
     public async IAsyncEnumerable<CommandOutput> ExecAsync([EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        using var activity = telemetry.ActivitySource.StartActivity();
+        using var activity = telemetry.StartDiagnosticActivity();
         var rpc = await GetRpcTaskAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
 
         logger.LogDebug("Requesting execution.");

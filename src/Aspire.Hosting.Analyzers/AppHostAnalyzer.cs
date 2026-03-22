@@ -77,6 +77,14 @@ public partial class AppHostAnalyzer : DiagnosticAnalyzer
         IMethodSymbol targetMethod,
         [NotNullWhen(true)] out (IParameterSymbol ModelNameParameter, ModelType[] ModelTypes)[]? parameterData)
     {
+        if (!wellKnownTypes.TryGet(WellKnownTypeData.WellKnownType.Aspire_Hosting_ApplicationModel_IModelNameParameter, out var modelNameParameter) ||
+            !wellKnownTypes.TryGet(WellKnownTypeData.WellKnownType.Aspire_Hosting_ApplicationModel_ResourceNameAttribute, out var resourceNameAttribute) ||
+            !wellKnownTypes.TryGet(WellKnownTypeData.WellKnownType.Aspire_Hosting_ApplicationModel_EndpointNameAttribute, out var endpointNameAttribute))
+        {
+            parameterData = null;
+            return false;
+        }
+
         // Look for string parameters annotated with attribute that implements IModelNameParameter
         var candidateParameters = targetMethod.Parameters
             .Select(ps => (Symbol: ps, ModelTypes: GetModelNameAttributes(ps)))
@@ -96,10 +104,6 @@ public partial class AppHostAnalyzer : DiagnosticAnalyzer
 
         ModelType[] GetModelNameAttributes(IParameterSymbol parameter)
         {
-            var modelNameParameter = wellKnownTypes.Get(WellKnownTypeData.WellKnownType.Aspire_Hosting_ApplicationModel_IModelNameParameter);
-            var resourceNameAttribute = wellKnownTypes.Get(WellKnownTypeData.WellKnownType.Aspire_Hosting_ApplicationModel_ResourceNameAttribute);
-            var endpointNameAttribute = wellKnownTypes.Get(WellKnownTypeData.WellKnownType.Aspire_Hosting_ApplicationModel_EndpointNameAttribute);
-
             var attrData = parameter.GetAttributes()
                 .Where(a => WellKnownTypes.Implements(a.AttributeClass, modelNameParameter));
 

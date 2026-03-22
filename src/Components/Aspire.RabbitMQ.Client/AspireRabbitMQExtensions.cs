@@ -234,7 +234,7 @@ public static class AspireRabbitMQExtensions
                 AddRabbitMQExceptionTags(connectAttemptActivity, ex);
                 throw;
             }
-        }, factory).AsTask().GetAwaiter().GetResult(); // see https://github.com/dotnet/aspire/issues/565
+        }, factory).AsTask().GetAwaiter().GetResult(); // see https://github.com/microsoft/aspire/issues/565
 #endif
     }
 

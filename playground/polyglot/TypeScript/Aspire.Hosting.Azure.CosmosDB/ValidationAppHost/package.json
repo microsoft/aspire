@@ -1,0 +1,19 @@
+{
+  "name": "validationapphost",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "aspire run",
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "vscode-jsonrpc": "^8.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "nodemon": "^3.1.11",
+    "tsx": "^4.19.0",
+    "typescript": "^5.3.0"
+  }
+}

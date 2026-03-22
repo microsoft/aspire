@@ -36,4 +36,6 @@ output tableEndpoint string = storage.properties.primaryEndpoints.table
 
 output name string = storage.name
 
+output id string = storage.id
+
 output description string = sku_description

@@ -3,6 +3,7 @@
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "5")]
 public class ModelNameTests
 {
     [Fact]

@@ -10,6 +10,7 @@
     <TestArchiveTestsDirForEndToEndTests Condition="'$(TestArchiveTestsDirForEndToEndTests)' == ''">$([MSBuild]::NormalizeDirectory($(ArtifactsDir), 'helix', 'e2e-tests'))</TestArchiveTestsDirForEndToEndTests>
     <TestArchiveTestsDirForBuildOnHelixTests Condition="'$(TestArchiveTestsDirForBuildOnHelixTests)' == ''">$([MSBuild]::NormalizeDirectory($(ArtifactsDir), 'helix', 'build-on-helix-tests'))</TestArchiveTestsDirForBuildOnHelixTests>
     <TestArchiveTestsDirForCliEndToEndTests Condition="'$(TestArchiveTestsDirForCliEndToEndTests)' == ''">$([MSBuild]::NormalizeDirectory($(ArtifactsDir), 'helix', 'cli-e2e-tests'))</TestArchiveTestsDirForCliEndToEndTests>
+    <TestArchiveTestsDirForDeploymentEndToEndTests Condition="'$(TestArchiveTestsDirForDeploymentEndToEndTests)' == ''">$([MSBuild]::NormalizeDirectory($(ArtifactsDir), 'helix', 'deployment-e2e-tests'))</TestArchiveTestsDirForDeploymentEndToEndTests>
     <PlaywrightDependenciesDirectory>$(ArtifactsBinDir)playwright-deps</PlaywrightDependenciesDirectory>
     <GeneratedPackagesVersionsPropsPath>$(IntermediateOutputPath)Directory.Packages.Versions.props</GeneratedPackagesVersionsPropsPath>
 

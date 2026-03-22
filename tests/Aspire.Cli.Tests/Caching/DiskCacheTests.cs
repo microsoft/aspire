@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Microsoft.AspNetCore.InternalTesting;
 using Aspire.Cli.Caching;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Configuration;
@@ -18,7 +19,7 @@ public class DiskCacheTests(ITestOutputHelper outputHelper)
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
         var hives = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives"));
         var cacheDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cache"));
-        var ctx = new CliExecutionContext(workspace.WorkspaceRoot, hives, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")));
+        var ctx = new CliExecutionContext(workspace.WorkspaceRoot, hives, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
         var loggerFactory = NullLoggerFactory.Instance; // no-op logging is fine here
         var logger = loggerFactory.CreateLogger<DiskCache>();
         return new DiskCache(logger, ctx, configuration);
@@ -31,11 +32,11 @@ public class DiskCacheTests(ITestOutputHelper outputHelper)
         var cache = CreateCache(workspace);
         var key = "query=foo|prerelease=False|take=10|skip=0|nugetConfigHash=abc|cliVersion=1.0";
 
-        var miss = await cache.GetAsync(key, CancellationToken.None);
+        var miss = await cache.GetAsync(key, CancellationToken.None).DefaultTimeout();
         Assert.Null(miss);
 
-        await cache.SetAsync(key, "RESULT-A", CancellationToken.None);
-        var hit = await cache.GetAsync(key, CancellationToken.None);
+        await cache.SetAsync(key, "RESULT-A", CancellationToken.None).DefaultTimeout();
+        var hit = await cache.GetAsync(key, CancellationToken.None).DefaultTimeout();
         Assert.Equal("RESULT-A", hit);
     }
 
@@ -51,11 +52,11 @@ public class DiskCacheTests(ITestOutputHelper outputHelper)
         });
         var key = "query=bar|prerelease=False|take=10|skip=0|nugetConfigHash=def|cliVersion=1.0";
 
-        await cache.SetAsync(key, "RESULT-B", CancellationToken.None);
+        await cache.SetAsync(key, "RESULT-B", CancellationToken.None).DefaultTimeout();
         // Wait slightly over 1 second so entry expires
-        await Task.Delay(TimeSpan.FromSeconds(2));
+        await Task.Delay(TimeSpan.FromSeconds(2)).DefaultTimeout();
 
-        var after = await cache.GetAsync(key, CancellationToken.None);
+        var after = await cache.GetAsync(key, CancellationToken.None).DefaultTimeout();
         Assert.Null(after);
     }
 
@@ -71,12 +72,12 @@ public class DiskCacheTests(ITestOutputHelper outputHelper)
         var diskPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cache", "nuget-search");
         var key = "query=baz|prerelease=False|take=10|skip=0|nugetConfigHash=ghi|cliVersion=1.0";
 
-        await cache.SetAsync(key, "OLD", CancellationToken.None);
+        await cache.SetAsync(key, "OLD", CancellationToken.None).DefaultTimeout();
         // Slight delay to ensure different timestamp
         await Task.Delay(50);
-        await cache.SetAsync(key, "NEW", CancellationToken.None);
+        await cache.SetAsync(key, "NEW", CancellationToken.None).DefaultTimeout();
 
-        var val = await cache.GetAsync(key, CancellationToken.None);
+        var val = await cache.GetAsync(key, CancellationToken.None).DefaultTimeout();
         Assert.Equal("NEW", val);
 
         // Ensure only one valid (newest) file remains for the key
@@ -92,11 +93,11 @@ public class DiskCacheTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var cache = CreateCache(workspace);
         var key = "query=clear|prerelease=False|take=10|skip=0|nugetConfigHash=jkl|cliVersion=1.0";
-        await cache.SetAsync(key, "VALUE", CancellationToken.None);
-        var before = await cache.GetAsync(key, CancellationToken.None);
+        await cache.SetAsync(key, "VALUE", CancellationToken.None).DefaultTimeout();
+        var before = await cache.GetAsync(key, CancellationToken.None).DefaultTimeout();
         Assert.NotNull(before);
-        await cache.ClearAsync(CancellationToken.None);
-        var after = await cache.GetAsync(key, CancellationToken.None);
+        await cache.ClearAsync(CancellationToken.None).DefaultTimeout();
+        var after = await cache.GetAsync(key, CancellationToken.None).DefaultTimeout();
         Assert.Null(after);
     }
 
@@ -111,7 +112,7 @@ public class DiskCacheTests(ITestOutputHelper outputHelper)
             cfg["PackageSearchMaxCacheAgeSeconds"] = "1";   // small
         });
         var key = "query=cleanup|prerelease=False|take=10|skip=0|nugetConfigHash=mno|cliVersion=1.0";
-        await cache.SetAsync(key, "VALUE-X", CancellationToken.None);
+        await cache.SetAsync(key, "VALUE-X", CancellationToken.None).DefaultTimeout();
 
         // Manually adjust timestamp older than max age by renaming file
         var diskPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cache", "nuget-search");
@@ -127,7 +128,7 @@ public class DiskCacheTests(ITestOutputHelper outputHelper)
         File.Move(current, oldName, overwrite: true);
 
         // Trigger Get which should treat it as too old and delete
-        var val = await cache.GetAsync(key, CancellationToken.None);
+        var val = await cache.GetAsync(key, CancellationToken.None).DefaultTimeout();
         Assert.Null(val); // treated as miss after cleanup
         Assert.False(File.Exists(oldName));
     }

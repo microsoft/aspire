@@ -29,26 +29,26 @@ Steps with no dependencies run first, followed by steps that depend on them.
  13. login-to-acr-aca-env-acr
  14. push-prereq
  15. push-api-service
- 16. update-api-service-provisionable-resource
- 17. provision-api-service-website
- 18. print-api-service-summary
- 19. provision-aca-env
- 20. provision-cache-containerapp
- 21. print-cache-summary
- 22. push-python-app
- 23. provision-python-app-containerapp
- 24. provision-storage
- 25. provision-azure-bicep-resources
- 26. print-dashboard-url-aas-env
- 27. print-dashboard-url-aca-env
- 28. print-python-app-summary
- 29. deploy
- 30. deploy-api-service
- 31. deploy-cache
- 32. deploy-python-app
- 33. diagnostics
- 34. publish-prereq
- 35. publish-azure634f9
+ 16. provision-api-service-website
+ 17. print-api-service-summary
+ 18. provision-aca-env
+ 19. provision-cache-containerapp
+ 20. print-cache-summary
+ 21. push-python-app
+ 22. provision-python-app-containerapp
+ 23. provision-storage
+ 24. provision-azure-bicep-resources
+ 25. print-dashboard-url-aas-env
+ 26. print-dashboard-url-aca-env
+ 27. print-python-app-summary
+ 28. deploy
+ 29. deploy-api-service
+ 30. deploy-cache
+ 31. deploy-python-app
+ 32. diagnostics
+ 33. publish-prereq
+ 34. publish-azure634f9
+ 35. validate-appservice-config-aas-env
  36. publish
  37. publish-manifest
  38. push
@@ -182,7 +182,7 @@ Step: provision-aca-env-acr
 
 Step: provision-api-service-website
     Description: Provisions the Azure Bicep resource api-service-website using Azure infrastructure.
-    Dependencies: ✓ create-provisioning-context, ✓ provision-aas-env, ✓ push-api-service, ✓ update-api-service-provisionable-resource
+    Dependencies: ✓ create-provisioning-context, ✓ provision-aas-env, ✓ push-api-service
     Resource: api-service-website (AzureAppServiceWebSiteResource)
     Tags: provision-infra
 
@@ -212,7 +212,7 @@ Step: provision-storage
 
 Step: publish
     Description: Aggregation step for all publish operations. All publish steps should be required by this step.
-    Dependencies: ✓ publish-azure634f9
+    Dependencies: ✓ publish-azure634f9, ✓ validate-appservice-config-aas-env
 
 Step: publish-azure634f9
     Description: Publishes the Azure environment configuration for azure634f9.
@@ -245,10 +245,10 @@ Step: push-python-app
     Resource: python-app (ContainerResource)
     Tags: push-container-image
 
-Step: update-api-service-provisionable-resource
-    Dependencies: ✓ create-provisioning-context
-    Resource: api-service-website (AzureAppServiceWebSiteResource)
-    Tags: update-website-provisionable-resource
+Step: validate-appservice-config-aas-env
+    Description: Validates Azure App Service configuration for aas-env.
+    Dependencies: ✓ publish-prereq
+    Resource: aas-env (AzureAppServiceEnvironmentResource)
 
 Step: validate-azure-login
     Description: Validates Azure CLI authentication before deployment.
@@ -309,13 +309,13 @@ If targeting 'create-provisioning-context':
 
 If targeting 'deploy':
   Direct dependencies: build-api-service, build-python-app, create-provisioning-context, print-api-service-summary, print-cache-summary, print-dashboard-url-aas-env, print-dashboard-url-aca-env, print-python-app-summary, provision-azure-bicep-resources, validate-azure-login
-  Total steps: 28
+  Total steps: 27
   Execution order:
     [0] process-parameters
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api-service | build-python-app | validate-azure-login (parallel)
     [3] create-provisioning-context
-    [4] provision-aas-env-acr | provision-aca-env-acr | provision-storage | update-api-service-provisionable-resource (parallel)
+    [4] provision-aas-env-acr | provision-aca-env-acr | provision-storage (parallel)
     [5] login-to-acr-aas-env-acr | login-to-acr-aca-env-acr | provision-aas-env | provision-aca-env (parallel)
     [6] provision-cache-containerapp | push-prereq (parallel)
     [7] print-cache-summary | push-api-service | push-python-app (parallel)
@@ -326,13 +326,13 @@ If targeting 'deploy':
 
 If targeting 'deploy-api-service':
   Direct dependencies: print-api-service-summary
-  Total steps: 17
+  Total steps: 16
   Execution order:
     [0] process-parameters
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api-service | validate-azure-login (parallel)
     [3] create-provisioning-context
-    [4] provision-aas-env-acr | provision-aca-env-acr | update-api-service-provisionable-resource (parallel)
+    [4] provision-aas-env-acr | provision-aca-env-acr (parallel)
     [5] login-to-acr-aas-env-acr | login-to-acr-aca-env-acr | provision-aas-env (parallel)
     [6] push-prereq
     [7] push-api-service
@@ -407,13 +407,13 @@ If targeting 'login-to-acr-aca-env-acr':
 
 If targeting 'print-api-service-summary':
   Direct dependencies: provision-api-service-website
-  Total steps: 16
+  Total steps: 15
   Execution order:
     [0] process-parameters
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api-service | validate-azure-login (parallel)
     [3] create-provisioning-context
-    [4] provision-aas-env-acr | provision-aca-env-acr | update-api-service-provisionable-resource (parallel)
+    [4] provision-aas-env-acr | provision-aca-env-acr (parallel)
     [5] login-to-acr-aas-env-acr | login-to-acr-aca-env-acr | provision-aas-env (parallel)
     [6] push-prereq
     [7] push-api-service
@@ -435,13 +435,13 @@ If targeting 'print-cache-summary':
 
 If targeting 'print-dashboard-url-aas-env':
   Direct dependencies: provision-aas-env, provision-azure-bicep-resources
-  Total steps: 23
+  Total steps: 22
   Execution order:
     [0] process-parameters
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api-service | build-python-app | validate-azure-login (parallel)
     [3] create-provisioning-context
-    [4] provision-aas-env-acr | provision-aca-env-acr | provision-storage | update-api-service-provisionable-resource (parallel)
+    [4] provision-aas-env-acr | provision-aca-env-acr | provision-storage (parallel)
     [5] login-to-acr-aas-env-acr | login-to-acr-aca-env-acr | provision-aas-env | provision-aca-env (parallel)
     [6] provision-cache-containerapp | push-prereq (parallel)
     [7] push-api-service | push-python-app (parallel)
@@ -451,13 +451,13 @@ If targeting 'print-dashboard-url-aas-env':
 
 If targeting 'print-dashboard-url-aca-env':
   Direct dependencies: provision-aca-env, provision-azure-bicep-resources
-  Total steps: 23
+  Total steps: 22
   Execution order:
     [0] process-parameters
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api-service | build-python-app | validate-azure-login (parallel)
     [3] create-provisioning-context
-    [4] provision-aas-env-acr | provision-aca-env-acr | provision-storage | update-api-service-provisionable-resource (parallel)
+    [4] provision-aas-env-acr | provision-aca-env-acr | provision-storage (parallel)
     [5] login-to-acr-aas-env-acr | login-to-acr-aca-env-acr | provision-aas-env | provision-aca-env (parallel)
     [6] provision-cache-containerapp | push-prereq (parallel)
     [7] push-api-service | push-python-app (parallel)
@@ -529,14 +529,14 @@ If targeting 'provision-aca-env-acr':
     [4] provision-aca-env-acr
 
 If targeting 'provision-api-service-website':
-  Direct dependencies: create-provisioning-context, provision-aas-env, push-api-service, update-api-service-provisionable-resource
-  Total steps: 15
+  Direct dependencies: create-provisioning-context, provision-aas-env, push-api-service
+  Total steps: 14
   Execution order:
     [0] process-parameters
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api-service | validate-azure-login (parallel)
     [3] create-provisioning-context
-    [4] provision-aas-env-acr | provision-aca-env-acr | update-api-service-provisionable-resource (parallel)
+    [4] provision-aas-env-acr | provision-aca-env-acr (parallel)
     [5] login-to-acr-aas-env-acr | login-to-acr-aca-env-acr | provision-aas-env (parallel)
     [6] push-prereq
     [7] push-api-service
@@ -544,13 +544,13 @@ If targeting 'provision-api-service-website':
 
 If targeting 'provision-azure-bicep-resources':
   Direct dependencies: create-provisioning-context, deploy-prereq, provision-aas-env, provision-aas-env-acr, provision-aca-env, provision-aca-env-acr, provision-api-service-website, provision-cache-containerapp, provision-python-app-containerapp, provision-storage
-  Total steps: 22
+  Total steps: 21
   Execution order:
     [0] process-parameters
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api-service | build-python-app | validate-azure-login (parallel)
     [3] create-provisioning-context
-    [4] provision-aas-env-acr | provision-aca-env-acr | provision-storage | update-api-service-provisionable-resource (parallel)
+    [4] provision-aas-env-acr | provision-aca-env-acr | provision-storage (parallel)
     [5] login-to-acr-aas-env-acr | login-to-acr-aca-env-acr | provision-aas-env | provision-aca-env (parallel)
     [6] provision-cache-containerapp | push-prereq (parallel)
     [7] push-api-service | push-python-app (parallel)
@@ -594,12 +594,12 @@ If targeting 'provision-storage':
     [4] provision-storage
 
 If targeting 'publish':
-  Direct dependencies: publish-azure634f9
-  Total steps: 4
+  Direct dependencies: publish-azure634f9, validate-appservice-config-aas-env
+  Total steps: 5
   Execution order:
     [0] process-parameters
     [1] publish-prereq
-    [2] publish-azure634f9
+    [2] publish-azure634f9 | validate-appservice-config-aas-env (parallel)
     [3] publish
 
 If targeting 'publish-azure634f9':
@@ -675,15 +675,13 @@ If targeting 'push-python-app':
     [6] push-prereq
     [7] push-python-app
 
-If targeting 'update-api-service-provisionable-resource':
-  Direct dependencies: create-provisioning-context
-  Total steps: 5
+If targeting 'validate-appservice-config-aas-env':
+  Direct dependencies: publish-prereq
+  Total steps: 3
   Execution order:
     [0] process-parameters
-    [1] deploy-prereq
-    [2] validate-azure-login
-    [3] create-provisioning-context
-    [4] update-api-service-provisionable-resource
+    [1] publish-prereq
+    [2] validate-appservice-config-aas-env
 
 If targeting 'validate-azure-login':
   Direct dependencies: deploy-prereq

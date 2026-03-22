@@ -14,6 +14,7 @@ public sealed class DashboardOptions
     public string? ApplicationName { get; set; }
     public OtlpOptions Otlp { get; set; } = new();
     public McpOptions Mcp { get; set; } = new();
+    public ApiOptions Api { get; set; } = new();
     public FrontendOptions Frontend { get; set; } = new();
     public ResourceServiceClientOptions ResourceServiceClient { get; set; } = new();
     public TelemetryLimitOptions TelemetryLimits { get; set; } = new();
@@ -138,6 +139,55 @@ public sealed class OtlpOptions
     }
 }
 
+/// <summary>
+/// Options for Dashboard API authentication (shared by MCP and Telemetry API).
+/// </summary>
+public sealed class ApiOptions
+{
+    private byte[]? _primaryApiKeyBytes;
+    private byte[]? _secondaryApiKeyBytes;
+
+    /// <summary>
+    /// Gets or sets whether the Telemetry HTTP API is enabled.
+    /// When false, the /api/telemetry/* endpoints are not registered.
+    /// Defaults to false.
+    /// </summary>
+    public bool? Enabled { get; set; }
+
+    /// <summary>
+    /// Gets or sets the authentication mode for API endpoints.
+    /// </summary>
+    public ApiAuthMode? AuthMode { get; set; }
+
+    /// <summary>
+    /// Gets or sets the primary API key for authentication.
+    /// </summary>
+    public string? PrimaryApiKey { get; set; }
+
+    /// <summary>
+    /// Gets or sets the secondary API key for authentication (for key rotation).
+    /// </summary>
+    public string? SecondaryApiKey { get; set; }
+
+    public byte[] GetPrimaryApiKeyBytes()
+    {
+        Debug.Assert(_primaryApiKeyBytes is not null, "Should have been parsed during validation.");
+        return _primaryApiKeyBytes;
+    }
+
+    public byte[]? GetPrimaryApiKeyBytesOrNull() => _primaryApiKeyBytes;
+
+    public byte[]? GetSecondaryApiKeyBytes() => _secondaryApiKeyBytes;
+
+    internal bool TryParseOptions([NotNullWhen(false)] out string? errorMessage)
+    {
+        _primaryApiKeyBytes = PrimaryApiKey != null ? Encoding.UTF8.GetBytes(PrimaryApiKey) : null;
+        _secondaryApiKeyBytes = SecondaryApiKey != null ? Encoding.UTF8.GetBytes(SecondaryApiKey) : null;
+        errorMessage = null;
+        return true;
+    }
+}
+
 public class McpOptions
 {
     private BindingAddress? _parsedEndpointAddress;
@@ -145,9 +195,22 @@ public class McpOptions
     private byte[]? _secondaryApiKeyBytes;
 
     public bool? Disabled { get; set; }
+
+    /// <summary>
+    /// Gets or sets the MCP-specific auth mode.
+    /// </summary>
     public McpAuthMode? AuthMode { get; set; }
+
+    /// <summary>
+    /// Gets or sets the MCP-specific primary API key.
+    /// </summary>
     public string? PrimaryApiKey { get; set; }
+
+    /// <summary>
+    /// Gets or sets the MCP-specific secondary API key.
+    /// </summary>
     public string? SecondaryApiKey { get; set; }
+
     public string? EndpointUrl { get; set; }
 
     // Public URL could be different from the endpoint URL (e.g., when behind a proxy).
@@ -172,7 +235,15 @@ public class McpOptions
         return _primaryApiKeyBytes;
     }
 
-    public byte[]? GetSecondaryApiKeyBytes() => _secondaryApiKeyBytes;
+    public byte[]? GetPrimaryApiKeyBytesOrNull()
+    {
+        return _primaryApiKeyBytes;
+    }
+
+    public byte[]? GetSecondaryApiKeyBytes()
+    {
+        return _secondaryApiKeyBytes;
+    }
 
     internal bool TryParseOptions([NotNullWhen(false)] out string? errorMessage)
     {

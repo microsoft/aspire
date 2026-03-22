@@ -9,11 +9,11 @@ using Xunit;
 
 namespace Aspire.Dashboard.Tests.Model;
 
-public class ResourceSourceViewModelTests
+public sealed class ResourceSourceViewModelTests
 {
     [Theory]
     [MemberData(nameof(ResourceSourceViewModel_ReturnsCorrectValue_TestData))]
-    public void ResourceSourceViewModel_ReturnsCorrectValue(TestData testData, ResourceSourceViewModel? expected)
+    public void ResourceSourceViewModel_ReturnsCorrectValue(TestData testData, ExpectedData? expected)
     {
         var properties = new Dictionary<string, ResourcePropertyViewModel>();
         AddStringProperty(KnownProperties.Executable.Path, testData.ExecutablePath);
@@ -49,9 +49,23 @@ public class ResourceSourceViewModelTests
         {
             Assert.NotNull(actual);
             Assert.Equal(expected.Value, actual.Value);
-            Assert.Equal(expected.ContentAfterValue, actual.ContentAfterValue);
             Assert.Equal(expected.ValueToVisualize, actual.ValueToVisualize);
             Assert.Equal(expected.Tooltip, actual.Tooltip);
+
+            if (expected.ContentAfterValue is null)
+            {
+                Assert.Null(actual.ContentAfterValue);
+            }
+            else
+            {
+                Assert.NotNull(actual.ContentAfterValue);
+                Assert.Equal(expected.ContentAfterValue.Count, actual.ContentAfterValue.Count);
+                for (var i = 0; i < expected.ContentAfterValue.Count; i++)
+                {
+                    Assert.Equal(expected.ContentAfterValue[i].Value, actual.ContentAfterValue[i].Value);
+                    Assert.Equal(expected.ContentAfterValue[i].IsShown, actual.ContentAfterValue[i].IsShown);
+                }
+            }
         }
 
         void AddStringProperty(string propertyName, string? propertyValue)
@@ -60,9 +74,9 @@ public class ResourceSourceViewModelTests
         }
     }
 
-    public static TheoryData<TestData, ResourceSourceViewModel?> ResourceSourceViewModel_ReturnsCorrectValue_TestData()
+    public static TheoryData<TestData, ExpectedData?> ResourceSourceViewModel_ReturnsCorrectValue_TestData()
     {
-        var data = new TheoryData<TestData, ResourceSourceViewModel?>();
+        var data = new TheoryData<TestData, ExpectedData?>();
 
         // Project with app arguments
         data.Add(new TestData(
@@ -74,11 +88,11 @@ public class ResourceSourceViewModelTests
                 ProjectPath: "path/to/project",
                 ContainerImage: null,
                 SourceProperty: null),
-            new ResourceSourceViewModel(
-                value: "project",
-                contentAfterValue: [new LaunchArgument("arg2", true)],
-                valueToVisualize: "path/to/project arg2",
-                tooltip: "path/to/project arg2"));
+            new ExpectedData(
+                Value: "project",
+                ContentAfterValue: [new ExpectedLaunchArgument("arg2", true)],
+                ValueToVisualize: "path/to/project arg2",
+                Tooltip: "path/to/project arg2"));
 
         var maskingText = DashboardUIHelpers.GetMaskingText(6).Text;
         // Project with app arguments, as well as a secret (format argument)
@@ -91,11 +105,11 @@ public class ResourceSourceViewModelTests
                 ProjectPath: "path/to/project",
                 ContainerImage: null,
                 SourceProperty: null),
-            new ResourceSourceViewModel(
-                value: "project",
-                contentAfterValue: [new LaunchArgument("arg2", true), new LaunchArgument("--key", true), new LaunchArgument("secret", false), new LaunchArgument("secret2", false), new LaunchArgument("notsecret", true)],
-                valueToVisualize: "path/to/project arg2 --key secret secret2 notsecret",
-                tooltip: $"path/to/project arg2 --key {maskingText} {maskingText} notsecret"));
+            new ExpectedData(
+                Value: "project",
+                ContentAfterValue: [new ExpectedLaunchArgument("arg2", true), new ExpectedLaunchArgument("--key", true), new ExpectedLaunchArgument("secret", false), new ExpectedLaunchArgument("secret2", false), new ExpectedLaunchArgument("notsecret", true)],
+                ValueToVisualize: "path/to/project arg2 --key secret secret2 notsecret",
+                Tooltip: $"path/to/project arg2 --key {maskingText} {maskingText} notsecret"));
 
         // Project without executable arguments
         data.Add(new TestData(
@@ -107,11 +121,11 @@ public class ResourceSourceViewModelTests
                 ProjectPath: "path/to/project",
                 ContainerImage: null,
                 SourceProperty: null),
-            new ResourceSourceViewModel(
-                value: "project",
-                contentAfterValue: null,
-                valueToVisualize: "path/to/project",
-                tooltip: "path/to/project"));
+            new ExpectedData(
+                Value: "project",
+                ContentAfterValue: null,
+                ValueToVisualize: "path/to/project",
+                Tooltip: "path/to/project"));
 
         // Executable with arguments
         data.Add(new TestData(
@@ -123,11 +137,11 @@ public class ResourceSourceViewModelTests
                 ProjectPath: null,
                 ContainerImage: null,
                 SourceProperty: null),
-            new ResourceSourceViewModel(
-                value: "executable",
-                contentAfterValue: [new LaunchArgument("arg1", true), new LaunchArgument("arg2", true)],
-                valueToVisualize: "path/to/executable arg1 arg2",
-                tooltip: "path/to/executable arg1 arg2"));
+            new ExpectedData(
+                Value: "executable",
+                ContentAfterValue: [new ExpectedLaunchArgument("arg1", true), new ExpectedLaunchArgument("arg2", true)],
+                ValueToVisualize: "path/to/executable arg1 arg2",
+                Tooltip: "path/to/executable arg1 arg2"));
 
         // Container image
         data.Add(new TestData(
@@ -139,11 +153,11 @@ public class ResourceSourceViewModelTests
                 ProjectPath: null,
                 ContainerImage: "my-container-image",
                 SourceProperty: null),
-            new ResourceSourceViewModel(
-                value: "my-container-image",
-                contentAfterValue: null,
-                valueToVisualize: "my-container-image",
-                tooltip: "my-container-image"));
+            new ExpectedData(
+                Value: "my-container-image",
+                ContentAfterValue: null,
+                ValueToVisualize: "my-container-image",
+                Tooltip: "my-container-image"));
 
         // Resource source property
         data.Add(new TestData(
@@ -155,11 +169,11 @@ public class ResourceSourceViewModelTests
                 ProjectPath: null,
                 ContainerImage: null,
                 SourceProperty: "source-value"),
-            new ResourceSourceViewModel(
-                value: "source-value",
-                contentAfterValue: null,
-                valueToVisualize: "source-value",
-                tooltip: "source-value"));
+            new ExpectedData(
+                Value: "source-value",
+                ContentAfterValue: null,
+                ValueToVisualize: "source-value",
+                Tooltip: "source-value"));
 
         // Executable path without arguments
         data.Add(new TestData(
@@ -171,16 +185,16 @@ public class ResourceSourceViewModelTests
                 ProjectPath: null,
                 ContainerImage: null,
                 SourceProperty: null),
-            new ResourceSourceViewModel(
-                value: "executable",
-                contentAfterValue: null,
-                valueToVisualize: "path/to/executable",
-                tooltip: "path/to/executable"));
+            new ExpectedData(
+                Value: "executable",
+                ContentAfterValue: null,
+                ValueToVisualize: "path/to/executable",
+                Tooltip: "path/to/executable"));
 
         return data;
     }
 
-    public record TestData(
+    public sealed record TestData(
         string ResourceType,
         string? ExecutablePath,
         string[]? ExecutableArguments,
@@ -189,4 +203,12 @@ public class ResourceSourceViewModelTests
         string? ProjectPath,
         string? ContainerImage,
         string? SourceProperty);
+
+    public sealed record ExpectedLaunchArgument(string Value, bool IsShown);
+
+    public sealed record ExpectedData(
+        string Value,
+        List<ExpectedLaunchArgument>? ContentAfterValue,
+        string ValueToVisualize,
+        string Tooltip);
 }

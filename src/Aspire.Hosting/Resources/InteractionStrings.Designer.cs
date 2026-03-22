@@ -10,8 +10,8 @@
 
 namespace Aspire.Hosting.Resources {
     using System;
-    
-    
+
+
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -23,15 +23,15 @@ namespace Aspire.Hosting.Resources {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class InteractionStrings {
-        
+
         private static global::System.Resources.ResourceManager resourceMan;
-        
+
         private static global::System.Globalization.CultureInfo resourceCulture;
-        
+
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal InteractionStrings() {
         }
-        
+
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Aspire.Hosting.Resources {
                 return resourceMan;
             }
         }
-        
+
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,7 +59,7 @@ namespace Aspire.Hosting.Resources {
                 resourceCulture = value;
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Ensure that Docker is running and that the Docker daemon is accessible. If Resource Saver mode is enabled, containers may not run..
         /// </summary>
@@ -68,7 +68,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("ContainerRuntimeDockerAdvice", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Ensure that the container runtime is running..
         /// </summary>
@@ -77,7 +77,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("ContainerRuntimeGenericAdvice", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Learn more.
         /// </summary>
@@ -86,7 +86,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("ContainerRuntimeLinkText", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Container runtime could not be found. See https://aka.ms/dotnet/aspire/containers for more details on supported container runtimes..
         /// </summary>
@@ -95,7 +95,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("ContainerRuntimeNotInstalledMessage", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Container runtime not installed.
         /// </summary>
@@ -104,7 +104,43 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("ContainerRuntimeNotInstalledTitle", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to Development certificate not fully trusted.
+        /// </summary>
+        internal static string DeveloperCertificateNotFullyTrustedTitle {
+            get {
+                return ResourceManager.GetString("DeveloperCertificateNotFullyTrustedTitle", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   The most recent development certificate isn&apos;t fully trusted. See https://aka.ms/aspire/devcerts for more information..
+        /// </summary>
+        internal static string DeveloperCertificateNotFullyTrustedMessage {
+            get {
+                return ResourceManager.GetString("DeveloperCertificateNotFullyTrustedMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No trusted development certificate.
+        /// </summary>
+        internal static string NoDeveloperCertificateTrustedTitle {
+            get {
+                return ResourceManager.GetString("NoDeveloperCertificateTrustedTitle", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   No trusted development certificate was found. See https://aka.ms/aspire/devcerts for more information..
+        /// </summary>
+        internal static string NoDeveloperCertificateTrustedMessage {
+            get {
+                return ResourceManager.GetString("NoDeveloperCertificateTrustedMessage", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Ensure that Podman is running..
         /// </summary>
@@ -113,7 +149,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("ContainerRuntimePodmanAdvice", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Container runtime &apos;{0}&apos; was found but appears to be unhealthy. .
         /// </summary>
@@ -122,7 +158,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("ContainerRuntimeUnhealthyMessage", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Container runtime unhealthy.
         /// </summary>
@@ -131,7 +167,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("ContainerRuntimeUnhealthyTitle", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Are you sure you want to delete the value for parameter `{0}`? .
         /// </summary>
@@ -140,18 +176,18 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("DeleteParameterMessage", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Are you sure you want to delete the value for parameter `{0}`?
         ///
-        ///The value is currently saved in [user secrets](https://learn.microsoft.com/aspnet/core/security/app-secrets). You can choose to also delete it from there..
+        ///The value is currently saved in [user secrets](https://aka.ms/aspire/user-secrets). You can choose to also delete it from there..
         /// </summary>
         internal static string DeleteParameterMessageWithUserSecrets {
             get {
                 return ResourceManager.GetString("DeleteParameterMessageWithUserSecrets", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Delete.
         /// </summary>
@@ -160,7 +196,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("DeleteParameterPrimaryButtonText", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Delete parameter value.
         /// </summary>
@@ -169,7 +205,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("DeleteParameterTitle", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to There are unresolved parameters that need to be set. Please provide values for them..
         /// </summary>
@@ -178,7 +214,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("ParametersBarMessage", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Enter values.
         /// </summary>
@@ -187,7 +223,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("ParametersBarPrimaryButtonText", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Unresolved parameters.
         /// </summary>
@@ -196,7 +232,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("ParametersBarTitle", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Delete from user secrets.
         /// </summary>
@@ -205,7 +241,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("ParametersInputsDeleteLabel", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Please provide values for the unresolved parameters. Parameters can be saved to [user secrets](https://aka.ms/aspire/user-secrets) for future use..
         /// </summary>
@@ -214,7 +250,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("ParametersInputsMessage", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Please provide values for the unresolved parameters..
         /// </summary>
@@ -223,7 +259,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("ParametersInputsMessagePublishMode", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Enter value for {0}.
         /// </summary>
@@ -232,7 +268,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("ParametersInputsParameterPlaceholder", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Save.
         /// </summary>
@@ -241,7 +277,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("ParametersInputsPrimaryButtonText", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Save to user secrets.
         /// </summary>
@@ -250,16 +286,16 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("ParametersInputsRememberLabel", resourceCulture);
             }
         }
-        
+
         /// <summary>
-        ///   Looks up a localized string similar to Requires a `UserSecretsId` to be configured in the AppHost project file. Run `dotnet user-secrets init` in the AppHost directory to configure..
+        ///   Looks up a localized string similar to Requires a `UserSecretsId` to be configured in the AppHost project file. Run `aspire secret set` to initialize user secrets, or see [user secrets](https://aka.ms/aspire/user-secrets) for more information..
         /// </summary>
         internal static string ParametersInputsRememberDescriptionNotConfigured {
             get {
                 return ResourceManager.GetString("ParametersInputsRememberDescriptionNotConfigured", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Set unresolved parameters.
         /// </summary>
@@ -268,9 +304,9 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("ParametersInputsTitle", resourceCulture);
             }
         }
-        
+
         /// <summary>
-        ///   Looks up a localized string similar to Please provide a value for the parameter. The parameter can be saved to [user secrets](https://learn.microsoft.com/aspnet/core/security/app-secrets) for future use.
+        ///   Looks up a localized string similar to Please provide a value for the parameter. The parameter can be saved to [user secrets](https://aka.ms/aspire/user-secrets) for future use.
         ///
         ///New parameter values may not be used until dependent resources are restarted..
         /// </summary>
@@ -279,7 +315,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("SetParameterMessage", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Set parameter.
         /// </summary>
@@ -288,7 +324,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("SetParameterTitle", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Upgrade instructions.
         /// </summary>
@@ -297,7 +333,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("VersionCheckLinkText", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Aspire {0} is available..
         /// </summary>
@@ -306,7 +342,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("VersionCheckMessage", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Ignore.
         /// </summary>
@@ -315,7 +351,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("VersionCheckPrimaryButtonText", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Update now.
         /// </summary>

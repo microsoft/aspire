@@ -9,6 +9,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -26,7 +27,7 @@ internal class PublishCommandPrompter(IInteractionService interactionService) : 
         return await interactionService.PromptForSelectionAsync(
             PublishCommandStrings.SelectAPublisher,
             publishers,
-            p => p,
+            p => p.EscapeMarkup(),
             cancellationToken
         );
     }
@@ -34,12 +35,13 @@ internal class PublishCommandPrompter(IInteractionService interactionService) : 
 
 internal sealed class PublishCommand : PipelineCommandBase
 {
+    internal override HelpGroup HelpGroup => HelpGroup.Deployment;
+
     private readonly IPublishCommandPrompter _prompter;
 
-    public PublishCommand(IDotNetCliRunner runner, IInteractionService interactionService, IProjectLocator projectLocator, IPublishCommandPrompter prompter, AspireCliTelemetry telemetry, IDotNetSdkInstaller sdkInstaller, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, ILogger<PublishCommand> logger, IAnsiConsole ansiConsole)
-        : base("publish", PublishCommandStrings.Description, runner, interactionService, projectLocator, telemetry, sdkInstaller, features, updateNotifier, executionContext, hostEnvironment, projectFactory, logger, ansiConsole)
+    public PublishCommand(IDotNetCliRunner runner, IInteractionService interactionService, IProjectLocator projectLocator, IPublishCommandPrompter prompter, AspireCliTelemetry telemetry, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, IConfiguration configuration, ILogger<PublishCommand> logger, IAnsiConsole ansiConsole)
+        : base("publish", PublishCommandStrings.Description, runner, interactionService, projectLocator, telemetry, features, updateNotifier, executionContext, hostEnvironment, projectFactory, configuration, logger, ansiConsole)
     {
-        ArgumentNullException.ThrowIfNull(prompter);
         _prompter = prompter;
     }
 
@@ -47,7 +49,7 @@ internal sealed class PublishCommand : PipelineCommandBase
     protected override string OperationFailedPrefix => PublishCommandStrings.OperationFailedPrefix;
     protected override string GetOutputPathDescription() => PublishCommandStrings.OutputPathArgumentDescription;
 
-    protected override string[] GetRunArguments(string? fullyQualifiedOutputPath, string[] unmatchedTokens, ParseResult parseResult)
+    protected override Task<string[]> GetRunArgumentsAsync(string? fullyQualifiedOutputPath, string[] unmatchedTokens, ParseResult parseResult, CancellationToken cancellationToken)
     {
         var baseArgs = new List<string> { "--operation", "publish", "--step", "publish" };
 
@@ -57,20 +59,20 @@ internal sealed class PublishCommand : PipelineCommandBase
         }
 
         // Add --log-level and --envionment flags if specified
-        var logLevel = parseResult.GetValue(_logLevelOption);
+        var logLevel = parseResult.GetValue(s_logLevelOption);
 
         if (!string.IsNullOrEmpty(logLevel))
         {
             baseArgs.AddRange(["--log-level", logLevel!]);
         }
 
-        var includeExceptionDetails = parseResult.GetValue(_includeExceptionDetailsOption);
+        var includeExceptionDetails = parseResult.GetValue(s_includeExceptionDetailsOption);
         if (includeExceptionDetails)
         {
             baseArgs.AddRange(["--include-exception-details", "true"]);
         }
 
-        var environment = parseResult.GetValue(_environmentOption);
+        var environment = parseResult.GetValue(s_environmentOption);
         if (!string.IsNullOrEmpty(environment))
         {
             baseArgs.AddRange(["--environment", environment!]);
@@ -78,7 +80,7 @@ internal sealed class PublishCommand : PipelineCommandBase
 
         baseArgs.AddRange(unmatchedTokens);
 
-        return [.. baseArgs];
+        return Task.FromResult<string[]>([.. baseArgs]);
     }
 
     protected override string GetCanceledMessage() => InteractionServiceStrings.OperationCancelled;

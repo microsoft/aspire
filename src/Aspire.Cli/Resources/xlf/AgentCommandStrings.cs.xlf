@@ -1,0 +1,82 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="cs" original="../AgentCommandStrings.resx">
+    <body>
+      <trans-unit id="ConfigUpdatesSelectPrompt">
+        <source>The following agent configurations use the deprecated 'mcp start' command. Update them?</source>
+        <target state="translated">Následující konfigurace agenta používají zastaralý příkaz „mcp start“. Chcete je aktualizovat?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeprecatedConfigFix">
+        <source>Run 'aspire agent init' to update configuration</source>
+        <target state="translated">Spuštěním příkazu „aspire agent init“ aktualizujte konfiguraci</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeprecatedConfigUpdate_Description">
+        <source>Update {0} config to use new 'agent mcp' command</source>
+        <target state="translated">Aktualizujte konfiguraci {0} tak, aby používala nový příkaz „agent mcp“</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeprecatedConfigWarning">
+        <source>{0} config uses deprecated 'mcp start' command</source>
+        <target state="translated">Konfigurace {0} používá zastaralý příkaz „mcp start“</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Description">
+        <source>Manage AI agent environment configuration</source>
+        <target state="needs-review-translation">Spravujte integrace agentů AI.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_ConfigureMcpServer">
+        <source>Install Aspire MCP server</source>
+        <target state="new">Install Aspire MCP server</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_Description">
+        <source>Initialize agent environment configuration for detected agents</source>
+        <target state="needs-review-translation">Inicializujte konfiguraci prostředí agentů pro zjištěné agenty.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_InstallSkillFile">
+        <source>Install Aspire skill file (Recommended)</source>
+        <target state="new">Install Aspire skill file (Recommended)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_NothingSelected">
+        <source>No options selected. Nothing to configure.</source>
+        <target state="new">No options selected. Nothing to configure.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_WhatToConfigure">
+        <source>What would you like to configure? [dim](Enter to skip, Ctrl+C to cancel)[/]</source>
+        <target state="new">What would you like to configure? [dim](Enter to skip, Ctrl+C to cancel)[/]</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MalformedConfigFileError">
+        <source>The configuration file '{0}' contains malformed JSON. Please fix the file manually and re-run the command.</source>
+        <target state="translated">Konfigurační soubor {0} obsahuje JSON v chybném formátu. Opravte prosím soubor ručně a spusťte příkaz znovu.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="McpCommand_Description">
+        <source>Start the MCP (Model Context Protocol) server</source>
+        <target state="needs-review-translation">Spusťte server MCP (Model Context Protocol).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkipNoneDescription">
+        <source>None — skip</source>
+        <target state="new">None — skip</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkippedMalformedConfigFile">
+        <source>Skipping update of '{0}'.</source>
+        <target state="translated">Přeskakuje se aktualizace {0}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigurationCompletedWithErrors">
+        <source>Configuration completed with errors. Please fix the reported issues and re-run the command.</source>
+        <target state="translated">Konfigurace se dokončila s chybami. Opravte prosím nahlášené problémy a spusťte příkaz znovu.</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

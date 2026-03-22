@@ -62,11 +62,6 @@ namespace Aspire.Hosting.Backchannel;
 internal static class BackchannelConstants
 {
     /// <summary>
-    /// Directory path within ~/.aspire for backchannel sockets.
-    /// </summary>
-    public const string BackchannelsRelativePath = ".aspire/cli/backchannels";
-
-    /// <summary>
     /// Prefix for auxiliary backchannel sockets.
     /// </summary>
     /// <remarks>
@@ -93,7 +88,7 @@ internal static class BackchannelConstants
     /// <param name="homeDirectory">The user's home directory.</param>
     /// <returns>The full path to the backchannels directory.</returns>
     public static string GetBackchannelsDirectory(string homeDirectory)
-        => Path.Combine(homeDirectory, BackchannelsRelativePath);
+        => Path.Combine(homeDirectory, ".aspire", "cli", "backchannels");
 
     /// <summary>
     /// Computes the hash portion of the socket name from an AppHost path.

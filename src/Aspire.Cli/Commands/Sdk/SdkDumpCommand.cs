@@ -7,11 +7,13 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Configuration;
-using Spectre.Console;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
+using Semver;
+using Spectre.Console;
 
 namespace Aspire.Cli.Commands.Sdk;
 
@@ -20,14 +22,31 @@ namespace Aspire.Cli.Commands.Sdk;
 /// Supports multiple output formats for different use cases.
 /// 
 /// Usage:
-///   aspire sdk dump [integration.csproj]           # Pretty output (default)
-///   aspire sdk dump --json                         # Machine-readable JSON
-///   aspire sdk dump --ci -o capabilities.txt      # Stable text for git diffing
+///   aspire sdk dump                                                               # Core Aspire.Hosting only
+///   aspire sdk dump Aspire.Hosting.Redis@13.2.0                                   # Single package
+///   aspire sdk dump Aspire.Hosting.Redis@13.2.0 Aspire.Hosting.PostgreSQL@13.2.0  # Multiple packages
+///   aspire sdk dump ./MyIntegration.csproj Aspire.Hosting.Redis@13.2.0            # Mix of project and packages
+///   aspire sdk dump --format json                                                 # Machine-readable JSON
+///   aspire sdk dump --format ci -o capabilities.txt                               # Stable text for git diffing
 /// </summary>
 internal sealed class SdkDumpCommand : BaseCommand
 {
     private readonly IAppHostServerProjectFactory _appHostServerProjectFactory;
     private readonly ILogger<SdkDumpCommand> _logger;
+
+    private static readonly Argument<string[]> s_integrationArgument = new("integrations")
+    {
+        Description = "Integrations to scan. Each can be a .csproj path or a NuGet package in PackageName@Version format. If not specified, dumps core Aspire.Hosting capabilities.",
+        Arity = ArgumentArity.ZeroOrMore
+    };
+    private static readonly Option<FileInfo?> s_outputOption = new("--output", "-o")
+    {
+        Description = "Output file. If not specified, outputs to stdout."
+    };
+    private static readonly Option<OutputFormat> s_formatOption = new("--format")
+    {
+        Description = "Output format: Pretty (default), Json (machine-readable), or Ci (stable text for diffing)."
+    };
 
     public SdkDumpCommand(
         IAppHostServerProjectFactory appHostServerProjectFactory,
@@ -35,83 +54,84 @@ internal sealed class SdkDumpCommand : BaseCommand
         ICliUpdateNotifier updateNotifier,
         CliExecutionContext executionContext,
         IInteractionService interactionService,
-        ILogger<SdkDumpCommand> logger)
-        : base("dump", "Dump ATS capabilities from Aspire integration libraries.", features, updateNotifier, executionContext, interactionService)
+        ILogger<SdkDumpCommand> logger,
+        AspireCliTelemetry telemetry)
+        : base("dump", "Dump ATS capabilities from Aspire integration libraries.", features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _appHostServerProjectFactory = appHostServerProjectFactory;
         _logger = logger;
 
-        // The integration project is the main input (optional - defaults to core Aspire.Hosting)
-        var integrationArgument = new Argument<FileInfo?>("integration")
-        {
-            Description = "Path to the integration project (.csproj). If not specified, dumps core Aspire.Hosting capabilities.",
-            Arity = ArgumentArity.ZeroOrOne
-        };
-        Arguments.Add(integrationArgument);
-
-        var outputOption = new Option<FileInfo?>("--output", "-o")
-        {
-            Description = "Output file. If not specified, outputs to stdout."
-        };
-        Options.Add(outputOption);
-
-        var jsonOption = new Option<bool>("--json")
-        {
-            Description = "Output as JSON for machine consumption."
-        };
-        Options.Add(jsonOption);
-
-        var ciOption = new Option<bool>("--ci")
-        {
-            Description = "Output stable text format for CI/CD diffing."
-        };
-        Options.Add(ciOption);
+        Arguments.Add(s_integrationArgument);
+        Options.Add(s_outputOption);
+        Options.Add(s_formatOption);
     }
 
     protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
-        var integrationProject = parseResult.GetValue<FileInfo?>("integration");
-        var outputFile = parseResult.GetValue<FileInfo?>("--output");
-        var jsonFormat = parseResult.GetValue<bool>("--json");
-        var ciFormat = parseResult.GetValue<bool>("--ci");
+        var integrationArgs = parseResult.GetValue(s_integrationArgument) ?? [];
+        var outputFile = parseResult.GetValue(s_outputOption);
+        var format = parseResult.GetValue(s_formatOption);
 
-        // Validate the integration project if specified
-        if (integrationProject is not null)
+        // Parse each integration argument: either a .csproj path or PackageName@Version
+        var integrations = new List<IntegrationReference>();
+
+        foreach (var arg in integrationArgs)
         {
-            if (!integrationProject.Exists)
+            if (arg.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
             {
-                InteractionService.DisplayError($"Integration project not found: {integrationProject.FullName}");
-                return ExitCodeConstants.FailedToFindProject;
-            }
+                var projectFile = new FileInfo(arg);
+                if (!projectFile.Exists)
+                {
+                    InteractionService.DisplayError($"Integration project not found: {projectFile.FullName}");
+                    return ExitCodeConstants.FailedToFindProject;
+                }
 
-            if (!integrationProject.Extension.Equals(".csproj", StringComparison.OrdinalIgnoreCase))
+                integrations.Add(IntegrationReference.FromProject(
+                    Path.GetFileNameWithoutExtension(projectFile.FullName),
+                    projectFile.FullName));
+            }
+            else if (arg.Contains('@'))
             {
-                InteractionService.DisplayError($"Expected a .csproj file, got: {integrationProject.Extension}");
+                var atIndex = arg.LastIndexOf('@');
+                var packageName = arg[..atIndex];
+                var packageVersion = arg[(atIndex + 1)..];
+
+                if (string.IsNullOrWhiteSpace(packageName) || string.IsNullOrWhiteSpace(packageVersion) || packageName.Contains('@'))
+                {
+                    InteractionService.DisplayError($"Invalid package format '{arg}'. Expected PackageName@Version (e.g. Aspire.Hosting.Redis@9.2.0).");
+                    return ExitCodeConstants.InvalidCommand;
+                }
+
+                if (!SemVersion.TryParse(packageVersion, SemVersionStyles.Any, out _))
+                {
+                    InteractionService.DisplayError($"Invalid version '{packageVersion}' in '{arg}'. Expected a valid NuGet version (e.g. 9.2.0).");
+                    return ExitCodeConstants.InvalidCommand;
+                }
+
+                _logger.LogDebug("Parsed package reference {PackageName} version {Version}", packageName, packageVersion);
+                integrations.Add(IntegrationReference.FromPackage(packageName, packageVersion));
+            }
+            else
+            {
+                InteractionService.DisplayError($"Invalid integration argument '{arg}'. Expected a .csproj path or PackageName@Version format.");
                 return ExitCodeConstants.InvalidCommand;
             }
         }
 
-        if (jsonFormat && ciFormat)
-        {
-            InteractionService.DisplayError("Cannot specify both --json and --ci. Choose one format.");
-            return ExitCodeConstants.InvalidCommand;
-        }
-
-        var format = jsonFormat ? OutputFormat.Json : ciFormat ? OutputFormat.Ci : OutputFormat.Pretty;
-
         // For file output, skip the interactive spinner
         if (outputFile is not null)
         {
-            return await DumpCapabilitiesAsync(integrationProject, outputFile, format, cancellationToken);
+            return await DumpCapabilitiesAsync(integrations, outputFile, format, cancellationToken);
         }
 
         return await InteractionService.ShowStatusAsync(
-            ":magnifying_glass_tilted_right: Scanning capabilities...",
-            async () => await DumpCapabilitiesAsync(integrationProject, outputFile, format, cancellationToken));
+            "Scanning capabilities...",
+            async () => await DumpCapabilitiesAsync(integrations, outputFile, format, cancellationToken),
+            emoji: KnownEmojis.MagnifyingGlassTiltedRight);
     }
 
     private async Task<int> DumpCapabilitiesAsync(
-        FileInfo? integrationProject,
+        List<IntegrationReference> integrations,
         FileInfo? outputFile,
         OutputFormat format,
         CancellationToken cancellationToken)
@@ -122,40 +142,31 @@ internal sealed class SdkDumpCommand : BaseCommand
 
         try
         {
-            var appHostServerProject = _appHostServerProjectFactory.Create(tempDir);
-            var socketPath = appHostServerProject.GetSocketPath();
+            var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(tempDir, cancellationToken);
 
-            // Build packages list - empty since we only need core capabilities + optional integration
-            var packages = new List<(string Name, string Version)>();
+            _logger.LogDebug("Building AppHost server for capability scanning with {Count} integrations", integrations.Count);
 
-            _logger.LogDebug("Building AppHost server for capability scanning");
+            var prepareResult = await appHostServerProject.PrepareAsync(
+                VersionHelper.GetDefaultTemplateVersion(),
+                integrations,
+                cancellationToken);
 
-            // Create project files with the integration project reference if specified
-            var additionalProjectRefs = integrationProject is not null
-                ? new[] { integrationProject.FullName }
-                : null;
-
-            await appHostServerProject.CreateProjectFilesAsync(
-                AppHostServerProject.DefaultSdkVersion,
-                packages,
-                cancellationToken,
-                additionalProjectReferences: additionalProjectRefs);
-
-            var (buildSuccess, buildOutput) = await appHostServerProject.BuildAsync(cancellationToken);
-
-            if (!buildSuccess)
+            if (!prepareResult.Success)
             {
                 InteractionService.DisplayError("Failed to build capability scanner.");
-                foreach (var (_, line) in buildOutput.GetLines())
+                if (prepareResult.Output is not null)
                 {
-                    InteractionService.DisplayMessage("wrench", line.EscapeMarkup());
+                    foreach (var (_, line) in prepareResult.Output.GetLines())
+                    {
+                        InteractionService.DisplayMessage(KnownEmojis.Wrench, line);
+                    }
                 }
                 return ExitCodeConstants.FailedToBuildArtifacts;
             }
 
             // Start the server
             var currentPid = Environment.ProcessId;
-            var (serverProcess, _) = appHostServerProject.Run(socketPath, currentPid, new Dictionary<string, string>());
+            var (socketPath, serverProcess, _) = appHostServerProject.Run(currentPid, new Dictionary<string, string>());
 
             try
             {
@@ -175,6 +186,16 @@ internal sealed class SdkDumpCommand : BaseCommand
 
                 // Remove Info diagnostics from output (they go to stderr only)
                 capabilities.Diagnostics.RemoveAll(d => d.Severity == "Info");
+
+                // Stamp package versions for integrations that have them
+                var packageVersions = integrations
+                    .Where(i => i.IsPackageReference)
+                    .Select(i => new PackageInfo { Name = i.Name, Version = i.Version! })
+                    .ToList();
+                if (packageVersions.Count > 0)
+                {
+                    capabilities.Packages = packageVersions;
+                }
 
                 // Format the output
                 var output = format switch
@@ -252,7 +273,7 @@ internal sealed class SdkDumpCommand : BaseCommand
 
         // Header (no timestamp for stable diffs)
         sb.AppendLine("# Aspire Type System Capabilities");
-        sb.AppendLine("# Generated by: aspire sdk dump --ci");
+        sb.AppendLine("# Generated by: aspire sdk dump --format ci");
         sb.AppendLine();
 
         // Diagnostics
@@ -295,11 +316,19 @@ internal sealed class SdkDumpCommand : BaseCommand
             sb.AppendLine("# DTO Types");
             foreach (var t in capabilities.DtoTypes.OrderBy(t => t.TypeId))
             {
-                sb.AppendLine(t.TypeId);
+                if (!string.IsNullOrEmpty(t.Description))
+                {
+                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "{0} # {1}", t.TypeId, t.Description));
+                }
+                else
+                {
+                    sb.AppendLine(t.TypeId);
+                }
                 foreach (var p in t.Properties.OrderBy(p => p.Name))
                 {
                     var optional = p.IsOptional ? "?" : "";
-                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  {0}{1}: {2}", p.Name, optional, p.Type?.TypeId ?? "unknown"));
+                    var desc = !string.IsNullOrEmpty(p.Description) ? string.Format(CultureInfo.InvariantCulture, " # {0}", p.Description) : "";
+                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  {0}{1}: {2}{3}", p.Name, optional, p.Type?.TypeId ?? "unknown", desc));
                 }
             }
             sb.AppendLine();
@@ -409,6 +438,10 @@ internal sealed class SdkDumpCommand : BaseCommand
             foreach (var t in capabilities.DtoTypes.OrderBy(t => t.Name))
             {
                 sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   {0}", t.Name));
+                if (!string.IsNullOrEmpty(t.Description))
+                {
+                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "      {0}", t.Description));
+                }
                 foreach (var p in t.Properties.OrderBy(p => p.Name))
                 {
                     var optional = p.IsOptional ? "?" : "";
@@ -416,6 +449,10 @@ internal sealed class SdkDumpCommand : BaseCommand
                     // Simplify type display
                     var simpleType = SimplifyTypeName(typeId);
                     sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "      - {0}{1}: {2}", p.Name, optional, simpleType));
+                    if (!string.IsNullOrEmpty(p.Description))
+                    {
+                        sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "         {0}", p.Description));
+                    }
                 }
             }
             sb.AppendLine();
@@ -496,11 +533,18 @@ internal sealed class SdkDumpCommand : BaseCommand
 
 internal sealed class CapabilitiesInfo
 {
+    public List<PackageInfo> Packages { get; set; } = [];
     public List<CapabilityInfo> Capabilities { get; set; } = [];
     public List<HandleTypeInfo> HandleTypes { get; set; } = [];
     public List<DtoTypeInfo> DtoTypes { get; set; } = [];
     public List<EnumTypeInfo> EnumTypes { get; set; } = [];
     public List<DiagnosticInfo> Diagnostics { get; set; } = [];
+}
+
+internal sealed class PackageInfo
+{
+    public string Name { get; set; } = "";
+    public string Version { get; set; } = "";
 }
 
 internal sealed class CapabilityInfo
@@ -564,6 +608,7 @@ internal sealed class DtoTypeInfo
 {
     public string TypeId { get; set; } = "";
     public string Name { get; set; } = "";
+    public string? Description { get; set; }
     public List<DtoPropertyInfo> Properties { get; set; } = [];
 }
 
@@ -572,6 +617,7 @@ internal sealed class DtoPropertyInfo
     public string Name { get; set; } = "";
     public TypeRefInfo? Type { get; set; }
     public bool IsOptional { get; set; }
+    public string? Description { get; set; }
 }
 
 internal sealed class EnumTypeInfo
@@ -594,6 +640,7 @@ internal sealed class DiagnosticInfo
 
 [JsonSourceGenerationOptions(WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(CapabilitiesInfo))]
+[JsonSerializable(typeof(PackageInfo))]
 [JsonSerializable(typeof(CapabilityInfo))]
 [JsonSerializable(typeof(ParameterInfo))]
 [JsonSerializable(typeof(CallbackParameterInfo))]

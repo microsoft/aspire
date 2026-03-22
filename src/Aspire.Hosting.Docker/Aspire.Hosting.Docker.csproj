@@ -14,6 +14,7 @@
     <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessSpec.cs" Link="Shared\ProcessSpec.cs" />
     <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessUtil.cs" Link="Shared\ProcessUtil.cs" />
     <Compile Include="$(SharedDir)ResourceNameComparer.cs" LinkBase="Shared" />
+    <Compile Include="$(SharedDir)KnownOtelConfigNames.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)PublishingContextUtils.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)StringComparers.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)Yaml\*.cs" LinkBase="Shared\Yaml" />

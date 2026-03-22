@@ -75,7 +75,11 @@ public class PostgresMcpBuilderTests
         var pass = appBuilder.AddParameter("pass", "p@ssw0rd1");
 
         appBuilder.AddPostgres("postgres", password: pass)
-            .WithEndpoint("tcp", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 5432))
+            .WithEndpoint("tcp", e =>
+            {
+                e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 5432);
+                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "postgres.dev.internal", 5432, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+            })
             .AddDatabase("db")
             .WithPostgresMcp();
 

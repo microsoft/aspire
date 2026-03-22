@@ -2,24 +2,74 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="ja" original="../RootCommandStrings.resx">
     <body>
+      <trans-unit id="BannerArgumentDescription">
+        <source>Display the animated Aspire CLI welcome banner</source>
+        <target state="needs-review-translation">アニメーション化された Aspire CLI のウェルカム バナーを表示します。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="BannerVersionFormat">
+        <source>CLI — version {0}</source>
+        <target state="translated">CLI — バージョン {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="BannerWelcomeText">
+        <source>Welcome to the</source>
+        <target state="translated">ようこそ:</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CliWaitForDebuggerArgumentDescription">
-        <source>Wait for a debugger to attach before executing the command.</source>
-        <target state="translated">デバッガーがアタッチされるまで待ってから、コマンドを実行します。</target>
+        <source>Wait for a debugger to attach before executing the command</source>
+        <target state="needs-review-translation">デバッガーがアタッチされるまで待ってから、コマンドを実行します。</target>
         <note />
       </trans-unit>
       <trans-unit id="DebugArgumentDescription">
-        <source>Enable debug logging to the console.</source>
-        <target state="translated">コンソールへのデバッグ ログを有効にします。</target>
+        <source>Enable debug logging to the console</source>
+        <target state="needs-review-translation">コンソールへのデバッグ ログを有効にします。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DebugLevelArgumentDescription">
+        <source>Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)</source>
+        <target state="new">Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>The Aspire CLI can be used to create, run, and publish Aspire-based applications.</source>
-        <target state="translated">Aspire CLI を使用して、Aspire ベースのアプリケーションを作成、実行、発行できます。</target>
+        <source>The Aspire CLI can be used to create, run, and publish Aspire-based applications</source>
+        <target state="needs-review-translation">Aspire CLI を使用して、Aspire ベースのアプリケーションを作成、実行、発行できます。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FirstTimeUseTelemetryNotice">
+        <source>Telemetry
+---------
+
+The Aspire CLI collects usage data. It is collected by Microsoft and is used to help us improve your experience. You can opt out of telemetry by setting the ASPIRE_CLI_TELEMETRY_OPTOUT environment variable to '1' or 'true' using your preferred shell.
+
+Read more about Aspire CLI telemetry: https://aka.ms/aspire/cli-telemetry</source>
+        <target state="translated">テレメトリ
+---------
+
+Aspire CLI は使用状況データを収集します。これは Microsoft によって収集され、エクスペリエンスを向上させるために役立てられます。テレメトリをオプトアウトするには、お好きなシェルを使って、ASPIRE_CLI_TELEMETRY_OPTOUT 環境変数を '1' または 'true' に設定します。
+
+Aspire CLI テレメトリの詳細情報: https://aka.ms/aspire/cli-telemetry</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FirstTimeUseWelcome">
+        <source>Welcome to Aspire! Learn more about Aspire at https://aspire.dev</source>
+        <target state="translated">Aspire へようこそ!https://aspire.dev で Aspire の詳細情報をご覧ください</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoLogoArgumentDescription">
+        <source>Suppress the startup banner and telemetry notice</source>
+        <target state="needs-review-translation">スタートアップ バナーとテレメトリ通知を非表示にします。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NonInteractiveArgumentDescription">
+        <source>Run the command in non-interactive mode, disabling all interactive prompts and spinners</source>
+        <target state="new">Run the command in non-interactive mode, disabling all interactive prompts and spinners</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitForDebuggerArgumentDescription">
-        <source>Wait for a debugger to attach before executing the command.</source>
-        <target state="translated">デバッガーがアタッチされるまで待ってから、コマンドを実行します。</target>
+        <source>Wait for a debugger to attach before executing the command</source>
+        <target state="needs-review-translation">デバッガーがアタッチされるまで待ってから、コマンドを実行します。</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitingForDebugger">

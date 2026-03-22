@@ -1,0 +1,72 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="ru" original="../ExportCommandStrings.resx">
+    <body>
+      <trans-unit id="DashboardNotAvailable">
+        <source>Dashboard is not available. Telemetry data (structured logs, traces) will not be included in the export.</source>
+        <target state="new">Dashboard is not available. Telemetry data (structured logs, traces) will not be included in the export.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Description">
+        <source>Export telemetry and resource data to a zip file</source>
+        <target state="new">Export telemetry and resource data to a zip file</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ExportComplete">
+        <source>Export saved to {0}</source>
+        <target state="new">Export saved to {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FailedToExport">
+        <source>Failed to export resource and telemetry data: {0}</source>
+        <target state="new">Failed to export resource and telemetry data: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="GatheringConsoleLogs">
+        <source>Gathering console logs...</source>
+        <target state="new">Gathering console logs...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="GatheringResources">
+        <source>Gathering resource data...</source>
+        <target state="new">Gathering resource data...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="GatheringStructuredLogs">
+        <source>Gathering structured logs...</source>
+        <target state="new">Gathering structured logs...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="GatheringTraces">
+        <source>Gathering traces...</source>
+        <target state="new">Gathering traces...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoResourcesFound">
+        <source>No resources found.</source>
+        <target state="new">No resources found.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OutputOptionDescription">
+        <source>The output file path for the export zip file</source>
+        <target state="new">The output file path for the export zip file</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceNotFound">
+        <source>Resource '{0}' not found.</source>
+        <target state="new">Resource '{0}' not found.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOptionDescription">
+        <source>Export data only for the specified resource</source>
+        <target state="new">Export data only for the specified resource</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SelectAppHostAction">
+        <source>export data from</source>
+        <target state="new">export data from</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

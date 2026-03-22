@@ -1,12 +1,16 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
+using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Azure.Provisioning;
 using Azure.Provisioning.Expressions;
 using Azure.Provisioning.Roles;
 using Azure.Provisioning.Sql;
+using Azure.Provisioning.Storage;
 using static Azure.Provisioning.Expressions.BicepFunction;
 
 namespace Aspire.Hosting;
@@ -72,6 +76,7 @@ public static class AzureSqlExtensions
     /// <param name="builder">The builder for the distributed application.</param>
     /// <param name="name">The name of the resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureSqlServerResource}"/> builder.</returns>
+    [AspireExport("addAzureSqlServer", Description = "Adds an Azure SQL Database server resource")]
     public static IResourceBuilder<AzureSqlServerResource> AddAzureSqlServer(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -101,6 +106,7 @@ public static class AzureSqlExtensions
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <param name="databaseName">The name of the database. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("addDatabase", Description = "Adds an Azure SQL database resource")]
     public static IResourceBuilder<AzureSqlDatabaseResource> AddDatabase(this IResourceBuilder<AzureSqlServerResource> builder, [ResourceName] string name, string? databaseName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -136,6 +142,7 @@ public static class AzureSqlExtensions
     /// </summary>
     /// <param name="builder">The builder for the Azure SQL resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("withDefaultAzureSku", Description = "Configures the Azure SQL database to use the default Azure SKU")]
     public static IResourceBuilder<AzureSqlDatabaseResource> WithDefaultAzureSku(this IResourceBuilder<AzureSqlDatabaseResource> builder)
     {
         builder.Resource.UseDefaultAzureSku = true;
@@ -165,6 +172,7 @@ public static class AzureSqlExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExport("runAsContainer", Description = "Configures the Azure SQL server to run locally in a SQL Server container", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureSqlServerResource> RunAsContainer(this IResourceBuilder<AzureSqlServerResource> builder, Action<IResourceBuilder<SqlServerServerResource>>? configureContainer = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -271,6 +279,9 @@ public static class AzureSqlExtensions
     {
         var azureResource = (AzureSqlServerResource)infrastructure.AspireResource;
 
+        // Check if this SQL Server has a private endpoint (via annotation)
+        var hasPrivateEndpoint = azureResource.HasAnnotationOfType<PrivateEndpointTargetAnnotation>();
+
         var sqlServer = AzureProvisioningResource.CreateExistingOrNewProvisionableResource(infrastructure,
 
         (identifier, name) =>
@@ -302,29 +313,34 @@ public static class AzureSqlExtensions
                     TenantId = BicepFunction.GetSubscription().TenantId
                 },
                 Version = "12.0",
-                PublicNetworkAccess = ServerNetworkAccessFlag.Enabled,
+                // When using private endpoints, disable public network access.
+                PublicNetworkAccess = hasPrivateEndpoint ? ServerNetworkAccessFlag.Disabled : ServerNetworkAccessFlag.Enabled,
                 MinTlsVersion = SqlMinimalTlsVersion.Tls1_2,
                 Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
             };
         });
 
-        infrastructure.Add(new SqlFirewallRule("sqlFirewallRule_AllowAllAzureIps")
+        // Only add firewall rules when not using private endpoints
+        if (!hasPrivateEndpoint)
         {
-            Parent = sqlServer,
-            Name = "AllowAllAzureIps",
-            StartIPAddress = "0.0.0.0",
-            EndIPAddress = "0.0.0.0"
-        });
-
-        if (distributedApplicationBuilder.ExecutionContext.IsRunMode)
-        {
-            infrastructure.Add(new SqlFirewallRule("sqlFirewallRule_AllowAllIps")
+            infrastructure.Add(new SqlFirewallRule("sqlFirewallRule_AllowAllAzureIps")
             {
                 Parent = sqlServer,
-                Name = "AllowAllIps",
+                Name = "AllowAllAzureIps",
                 StartIPAddress = "0.0.0.0",
-                EndIPAddress = "255.255.255.255"
+                EndIPAddress = "0.0.0.0"
             });
+
+            if (distributedApplicationBuilder.ExecutionContext.IsRunMode)
+            {
+                infrastructure.Add(new SqlFirewallRule("sqlFirewallRule_AllowAllIps")
+                {
+                    Parent = sqlServer,
+                    Name = "AllowAllIps",
+                    StartIPAddress = "0.0.0.0",
+                    EndIPAddress = "255.255.255.255"
+                });
+            }
         }
 
         infrastructure.Add(new ProvisioningOutput("sqlServerFqdn", typeof(string)) { Value = sqlServer.FullyQualifiedDomainName.ToBicepExpression() });
@@ -332,8 +348,126 @@ public static class AzureSqlExtensions
         // We need to output name to externalize role assignments.
         infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = sqlServer.Name.ToBicepExpression() });
 
+        // Output the resource id for private endpoint support.
+        infrastructure.Add(new ProvisioningOutput("id", typeof(string)) { Value = sqlServer.Id.ToBicepExpression() });
+
         infrastructure.Add(new ProvisioningOutput("sqlServerAdminName", typeof(string)) { Value = sqlServer.Administrators.Login.ToBicepExpression() });
 
         return sqlServer;
+    }
+
+    /// <summary>
+    /// Configures the Azure SQL Server to use the specified subnet for deployment script execution.
+    /// </summary>
+    /// <param name="builder">The Azure SQL Server resource builder.</param>
+    /// <param name="subnet">The subnet to delegate for Azure Container Instances used by deployment scripts.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{AzureSqlServerResource}"/> for chaining.</returns>
+    /// <remarks>
+    /// <para>
+    /// When an Azure SQL Server has a private endpoint, deployment scripts that add database role assignments
+    /// run inside Azure Container Instances (ACI). This method allows you to provide an explicit subnet for those
+    /// containers instead of having one auto-created.
+    /// </para>
+    /// <para>
+    /// The specified subnet will be automatically delegated to <c>Microsoft.ContainerInstance/containerGroups</c>.
+    /// Ensure the subnet has outbound network security rules allowing access to Azure Active Directory (port 443)
+    /// and SQL (port 443) service tags.
+    /// </para>
+    /// <para>
+    /// This method is not available in polyglot app hosts.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// Provide a custom ACI subnet for the deployment script:
+    /// <code>
+    /// var vnet = builder.AddAzureVirtualNetwork("vnet");
+    /// var peSubnet = vnet.AddSubnet("pe-subnet", "10.0.2.0/24");
+    /// var aciSubnet = vnet.AddSubnet("aci-subnet", "10.0.3.0/29");
+    ///
+    /// var sql = builder.AddAzureSqlServer("sql")
+    ///     .WithAdminDeploymentScriptSubnet(aciSubnet);
+    /// peSubnet.AddPrivateEndpoint(sql);
+    /// </code>
+    /// </example>
+    [AspireExportIgnore(Reason = "Azure subnet resources are not currently available to polyglot app hosts.")]
+    [Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/dotnet/aspire/diagnostics#{0}")]
+    public static IResourceBuilder<AzureSqlServerResource> WithAdminDeploymentScriptSubnet(
+        this IResourceBuilder<AzureSqlServerResource> builder,
+        IResourceBuilder<AzureSubnetResource> subnet)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(subnet);
+
+        if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
+        {
+            return builder;
+        }
+
+        builder.Resource.Annotations.Add(new AdminDeploymentScriptSubnetAnnotation(subnet.Resource));
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Configures the Azure SQL Server to use the specified storage account for deployment script execution.
+    /// </summary>
+    /// <param name="builder">The Azure SQL Server resource builder.</param>
+    /// <param name="storage">The storage account to use for deployment scripts.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{AzureSqlServerResource}"/> for chaining.</returns>
+    /// <remarks>
+    /// <para>
+    /// When an Azure SQL Server has a private endpoint, deployment scripts require a storage account to upload
+    /// scripts and write logs. This method allows you to provide an explicit storage account instead of having
+    /// one auto-created.
+    /// </para>
+    /// <para>
+    /// The storage account must have <c>AllowSharedKeyAccess</c> enabled, as deployment scripts need to mount
+    /// file shares. If the storage is not an existing resource, this method will automatically configure
+    /// <c>AllowSharedKeyAccess = true</c>.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// Provide a custom storage account for the deployment script:
+    /// <code>
+    /// var vnet = builder.AddAzureVirtualNetwork("vnet");
+    /// var peSubnet = vnet.AddSubnet("pe-subnet", "10.0.2.0/24");
+    ///
+    /// var storage = builder.AddAzureStorage("scriptstorage");
+    /// var sql = builder.AddAzureSqlServer("sql")
+    ///     .WithAdminDeploymentScriptStorage(storage);
+    /// peSubnet.AddPrivateEndpoint(sql);
+    /// </code>
+    /// </example>
+    [AspireExport("withAdminDeploymentScriptStorage", Description = "Configures the Azure SQL server to use a specific storage account for deployment scripts")]
+    [Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/dotnet/aspire/diagnostics#{0}")]
+    public static IResourceBuilder<AzureSqlServerResource> WithAdminDeploymentScriptStorage(
+        this IResourceBuilder<AzureSqlServerResource> builder,
+        IResourceBuilder<AzureStorageResource> storage)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(storage);
+
+        if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            return builder;
+        }
+
+        // Set the user's storage. The BeforeStartEvent handler will remove the
+        // original default storage since it no longer matches.
+        builder.Resource.DeploymentScriptStorage = storage.Resource;
+
+        // If the storage is not an existing resource, ensure AllowSharedKeyAccess is enabled
+        if (!storage.Resource.IsExisting())
+        {
+            storage.ConfigureInfrastructure(infra =>
+            {
+                var sa = infra.GetProvisionableResources().OfType<StorageAccount>().SingleOrDefault()
+                    ?? throw new InvalidOperationException("Could not find a StorageAccount resource in the infrastructure. Ensure that the provided storage builder creates a StorageAccount resource.");
+
+                sa.AllowSharedKeyAccess = true;
+            });
+        }
+
+        return builder;
     }
 }

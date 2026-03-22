@@ -11,6 +11,7 @@ using StreamJsonRpc;
 
 namespace Aspire.Hosting.Backchannel;
 
+[Trait("Partition", "4")]
 public class AppHostBackchannelTests(ITestOutputHelper outputHelper)
 {
     [Fact]

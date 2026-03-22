@@ -27,9 +27,6 @@ public partial class ResourceActions : ComponentBase
     public required IStringLocalizer<ControlsStrings> ControlLoc { get; init; }
 
     [Inject]
-    public required IStringLocalizer<Commands> CommandsLoc { get; init; }
-
-    [Inject]
     public required NavigationManager NavigationManager { get; init; }
 
     [Inject]
@@ -46,9 +43,6 @@ public partial class ResourceActions : ComponentBase
 
     [Parameter]
     public required ResourceViewModel Resource { get; set; }
-
-    [Parameter]
-    public required Func<ResourceViewModel, string> GetResourceName { get; set; }
 
     [Parameter]
     public required int MaxHighlightedCount { get; set; }
@@ -70,7 +64,7 @@ public partial class ResourceActions : ComponentBase
         ResourceMenuBuilder.AddMenuItems(
             _menuItems,
             Resource,
-            GetResourceName,
+            ResourceByName,
             EventCallback.Factory.Create(this, () => OnViewDetails.InvokeAsync(_menuButton?.MenuButtonId)),
             CommandSelected,
             IsCommandExecuting,

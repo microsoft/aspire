@@ -34,10 +34,11 @@ jobs:
   generate_tests_matrix:
     name: Generate test runsheet
     runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'dotnet' }}
+    if: ${{ github.repository_owner == 'microsoft' }}
     outputs:
       runsheet: ${{ steps.generate_tests_matrix.outputs.runsheet }}
       requiresNugets: ${{ steps.check_nugets.outputs.requiresNugets }}
+      requiresCliArchive: ${{ steps.check_cli_archive.outputs.requiresCliArchive }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -83,6 +84,16 @@ jobs:
             echo "requiresNugets=false" >> $GITHUB_OUTPUT
           fi
 
+      - name: Check if any test requires CLI archives
+        id: check_cli_archive
+        run: |
+          RUNSHEET='${{ steps.generate_tests_matrix.outputs.runsheet }}'
+          if echo "$RUNSHEET" | jq -e 'any(.[]; .requiresCliArchive == true)' > /dev/null 2>&1; then
+            echo "requiresCliArchive=true" >> $GITHUB_OUTPUT
+          else
+            echo "requiresCliArchive=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Upload logs, and test results
         if: ${{ always() }}
         uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
@@ -98,17 +109,23 @@ jobs:
   build_packages:
     name: Build packages
     needs: [generate_tests_matrix]
-    if: ${{ github.repository_owner == 'dotnet' && needs.generate_tests_matrix.outputs.requiresNugets == 'true' }}
+    if: ${{ github.repository_owner == 'microsoft' && needs.generate_tests_matrix.outputs.requiresNugets == 'true' }}
     uses: ./.github/workflows/build-packages.yml
 
+  build_cli_archives:
+    name: Build native CLI archives
+    needs: [generate_tests_matrix]
+    if: ${{ github.repository_owner == 'microsoft' && (needs.generate_tests_matrix.outputs.requiresNugets == 'true' || needs.generate_tests_matrix.outputs.requiresCliArchive == 'true') }}
+    uses: ./.github/workflows/build-cli-native-archives.yml
+
   run_tests:
-    name: Test
-    needs: [generate_tests_matrix, build_packages]
+    name: ${{ matrix.tests.project }}
+    needs: [generate_tests_matrix, build_packages, build_cli_archives]
     strategy:
       fail-fast: false
       matrix:
         tests: ${{ fromJson(needs.generate_tests_matrix.outputs.runsheet) }}
-    if: ${{ github.repository_owner == 'dotnet' && !cancelled() && !failure() }}
+    if: ${{ github.repository_owner == 'microsoft' && !cancelled() && !failure() }}
     uses: ./.github/workflows/run-tests.yml
     with:
       testShortName: ${{ matrix.tests.project }}
@@ -118,12 +135,13 @@ jobs:
       enablePlaywrightInstall: ${{ inputs.enablePlaywrightInstall }}
       extraTestArgs: ${{ inputs.extraTestArgs }}
       ignoreTestFailures: ${{ inputs.ignoreTestFailures }}
+      requiresCliArchive: ${{ matrix.tests.requiresCliArchive == true }}
 
   results:
-    if: ${{ always() && github.repository_owner == 'dotnet' }}
+    if: ${{ always() && github.repository_owner == 'microsoft' }}
     runs-on: ubuntu-latest
     name: Final Results
-    needs: [generate_tests_matrix, build_packages, run_tests]
+    needs: [generate_tests_matrix, build_packages, build_cli_archives, run_tests]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -184,7 +202,8 @@ jobs:
       - name: Fail if any dependency failed
         # 'skipped' can be when a transitive dependency fails and the dependent job gets 'skipped'.
         # For example, one of setup_* jobs failing and the Integration test jobs getting 'skipped'
-        # Note: build_packages being skipped is expected when requiresNugets is false, so we check it separately
+        # Note: build_packages/build_cli_archives being skipped is expected when requiresNugets is false,
+        # so we check them separately.
         if: >-
           ${{
             always() && (
@@ -194,7 +213,9 @@ jobs:
               needs.run_tests.result == 'cancelled' ||
               needs.run_tests.result == 'skipped' ||
               (needs.build_packages.result == 'failure') ||
-              (needs.build_packages.result == 'cancelled')
+              (needs.build_packages.result == 'cancelled') ||
+              (needs.build_cli_archives.result == 'failure') ||
+              (needs.build_cli_archives.result == 'cancelled')
             )
           }}
         run: |

@@ -39,4 +39,12 @@ namespace Aspire.Hosting;
 [Experimental("ASPIREATS001")]
 public sealed class AspireExportIgnoreAttribute : Attribute
 {
+    /// <summary>
+    /// Gets or sets the reason why this member is excluded from ATS export.
+    /// </summary>
+    /// <remarks>
+    /// Use this property to document why an API cannot be exported to polyglot app hosts,
+    /// distinguishing reviewed-but-incompatible members from those not yet reviewed.
+    /// </remarks>
+    public string? Reason { get; set; }
 }

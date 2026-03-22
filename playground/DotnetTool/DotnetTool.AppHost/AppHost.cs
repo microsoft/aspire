@@ -68,7 +68,7 @@ builder.AddDotnetTool("offlineWildcard", "dotnet-ef")
 
 builder.AddDotnetTool("offlinePrerelease", "dotnet-ef")
     .WithToolPrerelease()
-     .WithParentRelationship(offline)
+    .WithParentRelationship(offline)
     .WithToolSource(fakeSourcesPath)
     .WithToolIgnoreExistingFeeds()
     .WithToolIgnoreFailedSources();
@@ -79,6 +79,9 @@ var secret = builder.AddParameter("secret", "Shhhhhhh", secret: true);
 builder.AddDotnetTool("secretArg", "dotnet-ef")
     .WithArgs("--version")
     .WithArgs(secret);
+
+builder.AddDotnetTool("incompatibleSdk", "dotnet-ef")
+    .WithWorkingDirectory(Path.Combine(Projects.DotnetTool_AppHost.ProjectPath, "IncompatibleSdk"));
 
 // Some issues only show up when installing for first time, rather than using existing downloaded versions
 // Use a specific NUGET_PACKAGES path for these playground tools, so we can easily reset them

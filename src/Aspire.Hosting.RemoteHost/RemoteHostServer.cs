@@ -15,12 +15,13 @@ namespace Aspire.Hosting.RemoteHost;
 public static class RemoteHostServer
 {
     /// <summary>
-    /// Runs the RemoteHost JSON-RPC server, loading ATS assemblies from appsettings.json.
+    /// Runs the RemoteHost JSON-RPC server, loading ATS assemblies from configuration and available integration assemblies.
     /// </summary>
     /// <remarks>
     /// The server reads the "AtsAssemblies" section from appsettings.json to determine which
-    /// assemblies to scan for [AspireExport] capabilities. The appsettings.json should be
-    /// in the current working directory.
+    /// assemblies to scan for <c>Aspire.Hosting.AspireExportAttribute</c> capabilities, and it also
+    /// probes available <c>Aspire.Hosting*</c> assemblies from the application output and
+    /// integration libraries. The appsettings.json should be in the current working directory.
     /// </remarks>
     /// <param name="args">Command line arguments.</param>
     /// <returns>A task that completes when the server has stopped.</returns>

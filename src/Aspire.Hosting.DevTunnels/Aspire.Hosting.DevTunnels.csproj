@@ -11,8 +11,6 @@
 
   <ItemGroup>
     <Compile Include="$(SharedDir)CoalescingAsyncOperation.cs" LinkBase="Shared" />
-    <Compile Include="$(SharedDir)PathLookupHelper.cs" LinkBase="Shared" />
-    <Compile Include="$(SharedDir)RequiredCommandValidator.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)StringComparers.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)ResourceNameComparer.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)EnvironmentVariableNameEncoder.cs" LinkBase="Shared" />

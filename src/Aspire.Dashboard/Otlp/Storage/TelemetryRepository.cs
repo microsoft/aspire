@@ -24,7 +24,7 @@ using static OpenTelemetry.Proto.Trace.V1.Span.Types;
 
 namespace Aspire.Dashboard.Otlp.Storage;
 
-public sealed class TelemetryRepository : IDisposable
+public sealed partial class TelemetryRepository : IDisposable
 {
     private readonly PauseManager _pauseManager;
     private readonly IOutgoingPeerResolver[] _outgoingPeerResolvers;
@@ -37,6 +37,11 @@ public sealed class TelemetryRepository : IDisposable
     private readonly List<Subscription> _logSubscriptions = new();
     private readonly List<Subscription> _metricsSubscriptions = new();
     private readonly List<Subscription> _tracesSubscriptions = new();
+
+    // Push-based streaming watchers - lazily initialized
+    private readonly object _watchersLock = new();
+    private List<SpanWatcher>? _spanWatchers;
+    private List<LogWatcher>? _logWatchers;
 
     private readonly ConcurrentDictionary<ResourceKey, OtlpResource> _resources = new();
 
@@ -332,6 +337,8 @@ public sealed class TelemetryRepository : IDisposable
 
     public void AddLogsCore(AddContext context, OtlpResourceView resourceView, RepeatedField<ScopeLogs> scopeLogs)
     {
+        List<OtlpLogEntry>? addedLogs = null;
+
         _logsLock.EnterWriteLock();
 
         try
@@ -384,6 +391,11 @@ public sealed class TelemetryRepository : IDisposable
                         {
                             _logPropertyKeys.Add((resourceView.Resource, kvp.Key));
                         }
+
+                        // Collect log for push-based streaming (lazy init to avoid allocation when no watchers)
+                        addedLogs ??= new List<OtlpLogEntry>();
+                        addedLogs.Add(logEntry);
+
                         context.SuccessCount++;
                     }
                     catch (Exception ex)
@@ -397,6 +409,12 @@ public sealed class TelemetryRepository : IDisposable
         finally
         {
             _logsLock.ExitWriteLock();
+        }
+
+        // Push logs to watchers outside the lock
+        if (addedLogs is not null)
+        {
+            PushLogsToWatchers(addedLogs, resourceView.ResourceKey);
         }
     }
 
@@ -1118,6 +1136,8 @@ public sealed class TelemetryRepository : IDisposable
 
     internal void AddTracesCore(AddContext context, OtlpResourceView resourceView, RepeatedField<ScopeSpans> scopeSpans)
     {
+        List<OtlpSpan>? addedSpans = null;
+
         _tracesLock.EnterWriteLock();
 
         try
@@ -1235,6 +1255,11 @@ public sealed class TelemetryRepository : IDisposable
                         Debug.Assert(_traces.Contains(trace), "Trace not found in traces collection.");
 
                         updatedTraces[trace.Key] = trace;
+
+                        // Collect span for push-based streaming (lazy init to avoid allocation when no watchers)
+                        addedSpans ??= new List<OtlpSpan>();
+                        addedSpans.Add(newSpan);
+
                         context.SuccessCount++;
                     }
                     catch (Exception ex)
@@ -1258,6 +1283,12 @@ public sealed class TelemetryRepository : IDisposable
         finally
         {
             _tracesLock.ExitWriteLock();
+        }
+
+        // Push spans to watchers outside the lock
+        if (addedSpans is not null)
+        {
+            PushSpansToWatchers(addedSpans, resourceView.ResourceKey);
         }
 
         static bool TryGetTraceById(CircularBuffer<OtlpTrace> traces, ReadOnlyMemory<byte> traceId, [NotNullWhen(true)] out OtlpTrace? trace)
@@ -1418,7 +1449,7 @@ public sealed class TelemetryRepository : IDisposable
             EndTime = OtlpHelpers.UnixNanoSecondsToDateTime(span.EndTimeUnixNano),
             Status = ConvertStatus(span.Status),
             StatusMessage = span.Status?.Message,
-            Attributes = span.Attributes.ToKeyValuePairs(context),
+            Attributes = span.Attributes.ToKeyValuePairs(context, filter: attribute => attribute.Key != OtlpHelpers.AspireDestinationNameAttribute),
             State = !string.IsNullOrEmpty(span.TraceState) ? span.TraceState : null,
             Events = events,
             Links = links,
@@ -1552,5 +1583,7 @@ public sealed class TelemetryRepository : IDisposable
         {
             subscription.Dispose();
         }
+
+        DisposeWatchers();
     }
 }

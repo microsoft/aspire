@@ -46,9 +46,12 @@
 
     <_ShutdownDockerContainersCommand Condition="'$(OS)' != 'Windows_NT'">for f in `docker ps -aq`%3B do docker stop $f%3B docker rm $f%3B done</_ShutdownDockerContainersCommand>
     <_DeleteDockerVolumesCommand Condition="'$(OS)' != 'Windows_NT'">for f in `docker volume ls -q`%3B do docker volume rm $f%3B done</_DeleteDockerVolumesCommand>
+    <_UsesTestcontainersWorkItemCommand Condition="'$(OS)' != 'Windows_NT'">find "$HELIX_WORKITEM_ROOT" -type f \( -name 'Testcontainers*.dll' -o -name 'DotNet.Testcontainers*.dll' \) | grep -q .</_UsesTestcontainersWorkItemCommand>
+    <_DisableRyukForTestcontainersWorkItemCommand Condition="'$(OS)' != 'Windows_NT'">if $(_UsesTestcontainersWorkItemCommand)%3B then echo "Disabling Testcontainers Ryuk for this Helix work item." $(_ShellCommandSeparator) export TESTCONTAINERS_RYUK_DISABLED=true%3B fi</_DisableRyukForTestcontainersWorkItemCommand>
+    <_CleanupDockerForTestcontainersWorkItemCommand Condition="'$(OS)' != 'Windows_NT'">if $(_UsesTestcontainersWorkItemCommand)%3B then echo "Cleaning up Docker resources for this Testcontainers Helix work item." $(_ShellCommandSeparator) $(_ShutdownDockerContainersCommand) $(_ShellCommandSeparator) $(_DeleteDockerVolumesCommand) $(_ShellCommandSeparator) docker network prune -f%3B fi</_CleanupDockerForTestcontainersWorkItemCommand>
 
-    <_CleanupProcessesCommand Condition="'$(OS)' == 'Windows_NT'">powershell -ExecutionPolicy ByPass -NoProfile -command "&amp; get-ciminstance win32_process | where-object ExecutablePath -Match 'dotnet-tests|dcp.exe|dcpctrl.exe' | foreach-object { echo $_.ProcessId $_.ExecutablePath %3B stop-process -id $_.ProcessId -force -ErrorAction SilentlyContinue }"</_CleanupProcessesCommand>
-    <_CleanupProcessesCommand Condition="'$(OS)' != 'Windows_NT'">pgrep -lf "dotnet-tests|dcp.exe|dcpctrl.exe" | awk '{print %3B system("kill -9 "$1)}'</_CleanupProcessesCommand>
+    <_CleanupProcessesCommand Condition="'$(OS)' == 'Windows_NT'">powershell -ExecutionPolicy ByPass -NoProfile -command "&amp; get-ciminstance win32_process | where-object ExecutablePath -Match 'dotnet-tests|dcp.exe' | foreach-object { echo $_.ProcessId $_.ExecutablePath %3B stop-process -id $_.ProcessId -force -ErrorAction SilentlyContinue }"</_CleanupProcessesCommand>
+    <_CleanupProcessesCommand Condition="'$(OS)' != 'Windows_NT'">pgrep -lf "dotnet-tests|dcp.exe" | awk '{print %3B system("kill -9 "$1)}'</_CleanupProcessesCommand>
 
     <_WaitForDcpCommand Condition="'$(OS)' != 'Windows_NT'">echo "Waiting for dcp process to exit..."; start_time=$(date +%s); echo "Start time: $start_time"; timeout=120; while pgrep -lf "dcp.exe" &gt; /dev/null &amp;&amp; [ $timeout -gt 0 ]; do sleep 1; timeout=$((timeout - 1)); done; end_time=$(date +%s); echo "End time: $end_time"; if pgrep -lf "dcp.exe" &gt; /dev/null; then echo "dcp process did not exit within the timeout period."; exit 1; fi</_WaitForDcpCommand>
     <!-- Figure out the powershell... -->
@@ -133,11 +136,11 @@
     <HelixPreCommand Include="$(_DeleteDockerVolumesCommand)" />
     <HelixPreCommand Include="docker network ls" />
     <HelixPreCommand Include="docker network prune -f" />
-
     <HelixPostCommand Include="docker container ls --all" />
     <HelixPostCommand Include="docker container ls --all --format json" />
     <HelixPostCommand Include="docker volume ls" />
     <HelixPostCommand Include="docker network ls" />
+    <HelixPostCommand Condition="'$(OS)' != 'Windows_NT'" Include="$(_CleanupDockerForTestcontainersWorkItemCommand)" />
   </ItemGroup>
 
   <ItemGroup>
@@ -161,6 +164,7 @@
 
     <HelixPerWorkItemPreCommand Condition="'$(OS)' == 'Windows_NT'">$(HelixPerWorkItemPreCommand) &amp; set DOTNET_ROOT=%HELIX_CORRELATION_PAYLOAD%\$(_DefaultSdkDirNameForTests)</HelixPerWorkItemPreCommand>
     <HelixPerWorkItemPreCommand Condition="'$(OS)' != 'Windows_NT'">$(HelixPerWorkItemPreCommand) &amp;&amp; export DOTNET_ROOT=$HELIX_CORRELATION_PAYLOAD/$(_DefaultSdkDirNameForTests)</HelixPerWorkItemPreCommand>
+    <HelixPerWorkItemPreCommand Condition="'$(OS)' != 'Windows_NT'">$(HelixPerWorkItemPreCommand) &amp;&amp; $(_DisableRyukForTestcontainersWorkItemCommand)</HelixPerWorkItemPreCommand>
   </PropertyGroup>
 
   <Target Name="PrepareDependencies" DependsOnTargets="$(PrepareDependenciesDependsOn)" />

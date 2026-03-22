@@ -329,5 +329,21 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CommandNotSupportedWithSingleFileAppHost", resourceCulture);
             }
         }
+        public static string ProjectFileUnsupportedInCurrentEnvironment
+        {
+            get
+            {
+                return ResourceManager.GetString("ProjectFileUnsupportedInCurrentEnvironment", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The configuration file '{0}' contains invalid JSON: {1}.
+        /// </summary>
+        public static string InvalidJsonInConfigFile {
+            get {
+                return ResourceManager.GetString("InvalidJsonInConfigFile", resourceCulture);
+            }
+        }
     }
 }

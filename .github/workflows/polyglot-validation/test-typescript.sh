@@ -21,11 +21,11 @@ cd "$WORK_DIR"
 
 # Initialize TypeScript AppHost
 echo "Creating TypeScript apphost project..."
-aspire init -l typescript --non-interactive
+aspire init --language typescript --non-interactive -d
 
 # Add Redis integration
 echo "Adding Redis integration..."
-aspire add Aspire.Hosting.Redis --non-interactive 2>&1 || {
+aspire add Aspire.Hosting.Redis --non-interactive -d 2>&1 || {
     echo "aspire add failed, manually updating settings.json..."
     PKG_VERSION=$(aspire --version | grep -oP '\d+\.\d+\.\d+-.*' | head -1)
     if [ -f ".aspire/settings.json" ]; then
@@ -40,7 +40,7 @@ aspire add Aspire.Hosting.Redis --non-interactive 2>&1 || {
 # Insert Redis line into apphost.ts
 echo "Configuring apphost.ts with Redis..."
 if grep -q "builder.build().run()" apphost.ts; then
-    sed -i '/builder.build().run()/i\// Add Redis cache resource\nconst redis = await builder.addRedis("cache");' apphost.ts
+    sed -i '/builder.build().run()/i\// Add Redis cache resource\nconst redis = await builder.addRedis("cache").withImageRegistry("netaspireci.azurecr.io");' apphost.ts
     echo "✅ Redis configuration added to apphost.ts"
 fi
 

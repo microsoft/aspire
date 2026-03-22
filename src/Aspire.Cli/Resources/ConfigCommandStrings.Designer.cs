@@ -195,6 +195,24 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Show all available features that can be configured..
+        /// </summary>
+        public static string ListCommand_AllOptionDescription {
+            get {
+                return ResourceManager.GetString("ListCommand_AllOptionDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Run 'aspire config list --all' to see all available feature flags..
+        /// </summary>
+        public static string ListCommand_AllFeaturesHint {
+            get {
+                return ResourceManager.GetString("ListCommand_AllFeaturesHint", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to No configuration values found..
         /// </summary>
         public static string NoConfigurationValuesFound {
@@ -326,6 +344,81 @@ namespace Aspire.Cli.Resources {
         public static string NoGlobalConfigurationFound {
             get {
                 return ResourceManager.GetString("NoGlobalConfigurationFound", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Display configuration file paths and available features..
+        /// </summary>
+        public static string InfoCommand_Description {
+            get {
+                return ResourceManager.GetString("InfoCommand_Description", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Output information in JSON format..
+        /// </summary>
+        public static string InfoCommand_JsonOptionDescription {
+            get {
+                return ResourceManager.GetString("InfoCommand_JsonOptionDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Local settings path.
+        /// </summary>
+        public static string InfoCommand_LocalSettingsPath {
+            get {
+                return ResourceManager.GetString("InfoCommand_LocalSettingsPath", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Global settings path.
+        /// </summary>
+        public static string InfoCommand_GlobalSettingsPath {
+            get {
+                return ResourceManager.GetString("InfoCommand_GlobalSettingsPath", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Available features.
+        /// </summary>
+        public static string InfoCommand_AvailableFeatures {
+            get {
+                return ResourceManager.GetString("InfoCommand_AvailableFeatures", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Settings file properties.
+        /// </summary>
+        public static string InfoCommand_SettingsProperties {
+            get {
+                return ResourceManager.GetString("InfoCommand_SettingsProperties", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Use &apos;aspire config set features.&lt;name&gt; true|false&apos; to enable or disable a feature..
+        /// </summary>
+        public static string SetFeatureHint {
+            get {
+                return ResourceManager.GetString("SetFeatureHint", resourceCulture);
+            }
+        }
+
+        public static string HeaderKey {
+            get {
+                return ResourceManager.GetString("HeaderKey", resourceCulture);
+            }
+        }
+
+        public static string HeaderValue {
+            get {
+                return ResourceManager.GetString("HeaderValue", resourceCulture);
             }
         }
     }

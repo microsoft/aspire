@@ -62,6 +62,7 @@ public static class DockerComposeEnvironmentExtensions
     /// <param name="builder">The Docker Compose environment resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the <see cref="DockerComposeEnvironmentResource"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("withProperties", Description = "Configures properties of the Docker Compose environment", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<DockerComposeEnvironmentResource> WithProperties(this IResourceBuilder<DockerComposeEnvironmentResource> builder, Action<DockerComposeEnvironmentResource> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -78,6 +79,8 @@ public static class DockerComposeEnvironmentExtensions
     /// <param name="builder"> The Docker compose environment resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the <see cref="ComposeFile"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>This method is not available in polyglot app hosts because <see cref="ComposeFile"/> and its nested types are not exported to ATS.</remarks>
+    [AspireExportIgnore(Reason = "ComposeFile and its nested types are not exported to ATS.")]
     public static IResourceBuilder<DockerComposeEnvironmentResource> ConfigureComposeFile(this IResourceBuilder<DockerComposeEnvironmentResource> builder, Action<ComposeFile> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -94,9 +97,13 @@ public static class DockerComposeEnvironmentExtensions
     /// <param name="configure">A method that can be used for customizing the captured environment variables.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
+    /// This method is not available in polyglot app hosts.
+    /// <para>
     /// This callback is invoked during the prepare phase, allowing programmatic modification of the environment variables
     /// that will be written to the .env file adjacent to the Docker Compose file.
+    /// </para>
     /// </remarks>
+    [AspireExportIgnore(Reason = "Action<IDictionary<string, CapturedEnvironmentVariable>> callbacks are not ATS-compatible.")]
     public static IResourceBuilder<DockerComposeEnvironmentResource> ConfigureEnvFile(this IResourceBuilder<DockerComposeEnvironmentResource> builder, Action<IDictionary<string, CapturedEnvironmentVariable>> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -112,6 +119,7 @@ public static class DockerComposeEnvironmentExtensions
     /// <param name="builder">The Docker Compose environment resource builder.</param>
     /// <param name="enabled">Whether to enable the dashboard. Default is true.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("withDashboard", Description = "Enables or disables the Aspire dashboard for the Docker Compose environment")]
     public static IResourceBuilder<DockerComposeEnvironmentResource> WithDashboard(this IResourceBuilder<DockerComposeEnvironmentResource> builder, bool enabled = true)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -127,6 +135,7 @@ public static class DockerComposeEnvironmentExtensions
     /// <param name="builder">The Docker Compose environment resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the dashboard service.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("configureDashboard", MethodName = "configureDashboard", Description = "Configures the Aspire dashboard resource for the Docker Compose environment", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<DockerComposeEnvironmentResource> WithDashboard(this IResourceBuilder<DockerComposeEnvironmentResource> builder, Action<IResourceBuilder<DockerComposeAspireDashboardResource>> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);

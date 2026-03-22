@@ -6,6 +6,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Security.Claims;
 using System.Security.Cryptography;
+using Aspire.Dashboard.Api;
 using Aspire.Dashboard.Authentication;
 using Aspire.Dashboard.Authentication.Connection;
 using Aspire.Dashboard.Authentication.OpenIdConnect;
@@ -287,6 +288,9 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddTransient<OtlpTraceService>();
         builder.Services.AddTransient<OtlpMetricsService>();
 
+        // Telemetry API.
+        builder.Services.AddSingleton<TelemetryApiService>();
+
         // AI assistant services.
         builder.Services.AddTransient<AssistantChatViewModel>();
         builder.Services.AddTransient<AssistantChatDataContext>();
@@ -399,11 +403,20 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                 _logger.LogWarning("OTLP server is unsecured. Untrusted apps can send telemetry to the dashboard. For more information, visit https://go.microsoft.com/fwlink/?linkid=2267030");
             }
 
-            // Only show MCP security warning if MCP endpoint is configured
+            // Only show MCP security warning if MCP endpoint is configured and MCP is not disabled
             if (_mcpEndPointAccessor != null &&
+                !_dashboardOptionsMonitor.CurrentValue.Mcp.Disabled.GetValueOrDefault() &&
                 _dashboardOptionsMonitor.CurrentValue.Mcp.AuthMode == McpAuthMode.Unsecured)
             {
                 _logger.LogWarning("MCP server is unsecured. Untrusted apps can access sensitive information.");
+            }
+
+            // Only show API security warning if API is enabled and unsecured
+            // API runs on the frontend endpoint (no separate accessor needed)
+            if (_dashboardOptionsMonitor.CurrentValue.Api.Enabled.GetValueOrDefault() &&
+                _dashboardOptionsMonitor.CurrentValue.Api.AuthMode == ApiAuthMode.Unsecured)
+            {
+                _logger.LogWarning("Dashboard API is unsecured. Untrusted apps can access sensitive telemetry data.");
             }
 
             // Log frontend login URL last at startup so it's easy to find in the logs.
@@ -517,6 +530,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         _app.MapGrpcService<OtlpGrpcLogsService>();
 
         _app.MapDashboardMcp(dashboardOptions);
+        _app.MapTelemetryApi(dashboardOptions);
         _app.MapDashboardApi(dashboardOptions);
         _app.MapDashboardHealthChecks();
     }
@@ -713,6 +727,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             .AddScheme<OtlpApiKeyAuthenticationHandlerOptions, OtlpApiKeyAuthenticationHandler>(OtlpApiKeyAuthenticationDefaults.AuthenticationScheme, o => { })
             .AddScheme<McpCompositeAuthenticationHandlerOptions, McpCompositeAuthenticationHandler>(McpCompositeAuthenticationDefaults.AuthenticationScheme, o => { })
             .AddScheme<McpApiKeyAuthenticationHandlerOptions, McpApiKeyAuthenticationHandler>(McpApiKeyAuthenticationHandler.AuthenticationScheme, o => { })
+            .AddScheme<ApiAuthenticationHandlerOptions, ApiAuthenticationHandler>(ApiAuthenticationHandler.AuthenticationScheme, o => { })
             .AddScheme<ConnectionTypeAuthenticationHandlerOptions, ConnectionTypeAuthenticationHandler>(ConnectionTypeAuthenticationDefaults.AuthenticationSchemeFrontend, o => o.RequiredConnectionTypes = [ConnectionType.Frontend])
             .AddScheme<ConnectionTypeAuthenticationHandlerOptions, ConnectionTypeAuthenticationHandler>(ConnectionTypeAuthenticationDefaults.AuthenticationSchemeOtlp, o => o.RequiredConnectionTypes = [ConnectionType.OtlpGrpc, ConnectionType.OtlpHttp])
             .AddScheme<ConnectionTypeAuthenticationHandlerOptions, ConnectionTypeAuthenticationHandler>(ConnectionTypeAuthenticationDefaults.AuthenticationSchemeMcp, o => o.RequiredConnectionTypes = [ConnectionType.Mcp])
@@ -859,6 +874,12 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                 name: McpApiKeyAuthenticationHandler.PolicyName,
                 policy: new AuthorizationPolicyBuilder(McpCompositeAuthenticationDefaults.AuthenticationScheme)
                     .RequireClaim(McpApiKeyAuthenticationHandler.McpClaimName, [bool.TrueString])
+                    .Build());
+
+            options.AddPolicy(
+                name: ApiAuthenticationHandler.PolicyName,
+                policy: new AuthorizationPolicyBuilder(ApiAuthenticationHandler.AuthenticationScheme)
+                    .RequireAuthenticatedUser()
                     .Build());
 
             switch (dashboardOptions.Frontend.AuthMode)

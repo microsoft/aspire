@@ -56,10 +56,27 @@ internal static class AsyncTestHelpers
         }
 
         // Wrap the enumerable with an enumerable that times out after exceeding time limit on each iteration.
-        await using var enumator = asyncEnumerable.GetAsyncEnumerator();
-        while (await enumator.MoveNextAsync().DefaultTimeout(milliseconds, filePath, lineNumber))
+        var enumerator = asyncEnumerable.GetAsyncEnumerator();
+        try
         {
-            yield return enumator.Current;
+            while (await enumerator.MoveNextAsync().DefaultTimeout(milliseconds, filePath, lineNumber))
+            {
+                yield return enumerator.Current;
+            }
+        }
+        finally
+        {
+            try
+            {
+                await enumerator.DisposeAsync();
+            }
+            catch (NotSupportedException)
+            {
+                // When a timeout fires while the inner async iterator's MoveNextAsync() is still
+                // in flight, DisposeAsync() is called on an enumerator with an active MoveNextAsync().
+                // Async iterator state machines reject this with NotSupportedException. This is safe
+                // to suppress because the enumerator is being abandoned after a timeout anyway.
+            }
         }
     }
 

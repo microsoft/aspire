@@ -53,14 +53,21 @@ public sealed class EndpointReference : IManifestExpressionProvider, IValueProvi
     /// <summary>
     /// Gets a value indicating whether the endpoint uses HTTP scheme.
     /// </summary>
-    public bool IsHttp => StringComparers.EndpointAnnotationUriScheme.Equals(Scheme, "http");
+    public bool IsHttp => string.Equals(Scheme, "http", StringComparisons.EndpointAnnotationUriScheme);
 
     /// <summary>
-    ///
-    /// </summary> <summary>
     /// Gets a value indicating whether the endpoint uses HTTPS scheme.
     /// </summary>
-    public bool IsHttps => StringComparers.EndpointAnnotationUriScheme.Equals(Scheme, "https");
+    public bool IsHttps => string.Equals(Scheme, "https", StringComparisons.EndpointAnnotationUriScheme);
+
+    /// <summary>
+    /// Gets a value indicating whether TLS is enabled for this endpoint.
+    /// </summary>
+    /// <remarks>
+    /// Returns <see langword="false"/> if the endpoint annotation has not been added to the resource yet.
+    /// Once the annotation exists, this property delegates to <see cref="EndpointAnnotation.TlsEnabled"/>.
+    /// </remarks>
+    public bool TlsEnabled => Exists && EndpointAnnotation.TlsEnabled;
 
     string IManifestExpressionProvider.ValueExpression => GetExpression();
 
@@ -100,6 +107,7 @@ public sealed class EndpointReference : IManifestExpressionProvider, IValueProvi
             EndpointProperty.Scheme => Binding("scheme"),
             EndpointProperty.TargetPort => Binding("targetPort"),
             EndpointProperty.HostAndPort => $"{Binding("host")}:{Binding("port")}",
+            EndpointProperty.TlsEnabled => Binding("tlsEnabled"),
             _ => throw new InvalidOperationException($"The property '{property}' is not supported for the endpoint '{EndpointName}'.")
         };
 
@@ -114,6 +122,30 @@ public sealed class EndpointReference : IManifestExpressionProvider, IValueProvi
     public EndpointReferenceExpression Property(EndpointProperty property)
     {
         return new(this, property);
+    }
+
+    /// <summary>
+    /// Creates a conditional <see cref="ReferenceExpression"/> that resolves to <paramref name="enabledValue"/> when
+    /// <see cref="EndpointAnnotation.TlsEnabled"/> is <see langword="true"/> on this endpoint, or to
+    /// <paramref name="disabledValue"/> otherwise.
+    /// </summary>
+    /// <remarks>
+    /// The returned expression evaluates the TLS state lazily each time its value is resolved, making it
+    /// safe to embed in a <see cref="ReferenceExpression"/> that is built before TLS is configured
+    /// (e.g., before <c>BeforeStartEvent</c> fires). Because the condition and branches are declarative,
+    /// polyglot code generators can translate this into native conditional constructs in any target language.
+    /// </remarks>
+    /// <param name="enabledValue">The expression to evaluate when TLS is enabled (e.g., <c>",ssl=true"</c>).</param>
+    /// <param name="disabledValue">The expression to evaluate when TLS is not enabled.</param>
+    /// <returns>A conditional <see cref="ReferenceExpression"/> whose value tracks the TLS state of this endpoint.</returns>
+    [AspireExport(Description = "Gets a conditional expression that resolves to the enabledValue when TLS is enabled on the endpoint, or to the disabledValue otherwise.")]
+    public ReferenceExpression GetTlsValue(ReferenceExpression enabledValue, ReferenceExpression disabledValue)
+    {
+        return ReferenceExpression.CreateConditional(
+            Property(EndpointProperty.TlsEnabled),
+            bool.TrueString,
+            enabledValue,
+            disabledValue);
     }
 
     /// <summary>
@@ -141,8 +173,10 @@ public sealed class EndpointReference : IManifestExpressionProvider, IValueProvi
     /// </summary>
     public string Url => AllocatedEndpoint.UriString;
 
+#pragma warning disable CS0618 // Type or member is obsolete
     internal ValueSnapshot<AllocatedEndpoint> AllocatedEndpointSnapshot =>
         EndpointAnnotation.AllocatedEndpointSnapshot;
+#pragma warning restore CS0618 // Type or member is obsolete
 
     internal AllocatedEndpoint AllocatedEndpoint =>
         GetAllocatedEndpoint()
@@ -156,7 +190,7 @@ public sealed class EndpointReference : IManifestExpressionProvider, IValueProvi
         }
 
         _endpointAnnotation ??= Resource.Annotations.OfType<EndpointAnnotation>()
-            .SingleOrDefault(a => StringComparers.EndpointAnnotationName.Equals(a.Name, EndpointName));
+            .SingleOrDefault(a => string.Equals(a.Name, EndpointName, StringComparisons.EndpointAnnotationName));
         return _endpointAnnotation;
     }
 
@@ -170,7 +204,7 @@ public sealed class EndpointReference : IManifestExpressionProvider, IValueProvi
 
         foreach (var nes in endpointAnnotation.AllAllocatedEndpoints)
         {
-            if (StringComparers.NetworkID.Equals(nes.NetworkID, _contextNetworkID ?? KnownNetworkIdentifiers.LocalhostNetwork))
+            if (string.Equals(nes.NetworkID.Value, (_contextNetworkID ?? KnownNetworkIdentifiers.LocalhostNetwork).Value, StringComparisons.NetworkID))
             {
                 if (!nes.Snapshot.IsValueSet)
                 {
@@ -300,6 +334,7 @@ public class EndpointReferenceExpression(EndpointReference endpointReference, En
         return Property switch
         {
             EndpointProperty.Scheme => new(Endpoint.Scheme),
+            EndpointProperty.TlsEnabled => Endpoint.TlsEnabled ? bool.TrueString : bool.FalseString,
             EndpointProperty.IPV4Host when networkContext == KnownNetworkIdentifiers.LocalhostNetwork => "127.0.0.1",
             EndpointProperty.TargetPort when Endpoint.TargetPort is int port => new(port.ToString(CultureInfo.InvariantCulture)),
             _ => await ResolveValueWithAllocatedAddress().ConfigureAwait(false)
@@ -307,21 +342,8 @@ public class EndpointReferenceExpression(EndpointReference endpointReference, En
 
         async ValueTask<string?> ResolveValueWithAllocatedAddress()
         {
-            // We are going to take the first snapshot that matches the context network ID. In general there might be multiple endpoints for a single service,
-            // and in future we might need some sort of policy to choose between them, but for now we just take the first one.
             var endpointSnapshots = Endpoint.EndpointAnnotation.AllAllocatedEndpoints;
-            var nes = endpointSnapshots.Where(nes => nes.NetworkID == networkContext).FirstOrDefault();
-            if (nes is null)
-            {
-                nes = new NetworkEndpointSnapshot(new ValueSnapshot<AllocatedEndpoint>(), networkContext);
-                if (!endpointSnapshots.TryAdd(networkContext, nes.Snapshot))
-                {
-                    // Someone else added it first, use theirs.
-                    nes = endpointSnapshots.Where(nes => nes.NetworkID == networkContext).First();
-                }
-            }
-
-            var allocatedEndpoint = await nes.Snapshot.GetValueAsync(cancellationToken).ConfigureAwait(false);
+            var allocatedEndpoint = await endpointSnapshots.GetAllocatedEndpointAsync(networkContext, cancellationToken).ConfigureAwait(false);
 
             return Property switch
             {
@@ -381,5 +403,10 @@ public enum EndpointProperty
     /// <summary>
     /// The host and port of the endpoint in the format `{Host}:{Port}`.
     /// </summary>
-    HostAndPort
+    HostAndPort,
+
+    /// <summary>
+    /// Whether TLS is enabled on the endpoint. Returns <see cref="bool.TrueString"/> or <see cref="bool.FalseString"/>.
+    /// </summary>
+    TlsEnabled
 }

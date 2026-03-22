@@ -6,6 +6,7 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.DependencyInjection;
 using Aspire.Cli.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -22,7 +23,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("do --help");
 
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(0, exitCode);
     }
 
@@ -41,7 +42,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
                 var runner = new TestDotNetCliRunner
                 {
                     // Simulate a successful build
-                    BuildAsyncCallback = (projectFile, options, cancellationToken) => 0,
+                    BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
 
                     // Simulate a successful app host information retrieval
                     GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) =>
@@ -50,7 +51,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
                     },
 
                     // Simulate apphost running successfully and establishing a backchannel
-                    RunAsyncCallback = async (projectFile, watch, noBuild, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                    RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
                     {
                         Assert.True(options.NoLaunchProfile);
 
@@ -64,7 +65,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
                             RequestStopAsyncCalled = completed
                         };
                         backchannelCompletionSource?.SetResult(backchannel);
-                        await completed.Task;
+                        await completed.Task.DefaultTimeout();
                         return 0;
                     }
                 };
@@ -78,7 +79,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
 
         // Act
         var result = command.Parse("do my-custom-step");
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
         Assert.Equal(0, exitCode);
@@ -98,14 +99,14 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
             {
                 var runner = new TestDotNetCliRunner
                 {
-                    BuildAsyncCallback = (projectFile, options, cancellationToken) => 0,
+                    BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
 
                     GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) =>
                     {
                         return (0, true, VersionHelper.GetDefaultTemplateVersion());
                     },
 
-                    RunAsyncCallback = async (projectFile, watch, noBuild, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                    RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
                     {
                         // Verify that --step deploy is passed
                         Assert.Contains("--step", args);
@@ -117,7 +118,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
                             RequestStopAsyncCalled = completed
                         };
                         backchannelCompletionSource?.SetResult(backchannel);
-                        await completed.Task;
+                        await completed.Task.DefaultTimeout();
                         return 0;
                     }
                 };
@@ -131,7 +132,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
 
         // Act
         var result = command.Parse("do deploy");
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
         Assert.Equal(0, exitCode);
@@ -151,14 +152,14 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
             {
                 var runner = new TestDotNetCliRunner
                 {
-                    BuildAsyncCallback = (projectFile, options, cancellationToken) => 0,
+                    BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
 
                     GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) =>
                     {
                         return (0, true, VersionHelper.GetDefaultTemplateVersion());
                     },
 
-                    RunAsyncCallback = async (projectFile, watch, noBuild, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                    RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
                     {
                         // Verify that --step publish is passed
                         Assert.Contains("--step", args);
@@ -170,7 +171,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
                             RequestStopAsyncCalled = completed
                         };
                         backchannelCompletionSource?.SetResult(backchannel);
-                        await completed.Task;
+                        await completed.Task.DefaultTimeout();
                         return 0;
                     }
                 };
@@ -184,7 +185,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
 
         // Act
         var result = command.Parse("do publish");
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
         Assert.Equal(0, exitCode);
@@ -204,14 +205,14 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
             {
                 var runner = new TestDotNetCliRunner
                 {
-                    BuildAsyncCallback = (projectFile, options, cancellationToken) => 0,
+                    BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
 
                     GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) =>
                     {
                         return (0, true, VersionHelper.GetDefaultTemplateVersion());
                     },
 
-                    RunAsyncCallback = async (projectFile, watch, noBuild, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                    RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
                     {
                         // Verify output path is included
                         Assert.Contains("--output-path", args);
@@ -228,7 +229,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
                             RequestStopAsyncCalled = completed
                         };
                         backchannelCompletionSource?.SetResult(backchannel);
-                        await completed.Task;
+                        await completed.Task.DefaultTimeout();
                         return 0;
                     }
                 };
@@ -242,7 +243,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
 
         // Act
         var result = command.Parse("do my-step --output-path test-output");
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
         Assert.Equal(0, exitCode);
@@ -273,8 +274,8 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
 
         // Act
-        var result = command.Parse("do my-step --project invalid.csproj");
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var result = command.Parse("do my-step --apphost invalid.csproj");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
         Assert.Equal(ExitCodeConstants.FailedToFindProject, exitCode);

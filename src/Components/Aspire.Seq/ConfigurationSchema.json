@@ -72,6 +72,10 @@
                 "TimeoutMilliseconds": {
                   "type": "integer",
                   "description": "Gets or sets the max waiting time (in milliseconds) for the backend to process each batch. Default value: 10000."
+                },
+                "UserAgentProductIdentifier": {
+                  "type": "string",
+                  "description": "Gets or sets a custom user agent identifier. This will be prepended to the default user agent string."
                 }
               },
               "description": "Gets OTLP exporter options for logs."
@@ -127,6 +131,10 @@
                 "TimeoutMilliseconds": {
                   "type": "integer",
                   "description": "Gets or sets the max waiting time (in milliseconds) for the backend to process each batch. Default value: 10000."
+                },
+                "UserAgentProductIdentifier": {
+                  "type": "string",
+                  "description": "Gets or sets a custom user agent identifier. This will be prepended to the default user agent string."
                 }
               },
               "description": "Gets OTLP exporter options for traces."

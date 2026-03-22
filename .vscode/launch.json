@@ -69,6 +69,13 @@
 			"type": "coreclr",
 			"request": "attach",
 			"processId": "${command:pickProcess}"
+		},
+		{
+			"name": "Attach to Aspire MCP server",
+			"type": "coreclr",
+			"request": "attach",
+			"processId": "${command:pickProcess}",
+			"justMyCode": false
 		}
 	]
 }

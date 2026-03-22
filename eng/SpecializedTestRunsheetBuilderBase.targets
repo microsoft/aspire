@@ -34,12 +34,12 @@
     -->
 
   <!--
-    Skip Templates, Playground, and EndToEnd tests for specialized test workflows as these are known to be broken.
-    See https://github.com/dotnet/aspire/issues/11747 for tracking the work to enable these tests.
+    Skip Playground tests for specialized test workflows.
+    These still need setup that is not wired through this runsheet builder.
     -->
   <PropertyGroup>
     <_IsUnsupportedProject>false</_IsUnsupportedProject>
-    <_IsUnsupportedProject Condition="$(MSBuildProjectName.Contains('Templates')) or $(MSBuildProjectName.Contains('Playground')) or $(MSBuildProjectName.Contains('EndToEnd'))">true</_IsUnsupportedProject>
+    <_IsUnsupportedProject Condition="$(MSBuildProjectName.Contains('Playground'))">true</_IsUnsupportedProject>
   </PropertyGroup>
 
   <Target Name="RunTests"
@@ -121,19 +121,23 @@
       <_RelativeTestProjectPath>$([System.String]::Copy('$(MSBuildProjectFullPath)').Replace('$(RepoRoot)', '%24(pwd)/'))</_RelativeTestProjectPath>
       <_RelativeTestBinLog>$([System.String]::Copy('$(_TestBinLog)').Replace('$(RepoRoot)', '%24(pwd)/'))</_RelativeTestBinLog>
 
-      <!--
-        Determine if this test project requires nugets.
-        Templates, Playground, and EndToEnd tests require built nugets.
-        -->
       <_RequiresNugets>false</_RequiresNugets>
-      <_RequiresNugets Condition="$(MSBuildProjectName.Contains('Templates')) or $(MSBuildProjectName.Contains('Playground')) or $(MSBuildProjectName.Contains('EndToEnd'))">true</_RequiresNugets>
+      <_RequiresNugets Condition="'$(RequiresNugets)' == 'true'">true</_RequiresNugets>
 
-      <!--
-        Determine if this test project requires test SDK.
-        Template tests require the test SDK.
-        -->
       <_RequiresTestSdk>false</_RequiresTestSdk>
-      <_RequiresTestSdk Condition="$(MSBuildProjectName.Contains('Templates'))">true</_RequiresTestSdk>
+      <_RequiresTestSdk Condition="'$(RequiresTestSdk)' == 'true'">true</_RequiresTestSdk>
+
+      <_RequiresCliArchive>false</_RequiresCliArchive>
+      <_RequiresCliArchive Condition="'$(RequiresCliArchive)' == 'true'">true</_RequiresCliArchive>
+
+      <_GithubActionsRunnerWindows>windows-latest</_GithubActionsRunnerWindows>
+      <_GithubActionsRunnerWindows Condition="'$(GithubActionsRunnerWindows)' != ''">$(GithubActionsRunnerWindows)</_GithubActionsRunnerWindows>
+
+      <_GithubActionsRunnerLinux>ubuntu-latest</_GithubActionsRunnerLinux>
+      <_GithubActionsRunnerLinux Condition="'$(GithubActionsRunnerLinux)' != ''">$(GithubActionsRunnerLinux)</_GithubActionsRunnerLinux>
+
+      <_GithubActionsRunnerMacOS>macos-latest</_GithubActionsRunnerMacOS>
+      <_GithubActionsRunnerMacOS Condition="'$(GithubActionsRunnerMacOS)' != ''">$(GithubActionsRunnerMacOS)</_GithubActionsRunnerMacOS>
 
       <_TestRunnerWindows>./eng/build.ps1</_TestRunnerWindows>
       <_TestRunnerLinux>./eng/build.sh</_TestRunnerLinux>
@@ -149,9 +153,9 @@
       <!-- Replace \ with /, and then escape " with \", so we have a compliant JSON -->
       <_TestCommand>$([System.String]::Copy($(_TestCommand)).Replace("\", "/").Replace('&quot;', '\&quot;'))</_TestCommand>
 
-      <_TestRunsheetWindows>{ "label": "w: $(_TestRunsheet)", "project": "$(_TestRunsheet)", "os": "windows-latest", "command": "./eng/build.ps1 $(_TestCommand)", "requiresNugets": $(_RequiresNugets), "requiresTestSdk": $(_RequiresTestSdk) }</_TestRunsheetWindows>
-      <_TestRunsheetLinux>{ "label": "l: $(_TestRunsheet)", "project": "$(_TestRunsheet)", "os": "ubuntu-latest", "command": "./eng/build.sh $(_TestCommand)", "requiresNugets": $(_RequiresNugets), "requiresTestSdk": $(_RequiresTestSdk) }</_TestRunsheetLinux>
-      <_TestRunsheetMacOS>{ "label": "m: $(_TestRunsheet)", "project": "$(_TestRunsheet)", "os": "macos-latest", "command": "./eng/build.sh $(_TestCommand)", "requiresNugets": $(_RequiresNugets), "requiresTestSdk": $(_RequiresTestSdk) }</_TestRunsheetMacOS>
+      <_TestRunsheetWindows>{ "label": "w: $(_TestRunsheet)", "project": "$(_TestRunsheet)", "os": "$(_GithubActionsRunnerWindows)", "command": "./eng/build.ps1 $(_TestCommand)", "requiresNugets": $(_RequiresNugets), "requiresTestSdk": $(_RequiresTestSdk), "requiresCliArchive": $(_RequiresCliArchive) }</_TestRunsheetWindows>
+      <_TestRunsheetLinux>{ "label": "l: $(_TestRunsheet)", "project": "$(_TestRunsheet)", "os": "$(_GithubActionsRunnerLinux)", "command": "./eng/build.sh $(_TestCommand)", "requiresNugets": $(_RequiresNugets), "requiresTestSdk": $(_RequiresTestSdk), "requiresCliArchive": $(_RequiresCliArchive) }</_TestRunsheetLinux>
+      <_TestRunsheetMacOS>{ "label": "m: $(_TestRunsheet)", "project": "$(_TestRunsheet)", "os": "$(_GithubActionsRunnerMacOS)", "command": "./eng/build.sh $(_TestCommand)", "requiresNugets": $(_RequiresNugets), "requiresTestSdk": $(_RequiresTestSdk), "requiresCliArchive": $(_RequiresCliArchive) }</_TestRunsheetMacOS>
     </PropertyGroup>
 
     <WriteLinesToFile

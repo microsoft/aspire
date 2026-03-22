@@ -68,8 +68,29 @@
       IsResourceBuilder: true,
       IsDistributedApplicationBuilder: false,
       IsDistributedApplication: false
+    },
+    {
+      TypeId: Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestDatabaseResource,
+      ClrType: TestDatabaseResource,
+      Category: Handle,
+      IsInterface: false,
+      IsReadOnly: false,
+      IsResourceBuilder: true,
+      IsDistributedApplicationBuilder: false,
+      IsDistributedApplication: false
+    },
+    {
+      TypeId: Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestVaultResource,
+      ClrType: TestVaultResource,
+      Category: Handle,
+      IsInterface: false,
+      IsReadOnly: false,
+      IsResourceBuilder: true,
+      IsDistributedApplicationBuilder: false,
+      IsDistributedApplication: false
     }
   ],
   ReturnsBuilder: true,
-  SourceLocation: Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestExtensions.WithOptionalString
+  SourceLocation: Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestExtensions.WithOptionalString,
+  RunSyncOnBackgroundThread: false
 }

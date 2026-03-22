@@ -156,8 +156,8 @@ builder.AddKafkaConsumer<string, string>("messaging");
 ## Additional documentation
 
 * https://docs.confluent.io/kafka-clients/dotnet/current/overview.html
-* https://github.com/dotnet/aspire/tree/main/src/Components/README.md
+* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

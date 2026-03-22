@@ -49,6 +49,6 @@ Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPE
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire
 
 _Qdrant, and the Qdrant logo are trademarks or registered trademarks of Qdrant Solutions GmbH of Germany, and used with their permission._

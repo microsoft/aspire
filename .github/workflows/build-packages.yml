@@ -6,93 +6,30 @@ on:
       versionOverrideArg:
         required: false
         type: string
-    outputs:
-      arch_rids:
-        description: JSON array of architecture-specific RIDs discovered during packaging
-        value: ${{ jobs.build_packages.outputs.arch_rids }}
 
 jobs:
   build_packages:
     name: Build packages
     runs-on: 8-core-ubuntu-latest
-    outputs:
-      arch_rids: ${{ steps.stage_rid_specific.outputs.rids }}
     steps:
       - name: Checkout code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - name: Install VSCE tool
-        run: npm i -g @vscode/vsce@3.7.1
-
       - name: Build with packages
-        run: ./build.sh -restore -build -build-extension -ci -pack -bl -p:InstallBrowsersForPlaywright=false -p:SkipTestProjects=true -p:SkipPlaygroundProjects=true ${{ inputs.versionOverrideArg }}
+        run: ./build.sh -restore -build -ci -pack -bl -p:InstallBrowsersForPlaywright=false -p:SkipTestProjects=true -p:SkipPlaygroundProjects=true -p:SkipBundleDeps=true ${{ inputs.versionOverrideArg }}
 
       - name: Clean up artifacts
         run: |
           rm -rf artifacts/bin
           rm -rf artifacts/obj
 
-      - name: Stage RID-specific NuGets and remaining packages
-        id: stage_rid_specific
-        shell: bash
-        run: |
-          set -euo pipefail
-          set -x
-          shopt -s nullglob
-          mkdir -p staging/built-nugets staging/rid
-          # Copy full packages tree first (so structure expected by downstream tests is preserved)
-          rsync -a artifacts/packages/ staging/built-nugets/
-
-          declare -A RID_SET=()
-          # Find target packages (dcp and dashboard)
-          while IFS= read -r -d '' pkg; do
-            bn="$(basename "$pkg")"
-            rid=""
-            if [[ $bn =~ ^Aspire\.Hosting\.Orchestration\.([^.]+)\..*\.nupkg$ ]]; then
-              rid="${BASH_REMATCH[1]}"
-            elif [[ $bn =~ ^Aspire\.Dashboard\.Sdk\.([^.]+)\..*\.nupkg$ ]]; then
-              rid="${BASH_REMATCH[1]}"
-            else
-              continue
-            fi
-            if [[ -n $rid ]]; then
-              RID_SET["$rid"]=1
-              mkdir -p "staging/rid/$rid"
-              cp "$pkg" "staging/rid/$rid/"
-              # Remove from built-nugets staging copy so it is excluded there
-              rel="${pkg#artifacts/packages/}"
-              rm -f "staging/built-nugets/$rel" || true
-            fi
-          done < <(find artifacts/packages -type f \( -name 'Aspire.Hosting.Orchestration.*.nupkg' -o -name 'Aspire.Dashboard.Sdk.*.nupkg' \) -print0)
-
-          # Build JSON array of RIDs
-          if (( ${#RID_SET[@]} )); then
-            printf '%s\n' "${!RID_SET[@]}" | sort -u > /tmp/rids.txt
-            # Build a compact single-line JSON array (avoid pretty-print newlines which break $GITHUB_OUTPUT)
-            json=$(jq -R . < /tmp/rids.txt | jq -s -c .)
-          else
-            json='[]'
-          fi
-          echo "Discovered RIDs: $json"
-          # Use printf to safely write (single line) to GITHUB_OUTPUT
-          printf 'rids=%s\n' "$json" >> "$GITHUB_OUTPUT"
-
-      - name: Upload built NuGets (excluding RID-specific orchestration/dashboard)
+      - name: Upload built NuGets
         uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
         with:
           name: built-nugets
-          path: staging/built-nugets
+          path: artifacts/packages
           if-no-files-found: error
           retention-days: 15
-
-      - name: Upload consolidated RID-specific NuGets
-        if: ${{ steps.stage_rid_specific.outputs.rids != '[]' }}
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
-        with:
-          name: built-nugets-for-rid-all
-          path: staging/rid
-          if-no-files-found: error
-          retention-days: 1
 
       # Always upload logs, even if the build fails, to enable debugging
       - name: Upload logs
@@ -102,28 +39,4 @@ jobs:
           name: build_packages_logs
           path: artifacts/log
           retention-days: 5
-
-  upload_arch_specific_nugets:
-    name: Upload arch-specific NuGets
-    needs: build_packages
-    if: ${{ needs.build_packages.outputs.arch_rids != '[]' }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        rid: ${{ fromJson(needs.build_packages.outputs.arch_rids) }}
-    steps:
-      - name: Download consolidated RID-specific NuGets
-        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
-        with:
-          name: built-nugets-for-rid-all
-          path: rid-nugets
-
-      - name: Upload per-RID NuGets
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
-        with:
-          name: built-nugets-for-${{ matrix.rid }}
-          path: rid-nugets/${{ matrix.rid }}/*.nupkg
-          if-no-files-found: error
-          retention-days: 15
 

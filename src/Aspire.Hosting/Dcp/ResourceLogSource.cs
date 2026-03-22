@@ -20,9 +20,19 @@ internal sealed class ResourceLogSource<TResource>(
 {
     public async IAsyncEnumerator<LogEntryList> GetAsyncEnumerator(CancellationToken cancellationToken)
     {
+        // For follow mode, we require a cancellable token to stop streaming.
+        // For non-follow mode (snapshot), streams complete naturally so we create our own cancellable token if needed.
+        CancellationTokenSource? ownedCts = null;
         if (!cancellationToken.CanBeCanceled)
         {
-            throw new ArgumentException("Cancellation token must be cancellable in order to prevent leaking resources.", nameof(cancellationToken));
+            if (follow)
+            {
+                throw new ArgumentException("Cancellation token must be cancellable in order to prevent leaking resources when following logs.", nameof(cancellationToken));
+            }
+            // Create our own cancellable token for the APIs that require it.
+            // For non-follow mode, streams complete naturally when all logs are read.
+            ownedCts = new CancellationTokenSource();
+            cancellationToken = ownedCts.Token;
         }
 
         var channel = Channel.CreateUnbounded<LogEntry>(new UnboundedChannelOptions
@@ -31,45 +41,6 @@ internal sealed class ResourceLogSource<TResource>(
             SingleReader = true,
             SingleWriter = false
         });
-
-        var streamTasks = new List<Task>();
-
-        var startupStderrStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeStartupStdErr, cancellationToken, follow: follow, timestamps: true).ConfigureAwait(false);
-        var startupStdoutStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeStartupStdOut, cancellationToken, follow: follow, timestamps: true).ConfigureAwait(false);
-
-        var startupStdoutStreamTask = Task.Run(() => StreamLogsAsync(startupStdoutStream, isError: false, parseDcpLogs: false), cancellationToken);
-        streamTasks.Add(startupStdoutStreamTask);
-
-        var startupStderrStreamTask = Task.Run(() => StreamLogsAsync(startupStderrStream, isError: false, parseDcpLogs: false), cancellationToken);
-        streamTasks.Add(startupStderrStreamTask);
-
-        var stdoutStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeStdOut, cancellationToken, follow: follow, timestamps: true).ConfigureAwait(false);
-        var stderrStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeStdErr, cancellationToken, follow: follow, timestamps: true).ConfigureAwait(false);
-
-        var stdoutStreamTask = Task.Run(() => StreamLogsAsync(stdoutStream, isError: false, parseDcpLogs: false), cancellationToken);
-        streamTasks.Add(stdoutStreamTask);
-
-        var stderrStreamTask = Task.Run(() => StreamLogsAsync(stderrStream, isError: true, parseDcpLogs: false), cancellationToken);
-        streamTasks.Add(stderrStreamTask);
-
-        var systemStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeSystem, cancellationToken, follow: follow, timestamps: true).ConfigureAwait(false);
-
-        var systemStreamTask = Task.Run(() => StreamLogsAsync(systemStream, isError: false, parseDcpLogs: true), cancellationToken);
-        streamTasks.Add(systemStreamTask);
-
-        // End the enumeration when both streams have been read to completion.
-        async Task WaitForStreamsToCompleteAsync()
-        {
-            await Task.WhenAll(streamTasks).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
-            channel.Writer.TryComplete();
-        }
-
-        _ = WaitForStreamsToCompleteAsync();
-
-        await foreach (var batch in channel.GetBatchesAsync(cancellationToken: cancellationToken).ConfigureAwait(false))
-        {
-            yield return batch;
-        }
 
         async Task StreamLogsAsync(Stream stream, bool isError, bool parseDcpLogs)
         {
@@ -110,6 +81,52 @@ internal sealed class ResourceLogSource<TResource>(
                 logger.LogError(ex, "Unexpected error happened when capturing logs for {Kind} {Name}", resource.Kind, resource.Metadata.Name);
                 channel.Writer.TryComplete(ex);
             }
+        }
+
+        try
+        {
+            var streamTasks = new List<Task>();
+
+            var startupStderrStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeStartupStdErr, cancellationToken, follow: follow, timestamps: true).ConfigureAwait(false);
+            var startupStdoutStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeStartupStdOut, cancellationToken, follow: follow, timestamps: true).ConfigureAwait(false);
+
+            var startupStdoutStreamTask = Task.Run(() => StreamLogsAsync(startupStdoutStream, isError: false, parseDcpLogs: false), cancellationToken);
+            streamTasks.Add(startupStdoutStreamTask);
+
+            var startupStderrStreamTask = Task.Run(() => StreamLogsAsync(startupStderrStream, isError: false, parseDcpLogs: false), cancellationToken);
+            streamTasks.Add(startupStderrStreamTask);
+
+            var stdoutStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeStdOut, cancellationToken, follow: follow, timestamps: true).ConfigureAwait(false);
+            var stderrStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeStdErr, cancellationToken, follow: follow, timestamps: true).ConfigureAwait(false);
+
+            var stdoutStreamTask = Task.Run(() => StreamLogsAsync(stdoutStream, isError: false, parseDcpLogs: false), cancellationToken);
+            streamTasks.Add(stdoutStreamTask);
+
+            var stderrStreamTask = Task.Run(() => StreamLogsAsync(stderrStream, isError: true, parseDcpLogs: false), cancellationToken);
+            streamTasks.Add(stderrStreamTask);
+
+            var systemStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeSystem, cancellationToken, follow: follow, timestamps: true).ConfigureAwait(false);
+
+            var systemStreamTask = Task.Run(() => StreamLogsAsync(systemStream, isError: false, parseDcpLogs: true), cancellationToken);
+            streamTasks.Add(systemStreamTask);
+
+            // End the enumeration when all streams have been read to completion.
+            async Task WaitForStreamsToCompleteAsync()
+            {
+                await Task.WhenAll(streamTasks).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+                channel.Writer.TryComplete();
+            }
+
+            _ = WaitForStreamsToCompleteAsync();
+
+            await foreach (var batch in channel.GetBatchesAsync(cancellationToken: cancellationToken).ConfigureAwait(false))
+            {
+                yield return batch;
+            }
+        }
+        finally
+        {
+            ownedCts?.Dispose();
         }
     }
 }

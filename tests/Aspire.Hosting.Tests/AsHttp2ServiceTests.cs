@@ -5,6 +5,7 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "2")]
 public class AsHttp2ServiceTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]

@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Tests.Dashboard;
 
+[Trait("Partition", "3")]
 public class DashboardOptionsTests
 {
     [Theory]

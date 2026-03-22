@@ -7,6 +7,7 @@ using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Model.Assistant.Prompts;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Resources;
+using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -101,7 +102,8 @@ public sealed class StructuredLogMenuBuilder
                     DialogService = _dialogService,
                     ValueDescription = result.FileName,
                     Value = result.Content,
-                    DownloadFileName = result.FileName
+                    DownloadFileName = result.FileName,
+                    FixedFormat = DashboardUIHelpers.JsonFormat
                 }).ConfigureAwait(false);
             }
         });

@@ -3,9 +3,9 @@
 
 using System.Runtime.InteropServices;
 using Aspire.Cli.Certificates;
-using Aspire.Cli.DotNet;
-using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Microsoft.AspNetCore.Certificates.Generation;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Cli.Tests.Certificates;
@@ -18,27 +18,27 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.DotNetCliRunnerFactory = sp =>
+            options.CertificateToolRunnerFactory = sp =>
             {
-                var runner = new TestDotNetCliRunner();
-                runner.CheckHttpCertificateMachineReadableAsyncCallback = (_, _) =>
+                return new TestCertificateToolRunner
                 {
-                    return (0, new CertificateTrustResult
+                    CheckHttpCertificateCallback = () =>
                     {
-                        HasCertificates = true,
-                        TrustLevel = DevCertTrustLevel.Full,
-                        Certificates = [new DevCertInfo { Version = 5, TrustLevel = DevCertTrustLevel.Full, IsHttpsDevelopmentCertificate = true, ValidityNotBefore = DateTimeOffset.Now.AddDays(-1), ValidityNotAfter = DateTimeOffset.Now.AddDays(365) }]
-                    });
+                        return new CertificateTrustResult
+                        {
+                            HasCertificates = true,
+                            TrustLevel = CertificateManager.TrustLevel.Full,
+                            Certificates = [new DevCertInfo { Version = 5, TrustLevel = CertificateManager.TrustLevel.Full, IsHttpsDevelopmentCertificate = true, ValidityNotBefore = DateTimeOffset.Now.AddDays(-1), ValidityNotAfter = DateTimeOffset.Now.AddDays(365) }]
+                        };
+                    }
                 };
-                return runner;
             };
         });
 
         var sp = services.BuildServiceProvider();
         var cs = sp.GetRequiredService<ICertificateService>();
-        var runner = sp.GetRequiredService<IDotNetCliRunner>();
 
-        var result = await cs.EnsureCertificatesTrustedAsync(runner, TestContext.Current.CancellationToken).WaitAsync(CliTestConstants.DefaultTimeout);
+        var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
 
         Assert.NotNull(result);
         Assert.Empty(result.EnvironmentVariables);
@@ -52,44 +52,44 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.DotNetCliRunnerFactory = sp =>
+            options.CertificateToolRunnerFactory = sp =>
             {
-                var runner = new TestDotNetCliRunner();
                 var callCount = 0;
-                runner.CheckHttpCertificateMachineReadableAsyncCallback = (_, _) =>
+                return new TestCertificateToolRunner
                 {
-                    callCount++;
-                    // First call returns not trusted, second call (after trust) returns fully trusted
-                    if (callCount == 1)
+                    CheckHttpCertificateCallback = () =>
                     {
-                        return (0, new CertificateTrustResult
+                        callCount++;
+                        // First call returns not trusted, second call (after trust) returns fully trusted
+                        if (callCount == 1)
+                        {
+                            return new CertificateTrustResult
+                            {
+                                HasCertificates = true,
+                                TrustLevel = CertificateManager.TrustLevel.None,
+                                Certificates = [new DevCertInfo { Version = 5, TrustLevel = CertificateManager.TrustLevel.None, IsHttpsDevelopmentCertificate = true, ValidityNotBefore = DateTimeOffset.Now.AddDays(-1), ValidityNotAfter = DateTimeOffset.Now.AddDays(365) }]
+                            };
+                        }
+                        return new CertificateTrustResult
                         {
                             HasCertificates = true,
-                            TrustLevel = DevCertTrustLevel.None,
-                            Certificates = [new DevCertInfo { Version = 5, TrustLevel = DevCertTrustLevel.None, IsHttpsDevelopmentCertificate = true, ValidityNotBefore = DateTimeOffset.Now.AddDays(-1), ValidityNotAfter = DateTimeOffset.Now.AddDays(365) }]
-                        });
-                    }
-                    return (0, new CertificateTrustResult
+                            TrustLevel = CertificateManager.TrustLevel.Full,
+                            Certificates = [new DevCertInfo { Version = 5, TrustLevel = CertificateManager.TrustLevel.Full, IsHttpsDevelopmentCertificate = true, ValidityNotBefore = DateTimeOffset.Now.AddDays(-1), ValidityNotAfter = DateTimeOffset.Now.AddDays(365) }]
+                        };
+                    },
+                    TrustHttpCertificateCallback = () =>
                     {
-                        HasCertificates = true,
-                        TrustLevel = DevCertTrustLevel.Full,
-                        Certificates = [new DevCertInfo { Version = 5, TrustLevel = DevCertTrustLevel.Full, IsHttpsDevelopmentCertificate = true, ValidityNotBefore = DateTimeOffset.Now.AddDays(-1), ValidityNotAfter = DateTimeOffset.Now.AddDays(365) }]
-                    });
+                        trustCalled = true;
+                        return EnsureCertificateResult.ExistingHttpsCertificateTrusted;
+                    }
                 };
-                runner.TrustHttpCertificateAsyncCallback = (_, _) =>
-                {
-                    trustCalled = true;
-                    return 0;
-                };
-                return runner;
             };
         });
 
         var sp = services.BuildServiceProvider();
         var cs = sp.GetRequiredService<ICertificateService>();
-        var runner = sp.GetRequiredService<IDotNetCliRunner>();
 
-        var result = await cs.EnsureCertificatesTrustedAsync(runner, TestContext.Current.CancellationToken).WaitAsync(CliTestConstants.DefaultTimeout);
+        var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
 
         Assert.True(trustCalled);
         Assert.NotNull(result);
@@ -108,27 +108,27 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.DotNetCliRunnerFactory = sp =>
+            options.CertificateToolRunnerFactory = sp =>
             {
-                var runner = new TestDotNetCliRunner();
-                runner.CheckHttpCertificateMachineReadableAsyncCallback = (_, _) =>
+                return new TestCertificateToolRunner
                 {
-                    return (0, new CertificateTrustResult
+                    CheckHttpCertificateCallback = () =>
                     {
-                        HasCertificates = true,
-                        TrustLevel = DevCertTrustLevel.Partial,
-                        Certificates = [new DevCertInfo { Version = 5, TrustLevel = DevCertTrustLevel.Partial, IsHttpsDevelopmentCertificate = true, ValidityNotBefore = DateTimeOffset.Now.AddDays(-1), ValidityNotAfter = DateTimeOffset.Now.AddDays(365) }]
-                    });
+                        return new CertificateTrustResult
+                        {
+                            HasCertificates = true,
+                            TrustLevel = CertificateManager.TrustLevel.Partial,
+                            Certificates = [new DevCertInfo { Version = 5, TrustLevel = CertificateManager.TrustLevel.Partial, IsHttpsDevelopmentCertificate = true, ValidityNotBefore = DateTimeOffset.Now.AddDays(-1), ValidityNotAfter = DateTimeOffset.Now.AddDays(365) }]
+                        };
+                    }
                 };
-                return runner;
             };
         });
 
         var sp = services.BuildServiceProvider();
         var cs = sp.GetRequiredService<ICertificateService>();
-        var runner = sp.GetRequiredService<IDotNetCliRunner>();
 
-        var result = await cs.EnsureCertificatesTrustedAsync(runner, TestContext.Current.CancellationToken).WaitAsync(CliTestConstants.DefaultTimeout);
+        var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
 
         Assert.NotNull(result);
         Assert.True(result.EnvironmentVariables.ContainsKey("SSL_CERT_DIR"));
@@ -143,44 +143,44 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.DotNetCliRunnerFactory = sp =>
+            options.CertificateToolRunnerFactory = sp =>
             {
-                var runner = new TestDotNetCliRunner();
                 var callCount = 0;
-                runner.CheckHttpCertificateMachineReadableAsyncCallback = (_, _) =>
+                return new TestCertificateToolRunner
                 {
-                    callCount++;
-                    // First call returns no certificates, second call (after trust) returns fully trusted
-                    if (callCount == 1)
+                    CheckHttpCertificateCallback = () =>
                     {
-                        return (0, new CertificateTrustResult
+                        callCount++;
+                        // First call returns no certificates, second call (after trust) returns fully trusted
+                        if (callCount == 1)
                         {
-                            HasCertificates = false,
-                            TrustLevel = null,
-                            Certificates = []
-                        });
-                    }
-                    return (0, new CertificateTrustResult
+                            return new CertificateTrustResult
+                            {
+                                HasCertificates = false,
+                                TrustLevel = null,
+                                Certificates = []
+                            };
+                        }
+                        return new CertificateTrustResult
+                        {
+                            HasCertificates = true,
+                            TrustLevel = CertificateManager.TrustLevel.Full,
+                            Certificates = [new DevCertInfo { Version = 5, TrustLevel = CertificateManager.TrustLevel.Full, IsHttpsDevelopmentCertificate = true, ValidityNotBefore = DateTimeOffset.Now.AddDays(-1), ValidityNotAfter = DateTimeOffset.Now.AddDays(365) }]
+                        };
+                    },
+                    TrustHttpCertificateCallback = () =>
                     {
-                        HasCertificates = true,
-                        TrustLevel = DevCertTrustLevel.Full,
-                        Certificates = [new DevCertInfo { Version = 5, TrustLevel = DevCertTrustLevel.Full, IsHttpsDevelopmentCertificate = true, ValidityNotBefore = DateTimeOffset.Now.AddDays(-1), ValidityNotAfter = DateTimeOffset.Now.AddDays(365) }]
-                    });
+                        trustCalled = true;
+                        return EnsureCertificateResult.NewHttpsCertificateTrusted;
+                    }
                 };
-                runner.TrustHttpCertificateAsyncCallback = (_, _) =>
-                {
-                    trustCalled = true;
-                    return 0;
-                };
-                return runner;
             };
         });
 
         var sp = services.BuildServiceProvider();
         var cs = sp.GetRequiredService<ICertificateService>();
-        var runner = sp.GetRequiredService<IDotNetCliRunner>();
 
-        var result = await cs.EnsureCertificatesTrustedAsync(runner, TestContext.Current.CancellationToken).WaitAsync(CliTestConstants.DefaultTimeout);
+        var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
 
         Assert.True(trustCalled);
         Assert.NotNull(result);
@@ -192,34 +192,64 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.DotNetCliRunnerFactory = sp =>
+            options.CertificateToolRunnerFactory = sp =>
             {
-                var runner = new TestDotNetCliRunner();
-                runner.CheckHttpCertificateMachineReadableAsyncCallback = (_, _) =>
+                return new TestCertificateToolRunner
                 {
-                    return (0, new CertificateTrustResult
+                    CheckHttpCertificateCallback = () =>
                     {
-                        HasCertificates = true,
-                        TrustLevel = DevCertTrustLevel.None,
-                        Certificates = [new DevCertInfo { Version = 5, TrustLevel = DevCertTrustLevel.None, IsHttpsDevelopmentCertificate = true, ValidityNotBefore = DateTimeOffset.Now.AddDays(-1), ValidityNotAfter = DateTimeOffset.Now.AddDays(365) }]
-                    });
+                        return new CertificateTrustResult
+                        {
+                            HasCertificates = true,
+                            TrustLevel = CertificateManager.TrustLevel.None,
+                            Certificates = [new DevCertInfo { Version = 5, TrustLevel = CertificateManager.TrustLevel.None, IsHttpsDevelopmentCertificate = true, ValidityNotBefore = DateTimeOffset.Now.AddDays(-1), ValidityNotAfter = DateTimeOffset.Now.AddDays(365) }]
+                        };
+                    },
+                    TrustHttpCertificateCallback = () =>
+                    {
+                        return EnsureCertificateResult.FailedToTrustTheCertificate;
+                    }
                 };
-                runner.TrustHttpCertificateAsyncCallback = (options, _) =>
-                {
-                    Assert.NotNull(options.StandardErrorCallback);
-                    options.StandardErrorCallback!.Invoke("There was an error trusting the HTTPS developer certificate. It will be trusted by some clients but not by others.");
-                    return 4;
-                };
-                return runner;
             };
         });
 
         var sp = services.BuildServiceProvider();
         var cs = sp.GetRequiredService<ICertificateService>();
-        var runner = sp.GetRequiredService<IDotNetCliRunner>();
 
         // If this does not throw then the code is behaving correctly.
-        var result = await cs.EnsureCertificatesTrustedAsync(runner, TestContext.Current.CancellationToken).WaitAsync(CliTestConstants.DefaultTimeout);
+        var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
         Assert.NotNull(result);
+    }
+
+    private sealed class TestCertificateToolRunner : ICertificateToolRunner
+    {
+        public Func<CertificateTrustResult>? CheckHttpCertificateCallback { get; set; }
+        public Func<EnsureCertificateResult>? TrustHttpCertificateCallback { get; set; }
+
+        public CertificateTrustResult CheckHttpCertificate()
+        {
+            if (CheckHttpCertificateCallback is not null)
+            {
+                return CheckHttpCertificateCallback();
+            }
+
+            // Default: Return a fully trusted certificate result
+            return new CertificateTrustResult
+            {
+                HasCertificates = true,
+                TrustLevel = CertificateManager.TrustLevel.Full,
+                Certificates = []
+            };
+        }
+
+        public EnsureCertificateResult TrustHttpCertificate()
+        {
+            return TrustHttpCertificateCallback is not null
+                ? TrustHttpCertificateCallback()
+                : EnsureCertificateResult.ExistingHttpsCertificateTrusted;
+        }
+
+        public CertificateCleanResult CleanHttpCertificate()
+            => new CertificateCleanResult { Success = true };
     }
 }

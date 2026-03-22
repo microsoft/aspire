@@ -20,7 +20,8 @@ public static class AzureProvisioningResourceExtensions
     /// <param name="builder">The distributed application builder.</param>
     /// <param name="name">The name of the resource being added.</param>
     /// <param name="configureInfrastructure">A callback used to configure the infrastructure resource.</param>
-    /// <returns></returns>
+    /// <returns>A resource builder for the <see cref="AzureProvisioningResource"/> that can be used for further configuration.</returns>
+    [AspireExport("addAzureInfrastructure", Description = "Adds an Azure provisioning resource to the application model")]
     public static IResourceBuilder<AzureProvisioningResource> AddAzureInfrastructure(this IDistributedApplicationBuilder builder, [ResourceName] string name, Action<AzureResourceInfrastructure> configureInfrastructure)
     {
         builder.AddAzureProvisioning();
@@ -36,6 +37,7 @@ public static class AzureProvisioningResourceExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="configure">The configuration callback.</param>
     /// <returns>The resource builder.</returns>
+    [AspireExport("configureInfrastructure", Description = "Configures the Azure provisioning infrastructure callback")]
     public static IResourceBuilder<T> ConfigureInfrastructure<T>(this IResourceBuilder<T> builder, Action<AzureResourceInfrastructure> configure)
         where T : AzureProvisioningResource
     {
@@ -59,6 +61,8 @@ public static class AzureProvisioningResourceExtensions
     /// <returns>
     /// The <see cref="KeyVaultSecret"/> instance corresponding to the given secret reference.
     /// </returns>
+    /// <remarks>This method is not available in polyglot app hosts.</remarks>
+    [AspireExportIgnore(Reason = "KeyVaultSecret is an Azure.Provisioning type not compatible with ATS.")]
     public static KeyVaultSecret AsKeyVaultSecret(this IAzureKeyVaultSecretReference secretReference, AzureResourceInfrastructure infrastructure)
     {
         ArgumentNullException.ThrowIfNull(secretReference);
@@ -116,10 +120,11 @@ public static class AzureProvisioningResourceExtensions
     /// The corresponding <see cref="ProvisioningParameter"/> that was found or newly created.
     /// </returns>
     /// <remarks>
-    /// This is useful when assigning a <see cref="BicepValue"/> to the value of an Aspire <see cref="ParameterResource"/>.
+    /// This method is not available in polyglot app hosts.
     /// </remarks>
     [SuppressMessage("ApiDesign", "RS0026:Do not add multiple public overloads with optional parameters",
         Justification = "The 'this' arguments are mutually exclusive")]
+    [AspireExportIgnore(Reason = "ProvisioningParameter is an Azure.Provisioning type not compatible with ATS.")]
     public static ProvisioningParameter AsProvisioningParameter(this IResourceBuilder<ParameterResource> parameterResourceBuilder, AzureResourceInfrastructure infrastructure, string? parameterName = null)
     {
         ArgumentNullException.ThrowIfNull(parameterResourceBuilder);
@@ -130,12 +135,17 @@ public static class AzureProvisioningResourceExtensions
 
     /// <summary>
     /// Creates a new <see cref="ProvisioningParameter"/> in <paramref name="infrastructure"/>, or reuses an existing bicep parameter if one with
+    /// the same name already exists, that corresponds to the given <paramref name="manifestExpressionProvider"/>.
     /// </summary>
     /// <param name="manifestExpressionProvider">The <see cref="IManifestExpressionProvider"/> that represents the value to use for the <see cref="ProvisioningParameter"/>. </param>
     /// <param name="infrastructure">The <see cref="AzureResourceInfrastructure"/> that contains the <see cref="ProvisioningParameter"/>.</param>
     /// <param name="parameterName">The name of the parameter to be assigned.</param>
     /// <param name="isSecure">Indicates whether the parameter is secure.</param>
-    /// <returns></returns>
+    /// <returns>
+    /// The corresponding <see cref="ProvisioningParameter"/> that was found or newly created.
+    /// </returns>
+    /// <remarks>This method is not available in polyglot app hosts.</remarks>
+    [AspireExportIgnore(Reason = "ProvisioningParameter is an Azure.Provisioning type not compatible with ATS.")]
     public static ProvisioningParameter AsProvisioningParameter(this IManifestExpressionProvider manifestExpressionProvider, AzureResourceInfrastructure infrastructure, string? parameterName = null, bool? isSecure = null)
     {
         ArgumentNullException.ThrowIfNull(manifestExpressionProvider);
@@ -162,10 +172,11 @@ public static class AzureProvisioningResourceExtensions
     /// The corresponding <see cref="ProvisioningParameter"/> that was found or newly created.
     /// </returns>
     /// <remarks>
-    /// This is useful when assigning a <see cref="BicepValue"/> to the value of an Aspire <see cref="ParameterResource"/>.
+    /// This method is not available in polyglot app hosts.
     /// </remarks>
     [SuppressMessage("ApiDesign", "RS0026:Do not add multiple public overloads with optional parameters",
         Justification = "The 'this' arguments are mutually exclusive")]
+    [AspireExportIgnore(Reason = "ProvisioningParameter is an Azure.Provisioning type not compatible with ATS.")]
     public static ProvisioningParameter AsProvisioningParameter(this ParameterResource parameterResource, AzureResourceInfrastructure infrastructure, string? parameterName = null)
     {
         ArgumentNullException.ThrowIfNull(parameterResource);
@@ -191,10 +202,11 @@ public static class AzureProvisioningResourceExtensions
     /// The corresponding <see cref="ProvisioningParameter"/> that was found or newly created.
     /// </returns>
     /// <remarks>
-    /// This is useful when assigning a <see cref="BicepValue"/> to the value of an Aspire <see cref="BicepOutputReference"/>.
+    /// This method is not available in polyglot app hosts.
     /// </remarks>
     [SuppressMessage("ApiDesign", "RS0026:Do not add multiple public overloads with optional parameters",
         Justification = "The 'this' arguments are mutually exclusive")]
+    [AspireExportIgnore(Reason = "ProvisioningParameter is an Azure.Provisioning type not compatible with ATS.")]
     public static ProvisioningParameter AsProvisioningParameter(this BicepOutputReference outputReference, AzureResourceInfrastructure infrastructure, string? parameterName = null)
     {
         ArgumentNullException.ThrowIfNull(outputReference);
@@ -220,8 +232,9 @@ public static class AzureProvisioningResourceExtensions
     /// The corresponding <see cref="ProvisioningParameter"/> that was found or newly created.
     /// </returns>
     /// <remarks>
-    /// This is useful when assigning a <see cref="BicepValue"/> to the value of an Aspire <see cref="EndpointReference"/>.
+    /// This method is not available in polyglot app hosts.
     /// </remarks>
+    [AspireExportIgnore(Reason = "ProvisioningParameter is an Azure.Provisioning type not compatible with ATS.")]
     public static ProvisioningParameter AsProvisioningParameter(this EndpointReference endpointReference, AzureResourceInfrastructure infrastructure, string parameterName)
     {
         ArgumentNullException.ThrowIfNull(endpointReference);
@@ -246,8 +259,9 @@ public static class AzureProvisioningResourceExtensions
     /// The corresponding <see cref="ProvisioningParameter"/> that was found or newly created.
     /// </returns>
     /// <remarks>
-    /// This is useful when assigning a <see cref="BicepValue"/> to the value of an Aspire <see cref="EndpointReference"/>.
+    /// This method is not available in polyglot app hosts.
     /// </remarks>
+    [AspireExportIgnore(Reason = "ProvisioningParameter is an Azure.Provisioning type not compatible with ATS.")]
     public static ProvisioningParameter AsProvisioningParameter(this ReferenceExpression expression, AzureResourceInfrastructure infrastructure, string parameterName)
     {
         ArgumentNullException.ThrowIfNull(expression);
@@ -287,4 +301,3 @@ public static class AzureProvisioningResourceExtensions
         return Infrastructure.NormalizeBicepIdentifier(parameterName);
     }
 }
-

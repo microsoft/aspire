@@ -1,15 +1,15 @@
-﻿<configuration>
+<configuration>
   <packageSources>
     <clear />
     <add key="https://api.nuget.org/v3/index.json" value="https://api.nuget.org/v3/index.json" />
     <add key="companyfeed" value="https://companyfeed/v3/index.json" />
-    <add key="{PR_HIVE}" value="{PR_HIVE}" />
+    <add key="{PR_HIVE}/packages" value="{PR_HIVE}/packages" />
   </packageSources>
   <packageSourceMapping>
     <packageSource key="https://api.nuget.org/v3/index.json">
       <package pattern="*" />
     </packageSource>
-    <packageSource key="{PR_HIVE}">
+    <packageSource key="{PR_HIVE}/packages">
       <package pattern="Aspire*" />
       <package pattern="*" />
     </packageSource>

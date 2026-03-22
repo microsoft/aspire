@@ -841,6 +841,13 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         {
             await step.Action(stepContext).ConfigureAwait(false);
         }
+        catch (DistributedApplicationException)
+        {
+            // DistributedApplicationException subtypes already have clean, user-friendly messages.
+            // Re-throw without wrapping to avoid verbose error output (e.g. raw HTTP headers
+            // from Azure SDK RequestFailedException leaking into step failure messages).
+            throw;
+        }
         catch (Exception ex)
         {
             var exceptionInfo = ExceptionDispatchInfo.Capture(ex);
@@ -1049,7 +1056,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             sb.AppendLine();
         }
 
-        context.ReportingStep.Log(LogLevel.Information, sb.ToString(), enableMarkdown: false);
+        context.ReportingStep.Log(LogLevel.Information, sb.ToString());
     }
 
     /// <summary>

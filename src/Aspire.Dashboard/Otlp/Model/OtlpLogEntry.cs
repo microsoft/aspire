@@ -50,6 +50,7 @@ public class OtlpLogEntry
                     return false;
                 case "SpanId":
                 case "TraceId":
+                case OtlpHelpers.AspireLogIdAttribute:
                     // Explicitly ignore these
                     return false;
                 case "logrecord.event.name":
@@ -132,6 +133,7 @@ public class OtlpLogEntry
             KnownStructuredLogFields.OriginalFormatField => log.OriginalFormat,
             KnownStructuredLogFields.CategoryField => log.Scope.Name,
             KnownStructuredLogFields.EventNameField => log.EventName,
+            KnownStructuredLogFields.LevelField => log.Severity.ToString(),
             KnownResourceFields.ServiceNameField => log.ResourceView.Resource.ResourceName,
             _ => log.Attributes.GetValue(field)
         };

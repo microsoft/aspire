@@ -1,0 +1,60 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <IsUnitTestProject>true</IsUnitTestProject>
+    <OutputType>Exe</OutputType>
+
+    <!-- Disable strong name signing because Hex1b package is not signed -->
+    <SignAssembly>false</SignAssembly>
+
+    <!-- Deployment tests run on Linux only via deployment-tests.yml (excluded from tests.yml via OnlyDeploymentTests) -->
+    <RunOnGithubActionsWindows>false</RunOnGithubActionsWindows>
+    <RunOnGithubActionsLinux>true</RunOnGithubActionsLinux>
+    <RunOnGithubActionsMacOS>false</RunOnGithubActionsMacOS>
+
+    <!-- Do not run tests in Helix - use GitHub Actions matrix strategy instead -->
+    <RunOnAzdoHelixWindows>false</RunOnAzdoHelixWindows>
+    <RunOnAzdoHelixLinux>false</RunOnAzdoHelixLinux>
+
+    <!-- Do not run tests on AzDO -->
+    <RunOnAzdoCIWindows>false</RunOnAzdoCIWindows>
+    <RunOnAzdoCILinux>false</RunOnAzdoCILinux>
+
+    <!-- Each test class runs as a separate CI job via GenerateTestPartitionsForCI -->
+    <SplitTestsOnCI>true</SplitTestsOnCI>
+    <TestClassNamePrefixForCI>Aspire.Deployment.EndToEnd.Tests</TestClassNamePrefixForCI>
+
+    <!-- Short name for CI job display (avoids verbose "Deployment.EndToEnd-ClassName") -->
+    <TestShortName>EndToEnd</TestShortName>
+
+    <!-- These tests require built NuGet packages -->
+    <TestUsingWorkloads>true</TestUsingWorkloads>
+    <InstallWorkloadForTesting>true</InstallWorkloadForTesting>
+    <IncludeTestPackages>false</IncludeTestPackages>
+
+    <XunitRunnerJson>xunit.runner.json</XunitRunnerJson>
+    <TestArchiveTestsDir>$(TestArchiveTestsDirForDeploymentEndToEndTests)</TestArchiveTestsDir>
+
+    <!-- Extended test session settings for deployment tests -->
+    <TestSessionTimeout>60m</TestSessionTimeout>
+    <TestHangTimeout>45m</TestHangTimeout>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Identity" />
+    <PackageReference Include="Hex1b" />
+    <PackageReference Include="Microsoft.DotNet.XUnitV3Extensions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="$(TestsSharedDir)TemporaryRepo.cs" Link="shared\TemporaryRepo.cs" />
+    <Compile Include="$(TestsSharedDir)Hex1bTestHelpers.cs" Link="shared\Hex1bTestHelpers.cs" />
+    <Compile Include="$(TestsSharedDir)Hex1bAutomatorTestHelpers.cs" Link="shared\Hex1bAutomatorTestHelpers.cs" />
+  </ItemGroup>
+
+</Project>

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Microsoft.AspNetCore.InternalTesting;
 using Aspire.Cli.Backchannel;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
@@ -55,6 +56,9 @@ internal sealed class TestExtensionBackchannel : IExtensionBackchannel
     public TaskCompletionSource? PromptForSecretStringAsyncCalled { get; set; }
     public Func<string, Func<string, ValidationResult>?, bool, Task<string>>? PromptForSecretStringAsyncCallback { get; set; }
 
+    public TaskCompletionSource? PromptForFilePathAsyncCalled { get; set; }
+    public Func<string, string?, bool, Task<string?>>? PromptForFilePathAsyncCallback { get; set; }
+
     public TaskCompletionSource? OpenEditorAsyncCalled { get; set; }
     public Func<string, Task>? OpenEditorAsyncCallback { get; set; }
 
@@ -73,7 +77,7 @@ internal sealed class TestExtensionBackchannel : IExtensionBackchannel
     public TaskCompletionSource? NotifyAppHostStartupCompletedAsyncCalled { get; set; }
 
     public TaskCompletionSource? StartDebugSessionAsyncCalled { get; set; }
-    public Func<string, string?, bool, Task>? StartDebugSessionAsyncCallback { get; set; }
+    public Func<string, string?, bool, DebugSessionOptions?, Task>? StartDebugSessionAsyncCallback { get; set; }
 
     public TaskCompletionSource? DisplayPlainTextAsyncCalled { get; set; }
     public Func<string, Task>? DisplayPlainTextAsyncCallback { get; set; }
@@ -88,10 +92,10 @@ internal sealed class TestExtensionBackchannel : IExtensionBackchannel
         return Task.CompletedTask;
     }
 
-    public Task DisplayMessageAsync(string emoji, string message, CancellationToken cancellationToken)
+    public Task DisplayMessageAsync(string emojiName, string message, CancellationToken cancellationToken)
     {
         DisplayMessageAsyncCalled?.SetResult();
-        return DisplayMessageAsyncCallback?.Invoke(emoji, message) ?? Task.CompletedTask;
+        return DisplayMessageAsyncCallback?.Invoke(emojiName, message) ?? Task.CompletedTask;
     }
 
     public Task DisplaySuccessAsync(string message, CancellationToken cancellationToken)
@@ -146,6 +150,14 @@ internal sealed class TestExtensionBackchannel : IExtensionBackchannel
     {
         ShowStatusAsyncCalled?.SetResult();
         return ShowStatusAsyncCallback?.Invoke(status) ?? Task.CompletedTask;
+    }
+
+    public Task<string?> PromptForFilePathAsync(string promptText, string? defaultValue, bool directory, CancellationToken cancellationToken)
+    {
+        PromptForFilePathAsyncCalled?.SetResult();
+        return PromptForFilePathAsyncCallback != null
+            ? PromptForFilePathAsyncCallback.Invoke(promptText, defaultValue, directory)
+            : Task.FromResult(defaultValue);
     }
 
     public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, CancellationToken cancellationToken) where T : notnull
@@ -220,12 +232,17 @@ internal sealed class TestExtensionBackchannel : IExtensionBackchannel
             : Task.FromResult(Array.Empty<string>());
     }
 
-    public Task<bool> HasCapabilityAsync(string capability, CancellationToken cancellationToken)
+    public async Task<bool> HasCapabilityAsync(string capability, CancellationToken cancellationToken)
     {
         HasCapabilityAsyncCalled?.SetResult();
-        return HasCapabilityAsyncCallback != null
-            ? HasCapabilityAsyncCallback.Invoke(capability, cancellationToken)
-            : Task.FromResult(capability == "secret-prompts.v1"); // Default to supporting the new capability in tests
+        if (HasCapabilityAsyncCallback != null)
+        {
+            return await HasCapabilityAsyncCallback.Invoke(capability, cancellationToken);
+        }
+
+        // Default behavior: check if capability is in the capabilities returned by GetCapabilitiesAsync
+        var capabilities = await GetCapabilitiesAsync(cancellationToken).DefaultTimeout();
+        return capabilities.Contains(capability);
     }
 
     public Task LaunchAppHostAsync(string projectPath, List<string> arguments, List<EnvVar> envVars, bool debug, CancellationToken cancellationToken)
@@ -243,11 +260,11 @@ internal sealed class TestExtensionBackchannel : IExtensionBackchannel
     }
 
     public Task StartDebugSessionAsync(string workingDirectory, string? projectFile, bool debug,
-        CancellationToken cancellationToken)
+        DebugSessionOptions? options, CancellationToken cancellationToken)
     {
         StartDebugSessionAsyncCalled?.SetResult();
         return StartDebugSessionAsyncCallback != null
-            ? StartDebugSessionAsyncCallback.Invoke(workingDirectory, projectFile, debug)
+            ? StartDebugSessionAsyncCallback.Invoke(workingDirectory, projectFile, debug, options)
             : Task.CompletedTask;
     }
 

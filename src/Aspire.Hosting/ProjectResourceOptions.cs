@@ -6,6 +6,7 @@ namespace Aspire.Hosting;
 /// <summary>
 /// Various properties to modify the behavior of the project resource.
 /// </summary>
+[AspireExport(ExposeProperties = true)]
 public class ProjectResourceOptions
 {
     /// <summary>
