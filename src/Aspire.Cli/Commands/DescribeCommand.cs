@@ -142,7 +142,7 @@ internal sealed class DescribeCommand : BaseCommand
 
         await Task.WhenAll(dashboardUrlsTask, snapshotsTask).ConfigureAwait(false);
 
-        var dashboardBaseUrl = (await dashboardUrlsTask.ConfigureAwait(false))?.BaseUrlWithLoginToken;
+        var dashboardBaseUrl = TelemetryCommandHelpers.ExtractDashboardBaseUrl((await dashboardUrlsTask.ConfigureAwait(false))?.BaseUrlWithLoginToken);
         var snapshots = await snapshotsTask.ConfigureAwait(false);
 
         // Pre-resolve colors for all resource names so that assignment is
