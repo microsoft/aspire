@@ -6,6 +6,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.CosmosDB;
@@ -15,7 +16,6 @@ using Azure.Provisioning.Expressions;
 using Azure.Provisioning.KeyVault;
 using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace Aspire.Hosting;
 
@@ -118,17 +118,17 @@ public static class AzureCosmosExtensions
                 throw new InvalidOperationException("CosmosClient is not initialized.");
             }
 
-            await WaitForCosmosAccountReadyAsync(cosmosClient, ct).ConfigureAwait(false);
+            await cosmosClient.ReadAccountAsync().WaitAsync(ct).ConfigureAwait(false);
 
             foreach (var database in cosmosDb.Databases)
             {
-                var db = (await ExecuteCosmosOperationWithRetryAsync(static (client, token, state) => client.CreateDatabaseIfNotExistsAsync(state, cancellationToken: token), cosmosClient, database.DatabaseName, ct).ConfigureAwait(false)).Database;
+                var db = (await cosmosClient.CreateDatabaseIfNotExistsAsync(database.DatabaseName, cancellationToken: ct).ConfigureAwait(false)).Database;
 
                 foreach (var container in database.Containers)
                 {
                     var containerProperties = container.ContainerProperties;
 
-                    await ExecuteCosmosOperationWithRetryAsync(static (database, token, state) => database.CreateContainerIfNotExistsAsync(state, cancellationToken: token), db, containerProperties, ct).ConfigureAwait(false);
+                    await db.CreateContainerIfNotExistsAsync(containerProperties, cancellationToken: ct).ConfigureAwait(false);
                 }
             }
         });
@@ -188,16 +188,10 @@ public static class AzureCosmosExtensions
         else
         {
             var healthCheckKey = $"{builder.Resource.Name}_check";
-            builder.ApplicationBuilder.Services.AddHealthChecks().AddAsyncCheck(healthCheckKey, async ct =>
-            {
-                var client = cosmosClient ?? throw new InvalidOperationException("CosmosClient is not initialized.");
-
-                // Recent classic emulator images can report Running before the TLS endpoint is ready
-                // for the first SDK call, so health needs to tolerate a short startup gap.
-                await WaitForCosmosAccountReadyAsync(client, ct).ConfigureAwait(false);
-
-                return HealthCheckResult.Healthy();
-            });
+            builder.ApplicationBuilder.Services.AddHealthChecks().AddAzureCosmosDB(
+                sp => cosmosClient ?? throw new InvalidOperationException("CosmosClient is not initialized."),
+                name: healthCheckKey
+            );
 
             builder.WithHealthCheck(healthCheckKey);
         }
@@ -232,43 +226,6 @@ public static class AzureCosmosExtensions
             }
         }
     }
-
-    private static Task<AccountProperties> WaitForCosmosAccountReadyAsync(CosmosClient cosmosClient, CancellationToken cancellationToken)
-        => ExecuteCosmosOperationWithRetryAsync<CosmosClient, object?, AccountProperties>(static (client, token, _) => client.ReadAccountAsync().WaitAsync(token), cosmosClient, state: null, cancellationToken);
-
-    private static async Task<T> ExecuteCosmosOperationWithRetryAsync<TClient, TState, T>(
-        Func<TClient, CancellationToken, TState, Task<T>> action,
-        TClient client,
-        TState state,
-        CancellationToken cancellationToken)
-    {
-        var delay = TimeSpan.FromMilliseconds(200);
-
-        for (var attempt = 0; ; attempt++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            try
-            {
-                return await action(client, cancellationToken, state).ConfigureAwait(false);
-            }
-            catch (Exception ex) when (attempt < 9 && IsTransientCosmosStartupFailure(ex))
-            {
-                await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
-                delay = TimeSpan.FromMilliseconds(Math.Min(delay.TotalMilliseconds * 2, 5000));
-            }
-        }
-    }
-
-    private static bool IsTransientCosmosStartupFailure(Exception ex) => ex switch
-    {
-        HttpRequestException => true,
-        IOException => true,
-        CosmosException cosmosException when (int)cosmosException.StatusCode >= 500 => true,
-        CosmosException { StatusCode: System.Net.HttpStatusCode.RequestTimeout } => true,
-        _ when ex.InnerException is not null => IsTransientCosmosStartupFailure(ex.InnerException),
-        _ => false
-    };
 
     /// <summary>
     /// Adds a named volume for the data folder to an Azure Cosmos DB emulator resource.

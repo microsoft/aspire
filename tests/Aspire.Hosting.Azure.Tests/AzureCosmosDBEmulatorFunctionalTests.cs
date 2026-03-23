@@ -340,13 +340,6 @@ internal static class CosmosExtensions
     {
         void WithVolume(IResourceBuilder<AzureCosmosDBEmulatorResource> emulator)
         {
-            if (!usePreview)
-            {
-                // The classic emulator defaults to 10 partitions, which is much heavier than these tests need
-                // and has been causing CoreCLR startup failures under CI memory pressure.
-                emulator.WithPartitionCount(1);
-            }
-
             if (volumeName is not null)
             {
                 emulator.WithDataVolume(volumeName);
