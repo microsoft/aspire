@@ -28,9 +28,9 @@ public class KnownFeaturesTests
     }
 
     [Fact]
-    public void IsStagingChannelEnabled_ReturnsTrue_WhenChannelIsStagingAndFlagExplicitlyFalse()
+    public void IsStagingChannelEnabled_ReturnsTrue_WhenBothChannelIsStagingAndFlagIsTrue()
     {
-        var features = new TestFeatures(stagingChannelEnabled: false);
+        var features = new TestFeatures(stagingChannelEnabled: true);
         var configuration = BuildConfiguration(channel: PackageChannelNames.Staging);
 
         Assert.True(KnownFeatures.IsStagingChannelEnabled(features, configuration));
@@ -99,11 +99,12 @@ public class KnownFeaturesTests
     {
         public bool IsFeatureEnabled(string featureFlag, bool defaultValue)
         {
-            return featureFlag switch
+            if (featureFlag == KnownFeatures.StagingChannelEnabled)
             {
-                "stagingChannelEnabled" => stagingChannelEnabled,
-                _ => defaultValue
-            };
+                return stagingChannelEnabled;
+            }
+
+            return defaultValue;
         }
     }
 }
