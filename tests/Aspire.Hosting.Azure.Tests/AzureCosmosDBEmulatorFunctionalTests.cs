@@ -34,7 +34,7 @@ public class AzureCosmosDBEmulatorFunctionalTests(ITestOutputHelper testOutputHe
         });
 
         var resource = builder.AddAzureCosmosDB("resource")
-                              .RunAsEmulator(usePreview, includeResourceHealthCheck: false)
+                              .RunAsEmulator(usePreview)
                               .WithHealthCheck("blocking_check");
 
         var dependentResource = builder.AddContainer("nginx", "mcr.microsoft.com/cbl-mariner/base/nginx", "1.22")
@@ -336,7 +336,7 @@ public record Entry
 
 internal static class CosmosExtensions
 {
-    public static IResourceBuilder<AzureCosmosDBResource> RunAsEmulator(this IResourceBuilder<AzureCosmosDBResource> builder, bool usePreview, string? volumeName = null, bool includeResourceHealthCheck = true)
+    public static IResourceBuilder<AzureCosmosDBResource> RunAsEmulator(this IResourceBuilder<AzureCosmosDBResource> builder, bool usePreview, string? volumeName = null)
     {
         void WithVolume(IResourceBuilder<AzureCosmosDBEmulatorResource> emulator)
         {
@@ -353,22 +353,10 @@ internal static class CosmosExtensions
             }
         }
 
-        var resourceBuilder = usePreview
+        return usePreview
 #pragma warning disable ASPIRECOSMOSDB001 // RunAsPreviewEmulator is experimental
             ? builder.RunAsPreviewEmulator(WithVolume)
 #pragma warning restore ASPIRECOSMOSDB001 // RunAsPreviewEmulator is experimental
             : builder.RunAsEmulator(WithVolume);
-
-        if (!usePreview && !includeResourceHealthCheck)
-        {
-            var resourceHealthCheckKey = $"{resourceBuilder.Resource.Name}_check";
-
-            foreach (var annotation in resourceBuilder.Resource.Annotations.OfType<HealthCheckAnnotation>().Where(a => a.Key == resourceHealthCheckKey).ToArray())
-            {
-                resourceBuilder.Resource.Annotations.Remove(annotation);
-            }
-        }
-
-        return resourceBuilder;
     }
 }
