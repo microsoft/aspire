@@ -11,8 +11,8 @@ internal static class CosmosDBEmulatorContainerImageTags
     /// <remarks>cosmosdb/linux/azure-cosmos-emulator</remarks>
     public const string Image = "cosmosdb/linux/azure-cosmos-emulator";
 
-    /// <remarks>2.14.26</remarks>
-    public const string Tag = "2.14.26";
+    /// <remarks>stable</remarks>
+    public const string Tag = "stable";
 
     /// <remarks>vnext-preview</remarks>
     public const string TagVNextPreview = "vnext-preview";
