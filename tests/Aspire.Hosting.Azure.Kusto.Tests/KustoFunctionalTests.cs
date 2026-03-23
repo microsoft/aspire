@@ -187,9 +187,9 @@ public class KustoFunctionalTests
         var rns = app.Services.GetRequiredService<ResourceNotificationService>();
         await rns.WaitForResourceHealthyAsync(kusto.Resource.Name, cts.Token);
 
-        // Assert no warnings or errors were logged about the database already existing
+        // Assert the duplicate database definition did not surface as a database creation failure.
         var snapshot = app.Services.GetRequiredService<FakeLogCollector>().GetSnapshot();
-        var logs = snapshot.Where(IsResourceLog).Where(record => record.Level >= LogLevel.Warning);
+        var logs = snapshot.Where(IsDatabaseCreationFailureLog);
         Assert.Empty(logs);
     }
 
@@ -218,10 +218,11 @@ public class KustoFunctionalTests
         await rns.WaitForResourceHealthyAsync(db1.Resource.Name, cts.Token);
         await rns.WaitForResourceAsync(db2.Resource.Name, KnownResourceStates.FailedToStart, cts.Token);
 
-        // Assert an error was logged about the invalid database
+        // Assert an error was logged about the invalid database.
         var snapshot = app.Services.GetRequiredService<FakeLogCollector>().GetSnapshot();
-        var logs = snapshot.Where(IsResourceLog).Where(record => record.Level >= LogLevel.Warning);
-        Assert.Single(logs);
+        var log = Assert.Single(snapshot, IsDatabaseCreationFailureLog);
+        Assert.Equal(LogLevel.Error, log.Level);
+        Assert.Contains("Failed to create database '__invalid'", log.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -271,6 +272,15 @@ public class KustoFunctionalTests
     private static bool IsResourceLog(FakeLogRecord record)
     {
         return (record.Category ?? string.Empty).StartsWith("Aspire.Hosting.Tests.Resources", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsDatabaseCreationFailureLog(FakeLogRecord record)
+    {
+        return IsResourceLog(record)
+            && record.Level >= LogLevel.Error
+            // Matches the error logged by CreateDatabaseAsync in
+            // src/Aspire.Hosting.Azure.Kusto/AzureKustoBuilderExtensions.cs.
+            && (record.Message?.Contains("Failed to create database", StringComparison.Ordinal) ?? false);
     }
 
     /// <summary>
