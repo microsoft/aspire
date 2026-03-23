@@ -106,7 +106,7 @@ extends:
   template: v1/1ES.Official.PipelineTemplate.yml@1ESPipelineTemplates
   parameters:
     settings:
-      networkIsolationPolicy: Permissive, CFSClean, CFSClean2
+      networkIsolationPolicy: Permissive,CFSClean,CFSClean2
     featureFlags:
       autoEnablePREfastWithNewRuleset: false
       autoEnableRoslynWithNewRuleset: false
