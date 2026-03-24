@@ -57,16 +57,14 @@ public sealed class JavaPolyglotTests(ITestOutputHelper output)
 
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.java");
         var newContent = """
-            package aspire;
+            import aspire.*;
 
-            final class AppHost {
-                public static void main(String[] args) throws Exception {
-                    IDistributedApplicationBuilder builder = DistributedApplication.CreateBuilder(args);
+            void main(String[] args) throws Exception {
+                var builder = DistributedApplication.CreateBuilder(args);
 
-                    ViteAppResource viteApp = builder.addViteApp("viteapp", "./viteapp");
+                ViteAppResource viteApp = builder.addViteApp("viteapp", "./viteapp");
 
-                    builder.build().run();
-                }
+                builder.build().run();
             }
             """;
 

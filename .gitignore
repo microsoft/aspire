@@ -132,6 +132,10 @@ dependency-reduced-pom.xml
 playground/**/.java-build/
 playground/**/*.class
 
+# Generated Java AppHost SDK sources
+/playground/JavaAppHost/.modules/
+/playground/polyglot/Java/**/ValidationAppHost/.modules/
+
 # Ignore cache created with the Angular CLI.
 .angular/
 

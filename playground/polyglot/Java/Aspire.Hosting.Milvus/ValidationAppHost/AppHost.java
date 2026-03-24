@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         // Aspire TypeScript AppHost - Milvus integration validation
         // Exercises every exported member of Aspire.Hosting.Milvus
         var builder = DistributedApplication.CreateBuilder();
@@ -48,9 +44,9 @@ final class AppHost {
         milvusChained.withAttu();
         // ── 15. withReference: use Milvus database from a container resource ───────
         var api = builder.addContainer("api", "myregistry/myapp");
-        api.withReference(new IResource(db.getHandle(), db.getClient()));
+        api.withReference(db);
         // ── 16. withReference: use Milvus server directly ──────────────────────────
-        api.withReference(new IResource(milvus.getHandle(), milvus.getClient()));
+        api.withReference(milvus);
         // ---- Property access on MilvusServerResource ----
         var _endpoint = milvus.primaryEndpoint();
         var _host = milvus.host();
@@ -61,4 +57,3 @@ final class AppHost {
         var _databases = milvus.databases();
         builder.build().run();
     }
-}

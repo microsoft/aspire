@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var container = builder.addContainer("mycontainer", "nginx");
         var dockerContainer = builder.addDockerfile("dockerapp", "./app");
@@ -16,7 +12,7 @@ final class AppHost {
         var configParam = builder.addParameterFromConfiguration("myconfig", "MyConfig:Key");
         var secretParam = builder.addParameterFromConfiguration("mysecret", "MyConfig:Secret", true);
         container.withDockerfileBaseImage(new WithDockerfileBaseImageOptions().buildImage("mcr.microsoft.com/dotnet/sdk:8.0"));
-        container.withContainerRegistry(new IResource(container.getHandle(), container.getClient()));
+        container.withContainerRegistry(container);
         dockerContainer.withHttpEndpoint(new WithHttpEndpointOptions().name("http").targetPort(80.0));
         var endpoint = dockerContainer.getEndpoint("http");
         var expr = ReferenceExpression.refExpr("Host=%s", endpoint);
@@ -25,17 +21,17 @@ final class AppHost {
         builtConnectionString.withConnectionPropertyValue("Mode", "Development");
         container.withEnvironmentEndpoint("MY_ENDPOINT", endpoint);
         container.withEnvironmentParameter("MY_PARAM", configParam);
-        container.withEnvironmentConnectionString("MY_CONN", new IResourceWithConnectionString(builtConnectionString.getHandle(), builtConnectionString.getClient()));
+        container.withEnvironmentConnectionString("MY_CONN", builtConnectionString);
         builtConnectionString.withConnectionProperty("Endpoint", expr);
         builtConnectionString.withConnectionPropertyValue("Protocol", "https");
         container.excludeFromManifest();
         container.excludeFromMcp();
-        container.waitForCompletion(new IResource(exe.getHandle(), exe.getClient()));
+        container.waitForCompletion(exe);
         container.withDeveloperCertificateTrust(true);
         container.withCertificateTrustScope(CertificateTrustScope.SYSTEM);
         container.withHttpsDeveloperCertificate();
         container.withoutHttpsCertificate();
-        container.withChildRelationship(new IResource(exe.getHandle(), exe.getClient()));
+        container.withChildRelationship(exe);
         container.withIconName("Database", IconVariant.FILLED);
         container.withHttpProbe(ProbeType.LIVENESS, new WithHttpProbeOptions().path("/health"));
         container.withRemoteImageName("myregistry.azurecr.io/myapp");
@@ -67,7 +63,7 @@ final class AppHost {
         var builderExecutionContext = builder.executionContext();
         var executionContextServiceProvider = builderExecutionContext.serviceProvider();
         var _distributedApplicationModelFromExecutionContext = executionContextServiceProvider.getDistributedApplicationModel();
-        var beforeStartSubscription = builder.subscribeBeforeStart((beforeStartEvent) -> { var beforeStartServices = beforeStartEvent.services(); var beforeStartModel = beforeStartEvent.model(); var _beforeStartResources = beforeStartModel.getResources(); var _beforeStartContainer = beforeStartModel.findResourceByName("mycontainer"); var _beforeStartEventing = beforeStartServices.getEventing(); var beforeStartLoggerFactory = beforeStartServices.getLoggerFactory(); var beforeStartLogger = beforeStartLoggerFactory.createLogger("ValidationAppHost.BeforeStart"); beforeStartLogger.logInformation("BeforeStart information"); beforeStartLogger.logWarning("BeforeStart warning"); beforeStartLogger.logError("BeforeStart error"); beforeStartLogger.logDebug("BeforeStart debug"); beforeStartLogger.log("critical", "BeforeStart critical"); var beforeStartResourceLoggerService = beforeStartServices.getResourceLoggerService(); beforeStartResourceLoggerService.completeLog(new IResource(container.getHandle(), container.getClient())); beforeStartResourceLoggerService.completeLogByName("mycontainer"); var beforeStartNotificationService = beforeStartServices.getResourceNotificationService(); beforeStartNotificationService.waitForResourceState("mycontainer", "Running"); var _matchedResourceState = beforeStartNotificationService.waitForResourceStates("mycontainer", new String[] { "Running", "FailedToStart" }); var _healthyResourceEvent = beforeStartNotificationService.waitForResourceHealthy("mycontainer"); beforeStartNotificationService.waitForDependencies(new IResource(container.getHandle(), container.getClient())); var _currentResourceState = beforeStartNotificationService.tryGetResourceState("mycontainer"); beforeStartNotificationService.publishResourceUpdate(new IResource(container.getHandle(), container.getClient()), new PublishResourceUpdateOptions().state("Validated").stateStyle("info")); var userSecretsManager = beforeStartServices.getUserSecretsManager(); var _userSecretsAvailable = userSecretsManager.isAvailable(); var _userSecretsFilePath = userSecretsManager.filePath(); var _secretSet = userSecretsManager.trySetSecret("Validation:Key", "value"); userSecretsManager.getOrSetSecret(new IResource(container.getHandle(), container.getClient()), "Validation:GeneratedKey", "generated-value"); var _generatedSecretValue = builderConfiguration.getConfigValue("Validation:GeneratedKey"); userSecretsManager.saveStateJson("{\"Validation\":\"Value\"}"); var _modelFromServices = beforeStartServices.getDistributedApplicationModel(); });
+        var beforeStartSubscription = builder.subscribeBeforeStart((beforeStartEvent) -> { var beforeStartServices = beforeStartEvent.services(); var beforeStartModel = beforeStartEvent.model(); var _beforeStartResources = beforeStartModel.getResources(); var _beforeStartContainer = beforeStartModel.findResourceByName("mycontainer"); var _beforeStartEventing = beforeStartServices.getEventing(); var beforeStartLoggerFactory = beforeStartServices.getLoggerFactory(); var beforeStartLogger = beforeStartLoggerFactory.createLogger("ValidationAppHost.BeforeStart"); beforeStartLogger.logInformation("BeforeStart information"); beforeStartLogger.logWarning("BeforeStart warning"); beforeStartLogger.logError("BeforeStart error"); beforeStartLogger.logDebug("BeforeStart debug"); beforeStartLogger.log("critical", "BeforeStart critical"); var beforeStartResourceLoggerService = beforeStartServices.getResourceLoggerService(); beforeStartResourceLoggerService.completeLog(container); beforeStartResourceLoggerService.completeLogByName("mycontainer"); var beforeStartNotificationService = beforeStartServices.getResourceNotificationService(); beforeStartNotificationService.waitForResourceState("mycontainer", "Running"); var _matchedResourceState = beforeStartNotificationService.waitForResourceStates("mycontainer", new String[] { "Running", "FailedToStart" }); var _healthyResourceEvent = beforeStartNotificationService.waitForResourceHealthy("mycontainer"); beforeStartNotificationService.waitForDependencies(container); var _currentResourceState = beforeStartNotificationService.tryGetResourceState("mycontainer"); beforeStartNotificationService.publishResourceUpdate(container, new PublishResourceUpdateOptions().state("Validated").stateStyle("info")); var userSecretsManager = beforeStartServices.getUserSecretsManager(); var _userSecretsAvailable = userSecretsManager.isAvailable(); var _userSecretsFilePath = userSecretsManager.filePath(); var _secretSet = userSecretsManager.trySetSecret("Validation:Key", "value"); userSecretsManager.getOrSetSecret(container, "Validation:GeneratedKey", "generated-value"); var _generatedSecretValue = builderConfiguration.getConfigValue("Validation:GeneratedKey"); userSecretsManager.saveStateJson("{\"Validation\":\"Value\"}"); var _modelFromServices = beforeStartServices.getDistributedApplicationModel(); });
         var afterResourcesCreatedSubscription = builder.subscribeAfterResourcesCreated((afterResourcesCreatedEvent) -> { var afterResourcesCreatedServices = afterResourcesCreatedEvent.services(); var afterResourcesCreatedModel = afterResourcesCreatedEvent.model(); var _afterResources = afterResourcesCreatedModel.getResources(); var _afterResourcesContainer = afterResourcesCreatedModel.findResourceByName("mycontainer"); var afterResourcesCreatedLoggerFactory = afterResourcesCreatedServices.getLoggerFactory(); var afterResourcesCreatedLogger = afterResourcesCreatedLoggerFactory.createLogger("ValidationAppHost.AfterResourcesCreated"); afterResourcesCreatedLogger.logInformation("AfterResourcesCreated"); });
         var builderEventing = builder.eventing();
         builderEventing.unsubscribe(beforeStartSubscription);
@@ -75,7 +71,7 @@ final class AppHost {
         container.onBeforeResourceStarted((beforeResourceStartedEvent) -> { var _resource = beforeResourceStartedEvent.resource(); var services = beforeResourceStartedEvent.services(); var loggerFactory = services.getLoggerFactory(); var logger = loggerFactory.createLogger("ValidationAppHost.BeforeResourceStarted"); logger.logInformation("BeforeResourceStarted"); });
         container.onResourceStopped((resourceStoppedEvent) -> { var _resource = resourceStoppedEvent.resource(); var services = resourceStoppedEvent.services(); var loggerFactory = services.getLoggerFactory(); var logger = loggerFactory.createLogger("ValidationAppHost.ResourceStopped"); logger.logWarning("ResourceStopped"); });
         builtConnectionString.onConnectionStringAvailable((connectionStringAvailableEvent) -> { var _resource = connectionStringAvailableEvent.resource(); var services = connectionStringAvailableEvent.services(); var notifications = services.getResourceNotificationService(); var _connectionState = notifications.tryGetResourceState("customcs"); });
-        container.onInitializeResource((initializeResourceEvent) -> { var _resource = initializeResourceEvent.resource(); var _initializeEventing = initializeResourceEvent.eventing(); var initializeLogger = initializeResourceEvent.logger(); var initializeNotifications = initializeResourceEvent.notifications(); var initializeServices = initializeResourceEvent.services(); initializeLogger.logDebug("InitializeResource"); initializeNotifications.waitForDependencies(new IResource(container.getHandle(), container.getClient())); var _initializeModel = initializeServices.getDistributedApplicationModel(); var _initializeEventingFromServices = initializeServices.getEventing(); });
+        container.onInitializeResource((initializeResourceEvent) -> { var _resource = initializeResourceEvent.resource(); var _initializeEventing = initializeResourceEvent.eventing(); var initializeLogger = initializeResourceEvent.logger(); var initializeNotifications = initializeResourceEvent.notifications(); var initializeServices = initializeResourceEvent.services(); initializeLogger.logDebug("InitializeResource"); initializeNotifications.waitForDependencies(container); var _initializeModel = initializeServices.getDistributedApplicationModel(); var _initializeEventingFromServices = initializeServices.getEventing(); });
         container.onResourceEndpointsAllocated((resourceEndpointsAllocatedEvent) -> { var _resource = resourceEndpointsAllocatedEvent.resource(); var services = resourceEndpointsAllocatedEvent.services(); var loggerFactory = services.getLoggerFactory(); var logger = loggerFactory.createLogger("ValidationAppHost.ResourceEndpointsAllocated"); logger.logInformation("ResourceEndpointsAllocated"); });
         container.onResourceReady((resourceReadyEvent) -> { var _resource = resourceReadyEvent.resource(); var services = resourceReadyEvent.services(); var loggerFactory = services.getLoggerFactory(); var logger = loggerFactory.createLogger("ValidationAppHost.ResourceReady"); logger.logInformation("ResourceReady"); });
         container.withEnvironment("MY_VAR", "value");
@@ -85,7 +81,7 @@ final class AppHost {
         container.withExternalHttpEndpoints();
         container.asHttp2Service();
         container.withArgs(new String[] { "--verbose" });
-        container.withParentRelationship(new IResource(exe.getHandle(), exe.getClient()));
+        container.withParentRelationship(exe);
         container.withExplicitStart();
         container.withUrl("http://localhost:8080");
         container.withUrlExpression(ReferenceExpression.refExpr("http://%s", endpoint));
@@ -102,4 +98,3 @@ final class AppHost {
         var _distributedAppEndpointForNetwork = app.getEndpointForNetwork("dockerapp", new GetEndpointForNetworkOptions().networkIdentifier("localhost").endpointName("http"));
         app.run();
     }
-}

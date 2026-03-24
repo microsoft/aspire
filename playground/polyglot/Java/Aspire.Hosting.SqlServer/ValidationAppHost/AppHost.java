@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         // Test 1: Basic SQL Server resource creation (addSqlServer)
         var sqlServer = builder.addSqlServer("sql");
@@ -39,4 +35,3 @@ final class AppHost {
         var _databases = sqlServer.databases();
         builder.build().run();
     }
-}

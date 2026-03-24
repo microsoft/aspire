@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var kubernetes = builder.addKubernetesEnvironment("kube");
         kubernetes.withProperties((environment) -> {
@@ -38,4 +34,3 @@ final class AppHost {
         });
         builder.build().run();
     }
-}

@@ -33,10 +33,12 @@ public class AtsJavaCodeGeneratorTests
 
         // Assert
         Assert.Contains("Aspire.java", files.Keys);
-        Assert.Contains("Transport.java", files.Keys);
-        Assert.Contains("Base.java", files.Keys);
+        Assert.Contains("AspireClient.java", files.Keys);
+        Assert.Contains("HandleWrapperBase.java", files.Keys);
+        Assert.Contains("TestRedisResource.java", files.Keys);
+        Assert.Contains("sources.txt", files.Keys);
 
-        await Verify(files["Aspire.java"], extension: "java")
+        await Verify(JoinGeneratedFiles(files), extension: "java")
             .UseFileName("AtsGeneratedAspire");
     }
 
@@ -169,10 +171,10 @@ public class AtsJavaCodeGeneratorTests
         var atsContext = CreateContextFromBothAssemblies();
 
         var files = _generator.GenerateDistributedApplication(atsContext);
-        var aspireJava = files["Aspire.java"];
+        var containerResourceJava = files["ContainerResource.java"];
 
-        Assert.Contains("public ContainerResource withReference(IResource source, WithReferenceOptions options)", aspireJava);
-        Assert.Contains("public ContainerResource waitFor(IResource dependency)", aspireJava);
+        Assert.Contains("public ContainerResource withReference(IResource source, WithReferenceOptions options)", containerResourceJava);
+        Assert.Contains("public ContainerResource waitFor(IResource dependency)", containerResourceJava);
     }
 
     [Fact]
@@ -235,13 +237,13 @@ public class AtsJavaCodeGeneratorTests
 
         // Generate Java
         var files = _generator.GenerateDistributedApplication(atsContext);
-        var aspireJava = files["Aspire.java"];
+        var testRedisJava = files["TestRedisResource.java"];
 
         // Verify withEnvironment appears (method should exist for resources that support it)
-        Assert.Contains("withEnvironment", aspireJava);
+        Assert.Contains("withEnvironment", testRedisJava);
 
         // Snapshot for detailed verification
-        await Verify(aspireJava, extension: "java")
+        await Verify(JoinGeneratedFiles(files), extension: "java")
             .UseFileName("TwoPassScanningGeneratedAspire");
     }
 
@@ -252,11 +254,12 @@ public class AtsJavaCodeGeneratorTests
         var atsContext = CreateContextFromBothAssemblies();
 
         var files = _generator.GenerateDistributedApplication(atsContext);
-        var aspireJava = files["Aspire.java"];
+        var builderJava = files["IDistributedApplicationBuilder.java"];
+        var testRedisJava = files["TestRedisResource.java"];
 
         // Java uses camelCase for methods
-        Assert.Contains("addContainer", aspireJava);
-        Assert.Contains("withEnvironment", aspireJava);
+        Assert.Contains("addContainer", builderJava);
+        Assert.Contains("withEnvironment", testRedisJava);
     }
 
     [Fact]
@@ -266,9 +269,9 @@ public class AtsJavaCodeGeneratorTests
         var atsContext = CreateContextFromBothAssemblies();
 
         var files = _generator.GenerateDistributedApplication(atsContext);
-        var aspireJava = files["Aspire.java"];
+        var distributedApplicationJava = files["DistributedApplication.java"];
 
-        Assert.Contains("createBuilder", aspireJava);
+        Assert.Contains("createBuilder", distributedApplicationJava);
     }
 
     [Fact]
@@ -281,6 +284,15 @@ public class AtsJavaCodeGeneratorTests
         var aspireJava = files["Aspire.java"];
 
         Assert.Contains("public class Aspire", aspireJava);
+    }
+
+    private static string JoinGeneratedFiles(Dictionary<string, string> files)
+    {
+        return string.Join(
+            "\n",
+            files
+                .OrderBy(kvp => kvp.Key, StringComparer.Ordinal)
+                .Select(kvp => $"// ===== {kvp.Key} =====\n{kvp.Value}"));
     }
 
     private static List<AtsCapabilityInfo> ScanCapabilitiesFromTestAssembly()

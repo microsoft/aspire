@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         // Aspire TypeScript AppHost - Azure Functions validation
         // Exercises every exported member of Aspire.Hosting.Azure.Functions
         var builder = DistributedApplication.CreateBuilder();
@@ -24,7 +20,6 @@ final class AppHost {
         chainedFunc.withHttpEndpoint(new WithHttpEndpointOptions().port(7071.0));
         // ── 4. withReference from base builder - standard resource references ───────
         var anotherStorage = builder.addAzureStorage("appstorage");
-        funcApp.withReference(new IResource(anotherStorage.getHandle(), anotherStorage.getClient()));
+        funcApp.withReference(anotherStorage);
         builder.build().run();
     }
-}

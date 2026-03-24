@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         // Aspire TypeScript AppHost
         // For more information, see: https://aspire.dev
         var builder = DistributedApplication.CreateBuilder();
@@ -49,4 +45,3 @@ final class AppHost {
         var _databases = mongo.databases();
         builder.build().run();
     }
-}

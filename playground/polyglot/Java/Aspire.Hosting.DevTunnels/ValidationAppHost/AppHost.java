@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         // Test 1: Basic dev tunnel resource creation (addDevTunnel)
         var tunnel = builder.addDevTunnel("mytunnel");
@@ -28,7 +24,7 @@ final class AppHost {
         var tunnel3 = builder.addDevTunnel("all-endpoints-tunnel");
         var web3 = builder.addContainer("web3", "nginx");
         web3.withHttpEndpoint(new WithHttpEndpointOptions().port(80.0));
-        tunnel3.withTunnelReferenceAll(new IResourceWithEndpoints(web3.getHandle(), web3.getClient()), false);
+        tunnel3.withTunnelReferenceAll(web3, false);
         // Test 8: getTunnelEndpoint - get the public tunnel endpoint for a specific endpoint
         var web4 = builder.addContainer("web4", "nginx");
         web4.withHttpEndpoint(new WithHttpEndpointOptions().port(80.0));
@@ -47,4 +43,3 @@ final class AppHost {
             .withAnonymousAccess();
         builder.build().run();
     }
-}

@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var adminUsername = builder.addParameter("keycloak-admin-user");
         var adminPassword = builder.addParameter("keycloak-admin-password", true);
@@ -22,11 +18,10 @@ final class AppHost {
             .withDisabledFeatures(new String[] { "scripts" })
             .withOtlpExporterWithProtocol(OtlpProtocol.HTTP_PROTOBUF);
         var consumer = builder.addContainer("consumer", "nginx");
-        consumer.withReference(new IResource(keycloak.getHandle(), keycloak.getClient()));
-        consumer.withReference(new IResource(keycloak2.getHandle(), keycloak2.getClient()));
+        consumer.withReference(keycloak);
+        consumer.withReference(keycloak2);
         var _keycloakName = keycloak.name();
         var _keycloakEntrypoint = keycloak.entrypoint();
         var _keycloakShellExecution = keycloak.shellExecution();
         builder.build().run();
     }
-}

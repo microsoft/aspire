@@ -63,7 +63,15 @@ public sealed class JavaCodegenValidationTests(ITestOutputHelper output)
             throw new InvalidOperationException($".modules directory was not created at {modulesDir}");
         }
 
-        var expectedFiles = new[] { "Aspire.java", "Base.java", "Transport.java" };
+        var expectedFiles = new[]
+        {
+            "Aspire.java",
+            "AspireClient.java",
+            "DistributedApplication.java",
+            "IDistributedApplicationBuilder.java",
+            "sources.txt"
+        };
+
         foreach (var file in expectedFiles)
         {
             var filePath = Path.Combine(modulesDir, file);
@@ -79,14 +87,14 @@ public sealed class JavaCodegenValidationTests(ITestOutputHelper output)
             }
         }
 
-        var aspireJava = File.ReadAllText(Path.Combine(modulesDir, "Aspire.java"));
-        if (!aspireJava.Contains("addRedis"))
+        var builderJava = File.ReadAllText(Path.Combine(modulesDir, "IDistributedApplicationBuilder.java"));
+        if (!builderJava.Contains("addRedis"))
         {
-            throw new InvalidOperationException("Aspire.java does not contain addRedis from Aspire.Hosting.Redis");
+            throw new InvalidOperationException("IDistributedApplicationBuilder.java does not contain addRedis from Aspire.Hosting.Redis");
         }
-        if (!aspireJava.Contains("addSqlServer"))
+        if (!builderJava.Contains("addSqlServer"))
         {
-            throw new InvalidOperationException("Aspire.java does not contain addSqlServer from Aspire.Hosting.SqlServer");
+            throw new InvalidOperationException("IDistributedApplicationBuilder.java does not contain addSqlServer from Aspire.Hosting.SqlServer");
         }
 
         await auto.TypeAsync("exit");

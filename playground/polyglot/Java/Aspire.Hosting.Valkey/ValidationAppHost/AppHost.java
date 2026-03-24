@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var password = builder.addParameter("valkey-password", true);
         var valkey = builder.addValkey("cache", new AddValkeyOptions().port(6380.0));
@@ -20,4 +16,3 @@ final class AppHost {
         var _cstr = valkey.connectionStringExpression();
         builder.build().run();
     }
-}

@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var storage = builder.addAzureStorage("storage");
         storage.runAsEmulator();
@@ -26,4 +22,3 @@ final class AppHost {
         storage.addBlobContainer("images");
         builder.build().run();
     }
-}

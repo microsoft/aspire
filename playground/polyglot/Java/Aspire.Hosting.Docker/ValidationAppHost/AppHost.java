@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var compose = builder.addDockerComposeEnvironment("compose");
         var api = builder.addContainer("api", "nginx:alpine");
@@ -45,4 +41,3 @@ final class AppHost {
         var _resolvedName = compose.name();
         builder.build().run();
     }
-}

@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var rootPassword = builder.addParameter("mysql-root-password", true);
         var mysql = builder.addMySql("mysql", new AddMySqlOptions().password(rootPassword).port(3306.0));
@@ -28,4 +24,3 @@ final class AppHost {
         var _databases = mysql.databases();
         builder.build().run();
     }
-}

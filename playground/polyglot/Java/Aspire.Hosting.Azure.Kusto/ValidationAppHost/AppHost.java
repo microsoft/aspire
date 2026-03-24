@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var kusto = builder.addAzureKustoCluster("kusto").runAsEmulator((emulator) -> {
                 emulator.withHostPort(8088.0);
@@ -26,4 +22,3 @@ final class AppHost {
         var _customDatabaseCreationScript = customDatabase.getDatabaseCreationScript();
         builder.build().run();
     }
-}

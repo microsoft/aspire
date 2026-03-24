@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var applicationInsightsLocation = builder.addParameter("applicationInsightsLocation");
         var deploymentSlot = builder.addParameter("deploymentSlot");
@@ -33,4 +29,3 @@ final class AppHost {
         var _websiteName = website.getResourceName();
         builder.build().run();
     }
-}

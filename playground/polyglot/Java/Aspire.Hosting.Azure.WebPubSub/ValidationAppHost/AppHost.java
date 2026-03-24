@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         // addAzureWebPubSub - factory method
         var webpubsub = builder.addAzureWebPubSub("webpubsub");
@@ -20,8 +16,7 @@ final class AppHost {
         // withRoleAssignments - also available directly on AzureWebPubSubResource builder
         webpubsub.withWebPubSubRoleAssignments(webpubsub, new AzureWebPubSubRole[] { AzureWebPubSubRole.WEB_PUB_SUB_SERVICE_READER });
         // withReference - generic, works via IResourceWithConnectionString
-        container.withReference(new IResource(webpubsub.getHandle(), webpubsub.getClient()));
-        container.withReference(new IResource(hub.getHandle(), hub.getClient()));
+        container.withReference(webpubsub);
+        container.withReference(hub);
         builder.build().run();
     }
-}

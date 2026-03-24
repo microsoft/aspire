@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         // Aspire TypeScript AppHost - Kafka integration validation
         // Exercises all [AspireExport] methods for Aspire.Hosting.Kafka
         var builder = DistributedApplication.CreateBuilder();
@@ -28,4 +24,3 @@ final class AppHost {
         var _cstr = kafka.connectionStringExpression();
         builder.build().run();
     }
-}

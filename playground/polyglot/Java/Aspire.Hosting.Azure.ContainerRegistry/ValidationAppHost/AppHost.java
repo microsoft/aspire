@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var registry = builder.addAzureContainerRegistry("containerregistry")
             .withPurgeTask("0 1 * * *", new WithPurgeTaskOptions().filter("samples:*").ago(7.0).keep(5.0).taskName("purge-samples"));
@@ -15,4 +11,3 @@ final class AppHost {
         registryFromEnvironment.withPurgeTask("0 2 * * *", new WithPurgeTaskOptions().filter("environment:*").ago(14.0).keep(2.0));
         builder.build().run();
     }
-}

@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var rabbitmq = builder.addRabbitMQ("messaging");
         rabbitmq.withDataVolume();
@@ -23,4 +19,3 @@ final class AppHost {
         var _cstr = rabbitmq.connectionStringExpression();
         builder.build().run();
     }
-}

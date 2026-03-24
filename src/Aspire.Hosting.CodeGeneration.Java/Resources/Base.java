@@ -216,11 +216,11 @@ class ReferenceExpression {
         return result;
     }
 
-    String getValue() {
+    public String getValue() {
         return getValue(null);
     }
 
-    String getValue(CancellationToken cancellationToken) {
+    public String getValue(CancellationToken cancellationToken) {
         if (handle == null || client == null) {
             throw new IllegalStateException("getValue is only available on server-returned ReferenceExpression instances");
         }
@@ -234,11 +234,11 @@ class ReferenceExpression {
         return (String) client.invokeCapability("Aspire.Hosting.ApplicationModel/getValue", reqArgs);
     }
 
-    static ReferenceExpression refExpr(String format, Object... valueProviders) {
+    public static ReferenceExpression refExpr(String format, Object... valueProviders) {
         return new ReferenceExpression(format, valueProviders);
     }
 
-    static ReferenceExpression createConditional(Object condition, String matchValue, ReferenceExpression whenTrue, ReferenceExpression whenFalse) {
+    public static ReferenceExpression createConditional(Object condition, String matchValue, ReferenceExpression whenTrue, ReferenceExpression whenFalse) {
         return new ReferenceExpression(condition, matchValue, whenTrue, whenFalse);
     }
 

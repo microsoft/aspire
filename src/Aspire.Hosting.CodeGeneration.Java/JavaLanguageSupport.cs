@@ -32,24 +32,20 @@ public sealed class JavaLanguageSupport : ILanguageSupport
     {
         var files = new Dictionary<string, string>();
 
-        // Create AppHost.java - must be in same package as generated code (aspire)
-        // because Java only allows one public class per file
         files["AppHost.java"] = """
             // Aspire Java AppHost
             // For more information, see: https://aspire.dev
+            
+            import aspire.*;
 
-            package aspire;
+            void main(String[] args) throws Exception {
+                var builder = DistributedApplication.CreateBuilder(args);
 
-            final class AppHost {
-                public static void main(String[] args) throws Exception {
-                    IDistributedApplicationBuilder builder = DistributedApplication.CreateBuilder(args);
+                // Add your resources here, for example:
+                // var redis = builder.addRedis("cache");
+                // var postgres = builder.addPostgres("db");
 
-                    // Add your resources here, for example:
-                    // var redis = builder.addRedis("cache");
-                    // var postgres = builder.addPostgres("db");
-
-                    builder.build().run();
-                }
+                builder.build().run();
             }
             """;
 
@@ -109,8 +105,8 @@ public sealed class JavaLanguageSupport : ILanguageSupport
                 // On Windows, use cmd /c; on Unix, use sh -c
                 Command = OperatingSystem.IsWindows() ? "cmd" : "sh",
                 Args = OperatingSystem.IsWindows()
-                    ? ["/c", "javac -d . .modules\\Transport.java .modules\\Base.java .modules\\Aspire.java AppHost.java && java aspire.AppHost {args}"]
-                    : ["-c", "javac -d . .modules/Transport.java .modules/Base.java .modules/Aspire.java AppHost.java && java aspire.AppHost {args}"]
+                    ? ["/c", "if not exist .java-build mkdir .java-build && javac --enable-preview --source 25 -d .java-build @.modules\\sources.txt AppHost.java && java --enable-preview -cp .java-build AppHost {args}"]
+                    : ["-c", "mkdir -p .java-build && javac --enable-preview --source 25 -d .java-build @.modules/sources.txt AppHost.java && java --enable-preview -cp .java-build AppHost {args}"]
             }
         };
     }

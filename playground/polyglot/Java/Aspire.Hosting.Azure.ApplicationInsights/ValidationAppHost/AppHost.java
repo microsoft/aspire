@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         // Aspire TypeScript AppHost - Azure Application Insights validation
         // Exercises exported members of Aspire.Hosting.Azure.ApplicationInsights
         var builder = DistributedApplication.CreateBuilder();
@@ -18,4 +14,3 @@ final class AppHost {
           .withLogAnalyticsWorkspace(logAnalytics);
         builder.build().run();
     }
-}

@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         // 1) addAzureCosmosDB
         var cosmos = builder.addAzureCosmosDB("cosmos");
@@ -20,7 +16,7 @@ final class AppHost {
         cosmos.withAccessKeyAuthentication();
         // 7) withAccessKeyAuthenticationWithKeyVault
         var keyVault = builder.addAzureKeyVault("kv");
-        cosmos.withAccessKeyAuthenticationWithKeyVault(new IAzureKeyVaultResource(keyVault.getHandle(), keyVault.getClient()));
+        cosmos.withAccessKeyAuthenticationWithKeyVault(keyVault);
         // 8) runAsEmulator + emulator container configuration methods
         var cosmosEmulator = builder.addAzureCosmosDB("cosmos-emulator");
         cosmosEmulator.runAsEmulator((emulator) -> {
@@ -36,4 +32,3 @@ final class AppHost {
         var app = builder.build();
         app.run();
     }
-}

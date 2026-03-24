@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         // Aspire TypeScript AppHost - Oracle Integration Validation
         // Validates all [AspireExport] methods for Aspire.Hosting.Oracle
         var builder = DistributedApplication.CreateBuilder();
@@ -30,11 +26,11 @@ final class AppHost {
         // ---- withReference: connection string reference (from core) ----
         var otherOracle = builder.addOracle("other-oracle");
         var otherDb = otherOracle.addDatabase("otherdb");
-        oracle.withReference(new IResource(otherDb.getHandle(), otherDb.getClient()));
+        oracle.withReference(otherDb);
         // ---- withReference: with connection name option ----
-        oracle.withReference(new IResource(otherDb.getHandle(), otherDb.getClient()), new WithReferenceOptions().connectionName("secondary-db"));
+        oracle.withReference(otherDb, new WithReferenceOptions().connectionName("secondary-db"));
         // ---- withReference: unified reference to another Oracle server resource ----
-        oracle.withReference(new IResource(otherOracle.getHandle(), otherOracle.getClient()));
+        oracle.withReference(otherOracle);
         // ---- Fluent chaining: multiple methods chained ----
         var oracle3 = builder.addOracle("oracledb3");
         oracle3.withLifetime(ContainerLifetime.PERSISTENT);
@@ -56,4 +52,3 @@ final class AppHost {
         var _dbCstr = db.connectionStringExpression();
         builder.build().run();
     }
-}

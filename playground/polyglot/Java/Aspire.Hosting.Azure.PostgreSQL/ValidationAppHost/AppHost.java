@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         // 1) addAzurePostgresFlexibleServer - main factory method
         var pg = builder.addAzurePostgresFlexibleServer("pg");
@@ -24,4 +20,3 @@ final class AppHost {
         var app = builder.build();
         app.run();
     }
-}

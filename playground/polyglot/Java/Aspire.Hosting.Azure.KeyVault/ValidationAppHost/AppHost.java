@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         // Aspire TypeScript AppHost - Azure Key Vault validation
         // Exercises every exported member of Aspire.Hosting.Azure.KeyVault
         var builder = DistributedApplication.CreateBuilder();
@@ -35,4 +31,3 @@ final class AppHost {
         namedSecretFromExpression.withKeyVaultRoleAssignments(vault, new AzureKeyVaultRole[] { AzureKeyVaultRole.KEY_VAULT_READER });
         builder.build().run();
     }
-}

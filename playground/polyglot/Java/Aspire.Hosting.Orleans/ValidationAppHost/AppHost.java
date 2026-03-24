@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var provider = builder.addConnectionString("provider", "ORLEANS_PROVIDER_CONNECTION_STRING");
         var orleans = builder.addOrleans("orleans")
@@ -27,4 +23,3 @@ final class AppHost {
         client.withOrleansClientReference(orleansClient);
         builder.build().run();
     }
-}

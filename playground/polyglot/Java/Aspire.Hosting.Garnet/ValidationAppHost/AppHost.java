@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var cache = builder.addGarnet("cache");
         // ---- Property access on GarnetResource ----
@@ -16,4 +12,3 @@ final class AppHost {
         var _cstr = garnet.connectionStringExpression();
         builder.build().run();
     }
-}

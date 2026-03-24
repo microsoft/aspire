@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         // addRedis - full overload with port and password parameter
         var password = builder.addParameter("redis-password", true);
@@ -41,4 +37,3 @@ final class AppHost {
         var _cstr = redis.connectionStringExpression();
         builder.build().run();
     }
-}

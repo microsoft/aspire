@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var storage = builder.addAzureStorage("storage");
         var sqlServer = builder.addAzureSqlServer("sql");
@@ -29,4 +25,3 @@ final class AppHost {
         var _dbJdbcConnectionString = db.jdbcConnectionString();
         builder.build().run();
     }
-}

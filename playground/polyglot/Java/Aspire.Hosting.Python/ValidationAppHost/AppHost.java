@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         builder.addPythonApp("python-script", ".", "main.py");
         builder.addPythonModule("python-module", ".", "uvicorn");
@@ -17,4 +13,3 @@ final class AppHost {
         uvicorn.withUv(new WithUvOptions().install(false).args(new String[] { "sync" }));
         builder.build().run();
     }
-}

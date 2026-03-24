@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var nodeApp = builder.addNodeApp("node-app", "./node-app", "server.js");
         nodeApp.withNpm(new WithNpmOptions().install(false).installCommand("install").installArgs(new String[] { "--ignore-scripts" }));
@@ -22,4 +18,3 @@ final class AppHost {
         viteApp.withRunScript("dev", new String[] { "--host" });
         builder.build().run();
     }
-}

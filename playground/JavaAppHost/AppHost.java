@@ -1,7 +1,6 @@
-package aspire;
+import aspire.*;
 
-final class AppHost {
-    public static void main(String[] args) throws Exception {
+void main(String[] args) throws Exception {
         IDistributedApplicationBuilder builder = DistributedApplication.CreateBuilder(args);
 
         NodeAppResource app = builder.addNodeApp("app", "./api", "src/index.ts");
@@ -16,4 +15,3 @@ final class AppHost {
 
         builder.build().run();
     }
-}

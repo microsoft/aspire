@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         // 1) addGitHubModel - using the GitHubModelName enum
         var githubModel = builder.addGitHubModel("chat", GitHubModelName.OPEN_AIGPT4O);
@@ -20,10 +16,9 @@ final class AppHost {
         githubModel.enableHealthCheck();
         // 5) withReference - pass GitHubModelResource as a connection string source to a container
         var container = builder.addContainer("my-service", "mcr.microsoft.com/dotnet/samples:latest");
-        container.withReference(new IResource(githubModel.getHandle(), githubModel.getClient()));
+        container.withReference(githubModel);
         // 6) withReference - pass GitHubModelResource as a source to another container with custom connection name
-        container.withReference(new IResource(githubModelWithOrg.getHandle(), githubModelWithOrg.getClient()), new WithReferenceOptions().connectionName("github-model-org"));
+        container.withReference(githubModelWithOrg, new WithReferenceOptions().connectionName("github-model-org"));
         var app = builder.build();
         app.run();
     }
-}

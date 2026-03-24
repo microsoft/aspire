@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var adminPassword = builder.addParameter("seq-admin-password", true);
         var seq = builder.addSeq("seq", adminPassword, 5341.0);
@@ -19,4 +15,3 @@ final class AppHost {
         var _cstr = seq.connectionStringExpression();
         builder.build().run();
     }
-}

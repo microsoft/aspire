@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var appConfig = builder.addAzureAppConfiguration("appconfig");
         appConfig.withAppConfigurationRoleAssignments(appConfig, new AzureAppConfigurationRole[] { AzureAppConfigurationRole.APP_CONFIGURATION_DATA_OWNER, AzureAppConfigurationRole.APP_CONFIGURATION_DATA_READER });
@@ -15,4 +11,3 @@ final class AppHost {
             });
         builder.build().run();
     }
-}

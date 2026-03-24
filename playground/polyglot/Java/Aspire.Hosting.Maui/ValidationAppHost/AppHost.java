@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var maui = builder.addMauiProject(
             "mauiapp",
@@ -18,4 +14,3 @@ final class AppHost {
         maui.addiOSSimulator("mauiapp-ios-simulator", "E25BBE37-69BA-4720-B6FD-D54C97791E79").withOtlpDevTunnel();
         builder.build().run();
     }
-}

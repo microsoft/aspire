@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var serviceBus = builder.addAzureServiceBus("messaging");
         var emulatorBus = builder
@@ -44,4 +40,3 @@ final class AppHost {
     .withProperties((_s) -> {  });
         builder.build().run();
     }
-}

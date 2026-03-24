@@ -1,17 +1,13 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var keyVault = builder.addAzureKeyVault("vault");
         var cache = builder.addAzureManagedRedis("cache");
         var accessKeyCache = builder.addAzureManagedRedis("cache-access-key");
         var containerCache = builder.addAzureManagedRedis("cache-container");
         accessKeyCache.withAccessKeyAuthentication();
-        accessKeyCache.withAccessKeyAuthenticationWithKeyVault(new IAzureKeyVaultResource(keyVault.getHandle(), keyVault.getClient()));
+        accessKeyCache.withAccessKeyAuthenticationWithKeyVault(keyVault);
         containerCache.runAsContainer((container) -> {
                 container.withVolume("/data");
             });
@@ -32,4 +28,3 @@ final class AppHost {
         var _containerUri = containerCache.uriExpression();
         builder.build().run();
     }
-}

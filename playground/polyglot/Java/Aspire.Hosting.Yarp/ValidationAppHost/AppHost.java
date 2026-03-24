@@ -1,9 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var buildVersion = builder.addParameterFromConfiguration("buildVersion", "MyConfig:BuildVersion");
         var buildSecret = builder.addParameterFromConfiguration("buildSecret", "MyConfig:Secret", true);
@@ -19,13 +16,13 @@ final class AppHost {
         proxy.withImageSHA256("abc123def456");
         proxy.withContainerNetworkAlias("myalias");
         proxy.publishAsContainer();
-        proxy.publishWithStaticFiles(new IResourceWithContainerFiles(staticFilesSource.getHandle(), staticFilesSource.getClient()));
+        proxy.publishWithStaticFiles(staticFilesSource);
         proxy.withVolume("/data", new WithVolumeOptions().name("proxy-data"));
         proxy.withBuildArg("BUILD_VERSION", buildVersion);
         proxy.withBuildSecret("MY_SECRET", buildSecret);
         proxy.withConfiguration((config) -> {
             var endpoint = backend.getEndpoint("http");
-            var backendService = new IResourceWithServiceDiscovery(backend.getHandle(), backend.getClient());
+            var backendService = backend;
             var endpointCluster = config.addClusterFromEndpoint(endpoint);
             var resourceCluster = config.addClusterFromResource(backendService);
             var externalServiceCluster = config.addClusterFromExternalService(externalBackend);
@@ -135,4 +132,3 @@ final class AppHost {
         proxy.publishAsConnectionString();
         builder.build().run();
     }
-}

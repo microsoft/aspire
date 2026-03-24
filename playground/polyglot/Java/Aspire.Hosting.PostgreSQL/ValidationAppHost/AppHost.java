@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         // Aspire TypeScript AppHost - PostgreSQL Integration Validation
         // Validates all [AspireExport] methods for Aspire.Hosting.PostgreSQL
         var builder = DistributedApplication.CreateBuilder();
@@ -49,4 +45,3 @@ final class AppHost {
         var _dbCstr = db.connectionStringExpression();
         builder.build().run();
     }
-}

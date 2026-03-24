@@ -1,8 +1,9 @@
 #!/bin/bash
 # Polyglot SDK Validation - Java Playground Apps
 # Iterates all Java playground apps under playground/polyglot/Java/,
-# runs 'aspire restore' to regenerate the .modules/ SDK, and compiles with
-# 'javac' to verify there are no regressions in the codegen API surface.
+# runs 'aspire restore' to regenerate the .modules/ SDK, and compiles the
+# compact AppHost plus generated Java SDK sources to verify there are no
+# regressions in the codegen API surface.
 set -euo pipefail
 
 echo "=== Java Playground Codegen Validation ==="
@@ -78,19 +79,15 @@ for app_dir in "${APP_DIRS[@]}"; do
     build_dir="$app_dir/.java-build"
     rm -rf "$build_dir"
     mkdir -p "$build_dir"
-    java_sources=()
-    while IFS= read -r java_source; do
-        java_sources+=("$java_source")
-    done < <(find .modules -name '*.java' | sort)
 
-    if [ ${#java_sources[@]} -eq 0 ]; then
-        echo "  ❌ No generated Java sources found for $app_name"
+    if [ ! -f ".modules/sources.txt" ]; then
+        echo "  ❌ No generated Java source list found for $app_name"
         FAILED+=("$app_name (generated sources missing)")
         rm -rf "$build_dir"
         continue
     fi
 
-    if ! javac -d "$build_dir" "${java_sources[@]}" AppHost.java 2>&1; then
+    if ! javac --enable-preview --source 25 -d "$build_dir" @.modules/sources.txt AppHost.java 2>&1; then
         echo "  ❌ javac compilation failed for $app_name"
         FAILED+=("$app_name (javac)")
         rm -rf "$build_dir"

@@ -1,17 +1,13 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var customApiKey = builder.addParameter("qdrant-key", true);
         builder.addQdrant("qdrant-custom", new AddQdrantOptions().apiKey(customApiKey).grpcPort(16334.0).httpPort(16333.0));
         var qdrant = builder.addQdrant("qdrant");
         qdrant.withDataVolume(new WithDataVolumeOptions().name("qdrant-data")).withDataBindMount(".", true);
         var consumer = builder.addContainer("consumer", "busybox");
-        consumer.withReference(new IResource(qdrant.getHandle(), qdrant.getClient()), new WithReferenceOptions().connectionName("qdrant"));
+        consumer.withReference(qdrant, new WithReferenceOptions().connectionName("qdrant"));
         // ---- Property access on QdrantServerResource ----
         var _endpoint = qdrant.primaryEndpoint();
         var _grpcHost = qdrant.grpcHost();
@@ -24,4 +20,3 @@ final class AppHost {
         var _cstr = qdrant.connectionStringExpression();
         builder.build().run();
     }
-}

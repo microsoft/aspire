@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var eventHubs = builder.addAzureEventHubs("eventhubs");
         eventHubs.withEventHubsRoleAssignments(eventHubs, new AzureEventHubsRole[] { AzureEventHubsRole.AZURE_EVENT_HUBS_DATA_OWNER });
@@ -25,4 +21,3 @@ final class AppHost {
             });
         builder.build().run();
     }
-}

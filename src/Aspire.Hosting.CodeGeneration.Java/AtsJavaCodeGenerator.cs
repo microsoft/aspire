@@ -39,12 +39,20 @@ public sealed class AtsJavaCodeGenerator : ICodeGenerator
     /// <inheritdoc />
     public Dictionary<string, string> GenerateDistributedApplication(AtsContext context)
     {
-        return new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["Transport.java"] = GetEmbeddedResource("Transport.java"),
-            ["Base.java"] = GetEmbeddedResource("Base.java"),
-            ["Aspire.java"] = GenerateAspireSdk(context)
-        };
+        var files = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        AddSplitJavaSourceFiles(files, GetEmbeddedResource("Transport.java"));
+        AddSplitJavaSourceFiles(files, GetEmbeddedResource("Base.java"));
+        AddSplitJavaSourceFiles(files, GenerateAspireSdk(context));
+
+        files["sources.txt"] = string.Join(
+            '\n',
+            files.Keys
+                .Where(static key => key.EndsWith(".java", StringComparison.Ordinal))
+                .OrderBy(static key => key, StringComparer.Ordinal)
+                .Select(static key => $".modules/{key}")) + '\n';
+
+        return files;
     }
 
     private static string GetEmbeddedResource(string name)
@@ -56,6 +64,327 @@ public sealed class AtsJavaCodeGenerator : ICodeGenerator
             ?? throw new InvalidOperationException($"Embedded resource '{name}' not found.");
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();
+    }
+
+    private static void AddSplitJavaSourceFiles(Dictionary<string, string> files, string source)
+    {
+        foreach (var (fileName, content) in SplitJavaSourceFiles(source))
+        {
+            files.Add(fileName, content);
+        }
+    }
+
+    private static Dictionary<string, string> SplitJavaSourceFiles(string source)
+    {
+        var packageLine = string.Empty;
+        var importLines = new List<string>();
+        var declarations = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        var lines = source.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+        var bodyStartIndex = 0;
+
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var trimmed = lines[i].Trim();
+            if (trimmed.StartsWith("package ", StringComparison.Ordinal))
+            {
+                packageLine = trimmed;
+                continue;
+            }
+
+            if (string.IsNullOrEmpty(packageLine))
+            {
+                continue;
+            }
+
+            if (trimmed.StartsWith("import ", StringComparison.Ordinal))
+            {
+                importLines.Add(trimmed);
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(trimmed) || trimmed.StartsWith("//", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            bodyStartIndex = i;
+            break;
+        }
+
+        List<string>? currentDeclaration = null;
+        List<string>? pendingLines = [];
+        string? currentTypeName = null;
+        var braceDepth = 0;
+        var inBlockComment = false;
+
+        for (var i = bodyStartIndex; i < lines.Length; i++)
+        {
+            var line = lines[i];
+            var trimmed = line.Trim();
+
+            if (currentDeclaration is null)
+            {
+                if (TryGetTopLevelDeclarationName(trimmed, out var declarationName))
+                {
+                    currentTypeName = declarationName;
+                    currentDeclaration = [];
+
+                    if (pendingLines.Count > 0)
+                    {
+                        currentDeclaration.AddRange(pendingLines);
+                        pendingLines.Clear();
+                    }
+
+                    currentDeclaration.Add(PromoteTopLevelDeclaration(line));
+                    braceDepth = CountBraceDelta(line, ref inBlockComment);
+                    continue;
+                }
+
+                if (ShouldPreserveTopLevelLine(trimmed))
+                {
+                    pendingLines.Add(line);
+                }
+                else if (pendingLines.Count > 0 && string.IsNullOrWhiteSpace(trimmed))
+                {
+                    pendingLines.Add(line);
+                }
+                else
+                {
+                    pendingLines.Clear();
+                }
+
+                continue;
+            }
+
+            currentDeclaration.Add(line);
+            braceDepth += CountBraceDelta(line, ref inBlockComment);
+
+            if (braceDepth == 0)
+            {
+                declarations.Add(
+                    $"{currentTypeName}.java",
+                    CreateJavaSourceFile($"{currentTypeName}.java", packageLine, importLines, currentDeclaration));
+
+                currentDeclaration = null;
+                currentTypeName = null;
+                pendingLines = [];
+            }
+        }
+
+        return declarations;
+    }
+
+    private static bool TryGetTopLevelDeclarationName(string trimmedLine, out string? declarationName)
+    {
+        declarationName = null;
+
+        if (string.IsNullOrWhiteSpace(trimmedLine))
+        {
+            return false;
+        }
+
+        if (ShouldPreserveTopLevelLine(trimmedLine) || trimmedLine.StartsWith("//", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var declarationLine = trimmedLine;
+        while (true)
+        {
+            var updated = declarationLine switch
+            {
+                _ when declarationLine.StartsWith("public ", StringComparison.Ordinal) => declarationLine["public ".Length..].TrimStart(),
+                _ when declarationLine.StartsWith("final ", StringComparison.Ordinal) => declarationLine["final ".Length..].TrimStart(),
+                _ when declarationLine.StartsWith("abstract ", StringComparison.Ordinal) => declarationLine["abstract ".Length..].TrimStart(),
+                _ when declarationLine.StartsWith("static ", StringComparison.Ordinal) => declarationLine["static ".Length..].TrimStart(),
+                _ => declarationLine
+            };
+
+            if (ReferenceEquals(updated, declarationLine) || updated == declarationLine)
+            {
+                break;
+            }
+
+            declarationLine = updated;
+        }
+
+        foreach (var kind in new[] { "class", "interface", "enum", "record" })
+        {
+            var kindPrefix = kind + " ";
+            if (!declarationLine.StartsWith(kindPrefix, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            declarationName = declarationLine[kindPrefix.Length..]
+                .Split([' ', '\t', '<'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)[0];
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool ShouldPreserveTopLevelLine(string trimmedLine) =>
+        trimmedLine.StartsWith("/**", StringComparison.Ordinal)
+        || trimmedLine.StartsWith("/*", StringComparison.Ordinal)
+        || trimmedLine.StartsWith("*", StringComparison.Ordinal)
+        || trimmedLine.StartsWith("*/", StringComparison.Ordinal)
+        || trimmedLine.StartsWith("@", StringComparison.Ordinal);
+
+    private static string PromoteTopLevelDeclaration(string line)
+    {
+        var trimmed = line.TrimStart();
+        if (trimmed.StartsWith("public ", StringComparison.Ordinal))
+        {
+            return line;
+        }
+
+        var leadingWhitespaceLength = line.Length - trimmed.Length;
+        var leadingWhitespace = line[..leadingWhitespaceLength];
+
+        foreach (var declarationPrefix in new[]
+        {
+            "final class ",
+            "abstract class ",
+            "static class ",
+            "class ",
+            "interface ",
+            "enum ",
+            "record "
+        })
+        {
+            if (trimmed.StartsWith(declarationPrefix, StringComparison.Ordinal))
+            {
+                return $"{leadingWhitespace}public {trimmed}";
+            }
+        }
+
+        return line;
+    }
+
+    private static int CountBraceDelta(string line, ref bool inBlockComment)
+    {
+        var delta = 0;
+        var inString = false;
+        var inChar = false;
+        var escaped = false;
+
+        for (var i = 0; i < line.Length; i++)
+        {
+            var ch = line[i];
+            var next = i + 1 < line.Length ? line[i + 1] : '\0';
+
+            if (inBlockComment)
+            {
+                if (ch == '*' && next == '/')
+                {
+                    inBlockComment = false;
+                    i++;
+                }
+                continue;
+            }
+
+            if (!inString && !inChar)
+            {
+                if (ch == '/' && next == '/')
+                {
+                    break;
+                }
+
+                if (ch == '/' && next == '*')
+                {
+                    inBlockComment = true;
+                    i++;
+                    continue;
+                }
+            }
+
+            if (escaped)
+            {
+                escaped = false;
+                continue;
+            }
+
+            if (inString)
+            {
+                if (ch == '\\')
+                {
+                    escaped = true;
+                }
+                else if (ch == '"')
+                {
+                    inString = false;
+                }
+
+                continue;
+            }
+
+            if (inChar)
+            {
+                if (ch == '\\')
+                {
+                    escaped = true;
+                }
+                else if (ch == '\'')
+                {
+                    inChar = false;
+                }
+
+                continue;
+            }
+
+            if (ch == '"')
+            {
+                inString = true;
+                continue;
+            }
+
+            if (ch == '\'')
+            {
+                inChar = true;
+                continue;
+            }
+
+            if (ch == '{')
+            {
+                delta++;
+            }
+            else if (ch == '}')
+            {
+                delta--;
+            }
+        }
+
+        return delta;
+    }
+
+    private static string CreateJavaSourceFile(string fileName, string packageLine, List<string> importLines, List<string> declarationLines)
+    {
+        var builder = new StringBuilder();
+        builder.Append("// ");
+        builder.Append(fileName);
+        builder.AppendLine(" - GENERATED CODE - DO NOT EDIT");
+        builder.AppendLine();
+        builder.AppendLine(packageLine);
+        builder.AppendLine();
+
+        foreach (var importLine in importLines)
+        {
+            builder.AppendLine(importLine);
+        }
+
+        if (importLines.Count > 0)
+        {
+            builder.AppendLine();
+        }
+
+        foreach (var line in declarationLines)
+        {
+            builder.AppendLine(line);
+        }
+
+        return builder.ToString();
     }
 
     private string GenerateAspireSdk(AtsContext context)
@@ -408,26 +737,33 @@ public sealed class AtsJavaCodeGenerator : ICodeGenerator
 
         foreach (var parameter in parameters)
         {
+            var (resourceWrapperType, resourceWrapperParameterType) = GetResourceBuilderWrapperType(parameter);
             result.Add(new JavaMethodParameter(
                 MapParameterToJava(parameter),
                 ToCamelCase(parameter.Name),
-                GetResourceBuilderWrapperType(parameter)));
+                resourceWrapperType,
+                resourceWrapperParameterType));
         }
 
         return result;
     }
 
-    private string? GetResourceBuilderWrapperType(AtsParameterInfo parameter)
+    private (string? ResourceWrapperType, string? ResourceWrapperParameterType) GetResourceBuilderWrapperType(AtsParameterInfo parameter)
     {
         if (parameter.IsCallback || parameter.Type?.Category != AtsTypeCategory.Handle)
         {
-            return null;
+            return (null, null);
         }
 
         var wrapperType = MapInputTypeToJava(parameter.Type, parameter.IsOptional || parameter.IsNullable);
-        return wrapperType.StartsWith("I", StringComparison.Ordinal) && _resourceBuilderHandleClasses.Contains(wrapperType)
-            ? wrapperType
-            : null;
+        if (!wrapperType.StartsWith("I", StringComparison.Ordinal))
+        {
+            return (null, null);
+        }
+
+        return _resourceBuilderHandleClasses.Contains(wrapperType)
+            ? (wrapperType, "ResourceBuilderBase")
+            : (wrapperType, "HandleWrapperBase");
     }
 
     private void GenerateResourceBuilderOverloads(
@@ -469,7 +805,7 @@ public sealed class AtsJavaCodeGenerator : ICodeGenerator
                 var parameter = parameters[i];
                 if (selectedIndexes.Contains(i))
                 {
-                    overloadParameters.Add($"ResourceBuilderBase {parameter.Name}");
+                    overloadParameters.Add($"{parameter.ResourceWrapperParameterType} {parameter.Name}");
                     callArguments.Add($"new {parameter.ResourceWrapperType}({parameter.Name}.getHandle(), {parameter.Name}.getClient())");
                 }
                 else
@@ -1604,6 +1940,10 @@ public sealed class AtsJavaCodeGenerator : ICodeGenerator
     }
 
     private sealed record JavaHandleType(string TypeId, string ClassName, bool IsResourceBuilder);
-    private sealed record JavaMethodParameter(string Type, string Name, string? ResourceWrapperType = null);
+    private sealed record JavaMethodParameter(
+        string Type,
+        string Name,
+        string? ResourceWrapperType = null,
+        string? ResourceWrapperParameterType = null);
     private sealed record JavaCapabilityReturnInfo(string ReturnType, bool HasReturn, bool ReturnsCurrentBuilder);
 }

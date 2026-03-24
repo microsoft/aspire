@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         // Aspire TypeScript AppHost - Validation for Aspire.Hosting.Azure.AppContainers
         // For more information, see: https://aspire.dev
         var builder = DistributedApplication.CreateBuilder();
@@ -55,4 +51,3 @@ final class AppHost {
             });
         builder.build().run();
     }
-}

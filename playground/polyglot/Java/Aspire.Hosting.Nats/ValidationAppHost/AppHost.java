@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         // Aspire TypeScript AppHost - NATS integration validation
         // Exercises all [AspireExport] methods for Aspire.Hosting.Nats
         var builder = DistributedApplication.CreateBuilder();
@@ -28,9 +24,9 @@ final class AppHost {
         var nats4 = builder.addNats("messaging4", new AddNatsOptions().userName(customUser).password(customPass));
         // withReference - a container referencing a NATS resource (connection string)
         var consumer = builder.addContainer("consumer", "myimage");
-        consumer.withReference(new IResource(nats.getHandle(), nats.getClient()));
+        consumer.withReference(nats);
         // withReference - with explicit connection name option
-        consumer.withReference(new IResource(nats4.getHandle(), nats4.getClient()), new WithReferenceOptions().connectionName("messaging4-connection"));
+        consumer.withReference(nats4, new WithReferenceOptions().connectionName("messaging4-connection"));
         // ---- Property access on NatsServerResource ----
         var _endpoint = nats.primaryEndpoint();
         var _host = nats.host();
@@ -40,4 +36,3 @@ final class AppHost {
         var _cstr = nats.connectionStringExpression();
         builder.build().run();
     }
-}

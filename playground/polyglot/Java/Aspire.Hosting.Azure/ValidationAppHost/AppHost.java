@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         builder.addAzureProvisioning();
         var location = builder.addParameter("location");
@@ -78,11 +74,10 @@ final class AppHost {
         identity.publishAsExistingFromParameters(existingName, existingResourceGroup);
         identity.asExisting(existingName, existingResourceGroup);
         container.withEnvironmentFromOutput("INFRA_URL", infrastructureOutput);
-        container.withEnvironmentFromKeyVaultSecret("SECRET_FROM_IDENTITY", new IAzureKeyVaultSecretReference(identity.getHandle(), identity.getClient()));
+        container.withEnvironmentFromKeyVaultSecret("SECRET_FROM_IDENTITY", identity);
         container.withAzureUserAssignedIdentity(identity);
         executable.withEnvironmentFromOutput("INFRA_URL", infrastructureOutput);
-        executable.withEnvironmentFromKeyVaultSecret("SECRET_FROM_IDENTITY", new IAzureKeyVaultSecretReference(identity.getHandle(), identity.getClient()));
+        executable.withEnvironmentFromKeyVaultSecret("SECRET_FROM_IDENTITY", identity);
         executable.withAzureUserAssignedIdentity(identity);
         builder.build().run();
     }
-}

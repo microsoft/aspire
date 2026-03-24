@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var apiKey = builder.addParameter("openai-api-key", true);
         var openai = builder.addOpenAI("openai")
@@ -13,4 +9,3 @@ final class AppHost {
         openai.addModel("chat-model", "gpt-4o-mini");
         builder.build().run();
     }
-}

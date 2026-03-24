@@ -1,10 +1,6 @@
-package aspire;
+import aspire.*;
 
-import java.util.Map;
-
-final class AppHost {
-
-    void main() throws Exception {
+void main() throws Exception {
         // Aspire TypeScript AppHost
         // For more information, see: https://aspire.dev
         var builder = DistributedApplication.CreateBuilder();
@@ -14,4 +10,3 @@ final class AppHost {
         api.withCognitiveServicesRoleAssignments(openai, new AzureOpenAIRole[] { AzureOpenAIRole.COGNITIVE_SERVICES_OPEN_AIUSER });
         builder.build().run();
     }
-}
