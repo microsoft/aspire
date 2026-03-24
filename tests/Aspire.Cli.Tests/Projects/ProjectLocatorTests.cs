@@ -326,13 +326,20 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
         var appHostProjectFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "MyAppHost.csproj"));
         await File.WriteAllTextAsync(appHostProjectFile.FullName, "Not a real apphost");
 
+        // Add a decoy project so that a directory scan fallback would have another candidate
+        var decoyAppHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("DecoyAppHost");
+        var decoyAppHostProjectFile = new FileInfo(Path.Combine(decoyAppHostDirectory.FullName, "DecoyAppHost.csproj"));
+        await File.WriteAllTextAsync(decoyAppHostProjectFile.FullName, "Not a real apphost");
+
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
 
         // Write legacy .aspire/settings.json with a valid appHostPath
         // (CreateExecutionContext already created the .aspire directory)
         var aspireSettingsDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire"));
         var aspireSettingsFile = new FileInfo(Path.Combine(aspireSettingsDir.FullName, "settings.json"));
-        var relativeAppHostPath = Path.GetRelativePath(workspace.WorkspaceRoot.FullName, appHostProjectFile.FullName);
+        var relativeAppHostPath = Path
+            .GetRelativePath(aspireSettingsDir.FullName, appHostProjectFile.FullName)
+            .Replace(Path.DirectorySeparatorChar, '/');
         await File.WriteAllTextAsync(aspireSettingsFile.FullName, JsonSerializer.Serialize(new { appHostPath = relativeAppHostPath }));
 
         // Use real ConfigurationService so migration actually writes to disk
@@ -346,7 +353,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
         // Act
         var foundAppHost = await locator.UseOrFindAppHostProjectFileAsync(null, createSettingsFile: true, CancellationToken.None).DefaultTimeout();
 
-        // Assert: correct AppHost was found
+        // Assert: correct AppHost was found (not the decoy, proving legacy settings were used)
         Assert.NotNull(foundAppHost);
         Assert.Equal(appHostProjectFile.FullName, foundAppHost.FullName);
 
