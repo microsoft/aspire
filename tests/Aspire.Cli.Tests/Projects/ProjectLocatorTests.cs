@@ -317,6 +317,49 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task UseOrFindAppHostProjectFile_MigratesLegacySettingsToAspireConfigJson()
+    {
+        // Arrange: create a workspace with a legacy .aspire/settings.json
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("MyAppHost");
+        var appHostProjectFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "MyAppHost.csproj"));
+        await File.WriteAllTextAsync(appHostProjectFile.FullName, "Not a real apphost");
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+
+        // Write legacy .aspire/settings.json with a valid appHostPath
+        // (CreateExecutionContext already created the .aspire directory)
+        var aspireSettingsDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire"));
+        var aspireSettingsFile = new FileInfo(Path.Combine(aspireSettingsDir.FullName, "settings.json"));
+        var relativeAppHostPath = Path.GetRelativePath(workspace.WorkspaceRoot.FullName, appHostProjectFile.FullName);
+        await File.WriteAllTextAsync(aspireSettingsFile.FullName, JsonSerializer.Serialize(new { appHostPath = relativeAppHostPath }));
+
+        // Use real ConfigurationService so migration actually writes to disk
+        var globalSettingsFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "settings.global.json");
+        var globalSettingsFile = new FileInfo(globalSettingsFilePath);
+        var config = new ConfigurationBuilder().Build();
+        var configurationService = new ConfigurationService(config, executionContext, globalSettingsFile, NullLogger<ConfigurationService>.Instance);
+
+        var locator = CreateProjectLocator(executionContext, configurationService: configurationService);
+
+        // Act
+        var foundAppHost = await locator.UseOrFindAppHostProjectFileAsync(null, createSettingsFile: true, CancellationToken.None).DefaultTimeout();
+
+        // Assert: correct AppHost was found
+        Assert.NotNull(foundAppHost);
+        Assert.Equal(appHostProjectFile.FullName, foundAppHost.FullName);
+
+        // Assert: aspire.config.json was created by migration
+        var aspireConfigFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        Assert.True(File.Exists(aspireConfigFilePath), "aspire.config.json should have been created by migration from .aspire/settings.json");
+
+        var configJson = await File.ReadAllTextAsync(aspireConfigFilePath);
+        var migratedConfig = JsonSerializer.Deserialize<AspireConfigFile>(configJson);
+        Assert.NotNull(migratedConfig?.AppHost?.Path);
+    }
+
+    [Fact]
     public async Task FindAppHostProjectFilesAsync_DiscoversSingleFileAppHostInRootDirectory()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
