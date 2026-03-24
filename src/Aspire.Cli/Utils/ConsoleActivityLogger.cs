@@ -399,15 +399,15 @@ internal sealed class ConsoleActivityLogger
     {
         var orderedRecords = records
             .OrderBy(r => r.Sequence)
-            .ThenBy(r => r.DisplayName, StringComparer.Ordinal)
+            .ThenBy(r => r.DisplayName, StringComparers.CommandName)
             .ToList();
-        var recordsByKey = orderedRecords.ToDictionary(r => r.Key, StringComparer.Ordinal);
-        var childrenByParent = new Dictionary<string, List<StepDurationRecord>>(StringComparer.Ordinal);
+        var recordsByKey = orderedRecords.ToDictionary(r => r.Key, StringComparers.CommandName);
+        var childrenByParent = new Dictionary<string, List<StepDurationRecord>>(StringComparers.CommandName);
 
         foreach (var record in orderedRecords)
         {
             if (record.ParentKey is { Length: > 0 } parentKey &&
-                !string.Equals(parentKey, record.Key, StringComparison.Ordinal) &&
+                !string.Equals(parentKey, record.Key, StringComparisons.CommandName) &&
                 recordsByKey.ContainsKey(parentKey))
             {
                 if (!childrenByParent.TryGetValue(parentKey, out var children))
@@ -427,12 +427,12 @@ internal sealed class ConsoleActivityLogger
                 var sequenceComparison = left.Sequence.CompareTo(right.Sequence);
                 return sequenceComparison != 0
                     ? sequenceComparison
-                    : StringComparer.Ordinal.Compare(left.DisplayName, right.DisplayName);
+                    : StringComparers.CommandName.Compare(left.DisplayName, right.DisplayName);
             });
         }
 
         var result = new List<StepDurationRecord>(orderedRecords.Count);
-        var visited = new HashSet<string>(StringComparer.Ordinal);
+        var visited = new HashSet<string>(StringComparers.CommandName);
 
         foreach (var root in orderedRecords.Where(r => r.ParentKey is null || !recordsByKey.ContainsKey(r.ParentKey)))
         {
