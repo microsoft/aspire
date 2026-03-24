@@ -106,9 +106,22 @@
   <Target Name="_RestoreDcpPackage">
     <PropertyGroup>
       <_DcpBinlog Condition="'$(ContinuousIntegrationBuild)' == 'true'">-bl:$(ArtifactsLogDir)RestoreDcp.binlog</_DcpBinlog>
+
+      <!-- Map TargetRid to DCP BuildOs/BuildArch so the AppHost restore downloads
+           the correct DCP package for the target platform, not the build machine's platform.
+           Without this, cross-compiled bundles (e.g., win-arm64 built on win-x64) would
+           be missing DCP because the default BuildOs/BuildArch resolve to the build machine. -->
+      <_BundleBuildOs Condition="$(TargetRid.StartsWith('win-'))">windows</_BundleBuildOs>
+      <_BundleBuildOs Condition="$(TargetRid.StartsWith('osx-'))">darwin</_BundleBuildOs>
+      <_BundleBuildOs Condition="$(TargetRid.StartsWith('linux-musl-'))">linux-musl</_BundleBuildOs>
+      <_BundleBuildOs Condition="'$(_BundleBuildOs)' == '' and $(TargetRid.StartsWith('linux-'))">linux</_BundleBuildOs>
+
+      <_BundleBuildArch Condition="$(TargetRid.EndsWith('-x64'))">amd64</_BundleBuildArch>
+      <_BundleBuildArch Condition="$(TargetRid.EndsWith('-arm64'))">arm64</_BundleBuildArch>
+      <_BundleBuildArch Condition="$(TargetRid.EndsWith('-x86'))">386</_BundleBuildArch>
     </PropertyGroup>
-    <Message Importance="high" Text="Restoring DCP package..." />
-    <Exec Command="dotnet restore &quot;$(AppHostProjectPath)&quot; $(_DcpBinlog)" />
+    <Message Importance="high" Text="Restoring DCP package for $(TargetRid) (BuildOs=$(_BundleBuildOs), BuildArch=$(_BundleBuildArch))..." />
+    <Exec Command="dotnet restore &quot;$(AppHostProjectPath)&quot; /p:BuildOs=$(_BundleBuildOs) /p:BuildArch=$(_BundleBuildArch) $(_DcpBinlog)" />
   </Target>
 
   <Target Name="_RunCreateLayout">
