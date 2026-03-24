@@ -516,9 +516,14 @@ function Expand-AspireCliArchive {
             $currentLocation = Get-Location
             try {
                 Set-Location $DestinationPath
-                & tar -xzf $ArchiveFile
+                $tarOutput = & tar -xzf $ArchiveFile 2>&1
                 if ($LASTEXITCODE -ne 0) {
-                    throw "Failed to extract tar.gz archive: $ArchiveFile. tar command returned exit code $LASTEXITCODE"
+                    $tarMessage = ($tarOutput | ForEach-Object { $_.ToString() } | Out-String).Trim()
+                    if ([string]::IsNullOrWhiteSpace($tarMessage)) {
+                        throw "Failed to extract tar.gz archive: $ArchiveFile. tar command returned exit code $LASTEXITCODE"
+                    }
+
+                    throw "Failed to extract tar.gz archive: $ArchiveFile. tar command returned exit code $LASTEXITCODE`: $tarMessage"
                 }
             }
             finally {

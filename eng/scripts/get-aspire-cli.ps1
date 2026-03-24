@@ -743,9 +743,14 @@ function Expand-AspireCliArchive {
             $currentLocation = Get-Location
             try {
                 Set-Location $DestinationPath
-                & tar -xzf $ArchiveFile
+                $tarOutput = & tar -xzf $ArchiveFile 2>&1
                 if ($LASTEXITCODE -ne 0) {
-                    throw "tar command failed with exit code $LASTEXITCODE"
+                    $tarMessage = ($tarOutput | ForEach-Object { $_.ToString() } | Out-String).Trim()
+                    if ([string]::IsNullOrWhiteSpace($tarMessage)) {
+                        throw "tar command failed with exit code $LASTEXITCODE"
+                    }
+
+                    throw "tar command failed with exit code $LASTEXITCODE`: $tarMessage"
                 }
             }
             finally {
