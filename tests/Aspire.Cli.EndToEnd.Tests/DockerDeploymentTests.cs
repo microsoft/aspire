@@ -18,6 +18,7 @@ public sealed class DockerDeploymentTests(ITestOutputHelper output)
     private const string ProjectName = "AspireDockerDeployTest";
 
     [Fact]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/15511")]
     public async Task CreateAndDeployToDockerCompose()
     {
         using var workspace = TemporaryWorkspace.Create(output);
@@ -139,6 +140,7 @@ builder.Build().Run();
     }
 
     [Fact]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/15511")]
     public async Task CreateAndDeployToDockerComposeInteractive()
     {
         using var workspace = TemporaryWorkspace.Create(output);
