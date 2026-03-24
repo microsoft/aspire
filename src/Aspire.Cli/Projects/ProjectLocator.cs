@@ -347,6 +347,11 @@ internal sealed class ProjectLocator(
 
         if (projectFile is not null)
         {
+            if (createSettingsFile)
+            {
+                await CreateSettingsFileAsync(projectFile, cancellationToken);
+            }
+
             return new AppHostProjectSearchResult(projectFile, [projectFile]);
         }
 
