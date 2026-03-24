@@ -87,6 +87,13 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                     }
                 };
             };
+            options.CertificateServiceFactory = serviceProvider =>
+            {
+                var certificateToolRunner = serviceProvider.GetRequiredService<ICertificateToolRunner>();
+                var interactiveService = serviceProvider.GetRequiredService<IInteractionService>();
+                var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
+                return new CertificateService(certificateToolRunner, interactiveService, telemetry, new TestCliHostEnvironment(supportsInteractiveInput: true), isWindows: () => true);
+            };
         });
 
         var sp = services.BuildServiceProvider();
@@ -177,6 +184,13 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                         return EnsureCertificateResult.NewHttpsCertificateTrusted;
                     }
                 };
+            };
+            options.CertificateServiceFactory = serviceProvider =>
+            {
+                var certificateToolRunner = serviceProvider.GetRequiredService<ICertificateToolRunner>();
+                var interactiveService = serviceProvider.GetRequiredService<IInteractionService>();
+                var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
+                return new CertificateService(certificateToolRunner, interactiveService, telemetry, new TestCliHostEnvironment(supportsInteractiveInput: true), isWindows: () => true);
             };
         });
 
@@ -370,12 +384,12 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
             => new CertificateCleanResult { Success = true };
     }
 
-    private sealed class TestCliHostEnvironment : ICliHostEnvironment
+    private sealed class TestCliHostEnvironment(bool supportsInteractiveInput = false, bool supportsInteractiveOutput = false, bool supportsAnsi = true) : ICliHostEnvironment
     {
-        public bool SupportsInteractiveInput => false;
+        public bool SupportsInteractiveInput => supportsInteractiveInput;
 
-        public bool SupportsInteractiveOutput => false;
+        public bool SupportsInteractiveOutput => supportsInteractiveOutput;
 
-        public bool SupportsAnsi => true;
+        public bool SupportsAnsi => supportsAnsi;
     }
 }
