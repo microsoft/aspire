@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
@@ -113,7 +111,8 @@ internal sealed class ScaffoldingService : IScaffoldingService
             var contentToWrite = content;
             if (fileName.Equals(PackageJsonFileName, StringComparison.OrdinalIgnoreCase) && File.Exists(filePath))
             {
-                contentToWrite = MergePackageJson(filePath, content, _logger);
+                var existingContent = await File.ReadAllTextAsync(filePath, cancellationToken);
+                contentToWrite = PackageJsonMerger.Merge(existingContent, content, _logger);
             }
 
             await File.WriteAllTextAsync(filePath, contentToWrite, cancellationToken);
@@ -244,65 +243,4 @@ internal sealed class ScaffoldingService : IScaffoldingService
             language.LanguageId.Value.Equals(KnownLanguageId.TypeScriptAlias, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>
-    /// Merges scaffold-generated package.json with an existing one on disk.
-    /// Preserves all existing properties and only adds new ones from the scaffold output.
-    /// For nested objects (scripts, dependencies), existing values are kept.
-    /// </summary>
-    private static string MergePackageJson(string existingFilePath, string scaffoldContent, ILogger logger)
-    {
-        try
-        {
-            var existingContent = File.ReadAllText(existingFilePath);
-            if (string.IsNullOrWhiteSpace(existingContent))
-            {
-                return scaffoldContent;
-            }
-
-            var existingJson = JsonNode.Parse(existingContent)?.AsObject();
-            var scaffoldJson = JsonNode.Parse(scaffoldContent)?.AsObject();
-
-            if (existingJson is null || scaffoldJson is null)
-            {
-                return scaffoldContent;
-            }
-
-            DeepMerge(existingJson, scaffoldJson);
-            return existingJson.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
-        }
-        catch (Exception ex)
-        {
-            logger.LogDebug(ex, "Failed to merge existing package.json, using scaffold output as-is");
-            return scaffoldContent;
-        }
-    }
-
-    /// <summary>
-    /// Deep merges properties from source into target. Existing target values are preserved.
-    /// For nested objects, recursively merges. Scalar values in target are never overwritten.
-    /// </summary>
-    private static void DeepMerge(JsonObject target, JsonObject source)
-    {
-        foreach (var (key, sourceValue) in source)
-        {
-            if (sourceValue is null)
-            {
-                continue;
-            }
-
-            var targetValue = target[key];
-
-            if (targetValue is null)
-            {
-                // Property doesn't exist in target — add it from scaffold
-                target[key] = sourceValue.DeepClone();
-            }
-            else if (targetValue is JsonObject targetObj && sourceValue is JsonObject sourceObj)
-            {
-                // Both are objects — recursively merge (e.g., scripts, dependencies)
-                DeepMerge(targetObj, sourceObj);
-            }
-            // else: target already has a non-object value — keep it
-        }
-    }
 }
