@@ -338,8 +338,8 @@ public class PackageJsonMergerTests
         Assert.True(json["private"]?.GetValue<bool>());
         Assert.Equal("module", json["type"]?.GetValue<string>());
 
-        // Existing engine constraint preserved (deep merge — existing wins)
-        Assert.Equal(">=18", json["engines"]?["node"]?.GetValue<string>());
+        // engines.node overwritten by scaffold (Aspire requires specific Node versions)
+        Assert.Equal("^20.19.0 || ^22.13.0 || >=24", json["engines"]?["node"]?.GetValue<string>());
 
         // Script from scaffold is added
         Assert.Equal("tsc -p tsconfig.apphost.json", GetScript(result, "aspire:build"));
@@ -1017,5 +1017,107 @@ public class PackageJsonMergerTests
 
         // 5.9.3 release is newer than 5.9.3-beta.1 pre-release
         Assert.Equal("^5.9.3", GetDep(result, "devDependencies", "typescript"));
+    }
+
+    [Fact]
+    public void Engines_NodeConstraint_OverwrittenByScaffold()
+    {
+        var existing = """
+            {
+              "name": "my-app",
+              "engines": {
+                "node": ">=16"
+              }
+            }
+            """;
+
+        var scaffold = """
+            {
+              "engines": {
+                "node": "^20.19.0 || ^22.13.0 || >=24"
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.Merge(existing, scaffold);
+
+        // engines.node is always overwritten — aspire init enforces Node version for ESLint 10
+        var engines = ParseJson(result)["engines"]!.AsObject();
+        Assert.Equal("^20.19.0 || ^22.13.0 || >=24", engines["node"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void Engines_OtherKeys_Preserved()
+    {
+        var existing = """
+            {
+              "name": "my-app",
+              "engines": {
+                "node": ">=16",
+                "npm": ">=8"
+              }
+            }
+            """;
+
+        var scaffold = """
+            {
+              "engines": {
+                "node": "^20.19.0 || ^22.13.0 || >=24"
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.Merge(existing, scaffold);
+
+        var engines = ParseJson(result)["engines"]!.AsObject();
+        // node overwritten by scaffold
+        Assert.Equal("^20.19.0 || ^22.13.0 || >=24", engines["node"]?.GetValue<string>());
+        // npm preserved from existing
+        Assert.Equal(">=8", engines["npm"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void Engines_AddedWhenMissing()
+    {
+        var existing = """
+            {
+              "name": "my-app"
+            }
+            """;
+
+        var scaffold = """
+            {
+              "engines": {
+                "node": "^20.19.0 || ^22.13.0 || >=24"
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.Merge(existing, scaffold);
+
+        var engines = ParseJson(result)["engines"]!.AsObject();
+        Assert.Equal("^20.19.0 || ^22.13.0 || >=24", engines["node"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void ScaffoldWithArrayProperty_ThrowsInvalidOperation()
+    {
+        var existing = """
+            {
+              "name": "my-app"
+            }
+            """;
+
+        var scaffold = """
+            {
+              "files": ["dist/**", "README.md"]
+            }
+            """;
+
+        // Array properties in scaffold require explicit merge logic — the generic fallthrough
+        // cannot handle them correctly, so we throw to catch this at dev/test time.
+        var ex = Assert.Throws<InvalidOperationException>(() => PackageJsonMerger.Merge(existing, scaffold));
+        Assert.Contains("files", ex.Message);
+        Assert.Contains("PackageJsonMerger", ex.Message);
     }
 }

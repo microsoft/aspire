@@ -19,6 +19,8 @@ internal static class PackageJsonMerger
     private const string ScriptsKey = "scripts";
     private const string DependenciesKey = "dependencies";
     private const string DevDependenciesKey = "devDependencies";
+    private const string EnginesKey = "engines";
+    private const string EnginesNodeKey = "node";
     private const string AspirePrefix = "aspire:";
 
     private static readonly JsonSerializerOptions s_jsonOptions = new()
@@ -43,8 +45,8 @@ internal static class PackageJsonMerger
                 return scaffoldContent;
             }
 
-            var existingJson = JsonNode.Parse(existingContent)?.AsObject();
-            var scaffoldJson = JsonNode.Parse(scaffoldContent)?.AsObject();
+            var existingJson = JsonNode.Parse(existingContent) as JsonObject;
+            var scaffoldJson = JsonNode.Parse(scaffoldContent) as JsonObject;
 
             if (existingJson is null || scaffoldJson is null)
             {
@@ -53,6 +55,11 @@ internal static class PackageJsonMerger
 
             MergeObjects(existingJson, scaffoldJson);
             return existingJson.ToJsonString(s_jsonOptions);
+        }
+        catch (InvalidOperationException)
+        {
+            // Programming error (e.g., unsupported array property in scaffold) — let it propagate
+            throw;
         }
         catch (Exception ex)
         {
@@ -80,12 +87,28 @@ internal static class PackageJsonMerger
         MergeDependencySection(existing, scaffold, DependenciesKey);
         MergeDependencySection(existing, scaffold, DevDependenciesKey);
 
-        // Deep merge everything else
+        // Handle engines with overwrite semantics for "node" — since the user is running
+        // "aspire init", we enforce our Node version constraint (required for ESLint 10
+        // and TypeScript tooling compatibility). Other engines sub-keys are preserved.
+        MergeEngines(existing, scaffold);
+
+        // Deep merge everything else (scalars, nested objects).
+        // The scaffold currently only generates scalar and object properties at the top level.
+        // If an array property is ever added to the scaffold template, explicit merge logic
+        // must be written for it — the generic DeepMerge cannot handle arrays correctly
+        // (it would silently drop the scaffold's array when an existing value is present).
         foreach (var (key, sourceValue) in scaffold)
         {
-            if (key is ScriptsKey or DependenciesKey or DevDependenciesKey || sourceValue is null)
+            if (key is ScriptsKey or DependenciesKey or DevDependenciesKey or EnginesKey || sourceValue is null)
             {
                 continue;
+            }
+
+            if (sourceValue is JsonArray)
+            {
+                throw new InvalidOperationException(
+                    $"The scaffold template contains an array property '{key}' in package.json. " +
+                    $"Explicit merge logic must be added to {nameof(PackageJsonMerger)} for this property.");
             }
 
             var targetValue = existing[key];
@@ -211,6 +234,42 @@ internal static class PackageJsonMerger
                     existingDeps[packageName] = desiredVersion;
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// Merges the <c>engines</c> section from scaffold into existing. The <c>engines.node</c>
+    /// constraint is always overwritten by the scaffold's value because <c>aspire init</c> requires
+    /// specific Node.js versions for ESLint 10 and TypeScript tooling compatibility. Other
+    /// <c>engines</c> sub-keys (e.g., <c>npm</c>) are preserved from the existing package.json.
+    /// </summary>
+    private static void MergeEngines(JsonObject existing, JsonObject scaffold)
+    {
+        var scaffoldEngines = scaffold[EnginesKey]?.AsObject();
+        if (scaffoldEngines is null)
+        {
+            return;
+        }
+
+        var existingEngines = EnsureObject(existing, EnginesKey);
+
+        foreach (var (key, value) in scaffoldEngines)
+        {
+            if (value is null)
+            {
+                continue;
+            }
+
+            if (key == EnginesNodeKey)
+            {
+                // Always overwrite engines.node — Aspire requires specific Node versions
+                existingEngines[key] = value.DeepClone();
+            }
+            else if (existingEngines[key] is null)
+            {
+                existingEngines[key] = value.DeepClone();
+            }
+            // Other existing engine constraints are preserved
         }
     }
 
