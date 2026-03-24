@@ -46,6 +46,6 @@ internal sealed class FakePlaywrightCliRunner : IPlaywrightCliRunner
     public Task<SemVersion?> GetVersionAsync(CancellationToken cancellationToken)
         => Task.FromResult<SemVersion?>(null);
 
-    public Task<bool> InstallSkillsAsync(CancellationToken cancellationToken)
+    public Task<bool> InstallSkillsAsync(string workingDirectory, CancellationToken cancellationToken)
         => Task.FromResult(true);
 }

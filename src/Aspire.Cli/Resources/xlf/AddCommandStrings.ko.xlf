@@ -8,8 +8,8 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Add a hosting integration to the apphost.</source>
-        <target state="translated">AppHost에 호스팅 통합을 추가하세요.</target>
+        <source>Add a hosting integration to the apphost</source>
+        <target state="needs-review-translation">Aspire AppHost에 호스팅 통합을 추가하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="ErrorOccurredWhileAddingPackage">
@@ -18,8 +18,8 @@
         <note />
       </trans-unit>
       <trans-unit id="IntegrationArgumentDescription">
-        <source>The name of the integration to add (e.g. redis, postgres).</source>
-        <target state="translated">추가할 통합의 이름(예: redis, postgres)입니다.</target>
+        <source>The name of the integration to add (e.g. redis, postgres)</source>
+        <target state="needs-review-translation">추가할 통합의 이름(예: redis, postgres)입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoIntegrationPackagesFound">
@@ -48,8 +48,8 @@
         <note>{0} is a number, {1} is the log file path</note>
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file to add the integration to.</source>
-        <target state="translated">통합을 추가할 Scarlet AppHost 프로젝트 파일의 경로입니다.</target>
+        <source>The path to the Aspire apphost project file to add the integration to</source>
+        <target state="needs-review-translation">통합을 추가할 프로젝트 파일의 경로입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchingForAspirePackages">
@@ -68,17 +68,17 @@
         <note />
       </trans-unit>
       <trans-unit id="SourceArgumentDescription">
-        <source>The NuGet source to use for the integration.</source>
-        <target state="translated">통합에 사용할 NuGet 원본입니다.</target>
+        <source>The NuGet source to use for the integration</source>
+        <target state="needs-review-translation">통합에 사용할 NuGet 원본입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="StoppedRunningInstance" translate="yes" xml:space="preserve">
-          <source>Stopped a running Aspire AppHost instance to allow package modification.</source>
-          <target state="translated">패키지 수정을 허용하기 위해 실행 중인 Aspire AppHost 인스턴스를 중지했습니다.</target><note />
+          <source>Stopped a running Aspire apphost instance to allow package modification.</source>
+          <target state="new">Stopped a running Aspire apphost instance to allow package modification.</target><note />
         </trans-unit>
       <trans-unit id="UnableToStopRunningInstances">
-        <source>Unable to stop one or more running Aspire AppHost instances. Please stop the application and try again.</source>
-        <target state="translated">실행 중인 Aspire AppHost 인스턴스 중 하나 이상을 중지할 수 없습니다. 애플리케이션을 종료하고 다시 시도하세요.</target>
+        <source>Unable to stop one or more running Aspire apphost instances. Please stop the application and try again.</source>
+        <target state="new">Unable to stop one or more running Aspire apphost instances. Please stop the application and try again.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnexpectedNumberOfPackagesFound">
@@ -92,8 +92,8 @@
         <note />
       </trans-unit>
       <trans-unit id="VersionArgumentDescription">
-        <source>The version of the integration to add.</source>
-        <target state="translated">추가할 통합의 버전입니다.</target>
+        <source>The version of the integration to add</source>
+        <target state="needs-review-translation">추가할 통합의 버전입니다.</target>
         <note />
       </trans-unit>
     </body>

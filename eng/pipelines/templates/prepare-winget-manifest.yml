@@ -42,9 +42,19 @@ steps:
     displayName: 🟣Set version ${{ parameters.version }}
 
   - pwsh: |
-      Write-Host "Installing Microsoft.WinGet.Client from PSGallery..."
-      Install-PSResource -Name Microsoft.WinGet.Client -Repository PSGallery -TrustRepository
+      $repoName = 'dotnet-public'
+      $repoUri = 'https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public/nuget/v3/index.json'
 
+      Write-Host "Ensuring PSResource repository '$repoName' is registered..."
+      $existingRepo = Get-PSResourceRepository -Name $repoName -ErrorAction SilentlyContinue
+      if ($null -eq $existingRepo) {
+        Register-PSResourceRepository -Name $repoName -Uri $repoUri -Trusted
+      } else {
+        Write-Host "PSResource repository '$repoName' is already registered. Skipping registration."
+      }
+
+      Write-Host "Installing Microsoft.WinGet.Client from $repoName feed..."
+      Install-PSResource -Name Microsoft.WinGet.Client -Repository $repoName -TrustRepository
       Write-Host "Microsoft.WinGet.Client installed. Listing installed version:"
       Get-Module -ListAvailable Microsoft.WinGet.Client | Select-Object Name, Version | Format-Table
 

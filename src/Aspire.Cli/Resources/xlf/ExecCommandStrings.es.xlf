@@ -4,18 +4,18 @@
     <body>
       <trans-unit id="CommandArgumentDescription">
         <source>The command to execute in the target resource's context. Commands can be specified directly after options or after a -- separator.</source>
-        <target state="translated">Comando que se va a ejecutar en el contexto del recurso de destino. Los comandos se pueden especificar directamente después de las opciones o después de un separador --.</target>
+        <target state="needs-review-translation">Comando que se va a ejecutar en el contexto del recurso de destino. Los comandos se pueden especificar directamente después de las opciones o después de un separador --.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Execute commands in the context of an Aspire application resource. Starts the AppHost, waits for resources to initialize, then runs the specified command in the target resource's environment. (Preview)
+        <source>Execute commands in the context of an Aspire application resource. Starts the apphost, waits for resources to initialize, then runs the specified command in the target resource's environment (Preview)
 
 Examples:
   aspire exec --resource api dotnet build
   aspire exec --resource api -- dotnet test --logger console
   aspire exec --start-resource worker pwsh -c "Get-Process"
     </source>
-        <target state="translated">Ejecute comandos en el contexto de un recurso de aplicación Aspire. Inicie AppHost, espere a que se inicialicen los recursos y a continuación, ejecute el comando especificado en el entorno del recurso de destino. (Versión preliminar)
+        <target state="needs-review-translation">Ejecute comandos en el contexto de un recurso de aplicación Aspire. Inicie AppHost, espere a que se inicialicen los recursos y a continuación, ejecute el comando especificado en el entorno del recurso de destino. (Versión preliminar)
 
 Ejemplos:
   exec de --resource api dotnet build
@@ -35,8 +35,8 @@ Ejemplos:
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file. If not specified, searches for a project file in the current directory.</source>
-        <target state="translated">La ruta de acceso al archivo del proyecto host de la aplicación Aspire. Si no se especifica, se busca un archivo de proyecto en el directorio actual.</target>
+        <source>The path to the Aspire apphost project file. If not specified, searches for a project file in the current directory.</source>
+        <target state="needs-review-translation">La ruta de acceso al archivo del proyecto host de la aplicación Aspire. Si no se especifica, se busca un archivo de proyecto en el directorio actual.</target>
         <note />
       </trans-unit>
       <trans-unit id="Running">
@@ -46,7 +46,7 @@ Ejemplos:
       </trans-unit>
       <trans-unit id="StartTargetResourceArgumentDescription">
         <source>The name of the target resource to execute the command against. The command will only be executed after the target resource has successfully started and is running.</source>
-        <target state="translated">El nombre del recurso de destino en el que se ejecutará el comando. El comando solo se ejecutará después de que el recurso de destino se haya iniciado correctamente y se esté ejecutando.</target>
+        <target state="needs-review-translation">El nombre del recurso de destino en el que se ejecutará el comando. El comando solo se ejecutará después de que el recurso de destino se haya iniciado correctamente y se esté ejecutando.</target>
         <note />
       </trans-unit>
       <trans-unit id="StoppingAppHost">
@@ -55,8 +55,8 @@ Ejemplos:
         <note />
       </trans-unit>
       <trans-unit id="TargetResourceArgumentDescription">
-        <source>The name of the target resource to execute the command against. The command will be executed as soon as the AppHost starts, without waiting for the resource to be ready.</source>
-        <target state="translated">El nombre del recurso de destino en el que se ejecutará el comando. El comando se ejecutará en cuanto se inicie AppHost, sin tener que esperar a que el recurso esté listo.</target>
+        <source>The name of the target resource to execute the command against. The command will be executed as soon as the apphost starts, without waiting for the resource to be ready.</source>
+        <target state="needs-review-translation">El nombre del recurso de destino en el que se ejecutará el comando. El comando se ejecutará en cuanto se inicie AppHost, sin tener que esperar a que el recurso esté listo.</target>
         <note />
       </trans-unit>
       <trans-unit id="TargetResourceNotSpecified">
@@ -65,8 +65,8 @@ Ejemplos:
         <note />
       </trans-unit>
       <trans-unit id="WorkdirArgumentDescription">
-        <source>The working directory to execute the command in.</source>
-        <target state="translated">Directorio de trabajo en el que se va a ejecutar el comando.</target>
+        <source>The working directory to execute the command in</source>
+        <target state="needs-review-translation">Directorio de trabajo en el que se va a ejecutar el comando.</target>
         <note />
       </trans-unit>
     </body>

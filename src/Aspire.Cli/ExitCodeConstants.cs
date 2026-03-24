@@ -24,4 +24,6 @@ internal static class ExitCodeConstants
     public const int FailedToExecuteResourceCommand = 16;
     public const int WaitTimeout = 17;
     public const int WaitResourceFailed = 18;
+    public const int FailedToLoadConfiguration = 19;
+    public const int FailedToStartCli = 20;
 }

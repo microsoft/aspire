@@ -54,4 +54,4 @@ var bicepResource = builder.AddBicepTemplate("bicep", "template.bicep")
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

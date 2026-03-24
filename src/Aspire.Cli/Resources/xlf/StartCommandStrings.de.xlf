@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="de" original="../StartCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Start an apphost in the background.</source>
-        <target state="translated">Starten Sie einen Apphost im Hintergrund.</target>
+        <source>Start an apphost in the background</source>
+        <target state="new">Start an apphost in the background</target>
         <note />
       </trans-unit>
     </body>

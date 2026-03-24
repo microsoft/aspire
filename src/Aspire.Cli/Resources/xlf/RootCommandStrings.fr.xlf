@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="fr" original="../RootCommandStrings.resx">
     <body>
       <trans-unit id="BannerArgumentDescription">
-        <source>Display the animated Aspire CLI welcome banner.</source>
-        <target state="translated">Afficher la bannière d’accueil animée Aspire CLI.</target>
+        <source>Display the animated Aspire CLI welcome banner</source>
+        <target state="needs-review-translation">Afficher la bannière d’accueil animée Aspire CLI.</target>
         <note />
       </trans-unit>
       <trans-unit id="BannerVersionFormat">
@@ -18,23 +18,23 @@
         <note />
       </trans-unit>
       <trans-unit id="CliWaitForDebuggerArgumentDescription">
-        <source>Wait for a debugger to attach before executing the command.</source>
-        <target state="translated">Attendez qu’un débogueur s’attache avant d’exécuter la commande.</target>
+        <source>Wait for a debugger to attach before executing the command</source>
+        <target state="needs-review-translation">Attendez qu’un débogueur s’attache avant d’exécuter la commande.</target>
         <note />
       </trans-unit>
       <trans-unit id="DebugArgumentDescription">
-        <source>Enable debug logging to the console.</source>
-        <target state="translated">Activez la journalisation de débogage dans la console.</target>
+        <source>Enable debug logging to the console</source>
+        <target state="needs-review-translation">Activez la journalisation de débogage dans la console.</target>
         <note />
       </trans-unit>
       <trans-unit id="DebugLevelArgumentDescription">
-        <source>Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical).</source>
-        <target state="translated">Définir le niveau minimal de journalisation pour la sortie console (trace, débogage, information, avertissement, erreur, critique).</target>
+        <source>Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)</source>
+        <target state="new">Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>The Aspire CLI can be used to create, run, and publish Aspire-based applications.</source>
-        <target state="translated">L’interface CLI Aspire peut être utilisée pour créer, exécuter et publier des applications basées sur Aspire.</target>
+        <source>The Aspire CLI can be used to create, run, and publish Aspire-based applications</source>
+        <target state="needs-review-translation">L’interface CLI Aspire peut être utilisée pour créer, exécuter et publier des applications basées sur Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="FirstTimeUseTelemetryNotice">
@@ -58,18 +58,18 @@ En savoir plus sur la télémétrie de l’interface CLI Aspire : https://aka.m
         <note />
       </trans-unit>
       <trans-unit id="NoLogoArgumentDescription">
-        <source>Suppress the startup banner and telemetry notice.</source>
-        <target state="translated">Supprimer la bannière de démarrage et la notification de télémétrie.</target>
+        <source>Suppress the startup banner and telemetry notice</source>
+        <target state="needs-review-translation">Supprimer la bannière de démarrage et la notification de télémétrie.</target>
         <note />
       </trans-unit>
       <trans-unit id="NonInteractiveArgumentDescription">
-        <source>Run the command in non-interactive mode, disabling all interactive prompts and spinners.</source>
-        <target state="translated">Exécuter la commande en mode non interactif, en désactivant toutes les requêtes et les indicateurs animés.</target>
+        <source>Run the command in non-interactive mode, disabling all interactive prompts and spinners</source>
+        <target state="new">Run the command in non-interactive mode, disabling all interactive prompts and spinners</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitForDebuggerArgumentDescription">
-        <source>Wait for a debugger to attach before executing the command.</source>
-        <target state="translated">Attendez qu’un débogueur s’attache avant d’exécuter la commande.</target>
+        <source>Wait for a debugger to attach before executing the command</source>
+        <target state="needs-review-translation">Attendez qu’un débogueur s’attache avant d’exécuter la commande.</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitingForDebugger">

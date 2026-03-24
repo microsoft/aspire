@@ -3,6 +3,7 @@
 
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
@@ -112,7 +113,7 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
     {
     }
 
-    public void DisplayLines(IEnumerable<(string Stream, string Line)> lines)
+    public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines)
     {
     }
 

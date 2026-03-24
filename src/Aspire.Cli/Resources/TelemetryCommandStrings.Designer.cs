@@ -178,7 +178,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Dashboard API is not available. Ensure the AppHost is running with Dashboard enabled..
+        ///   Looks up a localized string similar to Dashboard API is not available. Ensure the apphost is running with Dashboard enabled..
         /// </summary>
         internal static string DashboardApiNotAvailable {
             get {

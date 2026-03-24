@@ -6,8 +6,10 @@ import { AspireResourceExtendedDebugConfiguration, AspireResourceDebugSession, E
 import { extensionLogOutputChannel } from "../utils/logging";
 import AspireDcpServer, { generateDcpIdPrefix } from "../dcp/AspireDcpServer";
 import { spawnCliProcess } from "./languages/cli";
-import { disconnectingFromSession, launchingWithAppHost, launchingWithDirectory, processExceptionOccurred, processExitedWithCode, aspireDashboard } from "../loc/strings";
+import { disconnectingFromSession, launchingWithAppHost, launchingWithDirectory, processExceptionOccurred, processExitedWithCode, aspireDashboard, appHostSessionTerminated } from "../loc/strings";
 import { projectDebuggerExtension } from "./languages/dotnet";
+import { AnsiColors } from "../utils/AspireTerminalProvider";
+import { applyTextStyle } from "../utils/strings";
 import { nodeDebuggerExtension } from "./languages/node";
 import { cleanupRun } from "./runCleanupRegistry";
 import AspireRpcServer from "../server/AspireRpcServer";
@@ -239,13 +241,16 @@ export class AspireDebugSession implements vscode.DebugAdapter {
       // When the user clicks "restart" on the app host child session,
       // we suppress VS Code's automatic child restart and restart the
       // entire Aspire debug session instead.
-      this.createDebugAdapterTrackerCore(debuggerExtension.debugAdapter, (debugSessionId) => {
-        if (debugSessionId === this.debugSessionId) {
-          this._appHostRestartRequested = true;
-          return true; // suppress VS Code's child restart
+      this.createDebugAdapterTrackerCore(
+        debuggerExtension.debugAdapter,
+        (debugSessionId) => {
+          if (debugSessionId === this.debugSessionId) {
+            this._appHostRestartRequested = true;
+            return true; // suppress VS Code's child restart
+          }
+          return false;
         }
-        return false;
-      });
+      );
 
       let appHostArgs: string[];
       let launchConfig;
@@ -290,6 +295,10 @@ export class AspireDebugSession implements vscode.DebugAdapter {
 
       const disposable = vscode.debug.onDidTerminateDebugSession(async session => {
         if (this._appHostDebugSession && session.id === this._appHostDebugSession.id) {
+          if (!this._appHostRestartRequested) {
+            this.sendMessageWithEmoji("ℹ️", applyTextStyle(appHostSessionTerminated, AnsiColors.Yellow));
+          }
+
           // Only restart the Aspire session when the user explicitly clicked
           // "restart" on the app host debug toolbar (detected via DAP tracker).
           // All other cases (user stop, process crash/exit) just dispose.

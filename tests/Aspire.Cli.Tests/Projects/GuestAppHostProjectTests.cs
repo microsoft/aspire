@@ -2,7 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Diagnostics;
+using Aspire.Cli.Projects;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Projects;
 
@@ -292,5 +297,75 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
 
         await Verify(content, extension: "json")
             .UseFileName("AspireJsonConfiguration_SettingsJson");
+    }
+
+    [Fact]
+    public void GetServerEnvironmentVariables_ParsesLaunchSettingsWithComments()
+    {
+        var project = CreateGuestAppHostProject(_workspace.WorkspaceRoot);
+
+        var propertiesDir = _workspace.CreateDirectory("Properties");
+        var launchSettingsPath = Path.Combine(propertiesDir.FullName, "launchSettings.json");
+        File.WriteAllText(launchSettingsPath, """
+            {
+              "profiles": {
+                "https": {
+                  "commandName": "Project",
+                  "applicationUrl": "https://localhost:16319;http://localhost:16320",
+                  "environmentVariables": {
+                    "ASPNETCORE_ENVIRONMENT": "Development",
+                    "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:17269",
+                    // This is a commented-out environment variable
+                    //"ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "https://localhost:17269",
+                    "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:17269"
+                  }
+                }
+              }
+            }
+            """);
+
+        var envVars = project.GetServerEnvironmentVariables(_workspace.WorkspaceRoot);
+
+        Assert.Equal("https://localhost:16319;http://localhost:16320", envVars["ASPNETCORE_URLS"]);
+        Assert.Equal("Development", envVars["ASPNETCORE_ENVIRONMENT"]);
+        Assert.Equal("https://localhost:17269", envVars["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]);
+        Assert.Equal("https://localhost:17269", envVars["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]);
+        Assert.False(envVars.ContainsKey("ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"));
+    }
+
+    private static GuestAppHostProject CreateGuestAppHostProject(DirectoryInfo workspaceRoot)
+    {
+        var language = new LanguageInfo(
+            LanguageId: "typescript/nodejs",
+            DisplayName: "TypeScript (Node.js)",
+            PackageName: "Aspire.Hosting.CodeGeneration.TypeScript",
+            DetectionPatterns: ["apphost.ts"],
+            CodeGenerator: "TypeScript");
+
+        // Point the config service at a non-existent file so GetConfigDirectory
+        // falls back to the directory we pass to GetServerEnvironmentVariables.
+        var configService = new TestConfigurationService
+        {
+            SettingsFilePath = Path.Combine(workspaceRoot.FullName, "nonexistent", "settings.json")
+        };
+
+        var configuration = new ConfigurationBuilder().Build();
+
+        var logFilePath = Path.Combine(Path.GetTempPath(), $"test-guest-{Guid.NewGuid()}.log");
+
+        return new GuestAppHostProject(
+            language: language,
+            interactionService: new TestInteractionService(),
+            backchannel: new TestAppHostBackchannel(),
+            appHostServerProjectFactory: new TestAppHostServerProjectFactory(),
+            certificateService: new TestCertificateService(),
+            runner: new TestDotNetCliRunner(),
+            packagingService: new TestPackagingService(),
+            configuration: configuration,
+            configurationService: configService,
+            features: new Features(configuration, NullLogger<Features>.Instance),
+            languageDiscovery: new TestLanguageDiscovery(),
+            logger: NullLogger<GuestAppHostProject>.Instance,
+            fileLoggerProvider: new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()));
     }
 }

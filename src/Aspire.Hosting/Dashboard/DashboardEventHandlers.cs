@@ -65,7 +65,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
     {
         Debug.Assert(executionContext.IsRunMode, "Dashboard resource should only be added in run mode");
 
-        if (@event.Model.Resources.SingleOrDefault(r => StringComparers.ResourceName.Equals(r.Name, KnownResourceNames.AspireDashboard)) is { } dashboardResource)
+        if (@event.Model.Resources.SingleOrDefault(r => string.Equals(r.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName)) is { } dashboardResource)
         {
             ConfigureAspireDashboardResource(dashboardResource);
 
@@ -635,6 +635,9 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             context.EnvironmentVariables[DashboardConfigNames.DashboardApiAuthModeName.EnvVarName] = "Unsecured";
         }
 
+        // Enable dashboard API
+        context.EnvironmentVariables[DashboardConfigNames.DashboardAspireApiEnabledName.EnvVarName] = "true";
+
         // Configure dashboard to show CLI MCP instructions when running with an AppHost (not in standalone mode)
         context.EnvironmentVariables[DashboardConfigNames.DashboardMcpUseCliMcpName.EnvVarName] = "true";
 
@@ -795,7 +798,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             {
                 // Track all dashboard resources and start watching their logs.
                 // TODO: In the future when resources can restart, we should handle purging the taskCache.
-                if (StringComparers.ResourceName.Equals(notification.Resource.Name, KnownResourceNames.AspireDashboard) && !dashboardResourceTasks.ContainsKey(notification.ResourceId))
+                if (string.Equals(notification.Resource.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName) && !dashboardResourceTasks.ContainsKey(notification.ResourceId))
                 {
                     dashboardResourceTasks[notification.ResourceId] = WatchResourceLogsAsync(notification.ResourceId, loggerCache, defaultDashboardLogger, resourceLoggerService, loggerFactory, cancellationToken);
                 }

@@ -144,7 +144,7 @@ internal sealed class SecretsStore
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var kvp in flat)
         {
-            var value = kvp.Value?.GetValue<string>();
+            var value = kvp.Value?.ToString();
             if (value is not null)
             {
                 result[kvp.Key] = value;

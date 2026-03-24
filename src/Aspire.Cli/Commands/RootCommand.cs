@@ -123,6 +123,7 @@ internal sealed class RootCommand : BaseRootCommand
         DoCommand doCommand,
         ConfigCommand configCommand,
         CacheCommand cacheCommand,
+        CertificatesCommand certificatesCommand,
         DoctorCommand doctorCommand,
         ExecCommand execCommand,
         UpdateCommand updateCommand,
@@ -210,6 +211,7 @@ internal sealed class RootCommand : BaseRootCommand
         Subcommands.Add(publishCommand);
         Subcommands.Add(configCommand);
         Subcommands.Add(cacheCommand);
+        Subcommands.Add(certificatesCommand);
         Subcommands.Add(doctorCommand);
         Subcommands.Add(deployCommand);
         Subcommands.Add(doCommand);

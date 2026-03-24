@@ -3,13 +3,13 @@
   <file datatype="xml" source-language="en" target-language="zh-Hant" original="../DescribeCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Describe resources in a running apphost.</source>
-        <target state="translated">描述執行中的 apphost 中的資源。</target>
+        <source>Describe resources in a running apphost</source>
+        <target state="needs-review-translation">顯示正在執行的 Aspire AppHost 的資源快照集。</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
-        <source>Continuously stream resource state changes.</source>
-        <target state="translated">持續串流資源狀態變更。</target>
+        <source>Continuously stream resource state changes</source>
+        <target state="new">Continuously stream resource state changes</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderEndpoints">
@@ -38,18 +38,18 @@
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">輸出格式 (資料表或 Json)。</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">輸出為 JSON 格式供機器使用。</target>
         <note />
       </trans-unit>
       <trans-unit id="NoAppHostFound">
-        <source>No AppHost project found.</source>
-        <target state="translated">找不到 AppHost 專案。</target>
+        <source>No apphost project found.</source>
+        <target state="needs-review-translation">找不到 AppHost 專案。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The name of the resource to display. If not specified, all resources are shown.</source>
-        <target state="translated">要顯示的資源名稱。如果未指定，則會顯示所有資源。</target>
+        <target state="needs-review-translation">要顯示的資源名稱。如果未指定，則會顯示所有資源。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">

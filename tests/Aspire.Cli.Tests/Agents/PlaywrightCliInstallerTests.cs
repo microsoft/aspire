@@ -64,6 +64,46 @@ public class PlaywrightCliInstallerTests
     }
 
     [Fact]
+    public async Task InstallAsync_PassesRepositoryRootAsWorkingDirectory()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"aspire-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var version = SemVersion.Parse("0.1.1", SemVersionStyles.Strict);
+            var npmRunner = new TestNpmRunner
+            {
+                ResolveResult = new NpmPackageInfo { Version = version, Integrity = "sha512-abc123" }
+            };
+            var playwrightRunner = new TestPlaywrightCliRunner
+            {
+                InstalledVersion = version,
+                InstallSkillsResult = true
+            };
+            var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+
+            var context = new AgentEnvironmentScanContext
+            {
+                WorkingDirectory = new DirectoryInfo(Path.GetTempPath()),
+                RepositoryRoot = new DirectoryInfo(tempDir)
+            };
+
+            await installer.InstallAsync(context, CancellationToken.None);
+
+            Assert.True(playwrightRunner.InstallSkillsCalled);
+            Assert.Equal(tempDir, playwrightRunner.InstallSkillsWorkingDirectory);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task InstallAsync_WhenNewerVersionInstalled_SkipsInstallAndInstallsSkills()
     {
         var targetVersion = SemVersion.Parse("0.1.1", SemVersionStyles.Strict);
@@ -554,13 +594,15 @@ public class PlaywrightCliInstallerTests
         public SemVersion? InstalledVersion { get; set; }
         public bool InstallSkillsResult { get; set; }
         public bool InstallSkillsCalled { get; private set; }
+        public string? InstallSkillsWorkingDirectory { get; private set; }
 
         public Task<SemVersion?> GetVersionAsync(CancellationToken cancellationToken)
             => Task.FromResult(InstalledVersion);
 
-        public Task<bool> InstallSkillsAsync(CancellationToken cancellationToken)
+        public Task<bool> InstallSkillsAsync(string workingDirectory, CancellationToken cancellationToken)
         {
             InstallSkillsCalled = true;
+            InstallSkillsWorkingDirectory = workingDirectory;
             return Task.FromResult(InstallSkillsResult);
         }
     }

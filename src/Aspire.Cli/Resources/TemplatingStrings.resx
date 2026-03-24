@@ -129,6 +129,9 @@
   <data name="AspireEmpty_Description" xml:space="preserve">
     <value>AppHost and service defaults</value>
   </data>
+  <data name="AspireEmptyDotNetTemplate_Description" xml:space="preserve">
+    <value>Empty (C# AppHost, dotnet template)</value>
+  </data>
   <data name="AspireAppHost_Description" xml:space="preserve">
     <value>AppHost</value>
   </data>
@@ -248,10 +251,10 @@
     <value>Configures whether to use *.dev.localhost URLs for local development.</value>
   </data>
   <data name="RunCdThenAspireRun" xml:space="preserve">
-    <value>Run 'cd "{0}"' and then 'aspire run' to start your AppHost.</value>
+    <value>Run 'cd "{0}"' and then 'aspire run' to start your apphost.</value>
     <comment>{0} is the relative path to the project directory</comment>
   </data>
   <data name="RunAspireRun" xml:space="preserve">
-    <value>Run 'aspire run' to start your AppHost.</value>
+    <value>Run 'aspire run' to start your apphost.</value>
   </data>
 </root>

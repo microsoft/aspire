@@ -42,17 +42,17 @@ internal abstract class PipelineCommandBase : BaseCommand
 
     protected static readonly Option<string?> s_logLevelOption = new("--log-level")
     {
-        Description = "Set the minimum log level for pipeline logging (trace, debug, information, warning, error, critical). The default is 'information'."
+        Description = SharedCommandStrings.PipelineLogLevelOptionDescription
     };
 
     protected static readonly Option<bool> s_includeExceptionDetailsOption = new("--include-exception-details")
     {
-        Description = "Include exception details (stack traces) in pipeline logs."
+        Description = SharedCommandStrings.PipelineIncludeExceptionDetailsOptionDescription
     };
 
     protected static readonly Option<string?> s_environmentOption = new("--environment", "-e")
     {
-        Description = "The environment to use for the operation. The default is 'Production'."
+        Description = SharedCommandStrings.PipelineEnvironmentOptionDescription
     };
 
     protected static readonly Option<bool> s_noBuildOption = new("--no-build")

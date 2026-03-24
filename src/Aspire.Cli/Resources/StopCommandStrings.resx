@@ -118,31 +118,31 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>Stop a running apphost.</value>
+    <value>Stop a running apphost</value>
   </data>
   <data name="ProjectArgumentDescription" xml:space="preserve">
-    <value>The path to the Aspire AppHost project file.</value>
+    <value>The path to the Aspire apphost project file</value>
   </data>
   <data name="StoppingAppHost" xml:space="preserve">
     <value>Stopping Aspire apphost...</value>
   </data>
   <data name="AppHostStoppedSuccessfully" xml:space="preserve">
-    <value>AppHost stopped successfully.</value>
+    <value>Apphost stopped successfully.</value>
   </data>
   <data name="MultipleAppHostsRunning" xml:space="preserve">
-    <value>Multiple AppHosts are running. Use --apphost to specify which one to stop, or select one:</value>
+    <value>Multiple apphosts are running. Use --apphost to specify which one to stop, or select one:</value>
   </data>
   <data name="FailedToStopAppHost" xml:space="preserve">
-    <value>Failed to stop the AppHost.</value>
+    <value>Failed to stop the apphost.</value>
   </data>
   <data name="SelectAppHostAction" xml:space="preserve">
     <value>stop</value>
   </data>
   <data name="AllOptionDescription" xml:space="preserve">
-    <value>Stop all running AppHosts.</value>
+    <value>Stop all running apphosts</value>
   </data>
   <data name="MultipleAppHostsNonInteractive" xml:space="preserve">
-    <value>Multiple AppHosts are running. Use {0} to specify which one to stop, or use {1} to stop all of them.</value>
+    <value>Multiple apphosts are running. Use {0} to specify which one to stop, or use {1} to stop all of them.</value>
   </data>
   <data name="AllAndProjectMutuallyExclusive" xml:space="preserve">
     <value>The {0} and {1} options cannot be used together.</value>

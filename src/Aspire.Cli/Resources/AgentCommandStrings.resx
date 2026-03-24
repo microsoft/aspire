@@ -61,13 +61,13 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>Manage AI agent specific setup.</value>
+    <value>Manage AI agent environment configuration</value>
   </data>
   <data name="McpCommand_Description" xml:space="preserve">
-    <value>Start the MCP (Model Context Protocol) server.</value>
+    <value>Start the MCP (Model Context Protocol) server</value>
   </data>
   <data name="InitCommand_Description" xml:space="preserve">
-    <value>Initialize agent environment configuration for detected agents.</value>
+    <value>Initialize agent environment configuration for detected agents</value>
   </data>
   <data name="DeprecatedConfigUpdate_Description" xml:space="preserve">
     <value>Update {0} config to use new 'agent mcp' command</value>

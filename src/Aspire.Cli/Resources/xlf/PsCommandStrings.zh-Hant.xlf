@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="zh-Hant" original="../PsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>List running apphosts.</source>
-        <target state="translated">列出執行中的 apphost。</target>
+        <source>List running apphosts</source>
+        <target state="needs-review-translation">列出正在執行的 Aspire apphost。</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderCliPid">
@@ -28,13 +28,13 @@
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">輸出格式 (資料表或 Json)。</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">以 JSON 格式輸出。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesOptionDescription">
-        <source>Include resource details for each running app host. Only applies to JSON output.</source>
-        <target state="translated">包含每個主控處理程序的資源詳細資料。僅適用於 JSON 輸出。</target>
+        <source>Include resource details for each running apphost. Only applies to JSON output.</source>
+        <target state="new">Include resource details for each running apphost. Only applies to JSON output.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnknownPath">

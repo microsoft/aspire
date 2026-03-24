@@ -1,3 +1,11 @@
+# TEMPORARY WORKAROUND: This workflow is a local copy of dotnet/arcade's backport-base.yml
+# reusable workflow, modified to use a GitHub App token for PR creation. The microsoft org
+# disables GITHUB_TOKEN from creating PRs, and the arcade reusable workflow doesn't accept
+# a custom token. Once https://github.com/dotnet/arcade/issues/16585 is resolved, this
+# workflow should be reverted back to calling the arcade reusable workflow.
+#
+# Original: dotnet/arcade/.github/workflows/backport-base.yml@66269f6a88f6062f2cccf6eb84660a8a6f5cc5ec
+
 name: Backport PR to branch
 on:
   issue_comment:
@@ -13,19 +21,252 @@ permissions:
   actions: write
 
 jobs:
-  backport:
-    if: ${{ contains(github.event.comment.body, '/backport to') || github.event_name == 'schedule' }}
-    uses: dotnet/arcade/.github/workflows/backport-base.yml@66269f6a88f6062f2cccf6eb84660a8a6f5cc5ec # 2025-01-13
+  cleanup:
+    if: github.event_name == 'schedule'
+    uses: dotnet/arcade/.github/workflows/scheduled-action-cleanup-base.yml@main
     with:
-      pr_description_template: |
-        Backport of #%source_pr_number% to %target_branch%
+      repository_owners: 'dotnet,microsoft'
 
-        /cc %cc_users%
+  backport:
+    if: >-
+      github.event_name == 'issue_comment' &&
+      contains(format('{0},', 'dotnet,microsoft'), format('{0},', github.repository_owner)) &&
+      github.event.issue.pull_request != '' &&
+      contains(github.event.comment.body, '/backport to')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+    - name: Extract backport target branch
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      id: target-branch-extractor
+      with:
+        result-encoding: string
+        script: |
+          if (context.eventName !== "issue_comment") throw "Error: This action only works on issue_comment events.";
 
-        ## Customer Impact
+          // extract the target branch name from the trigger phrase containing these characters: a-z, A-Z, digits, forward slash, dot, hyphen, underscore
+          const regex = /^\/backport to ([a-zA-Z\d\/\.\-\_]+)/;
+          target_branch = regex.exec(context.payload.comment.body);
+          if (target_branch == null) throw "Error: No backport branch found in the trigger phrase.";
 
-        ## Testing
+          return target_branch[1];
 
-        ## Risk
+    - name: Verify user has write access
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      with:
+        script: |
+          const comment_user = context.payload.comment.user.login;
+          const { data: permission } = await github.rest.repos.getCollaboratorPermissionLevel({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            username: comment_user
+          });
 
-        ## Regression?
+          const writePermissions = ['admin', 'write'];
+          if (!writePermissions.includes(permission.permission)) {
+            core.setFailed(`@${comment_user} does not have write access to this repo, backporting is not allowed. Required permissions: write or admin.`);
+            return;
+          }
+          console.log(`Verified ${comment_user} has ${permission.permission} access to the repo.`);
+
+    - name: Unlock comments if PR is locked
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      if: github.event.issue.locked == true
+      with:
+        script: |
+          console.log(`Unlocking locked PR #${context.issue.number}.`);
+          await github.rest.issues.unlock({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+          });
+
+    - name: Post backport started comment to pull request
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      with:
+        script: |
+          const target_branch = '${{ steps.target-branch-extractor.outputs.result }}';
+          const workflow_run_url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+          const backport_start_body = `Started backporting to \`${target_branch}\` ([link to workflow run](${workflow_run_url}))`;
+          await github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: backport_start_body
+          });
+
+    # Generate the App token only after verifying the commenter has write access,
+    # to avoid minting a privileged token for unauthorized users.
+    - name: Generate GitHub App Token
+      id: app-token
+      uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
+      with:
+        app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+        private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+
+    - name: Checkout repo
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      with:
+        fetch-depth: 0
+        token: ${{ steps.app-token.outputs.token }}
+
+    - name: Run backport
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      env:
+        GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        BACKPORT_PR_TITLE_TEMPLATE: '[%target_branch%] %source_pr_title%'
+        BACKPORT_PR_DESCRIPTION_TEMPLATE: |
+          Backport of #%source_pr_number% to %target_branch%
+
+          /cc %cc_users%
+
+          ## Customer Impact
+
+          ## Testing
+
+          ## Risk
+
+          ## Regression?
+      with:
+        github-token: ${{ steps.app-token.outputs.token }}
+        script: |
+          const target_branch = '${{ steps.target-branch-extractor.outputs.result }}';
+          const repo_owner = context.payload.repository.owner.login;
+          const repo_name = context.payload.repository.name;
+          const pr_number = context.payload.issue.number;
+          const comment_user = context.payload.comment.user.login;
+          const workflow_run_url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+          const wrap_in_code_block = (language, content) => `\`\`\`${language}\n${content}\n\`\`\``;
+          const wrap_in_details_block = (summary, content) => `<details>\n<summary>${summary}</summary>\n\n${content}\n</details>`;
+
+          // Post a comment on the PR and return the comment URL
+          async function postComment(body) {
+            const { data: comment } = await github.rest.issues.createComment({
+              owner: repo_owner,
+              repo: repo_name,
+              issue_number: pr_number,
+              body
+            });
+            return comment.html_url;
+          }
+
+          try {
+            // Permission check already done in the "Verify user has write access" step above.
+
+            try { await exec.exec(`git ls-remote --exit-code --heads origin ${target_branch}`) } catch { throw new Error(`Error: The specified backport target branch "${target_branch}" wasn't found in the repo.`); }
+            console.log(`Backport target branch: ${target_branch}`);
+
+            console.log("Applying backport patch");
+
+            await exec.exec(`git checkout ${target_branch}`);
+            await exec.exec(`git clean -xdff`);
+
+            // configure git
+            await exec.exec(`git config user.name "github-actions"`);
+            await exec.exec(`git config user.email "github-actions@github.com"`);
+
+            // create temporary backport branch
+            const temp_branch = `backport/pr-${pr_number}-to-${target_branch}`;
+            await exec.exec(`git checkout -b ${temp_branch}`);
+
+            // skip opening PR if the branch already exists on the origin remote since that means it was opened
+            // by an earlier backport and force pushing to the branch updates the existing PR
+            let should_open_pull_request = true;
+            try {
+              await exec.exec(`git ls-remote --exit-code --heads origin ${temp_branch}`);
+              should_open_pull_request = false;
+            } catch { }
+
+            // download and apply patch
+            const patch_file = 'changes.patch';
+            await exec.exec(`bash -c "gh pr diff --patch ${pr_number} > ${patch_file}"`);
+
+            const base_switches = '--3way --empty=keep --ignore-whitespace --keep-non-patch';
+            const git_am_command = `git am ${base_switches} ${patch_file}`;
+            let git_am_output = `$ ${git_am_command}\n\n`;
+            let git_am_failed = false;
+            try {
+              await exec.exec(git_am_command, [], {
+                listeners: {
+                  stdout: function stdout(data) { git_am_output += data; },
+                  stderr: function stderr(data) { git_am_output += data; }
+                }
+              });
+            } catch (error) {
+              git_am_output += error;
+              git_am_failed = true;
+            }
+
+            if (git_am_failed) {
+              const details = `${wrap_in_code_block('console', git_am_output)}\n[Link to workflow output](${workflow_run_url})`;
+              const git_am_failed_body = `@${comment_user} backporting to \`${target_branch}\` failed, the patch most likely resulted in conflicts. Please backport manually!\n${wrap_in_details_block('git am output', details)}`;
+              postComment(git_am_failed_body);
+              core.setFailed("git am failed, most likely due to a merge conflict.");
+              return;
+            }
+
+            // push the temp branch to the repository
+            await exec.exec(`git push --force --set-upstream origin HEAD:${temp_branch}`);
+
+            if (!should_open_pull_request) {
+              console.log("Backport temp branch already exists, skipping opening a PR.");
+              return;
+            }
+
+            // prepare the GitHub PR details
+
+            // get users to cc (append PR author if different from user who issued the backport command)
+            let cc_users = `@${comment_user}`;
+            if (comment_user != context.payload.issue.user.login) cc_users += ` @${context.payload.issue.user.login}`;
+
+            // replace the special placeholder tokens with values
+            const { BACKPORT_PR_TITLE_TEMPLATE, BACKPORT_PR_DESCRIPTION_TEMPLATE } = process.env
+
+            const backport_pr_title = BACKPORT_PR_TITLE_TEMPLATE
+              .replace(/%target_branch%/g, target_branch)
+              .replace(/%source_pr_title%/g, context.payload.issue.title)
+              .replace(/%source_pr_number%/g, context.payload.issue.number)
+              .replace(/%source_pr_author%/g, context.payload.issue.user.login)
+              .replace(/%cc_users%/g, cc_users);
+
+            const backport_pr_description = BACKPORT_PR_DESCRIPTION_TEMPLATE
+              .replace(/%target_branch%/g, target_branch)
+              .replace(/%source_pr_title%/g, context.payload.issue.title)
+              .replace(/%source_pr_number%/g, context.payload.issue.number)
+              .replace(/%source_pr_author%/g, context.payload.issue.user.login)
+              .replace(/%cc_users%/g, cc_users);
+
+            // open the GitHub PR
+            const { data: backportPullRequest } = await github.rest.pulls.create({
+              owner: repo_owner,
+              repo: repo_name,
+              title: backport_pr_title,
+              body: backport_pr_description,
+              head: temp_branch,
+              base: target_branch
+            });
+
+            console.log(`Successfully opened backport PR #${backportPullRequest.number}: ${backportPullRequest.html_url}`);
+          } catch (error) {
+            const body = `@${comment_user} an error occurred while backporting to \`${target_branch}\`. See the [workflow output](${workflow_run_url}) for details.`;
+            const comment_url = await postComment(body);
+            console.log(`Posted comment: ${comment_url}`);
+            core.setFailed(error);
+          }
+
+    - name: Re-lock PR comments
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      if: github.event.issue.locked == true && (success() || failure())
+      with:
+        script: |
+          console.log(`Locking previously locked PR #${context.issue.number} again.`);
+          await github.rest.issues.lock({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            lock_reason: "resolved"
+          });

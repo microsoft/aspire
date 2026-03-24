@@ -122,5 +122,11 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SolutionAndProjectInSameDirectory", resourceCulture);
             }
         }
+
+        internal static string LanguageOptionDescription {
+            get {
+                return ResourceManager.GetString("LanguageOptionDescription", resourceCulture);
+            }
+        }
     }
 }

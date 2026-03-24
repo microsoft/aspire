@@ -62,6 +62,10 @@
     <PackageReference Include="ModelContextProtocol" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Aspire.TypeSystem\Aspire.TypeSystem.csproj" />
+  </ItemGroup>
+
   <!-- When BundlePayloadPath is set (by Bundle.proj), embed the tar.gz as a resource.
        Inner-loop builds without this property produce an unbundled CLI. -->
   <ItemGroup Condition="'$(BundlePayloadPath)' != '' and Exists('$(BundlePayloadPath)')">
@@ -83,7 +87,6 @@
     <Compile Include="$(SharedDir)IConfigurationExtensions.cs" Link="Utils\IConfigurationExtensions.cs" />
     <Compile Include="$(RepoRoot)src\Aspire.Hosting\Backchannel\BackchannelDataTypes.cs" Link="Backchannel\CliBackchannelDataTypes.cs" />
     <Compile Include="$(RepoRoot)src\Aspire.Hosting\ApplicationModel\KnownResourceCommands.cs" Link="Utils\KnownResourceCommands.cs" />
-    <Compile Include="$(RepoRoot)src\Aspire.Hosting\Ats\RuntimeSpec.cs" Link="Ats\RuntimeSpec.cs" />
     <Compile Include="$(SharedDir)PackageUpdateHelpers.cs" Link="Utils\PackageUpdateHelpers.cs" />
     <Compile Include="$(SharedDir)PathLookupHelper.cs" Link="Utils\PathLookupHelper.cs" />
     <Compile Include="$(SharedDir)BackchannelConstants.cs" Link="Backchannel\BackchannelConstants.cs" />

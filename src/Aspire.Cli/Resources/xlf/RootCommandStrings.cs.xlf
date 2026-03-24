@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="cs" original="../RootCommandStrings.resx">
     <body>
       <trans-unit id="BannerArgumentDescription">
-        <source>Display the animated Aspire CLI welcome banner.</source>
-        <target state="translated">Umožňuje zobrazit animovaný úvodní banner rozhraní příkazového řádku Aspire.</target>
+        <source>Display the animated Aspire CLI welcome banner</source>
+        <target state="needs-review-translation">Umožňuje zobrazit animovaný úvodní banner rozhraní příkazového řádku Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="BannerVersionFormat">
@@ -18,23 +18,23 @@
         <note />
       </trans-unit>
       <trans-unit id="CliWaitForDebuggerArgumentDescription">
-        <source>Wait for a debugger to attach before executing the command.</source>
-        <target state="translated">Před provedením příkazu počkejte na připojení ladicího programu.</target>
+        <source>Wait for a debugger to attach before executing the command</source>
+        <target state="needs-review-translation">Před provedením příkazu počkejte na připojení ladicího programu.</target>
         <note />
       </trans-unit>
       <trans-unit id="DebugArgumentDescription">
-        <source>Enable debug logging to the console.</source>
-        <target state="translated">Povolte protokolování ladění do konzoly.</target>
+        <source>Enable debug logging to the console</source>
+        <target state="needs-review-translation">Povolte protokolování ladění do konzoly.</target>
         <note />
       </trans-unit>
       <trans-unit id="DebugLevelArgumentDescription">
-        <source>Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical).</source>
-        <target state="translated">Nastavte minimální úroveň protokolu pro výstup konzoly (trasování, ladění, informace, upozornění, chyba, kritické).</target>
+        <source>Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)</source>
+        <target state="new">Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>The Aspire CLI can be used to create, run, and publish Aspire-based applications.</source>
-        <target state="translated">Aspire CLI lze použít k vytváření, spouštění a publikování aplikací založených na Aspire.</target>
+        <source>The Aspire CLI can be used to create, run, and publish Aspire-based applications</source>
+        <target state="needs-review-translation">Aspire CLI lze použít k vytváření, spouštění a publikování aplikací založených na Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="FirstTimeUseTelemetryNotice">
@@ -58,18 +58,18 @@ Další informace o telemetrii rozhraní příkazového řádku Aspire: https://
         <note />
       </trans-unit>
       <trans-unit id="NoLogoArgumentDescription">
-        <source>Suppress the startup banner and telemetry notice.</source>
-        <target state="translated">Umožňuje potlačit banner spuštění a oznámení o telemetrii.</target>
+        <source>Suppress the startup banner and telemetry notice</source>
+        <target state="needs-review-translation">Umožňuje potlačit banner spuštění a oznámení o telemetrii.</target>
         <note />
       </trans-unit>
       <trans-unit id="NonInteractiveArgumentDescription">
-        <source>Run the command in non-interactive mode, disabling all interactive prompts and spinners.</source>
-        <target state="translated">Spusťte příkaz v neinteraktivním režimu, který zakáže všechny interaktivní výzvy a indikátory průběhu.</target>
+        <source>Run the command in non-interactive mode, disabling all interactive prompts and spinners</source>
+        <target state="new">Run the command in non-interactive mode, disabling all interactive prompts and spinners</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitForDebuggerArgumentDescription">
-        <source>Wait for a debugger to attach before executing the command.</source>
-        <target state="translated">Před provedením příkazu počkejte na připojení ladicího programu.</target>
+        <source>Wait for a debugger to attach before executing the command</source>
+        <target state="needs-review-translation">Před provedením příkazu počkejte na připojení ladicího programu.</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitingForDebugger">

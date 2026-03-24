@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Nodes;
-using Aspire.Hosting.Ats;
+using Aspire.TypeSystem;
 using Aspire.Hosting.RemoteHost.Ats;
 using Xunit;
 
@@ -173,9 +173,30 @@ public class CallbackProxyTests
         Assert.Single(invoker.Invocations);
         var args = invoker.Invocations[0].Args as JsonObject;
         Assert.NotNull(args);
-        // Arguments are passed with positional keys (p0, p1, p2, ...)
-        // CancellationToken is not included in positional args, but added as $cancellationToken if not None
         Assert.Equal("test", args["p0"]?.GetValue<string>());
+        var tokenId = args["p1"]?.GetValue<string>();
+        Assert.NotNull(tokenId);
+        Assert.StartsWith("ct_", tokenId);
+        Assert.Equal(tokenId, args["$cancellationToken"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task InvokedProxy_WithOnlyCancellationToken_UsesPositionalTokenId()
+    {
+        var invoker = new TestCallbackInvoker();
+        using var factory = CreateFactory(invoker);
+        using var cts = new CancellationTokenSource();
+
+        var proxy = (TestCallbackWithOnlyCancellation)factory.CreateProxy("test-callback", typeof(TestCallbackWithOnlyCancellation))!;
+
+        await proxy(cts.Token);
+
+        Assert.Single(invoker.Invocations);
+        var args = invoker.Invocations[0].Args as JsonObject;
+        Assert.NotNull(args);
+        var tokenId = args["p0"]?.GetValue<string>();
+        Assert.NotNull(tokenId);
+        Assert.Equal(tokenId, args["$cancellationToken"]?.GetValue<string>());
     }
 
     // Callback error handling tests
@@ -367,6 +388,8 @@ public class CallbackProxyTests
     public delegate Task<string> TestCallbackWithStringResult(string input);
 
     public delegate Task TestCallbackWithCancellation(string value, CancellationToken cancellationToken);
+
+    public delegate Task TestCallbackWithOnlyCancellation(CancellationToken cancellationToken);
 
     public delegate void TestSyncVoidCallbackWithDto(TestCallbackDto dto);
 

@@ -271,7 +271,16 @@ public class ResourceNotificationService : IDisposable
         var resourceLogger = _resourceLoggerService.GetLogger(resource);
         resourceLogger.LogInformation("Waiting for resource '{ResourceName}' to complete.", dependency.Name);
 
-        await PublishUpdateAsync(resource, s => s with { State = KnownResourceStates.Waiting }).ConfigureAwait(false);
+        // Only transition replicas that are actually starting up to "Waiting".
+        // Replicas already in a Running or terminal state should not be clobbered,
+        // as this broadcast targets ALL replicas of the resource (model-level update),
+        // not just the specific replica being started.
+        await PublishUpdateAsync(resource, s =>
+            s.State?.Text is null
+            || s.State?.Text == KnownResourceStates.Starting
+            || s.State?.Text == KnownResourceStates.Waiting
+                ? s with { State = KnownResourceStates.Waiting }
+                : s).ConfigureAwait(false);
 
         for (var i = 0; i < names.Length; i++)
         {
@@ -327,7 +336,17 @@ public class ResourceNotificationService : IDisposable
     {
         var resourceLogger = _resourceLoggerService.GetLogger(resource);
         resourceLogger.LogInformation("Waiting for resource '{ResourceName}' to enter the '{State}' state.", dependency.Name, KnownResourceStates.Running);
-        await PublishUpdateAsync(resource, s => s with { State = KnownResourceStates.Waiting }).ConfigureAwait(false);
+
+        // Only transition replicas that are actually starting up to "Waiting".
+        // Replicas already in a Running or terminal state should not be clobbered,
+        // as this broadcast targets ALL replicas of the resource (model-level update),
+        // not just the specific replica being started.
+        await PublishUpdateAsync(resource, s =>
+            s.State?.Text is null
+            || s.State?.Text == KnownResourceStates.Starting
+            || s.State?.Text == KnownResourceStates.Waiting
+                ? s with { State = KnownResourceStates.Waiting }
+                : s).ConfigureAwait(false);
 
         var names = dependency.GetResolvedResourceNames();
         var tasks = new Task[names.Length];

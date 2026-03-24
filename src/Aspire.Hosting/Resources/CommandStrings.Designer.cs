@@ -10,8 +10,8 @@
 
 namespace Aspire.Hosting.Resources {
     using System;
-    
-    
+
+
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -23,15 +23,15 @@ namespace Aspire.Hosting.Resources {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class CommandStrings {
-        
+
         private static global::System.Resources.ResourceManager resourceMan;
-        
+
         private static global::System.Globalization.CultureInfo resourceCulture;
-        
+
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal CommandStrings() {
         }
-        
+
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Aspire.Hosting.Resources {
                 return resourceMan;
             }
         }
-        
+
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,7 +59,7 @@ namespace Aspire.Hosting.Resources {
                 resourceCulture = value;
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Restart resource.
         /// </summary>
@@ -68,7 +68,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("RestartDescription", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Restart resource. Source code is not recompiled..
         /// </summary>
@@ -77,7 +77,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("RestartProjectDescription", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Restart.
         /// </summary>
@@ -86,7 +86,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("RestartName", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Delete parameter value.
         /// </summary>
@@ -95,7 +95,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("DeleteParameterDescription", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Delete parameter.
         /// </summary>
@@ -104,7 +104,34 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("DeleteParameterName", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to Stop the resource, rebuild the project from source, and restart. Use this to apply source code changes..
+        /// </summary>
+        internal static string RebuildDescription {
+            get {
+                return ResourceManager.GetString("RebuildDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Rebuild.
+        /// </summary>
+        internal static string RebuildName {
+            get {
+                return ResourceManager.GetString("RebuildName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Rebuilder resource for &apos;{0}&apos; not found..
+        /// </summary>
+        internal static string RebuilderResourceNotFound {
+            get {
+                return ResourceManager.GetString("RebuilderResourceNotFound", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Set parameter value.
         /// </summary>
@@ -113,7 +140,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("SetParameterDescription", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Set parameter.
         /// </summary>
@@ -122,7 +149,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("SetParameterName", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Start resource.
         /// </summary>
@@ -131,7 +158,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("StartDescription", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Start.
         /// </summary>
@@ -140,7 +167,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("StartName", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Stop resource.
         /// </summary>
@@ -149,7 +176,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("StopDescription", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Stop.
         /// </summary>

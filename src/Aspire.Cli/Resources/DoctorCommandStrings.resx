@@ -59,10 +59,10 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>Diagnose Aspire environment issues and verify setup.</value>
+    <value>Diagnose Aspire environment issues and verify setup</value>
   </data>
   <data name="JsonOptionDescription" xml:space="preserve">
-    <value>Output format (Table or Json).</value>
+    <value>Output format (Table or Json)</value>
   </data>
   <data name="EnvironmentCheckHeader" xml:space="preserve">
     <value>Aspire Environment Check</value>
@@ -84,5 +84,61 @@
   </data>
   <data name="CheckingPrerequisites" xml:space="preserve">
     <value>Checking Aspire environment...</value>
+  </data>
+  <data name="DevCertsNoCertificateMessage" xml:space="preserve">
+    <value>No HTTPS development certificate found</value>
+  </data>
+  <data name="DevCertsNoCertificateDetails" xml:space="preserve">
+    <value>Aspire uses HTTPS for secure communication between the dashboard and your services during local development.</value>
+  </data>
+  <data name="DevCertsTrustFixFormat" xml:space="preserve">
+    <value>Run '{0}' to trust the HTTPS development certificate.</value>
+    <comment>{0} is the aspire certs trust command (not localizable)</comment>
+  </data>
+  <data name="DevCertsCleanAndTrustFixFormat" xml:space="preserve">
+    <value>Run '{0}' to remove all certificates, then run '{1}' to create and trust a new one.</value>
+    <comment>{0} is the aspire certs clean command, {1} is the aspire certs trust command (not localizable)</comment>
+  </data>
+  <data name="DevCertsMultipleNoneTrustedMessageFormat" xml:space="preserve">
+    <value>Multiple HTTPS development certificates found ({0} certificates), but none are trusted</value>
+  </data>
+  <data name="DevCertsMultipleNoneTrustedDetailsFormat" xml:space="preserve">
+    <value>Found certificates: {0}. Having multiple certificates can cause confusion.</value>
+  </data>
+  <data name="DevCertsMultipleSomeUntrustedMessageFormat" xml:space="preserve">
+    <value>Multiple HTTPS development certificates found ({0} certificates)</value>
+  </data>
+  <data name="DevCertsMultipleSomeUntrustedDetailsFormat" xml:space="preserve">
+    <value>Found certificates: {0}. Having multiple certificates can cause confusion when selecting which one to use.</value>
+  </data>
+  <data name="DevCertsTrustedMessage" xml:space="preserve">
+    <value>HTTPS development certificate is trusted</value>
+  </data>
+  <data name="DevCertsNotTrustedMessage" xml:space="preserve">
+    <value>HTTPS development certificate is not trusted</value>
+  </data>
+  <data name="DevCertsNotTrustedDetailsFormat" xml:space="preserve">
+    <value>Certificate {0} exists in the personal store but was not found in the trusted root store.</value>
+  </data>
+  <data name="DevCertsPartiallyTrustedMessage" xml:space="preserve">
+    <value>HTTPS development certificate is only partially trusted</value>
+  </data>
+  <data name="DevCertsPartiallyTrustedDetailsFormat" xml:space="preserve">
+    <value>The certificate is in the trusted store, but SSL_CERT_DIR is not configured to include '{0}'. Some applications may not trust the certificate. 'aspire run' will configure this automatically.</value>
+  </data>
+  <data name="DevCertsPartiallyTrustedFixFormat" xml:space="preserve">
+    <value>Set SSL_CERT_DIR in your shell profile: {0}</value>
+  </data>
+  <data name="DevCertsOldVersionMessageFormat" xml:space="preserve">
+    <value>HTTPS development certificate has an older version ({0})</value>
+  </data>
+  <data name="DevCertsOldVersionDetailsFormat" xml:space="preserve">
+    <value>Older certificate versions (&lt; v{0}) may not support all certificate trust scenarios.</value>
+  </data>
+  <data name="DevCertsTrustLabelFull" xml:space="preserve">
+    <value>[trusted]</value>
+  </data>
+  <data name="DevCertsTrustLabelPartial" xml:space="preserve">
+    <value>[partial]</value>
   </data>
 </root>

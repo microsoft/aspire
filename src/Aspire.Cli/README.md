@@ -112,8 +112,8 @@ aspire docs search "redis"
 ## Additional documentation
 
 * https://aspire.dev
-* https://learn.microsoft.com/dotnet/aspire
+* https://learn.microsoft.com/microsoft/aspire
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

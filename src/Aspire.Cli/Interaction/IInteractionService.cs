@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Utils;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
@@ -25,7 +26,7 @@ internal interface IInteractionService
     void DisplayMarkupLine(string markup);
     void DisplaySuccess(string message, bool allowMarkup = false);
     void DisplaySubtleMessage(string message, bool allowMarkup = false);
-    void DisplayLines(IEnumerable<(string Stream, string Line)> lines);
+    void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines);
     void DisplayRenderable(IRenderable renderable);
     Task DisplayLiveAsync(IRenderable initialRenderable, Func<Action<IRenderable>, Task> callback);
     void DisplayCancellationMessage();
@@ -39,5 +40,7 @@ internal interface IInteractionService
     ConsoleOutput Console { get; set; }
 
     void DisplayVersionUpdateNotification(string newerVersion, string? updateCommand = null);
+    // The semantic type is stringly-typed because some values originate from backchannel payloads.
+    // Use ConsoleLogTypes for CLI-defined values.
     void WriteConsoleLog(string message, int? lineNumber = null, string? type = null, bool isErrorMessage = false);
 }

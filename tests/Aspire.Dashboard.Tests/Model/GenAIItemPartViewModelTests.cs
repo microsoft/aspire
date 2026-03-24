@@ -167,4 +167,24 @@ public sealed class GenAIItemPartViewModelTests
         Assert.Contains("こんにちは", itemPart.TextVisualizerViewModel.Text);
         Assert.DoesNotContain("\\u", itemPart.TextVisualizerViewModel.Text);
     }
+
+    [Fact]
+    public void CreateMessagePart_UnexpectedErrorPart_SetsErrorMessage()
+    {
+        var errorPart = new UnexpectedErrorPart
+        {
+            Type = "text",
+            Error = new JsonException("Test deserialization error"),
+            AdditionalProperties = new Dictionary<string, JsonElement>
+            {
+                ["content"] = JsonDocument.Parse("""{"nested":"value"}""").RootElement
+            }
+        };
+
+        var itemPart = GenAIItemPartViewModel.CreateMessagePart(errorPart);
+
+        Assert.Equal("Test deserialization error", itemPart.ErrorMessage);
+        Assert.NotNull(itemPart.AdditionalProperties);
+        Assert.Single(itemPart.AdditionalProperties);
+    }
 }

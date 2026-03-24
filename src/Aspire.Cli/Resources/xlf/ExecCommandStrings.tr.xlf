@@ -4,18 +4,18 @@
     <body>
       <trans-unit id="CommandArgumentDescription">
         <source>The command to execute in the target resource's context. Commands can be specified directly after options or after a -- separator.</source>
-        <target state="translated">Hedef kaynağın bağlamında yürütülecek komut. Komutlar, seçeneklerin hemen ardından veya -- ayırıcısından sonra belirtilebilir.</target>
+        <target state="needs-review-translation">Hedef kaynağın bağlamında yürütülecek komut. Komutlar, seçeneklerin hemen ardından veya -- ayırıcısından sonra belirtilebilir.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Execute commands in the context of an Aspire application resource. Starts the AppHost, waits for resources to initialize, then runs the specified command in the target resource's environment. (Preview)
+        <source>Execute commands in the context of an Aspire application resource. Starts the apphost, waits for resources to initialize, then runs the specified command in the target resource's environment (Preview)
 
 Examples:
   aspire exec --resource api dotnet build
   aspire exec --resource api -- dotnet test --logger console
   aspire exec --start-resource worker pwsh -c "Get-Process"
     </source>
-        <target state="translated">Aspire uygulama kaynağı bağlamında komutları yürütün. AppHost'u başlatır, kaynakların başlatılmasını bekler, ardından hedef kaynağın ortamında belirtilen komutu çalıştırır. (Önizleme)
+        <target state="needs-review-translation">Aspire uygulama kaynağı bağlamında komutları yürütün. AppHost'u başlatır, kaynakların başlatılmasını bekler, ardından hedef kaynağın ortamında belirtilen komutu çalıştırır. (Önizleme)
 
 Örnekler:
   aspire exec --resource api dotnet build
@@ -35,8 +35,8 @@ Examples:
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file. If not specified, searches for a project file in the current directory.</source>
-        <target state="translated">Aspire AppHost proje dosyasının yolu. Belirtilmezse, geçerli dizinde bir proje dosyası aranır.</target>
+        <source>The path to the Aspire apphost project file. If not specified, searches for a project file in the current directory.</source>
+        <target state="needs-review-translation">Aspire AppHost proje dosyasının yolu. Belirtilmezse, geçerli dizinde bir proje dosyası aranır.</target>
         <note />
       </trans-unit>
       <trans-unit id="Running">
@@ -46,7 +46,7 @@ Examples:
       </trans-unit>
       <trans-unit id="StartTargetResourceArgumentDescription">
         <source>The name of the target resource to execute the command against. The command will only be executed after the target resource has successfully started and is running.</source>
-        <target state="translated">Komutun yürütüleceği hedef kaynağın adıdır. Komut, yalnızca hedef kaynak başarıyla başlatıldıktan ve çalışmaya başladıktan sonra yürütülür.</target>
+        <target state="needs-review-translation">Komutun yürütüleceği hedef kaynağın adıdır. Komut, yalnızca hedef kaynak başarıyla başlatıldıktan ve çalışmaya başladıktan sonra yürütülür.</target>
         <note />
       </trans-unit>
       <trans-unit id="StoppingAppHost">
@@ -55,8 +55,8 @@ Examples:
         <note />
       </trans-unit>
       <trans-unit id="TargetResourceArgumentDescription">
-        <source>The name of the target resource to execute the command against. The command will be executed as soon as the AppHost starts, without waiting for the resource to be ready.</source>
-        <target state="translated">Komutun yürütüleceği hedef kaynağın adıdır. Komut, kaynak hazır olana kadar beklemeden AppHost başlatılır başlatılmaz yürütülür.</target>
+        <source>The name of the target resource to execute the command against. The command will be executed as soon as the apphost starts, without waiting for the resource to be ready.</source>
+        <target state="needs-review-translation">Komutun yürütüleceği hedef kaynağın adıdır. Komut, kaynak hazır olana kadar beklemeden AppHost başlatılır başlatılmaz yürütülür.</target>
         <note />
       </trans-unit>
       <trans-unit id="TargetResourceNotSpecified">
@@ -65,8 +65,8 @@ Examples:
         <note />
       </trans-unit>
       <trans-unit id="WorkdirArgumentDescription">
-        <source>The working directory to execute the command in.</source>
-        <target state="translated">Komutun yürütüleceği çalışma dizini.</target>
+        <source>The working directory to execute the command in</source>
+        <target state="needs-review-translation">Komutun yürütüleceği çalışma dizini.</target>
         <note />
       </trans-unit>
     </body>

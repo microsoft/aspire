@@ -521,13 +521,58 @@ When a project references integrations (e.g., `Aspire.Hosting.Redis`):
   --socket {socket-path}
 ```
 
-### Dynamic Integration Loading
+### Integration Assembly Loading Architecture
 
 When the user's project requires integrations not included in the bundle:
 
 1. CLI downloads missing packages using NuGet Helper to a project-specific cache
-2. AppHost Server receives the paths to restored assemblies via command line arguments
-3. Assemblies are loaded using the standard .NET assembly loading mechanism
+2. NuGet Helper restores packages and creates a flat DLL layout in `ASPIRE_INTEGRATION_LIBS_PATH`
+3. AppHost Server loads integration assemblies via `IntegrationLoadContext`
+
+#### Aspire.TypeSystem
+
+`Aspire.TypeSystem` is a standalone assembly containing the ATS (Aspire Type System) scanner, model types, and codegen contracts (`ICodeGenerator`, `ILanguageSupport`, `AtsContext`). It was extracted from `Aspire.Hosting` to establish a clean boundary — `Aspire.Hosting` does **not** reference `Aspire.TypeSystem`. The ATS attributes (`[AspireExport]`, `[AspireDto]`) remain in `Aspire.Hosting` and are discovered by name-based matching via `AttributeDataReader`.
+
+All types in `Aspire.TypeSystem` are public. It is loaded in the default context and shared with the `IntegrationLoadContext`, so codegen contracts have the same type identity across the boundary.
+
+#### IntegrationLoadContext
+
+Integration assemblies are loaded in a custom `AssemblyLoadContext` ("Aspire.Integrations") that:
+
+- **Probes directories** for assemblies — `ASPIRE_INTEGRATION_LIBS_PATH` and `AppContext.BaseDirectory`
+- **Shares `Aspire.TypeSystem`** — always defers to the default context for type identity
+- **Performs version unification** — before loading an assembly from the probe directory, checks if the default context already provides it at a higher or equal version; if so, defers to the default
+
+```text
+┌──────────────────────────────────────────────────────┐
+│ Default Load Context (aspire-managed)                │
+│  Aspire.Hosting.RemoteHost.dll (aspire-server)       │
+│  Aspire.TypeSystem.dll  ◄── shared                   │
+│  Framework assemblies (runtime-provided)             │
+├──────────────────────────────────────────────────────┤
+│ IntegrationLoadContext ("Aspire.Integrations")       │
+│  Aspire.Hosting.dll                                  │
+│  Aspire.Hosting.JavaScript.dll                       │
+│  Aspire.Hosting.Azure.*.dll                          │
+│  Third-party deps (Google.Protobuf, etc.)            │
+│  Framework assemblies → deferred via unification     │
+└──────────────────────────────────────────────────────┘
+```
+
+#### Version Unification
+
+The NuGet restore for integration packages includes transitive dependencies on framework-provided assemblies at potentially older versions (e.g., `System.Diagnostics.DiagnosticSource` 6.0 when the runtime provides 9.0). Loading the old version causes `MissingMethodException` because `Aspire.Hosting` was compiled against newer runtime APIs.
+
+The `IntegrationLoadContext` handles this by attempting to load the assembly from the default context first. If the default context provides a version that is higher or equal, it wins. This works in all deployment models (framework-dependent, self-contained, single-file) because it checks the default context at runtime rather than scanning framework directories on disk.
+
+#### Cross-ALC Communication
+
+All communication between the default context (RemoteHost) and the integration ALC uses:
+
+- **Reflection** — `MethodInfo.Invoke()` for capability dispatch
+- **Opaque handles** — objects stored as `object` in `HandleRegistry`, passed by handle ID
+- **JSON marshalling** — `AtsMarshaller` converts between JSON and .NET types
+- **Shared contracts** — `ICodeGenerator`/`ILanguageSupport` from `Aspire.TypeSystem` have matching type identity, so `IsAssignableFrom` works
 
 ---
 
@@ -753,7 +798,7 @@ The self-extracting binary is the **recommended distribution format** — one fi
 
 ### Download Locations
 
-- **GitHub Releases**: `https://github.com/dotnet/aspire/releases`
+- **GitHub Releases**: `https://github.com/microsoft/aspire/releases`
 - **aspire.dev**: Direct download links on documentation site
 
 ---

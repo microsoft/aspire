@@ -98,7 +98,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
     [Fact]
     [RequiresTools(["python"])]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/8466")]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/8466")]
     public async Task PythonResourceFinishesSuccessfully()
     {
         var (projectDirectory, _, scriptName) = CreateTempPythonProject(outputHelper);

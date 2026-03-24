@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Xunit;
@@ -26,86 +27,60 @@ public sealed class DescribeCommandTests(ITestOutputHelper output)
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
-        // Pattern searchers for start/stop/resources commands
-        var waitForAppHostStartedSuccessfully = new CellPatternSearcher()
-            .Find("AppHost started successfully.");
-
-        var waitForAppHostStoppedSuccessfully = new CellPatternSearcher()
-            .Find("AppHost stopped successfully.");
-
-        // Pattern for aspire resources output - table header
-        var waitForResourcesTableHeader = new CellPatternSearcher()
-            .Find("Name");
-
-        // Pattern for resources - should show the webfrontend and apiservice
-        var waitForWebfrontendResource = new CellPatternSearcher()
-            .Find("webfrontend");
-
-        var waitForApiserviceResource = new CellPatternSearcher()
-            .Find("apiservice");
-
-        // Pattern for verifying JSON output was written to file
-        var waitForJsonFileWritten = new CellPatternSearcher()
-            .Find("webfrontend");
-
         var counter = new SequenceCounter();
-        var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
-        sequenceBuilder.PrepareDockerEnvironment(counter, workspace);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        sequenceBuilder.InstallAspireCliInDocker(installMode, counter);
+        await auto.InstallAspireCliInDockerAsync(installMode, counter);
 
         // Create a new project using aspire new
-        sequenceBuilder.AspireNew("AspireResourcesTestApp", counter);
+        await auto.AspireNewAsync("AspireResourcesTestApp", counter);
 
         // Navigate to the AppHost directory
-        sequenceBuilder.Type("cd AspireResourcesTestApp/AspireResourcesTestApp.AppHost")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("cd AspireResourcesTestApp/AspireResourcesTestApp.AppHost");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Start the AppHost in the background using aspire start
-        sequenceBuilder.Type("aspire start")
-            .Enter()
-            .WaitUntil(s => waitForAppHostStartedSuccessfully.Search(s).Count > 0, TimeSpan.FromMinutes(3))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire start");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Wait a bit for resources to stabilize
-        sequenceBuilder.Type("sleep 5")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("sleep 5");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Now verify aspire describe shows the running resources (human-readable table)
-        sequenceBuilder.Type("aspire describe")
-            .Enter()
-            .WaitUntil(s => waitForResourcesTableHeader.Search(s).Count > 0, TimeSpan.FromSeconds(30))
-            .WaitUntil(s => waitForWebfrontendResource.Search(s).Count > 0, TimeSpan.FromSeconds(5))
-            .WaitUntil(s => waitForApiserviceResource.Search(s).Count > 0, TimeSpan.FromSeconds(5))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire describe");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Name", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitUntilTextAsync("webfrontend", timeout: TimeSpan.FromSeconds(5));
+        await auto.WaitUntilTextAsync("apiservice", timeout: TimeSpan.FromSeconds(5));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Test aspire describe --format json output - pipe to file to avoid terminal buffer issues
-        sequenceBuilder.Type("aspire describe --format json > resources.json")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire describe --format json > resources.json");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Verify the JSON file contains expected resources
-        sequenceBuilder.Type("cat resources.json | grep webfrontend")
-            .Enter()
-            .WaitUntil(s => waitForJsonFileWritten.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("cat resources.json | grep webfrontend");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("webfrontend", timeout: TimeSpan.FromSeconds(10));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Stop the AppHost using aspire stop
-        sequenceBuilder.Type("aspire stop")
-            .Enter()
-            .WaitUntil(s => waitForAppHostStoppedSuccessfully.Search(s).Count > 0, TimeSpan.FromMinutes(1))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire stop");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(StopCommandStrings.AppHostStoppedSuccessfully, timeout: TimeSpan.FromMinutes(1));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Exit the shell
-        sequenceBuilder.Type("exit")
-            .Enter();
-
-        var sequence = sequenceBuilder.Build();
-
-        await sequence.ApplyAsync(terminal, TestContext.Current.CancellationToken);
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
 
         await pendingRun;
     }
@@ -122,127 +97,109 @@ public sealed class DescribeCommandTests(ITestOutputHelper output)
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
-        // Pattern searchers for start/stop commands
-        var waitForAppHostStartedSuccessfully = new CellPatternSearcher()
-            .Find("AppHost started successfully.");
-
-        var waitForAppHostStoppedSuccessfully = new CellPatternSearcher()
-            .Find("AppHost stopped successfully.");
-
-        // Pattern for describe output with friendly name (non-replicated resource)
-        var waitForCacheResource = new CellPatternSearcher()
-            .Find("cache");
-
         // Pattern for describe output showing a specific replica
         var waitForApiserviceReplicaName = new CellPatternSearcher()
             .FindPattern("apiservice-[a-z0-9]+");
 
         var counter = new SequenceCounter();
-        var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
-        sequenceBuilder.PrepareDockerEnvironment(counter, workspace);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        sequenceBuilder.InstallAspireCliInDocker(installMode, counter);
+        await auto.InstallAspireCliInDockerAsync(installMode, counter);
 
         // Create a new project using aspire new
-        sequenceBuilder.AspireNew("AspireReplicaTestApp", counter);
+        await auto.AspireNewAsync("AspireReplicaTestApp", counter);
 
         // Navigate to the AppHost directory
-        sequenceBuilder.Type("cd AspireReplicaTestApp/AspireReplicaTestApp.AppHost")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("cd AspireReplicaTestApp/AspireReplicaTestApp.AppHost");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Add .WithReplicas(2) to the apiservice resource in the AppHost
-        sequenceBuilder.ExecuteCallback(() =>
+        var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, "AspireReplicaTestApp");
+        var appHostDir = Path.Combine(projectDir, "AspireReplicaTestApp.AppHost");
+        var appHostFilePath = Path.Combine(appHostDir, "AppHost.cs");
+
+        output.WriteLine($"Looking for AppHost.cs at: {appHostFilePath}");
+
+        var content = File.ReadAllText(appHostFilePath);
+
+        // Add .WithReplicas(2) to the first .WithHttpHealthCheck("/health"); occurrence (apiservice)
+        var originalPattern = ".WithHttpHealthCheck(\"/health\");";
+        var replacement = ".WithHttpHealthCheck(\"/health\").WithReplicas(2);";
+
+        // Only replace the first occurrence (apiservice), not the second (webfrontend)
+        var index = content.IndexOf(originalPattern);
+        if (index >= 0)
         {
-            var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, "AspireReplicaTestApp");
-            var appHostDir = Path.Combine(projectDir, "AspireReplicaTestApp.AppHost");
-            var appHostFilePath = Path.Combine(appHostDir, "AppHost.cs");
+            content = content[..index] + replacement + content[(index + originalPattern.Length)..];
+        }
 
-            output.WriteLine($"Looking for AppHost.cs at: {appHostFilePath}");
+        File.WriteAllText(appHostFilePath, content);
 
-            var content = File.ReadAllText(appHostFilePath);
-
-            // Add .WithReplicas(2) to the first .WithHttpHealthCheck("/health"); occurrence (apiservice)
-            var originalPattern = ".WithHttpHealthCheck(\"/health\");";
-            var replacement = ".WithHttpHealthCheck(\"/health\").WithReplicas(2);";
-
-            // Only replace the first occurrence (apiservice), not the second (webfrontend)
-            var index = content.IndexOf(originalPattern);
-            if (index >= 0)
-            {
-                content = content[..index] + replacement + content[(index + originalPattern.Length)..];
-            }
-
-            File.WriteAllText(appHostFilePath, content);
-
-            output.WriteLine($"Modified AppHost.cs to add .WithReplicas(2) to apiservice");
-        });
+        output.WriteLine($"Modified AppHost.cs to add .WithReplicas(2) to apiservice");
 
         // Start the AppHost in the background using aspire start
-        sequenceBuilder.Type("aspire start")
-            .Enter()
-            .WaitUntil(s => waitForAppHostStartedSuccessfully.Search(s).Count > 0, TimeSpan.FromMinutes(3))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire start");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Wait for resources to stabilize
-        sequenceBuilder.Type("sleep 10")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("sleep 10");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Test 1: aspire describe with friendly name for a non-replicated resource (cache)
         // This should resolve via DisplayName since cache has only one instance
-        sequenceBuilder.Type("aspire describe cache --format json > cache-describe.json")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire describe cache --format json > cache-describe.json");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Verify cache resource was found in the output
-        sequenceBuilder.Type("cat cache-describe.json | grep cache")
-            .Enter()
-            .WaitUntil(s => waitForCacheResource.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("cat cache-describe.json | grep cache");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("cache", timeout: TimeSpan.FromSeconds(10));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Test 2: Get all resources to find an apiservice replica name
-        sequenceBuilder.Type("aspire describe --format json > all-resources.json")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire describe --format json > all-resources.json");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Extract a replica name from the JSON - apiservice replicas have names like apiservice-<suffix>
-        sequenceBuilder.Type("REPLICA_NAME=$(cat all-resources.json | grep -o '\"name\": *\"apiservice-[a-z0-9]*\"' | head -1 | sed 's/.*\"\\(apiservice-[a-z0-9]*\\)\"/\\1/')")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("REPLICA_NAME=$(cat all-resources.json | grep -o '\"name\": *\"apiservice-[a-z0-9]*\"' | head -1 | sed 's/.*\"\\(apiservice-[a-z0-9]*\\)\"/\\1/')");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Verify we captured a replica name
-        sequenceBuilder.Type("echo \"Found replica: $REPLICA_NAME\"")
-            .Enter()
-            .WaitUntil(s => waitForApiserviceReplicaName.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("echo \"Found replica: $REPLICA_NAME\"");
+        await auto.EnterAsync();
+        await auto.WaitUntilAsync(s => waitForApiserviceReplicaName.Search(s).Count > 0, timeout: TimeSpan.FromSeconds(10), description: "waiting for apiservice replica name");
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Test 3: aspire describe with the replica name
         // This should resolve via exact Name match
-        sequenceBuilder.Type("aspire describe $REPLICA_NAME --format json > replica-describe.json")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire describe $REPLICA_NAME --format json > replica-describe.json");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Verify the replica was found and output contains the replica name
-        sequenceBuilder.Type("cat replica-describe.json | grep apiservice")
-            .Enter()
-            .WaitUntil(s => waitForApiserviceReplicaName.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("cat replica-describe.json | grep apiservice");
+        await auto.EnterAsync();
+        await auto.WaitUntilAsync(s => waitForApiserviceReplicaName.Search(s).Count > 0, timeout: TimeSpan.FromSeconds(10), description: "waiting for apiservice replica in describe output");
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Stop the AppHost using aspire stop
-        sequenceBuilder.Type("aspire stop")
-            .Enter()
-            .WaitUntil(s => waitForAppHostStoppedSuccessfully.Search(s).Count > 0, TimeSpan.FromMinutes(1))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire stop");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(StopCommandStrings.AppHostStoppedSuccessfully, timeout: TimeSpan.FromMinutes(1));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Exit the shell
-        sequenceBuilder.Type("exit")
-            .Enter();
-
-        var sequence = sequenceBuilder.Build();
-
-        await sequence.ApplyAsync(terminal, TestContext.Current.CancellationToken);
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
 
         await pendingRun;
     }

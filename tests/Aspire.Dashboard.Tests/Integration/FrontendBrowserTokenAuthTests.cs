@@ -213,6 +213,11 @@ public class FrontendBrowserTokenAuthTests
             },
             w =>
             {
+                Assert.Equal("Dashboard API is unsecured. Untrusted apps can access sensitive telemetry data.", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
+                Assert.Equal(LogLevel.Warning, w.LogLevel);
+            },
+            w =>
+            {
                 Assert.Equal("Login to the dashboard at {DashboardLoginUrl}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
 
                 var uri = new Uri((string)LogTestHelpers.GetValue(w, "DashboardLoginUrl")!, UriKind.Absolute);

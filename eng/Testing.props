@@ -11,11 +11,12 @@
     <!-- Detect if we're running in the context of a GitHub pull request -->
     <IsGithubPullRequest Condition="'$(GITHUB_EVENT_NAME)' == 'pull_request'">true</IsGithubPullRequest>
 
-    <!-- By default any test can run on all test platforms -->
+    <!-- See https://docs.github.com/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#default-environment-variables -->
+    <IsGitHubActionsRunner Condition="'$(GITHUB_ACTIONS)' == 'true'">true</IsGitHubActionsRunner>
+
+    <!-- By default tests run on Windows and Linux in GitHub Actions; macOS defaults are set in Testing.targets -->
     <RunOnGithubActionsWindows>true</RunOnGithubActionsWindows>
     <RunOnGithubActionsLinux>true</RunOnGithubActionsLinux>
-    <RunOnGithubActionsMacOS Condition="'$(RunOnGithubActionsMacOS)' == '' and '$(IsGithubPullRequest)' == 'true' and $(MSBuildProjectName.StartsWith('Aspire.')) and !$(MSBuildProjectName.StartsWith('Aspire.Cli'))">false</RunOnGithubActionsMacOS>
-    <RunOnGithubActionsMacOS Condition="'$(RunOnGithubActionsMacOS)' == ''">true</RunOnGithubActionsMacOS>
     <RunOnAzdoCIWindows>true</RunOnAzdoCIWindows>
     <RunOnAzdoCILinux>true</RunOnAzdoCILinux>
     <RunOnAzdoHelixWindows>true</RunOnAzdoHelixWindows>

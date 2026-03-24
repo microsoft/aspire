@@ -953,7 +953,7 @@ internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInterac
     public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false) { }
     public void DisplaySuccess(string message, bool allowMarkup = false) { }
     public void DisplaySubtleMessage(string message, bool allowMarkup = false) { }
-    public void DisplayLines(IEnumerable<(string Stream, string Line)> lines) { }
+    public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines) { }
     public void DisplayCancellationMessage() { }
     public void DisplayEmptyLine() { }
     public void DisplayPlainText(string text) { }

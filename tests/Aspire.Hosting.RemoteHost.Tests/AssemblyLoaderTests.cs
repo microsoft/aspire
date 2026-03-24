@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Aspire.Hosting.RemoteHost.Tests;
@@ -66,6 +67,22 @@ public class AssemblyLoaderTests
                 "Aspire.Hosting.Azure.OperationalInsights"
             ],
             assemblyNames);
+    }
+
+    [Fact]
+    public void GetAssemblies_LoadsConfiguredAssembly()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AtsAssemblies:0"] = "Aspire.Hosting"
+            })
+            .Build();
+
+        var loader = new AssemblyLoader(configuration, NullLogger<AssemblyLoader>.Instance);
+
+        var assemblies = loader.GetAssemblies();
+        Assert.Contains(assemblies, a => string.Equals(a.GetName().Name, "Aspire.Hosting", StringComparison.Ordinal));
     }
 
     private sealed class TemporaryDirectory : IDisposable

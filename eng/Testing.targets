@@ -2,7 +2,6 @@
 
   <!--
       Environment variables:
-        - IsGitHubActionsRunner:       indicates whether tests are currently run on GitHub Actions; computed, overridable. Locally this can be set by "/p:GITHUB_ACTIONS=true".
         - IsAzdoCIRunner:              indicates whether tests are currently run on Azure DevOps; computed, overridable. Locally this can be set by "/p:SYSTEM_TEAMPROJECT=foo".
         - IsAzdoHelixRunner:           indicates whether tests are currently run on Helix; computed, overridable. Locally this can be set by "/p:PrepareForHelix=true".
 
@@ -13,7 +12,7 @@
       Project requirements:
         - RunOnGithubActions:          indicates whether tests should run on GitHub Actions (either Windows or Linux or macOS); computed.
         - RunOnGithubActionsWindows:   indicates whether tests should run on Windows in GitHub Actions; default is true; overridable.
-        - RunOnGithubActionsMacOS:     indicates whether tests should run on MacOS in GitHub Actions; default is true; overridable.
+        - RunOnGithubActionsMacOS:     indicates whether tests should run on MacOS in GitHub Actions; default is false on pull requests and true otherwise; overridable.
         - RunOnGithubActionsLinux:     indicates whether tests should run on Linux in GitHub Actions; default is true; overridable.
         - RunOnAzdoCI:                 indicates whether tests should run on Azure DevOps (either Windows or Linux); always false, if RunOnAzdoHelix=true; computed.
         - RunOnAzdoCIWindows:          indicates whether tests should run on Windows in Azure DevOps; default is true; overridable.
@@ -29,9 +28,6 @@
     -->
 
   <PropertyGroup>
-    <!-- See https://docs.github.com/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#default-environment-variables -->
-    <IsGitHubActionsRunner Condition=" '$(GITHUB_ACTIONS)' == 'true' ">true</IsGitHubActionsRunner>
-
     <!-- See https://learn.microsoft.com/azure/devops/pipelines/build/variables#system-variables -->
     <IsAzdoCIRunner Condition=" '$(SYSTEM_TEAMPROJECT)' != '' ">true</IsAzdoCIRunner>
 
@@ -53,6 +49,9 @@
   </PropertyGroup>
 
   <PropertyGroup>
+    <RunOnGithubActionsMacOS Condition=" '$(RunOnGithubActionsMacOS)' == '' and '$(IsGithubPullRequest)' == 'true' ">false</RunOnGithubActionsMacOS>
+    <RunOnGithubActionsMacOS Condition=" '$(RunOnGithubActionsMacOS)' == '' ">true</RunOnGithubActionsMacOS>
+
     <RunOnGithubActions>false</RunOnGithubActions>
     <RunOnGithubActions Condition=" '$(RunOnGithubActionsWindows)' == 'true' or '$(RunOnGithubActionsLinux)' == 'true' or '$(RunOnGithubActionsMacOS)' == 'true' ">true</RunOnGithubActions>
 

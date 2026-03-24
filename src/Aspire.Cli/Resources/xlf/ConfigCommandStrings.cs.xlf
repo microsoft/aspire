@@ -28,18 +28,18 @@
         <note>{0} is the key, {1} is the value</note>
       </trans-unit>
       <trans-unit id="DeleteCommand_Description">
-        <source>Delete a configuration value.</source>
-        <target state="translated">Umožňuje odstranit hodnotu konfigurace.</target>
+        <source>Delete a configuration value</source>
+        <target state="needs-review-translation">Umožňuje odstranit hodnotu konfigurace.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteCommand_GlobalArgumentDescription">
-        <source>Delete the configuration value from the global $HOME/.aspire/settings.json instead of the local settings file.</source>
-        <target state="translated">Odstraňte hodnotu konfigurace z globálního souboru $HOME/.aspire/settings.json místo z místního souboru nastavení.</target>
+        <source>Delete the configuration value from the global $HOME/.aspire/settings.json instead of the local settings file</source>
+        <target state="needs-review-translation">Odstraňte hodnotu konfigurace z globálního souboru $HOME/.aspire/settings.json místo z místního souboru nastavení.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteCommand_KeyArgumentDescription">
-        <source>The configuration key to delete.</source>
-        <target state="translated">Konfigurační klíč, který se má odstranit</target>
+        <source>The configuration key to delete</source>
+        <target state="needs-review-translation">Konfigurační klíč, který se má odstranit</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteCommand_PromptForGlobal">
@@ -53,8 +53,8 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Manage CLI configuration including feature flags.</source>
-        <target state="translated">Spravujte konfiguraci CLI včetně příznaků funkcí.</target>
+        <source>Manage CLI configuration including feature flags</source>
+        <target state="needs-review-translation">Umožňuje spravovat nastavení konfigurace.</target>
         <note />
       </trans-unit>
       <trans-unit id="ExtensionActionPrompt">
@@ -63,13 +63,13 @@
         <note />
       </trans-unit>
       <trans-unit id="GetCommand_Description">
-        <source>Get a configuration value.</source>
-        <target state="translated">Získá hodnotu konfigurace.</target>
+        <source>Get a configuration value</source>
+        <target state="needs-review-translation">Získá hodnotu konfigurace.</target>
         <note />
       </trans-unit>
       <trans-unit id="GetCommand_KeyArgumentDescription">
-        <source>The configuration key to retrieve.</source>
-        <target state="translated">Konfigurační klíč, který se má načíst</target>
+        <source>The configuration key to retrieve</source>
+        <target state="needs-review-translation">Konfigurační klíč, který se má načíst</target>
         <note />
       </trans-unit>
       <trans-unit id="GetCommand_PromptForKey">
@@ -98,8 +98,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InfoCommand_Description">
-        <source>Display configuration file paths and available features.</source>
-        <target state="translated">Umožňuje zobrazit cesty ke konfiguračním souborům a dostupné funkce.</target>
+        <source>Display configuration file paths and available features</source>
+        <target state="needs-review-translation">Umožňuje zobrazit cesty ke konfiguračním souborům a dostupné funkce.</target>
         <note />
       </trans-unit>
       <trans-unit id="InfoCommand_GlobalSettingsPath">
@@ -108,8 +108,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InfoCommand_JsonOptionDescription">
-        <source>Output information in JSON format.</source>
-        <target state="translated">Výstup informací ve formátu JSON.</target>
+        <source>Output information in JSON format</source>
+        <target state="needs-review-translation">Výstup informací ve formátu JSON.</target>
         <note />
       </trans-unit>
       <trans-unit id="InfoCommand_LocalSettingsPath">
@@ -128,13 +128,13 @@
         <note />
       </trans-unit>
       <trans-unit id="ListCommand_AllOptionDescription">
-        <source>Show all available features that can be configured.</source>
-        <target state="new">Show all available features that can be configured.</target>
+        <source>Show all available features that can be configured</source>
+        <target state="new">Show all available features that can be configured</target>
         <note />
       </trans-unit>
       <trans-unit id="ListCommand_Description">
-        <source>List all configuration values.</source>
-        <target state="translated">Umožňuje vypsat všechny hodnoty konfigurace.</target>
+        <source>List all configuration values</source>
+        <target state="needs-review-translation">Umožňuje vypsat všechny hodnoty konfigurace.</target>
         <note />
       </trans-unit>
       <trans-unit id="LocalConfigurationHeader">
@@ -158,18 +158,18 @@
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_Description">
-        <source>Set a configuration value.</source>
-        <target state="translated">Nastavte hodnotu konfigurace.</target>
+        <source>Set a configuration value</source>
+        <target state="needs-review-translation">Nastavte hodnotu konfigurace.</target>
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_GlobalArgumentDescription">
-        <source>Set the configuration value globally in $HOME/.aspire/settings.json instead of the local settings file.</source>
-        <target state="translated">Nastavte hodnotu konfigurace globálně v souboru $HOME/.aspire/settings.json místo v místním souboru nastavení.</target>
+        <source>Set the configuration value globally in $HOME/.aspire/settings.json instead of the local settings file</source>
+        <target state="needs-review-translation">Nastavte hodnotu konfigurace globálně v souboru $HOME/.aspire/settings.json místo v místním souboru nastavení.</target>
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_KeyArgumentDescription">
-        <source>The configuration key to set.</source>
-        <target state="translated">Konfigurační klíč, který se má nastavit</target>
+        <source>The configuration key to set</source>
+        <target state="needs-review-translation">Konfigurační klíč, který se má nastavit</target>
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_PromptForGlobal">
@@ -198,8 +198,8 @@
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_ValueArgumentDescription">
-        <source>The configuration value to set.</source>
-        <target state="translated">Hodnota konfigurace, která se má nastavit</target>
+        <source>The configuration value to set</source>
+        <target state="needs-review-translation">Hodnota konfigurace, která se má nastavit</target>
         <note />
       </trans-unit>
       <trans-unit id="SetFeatureHint">

@@ -88,7 +88,7 @@ public static class ContainerRegistryResourceBuilderExtensions
     /// </code>
     /// </example>
     [Experimental("ASPIRECOMPUTE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExport("addContainerRegistryFromString", MethodName = "addContainerRegistry", Description = "Adds a container registry with string endpoint")]
+    [AspireExport("addContainerRegistryFromString", Description = "Adds a container registry with string endpoint")]
     public static IResourceBuilder<ContainerRegistryResource> AddContainerRegistry(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,

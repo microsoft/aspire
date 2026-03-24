@@ -87,6 +87,8 @@ public sealed class PostConfigureDashboardOptions : IPostConfigureOptions<Dashbo
 
         options.AI.Disabled = _configuration.GetBool(DashboardConfigNames.DashboardAIDisabledName.ConfigKey);
 
+        options.Api.Enabled ??= _configuration.GetBool(DashboardConfigNames.DashboardAspireApiEnabledName.ConfigKey);
+
         // Normalize API keys: Api is canonical, falls back to Mcp if not set.
         // Api -> Mcp fallback only (not bidirectional).
         if (string.IsNullOrEmpty(options.Mcp.PrimaryApiKey) && !string.IsNullOrEmpty(options.Api.PrimaryApiKey))

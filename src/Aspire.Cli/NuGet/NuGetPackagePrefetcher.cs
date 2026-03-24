@@ -96,7 +96,7 @@ internal sealed class NuGetPackagePrefetcher(ILogger<NuGetPackagePrefetcher> log
         }
 
         // Default behavior: prefetch templates for all commands except run, publish, deploy
-        // Because of this: https://github.com/dotnet/aspire/issues/6956
+        // Because of this: https://github.com/microsoft/aspire/issues/6956
         return command is null || !IsRuntimeOnlyCommand(command);
     }
 

@@ -25,6 +25,9 @@ console.log(`AppHost directory: ${dir}`);
 // Add PostgreSQL server and database
 const postgres = await builder.addPostgres("postgres");
 const db = await postgres.addDatabase("db");
+const localCancellation = new AbortController();
+const dbUriExpression = await db.uriExpression.get();
+const _dbUri = await dbUriExpression.getValue(localCancellation.signal);
 
 console.log("Added PostgreSQL server with database 'db'");
 
@@ -45,10 +48,10 @@ const cache = await builder
 
 console.log("Added Redis cache");
 
-// Add Vite frontend that connects to the API (using withServiceReference for endpoints)
+// Add Vite frontend that connects to the API using the unified reference API
 await builder
     .addViteApp("frontend", "./vite-frontend")
-    .withServiceReference(api)
+    .withReference(api)
     .waitFor(api)
     .withEnvironment("CUSTOM_ENV", "value")
     .withEnvironmentCallback(async (ctx: EnvironmentCallbackContext) => {

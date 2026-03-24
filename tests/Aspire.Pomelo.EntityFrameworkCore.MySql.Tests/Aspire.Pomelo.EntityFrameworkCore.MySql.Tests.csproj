@@ -14,7 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Needed until Pomelo MySQL EF supports net9.0 - https://github.com/dotnet/aspire/pull/6948 -->
+    <!-- Needed until Pomelo MySQL EF supports net9.0 - https://github.com/microsoft/aspire/pull/6948 -->
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" VersionOverride="$(MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCoreLTSVersion)" />
 
     <PackageReference Include="Testcontainers.MySql" />

@@ -4,6 +4,7 @@
 using System.Globalization;
 using System.Text;
 using System.Threading.Channels;
+using Aspire.Cli.Interaction;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -50,36 +51,18 @@ internal sealed class FileLoggerProvider : ILoggerProvider
     /// </summary>
     /// <param name="logsDirectory">The directory where log files will be written.</param>
     /// <param name="timeProvider">The time provider for timestamp generation.</param>
-    /// <param name="errorConsole">Optional console for error messages. Defaults to stderr.</param>
-    public FileLoggerProvider(string logsDirectory, TimeProvider timeProvider, IAnsiConsole? errorConsole = null)
+    /// <param name="errorWriter">Error writer for startup error messages.</param>
+    public FileLoggerProvider(string logsDirectory, TimeProvider timeProvider, IStartupErrorWriter errorWriter)
+        : this(GenerateLogFilePath(logsDirectory, timeProvider), errorWriter)
     {
-        _logFilePath = GenerateLogFilePath(logsDirectory, timeProvider);
-
-        try
-        {
-            Directory.CreateDirectory(logsDirectory);
-            _writer = new StreamWriter(_logFilePath, append: false, Encoding.UTF8)
-            {
-                AutoFlush = true
-            };
-
-            _channel = CreateChannel();
-            _writerTask = Task.Run(ProcessLogQueueAsync);
-        }
-        catch (IOException ex)
-        {
-            WriteWarning(errorConsole, _logFilePath, ex.Message);
-            _writer = null;
-            _channel = null;
-        }
     }
 
     /// <summary>
-    /// Creates a new FileLoggerProvider with a specific log file path (for testing).
+    /// Creates a new FileLoggerProvider with a specific log file path.
     /// </summary>
     /// <param name="logFilePath">The full path to the log file.</param>
-    /// <param name="errorConsole">Optional console for error messages. Defaults to stderr.</param>
-    internal FileLoggerProvider(string logFilePath, IAnsiConsole? errorConsole = null)
+    /// <param name="errorWriter">Error writer for startup error messages.</param>
+    internal FileLoggerProvider(string logFilePath, IStartupErrorWriter errorWriter)
     {
         _logFilePath = logFilePath;
 
@@ -101,7 +84,7 @@ internal sealed class FileLoggerProvider : ILoggerProvider
         }
         catch (IOException ex)
         {
-            WriteWarning(errorConsole, logFilePath, ex.Message);
+            WriteWarning(errorWriter, logFilePath, ex.Message);
             _writer = null;
             _channel = null;
         }
@@ -115,14 +98,9 @@ internal sealed class FileLoggerProvider : ILoggerProvider
             SingleWriter = false
         });
 
-    private static void WriteWarning(IAnsiConsole? console, string path, string message)
+    private static void WriteWarning(IStartupErrorWriter errorWriter, string path, string message)
     {
-        // Use provided console or create a minimal one for stderr
-        var errorConsole = console ?? AnsiConsole.Create(new AnsiConsoleSettings
-        {
-            Out = new AnsiConsoleOutput(Console.Error)
-        });
-        errorConsole.MarkupLine($"[yellow]⚠️ Warning:[/] Could not create log file at [blue]{path.EscapeMarkup()}[/]: {message.EscapeMarkup()}");
+        errorWriter.WriteMarkup($"Could not create log file at [blue]{path.EscapeMarkup()}[/]: {message.EscapeMarkup()}", KnownEmojis.Warning);
     }
 
     private async Task ProcessLogQueueAsync()
@@ -193,6 +171,35 @@ internal sealed class FileLoggerProvider : ILoggerProvider
         }
     }
 
+    internal void WriteLog(DateTimeOffset timestamp, LogLevel level, string category, string message, Exception? exception = null)
+    {
+        var ts = timestamp.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
+        var lvl = GetLogLevelString(level);
+
+        var logMessage = exception is not null
+            ? $"[{ts}] [{lvl}] [{category}] {message}{Environment.NewLine}{exception}"
+            : $"[{ts}] [{lvl}] [{category}] {message}";
+
+        WriteLog(logMessage);
+    }
+
+    internal static string GetLogLevelString(LogLevel logLevel) => logLevel switch
+    {
+        LogLevel.Trace => "TRCE",
+        LogLevel.Debug => "DBUG",
+        LogLevel.Information => "INFO",
+        LogLevel.Warning => "WARN",
+        LogLevel.Error => "FAIL",
+        LogLevel.Critical => "CRIT",
+        _ => logLevel.ToString().ToUpperInvariant()
+    };
+
+    internal static string GetShortCategoryName(string categoryName)
+    {
+        var lastDotIndex = categoryName.LastIndexOf('.');
+        return lastDotIndex >= 0 ? categoryName.Substring(lastDotIndex + 1) : categoryName;
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -239,31 +246,7 @@ internal sealed class FileLogger(FileLoggerProvider provider, string categoryNam
             return;
         }
 
-        var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
-        var level = GetLogLevelString(logLevel);
-        var shortCategory = GetShortCategoryName(categoryName);
-
-        var logMessage = exception is not null
-            ? $"[{timestamp}] [{level}] [{shortCategory}] {message}{Environment.NewLine}{exception}"
-            : $"[{timestamp}] [{level}] [{shortCategory}] {message}";
-
-        provider.WriteLog(logMessage);
-    }
-
-    private static string GetLogLevelString(LogLevel logLevel) => logLevel switch
-    {
-        LogLevel.Trace => "TRCE",
-        LogLevel.Debug => "DBUG",
-        LogLevel.Information => "INFO",
-        LogLevel.Warning => "WARN",
-        LogLevel.Error => "FAIL",
-        LogLevel.Critical => "CRIT",
-        _ => logLevel.ToString().ToUpperInvariant()
-    };
-
-    private static string GetShortCategoryName(string categoryName)
-    {
-        var lastDotIndex = categoryName.LastIndexOf('.');
-        return lastDotIndex >= 0 ? categoryName.Substring(lastDotIndex + 1) : categoryName;
+        var shortCategory = FileLoggerProvider.GetShortCategoryName(categoryName);
+        provider.WriteLog(DateTimeOffset.UtcNow, logLevel, shortCategory, message, exception);
     }
 }

@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="ru" original="../PublishCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Generate deployment artifacts for an apphost. (Preview)</source>
-        <target state="translated">Создать артефакты развертывания для хоста приложений. (Предварительная версия)</target>
+        <source>Generate deployment artifacts for an apphost (Preview)</source>
+        <target state="needs-review-translation">Генерирует артефакты развертывания для хоста приложений Aspire. (Предварительная версия)</target>
         <note />
       </trans-unit>
       <trans-unit id="GeneratingArtifacts">
@@ -18,8 +18,8 @@
         <note />
       </trans-unit>
       <trans-unit id="NoBuildArgumentDescription">
-        <source>Do not build or restore the project before running.</source>
-        <target state="translated">Сборка или восстановление проекта перед запуском не выполняется.</target>
+        <source>Do not build or restore the project before running</source>
+        <target state="new">Do not build or restore the project before running</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationCompletedPrefix">
@@ -34,12 +34,12 @@
       </trans-unit>
       <trans-unit id="OutputPathArgumentDescription">
         <source>The output path for the generated artifacts. Defaults to './aspire-output' if not specified.</source>
-        <target state="translated">Путь вывода созданных артефактов. По умолчанию используется "./aspire-output", если не указано иное.</target>
+        <target state="needs-review-translation">Путь вывода созданных артефактов. По умолчанию используется "./aspire-output", если не указано иное.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="translated">Путь к файлу проекта Aspire AppHost.</target>
+        <source>The path to the Aspire apphost project file</source>
+        <target state="needs-review-translation">Путь к файлу проекта Aspire AppHost.</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAPublisher">

@@ -27,17 +27,17 @@ internal sealed class McpCallCommand : BaseCommand
 
     private static readonly Argument<string> s_resourceArgument = new("resource")
     {
-        Description = "The name of the resource that exposes the MCP tool."
+        Description = McpCommandStrings.CallCommand_ResourceArgumentDescription
     };
 
     private static readonly Argument<string> s_toolArgument = new("tool")
     {
-        Description = "The name of the MCP tool to call."
+        Description = McpCommandStrings.CallCommand_ToolArgumentDescription
     };
 
     private static readonly Option<string?> s_inputOption = new("--input", "-i")
     {
-        Description = "JSON input to pass to the tool."
+        Description = McpCommandStrings.CallCommand_InputOptionDescription
     };
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", SharedCommandStrings.AppHostOptionDescription);
@@ -50,7 +50,7 @@ internal sealed class McpCallCommand : BaseCommand
         CliExecutionContext executionContext,
         AspireCliTelemetry telemetry,
         ILogger<McpCallCommand> logger)
-        : base("call", "Call an MCP tool on a running resource.", features, updateNotifier, executionContext, interactionService, telemetry)
+        : base("call", McpCommandStrings.CallCommand_Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _interactionService = interactionService;
         _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, executionContext, logger);

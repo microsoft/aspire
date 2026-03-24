@@ -103,7 +103,7 @@ internal class ExecResourceManager
         {
             await _resourceNotificationService.WaitForResourceAsync(execResource!.Name, targetStates: KnownResourceStates.TerminalStates, cancellationToken).ConfigureAwait(false);
 
-            // hack: https://github.com/dotnet/aspire/issues/10245
+            // hack: https://github.com/microsoft/aspire/issues/10245
             // workarounds the race-condition between streaming all logs from the resource, and resource completion
             await Task.Delay(1000, CancellationToken.None).ConfigureAwait(false);
 

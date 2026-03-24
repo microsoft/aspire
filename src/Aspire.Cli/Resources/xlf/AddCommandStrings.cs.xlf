@@ -8,8 +8,8 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Add a hosting integration to the apphost.</source>
-        <target state="translated">Přidejte hostující integraci do hostitele aplikace.</target>
+        <source>Add a hosting integration to the apphost</source>
+        <target state="needs-review-translation">Přidejte do hostitele aplikací Aspire integraci hostování.</target>
         <note />
       </trans-unit>
       <trans-unit id="ErrorOccurredWhileAddingPackage">
@@ -18,8 +18,8 @@
         <note />
       </trans-unit>
       <trans-unit id="IntegrationArgumentDescription">
-        <source>The name of the integration to add (e.g. redis, postgres).</source>
-        <target state="translated">Název integrace, která se má přidat (např. redis, postgres).</target>
+        <source>The name of the integration to add (e.g. redis, postgres)</source>
+        <target state="needs-review-translation">Název integrace, která se má přidat (např. redis, postgres).</target>
         <note />
       </trans-unit>
       <trans-unit id="NoIntegrationPackagesFound">
@@ -48,8 +48,8 @@
         <note>{0} is a number, {1} is the log file path</note>
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file to add the integration to.</source>
-        <target state="translated">Cesta k souboru projektu Aspire AppHost, do které se má integrace přidat</target>
+        <source>The path to the Aspire apphost project file to add the integration to</source>
+        <target state="needs-review-translation">Cesta k souboru projektu, do které se má integrace přidat</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchingForAspirePackages">
@@ -68,17 +68,17 @@
         <note />
       </trans-unit>
       <trans-unit id="SourceArgumentDescription">
-        <source>The NuGet source to use for the integration.</source>
-        <target state="translated">Zdroj NuGet, který se má použít pro integraci</target>
+        <source>The NuGet source to use for the integration</source>
+        <target state="needs-review-translation">Zdroj NuGet, který se má použít pro integraci</target>
         <note />
       </trans-unit>
       <trans-unit id="StoppedRunningInstance" translate="yes" xml:space="preserve">
-          <source>Stopped a running Aspire AppHost instance to allow package modification.</source>
-          <target state="translated">Zastavila se spuštěná instance Aspire AppHost, aby se povolila úprava balíčku.</target><note />
+          <source>Stopped a running Aspire apphost instance to allow package modification.</source>
+          <target state="new">Stopped a running Aspire apphost instance to allow package modification.</target><note />
         </trans-unit>
       <trans-unit id="UnableToStopRunningInstances">
-        <source>Unable to stop one or more running Aspire AppHost instances. Please stop the application and try again.</source>
-        <target state="translated">Nepodařilo se zastavit jednu nebo více spuštěných instancí Aspire AppHost. Zastavte prosím aplikaci a zkuste to znovu.</target>
+        <source>Unable to stop one or more running Aspire apphost instances. Please stop the application and try again.</source>
+        <target state="new">Unable to stop one or more running Aspire apphost instances. Please stop the application and try again.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnexpectedNumberOfPackagesFound">
@@ -92,8 +92,8 @@
         <note />
       </trans-unit>
       <trans-unit id="VersionArgumentDescription">
-        <source>The version of the integration to add.</source>
-        <target state="translated">Verze integrace, která se má přidat</target>
+        <source>The version of the integration to add</source>
+        <target state="needs-review-translation">Verze integrace, která se má přidat</target>
         <note />
       </trans-unit>
     </body>

@@ -8,6 +8,7 @@
     <IsTestProject>true</IsTestProject>
     <IsUnitTestProject>true</IsUnitTestProject>
     <OutputType>Exe</OutputType>
+    <SkipTests Condition="'$(IsGitHubActionsRunner)' == 'true' and '$(IsGithubPullRequest)' != 'true'">true</SkipTests>
 
     <SplitTestsOnCI>true</SplitTestsOnCI>
     <RequiresNugets>true</RequiresNugets>
@@ -53,11 +54,26 @@
   <ItemGroup>
       <Compile Include="$(TestsSharedDir)TemporaryRepo.cs" Link="shared\TemporaryRepo.cs" />
       <Compile Include="$(TestsSharedDir)Hex1bTestHelpers.cs" Link="shared\Hex1bTestHelpers.cs" />
+      <Compile Include="$(TestsSharedDir)Hex1bAutomatorTestHelpers.cs" Link="shared\Hex1bAutomatorTestHelpers.cs" />
       <Compile Include="..\Aspire.Hosting.Tests\Utils\MSBuildUtils.cs" Link="Utils\MSBuildUtils.cs" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Aspire.TestUtilities\Aspire.TestUtilities.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\Aspire.Cli\Resources\AddCommandStrings.Designer.cs" Link="Resources\AddCommandStrings.Designer.cs" />
+    <Compile Include="..\..\src\Aspire.Cli\Resources\RunCommandStrings.Designer.cs" Link="Resources\RunCommandStrings.Designer.cs" />
+    <Compile Include="..\..\src\Aspire.Cli\Resources\SharedCommandStrings.Designer.cs" Link="Resources\SharedCommandStrings.Designer.cs" />
+    <Compile Include="..\..\src\Aspire.Cli\Resources\StopCommandStrings.Designer.cs" Link="Resources\StopCommandStrings.Designer.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\src\Aspire.Cli\Resources\AddCommandStrings.resx" Link="Resources\AddCommandStrings.resx" LogicalName="Aspire.Cli.Resources.AddCommandStrings.resources" />
+    <EmbeddedResource Include="..\..\src\Aspire.Cli\Resources\RunCommandStrings.resx" Link="Resources\RunCommandStrings.resx" LogicalName="Aspire.Cli.Resources.RunCommandStrings.resources" />
+    <EmbeddedResource Include="..\..\src\Aspire.Cli\Resources\SharedCommandStrings.resx" Link="Resources\SharedCommandStrings.resx" LogicalName="Aspire.Cli.Resources.SharedCommandStrings.resources" />
+    <EmbeddedResource Include="..\..\src\Aspire.Cli\Resources\StopCommandStrings.resx" Link="Resources\StopCommandStrings.resx" LogicalName="Aspire.Cli.Resources.StopCommandStrings.resources" />
   </ItemGroup>
 
 </Project>

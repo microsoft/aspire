@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Aspire.TestUtilities;
 using Hex1b.Automation;
@@ -16,7 +17,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 public sealed class WaitCommandTests(ITestOutputHelper output)
 {
     [Fact]
-    [QuarantinedTest("https://github.com/dotnet/aspire/issues/14993")]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/14993")]
     public async Task CreateStartWaitAndStopAspireProject()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -28,57 +29,45 @@ public sealed class WaitCommandTests(ITestOutputHelper output)
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
-        // Pattern searchers for start/wait/stop commands
-        var waitForAppHostStartedSuccessfully = new CellPatternSearcher()
-            .Find("AppHost started successfully.");
-
-        var waitForResourceUp = new CellPatternSearcher()
-            .Find("is up (running).");
-
-        var waitForAppHostStoppedSuccessfully = new CellPatternSearcher()
-            .Find("AppHost stopped successfully.");
-
         var counter = new SequenceCounter();
-        var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
-        sequenceBuilder.PrepareDockerEnvironment(counter, workspace);
+        // Prepare Docker environment (prompt counting, umask, env vars)
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        sequenceBuilder.InstallAspireCliInDocker(installMode, counter);
+        // Install the Aspire CLI
+        await auto.InstallAspireCliInDockerAsync(installMode, counter);
 
         // Create a new project using aspire new
-        sequenceBuilder.AspireNew("AspireWaitApp", counter);
+        await auto.AspireNewAsync("AspireWaitApp", counter);
 
         // Navigate to the AppHost directory
-        sequenceBuilder.Type("cd AspireWaitApp/AspireWaitApp.AppHost")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("cd AspireWaitApp/AspireWaitApp.AppHost");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Start the AppHost in the background using aspire start
-        sequenceBuilder.Type("aspire start")
-            .Enter()
-            .WaitUntil(s => waitForAppHostStartedSuccessfully.Search(s).Count > 0, TimeSpan.FromMinutes(3))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire start");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Wait for the webfrontend resource to be up (running).
         // Use a longer timeout in Docker-in-Docker where container startup is slower.
-        sequenceBuilder.Type("aspire wait webfrontend --status up --timeout 300")
-            .Enter()
-            .WaitUntil(s => waitForResourceUp.Search(s).Count > 0, TimeSpan.FromMinutes(6))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire wait webfrontend --status up --timeout 300");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("is up (running).", timeout: TimeSpan.FromMinutes(6));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Stop the AppHost using aspire stop
-        sequenceBuilder.Type("aspire stop")
-            .Enter()
-            .WaitUntil(s => waitForAppHostStoppedSuccessfully.Search(s).Count > 0, TimeSpan.FromMinutes(1))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire stop");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(StopCommandStrings.AppHostStoppedSuccessfully, timeout: TimeSpan.FromMinutes(1));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Exit the shell
-        sequenceBuilder.Type("exit")
-            .Enter();
-
-        var sequence = sequenceBuilder.Build();
-
-        await sequence.ApplyAsync(terminal, TestContext.Current.CancellationToken);
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
 
         await pendingRun;
     }

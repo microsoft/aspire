@@ -45,7 +45,7 @@ internal static class BuiltInDistributedApplicationEventSubscriptionHandlers
     public static Task ExcludeDashboardFromManifestAsync(BeforeStartEvent beforeStartEvent, CancellationToken _)
     {
         // When developing locally, exclude the dashboard from the manifest. This only affects our playground projects in practice.
-        if (beforeStartEvent.Model.Resources.SingleOrDefault(r => StringComparers.ResourceName.Equals(r.Name, KnownResourceNames.AspireDashboard)) is { } dashboardResource)
+        if (beforeStartEvent.Model.Resources.SingleOrDefault(r => string.Equals(r.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName)) is { } dashboardResource)
         {
             dashboardResource.Annotations.Add(ManifestPublishingCallbackAnnotation.Ignore);
         }

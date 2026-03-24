@@ -318,6 +318,114 @@ func (d *TestDeeplyNestedDto) ToMap() map[string]any {
 // Handle Wrappers
 // ============================================================================
 
+// AfterResourcesCreatedEvent wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.AfterResourcesCreatedEvent.
+type AfterResourcesCreatedEvent struct {
+	HandleWrapperBase
+}
+
+// NewAfterResourcesCreatedEvent creates a new AfterResourcesCreatedEvent.
+func NewAfterResourcesCreatedEvent(handle *Handle, client *AspireClient) *AfterResourcesCreatedEvent {
+	return &AfterResourcesCreatedEvent{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// Services gets the Services property
+func (s *AfterResourcesCreatedEvent) Services() (*IServiceProvider, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/AfterResourcesCreatedEvent.services", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IServiceProvider), nil
+}
+
+// Model gets the Model property
+func (s *AfterResourcesCreatedEvent) Model() (*DistributedApplicationModel, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/AfterResourcesCreatedEvent.model", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DistributedApplicationModel), nil
+}
+
+// BeforeResourceStartedEvent wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeResourceStartedEvent.
+type BeforeResourceStartedEvent struct {
+	HandleWrapperBase
+}
+
+// NewBeforeResourceStartedEvent creates a new BeforeResourceStartedEvent.
+func NewBeforeResourceStartedEvent(handle *Handle, client *AspireClient) *BeforeResourceStartedEvent {
+	return &BeforeResourceStartedEvent{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// Resource gets the Resource property
+func (s *BeforeResourceStartedEvent) Resource() (*IResource, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/BeforeResourceStartedEvent.resource", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// Services gets the Services property
+func (s *BeforeResourceStartedEvent) Services() (*IServiceProvider, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/BeforeResourceStartedEvent.services", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IServiceProvider), nil
+}
+
+// BeforeStartEvent wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeStartEvent.
+type BeforeStartEvent struct {
+	HandleWrapperBase
+}
+
+// NewBeforeStartEvent creates a new BeforeStartEvent.
+func NewBeforeStartEvent(handle *Handle, client *AspireClient) *BeforeStartEvent {
+	return &BeforeStartEvent{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// Services gets the Services property
+func (s *BeforeStartEvent) Services() (*IServiceProvider, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/BeforeStartEvent.services", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IServiceProvider), nil
+}
+
+// Model gets the Model property
+func (s *BeforeStartEvent) Model() (*DistributedApplicationModel, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/BeforeStartEvent.model", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DistributedApplicationModel), nil
+}
+
 // CSharpAppResource wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.CSharpAppResource.
 type CSharpAppResource struct {
 	ResourceBuilderBase
@@ -344,12 +452,16 @@ func (s *CSharpAppResource) WithContainerRegistry(registry *IResource) (*IResour
 }
 
 // WithDockerfileBaseImage sets the base image for a Dockerfile build
-func (s *CSharpAppResource) WithDockerfileBaseImage(buildImage string, runtimeImage string) (*IResource, error) {
+func (s *CSharpAppResource) WithDockerfileBaseImage(buildImage *string, runtimeImage *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["buildImage"] = SerializeValue(buildImage)
-	reqArgs["runtimeImage"] = SerializeValue(runtimeImage)
+	if buildImage != nil {
+		reqArgs["buildImage"] = SerializeValue(buildImage)
+	}
+	if runtimeImage != nil {
+		reqArgs["runtimeImage"] = SerializeValue(runtimeImage)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withDockerfileBaseImage", reqArgs)
 	if err != nil {
 		return nil, err
@@ -358,12 +470,16 @@ func (s *CSharpAppResource) WithDockerfileBaseImage(buildImage string, runtimeIm
 }
 
 // WithMcpServer configures an MCP server endpoint on the resource
-func (s *CSharpAppResource) WithMcpServer(path string, endpointName string) (*IResourceWithEndpoints, error) {
+func (s *CSharpAppResource) WithMcpServer(path *string, endpointName *string) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["path"] = SerializeValue(path)
-	reqArgs["endpointName"] = SerializeValue(endpointName)
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withMcpServer", reqArgs)
 	if err != nil {
 		return nil, err
@@ -437,12 +553,14 @@ func (s *CSharpAppResource) PublishAsDockerFile(configure func(...any) any) (*Pr
 }
 
 // WithRequiredCommand adds a required command dependency
-func (s *CSharpAppResource) WithRequiredCommand(command string, helpLink string) (*IResource, error) {
+func (s *CSharpAppResource) WithRequiredCommand(command string, helpLink *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["command"] = SerializeValue(command)
-	reqArgs["helpLink"] = SerializeValue(helpLink)
+	if helpLink != nil {
+		reqArgs["helpLink"] = SerializeValue(helpLink)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withRequiredCommand", reqArgs)
 	if err != nil {
 		return nil, err
@@ -564,41 +682,21 @@ func (s *CSharpAppResource) WithArgsCallback(callback func(...any) any) (*IResou
 }
 
 // WithReference adds a reference to another resource
-func (s *CSharpAppResource) WithReference(source *IResourceWithConnectionString, connectionName string, optional bool) (*IResourceWithEnvironment, error) {
+func (s *CSharpAppResource) WithReference(source *IResource, connectionName *string, optional *bool, name *string) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["source"] = SerializeValue(source)
-	reqArgs["connectionName"] = SerializeValue(connectionName)
-	reqArgs["optional"] = SerializeValue(optional)
+	if connectionName != nil {
+		reqArgs["connectionName"] = SerializeValue(connectionName)
+	}
+	if optional != nil {
+		reqArgs["optional"] = SerializeValue(optional)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withReference", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*IResourceWithEnvironment), nil
-}
-
-// WithServiceReference adds a service discovery reference to another resource
-func (s *CSharpAppResource) WithServiceReference(source *IResourceWithServiceDiscovery) (*IResourceWithEnvironment, error) {
-	reqArgs := map[string]any{
-		"builder": SerializeValue(s.Handle()),
-	}
-	reqArgs["source"] = SerializeValue(source)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withServiceReference", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*IResourceWithEnvironment), nil
-}
-
-// WithServiceReferenceNamed adds a named service discovery reference
-func (s *CSharpAppResource) WithServiceReferenceNamed(source *IResourceWithServiceDiscovery, name string) (*IResourceWithEnvironment, error) {
-	reqArgs := map[string]any{
-		"builder": SerializeValue(s.Handle()),
-	}
-	reqArgs["source"] = SerializeValue(source)
-	reqArgs["name"] = SerializeValue(name)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withServiceReferenceNamed", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -646,18 +744,34 @@ func (s *CSharpAppResource) WithReferenceEndpoint(endpointReference *EndpointRef
 }
 
 // WithEndpoint adds a network endpoint
-func (s *CSharpAppResource) WithEndpoint(port float64, targetPort float64, scheme string, name string, env string, isProxied bool, isExternal bool, protocol ProtocolType) (*IResourceWithEndpoints, error) {
+func (s *CSharpAppResource) WithEndpoint(port *float64, targetPort *float64, scheme *string, name *string, env *string, isProxied *bool, isExternal *bool, protocol *ProtocolType) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["port"] = SerializeValue(port)
-	reqArgs["targetPort"] = SerializeValue(targetPort)
-	reqArgs["scheme"] = SerializeValue(scheme)
-	reqArgs["name"] = SerializeValue(name)
-	reqArgs["env"] = SerializeValue(env)
-	reqArgs["isProxied"] = SerializeValue(isProxied)
-	reqArgs["isExternal"] = SerializeValue(isExternal)
-	reqArgs["protocol"] = SerializeValue(protocol)
+	if port != nil {
+		reqArgs["port"] = SerializeValue(port)
+	}
+	if targetPort != nil {
+		reqArgs["targetPort"] = SerializeValue(targetPort)
+	}
+	if scheme != nil {
+		reqArgs["scheme"] = SerializeValue(scheme)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if env != nil {
+		reqArgs["env"] = SerializeValue(env)
+	}
+	if isProxied != nil {
+		reqArgs["isProxied"] = SerializeValue(isProxied)
+	}
+	if isExternal != nil {
+		reqArgs["isExternal"] = SerializeValue(isExternal)
+	}
+	if protocol != nil {
+		reqArgs["protocol"] = SerializeValue(protocol)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withEndpoint", reqArgs)
 	if err != nil {
 		return nil, err
@@ -666,15 +780,25 @@ func (s *CSharpAppResource) WithEndpoint(port float64, targetPort float64, schem
 }
 
 // WithHttpEndpoint adds an HTTP endpoint
-func (s *CSharpAppResource) WithHttpEndpoint(port float64, targetPort float64, name string, env string, isProxied bool) (*IResourceWithEndpoints, error) {
+func (s *CSharpAppResource) WithHttpEndpoint(port *float64, targetPort *float64, name *string, env *string, isProxied *bool) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["port"] = SerializeValue(port)
-	reqArgs["targetPort"] = SerializeValue(targetPort)
-	reqArgs["name"] = SerializeValue(name)
-	reqArgs["env"] = SerializeValue(env)
-	reqArgs["isProxied"] = SerializeValue(isProxied)
+	if port != nil {
+		reqArgs["port"] = SerializeValue(port)
+	}
+	if targetPort != nil {
+		reqArgs["targetPort"] = SerializeValue(targetPort)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if env != nil {
+		reqArgs["env"] = SerializeValue(env)
+	}
+	if isProxied != nil {
+		reqArgs["isProxied"] = SerializeValue(isProxied)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpEndpoint", reqArgs)
 	if err != nil {
 		return nil, err
@@ -683,15 +807,25 @@ func (s *CSharpAppResource) WithHttpEndpoint(port float64, targetPort float64, n
 }
 
 // WithHttpsEndpoint adds an HTTPS endpoint
-func (s *CSharpAppResource) WithHttpsEndpoint(port float64, targetPort float64, name string, env string, isProxied bool) (*IResourceWithEndpoints, error) {
+func (s *CSharpAppResource) WithHttpsEndpoint(port *float64, targetPort *float64, name *string, env *string, isProxied *bool) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["port"] = SerializeValue(port)
-	reqArgs["targetPort"] = SerializeValue(targetPort)
-	reqArgs["name"] = SerializeValue(name)
-	reqArgs["env"] = SerializeValue(env)
-	reqArgs["isProxied"] = SerializeValue(isProxied)
+	if port != nil {
+		reqArgs["port"] = SerializeValue(port)
+	}
+	if targetPort != nil {
+		reqArgs["targetPort"] = SerializeValue(targetPort)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if env != nil {
+		reqArgs["env"] = SerializeValue(env)
+	}
+	if isProxied != nil {
+		reqArgs["isProxied"] = SerializeValue(isProxied)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpsEndpoint", reqArgs)
 	if err != nil {
 		return nil, err
@@ -752,12 +886,14 @@ func (s *CSharpAppResource) WithUrlsCallback(callback func(...any) any) (*IResou
 }
 
 // WithUrl adds or modifies displayed URLs
-func (s *CSharpAppResource) WithUrl(url string, displayText string) (*IResource, error) {
+func (s *CSharpAppResource) WithUrl(url string, displayText *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["url"] = SerializeValue(url)
-	reqArgs["displayText"] = SerializeValue(displayText)
+	if displayText != nil {
+		reqArgs["displayText"] = SerializeValue(displayText)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withUrl", reqArgs)
 	if err != nil {
 		return nil, err
@@ -766,12 +902,14 @@ func (s *CSharpAppResource) WithUrl(url string, displayText string) (*IResource,
 }
 
 // WithUrlExpression adds a URL using a reference expression
-func (s *CSharpAppResource) WithUrlExpression(url *ReferenceExpression, displayText string) (*IResource, error) {
+func (s *CSharpAppResource) WithUrlExpression(url *ReferenceExpression, displayText *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["url"] = SerializeValue(url)
-	reqArgs["displayText"] = SerializeValue(displayText)
+	if displayText != nil {
+		reqArgs["displayText"] = SerializeValue(displayText)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withUrlExpression", reqArgs)
 	if err != nil {
 		return nil, err
@@ -904,12 +1042,14 @@ func (s *CSharpAppResource) WithExplicitStart() (*IResource, error) {
 }
 
 // WaitForCompletion waits for resource completion
-func (s *CSharpAppResource) WaitForCompletion(dependency *IResource, exitCode float64) (*IResourceWithWaitSupport, error) {
+func (s *CSharpAppResource) WaitForCompletion(dependency *IResource, exitCode *float64) (*IResourceWithWaitSupport, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
-	reqArgs["exitCode"] = SerializeValue(exitCode)
+	if exitCode != nil {
+		reqArgs["exitCode"] = SerializeValue(exitCode)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForCompletion", reqArgs)
 	if err != nil {
 		return nil, err
@@ -931,13 +1071,19 @@ func (s *CSharpAppResource) WithHealthCheck(key string) (*IResource, error) {
 }
 
 // WithHttpHealthCheck adds an HTTP health check
-func (s *CSharpAppResource) WithHttpHealthCheck(path string, statusCode float64, endpointName string) (*IResourceWithEndpoints, error) {
+func (s *CSharpAppResource) WithHttpHealthCheck(path *string, statusCode *float64, endpointName *string) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["path"] = SerializeValue(path)
-	reqArgs["statusCode"] = SerializeValue(statusCode)
-	reqArgs["endpointName"] = SerializeValue(endpointName)
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if statusCode != nil {
+		reqArgs["statusCode"] = SerializeValue(statusCode)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpHealthCheck", reqArgs)
 	if err != nil {
 		return nil, err
@@ -1045,12 +1191,14 @@ func (s *CSharpAppResource) WithChildRelationship(child *IResource) (*IResource,
 }
 
 // WithIconName sets the icon for the resource
-func (s *CSharpAppResource) WithIconName(iconName string, iconVariant IconVariant) (*IResource, error) {
+func (s *CSharpAppResource) WithIconName(iconName string, iconVariant *IconVariant) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["iconName"] = SerializeValue(iconName)
-	reqArgs["iconVariant"] = SerializeValue(iconVariant)
+	if iconVariant != nil {
+		reqArgs["iconVariant"] = SerializeValue(iconVariant)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withIconName", reqArgs)
 	if err != nil {
 		return nil, err
@@ -1059,18 +1207,32 @@ func (s *CSharpAppResource) WithIconName(iconName string, iconVariant IconVarian
 }
 
 // WithHttpProbe adds an HTTP health probe to the resource
-func (s *CSharpAppResource) WithHttpProbe(probeType ProbeType, path string, initialDelaySeconds float64, periodSeconds float64, timeoutSeconds float64, failureThreshold float64, successThreshold float64, endpointName string) (*IResourceWithEndpoints, error) {
+func (s *CSharpAppResource) WithHttpProbe(probeType ProbeType, path *string, initialDelaySeconds *float64, periodSeconds *float64, timeoutSeconds *float64, failureThreshold *float64, successThreshold *float64, endpointName *string) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["probeType"] = SerializeValue(probeType)
-	reqArgs["path"] = SerializeValue(path)
-	reqArgs["initialDelaySeconds"] = SerializeValue(initialDelaySeconds)
-	reqArgs["periodSeconds"] = SerializeValue(periodSeconds)
-	reqArgs["timeoutSeconds"] = SerializeValue(timeoutSeconds)
-	reqArgs["failureThreshold"] = SerializeValue(failureThreshold)
-	reqArgs["successThreshold"] = SerializeValue(successThreshold)
-	reqArgs["endpointName"] = SerializeValue(endpointName)
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if initialDelaySeconds != nil {
+		reqArgs["initialDelaySeconds"] = SerializeValue(initialDelaySeconds)
+	}
+	if periodSeconds != nil {
+		reqArgs["periodSeconds"] = SerializeValue(periodSeconds)
+	}
+	if timeoutSeconds != nil {
+		reqArgs["timeoutSeconds"] = SerializeValue(timeoutSeconds)
+	}
+	if failureThreshold != nil {
+		reqArgs["failureThreshold"] = SerializeValue(failureThreshold)
+	}
+	if successThreshold != nil {
+		reqArgs["successThreshold"] = SerializeValue(successThreshold)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpProbe", reqArgs)
 	if err != nil {
 		return nil, err
@@ -1117,7 +1279,7 @@ func (s *CSharpAppResource) WithRemoteImageTag(remoteImageTag string) (*ICompute
 }
 
 // WithPipelineStepFactory adds a pipeline step to the resource
-func (s *CSharpAppResource) WithPipelineStepFactory(stepName string, callback func(...any) any, dependsOn []string, requiredBy []string, tags []string, description string) (*IResource, error) {
+func (s *CSharpAppResource) WithPipelineStepFactory(stepName string, callback func(...any) any, dependsOn []string, requiredBy []string, tags []string, description *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
@@ -1125,10 +1287,18 @@ func (s *CSharpAppResource) WithPipelineStepFactory(stepName string, callback fu
 	if callback != nil {
 		reqArgs["callback"] = RegisterCallback(callback)
 	}
-	reqArgs["dependsOn"] = SerializeValue(dependsOn)
-	reqArgs["requiredBy"] = SerializeValue(requiredBy)
-	reqArgs["tags"] = SerializeValue(tags)
-	reqArgs["description"] = SerializeValue(description)
+	if dependsOn != nil {
+		reqArgs["dependsOn"] = SerializeValue(dependsOn)
+	}
+	if requiredBy != nil {
+		reqArgs["requiredBy"] = SerializeValue(requiredBy)
+	}
+	if tags != nil {
+		reqArgs["tags"] = SerializeValue(tags)
+	}
+	if description != nil {
+		reqArgs["description"] = SerializeValue(description)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withPipelineStepFactory", reqArgs)
 	if err != nil {
 		return nil, err
@@ -1178,13 +1348,92 @@ func (s *CSharpAppResource) GetResourceName() (*string, error) {
 	return result.(*string), nil
 }
 
-// WithOptionalString adds an optional string parameter
-func (s *CSharpAppResource) WithOptionalString(value string, enabled bool) (*IResource, error) {
+// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event
+func (s *CSharpAppResource) OnBeforeResourceStarted(callback func(...any) any) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["value"] = SerializeValue(value)
-	reqArgs["enabled"] = SerializeValue(enabled)
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onBeforeResourceStarted", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnResourceStopped subscribes to the ResourceStopped event
+func (s *CSharpAppResource) OnResourceStopped(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceStopped", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnInitializeResource subscribes to the InitializeResource event
+func (s *CSharpAppResource) OnInitializeResource(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onInitializeResource", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated event
+func (s *CSharpAppResource) OnResourceEndpointsAllocated(callback func(...any) any) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceEndpointsAllocated", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
+}
+
+// OnResourceReady subscribes to the ResourceReady event
+func (s *CSharpAppResource) OnResourceReady(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceReady", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithOptionalString adds an optional string parameter
+func (s *CSharpAppResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if value != nil {
+		reqArgs["value"] = SerializeValue(value)
+	}
+	if enabled != nil {
+		reqArgs["enabled"] = SerializeValue(enabled)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalString", reqArgs)
 	if err != nil {
 		return nil, err
@@ -1440,6 +1689,79 @@ func (s *CommandLineArgsCallbackContext) SetExecutionContext(value *DistributedA
 	return result.(*CommandLineArgsCallbackContext), nil
 }
 
+// Logger gets the Logger property
+func (s *CommandLineArgsCallbackContext) Logger() (*ILogger, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.logger", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ILogger), nil
+}
+
+// SetLogger sets the Logger property
+func (s *CommandLineArgsCallbackContext) SetLogger(value *ILogger) (*CommandLineArgsCallbackContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.setLogger", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*CommandLineArgsCallbackContext), nil
+}
+
+// Resource gets the Resource property
+func (s *CommandLineArgsCallbackContext) Resource() (*IResource, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.resource", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// ConnectionStringAvailableEvent wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ConnectionStringAvailableEvent.
+type ConnectionStringAvailableEvent struct {
+	HandleWrapperBase
+}
+
+// NewConnectionStringAvailableEvent creates a new ConnectionStringAvailableEvent.
+func NewConnectionStringAvailableEvent(handle *Handle, client *AspireClient) *ConnectionStringAvailableEvent {
+	return &ConnectionStringAvailableEvent{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// Resource gets the Resource property
+func (s *ConnectionStringAvailableEvent) Resource() (*IResource, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ConnectionStringAvailableEvent.resource", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// Services gets the Services property
+func (s *ConnectionStringAvailableEvent) Services() (*IServiceProvider, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ConnectionStringAvailableEvent.services", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IServiceProvider), nil
+}
+
 // ConnectionStringResource wraps a handle for Aspire.Hosting/Aspire.Hosting.ConnectionStringResource.
 type ConnectionStringResource struct {
 	ResourceBuilderBase
@@ -1466,12 +1788,16 @@ func (s *ConnectionStringResource) WithContainerRegistry(registry *IResource) (*
 }
 
 // WithDockerfileBaseImage sets the base image for a Dockerfile build
-func (s *ConnectionStringResource) WithDockerfileBaseImage(buildImage string, runtimeImage string) (*IResource, error) {
+func (s *ConnectionStringResource) WithDockerfileBaseImage(buildImage *string, runtimeImage *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["buildImage"] = SerializeValue(buildImage)
-	reqArgs["runtimeImage"] = SerializeValue(runtimeImage)
+	if buildImage != nil {
+		reqArgs["buildImage"] = SerializeValue(buildImage)
+	}
+	if runtimeImage != nil {
+		reqArgs["runtimeImage"] = SerializeValue(runtimeImage)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withDockerfileBaseImage", reqArgs)
 	if err != nil {
 		return nil, err
@@ -1480,12 +1806,14 @@ func (s *ConnectionStringResource) WithDockerfileBaseImage(buildImage string, ru
 }
 
 // WithRequiredCommand adds a required command dependency
-func (s *ConnectionStringResource) WithRequiredCommand(command string, helpLink string) (*IResource, error) {
+func (s *ConnectionStringResource) WithRequiredCommand(command string, helpLink *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["command"] = SerializeValue(command)
-	reqArgs["helpLink"] = SerializeValue(helpLink)
+	if helpLink != nil {
+		reqArgs["helpLink"] = SerializeValue(helpLink)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withRequiredCommand", reqArgs)
 	if err != nil {
 		return nil, err
@@ -1537,12 +1865,14 @@ func (s *ConnectionStringResource) WithUrlsCallback(callback func(...any) any) (
 }
 
 // WithUrl adds or modifies displayed URLs
-func (s *ConnectionStringResource) WithUrl(url string, displayText string) (*IResource, error) {
+func (s *ConnectionStringResource) WithUrl(url string, displayText *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["url"] = SerializeValue(url)
-	reqArgs["displayText"] = SerializeValue(displayText)
+	if displayText != nil {
+		reqArgs["displayText"] = SerializeValue(displayText)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withUrl", reqArgs)
 	if err != nil {
 		return nil, err
@@ -1551,12 +1881,14 @@ func (s *ConnectionStringResource) WithUrl(url string, displayText string) (*IRe
 }
 
 // WithUrlExpression adds a URL using a reference expression
-func (s *ConnectionStringResource) WithUrlExpression(url *ReferenceExpression, displayText string) (*IResource, error) {
+func (s *ConnectionStringResource) WithUrlExpression(url *ReferenceExpression, displayText *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["url"] = SerializeValue(url)
-	reqArgs["displayText"] = SerializeValue(displayText)
+	if displayText != nil {
+		reqArgs["displayText"] = SerializeValue(displayText)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withUrlExpression", reqArgs)
 	if err != nil {
 		return nil, err
@@ -1659,12 +1991,14 @@ func (s *ConnectionStringResource) WithExplicitStart() (*IResource, error) {
 }
 
 // WaitForCompletion waits for resource completion
-func (s *ConnectionStringResource) WaitForCompletion(dependency *IResource, exitCode float64) (*IResourceWithWaitSupport, error) {
+func (s *ConnectionStringResource) WaitForCompletion(dependency *IResource, exitCode *float64) (*IResourceWithWaitSupport, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
-	reqArgs["exitCode"] = SerializeValue(exitCode)
+	if exitCode != nil {
+		reqArgs["exitCode"] = SerializeValue(exitCode)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForCompletion", reqArgs)
 	if err != nil {
 		return nil, err
@@ -1732,12 +2066,14 @@ func (s *ConnectionStringResource) WithChildRelationship(child *IResource) (*IRe
 }
 
 // WithIconName sets the icon for the resource
-func (s *ConnectionStringResource) WithIconName(iconName string, iconVariant IconVariant) (*IResource, error) {
+func (s *ConnectionStringResource) WithIconName(iconName string, iconVariant *IconVariant) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["iconName"] = SerializeValue(iconName)
-	reqArgs["iconVariant"] = SerializeValue(iconVariant)
+	if iconVariant != nil {
+		reqArgs["iconVariant"] = SerializeValue(iconVariant)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withIconName", reqArgs)
 	if err != nil {
 		return nil, err
@@ -1758,7 +2094,7 @@ func (s *ConnectionStringResource) ExcludeFromMcp() (*IResource, error) {
 }
 
 // WithPipelineStepFactory adds a pipeline step to the resource
-func (s *ConnectionStringResource) WithPipelineStepFactory(stepName string, callback func(...any) any, dependsOn []string, requiredBy []string, tags []string, description string) (*IResource, error) {
+func (s *ConnectionStringResource) WithPipelineStepFactory(stepName string, callback func(...any) any, dependsOn []string, requiredBy []string, tags []string, description *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
@@ -1766,10 +2102,18 @@ func (s *ConnectionStringResource) WithPipelineStepFactory(stepName string, call
 	if callback != nil {
 		reqArgs["callback"] = RegisterCallback(callback)
 	}
-	reqArgs["dependsOn"] = SerializeValue(dependsOn)
-	reqArgs["requiredBy"] = SerializeValue(requiredBy)
-	reqArgs["tags"] = SerializeValue(tags)
-	reqArgs["description"] = SerializeValue(description)
+	if dependsOn != nil {
+		reqArgs["dependsOn"] = SerializeValue(dependsOn)
+	}
+	if requiredBy != nil {
+		reqArgs["requiredBy"] = SerializeValue(requiredBy)
+	}
+	if tags != nil {
+		reqArgs["tags"] = SerializeValue(tags)
+	}
+	if description != nil {
+		reqArgs["description"] = SerializeValue(description)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withPipelineStepFactory", reqArgs)
 	if err != nil {
 		return nil, err
@@ -1819,13 +2163,92 @@ func (s *ConnectionStringResource) GetResourceName() (*string, error) {
 	return result.(*string), nil
 }
 
-// WithOptionalString adds an optional string parameter
-func (s *ConnectionStringResource) WithOptionalString(value string, enabled bool) (*IResource, error) {
+// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event
+func (s *ConnectionStringResource) OnBeforeResourceStarted(callback func(...any) any) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["value"] = SerializeValue(value)
-	reqArgs["enabled"] = SerializeValue(enabled)
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onBeforeResourceStarted", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnResourceStopped subscribes to the ResourceStopped event
+func (s *ConnectionStringResource) OnResourceStopped(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceStopped", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnConnectionStringAvailable subscribes to the ConnectionStringAvailable event
+func (s *ConnectionStringResource) OnConnectionStringAvailable(callback func(...any) any) (*IResourceWithConnectionString, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onConnectionStringAvailable", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithConnectionString), nil
+}
+
+// OnInitializeResource subscribes to the InitializeResource event
+func (s *ConnectionStringResource) OnInitializeResource(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onInitializeResource", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnResourceReady subscribes to the ResourceReady event
+func (s *ConnectionStringResource) OnResourceReady(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceReady", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithOptionalString adds an optional string parameter
+func (s *ConnectionStringResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if value != nil {
+		reqArgs["value"] = SerializeValue(value)
+	}
+	if enabled != nil {
+		reqArgs["enabled"] = SerializeValue(enabled)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalString", reqArgs)
 	if err != nil {
 		return nil, err
@@ -2047,12 +2470,16 @@ func (s *ContainerRegistryResource) WithContainerRegistry(registry *IResource) (
 }
 
 // WithDockerfileBaseImage sets the base image for a Dockerfile build
-func (s *ContainerRegistryResource) WithDockerfileBaseImage(buildImage string, runtimeImage string) (*IResource, error) {
+func (s *ContainerRegistryResource) WithDockerfileBaseImage(buildImage *string, runtimeImage *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["buildImage"] = SerializeValue(buildImage)
-	reqArgs["runtimeImage"] = SerializeValue(runtimeImage)
+	if buildImage != nil {
+		reqArgs["buildImage"] = SerializeValue(buildImage)
+	}
+	if runtimeImage != nil {
+		reqArgs["runtimeImage"] = SerializeValue(runtimeImage)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withDockerfileBaseImage", reqArgs)
 	if err != nil {
 		return nil, err
@@ -2061,12 +2488,14 @@ func (s *ContainerRegistryResource) WithDockerfileBaseImage(buildImage string, r
 }
 
 // WithRequiredCommand adds a required command dependency
-func (s *ContainerRegistryResource) WithRequiredCommand(command string, helpLink string) (*IResource, error) {
+func (s *ContainerRegistryResource) WithRequiredCommand(command string, helpLink *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["command"] = SerializeValue(command)
-	reqArgs["helpLink"] = SerializeValue(helpLink)
+	if helpLink != nil {
+		reqArgs["helpLink"] = SerializeValue(helpLink)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withRequiredCommand", reqArgs)
 	if err != nil {
 		return nil, err
@@ -2090,12 +2519,14 @@ func (s *ContainerRegistryResource) WithUrlsCallback(callback func(...any) any) 
 }
 
 // WithUrl adds or modifies displayed URLs
-func (s *ContainerRegistryResource) WithUrl(url string, displayText string) (*IResource, error) {
+func (s *ContainerRegistryResource) WithUrl(url string, displayText *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["url"] = SerializeValue(url)
-	reqArgs["displayText"] = SerializeValue(displayText)
+	if displayText != nil {
+		reqArgs["displayText"] = SerializeValue(displayText)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withUrl", reqArgs)
 	if err != nil {
 		return nil, err
@@ -2104,12 +2535,14 @@ func (s *ContainerRegistryResource) WithUrl(url string, displayText string) (*IR
 }
 
 // WithUrlExpression adds a URL using a reference expression
-func (s *ContainerRegistryResource) WithUrlExpression(url *ReferenceExpression, displayText string) (*IResource, error) {
+func (s *ContainerRegistryResource) WithUrlExpression(url *ReferenceExpression, displayText *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["url"] = SerializeValue(url)
-	reqArgs["displayText"] = SerializeValue(displayText)
+	if displayText != nil {
+		reqArgs["displayText"] = SerializeValue(displayText)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withUrlExpression", reqArgs)
 	if err != nil {
 		return nil, err
@@ -2217,12 +2650,14 @@ func (s *ContainerRegistryResource) WithChildRelationship(child *IResource) (*IR
 }
 
 // WithIconName sets the icon for the resource
-func (s *ContainerRegistryResource) WithIconName(iconName string, iconVariant IconVariant) (*IResource, error) {
+func (s *ContainerRegistryResource) WithIconName(iconName string, iconVariant *IconVariant) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["iconName"] = SerializeValue(iconName)
-	reqArgs["iconVariant"] = SerializeValue(iconVariant)
+	if iconVariant != nil {
+		reqArgs["iconVariant"] = SerializeValue(iconVariant)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withIconName", reqArgs)
 	if err != nil {
 		return nil, err
@@ -2243,7 +2678,7 @@ func (s *ContainerRegistryResource) ExcludeFromMcp() (*IResource, error) {
 }
 
 // WithPipelineStepFactory adds a pipeline step to the resource
-func (s *ContainerRegistryResource) WithPipelineStepFactory(stepName string, callback func(...any) any, dependsOn []string, requiredBy []string, tags []string, description string) (*IResource, error) {
+func (s *ContainerRegistryResource) WithPipelineStepFactory(stepName string, callback func(...any) any, dependsOn []string, requiredBy []string, tags []string, description *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
@@ -2251,10 +2686,18 @@ func (s *ContainerRegistryResource) WithPipelineStepFactory(stepName string, cal
 	if callback != nil {
 		reqArgs["callback"] = RegisterCallback(callback)
 	}
-	reqArgs["dependsOn"] = SerializeValue(dependsOn)
-	reqArgs["requiredBy"] = SerializeValue(requiredBy)
-	reqArgs["tags"] = SerializeValue(tags)
-	reqArgs["description"] = SerializeValue(description)
+	if dependsOn != nil {
+		reqArgs["dependsOn"] = SerializeValue(dependsOn)
+	}
+	if requiredBy != nil {
+		reqArgs["requiredBy"] = SerializeValue(requiredBy)
+	}
+	if tags != nil {
+		reqArgs["tags"] = SerializeValue(tags)
+	}
+	if description != nil {
+		reqArgs["description"] = SerializeValue(description)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withPipelineStepFactory", reqArgs)
 	if err != nil {
 		return nil, err
@@ -2304,13 +2747,77 @@ func (s *ContainerRegistryResource) GetResourceName() (*string, error) {
 	return result.(*string), nil
 }
 
-// WithOptionalString adds an optional string parameter
-func (s *ContainerRegistryResource) WithOptionalString(value string, enabled bool) (*IResource, error) {
+// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event
+func (s *ContainerRegistryResource) OnBeforeResourceStarted(callback func(...any) any) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["value"] = SerializeValue(value)
-	reqArgs["enabled"] = SerializeValue(enabled)
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onBeforeResourceStarted", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnResourceStopped subscribes to the ResourceStopped event
+func (s *ContainerRegistryResource) OnResourceStopped(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceStopped", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnInitializeResource subscribes to the InitializeResource event
+func (s *ContainerRegistryResource) OnInitializeResource(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onInitializeResource", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnResourceReady subscribes to the ResourceReady event
+func (s *ContainerRegistryResource) OnResourceReady(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceReady", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithOptionalString adds an optional string parameter
+func (s *ContainerRegistryResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if value != nil {
+		reqArgs["value"] = SerializeValue(value)
+	}
+	if enabled != nil {
+		reqArgs["enabled"] = SerializeValue(enabled)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalString", reqArgs)
 	if err != nil {
 		return nil, err
@@ -2505,13 +3012,226 @@ func (s *ContainerResource) WithContainerRegistry(registry *IResource) (*IResour
 	return result.(*IResource), nil
 }
 
-// WithDockerfileBaseImage sets the base image for a Dockerfile build
-func (s *ContainerResource) WithDockerfileBaseImage(buildImage string, runtimeImage string) (*IResource, error) {
+// WithBindMount adds a bind mount
+func (s *ContainerResource) WithBindMount(source string, target string, isReadOnly *bool) (*ContainerResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["buildImage"] = SerializeValue(buildImage)
-	reqArgs["runtimeImage"] = SerializeValue(runtimeImage)
+	reqArgs["source"] = SerializeValue(source)
+	reqArgs["target"] = SerializeValue(target)
+	if isReadOnly != nil {
+		reqArgs["isReadOnly"] = SerializeValue(isReadOnly)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBindMount", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ContainerResource), nil
+}
+
+// WithEntrypoint sets the container entrypoint
+func (s *ContainerResource) WithEntrypoint(entrypoint string) (*ContainerResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["entrypoint"] = SerializeValue(entrypoint)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withEntrypoint", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ContainerResource), nil
+}
+
+// WithImageTag sets the container image tag
+func (s *ContainerResource) WithImageTag(tag string) (*ContainerResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["tag"] = SerializeValue(tag)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withImageTag", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ContainerResource), nil
+}
+
+// WithImageRegistry sets the container image registry
+func (s *ContainerResource) WithImageRegistry(registry string) (*ContainerResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["registry"] = SerializeValue(registry)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withImageRegistry", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ContainerResource), nil
+}
+
+// WithImage sets the container image
+func (s *ContainerResource) WithImage(image string, tag *string) (*ContainerResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["image"] = SerializeValue(image)
+	if tag != nil {
+		reqArgs["tag"] = SerializeValue(tag)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withImage", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ContainerResource), nil
+}
+
+// WithImageSHA256 sets the image SHA256 digest
+func (s *ContainerResource) WithImageSHA256(sha256 string) (*ContainerResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["sha256"] = SerializeValue(sha256)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withImageSHA256", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ContainerResource), nil
+}
+
+// WithContainerRuntimeArgs adds runtime arguments for the container
+func (s *ContainerResource) WithContainerRuntimeArgs(args []string) (*ContainerResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["args"] = SerializeValue(args)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withContainerRuntimeArgs", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ContainerResource), nil
+}
+
+// WithLifetime sets the lifetime behavior of the container resource
+func (s *ContainerResource) WithLifetime(lifetime ContainerLifetime) (*ContainerResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["lifetime"] = SerializeValue(lifetime)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withLifetime", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ContainerResource), nil
+}
+
+// WithImagePullPolicy sets the container image pull policy
+func (s *ContainerResource) WithImagePullPolicy(pullPolicy ImagePullPolicy) (*ContainerResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["pullPolicy"] = SerializeValue(pullPolicy)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withImagePullPolicy", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ContainerResource), nil
+}
+
+// PublishAsContainer configures the resource to be published as a container
+func (s *ContainerResource) PublishAsContainer() (*ContainerResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/publishAsContainer", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ContainerResource), nil
+}
+
+// WithDockerfile configures the resource to use a Dockerfile
+func (s *ContainerResource) WithDockerfile(contextPath string, dockerfilePath *string, stage *string) (*ContainerResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["contextPath"] = SerializeValue(contextPath)
+	if dockerfilePath != nil {
+		reqArgs["dockerfilePath"] = SerializeValue(dockerfilePath)
+	}
+	if stage != nil {
+		reqArgs["stage"] = SerializeValue(stage)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withDockerfile", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ContainerResource), nil
+}
+
+// WithContainerName sets the container name
+func (s *ContainerResource) WithContainerName(name string) (*ContainerResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["name"] = SerializeValue(name)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withContainerName", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ContainerResource), nil
+}
+
+// WithBuildArg adds a build argument from a parameter resource
+func (s *ContainerResource) WithBuildArg(name string, value *ParameterResource) (*ContainerResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["name"] = SerializeValue(name)
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuildArg", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ContainerResource), nil
+}
+
+// WithBuildSecret adds a build secret from a parameter resource
+func (s *ContainerResource) WithBuildSecret(name string, value *ParameterResource) (*ContainerResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["name"] = SerializeValue(name)
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuildSecret", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ContainerResource), nil
+}
+
+// WithEndpointProxySupport configures endpoint proxy support
+func (s *ContainerResource) WithEndpointProxySupport(proxyEnabled bool) (*ContainerResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["proxyEnabled"] = SerializeValue(proxyEnabled)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withEndpointProxySupport", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ContainerResource), nil
+}
+
+// WithDockerfileBaseImage sets the base image for a Dockerfile build
+func (s *ContainerResource) WithDockerfileBaseImage(buildImage *string, runtimeImage *string) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if buildImage != nil {
+		reqArgs["buildImage"] = SerializeValue(buildImage)
+	}
+	if runtimeImage != nil {
+		reqArgs["runtimeImage"] = SerializeValue(runtimeImage)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withDockerfileBaseImage", reqArgs)
 	if err != nil {
 		return nil, err
@@ -2519,13 +3239,30 @@ func (s *ContainerResource) WithDockerfileBaseImage(buildImage string, runtimeIm
 	return result.(*IResource), nil
 }
 
-// WithMcpServer configures an MCP server endpoint on the resource
-func (s *ContainerResource) WithMcpServer(path string, endpointName string) (*IResourceWithEndpoints, error) {
+// WithContainerNetworkAlias adds a network alias for the container
+func (s *ContainerResource) WithContainerNetworkAlias(alias string) (*ContainerResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["path"] = SerializeValue(path)
-	reqArgs["endpointName"] = SerializeValue(endpointName)
+	reqArgs["alias"] = SerializeValue(alias)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withContainerNetworkAlias", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ContainerResource), nil
+}
+
+// WithMcpServer configures an MCP server endpoint on the resource
+func (s *ContainerResource) WithMcpServer(path *string, endpointName *string) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withMcpServer", reqArgs)
 	if err != nil {
 		return nil, err
@@ -2558,13 +3295,27 @@ func (s *ContainerResource) WithOtlpExporterProtocol(protocol OtlpProtocol) (*IR
 	return result.(*IResourceWithEnvironment), nil
 }
 
+// PublishAsConnectionString publishes the resource as a connection string
+func (s *ContainerResource) PublishAsConnectionString() (*ContainerResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/publishAsConnectionString", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ContainerResource), nil
+}
+
 // WithRequiredCommand adds a required command dependency
-func (s *ContainerResource) WithRequiredCommand(command string, helpLink string) (*IResource, error) {
+func (s *ContainerResource) WithRequiredCommand(command string, helpLink *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["command"] = SerializeValue(command)
-	reqArgs["helpLink"] = SerializeValue(helpLink)
+	if helpLink != nil {
+		reqArgs["helpLink"] = SerializeValue(helpLink)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withRequiredCommand", reqArgs)
 	if err != nil {
 		return nil, err
@@ -2686,41 +3437,21 @@ func (s *ContainerResource) WithArgsCallback(callback func(...any) any) (*IResou
 }
 
 // WithReference adds a reference to another resource
-func (s *ContainerResource) WithReference(source *IResourceWithConnectionString, connectionName string, optional bool) (*IResourceWithEnvironment, error) {
+func (s *ContainerResource) WithReference(source *IResource, connectionName *string, optional *bool, name *string) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["source"] = SerializeValue(source)
-	reqArgs["connectionName"] = SerializeValue(connectionName)
-	reqArgs["optional"] = SerializeValue(optional)
+	if connectionName != nil {
+		reqArgs["connectionName"] = SerializeValue(connectionName)
+	}
+	if optional != nil {
+		reqArgs["optional"] = SerializeValue(optional)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withReference", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*IResourceWithEnvironment), nil
-}
-
-// WithServiceReference adds a service discovery reference to another resource
-func (s *ContainerResource) WithServiceReference(source *IResourceWithServiceDiscovery) (*IResourceWithEnvironment, error) {
-	reqArgs := map[string]any{
-		"builder": SerializeValue(s.Handle()),
-	}
-	reqArgs["source"] = SerializeValue(source)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withServiceReference", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*IResourceWithEnvironment), nil
-}
-
-// WithServiceReferenceNamed adds a named service discovery reference
-func (s *ContainerResource) WithServiceReferenceNamed(source *IResourceWithServiceDiscovery, name string) (*IResourceWithEnvironment, error) {
-	reqArgs := map[string]any{
-		"builder": SerializeValue(s.Handle()),
-	}
-	reqArgs["source"] = SerializeValue(source)
-	reqArgs["name"] = SerializeValue(name)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withServiceReferenceNamed", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -2768,18 +3499,34 @@ func (s *ContainerResource) WithReferenceEndpoint(endpointReference *EndpointRef
 }
 
 // WithEndpoint adds a network endpoint
-func (s *ContainerResource) WithEndpoint(port float64, targetPort float64, scheme string, name string, env string, isProxied bool, isExternal bool, protocol ProtocolType) (*IResourceWithEndpoints, error) {
+func (s *ContainerResource) WithEndpoint(port *float64, targetPort *float64, scheme *string, name *string, env *string, isProxied *bool, isExternal *bool, protocol *ProtocolType) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["port"] = SerializeValue(port)
-	reqArgs["targetPort"] = SerializeValue(targetPort)
-	reqArgs["scheme"] = SerializeValue(scheme)
-	reqArgs["name"] = SerializeValue(name)
-	reqArgs["env"] = SerializeValue(env)
-	reqArgs["isProxied"] = SerializeValue(isProxied)
-	reqArgs["isExternal"] = SerializeValue(isExternal)
-	reqArgs["protocol"] = SerializeValue(protocol)
+	if port != nil {
+		reqArgs["port"] = SerializeValue(port)
+	}
+	if targetPort != nil {
+		reqArgs["targetPort"] = SerializeValue(targetPort)
+	}
+	if scheme != nil {
+		reqArgs["scheme"] = SerializeValue(scheme)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if env != nil {
+		reqArgs["env"] = SerializeValue(env)
+	}
+	if isProxied != nil {
+		reqArgs["isProxied"] = SerializeValue(isProxied)
+	}
+	if isExternal != nil {
+		reqArgs["isExternal"] = SerializeValue(isExternal)
+	}
+	if protocol != nil {
+		reqArgs["protocol"] = SerializeValue(protocol)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withEndpoint", reqArgs)
 	if err != nil {
 		return nil, err
@@ -2788,15 +3535,25 @@ func (s *ContainerResource) WithEndpoint(port float64, targetPort float64, schem
 }
 
 // WithHttpEndpoint adds an HTTP endpoint
-func (s *ContainerResource) WithHttpEndpoint(port float64, targetPort float64, name string, env string, isProxied bool) (*IResourceWithEndpoints, error) {
+func (s *ContainerResource) WithHttpEndpoint(port *float64, targetPort *float64, name *string, env *string, isProxied *bool) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["port"] = SerializeValue(port)
-	reqArgs["targetPort"] = SerializeValue(targetPort)
-	reqArgs["name"] = SerializeValue(name)
-	reqArgs["env"] = SerializeValue(env)
-	reqArgs["isProxied"] = SerializeValue(isProxied)
+	if port != nil {
+		reqArgs["port"] = SerializeValue(port)
+	}
+	if targetPort != nil {
+		reqArgs["targetPort"] = SerializeValue(targetPort)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if env != nil {
+		reqArgs["env"] = SerializeValue(env)
+	}
+	if isProxied != nil {
+		reqArgs["isProxied"] = SerializeValue(isProxied)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpEndpoint", reqArgs)
 	if err != nil {
 		return nil, err
@@ -2805,15 +3562,25 @@ func (s *ContainerResource) WithHttpEndpoint(port float64, targetPort float64, n
 }
 
 // WithHttpsEndpoint adds an HTTPS endpoint
-func (s *ContainerResource) WithHttpsEndpoint(port float64, targetPort float64, name string, env string, isProxied bool) (*IResourceWithEndpoints, error) {
+func (s *ContainerResource) WithHttpsEndpoint(port *float64, targetPort *float64, name *string, env *string, isProxied *bool) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["port"] = SerializeValue(port)
-	reqArgs["targetPort"] = SerializeValue(targetPort)
-	reqArgs["name"] = SerializeValue(name)
-	reqArgs["env"] = SerializeValue(env)
-	reqArgs["isProxied"] = SerializeValue(isProxied)
+	if port != nil {
+		reqArgs["port"] = SerializeValue(port)
+	}
+	if targetPort != nil {
+		reqArgs["targetPort"] = SerializeValue(targetPort)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if env != nil {
+		reqArgs["env"] = SerializeValue(env)
+	}
+	if isProxied != nil {
+		reqArgs["isProxied"] = SerializeValue(isProxied)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpsEndpoint", reqArgs)
 	if err != nil {
 		return nil, err
@@ -2874,12 +3641,14 @@ func (s *ContainerResource) WithUrlsCallback(callback func(...any) any) (*IResou
 }
 
 // WithUrl adds or modifies displayed URLs
-func (s *ContainerResource) WithUrl(url string, displayText string) (*IResource, error) {
+func (s *ContainerResource) WithUrl(url string, displayText *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["url"] = SerializeValue(url)
-	reqArgs["displayText"] = SerializeValue(displayText)
+	if displayText != nil {
+		reqArgs["displayText"] = SerializeValue(displayText)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withUrl", reqArgs)
 	if err != nil {
 		return nil, err
@@ -2888,12 +3657,14 @@ func (s *ContainerResource) WithUrl(url string, displayText string) (*IResource,
 }
 
 // WithUrlExpression adds a URL using a reference expression
-func (s *ContainerResource) WithUrlExpression(url *ReferenceExpression, displayText string) (*IResource, error) {
+func (s *ContainerResource) WithUrlExpression(url *ReferenceExpression, displayText *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["url"] = SerializeValue(url)
-	reqArgs["displayText"] = SerializeValue(displayText)
+	if displayText != nil {
+		reqArgs["displayText"] = SerializeValue(displayText)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withUrlExpression", reqArgs)
 	if err != nil {
 		return nil, err
@@ -3012,12 +3783,14 @@ func (s *ContainerResource) WithExplicitStart() (*IResource, error) {
 }
 
 // WaitForCompletion waits for resource completion
-func (s *ContainerResource) WaitForCompletion(dependency *IResource, exitCode float64) (*IResourceWithWaitSupport, error) {
+func (s *ContainerResource) WaitForCompletion(dependency *IResource, exitCode *float64) (*IResourceWithWaitSupport, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
-	reqArgs["exitCode"] = SerializeValue(exitCode)
+	if exitCode != nil {
+		reqArgs["exitCode"] = SerializeValue(exitCode)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForCompletion", reqArgs)
 	if err != nil {
 		return nil, err
@@ -3039,13 +3812,19 @@ func (s *ContainerResource) WithHealthCheck(key string) (*IResource, error) {
 }
 
 // WithHttpHealthCheck adds an HTTP health check
-func (s *ContainerResource) WithHttpHealthCheck(path string, statusCode float64, endpointName string) (*IResourceWithEndpoints, error) {
+func (s *ContainerResource) WithHttpHealthCheck(path *string, statusCode *float64, endpointName *string) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["path"] = SerializeValue(path)
-	reqArgs["statusCode"] = SerializeValue(statusCode)
-	reqArgs["endpointName"] = SerializeValue(endpointName)
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if statusCode != nil {
+		reqArgs["statusCode"] = SerializeValue(statusCode)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpHealthCheck", reqArgs)
 	if err != nil {
 		return nil, err
@@ -3153,12 +3932,14 @@ func (s *ContainerResource) WithChildRelationship(child *IResource) (*IResource,
 }
 
 // WithIconName sets the icon for the resource
-func (s *ContainerResource) WithIconName(iconName string, iconVariant IconVariant) (*IResource, error) {
+func (s *ContainerResource) WithIconName(iconName string, iconVariant *IconVariant) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["iconName"] = SerializeValue(iconName)
-	reqArgs["iconVariant"] = SerializeValue(iconVariant)
+	if iconVariant != nil {
+		reqArgs["iconVariant"] = SerializeValue(iconVariant)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withIconName", reqArgs)
 	if err != nil {
 		return nil, err
@@ -3167,18 +3948,32 @@ func (s *ContainerResource) WithIconName(iconName string, iconVariant IconVarian
 }
 
 // WithHttpProbe adds an HTTP health probe to the resource
-func (s *ContainerResource) WithHttpProbe(probeType ProbeType, path string, initialDelaySeconds float64, periodSeconds float64, timeoutSeconds float64, failureThreshold float64, successThreshold float64, endpointName string) (*IResourceWithEndpoints, error) {
+func (s *ContainerResource) WithHttpProbe(probeType ProbeType, path *string, initialDelaySeconds *float64, periodSeconds *float64, timeoutSeconds *float64, failureThreshold *float64, successThreshold *float64, endpointName *string) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["probeType"] = SerializeValue(probeType)
-	reqArgs["path"] = SerializeValue(path)
-	reqArgs["initialDelaySeconds"] = SerializeValue(initialDelaySeconds)
-	reqArgs["periodSeconds"] = SerializeValue(periodSeconds)
-	reqArgs["timeoutSeconds"] = SerializeValue(timeoutSeconds)
-	reqArgs["failureThreshold"] = SerializeValue(failureThreshold)
-	reqArgs["successThreshold"] = SerializeValue(successThreshold)
-	reqArgs["endpointName"] = SerializeValue(endpointName)
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if initialDelaySeconds != nil {
+		reqArgs["initialDelaySeconds"] = SerializeValue(initialDelaySeconds)
+	}
+	if periodSeconds != nil {
+		reqArgs["periodSeconds"] = SerializeValue(periodSeconds)
+	}
+	if timeoutSeconds != nil {
+		reqArgs["timeoutSeconds"] = SerializeValue(timeoutSeconds)
+	}
+	if failureThreshold != nil {
+		reqArgs["failureThreshold"] = SerializeValue(failureThreshold)
+	}
+	if successThreshold != nil {
+		reqArgs["successThreshold"] = SerializeValue(successThreshold)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpProbe", reqArgs)
 	if err != nil {
 		return nil, err
@@ -3225,7 +4020,7 @@ func (s *ContainerResource) WithRemoteImageTag(remoteImageTag string) (*ICompute
 }
 
 // WithPipelineStepFactory adds a pipeline step to the resource
-func (s *ContainerResource) WithPipelineStepFactory(stepName string, callback func(...any) any, dependsOn []string, requiredBy []string, tags []string, description string) (*IResource, error) {
+func (s *ContainerResource) WithPipelineStepFactory(stepName string, callback func(...any) any, dependsOn []string, requiredBy []string, tags []string, description *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
@@ -3233,10 +4028,18 @@ func (s *ContainerResource) WithPipelineStepFactory(stepName string, callback fu
 	if callback != nil {
 		reqArgs["callback"] = RegisterCallback(callback)
 	}
-	reqArgs["dependsOn"] = SerializeValue(dependsOn)
-	reqArgs["requiredBy"] = SerializeValue(requiredBy)
-	reqArgs["tags"] = SerializeValue(tags)
-	reqArgs["description"] = SerializeValue(description)
+	if dependsOn != nil {
+		reqArgs["dependsOn"] = SerializeValue(dependsOn)
+	}
+	if requiredBy != nil {
+		reqArgs["requiredBy"] = SerializeValue(requiredBy)
+	}
+	if tags != nil {
+		reqArgs["tags"] = SerializeValue(tags)
+	}
+	if description != nil {
+		reqArgs["description"] = SerializeValue(description)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withPipelineStepFactory", reqArgs)
 	if err != nil {
 		return nil, err
@@ -3274,6 +4077,25 @@ func (s *ContainerResource) WithPipelineConfiguration(callback func(...any) any)
 	return result.(*IResource), nil
 }
 
+// WithVolume adds a volume
+func (s *ContainerResource) WithVolume(target string, name *string, isReadOnly *bool) (*ContainerResource, error) {
+	reqArgs := map[string]any{
+		"resource": SerializeValue(s.Handle()),
+	}
+	reqArgs["target"] = SerializeValue(target)
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if isReadOnly != nil {
+		reqArgs["isReadOnly"] = SerializeValue(isReadOnly)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withVolume", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ContainerResource), nil
+}
+
 // GetResourceName gets the resource name
 func (s *ContainerResource) GetResourceName() (*string, error) {
 	reqArgs := map[string]any{
@@ -3286,13 +4108,92 @@ func (s *ContainerResource) GetResourceName() (*string, error) {
 	return result.(*string), nil
 }
 
-// WithOptionalString adds an optional string parameter
-func (s *ContainerResource) WithOptionalString(value string, enabled bool) (*IResource, error) {
+// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event
+func (s *ContainerResource) OnBeforeResourceStarted(callback func(...any) any) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["value"] = SerializeValue(value)
-	reqArgs["enabled"] = SerializeValue(enabled)
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onBeforeResourceStarted", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnResourceStopped subscribes to the ResourceStopped event
+func (s *ContainerResource) OnResourceStopped(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceStopped", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnInitializeResource subscribes to the InitializeResource event
+func (s *ContainerResource) OnInitializeResource(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onInitializeResource", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated event
+func (s *ContainerResource) OnResourceEndpointsAllocated(callback func(...any) any) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceEndpointsAllocated", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
+}
+
+// OnResourceReady subscribes to the ResourceReady event
+func (s *ContainerResource) OnResourceReady(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceReady", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithOptionalString adds an optional string parameter
+func (s *ContainerResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if value != nil {
+		reqArgs["value"] = SerializeValue(value)
+	}
+	if enabled != nil {
+		reqArgs["enabled"] = SerializeValue(enabled)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalString", reqArgs)
 	if err != nil {
 		return nil, err
@@ -3575,6 +4476,18 @@ func (s *DistributedApplicationExecutionContext) Operation() (*DistributedApplic
 	return result.(*DistributedApplicationOperation), nil
 }
 
+// ServiceProvider gets the ServiceProvider property
+func (s *DistributedApplicationExecutionContext) ServiceProvider() (*IServiceProvider, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/DistributedApplicationExecutionContext.serviceProvider", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IServiceProvider), nil
+}
+
 // IsPublishMode gets the IsPublishMode property
 func (s *DistributedApplicationExecutionContext) IsPublishMode() (*bool, error) {
 	reqArgs := map[string]any{
@@ -3609,6 +4522,43 @@ func NewDistributedApplicationExecutionContextOptions(handle *Handle, client *As
 	return &DistributedApplicationExecutionContextOptions{
 		HandleWrapperBase: NewHandleWrapperBase(handle, client),
 	}
+}
+
+// DistributedApplicationModel wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.DistributedApplicationModel.
+type DistributedApplicationModel struct {
+	HandleWrapperBase
+}
+
+// NewDistributedApplicationModel creates a new DistributedApplicationModel.
+func NewDistributedApplicationModel(handle *Handle, client *AspireClient) *DistributedApplicationModel {
+	return &DistributedApplicationModel{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// GetResources gets resources from the distributed application model
+func (s *DistributedApplicationModel) GetResources() (*[]*IResource, error) {
+	reqArgs := map[string]any{
+		"model": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/getResources", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*[]*IResource), nil
+}
+
+// FindResourceByName finds a resource by name
+func (s *DistributedApplicationModel) FindResourceByName(name string) (*IResource, error) {
+	reqArgs := map[string]any{
+		"model": SerializeValue(s.Handle()),
+	}
+	reqArgs["name"] = SerializeValue(name)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/findResourceByName", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
 }
 
 // DistributedApplicationResourceEventSubscription wraps a handle for Aspire.Hosting/Aspire.Hosting.Eventing.DistributedApplicationResourceEventSubscription.
@@ -3649,12 +4599,16 @@ func (s *DotnetToolResource) WithContainerRegistry(registry *IResource) (*IResou
 }
 
 // WithDockerfileBaseImage sets the base image for a Dockerfile build
-func (s *DotnetToolResource) WithDockerfileBaseImage(buildImage string, runtimeImage string) (*IResource, error) {
+func (s *DotnetToolResource) WithDockerfileBaseImage(buildImage *string, runtimeImage *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["buildImage"] = SerializeValue(buildImage)
-	reqArgs["runtimeImage"] = SerializeValue(runtimeImage)
+	if buildImage != nil {
+		reqArgs["buildImage"] = SerializeValue(buildImage)
+	}
+	if runtimeImage != nil {
+		reqArgs["runtimeImage"] = SerializeValue(runtimeImage)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withDockerfileBaseImage", reqArgs)
 	if err != nil {
 		return nil, err
@@ -3791,12 +4745,16 @@ func (s *DotnetToolResource) WithWorkingDirectory(workingDirectory string) (*Exe
 }
 
 // WithMcpServer configures an MCP server endpoint on the resource
-func (s *DotnetToolResource) WithMcpServer(path string, endpointName string) (*IResourceWithEndpoints, error) {
+func (s *DotnetToolResource) WithMcpServer(path *string, endpointName *string) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["path"] = SerializeValue(path)
-	reqArgs["endpointName"] = SerializeValue(endpointName)
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withMcpServer", reqArgs)
 	if err != nil {
 		return nil, err
@@ -3830,12 +4788,14 @@ func (s *DotnetToolResource) WithOtlpExporterProtocol(protocol OtlpProtocol) (*I
 }
 
 // WithRequiredCommand adds a required command dependency
-func (s *DotnetToolResource) WithRequiredCommand(command string, helpLink string) (*IResource, error) {
+func (s *DotnetToolResource) WithRequiredCommand(command string, helpLink *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["command"] = SerializeValue(command)
-	reqArgs["helpLink"] = SerializeValue(helpLink)
+	if helpLink != nil {
+		reqArgs["helpLink"] = SerializeValue(helpLink)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withRequiredCommand", reqArgs)
 	if err != nil {
 		return nil, err
@@ -3957,41 +4917,21 @@ func (s *DotnetToolResource) WithArgsCallback(callback func(...any) any) (*IReso
 }
 
 // WithReference adds a reference to another resource
-func (s *DotnetToolResource) WithReference(source *IResourceWithConnectionString, connectionName string, optional bool) (*IResourceWithEnvironment, error) {
+func (s *DotnetToolResource) WithReference(source *IResource, connectionName *string, optional *bool, name *string) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["source"] = SerializeValue(source)
-	reqArgs["connectionName"] = SerializeValue(connectionName)
-	reqArgs["optional"] = SerializeValue(optional)
+	if connectionName != nil {
+		reqArgs["connectionName"] = SerializeValue(connectionName)
+	}
+	if optional != nil {
+		reqArgs["optional"] = SerializeValue(optional)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withReference", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*IResourceWithEnvironment), nil
-}
-
-// WithServiceReference adds a service discovery reference to another resource
-func (s *DotnetToolResource) WithServiceReference(source *IResourceWithServiceDiscovery) (*IResourceWithEnvironment, error) {
-	reqArgs := map[string]any{
-		"builder": SerializeValue(s.Handle()),
-	}
-	reqArgs["source"] = SerializeValue(source)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withServiceReference", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*IResourceWithEnvironment), nil
-}
-
-// WithServiceReferenceNamed adds a named service discovery reference
-func (s *DotnetToolResource) WithServiceReferenceNamed(source *IResourceWithServiceDiscovery, name string) (*IResourceWithEnvironment, error) {
-	reqArgs := map[string]any{
-		"builder": SerializeValue(s.Handle()),
-	}
-	reqArgs["source"] = SerializeValue(source)
-	reqArgs["name"] = SerializeValue(name)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withServiceReferenceNamed", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -4039,18 +4979,34 @@ func (s *DotnetToolResource) WithReferenceEndpoint(endpointReference *EndpointRe
 }
 
 // WithEndpoint adds a network endpoint
-func (s *DotnetToolResource) WithEndpoint(port float64, targetPort float64, scheme string, name string, env string, isProxied bool, isExternal bool, protocol ProtocolType) (*IResourceWithEndpoints, error) {
+func (s *DotnetToolResource) WithEndpoint(port *float64, targetPort *float64, scheme *string, name *string, env *string, isProxied *bool, isExternal *bool, protocol *ProtocolType) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["port"] = SerializeValue(port)
-	reqArgs["targetPort"] = SerializeValue(targetPort)
-	reqArgs["scheme"] = SerializeValue(scheme)
-	reqArgs["name"] = SerializeValue(name)
-	reqArgs["env"] = SerializeValue(env)
-	reqArgs["isProxied"] = SerializeValue(isProxied)
-	reqArgs["isExternal"] = SerializeValue(isExternal)
-	reqArgs["protocol"] = SerializeValue(protocol)
+	if port != nil {
+		reqArgs["port"] = SerializeValue(port)
+	}
+	if targetPort != nil {
+		reqArgs["targetPort"] = SerializeValue(targetPort)
+	}
+	if scheme != nil {
+		reqArgs["scheme"] = SerializeValue(scheme)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if env != nil {
+		reqArgs["env"] = SerializeValue(env)
+	}
+	if isProxied != nil {
+		reqArgs["isProxied"] = SerializeValue(isProxied)
+	}
+	if isExternal != nil {
+		reqArgs["isExternal"] = SerializeValue(isExternal)
+	}
+	if protocol != nil {
+		reqArgs["protocol"] = SerializeValue(protocol)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withEndpoint", reqArgs)
 	if err != nil {
 		return nil, err
@@ -4059,15 +5015,25 @@ func (s *DotnetToolResource) WithEndpoint(port float64, targetPort float64, sche
 }
 
 // WithHttpEndpoint adds an HTTP endpoint
-func (s *DotnetToolResource) WithHttpEndpoint(port float64, targetPort float64, name string, env string, isProxied bool) (*IResourceWithEndpoints, error) {
+func (s *DotnetToolResource) WithHttpEndpoint(port *float64, targetPort *float64, name *string, env *string, isProxied *bool) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["port"] = SerializeValue(port)
-	reqArgs["targetPort"] = SerializeValue(targetPort)
-	reqArgs["name"] = SerializeValue(name)
-	reqArgs["env"] = SerializeValue(env)
-	reqArgs["isProxied"] = SerializeValue(isProxied)
+	if port != nil {
+		reqArgs["port"] = SerializeValue(port)
+	}
+	if targetPort != nil {
+		reqArgs["targetPort"] = SerializeValue(targetPort)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if env != nil {
+		reqArgs["env"] = SerializeValue(env)
+	}
+	if isProxied != nil {
+		reqArgs["isProxied"] = SerializeValue(isProxied)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpEndpoint", reqArgs)
 	if err != nil {
 		return nil, err
@@ -4076,15 +5042,25 @@ func (s *DotnetToolResource) WithHttpEndpoint(port float64, targetPort float64, 
 }
 
 // WithHttpsEndpoint adds an HTTPS endpoint
-func (s *DotnetToolResource) WithHttpsEndpoint(port float64, targetPort float64, name string, env string, isProxied bool) (*IResourceWithEndpoints, error) {
+func (s *DotnetToolResource) WithHttpsEndpoint(port *float64, targetPort *float64, name *string, env *string, isProxied *bool) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["port"] = SerializeValue(port)
-	reqArgs["targetPort"] = SerializeValue(targetPort)
-	reqArgs["name"] = SerializeValue(name)
-	reqArgs["env"] = SerializeValue(env)
-	reqArgs["isProxied"] = SerializeValue(isProxied)
+	if port != nil {
+		reqArgs["port"] = SerializeValue(port)
+	}
+	if targetPort != nil {
+		reqArgs["targetPort"] = SerializeValue(targetPort)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if env != nil {
+		reqArgs["env"] = SerializeValue(env)
+	}
+	if isProxied != nil {
+		reqArgs["isProxied"] = SerializeValue(isProxied)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpsEndpoint", reqArgs)
 	if err != nil {
 		return nil, err
@@ -4145,12 +5121,14 @@ func (s *DotnetToolResource) WithUrlsCallback(callback func(...any) any) (*IReso
 }
 
 // WithUrl adds or modifies displayed URLs
-func (s *DotnetToolResource) WithUrl(url string, displayText string) (*IResource, error) {
+func (s *DotnetToolResource) WithUrl(url string, displayText *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["url"] = SerializeValue(url)
-	reqArgs["displayText"] = SerializeValue(displayText)
+	if displayText != nil {
+		reqArgs["displayText"] = SerializeValue(displayText)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withUrl", reqArgs)
 	if err != nil {
 		return nil, err
@@ -4159,12 +5137,14 @@ func (s *DotnetToolResource) WithUrl(url string, displayText string) (*IResource
 }
 
 // WithUrlExpression adds a URL using a reference expression
-func (s *DotnetToolResource) WithUrlExpression(url *ReferenceExpression, displayText string) (*IResource, error) {
+func (s *DotnetToolResource) WithUrlExpression(url *ReferenceExpression, displayText *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["url"] = SerializeValue(url)
-	reqArgs["displayText"] = SerializeValue(displayText)
+	if displayText != nil {
+		reqArgs["displayText"] = SerializeValue(displayText)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withUrlExpression", reqArgs)
 	if err != nil {
 		return nil, err
@@ -4283,12 +5263,14 @@ func (s *DotnetToolResource) WithExplicitStart() (*IResource, error) {
 }
 
 // WaitForCompletion waits for resource completion
-func (s *DotnetToolResource) WaitForCompletion(dependency *IResource, exitCode float64) (*IResourceWithWaitSupport, error) {
+func (s *DotnetToolResource) WaitForCompletion(dependency *IResource, exitCode *float64) (*IResourceWithWaitSupport, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
-	reqArgs["exitCode"] = SerializeValue(exitCode)
+	if exitCode != nil {
+		reqArgs["exitCode"] = SerializeValue(exitCode)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForCompletion", reqArgs)
 	if err != nil {
 		return nil, err
@@ -4310,13 +5292,19 @@ func (s *DotnetToolResource) WithHealthCheck(key string) (*IResource, error) {
 }
 
 // WithHttpHealthCheck adds an HTTP health check
-func (s *DotnetToolResource) WithHttpHealthCheck(path string, statusCode float64, endpointName string) (*IResourceWithEndpoints, error) {
+func (s *DotnetToolResource) WithHttpHealthCheck(path *string, statusCode *float64, endpointName *string) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["path"] = SerializeValue(path)
-	reqArgs["statusCode"] = SerializeValue(statusCode)
-	reqArgs["endpointName"] = SerializeValue(endpointName)
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if statusCode != nil {
+		reqArgs["statusCode"] = SerializeValue(statusCode)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpHealthCheck", reqArgs)
 	if err != nil {
 		return nil, err
@@ -4424,12 +5412,14 @@ func (s *DotnetToolResource) WithChildRelationship(child *IResource) (*IResource
 }
 
 // WithIconName sets the icon for the resource
-func (s *DotnetToolResource) WithIconName(iconName string, iconVariant IconVariant) (*IResource, error) {
+func (s *DotnetToolResource) WithIconName(iconName string, iconVariant *IconVariant) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["iconName"] = SerializeValue(iconName)
-	reqArgs["iconVariant"] = SerializeValue(iconVariant)
+	if iconVariant != nil {
+		reqArgs["iconVariant"] = SerializeValue(iconVariant)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withIconName", reqArgs)
 	if err != nil {
 		return nil, err
@@ -4438,18 +5428,32 @@ func (s *DotnetToolResource) WithIconName(iconName string, iconVariant IconVaria
 }
 
 // WithHttpProbe adds an HTTP health probe to the resource
-func (s *DotnetToolResource) WithHttpProbe(probeType ProbeType, path string, initialDelaySeconds float64, periodSeconds float64, timeoutSeconds float64, failureThreshold float64, successThreshold float64, endpointName string) (*IResourceWithEndpoints, error) {
+func (s *DotnetToolResource) WithHttpProbe(probeType ProbeType, path *string, initialDelaySeconds *float64, periodSeconds *float64, timeoutSeconds *float64, failureThreshold *float64, successThreshold *float64, endpointName *string) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["probeType"] = SerializeValue(probeType)
-	reqArgs["path"] = SerializeValue(path)
-	reqArgs["initialDelaySeconds"] = SerializeValue(initialDelaySeconds)
-	reqArgs["periodSeconds"] = SerializeValue(periodSeconds)
-	reqArgs["timeoutSeconds"] = SerializeValue(timeoutSeconds)
-	reqArgs["failureThreshold"] = SerializeValue(failureThreshold)
-	reqArgs["successThreshold"] = SerializeValue(successThreshold)
-	reqArgs["endpointName"] = SerializeValue(endpointName)
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if initialDelaySeconds != nil {
+		reqArgs["initialDelaySeconds"] = SerializeValue(initialDelaySeconds)
+	}
+	if periodSeconds != nil {
+		reqArgs["periodSeconds"] = SerializeValue(periodSeconds)
+	}
+	if timeoutSeconds != nil {
+		reqArgs["timeoutSeconds"] = SerializeValue(timeoutSeconds)
+	}
+	if failureThreshold != nil {
+		reqArgs["failureThreshold"] = SerializeValue(failureThreshold)
+	}
+	if successThreshold != nil {
+		reqArgs["successThreshold"] = SerializeValue(successThreshold)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpProbe", reqArgs)
 	if err != nil {
 		return nil, err
@@ -4496,7 +5500,7 @@ func (s *DotnetToolResource) WithRemoteImageTag(remoteImageTag string) (*IComput
 }
 
 // WithPipelineStepFactory adds a pipeline step to the resource
-func (s *DotnetToolResource) WithPipelineStepFactory(stepName string, callback func(...any) any, dependsOn []string, requiredBy []string, tags []string, description string) (*IResource, error) {
+func (s *DotnetToolResource) WithPipelineStepFactory(stepName string, callback func(...any) any, dependsOn []string, requiredBy []string, tags []string, description *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
@@ -4504,10 +5508,18 @@ func (s *DotnetToolResource) WithPipelineStepFactory(stepName string, callback f
 	if callback != nil {
 		reqArgs["callback"] = RegisterCallback(callback)
 	}
-	reqArgs["dependsOn"] = SerializeValue(dependsOn)
-	reqArgs["requiredBy"] = SerializeValue(requiredBy)
-	reqArgs["tags"] = SerializeValue(tags)
-	reqArgs["description"] = SerializeValue(description)
+	if dependsOn != nil {
+		reqArgs["dependsOn"] = SerializeValue(dependsOn)
+	}
+	if requiredBy != nil {
+		reqArgs["requiredBy"] = SerializeValue(requiredBy)
+	}
+	if tags != nil {
+		reqArgs["tags"] = SerializeValue(tags)
+	}
+	if description != nil {
+		reqArgs["description"] = SerializeValue(description)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withPipelineStepFactory", reqArgs)
 	if err != nil {
 		return nil, err
@@ -4557,13 +5569,92 @@ func (s *DotnetToolResource) GetResourceName() (*string, error) {
 	return result.(*string), nil
 }
 
-// WithOptionalString adds an optional string parameter
-func (s *DotnetToolResource) WithOptionalString(value string, enabled bool) (*IResource, error) {
+// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event
+func (s *DotnetToolResource) OnBeforeResourceStarted(callback func(...any) any) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["value"] = SerializeValue(value)
-	reqArgs["enabled"] = SerializeValue(enabled)
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onBeforeResourceStarted", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnResourceStopped subscribes to the ResourceStopped event
+func (s *DotnetToolResource) OnResourceStopped(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceStopped", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnInitializeResource subscribes to the InitializeResource event
+func (s *DotnetToolResource) OnInitializeResource(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onInitializeResource", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated event
+func (s *DotnetToolResource) OnResourceEndpointsAllocated(callback func(...any) any) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceEndpointsAllocated", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
+}
+
+// OnResourceReady subscribes to the ResourceReady event
+func (s *DotnetToolResource) OnResourceReady(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceReady", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithOptionalString adds an optional string parameter
+func (s *DotnetToolResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if value != nil {
+		reqArgs["value"] = SerializeValue(value)
+	}
+	if enabled != nil {
+		reqArgs["enabled"] = SerializeValue(enabled)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalString", reqArgs)
 	if err != nil {
 		return nil, err
@@ -4771,6 +5862,18 @@ func NewEndpointReference(handle *Handle, client *AspireClient) *EndpointReferen
 	return &EndpointReference{
 		HandleWrapperBase: NewHandleWrapperBase(handle, client),
 	}
+}
+
+// Resource gets the Resource property
+func (s *EndpointReference) Resource() (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.resource", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
 }
 
 // EndpointName gets the EndpointName property
@@ -5040,6 +6143,43 @@ func (s *EnvironmentCallbackContext) CancellationToken() (*CancellationToken, er
 	return result.(*CancellationToken), nil
 }
 
+// Logger gets the Logger property
+func (s *EnvironmentCallbackContext) Logger() (*ILogger, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.logger", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ILogger), nil
+}
+
+// SetLogger sets the Logger property
+func (s *EnvironmentCallbackContext) SetLogger(value *ILogger) (*EnvironmentCallbackContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.setLogger", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*EnvironmentCallbackContext), nil
+}
+
+// Resource gets the Resource property
+func (s *EnvironmentCallbackContext) Resource() (*IResource, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.resource", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
 // ExecutionContext gets the ExecutionContext property
 func (s *EnvironmentCallbackContext) ExecutionContext() (*DistributedApplicationExecutionContext, error) {
 	reqArgs := map[string]any{
@@ -5078,12 +6218,16 @@ func (s *ExecutableResource) WithContainerRegistry(registry *IResource) (*IResou
 }
 
 // WithDockerfileBaseImage sets the base image for a Dockerfile build
-func (s *ExecutableResource) WithDockerfileBaseImage(buildImage string, runtimeImage string) (*IResource, error) {
+func (s *ExecutableResource) WithDockerfileBaseImage(buildImage *string, runtimeImage *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["buildImage"] = SerializeValue(buildImage)
-	reqArgs["runtimeImage"] = SerializeValue(runtimeImage)
+	if buildImage != nil {
+		reqArgs["buildImage"] = SerializeValue(buildImage)
+	}
+	if runtimeImage != nil {
+		reqArgs["runtimeImage"] = SerializeValue(runtimeImage)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withDockerfileBaseImage", reqArgs)
 	if err != nil {
 		return nil, err
@@ -5091,13 +6235,70 @@ func (s *ExecutableResource) WithDockerfileBaseImage(buildImage string, runtimeI
 	return result.(*IResource), nil
 }
 
-// WithMcpServer configures an MCP server endpoint on the resource
-func (s *ExecutableResource) WithMcpServer(path string, endpointName string) (*IResourceWithEndpoints, error) {
+// PublishAsDockerFile publishes the executable as a Docker container
+func (s *ExecutableResource) PublishAsDockerFile() (*ExecutableResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["path"] = SerializeValue(path)
-	reqArgs["endpointName"] = SerializeValue(endpointName)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/publishAsDockerFile", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ExecutableResource), nil
+}
+
+// PublishAsDockerFileWithConfigure publishes an executable as a Docker file with optional container configuration
+func (s *ExecutableResource) PublishAsDockerFileWithConfigure(configure func(...any) any) (*ExecutableResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if configure != nil {
+		reqArgs["configure"] = RegisterCallback(configure)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/publishAsDockerFileWithConfigure", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ExecutableResource), nil
+}
+
+// WithExecutableCommand sets the executable command
+func (s *ExecutableResource) WithExecutableCommand(command string) (*ExecutableResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["command"] = SerializeValue(command)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withExecutableCommand", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ExecutableResource), nil
+}
+
+// WithWorkingDirectory sets the executable working directory
+func (s *ExecutableResource) WithWorkingDirectory(workingDirectory string) (*ExecutableResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["workingDirectory"] = SerializeValue(workingDirectory)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withWorkingDirectory", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ExecutableResource), nil
+}
+
+// WithMcpServer configures an MCP server endpoint on the resource
+func (s *ExecutableResource) WithMcpServer(path *string, endpointName *string) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withMcpServer", reqArgs)
 	if err != nil {
 		return nil, err
@@ -5131,12 +6332,14 @@ func (s *ExecutableResource) WithOtlpExporterProtocol(protocol OtlpProtocol) (*I
 }
 
 // WithRequiredCommand adds a required command dependency
-func (s *ExecutableResource) WithRequiredCommand(command string, helpLink string) (*IResource, error) {
+func (s *ExecutableResource) WithRequiredCommand(command string, helpLink *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["command"] = SerializeValue(command)
-	reqArgs["helpLink"] = SerializeValue(helpLink)
+	if helpLink != nil {
+		reqArgs["helpLink"] = SerializeValue(helpLink)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withRequiredCommand", reqArgs)
 	if err != nil {
 		return nil, err
@@ -5258,41 +6461,21 @@ func (s *ExecutableResource) WithArgsCallback(callback func(...any) any) (*IReso
 }
 
 // WithReference adds a reference to another resource
-func (s *ExecutableResource) WithReference(source *IResourceWithConnectionString, connectionName string, optional bool) (*IResourceWithEnvironment, error) {
+func (s *ExecutableResource) WithReference(source *IResource, connectionName *string, optional *bool, name *string) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["source"] = SerializeValue(source)
-	reqArgs["connectionName"] = SerializeValue(connectionName)
-	reqArgs["optional"] = SerializeValue(optional)
+	if connectionName != nil {
+		reqArgs["connectionName"] = SerializeValue(connectionName)
+	}
+	if optional != nil {
+		reqArgs["optional"] = SerializeValue(optional)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withReference", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*IResourceWithEnvironment), nil
-}
-
-// WithServiceReference adds a service discovery reference to another resource
-func (s *ExecutableResource) WithServiceReference(source *IResourceWithServiceDiscovery) (*IResourceWithEnvironment, error) {
-	reqArgs := map[string]any{
-		"builder": SerializeValue(s.Handle()),
-	}
-	reqArgs["source"] = SerializeValue(source)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withServiceReference", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*IResourceWithEnvironment), nil
-}
-
-// WithServiceReferenceNamed adds a named service discovery reference
-func (s *ExecutableResource) WithServiceReferenceNamed(source *IResourceWithServiceDiscovery, name string) (*IResourceWithEnvironment, error) {
-	reqArgs := map[string]any{
-		"builder": SerializeValue(s.Handle()),
-	}
-	reqArgs["source"] = SerializeValue(source)
-	reqArgs["name"] = SerializeValue(name)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withServiceReferenceNamed", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -5340,18 +6523,34 @@ func (s *ExecutableResource) WithReferenceEndpoint(endpointReference *EndpointRe
 }
 
 // WithEndpoint adds a network endpoint
-func (s *ExecutableResource) WithEndpoint(port float64, targetPort float64, scheme string, name string, env string, isProxied bool, isExternal bool, protocol ProtocolType) (*IResourceWithEndpoints, error) {
+func (s *ExecutableResource) WithEndpoint(port *float64, targetPort *float64, scheme *string, name *string, env *string, isProxied *bool, isExternal *bool, protocol *ProtocolType) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["port"] = SerializeValue(port)
-	reqArgs["targetPort"] = SerializeValue(targetPort)
-	reqArgs["scheme"] = SerializeValue(scheme)
-	reqArgs["name"] = SerializeValue(name)
-	reqArgs["env"] = SerializeValue(env)
-	reqArgs["isProxied"] = SerializeValue(isProxied)
-	reqArgs["isExternal"] = SerializeValue(isExternal)
-	reqArgs["protocol"] = SerializeValue(protocol)
+	if port != nil {
+		reqArgs["port"] = SerializeValue(port)
+	}
+	if targetPort != nil {
+		reqArgs["targetPort"] = SerializeValue(targetPort)
+	}
+	if scheme != nil {
+		reqArgs["scheme"] = SerializeValue(scheme)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if env != nil {
+		reqArgs["env"] = SerializeValue(env)
+	}
+	if isProxied != nil {
+		reqArgs["isProxied"] = SerializeValue(isProxied)
+	}
+	if isExternal != nil {
+		reqArgs["isExternal"] = SerializeValue(isExternal)
+	}
+	if protocol != nil {
+		reqArgs["protocol"] = SerializeValue(protocol)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withEndpoint", reqArgs)
 	if err != nil {
 		return nil, err
@@ -5360,15 +6559,25 @@ func (s *ExecutableResource) WithEndpoint(port float64, targetPort float64, sche
 }
 
 // WithHttpEndpoint adds an HTTP endpoint
-func (s *ExecutableResource) WithHttpEndpoint(port float64, targetPort float64, name string, env string, isProxied bool) (*IResourceWithEndpoints, error) {
+func (s *ExecutableResource) WithHttpEndpoint(port *float64, targetPort *float64, name *string, env *string, isProxied *bool) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["port"] = SerializeValue(port)
-	reqArgs["targetPort"] = SerializeValue(targetPort)
-	reqArgs["name"] = SerializeValue(name)
-	reqArgs["env"] = SerializeValue(env)
-	reqArgs["isProxied"] = SerializeValue(isProxied)
+	if port != nil {
+		reqArgs["port"] = SerializeValue(port)
+	}
+	if targetPort != nil {
+		reqArgs["targetPort"] = SerializeValue(targetPort)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if env != nil {
+		reqArgs["env"] = SerializeValue(env)
+	}
+	if isProxied != nil {
+		reqArgs["isProxied"] = SerializeValue(isProxied)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpEndpoint", reqArgs)
 	if err != nil {
 		return nil, err
@@ -5377,15 +6586,25 @@ func (s *ExecutableResource) WithHttpEndpoint(port float64, targetPort float64, 
 }
 
 // WithHttpsEndpoint adds an HTTPS endpoint
-func (s *ExecutableResource) WithHttpsEndpoint(port float64, targetPort float64, name string, env string, isProxied bool) (*IResourceWithEndpoints, error) {
+func (s *ExecutableResource) WithHttpsEndpoint(port *float64, targetPort *float64, name *string, env *string, isProxied *bool) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["port"] = SerializeValue(port)
-	reqArgs["targetPort"] = SerializeValue(targetPort)
-	reqArgs["name"] = SerializeValue(name)
-	reqArgs["env"] = SerializeValue(env)
-	reqArgs["isProxied"] = SerializeValue(isProxied)
+	if port != nil {
+		reqArgs["port"] = SerializeValue(port)
+	}
+	if targetPort != nil {
+		reqArgs["targetPort"] = SerializeValue(targetPort)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if env != nil {
+		reqArgs["env"] = SerializeValue(env)
+	}
+	if isProxied != nil {
+		reqArgs["isProxied"] = SerializeValue(isProxied)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpsEndpoint", reqArgs)
 	if err != nil {
 		return nil, err
@@ -5446,12 +6665,14 @@ func (s *ExecutableResource) WithUrlsCallback(callback func(...any) any) (*IReso
 }
 
 // WithUrl adds or modifies displayed URLs
-func (s *ExecutableResource) WithUrl(url string, displayText string) (*IResource, error) {
+func (s *ExecutableResource) WithUrl(url string, displayText *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["url"] = SerializeValue(url)
-	reqArgs["displayText"] = SerializeValue(displayText)
+	if displayText != nil {
+		reqArgs["displayText"] = SerializeValue(displayText)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withUrl", reqArgs)
 	if err != nil {
 		return nil, err
@@ -5460,12 +6681,14 @@ func (s *ExecutableResource) WithUrl(url string, displayText string) (*IResource
 }
 
 // WithUrlExpression adds a URL using a reference expression
-func (s *ExecutableResource) WithUrlExpression(url *ReferenceExpression, displayText string) (*IResource, error) {
+func (s *ExecutableResource) WithUrlExpression(url *ReferenceExpression, displayText *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["url"] = SerializeValue(url)
-	reqArgs["displayText"] = SerializeValue(displayText)
+	if displayText != nil {
+		reqArgs["displayText"] = SerializeValue(displayText)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withUrlExpression", reqArgs)
 	if err != nil {
 		return nil, err
@@ -5584,12 +6807,14 @@ func (s *ExecutableResource) WithExplicitStart() (*IResource, error) {
 }
 
 // WaitForCompletion waits for resource completion
-func (s *ExecutableResource) WaitForCompletion(dependency *IResource, exitCode float64) (*IResourceWithWaitSupport, error) {
+func (s *ExecutableResource) WaitForCompletion(dependency *IResource, exitCode *float64) (*IResourceWithWaitSupport, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
-	reqArgs["exitCode"] = SerializeValue(exitCode)
+	if exitCode != nil {
+		reqArgs["exitCode"] = SerializeValue(exitCode)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForCompletion", reqArgs)
 	if err != nil {
 		return nil, err
@@ -5611,13 +6836,19 @@ func (s *ExecutableResource) WithHealthCheck(key string) (*IResource, error) {
 }
 
 // WithHttpHealthCheck adds an HTTP health check
-func (s *ExecutableResource) WithHttpHealthCheck(path string, statusCode float64, endpointName string) (*IResourceWithEndpoints, error) {
+func (s *ExecutableResource) WithHttpHealthCheck(path *string, statusCode *float64, endpointName *string) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["path"] = SerializeValue(path)
-	reqArgs["statusCode"] = SerializeValue(statusCode)
-	reqArgs["endpointName"] = SerializeValue(endpointName)
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if statusCode != nil {
+		reqArgs["statusCode"] = SerializeValue(statusCode)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpHealthCheck", reqArgs)
 	if err != nil {
 		return nil, err
@@ -5725,12 +6956,14 @@ func (s *ExecutableResource) WithChildRelationship(child *IResource) (*IResource
 }
 
 // WithIconName sets the icon for the resource
-func (s *ExecutableResource) WithIconName(iconName string, iconVariant IconVariant) (*IResource, error) {
+func (s *ExecutableResource) WithIconName(iconName string, iconVariant *IconVariant) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["iconName"] = SerializeValue(iconName)
-	reqArgs["iconVariant"] = SerializeValue(iconVariant)
+	if iconVariant != nil {
+		reqArgs["iconVariant"] = SerializeValue(iconVariant)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withIconName", reqArgs)
 	if err != nil {
 		return nil, err
@@ -5739,18 +6972,32 @@ func (s *ExecutableResource) WithIconName(iconName string, iconVariant IconVaria
 }
 
 // WithHttpProbe adds an HTTP health probe to the resource
-func (s *ExecutableResource) WithHttpProbe(probeType ProbeType, path string, initialDelaySeconds float64, periodSeconds float64, timeoutSeconds float64, failureThreshold float64, successThreshold float64, endpointName string) (*IResourceWithEndpoints, error) {
+func (s *ExecutableResource) WithHttpProbe(probeType ProbeType, path *string, initialDelaySeconds *float64, periodSeconds *float64, timeoutSeconds *float64, failureThreshold *float64, successThreshold *float64, endpointName *string) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["probeType"] = SerializeValue(probeType)
-	reqArgs["path"] = SerializeValue(path)
-	reqArgs["initialDelaySeconds"] = SerializeValue(initialDelaySeconds)
-	reqArgs["periodSeconds"] = SerializeValue(periodSeconds)
-	reqArgs["timeoutSeconds"] = SerializeValue(timeoutSeconds)
-	reqArgs["failureThreshold"] = SerializeValue(failureThreshold)
-	reqArgs["successThreshold"] = SerializeValue(successThreshold)
-	reqArgs["endpointName"] = SerializeValue(endpointName)
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if initialDelaySeconds != nil {
+		reqArgs["initialDelaySeconds"] = SerializeValue(initialDelaySeconds)
+	}
+	if periodSeconds != nil {
+		reqArgs["periodSeconds"] = SerializeValue(periodSeconds)
+	}
+	if timeoutSeconds != nil {
+		reqArgs["timeoutSeconds"] = SerializeValue(timeoutSeconds)
+	}
+	if failureThreshold != nil {
+		reqArgs["failureThreshold"] = SerializeValue(failureThreshold)
+	}
+	if successThreshold != nil {
+		reqArgs["successThreshold"] = SerializeValue(successThreshold)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpProbe", reqArgs)
 	if err != nil {
 		return nil, err
@@ -5797,7 +7044,7 @@ func (s *ExecutableResource) WithRemoteImageTag(remoteImageTag string) (*IComput
 }
 
 // WithPipelineStepFactory adds a pipeline step to the resource
-func (s *ExecutableResource) WithPipelineStepFactory(stepName string, callback func(...any) any, dependsOn []string, requiredBy []string, tags []string, description string) (*IResource, error) {
+func (s *ExecutableResource) WithPipelineStepFactory(stepName string, callback func(...any) any, dependsOn []string, requiredBy []string, tags []string, description *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
@@ -5805,10 +7052,18 @@ func (s *ExecutableResource) WithPipelineStepFactory(stepName string, callback f
 	if callback != nil {
 		reqArgs["callback"] = RegisterCallback(callback)
 	}
-	reqArgs["dependsOn"] = SerializeValue(dependsOn)
-	reqArgs["requiredBy"] = SerializeValue(requiredBy)
-	reqArgs["tags"] = SerializeValue(tags)
-	reqArgs["description"] = SerializeValue(description)
+	if dependsOn != nil {
+		reqArgs["dependsOn"] = SerializeValue(dependsOn)
+	}
+	if requiredBy != nil {
+		reqArgs["requiredBy"] = SerializeValue(requiredBy)
+	}
+	if tags != nil {
+		reqArgs["tags"] = SerializeValue(tags)
+	}
+	if description != nil {
+		reqArgs["description"] = SerializeValue(description)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withPipelineStepFactory", reqArgs)
 	if err != nil {
 		return nil, err
@@ -5858,13 +7113,92 @@ func (s *ExecutableResource) GetResourceName() (*string, error) {
 	return result.(*string), nil
 }
 
-// WithOptionalString adds an optional string parameter
-func (s *ExecutableResource) WithOptionalString(value string, enabled bool) (*IResource, error) {
+// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event
+func (s *ExecutableResource) OnBeforeResourceStarted(callback func(...any) any) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["value"] = SerializeValue(value)
-	reqArgs["enabled"] = SerializeValue(enabled)
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onBeforeResourceStarted", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnResourceStopped subscribes to the ResourceStopped event
+func (s *ExecutableResource) OnResourceStopped(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceStopped", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnInitializeResource subscribes to the InitializeResource event
+func (s *ExecutableResource) OnInitializeResource(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onInitializeResource", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated event
+func (s *ExecutableResource) OnResourceEndpointsAllocated(callback func(...any) any) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceEndpointsAllocated", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
+}
+
+// OnResourceReady subscribes to the ResourceReady event
+func (s *ExecutableResource) OnResourceReady(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceReady", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithOptionalString adds an optional string parameter
+func (s *ExecutableResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if value != nil {
+		reqArgs["value"] = SerializeValue(value)
+	}
+	if enabled != nil {
+		reqArgs["enabled"] = SerializeValue(enabled)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalString", reqArgs)
 	if err != nil {
 		return nil, err
@@ -6074,6 +7408,31 @@ func NewExecuteCommandContext(handle *Handle, client *AspireClient) *ExecuteComm
 	}
 }
 
+// ServiceProvider gets the ServiceProvider property
+func (s *ExecuteCommandContext) ServiceProvider() (*IServiceProvider, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.serviceProvider", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IServiceProvider), nil
+}
+
+// SetServiceProvider sets the ServiceProvider property
+func (s *ExecuteCommandContext) SetServiceProvider(value *IServiceProvider) (*ExecuteCommandContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setServiceProvider", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ExecuteCommandContext), nil
+}
+
 // ResourceName gets the ResourceName property
 func (s *ExecuteCommandContext) ResourceName() (*string, error) {
 	reqArgs := map[string]any{
@@ -6152,12 +7511,16 @@ func (s *ExternalServiceResource) WithContainerRegistry(registry *IResource) (*I
 }
 
 // WithDockerfileBaseImage sets the base image for a Dockerfile build
-func (s *ExternalServiceResource) WithDockerfileBaseImage(buildImage string, runtimeImage string) (*IResource, error) {
+func (s *ExternalServiceResource) WithDockerfileBaseImage(buildImage *string, runtimeImage *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["buildImage"] = SerializeValue(buildImage)
-	reqArgs["runtimeImage"] = SerializeValue(runtimeImage)
+	if buildImage != nil {
+		reqArgs["buildImage"] = SerializeValue(buildImage)
+	}
+	if runtimeImage != nil {
+		reqArgs["runtimeImage"] = SerializeValue(runtimeImage)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withDockerfileBaseImage", reqArgs)
 	if err != nil {
 		return nil, err
@@ -6166,12 +7529,16 @@ func (s *ExternalServiceResource) WithDockerfileBaseImage(buildImage string, run
 }
 
 // WithExternalServiceHttpHealthCheck adds an HTTP health check to an external service
-func (s *ExternalServiceResource) WithExternalServiceHttpHealthCheck(path string, statusCode float64) (*ExternalServiceResource, error) {
+func (s *ExternalServiceResource) WithExternalServiceHttpHealthCheck(path *string, statusCode *float64) (*ExternalServiceResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["path"] = SerializeValue(path)
-	reqArgs["statusCode"] = SerializeValue(statusCode)
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if statusCode != nil {
+		reqArgs["statusCode"] = SerializeValue(statusCode)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withExternalServiceHttpHealthCheck", reqArgs)
 	if err != nil {
 		return nil, err
@@ -6180,12 +7547,14 @@ func (s *ExternalServiceResource) WithExternalServiceHttpHealthCheck(path string
 }
 
 // WithRequiredCommand adds a required command dependency
-func (s *ExternalServiceResource) WithRequiredCommand(command string, helpLink string) (*IResource, error) {
+func (s *ExternalServiceResource) WithRequiredCommand(command string, helpLink *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["command"] = SerializeValue(command)
-	reqArgs["helpLink"] = SerializeValue(helpLink)
+	if helpLink != nil {
+		reqArgs["helpLink"] = SerializeValue(helpLink)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withRequiredCommand", reqArgs)
 	if err != nil {
 		return nil, err
@@ -6209,12 +7578,14 @@ func (s *ExternalServiceResource) WithUrlsCallback(callback func(...any) any) (*
 }
 
 // WithUrl adds or modifies displayed URLs
-func (s *ExternalServiceResource) WithUrl(url string, displayText string) (*IResource, error) {
+func (s *ExternalServiceResource) WithUrl(url string, displayText *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["url"] = SerializeValue(url)
-	reqArgs["displayText"] = SerializeValue(displayText)
+	if displayText != nil {
+		reqArgs["displayText"] = SerializeValue(displayText)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withUrl", reqArgs)
 	if err != nil {
 		return nil, err
@@ -6223,12 +7594,14 @@ func (s *ExternalServiceResource) WithUrl(url string, displayText string) (*IRes
 }
 
 // WithUrlExpression adds a URL using a reference expression
-func (s *ExternalServiceResource) WithUrlExpression(url *ReferenceExpression, displayText string) (*IResource, error) {
+func (s *ExternalServiceResource) WithUrlExpression(url *ReferenceExpression, displayText *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["url"] = SerializeValue(url)
-	reqArgs["displayText"] = SerializeValue(displayText)
+	if displayText != nil {
+		reqArgs["displayText"] = SerializeValue(displayText)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withUrlExpression", reqArgs)
 	if err != nil {
 		return nil, err
@@ -6336,12 +7709,14 @@ func (s *ExternalServiceResource) WithChildRelationship(child *IResource) (*IRes
 }
 
 // WithIconName sets the icon for the resource
-func (s *ExternalServiceResource) WithIconName(iconName string, iconVariant IconVariant) (*IResource, error) {
+func (s *ExternalServiceResource) WithIconName(iconName string, iconVariant *IconVariant) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["iconName"] = SerializeValue(iconName)
-	reqArgs["iconVariant"] = SerializeValue(iconVariant)
+	if iconVariant != nil {
+		reqArgs["iconVariant"] = SerializeValue(iconVariant)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withIconName", reqArgs)
 	if err != nil {
 		return nil, err
@@ -6362,7 +7737,7 @@ func (s *ExternalServiceResource) ExcludeFromMcp() (*IResource, error) {
 }
 
 // WithPipelineStepFactory adds a pipeline step to the resource
-func (s *ExternalServiceResource) WithPipelineStepFactory(stepName string, callback func(...any) any, dependsOn []string, requiredBy []string, tags []string, description string) (*IResource, error) {
+func (s *ExternalServiceResource) WithPipelineStepFactory(stepName string, callback func(...any) any, dependsOn []string, requiredBy []string, tags []string, description *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
@@ -6370,10 +7745,18 @@ func (s *ExternalServiceResource) WithPipelineStepFactory(stepName string, callb
 	if callback != nil {
 		reqArgs["callback"] = RegisterCallback(callback)
 	}
-	reqArgs["dependsOn"] = SerializeValue(dependsOn)
-	reqArgs["requiredBy"] = SerializeValue(requiredBy)
-	reqArgs["tags"] = SerializeValue(tags)
-	reqArgs["description"] = SerializeValue(description)
+	if dependsOn != nil {
+		reqArgs["dependsOn"] = SerializeValue(dependsOn)
+	}
+	if requiredBy != nil {
+		reqArgs["requiredBy"] = SerializeValue(requiredBy)
+	}
+	if tags != nil {
+		reqArgs["tags"] = SerializeValue(tags)
+	}
+	if description != nil {
+		reqArgs["description"] = SerializeValue(description)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withPipelineStepFactory", reqArgs)
 	if err != nil {
 		return nil, err
@@ -6423,13 +7806,77 @@ func (s *ExternalServiceResource) GetResourceName() (*string, error) {
 	return result.(*string), nil
 }
 
-// WithOptionalString adds an optional string parameter
-func (s *ExternalServiceResource) WithOptionalString(value string, enabled bool) (*IResource, error) {
+// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event
+func (s *ExternalServiceResource) OnBeforeResourceStarted(callback func(...any) any) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["value"] = SerializeValue(value)
-	reqArgs["enabled"] = SerializeValue(enabled)
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onBeforeResourceStarted", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnResourceStopped subscribes to the ResourceStopped event
+func (s *ExternalServiceResource) OnResourceStopped(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceStopped", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnInitializeResource subscribes to the InitializeResource event
+func (s *ExternalServiceResource) OnInitializeResource(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onInitializeResource", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnResourceReady subscribes to the ResourceReady event
+func (s *ExternalServiceResource) OnResourceReady(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceReady", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithOptionalString adds an optional string parameter
+func (s *ExternalServiceResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if value != nil {
+		reqArgs["value"] = SerializeValue(value)
+	}
+	if enabled != nil {
+		reqArgs["enabled"] = SerializeValue(enabled)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalString", reqArgs)
 	if err != nil {
 		return nil, err
@@ -6649,6 +8096,56 @@ func (s *IConfiguration) GetConnectionString(name string) (*string, error) {
 	return result.(*string), nil
 }
 
+// GetSection gets a configuration section by key
+func (s *IConfiguration) GetSection(key string) (*IConfigurationSection, error) {
+	reqArgs := map[string]any{
+		"configuration": SerializeValue(s.Handle()),
+	}
+	reqArgs["key"] = SerializeValue(key)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/getSection", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IConfigurationSection), nil
+}
+
+// GetChildren gets child configuration sections
+func (s *IConfiguration) GetChildren() (*[]*IConfigurationSection, error) {
+	reqArgs := map[string]any{
+		"configuration": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/getChildren", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*[]*IConfigurationSection), nil
+}
+
+// Exists checks whether a configuration section exists
+func (s *IConfiguration) Exists(key string) (*bool, error) {
+	reqArgs := map[string]any{
+		"configuration": SerializeValue(s.Handle()),
+	}
+	reqArgs["key"] = SerializeValue(key)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/exists", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*bool), nil
+}
+
+// IConfigurationSection wraps a handle for Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfigurationSection.
+type IConfigurationSection struct {
+	HandleWrapperBase
+}
+
+// NewIConfigurationSection creates a new IConfigurationSection.
+func NewIConfigurationSection(handle *Handle, client *AspireClient) *IConfigurationSection {
+	return &IConfigurationSection{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
 // IContainerFilesDestinationResource wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IContainerFilesDestinationResource.
 type IContainerFilesDestinationResource struct {
 	HandleWrapperBase
@@ -6671,6 +8168,20 @@ func NewIDistributedApplicationBuilder(handle *Handle, client *AspireClient) *ID
 	return &IDistributedApplicationBuilder{
 		HandleWrapperBase: NewHandleWrapperBase(handle, client),
 	}
+}
+
+// AddConnectionStringExpression adds a connection string with a reference expression
+func (s *IDistributedApplicationBuilder) AddConnectionStringExpression(name string, connectionStringExpression *ReferenceExpression) (*ConnectionStringResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["name"] = SerializeValue(name)
+	reqArgs["connectionStringExpression"] = SerializeValue(connectionStringExpression)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/addConnectionStringExpression", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ConnectionStringResource), nil
 }
 
 // AddConnectionStringBuilder adds a connection string with a builder callback
@@ -6706,6 +8217,23 @@ func (s *IDistributedApplicationBuilder) AddContainerRegistry(name string, endpo
 	return result.(*ContainerRegistryResource), nil
 }
 
+// AddContainerRegistryFromString adds a container registry with string endpoint
+func (s *IDistributedApplicationBuilder) AddContainerRegistryFromString(name string, endpoint string, repository *string) (*ContainerRegistryResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["name"] = SerializeValue(name)
+	reqArgs["endpoint"] = SerializeValue(endpoint)
+	if repository != nil {
+		reqArgs["repository"] = SerializeValue(repository)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/addContainerRegistryFromString", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ContainerRegistryResource), nil
+}
+
 // AddContainer adds a container resource
 func (s *IDistributedApplicationBuilder) AddContainer(name string, image string) (*ContainerResource, error) {
 	reqArgs := map[string]any{
@@ -6721,14 +8249,18 @@ func (s *IDistributedApplicationBuilder) AddContainer(name string, image string)
 }
 
 // AddDockerfile adds a container resource built from a Dockerfile
-func (s *IDistributedApplicationBuilder) AddDockerfile(name string, contextPath string, dockerfilePath string, stage string) (*ContainerResource, error) {
+func (s *IDistributedApplicationBuilder) AddDockerfile(name string, contextPath string, dockerfilePath *string, stage *string) (*ContainerResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["name"] = SerializeValue(name)
 	reqArgs["contextPath"] = SerializeValue(contextPath)
-	reqArgs["dockerfilePath"] = SerializeValue(dockerfilePath)
-	reqArgs["stage"] = SerializeValue(stage)
+	if dockerfilePath != nil {
+		reqArgs["dockerfilePath"] = SerializeValue(dockerfilePath)
+	}
+	if stage != nil {
+		reqArgs["stage"] = SerializeValue(stage)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/addDockerfile", reqArgs)
 	if err != nil {
 		return nil, err
@@ -6780,6 +8312,34 @@ func (s *IDistributedApplicationBuilder) AddExternalService(name string, url str
 	return result.(*ExternalServiceResource), nil
 }
 
+// AddExternalServiceUri adds an external service with a URI
+func (s *IDistributedApplicationBuilder) AddExternalServiceUri(name string, uri string) (*ExternalServiceResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["name"] = SerializeValue(name)
+	reqArgs["uri"] = SerializeValue(uri)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/addExternalServiceUri", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ExternalServiceResource), nil
+}
+
+// AddExternalServiceParameter adds an external service with a parameter URL
+func (s *IDistributedApplicationBuilder) AddExternalServiceParameter(name string, urlParameter *ParameterResource) (*ExternalServiceResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["name"] = SerializeValue(name)
+	reqArgs["urlParameter"] = SerializeValue(urlParameter)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/addExternalServiceParameter", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ExternalServiceResource), nil
+}
+
 // AppHostDirectory gets the AppHostDirectory property
 func (s *IDistributedApplicationBuilder) AppHostDirectory() (*string, error) {
 	reqArgs := map[string]any{
@@ -6790,6 +8350,18 @@ func (s *IDistributedApplicationBuilder) AppHostDirectory() (*string, error) {
 		return nil, err
 	}
 	return result.(*string), nil
+}
+
+// Environment gets the Environment property
+func (s *IDistributedApplicationBuilder) Environment() (*IHostEnvironment, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/IDistributedApplicationBuilder.environment", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IHostEnvironment), nil
 }
 
 // Eventing gets the Eventing property
@@ -6816,6 +8388,18 @@ func (s *IDistributedApplicationBuilder) ExecutionContext() (*DistributedApplica
 	return result.(*DistributedApplicationExecutionContext), nil
 }
 
+// UserSecretsManager gets the UserSecretsManager property
+func (s *IDistributedApplicationBuilder) UserSecretsManager() (*IUserSecretsManager, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/IDistributedApplicationBuilder.userSecretsManager", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IUserSecretsManager), nil
+}
+
 // Build builds the distributed application
 func (s *IDistributedApplicationBuilder) Build() (*DistributedApplication, error) {
 	reqArgs := map[string]any{
@@ -6829,12 +8413,14 @@ func (s *IDistributedApplicationBuilder) Build() (*DistributedApplication, error
 }
 
 // AddParameter adds a parameter resource
-func (s *IDistributedApplicationBuilder) AddParameter(name string, secret bool) (*ParameterResource, error) {
+func (s *IDistributedApplicationBuilder) AddParameter(name string, secret *bool) (*ParameterResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["name"] = SerializeValue(name)
-	reqArgs["secret"] = SerializeValue(secret)
+	if secret != nil {
+		reqArgs["secret"] = SerializeValue(secret)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/addParameter", reqArgs)
 	if err != nil {
 		return nil, err
@@ -6842,14 +8428,36 @@ func (s *IDistributedApplicationBuilder) AddParameter(name string, secret bool) 
 	return result.(*ParameterResource), nil
 }
 
+// AddParameterWithValue adds a parameter with a default value
+func (s *IDistributedApplicationBuilder) AddParameterWithValue(name string, value string, publishValueAsDefault *bool, secret *bool) (*ParameterResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["name"] = SerializeValue(name)
+	reqArgs["value"] = SerializeValue(value)
+	if publishValueAsDefault != nil {
+		reqArgs["publishValueAsDefault"] = SerializeValue(publishValueAsDefault)
+	}
+	if secret != nil {
+		reqArgs["secret"] = SerializeValue(secret)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/addParameterWithValue", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ParameterResource), nil
+}
+
 // AddParameterFromConfiguration adds a parameter sourced from configuration
-func (s *IDistributedApplicationBuilder) AddParameterFromConfiguration(name string, configurationKey string, secret bool) (*ParameterResource, error) {
+func (s *IDistributedApplicationBuilder) AddParameterFromConfiguration(name string, configurationKey string, secret *bool) (*ParameterResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["name"] = SerializeValue(name)
 	reqArgs["configurationKey"] = SerializeValue(configurationKey)
-	reqArgs["secret"] = SerializeValue(secret)
+	if secret != nil {
+		reqArgs["secret"] = SerializeValue(secret)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/addParameterFromConfiguration", reqArgs)
 	if err != nil {
 		return nil, err
@@ -6858,12 +8466,14 @@ func (s *IDistributedApplicationBuilder) AddParameterFromConfiguration(name stri
 }
 
 // AddConnectionString adds a connection string resource
-func (s *IDistributedApplicationBuilder) AddConnectionString(name string, environmentVariableName string) (*IResourceWithConnectionString, error) {
+func (s *IDistributedApplicationBuilder) AddConnectionString(name string, environmentVariableName *string) (*IResourceWithConnectionString, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["name"] = SerializeValue(name)
-	reqArgs["environmentVariableName"] = SerializeValue(environmentVariableName)
+	if environmentVariableName != nil {
+		reqArgs["environmentVariableName"] = SerializeValue(environmentVariableName)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/addConnectionString", reqArgs)
 	if err != nil {
 		return nil, err
@@ -6934,13 +8544,57 @@ func (s *IDistributedApplicationBuilder) AddCSharpAppWithOptions(name string, pa
 	return result.(*CSharpAppResource), nil
 }
 
+// GetConfiguration gets the application configuration
+func (s *IDistributedApplicationBuilder) GetConfiguration() (*IConfiguration, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/getConfiguration", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IConfiguration), nil
+}
+
+// SubscribeBeforeStart subscribes to the BeforeStart event
+func (s *IDistributedApplicationBuilder) SubscribeBeforeStart(callback func(...any) any) (*DistributedApplicationEventSubscription, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/subscribeBeforeStart", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DistributedApplicationEventSubscription), nil
+}
+
+// SubscribeAfterResourcesCreated subscribes to the AfterResourcesCreated event
+func (s *IDistributedApplicationBuilder) SubscribeAfterResourcesCreated(callback func(...any) any) (*DistributedApplicationEventSubscription, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/subscribeAfterResourcesCreated", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DistributedApplicationEventSubscription), nil
+}
+
 // AddTestRedis adds a test Redis resource
-func (s *IDistributedApplicationBuilder) AddTestRedis(name string, port float64) (*TestRedisResource, error) {
+func (s *IDistributedApplicationBuilder) AddTestRedis(name string, port *float64) (*TestRedisResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["name"] = SerializeValue(name)
-	reqArgs["port"] = SerializeValue(port)
+	if port != nil {
+		reqArgs["port"] = SerializeValue(port)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/addTestRedis", reqArgs)
 	if err != nil {
 		return nil, err
@@ -7019,18 +8673,6 @@ func NewIHostEnvironment(handle *Handle, client *AspireClient) *IHostEnvironment
 	}
 }
 
-// GetEnvironmentName gets the environment name
-func (s *IHostEnvironment) GetEnvironmentName() (*string, error) {
-	reqArgs := map[string]any{
-		"environment": SerializeValue(s.Handle()),
-	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/getEnvironmentName", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*string), nil
-}
-
 // IsDevelopment checks if running in Development environment
 func (s *IHostEnvironment) IsDevelopment() (*bool, error) {
 	reqArgs := map[string]any{
@@ -7041,6 +8683,301 @@ func (s *IHostEnvironment) IsDevelopment() (*bool, error) {
 		return nil, err
 	}
 	return result.(*bool), nil
+}
+
+// IsProduction checks if running in Production environment
+func (s *IHostEnvironment) IsProduction() (*bool, error) {
+	reqArgs := map[string]any{
+		"environment": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/isProduction", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*bool), nil
+}
+
+// IsStaging checks if running in Staging environment
+func (s *IHostEnvironment) IsStaging() (*bool, error) {
+	reqArgs := map[string]any{
+		"environment": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/isStaging", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*bool), nil
+}
+
+// IsEnvironment checks if the environment matches the specified name
+func (s *IHostEnvironment) IsEnvironment(environmentName string) (*bool, error) {
+	reqArgs := map[string]any{
+		"environment": SerializeValue(s.Handle()),
+	}
+	reqArgs["environmentName"] = SerializeValue(environmentName)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/isEnvironment", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*bool), nil
+}
+
+// ILogger wraps a handle for Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILogger.
+type ILogger struct {
+	HandleWrapperBase
+}
+
+// NewILogger creates a new ILogger.
+func NewILogger(handle *Handle, client *AspireClient) *ILogger {
+	return &ILogger{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// LogInformation logs an information message
+func (s *ILogger) LogInformation(message string) error {
+	reqArgs := map[string]any{
+		"logger": SerializeValue(s.Handle()),
+	}
+	reqArgs["message"] = SerializeValue(message)
+	_, err := s.Client().InvokeCapability("Aspire.Hosting/logInformation", reqArgs)
+	return err
+}
+
+// LogWarning logs a warning message
+func (s *ILogger) LogWarning(message string) error {
+	reqArgs := map[string]any{
+		"logger": SerializeValue(s.Handle()),
+	}
+	reqArgs["message"] = SerializeValue(message)
+	_, err := s.Client().InvokeCapability("Aspire.Hosting/logWarning", reqArgs)
+	return err
+}
+
+// LogError logs an error message
+func (s *ILogger) LogError(message string) error {
+	reqArgs := map[string]any{
+		"logger": SerializeValue(s.Handle()),
+	}
+	reqArgs["message"] = SerializeValue(message)
+	_, err := s.Client().InvokeCapability("Aspire.Hosting/logError", reqArgs)
+	return err
+}
+
+// LogDebug logs a debug message
+func (s *ILogger) LogDebug(message string) error {
+	reqArgs := map[string]any{
+		"logger": SerializeValue(s.Handle()),
+	}
+	reqArgs["message"] = SerializeValue(message)
+	_, err := s.Client().InvokeCapability("Aspire.Hosting/logDebug", reqArgs)
+	return err
+}
+
+// Log logs a message with specified level
+func (s *ILogger) Log(level string, message string) error {
+	reqArgs := map[string]any{
+		"logger": SerializeValue(s.Handle()),
+	}
+	reqArgs["level"] = SerializeValue(level)
+	reqArgs["message"] = SerializeValue(message)
+	_, err := s.Client().InvokeCapability("Aspire.Hosting/log", reqArgs)
+	return err
+}
+
+// ILoggerFactory wraps a handle for Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILoggerFactory.
+type ILoggerFactory struct {
+	HandleWrapperBase
+}
+
+// NewILoggerFactory creates a new ILoggerFactory.
+func NewILoggerFactory(handle *Handle, client *AspireClient) *ILoggerFactory {
+	return &ILoggerFactory{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// CreateLogger creates a logger for a category
+func (s *ILoggerFactory) CreateLogger(categoryName string) (*ILogger, error) {
+	reqArgs := map[string]any{
+		"loggerFactory": SerializeValue(s.Handle()),
+	}
+	reqArgs["categoryName"] = SerializeValue(categoryName)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/createLogger", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ILogger), nil
+}
+
+// IReportingStep wraps a handle for Aspire.Hosting/Aspire.Hosting.Pipelines.IReportingStep.
+type IReportingStep struct {
+	HandleWrapperBase
+}
+
+// NewIReportingStep creates a new IReportingStep.
+func NewIReportingStep(handle *Handle, client *AspireClient) *IReportingStep {
+	return &IReportingStep{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// CreateTask creates a reporting task with plain-text status text
+func (s *IReportingStep) CreateTask(statusText string, cancellationToken *CancellationToken) (*IReportingTask, error) {
+	reqArgs := map[string]any{
+		"reportingStep": SerializeValue(s.Handle()),
+	}
+	reqArgs["statusText"] = SerializeValue(statusText)
+	if cancellationToken != nil {
+		reqArgs["cancellationToken"] = RegisterCancellation(cancellationToken, s.Client())
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/createTask", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IReportingTask), nil
+}
+
+// CreateMarkdownTask creates a reporting task with Markdown-formatted status text
+func (s *IReportingStep) CreateMarkdownTask(markdownString string, cancellationToken *CancellationToken) (*IReportingTask, error) {
+	reqArgs := map[string]any{
+		"reportingStep": SerializeValue(s.Handle()),
+	}
+	reqArgs["markdownString"] = SerializeValue(markdownString)
+	if cancellationToken != nil {
+		reqArgs["cancellationToken"] = RegisterCancellation(cancellationToken, s.Client())
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/createMarkdownTask", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IReportingTask), nil
+}
+
+// LogStep logs a plain-text message for the reporting step
+func (s *IReportingStep) LogStep(level string, message string) error {
+	reqArgs := map[string]any{
+		"reportingStep": SerializeValue(s.Handle()),
+	}
+	reqArgs["level"] = SerializeValue(level)
+	reqArgs["message"] = SerializeValue(message)
+	_, err := s.Client().InvokeCapability("Aspire.Hosting/logStep", reqArgs)
+	return err
+}
+
+// LogStepMarkdown logs a Markdown-formatted message for the reporting step
+func (s *IReportingStep) LogStepMarkdown(level string, markdownString string) error {
+	reqArgs := map[string]any{
+		"reportingStep": SerializeValue(s.Handle()),
+	}
+	reqArgs["level"] = SerializeValue(level)
+	reqArgs["markdownString"] = SerializeValue(markdownString)
+	_, err := s.Client().InvokeCapability("Aspire.Hosting/logStepMarkdown", reqArgs)
+	return err
+}
+
+// CompleteStep completes the reporting step with plain-text completion text
+func (s *IReportingStep) CompleteStep(completionText string, completionState *string, cancellationToken *CancellationToken) error {
+	reqArgs := map[string]any{
+		"reportingStep": SerializeValue(s.Handle()),
+	}
+	reqArgs["completionText"] = SerializeValue(completionText)
+	if completionState != nil {
+		reqArgs["completionState"] = SerializeValue(completionState)
+	}
+	if cancellationToken != nil {
+		reqArgs["cancellationToken"] = RegisterCancellation(cancellationToken, s.Client())
+	}
+	_, err := s.Client().InvokeCapability("Aspire.Hosting/completeStep", reqArgs)
+	return err
+}
+
+// CompleteStepMarkdown completes the reporting step with Markdown-formatted completion text
+func (s *IReportingStep) CompleteStepMarkdown(markdownString string, completionState *string, cancellationToken *CancellationToken) error {
+	reqArgs := map[string]any{
+		"reportingStep": SerializeValue(s.Handle()),
+	}
+	reqArgs["markdownString"] = SerializeValue(markdownString)
+	if completionState != nil {
+		reqArgs["completionState"] = SerializeValue(completionState)
+	}
+	if cancellationToken != nil {
+		reqArgs["cancellationToken"] = RegisterCancellation(cancellationToken, s.Client())
+	}
+	_, err := s.Client().InvokeCapability("Aspire.Hosting/completeStepMarkdown", reqArgs)
+	return err
+}
+
+// IReportingTask wraps a handle for Aspire.Hosting/Aspire.Hosting.Pipelines.IReportingTask.
+type IReportingTask struct {
+	HandleWrapperBase
+}
+
+// NewIReportingTask creates a new IReportingTask.
+func NewIReportingTask(handle *Handle, client *AspireClient) *IReportingTask {
+	return &IReportingTask{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// UpdateTask updates the reporting task with plain-text status text
+func (s *IReportingTask) UpdateTask(statusText string, cancellationToken *CancellationToken) error {
+	reqArgs := map[string]any{
+		"reportingTask": SerializeValue(s.Handle()),
+	}
+	reqArgs["statusText"] = SerializeValue(statusText)
+	if cancellationToken != nil {
+		reqArgs["cancellationToken"] = RegisterCancellation(cancellationToken, s.Client())
+	}
+	_, err := s.Client().InvokeCapability("Aspire.Hosting/updateTask", reqArgs)
+	return err
+}
+
+// UpdateTaskMarkdown updates the reporting task with Markdown-formatted status text
+func (s *IReportingTask) UpdateTaskMarkdown(markdownString string, cancellationToken *CancellationToken) error {
+	reqArgs := map[string]any{
+		"reportingTask": SerializeValue(s.Handle()),
+	}
+	reqArgs["markdownString"] = SerializeValue(markdownString)
+	if cancellationToken != nil {
+		reqArgs["cancellationToken"] = RegisterCancellation(cancellationToken, s.Client())
+	}
+	_, err := s.Client().InvokeCapability("Aspire.Hosting/updateTaskMarkdown", reqArgs)
+	return err
+}
+
+// CompleteTask completes the reporting task with plain-text completion text
+func (s *IReportingTask) CompleteTask(completionMessage *string, completionState *string, cancellationToken *CancellationToken) error {
+	reqArgs := map[string]any{
+		"reportingTask": SerializeValue(s.Handle()),
+	}
+	if completionMessage != nil {
+		reqArgs["completionMessage"] = SerializeValue(completionMessage)
+	}
+	if completionState != nil {
+		reqArgs["completionState"] = SerializeValue(completionState)
+	}
+	if cancellationToken != nil {
+		reqArgs["cancellationToken"] = RegisterCancellation(cancellationToken, s.Client())
+	}
+	_, err := s.Client().InvokeCapability("Aspire.Hosting/completeTask", reqArgs)
+	return err
+}
+
+// CompleteTaskMarkdown completes the reporting task with Markdown-formatted completion text
+func (s *IReportingTask) CompleteTaskMarkdown(markdownString string, completionState *string, cancellationToken *CancellationToken) error {
+	reqArgs := map[string]any{
+		"reportingTask": SerializeValue(s.Handle()),
+	}
+	reqArgs["markdownString"] = SerializeValue(markdownString)
+	if completionState != nil {
+		reqArgs["completionState"] = SerializeValue(completionState)
+	}
+	if cancellationToken != nil {
+		reqArgs["cancellationToken"] = RegisterCancellation(cancellationToken, s.Client())
+	}
+	_, err := s.Client().InvokeCapability("Aspire.Hosting/completeTaskMarkdown", reqArgs)
+	return err
 }
 
 // IResource wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource.
@@ -7152,18 +9089,6 @@ func NewIResourceWithParent(handle *Handle, client *AspireClient) *IResourceWith
 	}
 }
 
-// IResourceWithServiceDiscovery wraps a handle for Aspire.Hosting/Aspire.Hosting.IResourceWithServiceDiscovery.
-type IResourceWithServiceDiscovery struct {
-	ResourceBuilderBase
-}
-
-// NewIResourceWithServiceDiscovery creates a new IResourceWithServiceDiscovery.
-func NewIResourceWithServiceDiscovery(handle *Handle, client *AspireClient) *IResourceWithServiceDiscovery {
-	return &IResourceWithServiceDiscovery{
-		ResourceBuilderBase: NewResourceBuilderBase(handle, client),
-	}
-}
-
 // IResourceWithWaitSupport wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithWaitSupport.
 type IResourceWithWaitSupport struct {
 	ResourceBuilderBase
@@ -7188,30 +9113,76 @@ func NewIServiceProvider(handle *Handle, client *AspireClient) *IServiceProvider
 	}
 }
 
-// GetService gets a service by ATS type ID
-func (s *IServiceProvider) GetService(typeId string) (any, error) {
+// GetEventing gets the distributed application eventing service from the service provider
+func (s *IServiceProvider) GetEventing() (*IDistributedApplicationEventing, error) {
 	reqArgs := map[string]any{
 		"serviceProvider": SerializeValue(s.Handle()),
 	}
-	reqArgs["typeId"] = SerializeValue(typeId)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/getService", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/getEventing", reqArgs)
 	if err != nil {
 		return nil, err
 	}
-	return result, nil
+	return result.(*IDistributedApplicationEventing), nil
 }
 
-// GetRequiredService gets a required service by ATS type ID
-func (s *IServiceProvider) GetRequiredService(typeId string) (any, error) {
+// GetLoggerFactory gets the logger factory from the service provider
+func (s *IServiceProvider) GetLoggerFactory() (*ILoggerFactory, error) {
 	reqArgs := map[string]any{
 		"serviceProvider": SerializeValue(s.Handle()),
 	}
-	reqArgs["typeId"] = SerializeValue(typeId)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/getRequiredService", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/getLoggerFactory", reqArgs)
 	if err != nil {
 		return nil, err
 	}
-	return result, nil
+	return result.(*ILoggerFactory), nil
+}
+
+// GetResourceLoggerService gets the resource logger service from the service provider
+func (s *IServiceProvider) GetResourceLoggerService() (*ResourceLoggerService, error) {
+	reqArgs := map[string]any{
+		"serviceProvider": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/getResourceLoggerService", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ResourceLoggerService), nil
+}
+
+// GetDistributedApplicationModel gets the distributed application model from the service provider
+func (s *IServiceProvider) GetDistributedApplicationModel() (*DistributedApplicationModel, error) {
+	reqArgs := map[string]any{
+		"serviceProvider": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/getDistributedApplicationModel", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DistributedApplicationModel), nil
+}
+
+// GetResourceNotificationService gets the resource notification service from the service provider
+func (s *IServiceProvider) GetResourceNotificationService() (*ResourceNotificationService, error) {
+	reqArgs := map[string]any{
+		"serviceProvider": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/getResourceNotificationService", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ResourceNotificationService), nil
+}
+
+// GetUserSecretsManager gets the user secrets manager from the service provider
+func (s *IServiceProvider) GetUserSecretsManager() (*IUserSecretsManager, error) {
+	reqArgs := map[string]any{
+		"serviceProvider": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/getUserSecretsManager", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IUserSecretsManager), nil
 }
 
 // ITestVaultResource wraps a handle for Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestVaultResource.
@@ -7224,6 +9195,153 @@ func NewITestVaultResource(handle *Handle, client *AspireClient) *ITestVaultReso
 	return &ITestVaultResource{
 		ResourceBuilderBase: NewResourceBuilderBase(handle, client),
 	}
+}
+
+// IUserSecretsManager wraps a handle for Aspire.Hosting/Aspire.Hosting.IUserSecretsManager.
+type IUserSecretsManager struct {
+	HandleWrapperBase
+}
+
+// NewIUserSecretsManager creates a new IUserSecretsManager.
+func NewIUserSecretsManager(handle *Handle, client *AspireClient) *IUserSecretsManager {
+	return &IUserSecretsManager{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// IsAvailable gets the IsAvailable property
+func (s *IUserSecretsManager) IsAvailable() (*bool, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/IUserSecretsManager.isAvailable", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*bool), nil
+}
+
+// FilePath gets the FilePath property
+func (s *IUserSecretsManager) FilePath() (*string, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/IUserSecretsManager.filePath", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*string), nil
+}
+
+// TrySetSecret attempts to set a user secret value
+func (s *IUserSecretsManager) TrySetSecret(name string, value string) (*bool, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["name"] = SerializeValue(name)
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/IUserSecretsManager.trySetSecret", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*bool), nil
+}
+
+// SaveStateJson saves state to user secrets from a JSON string
+func (s *IUserSecretsManager) SaveStateJson(json string, cancellationToken *CancellationToken) error {
+	reqArgs := map[string]any{
+		"userSecretsManager": SerializeValue(s.Handle()),
+	}
+	reqArgs["json"] = SerializeValue(json)
+	if cancellationToken != nil {
+		reqArgs["cancellationToken"] = RegisterCancellation(cancellationToken, s.Client())
+	}
+	_, err := s.Client().InvokeCapability("Aspire.Hosting/saveStateJson", reqArgs)
+	return err
+}
+
+// GetOrSetSecret gets a secret value if it exists, or sets it to the provided value if it does not
+func (s *IUserSecretsManager) GetOrSetSecret(resourceBuilder *IResource, name string, value string) error {
+	reqArgs := map[string]any{
+		"userSecretsManager": SerializeValue(s.Handle()),
+	}
+	reqArgs["resourceBuilder"] = SerializeValue(resourceBuilder)
+	reqArgs["name"] = SerializeValue(name)
+	reqArgs["value"] = SerializeValue(value)
+	_, err := s.Client().InvokeCapability("Aspire.Hosting/getOrSetSecret", reqArgs)
+	return err
+}
+
+// InitializeResourceEvent wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent.
+type InitializeResourceEvent struct {
+	HandleWrapperBase
+}
+
+// NewInitializeResourceEvent creates a new InitializeResourceEvent.
+func NewInitializeResourceEvent(handle *Handle, client *AspireClient) *InitializeResourceEvent {
+	return &InitializeResourceEvent{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// Resource gets the Resource property
+func (s *InitializeResourceEvent) Resource() (*IResource, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/InitializeResourceEvent.resource", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// Eventing gets the Eventing property
+func (s *InitializeResourceEvent) Eventing() (*IDistributedApplicationEventing, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/InitializeResourceEvent.eventing", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IDistributedApplicationEventing), nil
+}
+
+// Logger gets the Logger property
+func (s *InitializeResourceEvent) Logger() (*ILogger, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/InitializeResourceEvent.logger", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ILogger), nil
+}
+
+// Notifications gets the Notifications property
+func (s *InitializeResourceEvent) Notifications() (*ResourceNotificationService, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/InitializeResourceEvent.notifications", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ResourceNotificationService), nil
+}
+
+// Services gets the Services property
+func (s *InitializeResourceEvent) Services() (*IServiceProvider, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/InitializeResourceEvent.services", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IServiceProvider), nil
 }
 
 // ParameterResource wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource.
@@ -7252,12 +9370,16 @@ func (s *ParameterResource) WithContainerRegistry(registry *IResource) (*IResour
 }
 
 // WithDockerfileBaseImage sets the base image for a Dockerfile build
-func (s *ParameterResource) WithDockerfileBaseImage(buildImage string, runtimeImage string) (*IResource, error) {
+func (s *ParameterResource) WithDockerfileBaseImage(buildImage *string, runtimeImage *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["buildImage"] = SerializeValue(buildImage)
-	reqArgs["runtimeImage"] = SerializeValue(runtimeImage)
+	if buildImage != nil {
+		reqArgs["buildImage"] = SerializeValue(buildImage)
+	}
+	if runtimeImage != nil {
+		reqArgs["runtimeImage"] = SerializeValue(runtimeImage)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withDockerfileBaseImage", reqArgs)
 	if err != nil {
 		return nil, err
@@ -7266,12 +9388,14 @@ func (s *ParameterResource) WithDockerfileBaseImage(buildImage string, runtimeIm
 }
 
 // WithDescription sets a parameter description
-func (s *ParameterResource) WithDescription(description string, enableMarkdown bool) (*ParameterResource, error) {
+func (s *ParameterResource) WithDescription(description string, enableMarkdown *bool) (*ParameterResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["description"] = SerializeValue(description)
-	reqArgs["enableMarkdown"] = SerializeValue(enableMarkdown)
+	if enableMarkdown != nil {
+		reqArgs["enableMarkdown"] = SerializeValue(enableMarkdown)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withDescription", reqArgs)
 	if err != nil {
 		return nil, err
@@ -7280,12 +9404,14 @@ func (s *ParameterResource) WithDescription(description string, enableMarkdown b
 }
 
 // WithRequiredCommand adds a required command dependency
-func (s *ParameterResource) WithRequiredCommand(command string, helpLink string) (*IResource, error) {
+func (s *ParameterResource) WithRequiredCommand(command string, helpLink *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["command"] = SerializeValue(command)
-	reqArgs["helpLink"] = SerializeValue(helpLink)
+	if helpLink != nil {
+		reqArgs["helpLink"] = SerializeValue(helpLink)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withRequiredCommand", reqArgs)
 	if err != nil {
 		return nil, err
@@ -7309,12 +9435,14 @@ func (s *ParameterResource) WithUrlsCallback(callback func(...any) any) (*IResou
 }
 
 // WithUrl adds or modifies displayed URLs
-func (s *ParameterResource) WithUrl(url string, displayText string) (*IResource, error) {
+func (s *ParameterResource) WithUrl(url string, displayText *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["url"] = SerializeValue(url)
-	reqArgs["displayText"] = SerializeValue(displayText)
+	if displayText != nil {
+		reqArgs["displayText"] = SerializeValue(displayText)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withUrl", reqArgs)
 	if err != nil {
 		return nil, err
@@ -7323,12 +9451,14 @@ func (s *ParameterResource) WithUrl(url string, displayText string) (*IResource,
 }
 
 // WithUrlExpression adds a URL using a reference expression
-func (s *ParameterResource) WithUrlExpression(url *ReferenceExpression, displayText string) (*IResource, error) {
+func (s *ParameterResource) WithUrlExpression(url *ReferenceExpression, displayText *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["url"] = SerializeValue(url)
-	reqArgs["displayText"] = SerializeValue(displayText)
+	if displayText != nil {
+		reqArgs["displayText"] = SerializeValue(displayText)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withUrlExpression", reqArgs)
 	if err != nil {
 		return nil, err
@@ -7436,12 +9566,14 @@ func (s *ParameterResource) WithChildRelationship(child *IResource) (*IResource,
 }
 
 // WithIconName sets the icon for the resource
-func (s *ParameterResource) WithIconName(iconName string, iconVariant IconVariant) (*IResource, error) {
+func (s *ParameterResource) WithIconName(iconName string, iconVariant *IconVariant) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["iconName"] = SerializeValue(iconName)
-	reqArgs["iconVariant"] = SerializeValue(iconVariant)
+	if iconVariant != nil {
+		reqArgs["iconVariant"] = SerializeValue(iconVariant)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withIconName", reqArgs)
 	if err != nil {
 		return nil, err
@@ -7462,7 +9594,7 @@ func (s *ParameterResource) ExcludeFromMcp() (*IResource, error) {
 }
 
 // WithPipelineStepFactory adds a pipeline step to the resource
-func (s *ParameterResource) WithPipelineStepFactory(stepName string, callback func(...any) any, dependsOn []string, requiredBy []string, tags []string, description string) (*IResource, error) {
+func (s *ParameterResource) WithPipelineStepFactory(stepName string, callback func(...any) any, dependsOn []string, requiredBy []string, tags []string, description *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
@@ -7470,10 +9602,18 @@ func (s *ParameterResource) WithPipelineStepFactory(stepName string, callback fu
 	if callback != nil {
 		reqArgs["callback"] = RegisterCallback(callback)
 	}
-	reqArgs["dependsOn"] = SerializeValue(dependsOn)
-	reqArgs["requiredBy"] = SerializeValue(requiredBy)
-	reqArgs["tags"] = SerializeValue(tags)
-	reqArgs["description"] = SerializeValue(description)
+	if dependsOn != nil {
+		reqArgs["dependsOn"] = SerializeValue(dependsOn)
+	}
+	if requiredBy != nil {
+		reqArgs["requiredBy"] = SerializeValue(requiredBy)
+	}
+	if tags != nil {
+		reqArgs["tags"] = SerializeValue(tags)
+	}
+	if description != nil {
+		reqArgs["description"] = SerializeValue(description)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withPipelineStepFactory", reqArgs)
 	if err != nil {
 		return nil, err
@@ -7523,13 +9663,77 @@ func (s *ParameterResource) GetResourceName() (*string, error) {
 	return result.(*string), nil
 }
 
-// WithOptionalString adds an optional string parameter
-func (s *ParameterResource) WithOptionalString(value string, enabled bool) (*IResource, error) {
+// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event
+func (s *ParameterResource) OnBeforeResourceStarted(callback func(...any) any) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["value"] = SerializeValue(value)
-	reqArgs["enabled"] = SerializeValue(enabled)
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onBeforeResourceStarted", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnResourceStopped subscribes to the ResourceStopped event
+func (s *ParameterResource) OnResourceStopped(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceStopped", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnInitializeResource subscribes to the InitializeResource event
+func (s *ParameterResource) OnInitializeResource(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onInitializeResource", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnResourceReady subscribes to the ResourceReady event
+func (s *ParameterResource) OnResourceReady(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceReady", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithOptionalString adds an optional string parameter
+func (s *ParameterResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if value != nil {
+		reqArgs["value"] = SerializeValue(value)
+	}
+	if enabled != nil {
+		reqArgs["enabled"] = SerializeValue(enabled)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalString", reqArgs)
 	if err != nil {
 		return nil, err
@@ -7711,6 +9915,31 @@ func NewPipelineConfigurationContext(handle *Handle, client *AspireClient) *Pipe
 	}
 }
 
+// Services gets the Services property
+func (s *PipelineConfigurationContext) Services() (*IServiceProvider, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineConfigurationContext.services", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IServiceProvider), nil
+}
+
+// SetServices sets the Services property
+func (s *PipelineConfigurationContext) SetServices(value *IServiceProvider) (*PipelineConfigurationContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineConfigurationContext.setServices", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*PipelineConfigurationContext), nil
+}
+
 // Steps gets the Steps property
 func (s *PipelineConfigurationContext) Steps() (*[]*PipelineStep, error) {
 	reqArgs := map[string]any{
@@ -7736,6 +9965,31 @@ func (s *PipelineConfigurationContext) SetSteps(value []*PipelineStep) (*Pipelin
 	return result.(*PipelineConfigurationContext), nil
 }
 
+// Model gets the Model property
+func (s *PipelineConfigurationContext) Model() (*DistributedApplicationModel, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineConfigurationContext.model", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DistributedApplicationModel), nil
+}
+
+// SetModel sets the Model property
+func (s *PipelineConfigurationContext) SetModel(value *DistributedApplicationModel) (*PipelineConfigurationContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineConfigurationContext.setModel", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*PipelineConfigurationContext), nil
+}
+
 // GetStepsByTag gets pipeline steps with the specified tag
 func (s *PipelineConfigurationContext) GetStepsByTag(tag string) (*[]*PipelineStep, error) {
 	reqArgs := map[string]any{
@@ -7747,6 +10001,105 @@ func (s *PipelineConfigurationContext) GetStepsByTag(tag string) (*[]*PipelineSt
 		return nil, err
 	}
 	return result.(*[]*PipelineStep), nil
+}
+
+// PipelineContext wraps a handle for Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineContext.
+type PipelineContext struct {
+	HandleWrapperBase
+}
+
+// NewPipelineContext creates a new PipelineContext.
+func NewPipelineContext(handle *Handle, client *AspireClient) *PipelineContext {
+	return &PipelineContext{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// Model gets the Model property
+func (s *PipelineContext) Model() (*DistributedApplicationModel, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineContext.model", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DistributedApplicationModel), nil
+}
+
+// ExecutionContext gets the ExecutionContext property
+func (s *PipelineContext) ExecutionContext() (*DistributedApplicationExecutionContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineContext.executionContext", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DistributedApplicationExecutionContext), nil
+}
+
+// Services gets the Services property
+func (s *PipelineContext) Services() (*IServiceProvider, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineContext.services", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IServiceProvider), nil
+}
+
+// Logger gets the Logger property
+func (s *PipelineContext) Logger() (*ILogger, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineContext.logger", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ILogger), nil
+}
+
+// CancellationToken gets the CancellationToken property
+func (s *PipelineContext) CancellationToken() (*CancellationToken, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineContext.cancellationToken", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*CancellationToken), nil
+}
+
+// SetCancellationToken sets the CancellationToken property
+func (s *PipelineContext) SetCancellationToken(value *CancellationToken) (*PipelineContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	if value != nil {
+		reqArgs["value"] = RegisterCancellation(value, s.Client())
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineContext.setCancellationToken", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*PipelineContext), nil
+}
+
+// Summary gets the Summary property
+func (s *PipelineContext) Summary() (*PipelineSummary, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineContext.summary", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*PipelineSummary), nil
 }
 
 // PipelineStep wraps a handle for Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStep.
@@ -7877,6 +10230,31 @@ func (s *PipelineStep) SetTags(value *AspireList[string]) (*PipelineStep, error)
 	return result.(*PipelineStep), nil
 }
 
+// Resource gets the Resource property
+func (s *PipelineStep) Resource() (*IResource, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineStep.resource", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// SetResource sets the Resource property
+func (s *PipelineStep) SetResource(value *IResource) (*PipelineStep, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineStep.setResource", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*PipelineStep), nil
+}
+
 // DependsOn adds a dependency on another step by name
 func (s *PipelineStep) DependsOn(stepName string) error {
 	reqArgs := map[string]any{
@@ -7909,6 +10287,68 @@ func NewPipelineStepContext(handle *Handle, client *AspireClient) *PipelineStepC
 	}
 }
 
+// PipelineContext gets the PipelineContext property
+func (s *PipelineStepContext) PipelineContext() (*PipelineContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineStepContext.pipelineContext", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*PipelineContext), nil
+}
+
+// SetPipelineContext sets the PipelineContext property
+func (s *PipelineStepContext) SetPipelineContext(value *PipelineContext) (*PipelineStepContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineStepContext.setPipelineContext", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*PipelineStepContext), nil
+}
+
+// ReportingStep gets the ReportingStep property
+func (s *PipelineStepContext) ReportingStep() (*IReportingStep, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineStepContext.reportingStep", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IReportingStep), nil
+}
+
+// SetReportingStep sets the ReportingStep property
+func (s *PipelineStepContext) SetReportingStep(value *IReportingStep) (*PipelineStepContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineStepContext.setReportingStep", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*PipelineStepContext), nil
+}
+
+// Model gets the Model property
+func (s *PipelineStepContext) Model() (*DistributedApplicationModel, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineStepContext.model", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DistributedApplicationModel), nil
+}
+
 // ExecutionContext gets the ExecutionContext property
 func (s *PipelineStepContext) ExecutionContext() (*DistributedApplicationExecutionContext, error) {
 	reqArgs := map[string]any{
@@ -7921,6 +10361,30 @@ func (s *PipelineStepContext) ExecutionContext() (*DistributedApplicationExecuti
 	return result.(*DistributedApplicationExecutionContext), nil
 }
 
+// Services gets the Services property
+func (s *PipelineStepContext) Services() (*IServiceProvider, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineStepContext.services", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IServiceProvider), nil
+}
+
+// Logger gets the Logger property
+func (s *PipelineStepContext) Logger() (*ILogger, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineStepContext.logger", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ILogger), nil
+}
+
 // CancellationToken gets the CancellationToken property
 func (s *PipelineStepContext) CancellationToken() (*CancellationToken, error) {
 	reqArgs := map[string]any{
@@ -7931,6 +10395,114 @@ func (s *PipelineStepContext) CancellationToken() (*CancellationToken, error) {
 		return nil, err
 	}
 	return result.(*CancellationToken), nil
+}
+
+// Summary gets the Summary property
+func (s *PipelineStepContext) Summary() (*PipelineSummary, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineStepContext.summary", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*PipelineSummary), nil
+}
+
+// PipelineStepFactoryContext wraps a handle for Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepFactoryContext.
+type PipelineStepFactoryContext struct {
+	HandleWrapperBase
+}
+
+// NewPipelineStepFactoryContext creates a new PipelineStepFactoryContext.
+func NewPipelineStepFactoryContext(handle *Handle, client *AspireClient) *PipelineStepFactoryContext {
+	return &PipelineStepFactoryContext{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// PipelineContext gets the PipelineContext property
+func (s *PipelineStepFactoryContext) PipelineContext() (*PipelineContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineStepFactoryContext.pipelineContext", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*PipelineContext), nil
+}
+
+// SetPipelineContext sets the PipelineContext property
+func (s *PipelineStepFactoryContext) SetPipelineContext(value *PipelineContext) (*PipelineStepFactoryContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineStepFactoryContext.setPipelineContext", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*PipelineStepFactoryContext), nil
+}
+
+// Resource gets the Resource property
+func (s *PipelineStepFactoryContext) Resource() (*IResource, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineStepFactoryContext.resource", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// SetResource sets the Resource property
+func (s *PipelineStepFactoryContext) SetResource(value *IResource) (*PipelineStepFactoryContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineStepFactoryContext.setResource", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*PipelineStepFactoryContext), nil
+}
+
+// PipelineSummary wraps a handle for Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineSummary.
+type PipelineSummary struct {
+	HandleWrapperBase
+}
+
+// NewPipelineSummary creates a new PipelineSummary.
+func NewPipelineSummary(handle *Handle, client *AspireClient) *PipelineSummary {
+	return &PipelineSummary{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// Add invokes the Add method
+func (s *PipelineSummary) Add(key string, value string) error {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["key"] = SerializeValue(key)
+	reqArgs["value"] = SerializeValue(value)
+	_, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineSummary.add", reqArgs)
+	return err
+}
+
+// AddMarkdown adds a Markdown-formatted value to the pipeline summary
+func (s *PipelineSummary) AddMarkdown(key string, markdownString string) error {
+	reqArgs := map[string]any{
+		"summary": SerializeValue(s.Handle()),
+	}
+	reqArgs["key"] = SerializeValue(key)
+	reqArgs["markdownString"] = SerializeValue(markdownString)
+	_, err := s.Client().InvokeCapability("Aspire.Hosting/addMarkdown", reqArgs)
+	return err
 }
 
 // ProjectResource wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource.
@@ -7959,12 +10531,16 @@ func (s *ProjectResource) WithContainerRegistry(registry *IResource) (*IResource
 }
 
 // WithDockerfileBaseImage sets the base image for a Dockerfile build
-func (s *ProjectResource) WithDockerfileBaseImage(buildImage string, runtimeImage string) (*IResource, error) {
+func (s *ProjectResource) WithDockerfileBaseImage(buildImage *string, runtimeImage *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["buildImage"] = SerializeValue(buildImage)
-	reqArgs["runtimeImage"] = SerializeValue(runtimeImage)
+	if buildImage != nil {
+		reqArgs["buildImage"] = SerializeValue(buildImage)
+	}
+	if runtimeImage != nil {
+		reqArgs["runtimeImage"] = SerializeValue(runtimeImage)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withDockerfileBaseImage", reqArgs)
 	if err != nil {
 		return nil, err
@@ -7973,12 +10549,16 @@ func (s *ProjectResource) WithDockerfileBaseImage(buildImage string, runtimeImag
 }
 
 // WithMcpServer configures an MCP server endpoint on the resource
-func (s *ProjectResource) WithMcpServer(path string, endpointName string) (*IResourceWithEndpoints, error) {
+func (s *ProjectResource) WithMcpServer(path *string, endpointName *string) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["path"] = SerializeValue(path)
-	reqArgs["endpointName"] = SerializeValue(endpointName)
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withMcpServer", reqArgs)
 	if err != nil {
 		return nil, err
@@ -8011,13 +10591,55 @@ func (s *ProjectResource) WithOtlpExporterProtocol(protocol OtlpProtocol) (*IRes
 	return result.(*IResourceWithEnvironment), nil
 }
 
+// WithReplicas sets the number of replicas
+func (s *ProjectResource) WithReplicas(replicas float64) (*ProjectResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["replicas"] = SerializeValue(replicas)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withReplicas", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ProjectResource), nil
+}
+
+// DisableForwardedHeaders disables forwarded headers for the project
+func (s *ProjectResource) DisableForwardedHeaders() (*ProjectResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/disableForwardedHeaders", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ProjectResource), nil
+}
+
+// PublishAsDockerFile publishes a project as a Docker file with optional container configuration
+func (s *ProjectResource) PublishAsDockerFile(configure func(...any) any) (*ProjectResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if configure != nil {
+		reqArgs["configure"] = RegisterCallback(configure)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/publishProjectAsDockerFileWithConfigure", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ProjectResource), nil
+}
+
 // WithRequiredCommand adds a required command dependency
-func (s *ProjectResource) WithRequiredCommand(command string, helpLink string) (*IResource, error) {
+func (s *ProjectResource) WithRequiredCommand(command string, helpLink *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["command"] = SerializeValue(command)
-	reqArgs["helpLink"] = SerializeValue(helpLink)
+	if helpLink != nil {
+		reqArgs["helpLink"] = SerializeValue(helpLink)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withRequiredCommand", reqArgs)
 	if err != nil {
 		return nil, err
@@ -8139,41 +10761,21 @@ func (s *ProjectResource) WithArgsCallback(callback func(...any) any) (*IResourc
 }
 
 // WithReference adds a reference to another resource
-func (s *ProjectResource) WithReference(source *IResourceWithConnectionString, connectionName string, optional bool) (*IResourceWithEnvironment, error) {
+func (s *ProjectResource) WithReference(source *IResource, connectionName *string, optional *bool, name *string) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["source"] = SerializeValue(source)
-	reqArgs["connectionName"] = SerializeValue(connectionName)
-	reqArgs["optional"] = SerializeValue(optional)
+	if connectionName != nil {
+		reqArgs["connectionName"] = SerializeValue(connectionName)
+	}
+	if optional != nil {
+		reqArgs["optional"] = SerializeValue(optional)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withReference", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*IResourceWithEnvironment), nil
-}
-
-// WithServiceReference adds a service discovery reference to another resource
-func (s *ProjectResource) WithServiceReference(source *IResourceWithServiceDiscovery) (*IResourceWithEnvironment, error) {
-	reqArgs := map[string]any{
-		"builder": SerializeValue(s.Handle()),
-	}
-	reqArgs["source"] = SerializeValue(source)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withServiceReference", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*IResourceWithEnvironment), nil
-}
-
-// WithServiceReferenceNamed adds a named service discovery reference
-func (s *ProjectResource) WithServiceReferenceNamed(source *IResourceWithServiceDiscovery, name string) (*IResourceWithEnvironment, error) {
-	reqArgs := map[string]any{
-		"builder": SerializeValue(s.Handle()),
-	}
-	reqArgs["source"] = SerializeValue(source)
-	reqArgs["name"] = SerializeValue(name)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withServiceReferenceNamed", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -8221,18 +10823,34 @@ func (s *ProjectResource) WithReferenceEndpoint(endpointReference *EndpointRefer
 }
 
 // WithEndpoint adds a network endpoint
-func (s *ProjectResource) WithEndpoint(port float64, targetPort float64, scheme string, name string, env string, isProxied bool, isExternal bool, protocol ProtocolType) (*IResourceWithEndpoints, error) {
+func (s *ProjectResource) WithEndpoint(port *float64, targetPort *float64, scheme *string, name *string, env *string, isProxied *bool, isExternal *bool, protocol *ProtocolType) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["port"] = SerializeValue(port)
-	reqArgs["targetPort"] = SerializeValue(targetPort)
-	reqArgs["scheme"] = SerializeValue(scheme)
-	reqArgs["name"] = SerializeValue(name)
-	reqArgs["env"] = SerializeValue(env)
-	reqArgs["isProxied"] = SerializeValue(isProxied)
-	reqArgs["isExternal"] = SerializeValue(isExternal)
-	reqArgs["protocol"] = SerializeValue(protocol)
+	if port != nil {
+		reqArgs["port"] = SerializeValue(port)
+	}
+	if targetPort != nil {
+		reqArgs["targetPort"] = SerializeValue(targetPort)
+	}
+	if scheme != nil {
+		reqArgs["scheme"] = SerializeValue(scheme)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if env != nil {
+		reqArgs["env"] = SerializeValue(env)
+	}
+	if isProxied != nil {
+		reqArgs["isProxied"] = SerializeValue(isProxied)
+	}
+	if isExternal != nil {
+		reqArgs["isExternal"] = SerializeValue(isExternal)
+	}
+	if protocol != nil {
+		reqArgs["protocol"] = SerializeValue(protocol)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withEndpoint", reqArgs)
 	if err != nil {
 		return nil, err
@@ -8241,15 +10859,25 @@ func (s *ProjectResource) WithEndpoint(port float64, targetPort float64, scheme 
 }
 
 // WithHttpEndpoint adds an HTTP endpoint
-func (s *ProjectResource) WithHttpEndpoint(port float64, targetPort float64, name string, env string, isProxied bool) (*IResourceWithEndpoints, error) {
+func (s *ProjectResource) WithHttpEndpoint(port *float64, targetPort *float64, name *string, env *string, isProxied *bool) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["port"] = SerializeValue(port)
-	reqArgs["targetPort"] = SerializeValue(targetPort)
-	reqArgs["name"] = SerializeValue(name)
-	reqArgs["env"] = SerializeValue(env)
-	reqArgs["isProxied"] = SerializeValue(isProxied)
+	if port != nil {
+		reqArgs["port"] = SerializeValue(port)
+	}
+	if targetPort != nil {
+		reqArgs["targetPort"] = SerializeValue(targetPort)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if env != nil {
+		reqArgs["env"] = SerializeValue(env)
+	}
+	if isProxied != nil {
+		reqArgs["isProxied"] = SerializeValue(isProxied)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpEndpoint", reqArgs)
 	if err != nil {
 		return nil, err
@@ -8258,15 +10886,25 @@ func (s *ProjectResource) WithHttpEndpoint(port float64, targetPort float64, nam
 }
 
 // WithHttpsEndpoint adds an HTTPS endpoint
-func (s *ProjectResource) WithHttpsEndpoint(port float64, targetPort float64, name string, env string, isProxied bool) (*IResourceWithEndpoints, error) {
+func (s *ProjectResource) WithHttpsEndpoint(port *float64, targetPort *float64, name *string, env *string, isProxied *bool) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["port"] = SerializeValue(port)
-	reqArgs["targetPort"] = SerializeValue(targetPort)
-	reqArgs["name"] = SerializeValue(name)
-	reqArgs["env"] = SerializeValue(env)
-	reqArgs["isProxied"] = SerializeValue(isProxied)
+	if port != nil {
+		reqArgs["port"] = SerializeValue(port)
+	}
+	if targetPort != nil {
+		reqArgs["targetPort"] = SerializeValue(targetPort)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if env != nil {
+		reqArgs["env"] = SerializeValue(env)
+	}
+	if isProxied != nil {
+		reqArgs["isProxied"] = SerializeValue(isProxied)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpsEndpoint", reqArgs)
 	if err != nil {
 		return nil, err
@@ -8327,12 +10965,14 @@ func (s *ProjectResource) WithUrlsCallback(callback func(...any) any) (*IResourc
 }
 
 // WithUrl adds or modifies displayed URLs
-func (s *ProjectResource) WithUrl(url string, displayText string) (*IResource, error) {
+func (s *ProjectResource) WithUrl(url string, displayText *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["url"] = SerializeValue(url)
-	reqArgs["displayText"] = SerializeValue(displayText)
+	if displayText != nil {
+		reqArgs["displayText"] = SerializeValue(displayText)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withUrl", reqArgs)
 	if err != nil {
 		return nil, err
@@ -8341,12 +10981,14 @@ func (s *ProjectResource) WithUrl(url string, displayText string) (*IResource, e
 }
 
 // WithUrlExpression adds a URL using a reference expression
-func (s *ProjectResource) WithUrlExpression(url *ReferenceExpression, displayText string) (*IResource, error) {
+func (s *ProjectResource) WithUrlExpression(url *ReferenceExpression, displayText *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["url"] = SerializeValue(url)
-	reqArgs["displayText"] = SerializeValue(displayText)
+	if displayText != nil {
+		reqArgs["displayText"] = SerializeValue(displayText)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withUrlExpression", reqArgs)
 	if err != nil {
 		return nil, err
@@ -8479,12 +11121,14 @@ func (s *ProjectResource) WithExplicitStart() (*IResource, error) {
 }
 
 // WaitForCompletion waits for resource completion
-func (s *ProjectResource) WaitForCompletion(dependency *IResource, exitCode float64) (*IResourceWithWaitSupport, error) {
+func (s *ProjectResource) WaitForCompletion(dependency *IResource, exitCode *float64) (*IResourceWithWaitSupport, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
-	reqArgs["exitCode"] = SerializeValue(exitCode)
+	if exitCode != nil {
+		reqArgs["exitCode"] = SerializeValue(exitCode)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForCompletion", reqArgs)
 	if err != nil {
 		return nil, err
@@ -8506,13 +11150,19 @@ func (s *ProjectResource) WithHealthCheck(key string) (*IResource, error) {
 }
 
 // WithHttpHealthCheck adds an HTTP health check
-func (s *ProjectResource) WithHttpHealthCheck(path string, statusCode float64, endpointName string) (*IResourceWithEndpoints, error) {
+func (s *ProjectResource) WithHttpHealthCheck(path *string, statusCode *float64, endpointName *string) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["path"] = SerializeValue(path)
-	reqArgs["statusCode"] = SerializeValue(statusCode)
-	reqArgs["endpointName"] = SerializeValue(endpointName)
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if statusCode != nil {
+		reqArgs["statusCode"] = SerializeValue(statusCode)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpHealthCheck", reqArgs)
 	if err != nil {
 		return nil, err
@@ -8620,12 +11270,14 @@ func (s *ProjectResource) WithChildRelationship(child *IResource) (*IResource, e
 }
 
 // WithIconName sets the icon for the resource
-func (s *ProjectResource) WithIconName(iconName string, iconVariant IconVariant) (*IResource, error) {
+func (s *ProjectResource) WithIconName(iconName string, iconVariant *IconVariant) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["iconName"] = SerializeValue(iconName)
-	reqArgs["iconVariant"] = SerializeValue(iconVariant)
+	if iconVariant != nil {
+		reqArgs["iconVariant"] = SerializeValue(iconVariant)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withIconName", reqArgs)
 	if err != nil {
 		return nil, err
@@ -8634,18 +11286,32 @@ func (s *ProjectResource) WithIconName(iconName string, iconVariant IconVariant)
 }
 
 // WithHttpProbe adds an HTTP health probe to the resource
-func (s *ProjectResource) WithHttpProbe(probeType ProbeType, path string, initialDelaySeconds float64, periodSeconds float64, timeoutSeconds float64, failureThreshold float64, successThreshold float64, endpointName string) (*IResourceWithEndpoints, error) {
+func (s *ProjectResource) WithHttpProbe(probeType ProbeType, path *string, initialDelaySeconds *float64, periodSeconds *float64, timeoutSeconds *float64, failureThreshold *float64, successThreshold *float64, endpointName *string) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["probeType"] = SerializeValue(probeType)
-	reqArgs["path"] = SerializeValue(path)
-	reqArgs["initialDelaySeconds"] = SerializeValue(initialDelaySeconds)
-	reqArgs["periodSeconds"] = SerializeValue(periodSeconds)
-	reqArgs["timeoutSeconds"] = SerializeValue(timeoutSeconds)
-	reqArgs["failureThreshold"] = SerializeValue(failureThreshold)
-	reqArgs["successThreshold"] = SerializeValue(successThreshold)
-	reqArgs["endpointName"] = SerializeValue(endpointName)
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if initialDelaySeconds != nil {
+		reqArgs["initialDelaySeconds"] = SerializeValue(initialDelaySeconds)
+	}
+	if periodSeconds != nil {
+		reqArgs["periodSeconds"] = SerializeValue(periodSeconds)
+	}
+	if timeoutSeconds != nil {
+		reqArgs["timeoutSeconds"] = SerializeValue(timeoutSeconds)
+	}
+	if failureThreshold != nil {
+		reqArgs["failureThreshold"] = SerializeValue(failureThreshold)
+	}
+	if successThreshold != nil {
+		reqArgs["successThreshold"] = SerializeValue(successThreshold)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpProbe", reqArgs)
 	if err != nil {
 		return nil, err
@@ -8692,7 +11358,7 @@ func (s *ProjectResource) WithRemoteImageTag(remoteImageTag string) (*IComputeRe
 }
 
 // WithPipelineStepFactory adds a pipeline step to the resource
-func (s *ProjectResource) WithPipelineStepFactory(stepName string, callback func(...any) any, dependsOn []string, requiredBy []string, tags []string, description string) (*IResource, error) {
+func (s *ProjectResource) WithPipelineStepFactory(stepName string, callback func(...any) any, dependsOn []string, requiredBy []string, tags []string, description *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
@@ -8700,10 +11366,18 @@ func (s *ProjectResource) WithPipelineStepFactory(stepName string, callback func
 	if callback != nil {
 		reqArgs["callback"] = RegisterCallback(callback)
 	}
-	reqArgs["dependsOn"] = SerializeValue(dependsOn)
-	reqArgs["requiredBy"] = SerializeValue(requiredBy)
-	reqArgs["tags"] = SerializeValue(tags)
-	reqArgs["description"] = SerializeValue(description)
+	if dependsOn != nil {
+		reqArgs["dependsOn"] = SerializeValue(dependsOn)
+	}
+	if requiredBy != nil {
+		reqArgs["requiredBy"] = SerializeValue(requiredBy)
+	}
+	if tags != nil {
+		reqArgs["tags"] = SerializeValue(tags)
+	}
+	if description != nil {
+		reqArgs["description"] = SerializeValue(description)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withPipelineStepFactory", reqArgs)
 	if err != nil {
 		return nil, err
@@ -8753,13 +11427,92 @@ func (s *ProjectResource) GetResourceName() (*string, error) {
 	return result.(*string), nil
 }
 
-// WithOptionalString adds an optional string parameter
-func (s *ProjectResource) WithOptionalString(value string, enabled bool) (*IResource, error) {
+// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event
+func (s *ProjectResource) OnBeforeResourceStarted(callback func(...any) any) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["value"] = SerializeValue(value)
-	reqArgs["enabled"] = SerializeValue(enabled)
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onBeforeResourceStarted", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnResourceStopped subscribes to the ResourceStopped event
+func (s *ProjectResource) OnResourceStopped(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceStopped", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnInitializeResource subscribes to the InitializeResource event
+func (s *ProjectResource) OnInitializeResource(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onInitializeResource", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated event
+func (s *ProjectResource) OnResourceEndpointsAllocated(callback func(...any) any) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceEndpointsAllocated", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
+}
+
+// OnResourceReady subscribes to the ResourceReady event
+func (s *ProjectResource) OnResourceReady(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceReady", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithOptionalString adds an optional string parameter
+func (s *ProjectResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if value != nil {
+		reqArgs["value"] = SerializeValue(value)
+	}
+	if enabled != nil {
+		reqArgs["enabled"] = SerializeValue(enabled)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalString", reqArgs)
 	if err != nil {
 		return nil, err
@@ -9079,23 +11832,27 @@ func (s *ReferenceExpressionBuilder) AppendLiteral(value string) error {
 }
 
 // AppendFormatted appends a formatted string value to the reference expression
-func (s *ReferenceExpressionBuilder) AppendFormatted(value string, format string) error {
+func (s *ReferenceExpressionBuilder) AppendFormatted(value string, format *string) error {
 	reqArgs := map[string]any{
 		"context": SerializeValue(s.Handle()),
 	}
 	reqArgs["value"] = SerializeValue(value)
-	reqArgs["format"] = SerializeValue(format)
+	if format != nil {
+		reqArgs["format"] = SerializeValue(format)
+	}
 	_, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/appendFormatted", reqArgs)
 	return err
 }
 
 // AppendValueProvider appends a value provider to the reference expression
-func (s *ReferenceExpressionBuilder) AppendValueProvider(valueProvider any, format string) error {
+func (s *ReferenceExpressionBuilder) AppendValueProvider(valueProvider any, format *string) error {
 	reqArgs := map[string]any{
 		"context": SerializeValue(s.Handle()),
 	}
 	reqArgs["valueProvider"] = SerializeValue(valueProvider)
-	reqArgs["format"] = SerializeValue(format)
+	if format != nil {
+		reqArgs["format"] = SerializeValue(format)
+	}
 	_, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/appendValueProvider", reqArgs)
 	return err
 }
@@ -9110,6 +11867,42 @@ func (s *ReferenceExpressionBuilder) Build() (*ReferenceExpression, error) {
 		return nil, err
 	}
 	return result.(*ReferenceExpression), nil
+}
+
+// ResourceEndpointsAllocatedEvent wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceEndpointsAllocatedEvent.
+type ResourceEndpointsAllocatedEvent struct {
+	HandleWrapperBase
+}
+
+// NewResourceEndpointsAllocatedEvent creates a new ResourceEndpointsAllocatedEvent.
+func NewResourceEndpointsAllocatedEvent(handle *Handle, client *AspireClient) *ResourceEndpointsAllocatedEvent {
+	return &ResourceEndpointsAllocatedEvent{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// Resource gets the Resource property
+func (s *ResourceEndpointsAllocatedEvent) Resource() (*IResource, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ResourceEndpointsAllocatedEvent.resource", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// Services gets the Services property
+func (s *ResourceEndpointsAllocatedEvent) Services() (*IServiceProvider, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ResourceEndpointsAllocatedEvent.services", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IServiceProvider), nil
 }
 
 // ResourceLoggerService wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceLoggerService.
@@ -9157,12 +11950,14 @@ func NewResourceNotificationService(handle *Handle, client *AspireClient) *Resou
 }
 
 // WaitForResourceState waits for a resource to reach a specified state
-func (s *ResourceNotificationService) WaitForResourceState(resourceName string, targetState string) error {
+func (s *ResourceNotificationService) WaitForResourceState(resourceName string, targetState *string) error {
 	reqArgs := map[string]any{
 		"notificationService": SerializeValue(s.Handle()),
 	}
 	reqArgs["resourceName"] = SerializeValue(resourceName)
-	reqArgs["targetState"] = SerializeValue(targetState)
+	if targetState != nil {
+		reqArgs["targetState"] = SerializeValue(targetState)
+	}
 	_, err := s.Client().InvokeCapability("Aspire.Hosting/waitForResourceState", reqArgs)
 	return err
 }
@@ -9218,15 +12013,91 @@ func (s *ResourceNotificationService) TryGetResourceState(resourceName string) (
 }
 
 // PublishResourceUpdate publishes an update for a resource's state
-func (s *ResourceNotificationService) PublishResourceUpdate(resource *IResource, state string, stateStyle string) error {
+func (s *ResourceNotificationService) PublishResourceUpdate(resource *IResource, state *string, stateStyle *string) error {
 	reqArgs := map[string]any{
 		"notificationService": SerializeValue(s.Handle()),
 	}
 	reqArgs["resource"] = SerializeValue(resource)
-	reqArgs["state"] = SerializeValue(state)
-	reqArgs["stateStyle"] = SerializeValue(stateStyle)
+	if state != nil {
+		reqArgs["state"] = SerializeValue(state)
+	}
+	if stateStyle != nil {
+		reqArgs["stateStyle"] = SerializeValue(stateStyle)
+	}
 	_, err := s.Client().InvokeCapability("Aspire.Hosting/publishResourceUpdate", reqArgs)
 	return err
+}
+
+// ResourceReadyEvent wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceReadyEvent.
+type ResourceReadyEvent struct {
+	HandleWrapperBase
+}
+
+// NewResourceReadyEvent creates a new ResourceReadyEvent.
+func NewResourceReadyEvent(handle *Handle, client *AspireClient) *ResourceReadyEvent {
+	return &ResourceReadyEvent{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// Resource gets the Resource property
+func (s *ResourceReadyEvent) Resource() (*IResource, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ResourceReadyEvent.resource", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// Services gets the Services property
+func (s *ResourceReadyEvent) Services() (*IServiceProvider, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ResourceReadyEvent.services", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IServiceProvider), nil
+}
+
+// ResourceStoppedEvent wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceStoppedEvent.
+type ResourceStoppedEvent struct {
+	HandleWrapperBase
+}
+
+// NewResourceStoppedEvent creates a new ResourceStoppedEvent.
+func NewResourceStoppedEvent(handle *Handle, client *AspireClient) *ResourceStoppedEvent {
+	return &ResourceStoppedEvent{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// Resource gets the Resource property
+func (s *ResourceStoppedEvent) Resource() (*IResource, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ResourceStoppedEvent.resource", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// Services gets the Services property
+func (s *ResourceStoppedEvent) Services() (*IServiceProvider, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ResourceStoppedEvent.services", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IServiceProvider), nil
 }
 
 // ResourceUrlsCallbackContext wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext.
@@ -9240,6 +12111,18 @@ func NewResourceUrlsCallbackContext(handle *Handle, client *AspireClient) *Resou
 	return &ResourceUrlsCallbackContext{
 		HandleWrapperBase: NewHandleWrapperBase(handle, client),
 	}
+}
+
+// Resource gets the Resource property
+func (s *ResourceUrlsCallbackContext) Resource() (*IResource, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.resource", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
 }
 
 // Urls gets the Urls property
@@ -9260,6 +12143,31 @@ func (s *ResourceUrlsCallbackContext) CancellationToken() (*CancellationToken, e
 		return nil, err
 	}
 	return result.(*CancellationToken), nil
+}
+
+// Logger gets the Logger property
+func (s *ResourceUrlsCallbackContext) Logger() (*ILogger, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.logger", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ILogger), nil
+}
+
+// SetLogger sets the Logger property
+func (s *ResourceUrlsCallbackContext) SetLogger(value *ILogger) (*ResourceUrlsCallbackContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.setLogger", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ResourceUrlsCallbackContext), nil
 }
 
 // ExecutionContext gets the ExecutionContext property
@@ -9419,13 +12327,15 @@ func (s *TestDatabaseResource) WithContainerRegistry(registry *IResource) (*IRes
 }
 
 // WithBindMount adds a bind mount
-func (s *TestDatabaseResource) WithBindMount(source string, target string, isReadOnly bool) (*ContainerResource, error) {
+func (s *TestDatabaseResource) WithBindMount(source string, target string, isReadOnly *bool) (*ContainerResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["source"] = SerializeValue(source)
 	reqArgs["target"] = SerializeValue(target)
-	reqArgs["isReadOnly"] = SerializeValue(isReadOnly)
+	if isReadOnly != nil {
+		reqArgs["isReadOnly"] = SerializeValue(isReadOnly)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBindMount", reqArgs)
 	if err != nil {
 		return nil, err
@@ -9473,12 +12383,14 @@ func (s *TestDatabaseResource) WithImageRegistry(registry string) (*ContainerRes
 }
 
 // WithImage sets the container image
-func (s *TestDatabaseResource) WithImage(image string, tag string) (*ContainerResource, error) {
+func (s *TestDatabaseResource) WithImage(image string, tag *string) (*ContainerResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["image"] = SerializeValue(image)
-	reqArgs["tag"] = SerializeValue(tag)
+	if tag != nil {
+		reqArgs["tag"] = SerializeValue(tag)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withImage", reqArgs)
 	if err != nil {
 		return nil, err
@@ -9551,13 +12463,17 @@ func (s *TestDatabaseResource) PublishAsContainer() (*ContainerResource, error) 
 }
 
 // WithDockerfile configures the resource to use a Dockerfile
-func (s *TestDatabaseResource) WithDockerfile(contextPath string, dockerfilePath string, stage string) (*ContainerResource, error) {
+func (s *TestDatabaseResource) WithDockerfile(contextPath string, dockerfilePath *string, stage *string) (*ContainerResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["contextPath"] = SerializeValue(contextPath)
-	reqArgs["dockerfilePath"] = SerializeValue(dockerfilePath)
-	reqArgs["stage"] = SerializeValue(stage)
+	if dockerfilePath != nil {
+		reqArgs["dockerfilePath"] = SerializeValue(dockerfilePath)
+	}
+	if stage != nil {
+		reqArgs["stage"] = SerializeValue(stage)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withDockerfile", reqArgs)
 	if err != nil {
 		return nil, err
@@ -9620,12 +12536,16 @@ func (s *TestDatabaseResource) WithEndpointProxySupport(proxyEnabled bool) (*Con
 }
 
 // WithDockerfileBaseImage sets the base image for a Dockerfile build
-func (s *TestDatabaseResource) WithDockerfileBaseImage(buildImage string, runtimeImage string) (*IResource, error) {
+func (s *TestDatabaseResource) WithDockerfileBaseImage(buildImage *string, runtimeImage *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["buildImage"] = SerializeValue(buildImage)
-	reqArgs["runtimeImage"] = SerializeValue(runtimeImage)
+	if buildImage != nil {
+		reqArgs["buildImage"] = SerializeValue(buildImage)
+	}
+	if runtimeImage != nil {
+		reqArgs["runtimeImage"] = SerializeValue(runtimeImage)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withDockerfileBaseImage", reqArgs)
 	if err != nil {
 		return nil, err
@@ -9647,12 +12567,16 @@ func (s *TestDatabaseResource) WithContainerNetworkAlias(alias string) (*Contain
 }
 
 // WithMcpServer configures an MCP server endpoint on the resource
-func (s *TestDatabaseResource) WithMcpServer(path string, endpointName string) (*IResourceWithEndpoints, error) {
+func (s *TestDatabaseResource) WithMcpServer(path *string, endpointName *string) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["path"] = SerializeValue(path)
-	reqArgs["endpointName"] = SerializeValue(endpointName)
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withMcpServer", reqArgs)
 	if err != nil {
 		return nil, err
@@ -9698,12 +12622,14 @@ func (s *TestDatabaseResource) PublishAsConnectionString() (*ContainerResource, 
 }
 
 // WithRequiredCommand adds a required command dependency
-func (s *TestDatabaseResource) WithRequiredCommand(command string, helpLink string) (*IResource, error) {
+func (s *TestDatabaseResource) WithRequiredCommand(command string, helpLink *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["command"] = SerializeValue(command)
-	reqArgs["helpLink"] = SerializeValue(helpLink)
+	if helpLink != nil {
+		reqArgs["helpLink"] = SerializeValue(helpLink)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withRequiredCommand", reqArgs)
 	if err != nil {
 		return nil, err
@@ -9825,41 +12751,21 @@ func (s *TestDatabaseResource) WithArgsCallback(callback func(...any) any) (*IRe
 }
 
 // WithReference adds a reference to another resource
-func (s *TestDatabaseResource) WithReference(source *IResourceWithConnectionString, connectionName string, optional bool) (*IResourceWithEnvironment, error) {
+func (s *TestDatabaseResource) WithReference(source *IResource, connectionName *string, optional *bool, name *string) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["source"] = SerializeValue(source)
-	reqArgs["connectionName"] = SerializeValue(connectionName)
-	reqArgs["optional"] = SerializeValue(optional)
+	if connectionName != nil {
+		reqArgs["connectionName"] = SerializeValue(connectionName)
+	}
+	if optional != nil {
+		reqArgs["optional"] = SerializeValue(optional)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withReference", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*IResourceWithEnvironment), nil
-}
-
-// WithServiceReference adds a service discovery reference to another resource
-func (s *TestDatabaseResource) WithServiceReference(source *IResourceWithServiceDiscovery) (*IResourceWithEnvironment, error) {
-	reqArgs := map[string]any{
-		"builder": SerializeValue(s.Handle()),
-	}
-	reqArgs["source"] = SerializeValue(source)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withServiceReference", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*IResourceWithEnvironment), nil
-}
-
-// WithServiceReferenceNamed adds a named service discovery reference
-func (s *TestDatabaseResource) WithServiceReferenceNamed(source *IResourceWithServiceDiscovery, name string) (*IResourceWithEnvironment, error) {
-	reqArgs := map[string]any{
-		"builder": SerializeValue(s.Handle()),
-	}
-	reqArgs["source"] = SerializeValue(source)
-	reqArgs["name"] = SerializeValue(name)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withServiceReferenceNamed", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -9907,18 +12813,34 @@ func (s *TestDatabaseResource) WithReferenceEndpoint(endpointReference *Endpoint
 }
 
 // WithEndpoint adds a network endpoint
-func (s *TestDatabaseResource) WithEndpoint(port float64, targetPort float64, scheme string, name string, env string, isProxied bool, isExternal bool, protocol ProtocolType) (*IResourceWithEndpoints, error) {
+func (s *TestDatabaseResource) WithEndpoint(port *float64, targetPort *float64, scheme *string, name *string, env *string, isProxied *bool, isExternal *bool, protocol *ProtocolType) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["port"] = SerializeValue(port)
-	reqArgs["targetPort"] = SerializeValue(targetPort)
-	reqArgs["scheme"] = SerializeValue(scheme)
-	reqArgs["name"] = SerializeValue(name)
-	reqArgs["env"] = SerializeValue(env)
-	reqArgs["isProxied"] = SerializeValue(isProxied)
-	reqArgs["isExternal"] = SerializeValue(isExternal)
-	reqArgs["protocol"] = SerializeValue(protocol)
+	if port != nil {
+		reqArgs["port"] = SerializeValue(port)
+	}
+	if targetPort != nil {
+		reqArgs["targetPort"] = SerializeValue(targetPort)
+	}
+	if scheme != nil {
+		reqArgs["scheme"] = SerializeValue(scheme)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if env != nil {
+		reqArgs["env"] = SerializeValue(env)
+	}
+	if isProxied != nil {
+		reqArgs["isProxied"] = SerializeValue(isProxied)
+	}
+	if isExternal != nil {
+		reqArgs["isExternal"] = SerializeValue(isExternal)
+	}
+	if protocol != nil {
+		reqArgs["protocol"] = SerializeValue(protocol)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withEndpoint", reqArgs)
 	if err != nil {
 		return nil, err
@@ -9927,15 +12849,25 @@ func (s *TestDatabaseResource) WithEndpoint(port float64, targetPort float64, sc
 }
 
 // WithHttpEndpoint adds an HTTP endpoint
-func (s *TestDatabaseResource) WithHttpEndpoint(port float64, targetPort float64, name string, env string, isProxied bool) (*IResourceWithEndpoints, error) {
+func (s *TestDatabaseResource) WithHttpEndpoint(port *float64, targetPort *float64, name *string, env *string, isProxied *bool) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["port"] = SerializeValue(port)
-	reqArgs["targetPort"] = SerializeValue(targetPort)
-	reqArgs["name"] = SerializeValue(name)
-	reqArgs["env"] = SerializeValue(env)
-	reqArgs["isProxied"] = SerializeValue(isProxied)
+	if port != nil {
+		reqArgs["port"] = SerializeValue(port)
+	}
+	if targetPort != nil {
+		reqArgs["targetPort"] = SerializeValue(targetPort)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if env != nil {
+		reqArgs["env"] = SerializeValue(env)
+	}
+	if isProxied != nil {
+		reqArgs["isProxied"] = SerializeValue(isProxied)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpEndpoint", reqArgs)
 	if err != nil {
 		return nil, err
@@ -9944,15 +12876,25 @@ func (s *TestDatabaseResource) WithHttpEndpoint(port float64, targetPort float64
 }
 
 // WithHttpsEndpoint adds an HTTPS endpoint
-func (s *TestDatabaseResource) WithHttpsEndpoint(port float64, targetPort float64, name string, env string, isProxied bool) (*IResourceWithEndpoints, error) {
+func (s *TestDatabaseResource) WithHttpsEndpoint(port *float64, targetPort *float64, name *string, env *string, isProxied *bool) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["port"] = SerializeValue(port)
-	reqArgs["targetPort"] = SerializeValue(targetPort)
-	reqArgs["name"] = SerializeValue(name)
-	reqArgs["env"] = SerializeValue(env)
-	reqArgs["isProxied"] = SerializeValue(isProxied)
+	if port != nil {
+		reqArgs["port"] = SerializeValue(port)
+	}
+	if targetPort != nil {
+		reqArgs["targetPort"] = SerializeValue(targetPort)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if env != nil {
+		reqArgs["env"] = SerializeValue(env)
+	}
+	if isProxied != nil {
+		reqArgs["isProxied"] = SerializeValue(isProxied)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpsEndpoint", reqArgs)
 	if err != nil {
 		return nil, err
@@ -10013,12 +12955,14 @@ func (s *TestDatabaseResource) WithUrlsCallback(callback func(...any) any) (*IRe
 }
 
 // WithUrl adds or modifies displayed URLs
-func (s *TestDatabaseResource) WithUrl(url string, displayText string) (*IResource, error) {
+func (s *TestDatabaseResource) WithUrl(url string, displayText *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["url"] = SerializeValue(url)
-	reqArgs["displayText"] = SerializeValue(displayText)
+	if displayText != nil {
+		reqArgs["displayText"] = SerializeValue(displayText)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withUrl", reqArgs)
 	if err != nil {
 		return nil, err
@@ -10027,12 +12971,14 @@ func (s *TestDatabaseResource) WithUrl(url string, displayText string) (*IResour
 }
 
 // WithUrlExpression adds a URL using a reference expression
-func (s *TestDatabaseResource) WithUrlExpression(url *ReferenceExpression, displayText string) (*IResource, error) {
+func (s *TestDatabaseResource) WithUrlExpression(url *ReferenceExpression, displayText *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["url"] = SerializeValue(url)
-	reqArgs["displayText"] = SerializeValue(displayText)
+	if displayText != nil {
+		reqArgs["displayText"] = SerializeValue(displayText)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withUrlExpression", reqArgs)
 	if err != nil {
 		return nil, err
@@ -10151,12 +13097,14 @@ func (s *TestDatabaseResource) WithExplicitStart() (*IResource, error) {
 }
 
 // WaitForCompletion waits for resource completion
-func (s *TestDatabaseResource) WaitForCompletion(dependency *IResource, exitCode float64) (*IResourceWithWaitSupport, error) {
+func (s *TestDatabaseResource) WaitForCompletion(dependency *IResource, exitCode *float64) (*IResourceWithWaitSupport, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
-	reqArgs["exitCode"] = SerializeValue(exitCode)
+	if exitCode != nil {
+		reqArgs["exitCode"] = SerializeValue(exitCode)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForCompletion", reqArgs)
 	if err != nil {
 		return nil, err
@@ -10178,13 +13126,19 @@ func (s *TestDatabaseResource) WithHealthCheck(key string) (*IResource, error) {
 }
 
 // WithHttpHealthCheck adds an HTTP health check
-func (s *TestDatabaseResource) WithHttpHealthCheck(path string, statusCode float64, endpointName string) (*IResourceWithEndpoints, error) {
+func (s *TestDatabaseResource) WithHttpHealthCheck(path *string, statusCode *float64, endpointName *string) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["path"] = SerializeValue(path)
-	reqArgs["statusCode"] = SerializeValue(statusCode)
-	reqArgs["endpointName"] = SerializeValue(endpointName)
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if statusCode != nil {
+		reqArgs["statusCode"] = SerializeValue(statusCode)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpHealthCheck", reqArgs)
 	if err != nil {
 		return nil, err
@@ -10292,12 +13246,14 @@ func (s *TestDatabaseResource) WithChildRelationship(child *IResource) (*IResour
 }
 
 // WithIconName sets the icon for the resource
-func (s *TestDatabaseResource) WithIconName(iconName string, iconVariant IconVariant) (*IResource, error) {
+func (s *TestDatabaseResource) WithIconName(iconName string, iconVariant *IconVariant) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["iconName"] = SerializeValue(iconName)
-	reqArgs["iconVariant"] = SerializeValue(iconVariant)
+	if iconVariant != nil {
+		reqArgs["iconVariant"] = SerializeValue(iconVariant)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withIconName", reqArgs)
 	if err != nil {
 		return nil, err
@@ -10306,18 +13262,32 @@ func (s *TestDatabaseResource) WithIconName(iconName string, iconVariant IconVar
 }
 
 // WithHttpProbe adds an HTTP health probe to the resource
-func (s *TestDatabaseResource) WithHttpProbe(probeType ProbeType, path string, initialDelaySeconds float64, periodSeconds float64, timeoutSeconds float64, failureThreshold float64, successThreshold float64, endpointName string) (*IResourceWithEndpoints, error) {
+func (s *TestDatabaseResource) WithHttpProbe(probeType ProbeType, path *string, initialDelaySeconds *float64, periodSeconds *float64, timeoutSeconds *float64, failureThreshold *float64, successThreshold *float64, endpointName *string) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["probeType"] = SerializeValue(probeType)
-	reqArgs["path"] = SerializeValue(path)
-	reqArgs["initialDelaySeconds"] = SerializeValue(initialDelaySeconds)
-	reqArgs["periodSeconds"] = SerializeValue(periodSeconds)
-	reqArgs["timeoutSeconds"] = SerializeValue(timeoutSeconds)
-	reqArgs["failureThreshold"] = SerializeValue(failureThreshold)
-	reqArgs["successThreshold"] = SerializeValue(successThreshold)
-	reqArgs["endpointName"] = SerializeValue(endpointName)
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if initialDelaySeconds != nil {
+		reqArgs["initialDelaySeconds"] = SerializeValue(initialDelaySeconds)
+	}
+	if periodSeconds != nil {
+		reqArgs["periodSeconds"] = SerializeValue(periodSeconds)
+	}
+	if timeoutSeconds != nil {
+		reqArgs["timeoutSeconds"] = SerializeValue(timeoutSeconds)
+	}
+	if failureThreshold != nil {
+		reqArgs["failureThreshold"] = SerializeValue(failureThreshold)
+	}
+	if successThreshold != nil {
+		reqArgs["successThreshold"] = SerializeValue(successThreshold)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpProbe", reqArgs)
 	if err != nil {
 		return nil, err
@@ -10364,7 +13334,7 @@ func (s *TestDatabaseResource) WithRemoteImageTag(remoteImageTag string) (*IComp
 }
 
 // WithPipelineStepFactory adds a pipeline step to the resource
-func (s *TestDatabaseResource) WithPipelineStepFactory(stepName string, callback func(...any) any, dependsOn []string, requiredBy []string, tags []string, description string) (*IResource, error) {
+func (s *TestDatabaseResource) WithPipelineStepFactory(stepName string, callback func(...any) any, dependsOn []string, requiredBy []string, tags []string, description *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
@@ -10372,10 +13342,18 @@ func (s *TestDatabaseResource) WithPipelineStepFactory(stepName string, callback
 	if callback != nil {
 		reqArgs["callback"] = RegisterCallback(callback)
 	}
-	reqArgs["dependsOn"] = SerializeValue(dependsOn)
-	reqArgs["requiredBy"] = SerializeValue(requiredBy)
-	reqArgs["tags"] = SerializeValue(tags)
-	reqArgs["description"] = SerializeValue(description)
+	if dependsOn != nil {
+		reqArgs["dependsOn"] = SerializeValue(dependsOn)
+	}
+	if requiredBy != nil {
+		reqArgs["requiredBy"] = SerializeValue(requiredBy)
+	}
+	if tags != nil {
+		reqArgs["tags"] = SerializeValue(tags)
+	}
+	if description != nil {
+		reqArgs["description"] = SerializeValue(description)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withPipelineStepFactory", reqArgs)
 	if err != nil {
 		return nil, err
@@ -10414,13 +13392,17 @@ func (s *TestDatabaseResource) WithPipelineConfiguration(callback func(...any) a
 }
 
 // WithVolume adds a volume
-func (s *TestDatabaseResource) WithVolume(target string, name string, isReadOnly bool) (*ContainerResource, error) {
+func (s *TestDatabaseResource) WithVolume(target string, name *string, isReadOnly *bool) (*ContainerResource, error) {
 	reqArgs := map[string]any{
 		"resource": SerializeValue(s.Handle()),
 	}
 	reqArgs["target"] = SerializeValue(target)
-	reqArgs["name"] = SerializeValue(name)
-	reqArgs["isReadOnly"] = SerializeValue(isReadOnly)
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if isReadOnly != nil {
+		reqArgs["isReadOnly"] = SerializeValue(isReadOnly)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withVolume", reqArgs)
 	if err != nil {
 		return nil, err
@@ -10440,13 +13422,92 @@ func (s *TestDatabaseResource) GetResourceName() (*string, error) {
 	return result.(*string), nil
 }
 
-// WithOptionalString adds an optional string parameter
-func (s *TestDatabaseResource) WithOptionalString(value string, enabled bool) (*IResource, error) {
+// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event
+func (s *TestDatabaseResource) OnBeforeResourceStarted(callback func(...any) any) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["value"] = SerializeValue(value)
-	reqArgs["enabled"] = SerializeValue(enabled)
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onBeforeResourceStarted", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnResourceStopped subscribes to the ResourceStopped event
+func (s *TestDatabaseResource) OnResourceStopped(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceStopped", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnInitializeResource subscribes to the InitializeResource event
+func (s *TestDatabaseResource) OnInitializeResource(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onInitializeResource", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated event
+func (s *TestDatabaseResource) OnResourceEndpointsAllocated(callback func(...any) any) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceEndpointsAllocated", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
+}
+
+// OnResourceReady subscribes to the ResourceReady event
+func (s *TestDatabaseResource) OnResourceReady(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceReady", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithOptionalString adds an optional string parameter
+func (s *TestDatabaseResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if value != nil {
+		reqArgs["value"] = SerializeValue(value)
+	}
+	if enabled != nil {
+		reqArgs["enabled"] = SerializeValue(enabled)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalString", reqArgs)
 	if err != nil {
 		return nil, err
@@ -10759,13 +13820,15 @@ func (s *TestRedisResource) WithContainerRegistry(registry *IResource) (*IResour
 }
 
 // WithBindMount adds a bind mount
-func (s *TestRedisResource) WithBindMount(source string, target string, isReadOnly bool) (*ContainerResource, error) {
+func (s *TestRedisResource) WithBindMount(source string, target string, isReadOnly *bool) (*ContainerResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["source"] = SerializeValue(source)
 	reqArgs["target"] = SerializeValue(target)
-	reqArgs["isReadOnly"] = SerializeValue(isReadOnly)
+	if isReadOnly != nil {
+		reqArgs["isReadOnly"] = SerializeValue(isReadOnly)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBindMount", reqArgs)
 	if err != nil {
 		return nil, err
@@ -10813,12 +13876,14 @@ func (s *TestRedisResource) WithImageRegistry(registry string) (*ContainerResour
 }
 
 // WithImage sets the container image
-func (s *TestRedisResource) WithImage(image string, tag string) (*ContainerResource, error) {
+func (s *TestRedisResource) WithImage(image string, tag *string) (*ContainerResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["image"] = SerializeValue(image)
-	reqArgs["tag"] = SerializeValue(tag)
+	if tag != nil {
+		reqArgs["tag"] = SerializeValue(tag)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withImage", reqArgs)
 	if err != nil {
 		return nil, err
@@ -10891,13 +13956,17 @@ func (s *TestRedisResource) PublishAsContainer() (*ContainerResource, error) {
 }
 
 // WithDockerfile configures the resource to use a Dockerfile
-func (s *TestRedisResource) WithDockerfile(contextPath string, dockerfilePath string, stage string) (*ContainerResource, error) {
+func (s *TestRedisResource) WithDockerfile(contextPath string, dockerfilePath *string, stage *string) (*ContainerResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["contextPath"] = SerializeValue(contextPath)
-	reqArgs["dockerfilePath"] = SerializeValue(dockerfilePath)
-	reqArgs["stage"] = SerializeValue(stage)
+	if dockerfilePath != nil {
+		reqArgs["dockerfilePath"] = SerializeValue(dockerfilePath)
+	}
+	if stage != nil {
+		reqArgs["stage"] = SerializeValue(stage)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withDockerfile", reqArgs)
 	if err != nil {
 		return nil, err
@@ -10960,12 +14029,16 @@ func (s *TestRedisResource) WithEndpointProxySupport(proxyEnabled bool) (*Contai
 }
 
 // WithDockerfileBaseImage sets the base image for a Dockerfile build
-func (s *TestRedisResource) WithDockerfileBaseImage(buildImage string, runtimeImage string) (*IResource, error) {
+func (s *TestRedisResource) WithDockerfileBaseImage(buildImage *string, runtimeImage *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["buildImage"] = SerializeValue(buildImage)
-	reqArgs["runtimeImage"] = SerializeValue(runtimeImage)
+	if buildImage != nil {
+		reqArgs["buildImage"] = SerializeValue(buildImage)
+	}
+	if runtimeImage != nil {
+		reqArgs["runtimeImage"] = SerializeValue(runtimeImage)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withDockerfileBaseImage", reqArgs)
 	if err != nil {
 		return nil, err
@@ -10987,12 +14060,16 @@ func (s *TestRedisResource) WithContainerNetworkAlias(alias string) (*ContainerR
 }
 
 // WithMcpServer configures an MCP server endpoint on the resource
-func (s *TestRedisResource) WithMcpServer(path string, endpointName string) (*IResourceWithEndpoints, error) {
+func (s *TestRedisResource) WithMcpServer(path *string, endpointName *string) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["path"] = SerializeValue(path)
-	reqArgs["endpointName"] = SerializeValue(endpointName)
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withMcpServer", reqArgs)
 	if err != nil {
 		return nil, err
@@ -11038,12 +14115,14 @@ func (s *TestRedisResource) PublishAsConnectionString() (*ContainerResource, err
 }
 
 // WithRequiredCommand adds a required command dependency
-func (s *TestRedisResource) WithRequiredCommand(command string, helpLink string) (*IResource, error) {
+func (s *TestRedisResource) WithRequiredCommand(command string, helpLink *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["command"] = SerializeValue(command)
-	reqArgs["helpLink"] = SerializeValue(helpLink)
+	if helpLink != nil {
+		reqArgs["helpLink"] = SerializeValue(helpLink)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withRequiredCommand", reqArgs)
 	if err != nil {
 		return nil, err
@@ -11193,41 +14272,21 @@ func (s *TestRedisResource) WithArgsCallback(callback func(...any) any) (*IResou
 }
 
 // WithReference adds a reference to another resource
-func (s *TestRedisResource) WithReference(source *IResourceWithConnectionString, connectionName string, optional bool) (*IResourceWithEnvironment, error) {
+func (s *TestRedisResource) WithReference(source *IResource, connectionName *string, optional *bool, name *string) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["source"] = SerializeValue(source)
-	reqArgs["connectionName"] = SerializeValue(connectionName)
-	reqArgs["optional"] = SerializeValue(optional)
+	if connectionName != nil {
+		reqArgs["connectionName"] = SerializeValue(connectionName)
+	}
+	if optional != nil {
+		reqArgs["optional"] = SerializeValue(optional)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withReference", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*IResourceWithEnvironment), nil
-}
-
-// WithServiceReference adds a service discovery reference to another resource
-func (s *TestRedisResource) WithServiceReference(source *IResourceWithServiceDiscovery) (*IResourceWithEnvironment, error) {
-	reqArgs := map[string]any{
-		"builder": SerializeValue(s.Handle()),
-	}
-	reqArgs["source"] = SerializeValue(source)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withServiceReference", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*IResourceWithEnvironment), nil
-}
-
-// WithServiceReferenceNamed adds a named service discovery reference
-func (s *TestRedisResource) WithServiceReferenceNamed(source *IResourceWithServiceDiscovery, name string) (*IResourceWithEnvironment, error) {
-	reqArgs := map[string]any{
-		"builder": SerializeValue(s.Handle()),
-	}
-	reqArgs["source"] = SerializeValue(source)
-	reqArgs["name"] = SerializeValue(name)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withServiceReferenceNamed", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -11275,18 +14334,34 @@ func (s *TestRedisResource) WithReferenceEndpoint(endpointReference *EndpointRef
 }
 
 // WithEndpoint adds a network endpoint
-func (s *TestRedisResource) WithEndpoint(port float64, targetPort float64, scheme string, name string, env string, isProxied bool, isExternal bool, protocol ProtocolType) (*IResourceWithEndpoints, error) {
+func (s *TestRedisResource) WithEndpoint(port *float64, targetPort *float64, scheme *string, name *string, env *string, isProxied *bool, isExternal *bool, protocol *ProtocolType) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["port"] = SerializeValue(port)
-	reqArgs["targetPort"] = SerializeValue(targetPort)
-	reqArgs["scheme"] = SerializeValue(scheme)
-	reqArgs["name"] = SerializeValue(name)
-	reqArgs["env"] = SerializeValue(env)
-	reqArgs["isProxied"] = SerializeValue(isProxied)
-	reqArgs["isExternal"] = SerializeValue(isExternal)
-	reqArgs["protocol"] = SerializeValue(protocol)
+	if port != nil {
+		reqArgs["port"] = SerializeValue(port)
+	}
+	if targetPort != nil {
+		reqArgs["targetPort"] = SerializeValue(targetPort)
+	}
+	if scheme != nil {
+		reqArgs["scheme"] = SerializeValue(scheme)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if env != nil {
+		reqArgs["env"] = SerializeValue(env)
+	}
+	if isProxied != nil {
+		reqArgs["isProxied"] = SerializeValue(isProxied)
+	}
+	if isExternal != nil {
+		reqArgs["isExternal"] = SerializeValue(isExternal)
+	}
+	if protocol != nil {
+		reqArgs["protocol"] = SerializeValue(protocol)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withEndpoint", reqArgs)
 	if err != nil {
 		return nil, err
@@ -11295,15 +14370,25 @@ func (s *TestRedisResource) WithEndpoint(port float64, targetPort float64, schem
 }
 
 // WithHttpEndpoint adds an HTTP endpoint
-func (s *TestRedisResource) WithHttpEndpoint(port float64, targetPort float64, name string, env string, isProxied bool) (*IResourceWithEndpoints, error) {
+func (s *TestRedisResource) WithHttpEndpoint(port *float64, targetPort *float64, name *string, env *string, isProxied *bool) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["port"] = SerializeValue(port)
-	reqArgs["targetPort"] = SerializeValue(targetPort)
-	reqArgs["name"] = SerializeValue(name)
-	reqArgs["env"] = SerializeValue(env)
-	reqArgs["isProxied"] = SerializeValue(isProxied)
+	if port != nil {
+		reqArgs["port"] = SerializeValue(port)
+	}
+	if targetPort != nil {
+		reqArgs["targetPort"] = SerializeValue(targetPort)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if env != nil {
+		reqArgs["env"] = SerializeValue(env)
+	}
+	if isProxied != nil {
+		reqArgs["isProxied"] = SerializeValue(isProxied)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpEndpoint", reqArgs)
 	if err != nil {
 		return nil, err
@@ -11312,15 +14397,25 @@ func (s *TestRedisResource) WithHttpEndpoint(port float64, targetPort float64, n
 }
 
 // WithHttpsEndpoint adds an HTTPS endpoint
-func (s *TestRedisResource) WithHttpsEndpoint(port float64, targetPort float64, name string, env string, isProxied bool) (*IResourceWithEndpoints, error) {
+func (s *TestRedisResource) WithHttpsEndpoint(port *float64, targetPort *float64, name *string, env *string, isProxied *bool) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["port"] = SerializeValue(port)
-	reqArgs["targetPort"] = SerializeValue(targetPort)
-	reqArgs["name"] = SerializeValue(name)
-	reqArgs["env"] = SerializeValue(env)
-	reqArgs["isProxied"] = SerializeValue(isProxied)
+	if port != nil {
+		reqArgs["port"] = SerializeValue(port)
+	}
+	if targetPort != nil {
+		reqArgs["targetPort"] = SerializeValue(targetPort)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if env != nil {
+		reqArgs["env"] = SerializeValue(env)
+	}
+	if isProxied != nil {
+		reqArgs["isProxied"] = SerializeValue(isProxied)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpsEndpoint", reqArgs)
 	if err != nil {
 		return nil, err
@@ -11381,12 +14476,14 @@ func (s *TestRedisResource) WithUrlsCallback(callback func(...any) any) (*IResou
 }
 
 // WithUrl adds or modifies displayed URLs
-func (s *TestRedisResource) WithUrl(url string, displayText string) (*IResource, error) {
+func (s *TestRedisResource) WithUrl(url string, displayText *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["url"] = SerializeValue(url)
-	reqArgs["displayText"] = SerializeValue(displayText)
+	if displayText != nil {
+		reqArgs["displayText"] = SerializeValue(displayText)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withUrl", reqArgs)
 	if err != nil {
 		return nil, err
@@ -11395,12 +14492,14 @@ func (s *TestRedisResource) WithUrl(url string, displayText string) (*IResource,
 }
 
 // WithUrlExpression adds a URL using a reference expression
-func (s *TestRedisResource) WithUrlExpression(url *ReferenceExpression, displayText string) (*IResource, error) {
+func (s *TestRedisResource) WithUrlExpression(url *ReferenceExpression, displayText *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["url"] = SerializeValue(url)
-	reqArgs["displayText"] = SerializeValue(displayText)
+	if displayText != nil {
+		reqArgs["displayText"] = SerializeValue(displayText)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withUrlExpression", reqArgs)
 	if err != nil {
 		return nil, err
@@ -11519,12 +14618,14 @@ func (s *TestRedisResource) WithExplicitStart() (*IResource, error) {
 }
 
 // WaitForCompletion waits for resource completion
-func (s *TestRedisResource) WaitForCompletion(dependency *IResource, exitCode float64) (*IResourceWithWaitSupport, error) {
+func (s *TestRedisResource) WaitForCompletion(dependency *IResource, exitCode *float64) (*IResourceWithWaitSupport, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
-	reqArgs["exitCode"] = SerializeValue(exitCode)
+	if exitCode != nil {
+		reqArgs["exitCode"] = SerializeValue(exitCode)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForCompletion", reqArgs)
 	if err != nil {
 		return nil, err
@@ -11546,13 +14647,19 @@ func (s *TestRedisResource) WithHealthCheck(key string) (*IResource, error) {
 }
 
 // WithHttpHealthCheck adds an HTTP health check
-func (s *TestRedisResource) WithHttpHealthCheck(path string, statusCode float64, endpointName string) (*IResourceWithEndpoints, error) {
+func (s *TestRedisResource) WithHttpHealthCheck(path *string, statusCode *float64, endpointName *string) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["path"] = SerializeValue(path)
-	reqArgs["statusCode"] = SerializeValue(statusCode)
-	reqArgs["endpointName"] = SerializeValue(endpointName)
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if statusCode != nil {
+		reqArgs["statusCode"] = SerializeValue(statusCode)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpHealthCheck", reqArgs)
 	if err != nil {
 		return nil, err
@@ -11660,12 +14767,14 @@ func (s *TestRedisResource) WithChildRelationship(child *IResource) (*IResource,
 }
 
 // WithIconName sets the icon for the resource
-func (s *TestRedisResource) WithIconName(iconName string, iconVariant IconVariant) (*IResource, error) {
+func (s *TestRedisResource) WithIconName(iconName string, iconVariant *IconVariant) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["iconName"] = SerializeValue(iconName)
-	reqArgs["iconVariant"] = SerializeValue(iconVariant)
+	if iconVariant != nil {
+		reqArgs["iconVariant"] = SerializeValue(iconVariant)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withIconName", reqArgs)
 	if err != nil {
 		return nil, err
@@ -11674,18 +14783,32 @@ func (s *TestRedisResource) WithIconName(iconName string, iconVariant IconVarian
 }
 
 // WithHttpProbe adds an HTTP health probe to the resource
-func (s *TestRedisResource) WithHttpProbe(probeType ProbeType, path string, initialDelaySeconds float64, periodSeconds float64, timeoutSeconds float64, failureThreshold float64, successThreshold float64, endpointName string) (*IResourceWithEndpoints, error) {
+func (s *TestRedisResource) WithHttpProbe(probeType ProbeType, path *string, initialDelaySeconds *float64, periodSeconds *float64, timeoutSeconds *float64, failureThreshold *float64, successThreshold *float64, endpointName *string) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["probeType"] = SerializeValue(probeType)
-	reqArgs["path"] = SerializeValue(path)
-	reqArgs["initialDelaySeconds"] = SerializeValue(initialDelaySeconds)
-	reqArgs["periodSeconds"] = SerializeValue(periodSeconds)
-	reqArgs["timeoutSeconds"] = SerializeValue(timeoutSeconds)
-	reqArgs["failureThreshold"] = SerializeValue(failureThreshold)
-	reqArgs["successThreshold"] = SerializeValue(successThreshold)
-	reqArgs["endpointName"] = SerializeValue(endpointName)
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if initialDelaySeconds != nil {
+		reqArgs["initialDelaySeconds"] = SerializeValue(initialDelaySeconds)
+	}
+	if periodSeconds != nil {
+		reqArgs["periodSeconds"] = SerializeValue(periodSeconds)
+	}
+	if timeoutSeconds != nil {
+		reqArgs["timeoutSeconds"] = SerializeValue(timeoutSeconds)
+	}
+	if failureThreshold != nil {
+		reqArgs["failureThreshold"] = SerializeValue(failureThreshold)
+	}
+	if successThreshold != nil {
+		reqArgs["successThreshold"] = SerializeValue(successThreshold)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpProbe", reqArgs)
 	if err != nil {
 		return nil, err
@@ -11732,7 +14855,7 @@ func (s *TestRedisResource) WithRemoteImageTag(remoteImageTag string) (*ICompute
 }
 
 // WithPipelineStepFactory adds a pipeline step to the resource
-func (s *TestRedisResource) WithPipelineStepFactory(stepName string, callback func(...any) any, dependsOn []string, requiredBy []string, tags []string, description string) (*IResource, error) {
+func (s *TestRedisResource) WithPipelineStepFactory(stepName string, callback func(...any) any, dependsOn []string, requiredBy []string, tags []string, description *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
@@ -11740,10 +14863,18 @@ func (s *TestRedisResource) WithPipelineStepFactory(stepName string, callback fu
 	if callback != nil {
 		reqArgs["callback"] = RegisterCallback(callback)
 	}
-	reqArgs["dependsOn"] = SerializeValue(dependsOn)
-	reqArgs["requiredBy"] = SerializeValue(requiredBy)
-	reqArgs["tags"] = SerializeValue(tags)
-	reqArgs["description"] = SerializeValue(description)
+	if dependsOn != nil {
+		reqArgs["dependsOn"] = SerializeValue(dependsOn)
+	}
+	if requiredBy != nil {
+		reqArgs["requiredBy"] = SerializeValue(requiredBy)
+	}
+	if tags != nil {
+		reqArgs["tags"] = SerializeValue(tags)
+	}
+	if description != nil {
+		reqArgs["description"] = SerializeValue(description)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withPipelineStepFactory", reqArgs)
 	if err != nil {
 		return nil, err
@@ -11782,13 +14913,17 @@ func (s *TestRedisResource) WithPipelineConfiguration(callback func(...any) any)
 }
 
 // WithVolume adds a volume
-func (s *TestRedisResource) WithVolume(target string, name string, isReadOnly bool) (*ContainerResource, error) {
+func (s *TestRedisResource) WithVolume(target string, name *string, isReadOnly *bool) (*ContainerResource, error) {
 	reqArgs := map[string]any{
 		"resource": SerializeValue(s.Handle()),
 	}
 	reqArgs["target"] = SerializeValue(target)
-	reqArgs["name"] = SerializeValue(name)
-	reqArgs["isReadOnly"] = SerializeValue(isReadOnly)
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if isReadOnly != nil {
+		reqArgs["isReadOnly"] = SerializeValue(isReadOnly)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withVolume", reqArgs)
 	if err != nil {
 		return nil, err
@@ -11808,13 +14943,105 @@ func (s *TestRedisResource) GetResourceName() (*string, error) {
 	return result.(*string), nil
 }
 
+// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event
+func (s *TestRedisResource) OnBeforeResourceStarted(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onBeforeResourceStarted", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnResourceStopped subscribes to the ResourceStopped event
+func (s *TestRedisResource) OnResourceStopped(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceStopped", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnConnectionStringAvailable subscribes to the ConnectionStringAvailable event
+func (s *TestRedisResource) OnConnectionStringAvailable(callback func(...any) any) (*IResourceWithConnectionString, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onConnectionStringAvailable", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithConnectionString), nil
+}
+
+// OnInitializeResource subscribes to the InitializeResource event
+func (s *TestRedisResource) OnInitializeResource(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onInitializeResource", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated event
+func (s *TestRedisResource) OnResourceEndpointsAllocated(callback func(...any) any) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceEndpointsAllocated", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
+}
+
+// OnResourceReady subscribes to the ResourceReady event
+func (s *TestRedisResource) OnResourceReady(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceReady", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
 // AddTestChildDatabase adds a child database to a test Redis resource
-func (s *TestRedisResource) AddTestChildDatabase(name string, databaseName string) (*TestDatabaseResource, error) {
+func (s *TestRedisResource) AddTestChildDatabase(name string, databaseName *string) (*TestDatabaseResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["name"] = SerializeValue(name)
-	reqArgs["databaseName"] = SerializeValue(databaseName)
+	if databaseName != nil {
+		reqArgs["databaseName"] = SerializeValue(databaseName)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/addTestChildDatabase", reqArgs)
 	if err != nil {
 		return nil, err
@@ -11823,11 +15050,13 @@ func (s *TestRedisResource) AddTestChildDatabase(name string, databaseName strin
 }
 
 // WithPersistence configures the Redis resource with persistence
-func (s *TestRedisResource) WithPersistence(mode TestPersistenceMode) (*TestRedisResource, error) {
+func (s *TestRedisResource) WithPersistence(mode *TestPersistenceMode) (*TestRedisResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["mode"] = SerializeValue(mode)
+	if mode != nil {
+		reqArgs["mode"] = SerializeValue(mode)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withPersistence", reqArgs)
 	if err != nil {
 		return nil, err
@@ -11836,12 +15065,16 @@ func (s *TestRedisResource) WithPersistence(mode TestPersistenceMode) (*TestRedi
 }
 
 // WithOptionalString adds an optional string parameter
-func (s *TestRedisResource) WithOptionalString(value string, enabled bool) (*IResource, error) {
+func (s *TestRedisResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["value"] = SerializeValue(value)
-	reqArgs["enabled"] = SerializeValue(enabled)
+	if value != nil {
+		reqArgs["value"] = SerializeValue(value)
+	}
+	if enabled != nil {
+		reqArgs["enabled"] = SerializeValue(enabled)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalString", reqArgs)
 	if err != nil {
 		return nil, err
@@ -12153,12 +15386,16 @@ func (s *TestRedisResource) WithMultiParamHandleCallback(callback func(...any) a
 }
 
 // WithDataVolume adds a data volume with persistence
-func (s *TestRedisResource) WithDataVolume(name string, isReadOnly bool) (*TestRedisResource, error) {
+func (s *TestRedisResource) WithDataVolume(name *string, isReadOnly *bool) (*TestRedisResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["name"] = SerializeValue(name)
-	reqArgs["isReadOnly"] = SerializeValue(isReadOnly)
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if isReadOnly != nil {
+		reqArgs["isReadOnly"] = SerializeValue(isReadOnly)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withDataVolume", reqArgs)
 	if err != nil {
 		return nil, err
@@ -12288,13 +15525,15 @@ func (s *TestVaultResource) WithContainerRegistry(registry *IResource) (*IResour
 }
 
 // WithBindMount adds a bind mount
-func (s *TestVaultResource) WithBindMount(source string, target string, isReadOnly bool) (*ContainerResource, error) {
+func (s *TestVaultResource) WithBindMount(source string, target string, isReadOnly *bool) (*ContainerResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["source"] = SerializeValue(source)
 	reqArgs["target"] = SerializeValue(target)
-	reqArgs["isReadOnly"] = SerializeValue(isReadOnly)
+	if isReadOnly != nil {
+		reqArgs["isReadOnly"] = SerializeValue(isReadOnly)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBindMount", reqArgs)
 	if err != nil {
 		return nil, err
@@ -12342,12 +15581,14 @@ func (s *TestVaultResource) WithImageRegistry(registry string) (*ContainerResour
 }
 
 // WithImage sets the container image
-func (s *TestVaultResource) WithImage(image string, tag string) (*ContainerResource, error) {
+func (s *TestVaultResource) WithImage(image string, tag *string) (*ContainerResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["image"] = SerializeValue(image)
-	reqArgs["tag"] = SerializeValue(tag)
+	if tag != nil {
+		reqArgs["tag"] = SerializeValue(tag)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withImage", reqArgs)
 	if err != nil {
 		return nil, err
@@ -12420,13 +15661,17 @@ func (s *TestVaultResource) PublishAsContainer() (*ContainerResource, error) {
 }
 
 // WithDockerfile configures the resource to use a Dockerfile
-func (s *TestVaultResource) WithDockerfile(contextPath string, dockerfilePath string, stage string) (*ContainerResource, error) {
+func (s *TestVaultResource) WithDockerfile(contextPath string, dockerfilePath *string, stage *string) (*ContainerResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["contextPath"] = SerializeValue(contextPath)
-	reqArgs["dockerfilePath"] = SerializeValue(dockerfilePath)
-	reqArgs["stage"] = SerializeValue(stage)
+	if dockerfilePath != nil {
+		reqArgs["dockerfilePath"] = SerializeValue(dockerfilePath)
+	}
+	if stage != nil {
+		reqArgs["stage"] = SerializeValue(stage)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withDockerfile", reqArgs)
 	if err != nil {
 		return nil, err
@@ -12489,12 +15734,16 @@ func (s *TestVaultResource) WithEndpointProxySupport(proxyEnabled bool) (*Contai
 }
 
 // WithDockerfileBaseImage sets the base image for a Dockerfile build
-func (s *TestVaultResource) WithDockerfileBaseImage(buildImage string, runtimeImage string) (*IResource, error) {
+func (s *TestVaultResource) WithDockerfileBaseImage(buildImage *string, runtimeImage *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["buildImage"] = SerializeValue(buildImage)
-	reqArgs["runtimeImage"] = SerializeValue(runtimeImage)
+	if buildImage != nil {
+		reqArgs["buildImage"] = SerializeValue(buildImage)
+	}
+	if runtimeImage != nil {
+		reqArgs["runtimeImage"] = SerializeValue(runtimeImage)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withDockerfileBaseImage", reqArgs)
 	if err != nil {
 		return nil, err
@@ -12516,12 +15765,16 @@ func (s *TestVaultResource) WithContainerNetworkAlias(alias string) (*ContainerR
 }
 
 // WithMcpServer configures an MCP server endpoint on the resource
-func (s *TestVaultResource) WithMcpServer(path string, endpointName string) (*IResourceWithEndpoints, error) {
+func (s *TestVaultResource) WithMcpServer(path *string, endpointName *string) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["path"] = SerializeValue(path)
-	reqArgs["endpointName"] = SerializeValue(endpointName)
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withMcpServer", reqArgs)
 	if err != nil {
 		return nil, err
@@ -12567,12 +15820,14 @@ func (s *TestVaultResource) PublishAsConnectionString() (*ContainerResource, err
 }
 
 // WithRequiredCommand adds a required command dependency
-func (s *TestVaultResource) WithRequiredCommand(command string, helpLink string) (*IResource, error) {
+func (s *TestVaultResource) WithRequiredCommand(command string, helpLink *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["command"] = SerializeValue(command)
-	reqArgs["helpLink"] = SerializeValue(helpLink)
+	if helpLink != nil {
+		reqArgs["helpLink"] = SerializeValue(helpLink)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withRequiredCommand", reqArgs)
 	if err != nil {
 		return nil, err
@@ -12694,41 +15949,21 @@ func (s *TestVaultResource) WithArgsCallback(callback func(...any) any) (*IResou
 }
 
 // WithReference adds a reference to another resource
-func (s *TestVaultResource) WithReference(source *IResourceWithConnectionString, connectionName string, optional bool) (*IResourceWithEnvironment, error) {
+func (s *TestVaultResource) WithReference(source *IResource, connectionName *string, optional *bool, name *string) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["source"] = SerializeValue(source)
-	reqArgs["connectionName"] = SerializeValue(connectionName)
-	reqArgs["optional"] = SerializeValue(optional)
+	if connectionName != nil {
+		reqArgs["connectionName"] = SerializeValue(connectionName)
+	}
+	if optional != nil {
+		reqArgs["optional"] = SerializeValue(optional)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withReference", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*IResourceWithEnvironment), nil
-}
-
-// WithServiceReference adds a service discovery reference to another resource
-func (s *TestVaultResource) WithServiceReference(source *IResourceWithServiceDiscovery) (*IResourceWithEnvironment, error) {
-	reqArgs := map[string]any{
-		"builder": SerializeValue(s.Handle()),
-	}
-	reqArgs["source"] = SerializeValue(source)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withServiceReference", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*IResourceWithEnvironment), nil
-}
-
-// WithServiceReferenceNamed adds a named service discovery reference
-func (s *TestVaultResource) WithServiceReferenceNamed(source *IResourceWithServiceDiscovery, name string) (*IResourceWithEnvironment, error) {
-	reqArgs := map[string]any{
-		"builder": SerializeValue(s.Handle()),
-	}
-	reqArgs["source"] = SerializeValue(source)
-	reqArgs["name"] = SerializeValue(name)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withServiceReferenceNamed", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -12776,18 +16011,34 @@ func (s *TestVaultResource) WithReferenceEndpoint(endpointReference *EndpointRef
 }
 
 // WithEndpoint adds a network endpoint
-func (s *TestVaultResource) WithEndpoint(port float64, targetPort float64, scheme string, name string, env string, isProxied bool, isExternal bool, protocol ProtocolType) (*IResourceWithEndpoints, error) {
+func (s *TestVaultResource) WithEndpoint(port *float64, targetPort *float64, scheme *string, name *string, env *string, isProxied *bool, isExternal *bool, protocol *ProtocolType) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["port"] = SerializeValue(port)
-	reqArgs["targetPort"] = SerializeValue(targetPort)
-	reqArgs["scheme"] = SerializeValue(scheme)
-	reqArgs["name"] = SerializeValue(name)
-	reqArgs["env"] = SerializeValue(env)
-	reqArgs["isProxied"] = SerializeValue(isProxied)
-	reqArgs["isExternal"] = SerializeValue(isExternal)
-	reqArgs["protocol"] = SerializeValue(protocol)
+	if port != nil {
+		reqArgs["port"] = SerializeValue(port)
+	}
+	if targetPort != nil {
+		reqArgs["targetPort"] = SerializeValue(targetPort)
+	}
+	if scheme != nil {
+		reqArgs["scheme"] = SerializeValue(scheme)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if env != nil {
+		reqArgs["env"] = SerializeValue(env)
+	}
+	if isProxied != nil {
+		reqArgs["isProxied"] = SerializeValue(isProxied)
+	}
+	if isExternal != nil {
+		reqArgs["isExternal"] = SerializeValue(isExternal)
+	}
+	if protocol != nil {
+		reqArgs["protocol"] = SerializeValue(protocol)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withEndpoint", reqArgs)
 	if err != nil {
 		return nil, err
@@ -12796,15 +16047,25 @@ func (s *TestVaultResource) WithEndpoint(port float64, targetPort float64, schem
 }
 
 // WithHttpEndpoint adds an HTTP endpoint
-func (s *TestVaultResource) WithHttpEndpoint(port float64, targetPort float64, name string, env string, isProxied bool) (*IResourceWithEndpoints, error) {
+func (s *TestVaultResource) WithHttpEndpoint(port *float64, targetPort *float64, name *string, env *string, isProxied *bool) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["port"] = SerializeValue(port)
-	reqArgs["targetPort"] = SerializeValue(targetPort)
-	reqArgs["name"] = SerializeValue(name)
-	reqArgs["env"] = SerializeValue(env)
-	reqArgs["isProxied"] = SerializeValue(isProxied)
+	if port != nil {
+		reqArgs["port"] = SerializeValue(port)
+	}
+	if targetPort != nil {
+		reqArgs["targetPort"] = SerializeValue(targetPort)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if env != nil {
+		reqArgs["env"] = SerializeValue(env)
+	}
+	if isProxied != nil {
+		reqArgs["isProxied"] = SerializeValue(isProxied)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpEndpoint", reqArgs)
 	if err != nil {
 		return nil, err
@@ -12813,15 +16074,25 @@ func (s *TestVaultResource) WithHttpEndpoint(port float64, targetPort float64, n
 }
 
 // WithHttpsEndpoint adds an HTTPS endpoint
-func (s *TestVaultResource) WithHttpsEndpoint(port float64, targetPort float64, name string, env string, isProxied bool) (*IResourceWithEndpoints, error) {
+func (s *TestVaultResource) WithHttpsEndpoint(port *float64, targetPort *float64, name *string, env *string, isProxied *bool) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["port"] = SerializeValue(port)
-	reqArgs["targetPort"] = SerializeValue(targetPort)
-	reqArgs["name"] = SerializeValue(name)
-	reqArgs["env"] = SerializeValue(env)
-	reqArgs["isProxied"] = SerializeValue(isProxied)
+	if port != nil {
+		reqArgs["port"] = SerializeValue(port)
+	}
+	if targetPort != nil {
+		reqArgs["targetPort"] = SerializeValue(targetPort)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if env != nil {
+		reqArgs["env"] = SerializeValue(env)
+	}
+	if isProxied != nil {
+		reqArgs["isProxied"] = SerializeValue(isProxied)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpsEndpoint", reqArgs)
 	if err != nil {
 		return nil, err
@@ -12882,12 +16153,14 @@ func (s *TestVaultResource) WithUrlsCallback(callback func(...any) any) (*IResou
 }
 
 // WithUrl adds or modifies displayed URLs
-func (s *TestVaultResource) WithUrl(url string, displayText string) (*IResource, error) {
+func (s *TestVaultResource) WithUrl(url string, displayText *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["url"] = SerializeValue(url)
-	reqArgs["displayText"] = SerializeValue(displayText)
+	if displayText != nil {
+		reqArgs["displayText"] = SerializeValue(displayText)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withUrl", reqArgs)
 	if err != nil {
 		return nil, err
@@ -12896,12 +16169,14 @@ func (s *TestVaultResource) WithUrl(url string, displayText string) (*IResource,
 }
 
 // WithUrlExpression adds a URL using a reference expression
-func (s *TestVaultResource) WithUrlExpression(url *ReferenceExpression, displayText string) (*IResource, error) {
+func (s *TestVaultResource) WithUrlExpression(url *ReferenceExpression, displayText *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["url"] = SerializeValue(url)
-	reqArgs["displayText"] = SerializeValue(displayText)
+	if displayText != nil {
+		reqArgs["displayText"] = SerializeValue(displayText)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withUrlExpression", reqArgs)
 	if err != nil {
 		return nil, err
@@ -13020,12 +16295,14 @@ func (s *TestVaultResource) WithExplicitStart() (*IResource, error) {
 }
 
 // WaitForCompletion waits for resource completion
-func (s *TestVaultResource) WaitForCompletion(dependency *IResource, exitCode float64) (*IResourceWithWaitSupport, error) {
+func (s *TestVaultResource) WaitForCompletion(dependency *IResource, exitCode *float64) (*IResourceWithWaitSupport, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
-	reqArgs["exitCode"] = SerializeValue(exitCode)
+	if exitCode != nil {
+		reqArgs["exitCode"] = SerializeValue(exitCode)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForCompletion", reqArgs)
 	if err != nil {
 		return nil, err
@@ -13047,13 +16324,19 @@ func (s *TestVaultResource) WithHealthCheck(key string) (*IResource, error) {
 }
 
 // WithHttpHealthCheck adds an HTTP health check
-func (s *TestVaultResource) WithHttpHealthCheck(path string, statusCode float64, endpointName string) (*IResourceWithEndpoints, error) {
+func (s *TestVaultResource) WithHttpHealthCheck(path *string, statusCode *float64, endpointName *string) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["path"] = SerializeValue(path)
-	reqArgs["statusCode"] = SerializeValue(statusCode)
-	reqArgs["endpointName"] = SerializeValue(endpointName)
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if statusCode != nil {
+		reqArgs["statusCode"] = SerializeValue(statusCode)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpHealthCheck", reqArgs)
 	if err != nil {
 		return nil, err
@@ -13161,12 +16444,14 @@ func (s *TestVaultResource) WithChildRelationship(child *IResource) (*IResource,
 }
 
 // WithIconName sets the icon for the resource
-func (s *TestVaultResource) WithIconName(iconName string, iconVariant IconVariant) (*IResource, error) {
+func (s *TestVaultResource) WithIconName(iconName string, iconVariant *IconVariant) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["iconName"] = SerializeValue(iconName)
-	reqArgs["iconVariant"] = SerializeValue(iconVariant)
+	if iconVariant != nil {
+		reqArgs["iconVariant"] = SerializeValue(iconVariant)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withIconName", reqArgs)
 	if err != nil {
 		return nil, err
@@ -13175,18 +16460,32 @@ func (s *TestVaultResource) WithIconName(iconName string, iconVariant IconVarian
 }
 
 // WithHttpProbe adds an HTTP health probe to the resource
-func (s *TestVaultResource) WithHttpProbe(probeType ProbeType, path string, initialDelaySeconds float64, periodSeconds float64, timeoutSeconds float64, failureThreshold float64, successThreshold float64, endpointName string) (*IResourceWithEndpoints, error) {
+func (s *TestVaultResource) WithHttpProbe(probeType ProbeType, path *string, initialDelaySeconds *float64, periodSeconds *float64, timeoutSeconds *float64, failureThreshold *float64, successThreshold *float64, endpointName *string) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["probeType"] = SerializeValue(probeType)
-	reqArgs["path"] = SerializeValue(path)
-	reqArgs["initialDelaySeconds"] = SerializeValue(initialDelaySeconds)
-	reqArgs["periodSeconds"] = SerializeValue(periodSeconds)
-	reqArgs["timeoutSeconds"] = SerializeValue(timeoutSeconds)
-	reqArgs["failureThreshold"] = SerializeValue(failureThreshold)
-	reqArgs["successThreshold"] = SerializeValue(successThreshold)
-	reqArgs["endpointName"] = SerializeValue(endpointName)
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if initialDelaySeconds != nil {
+		reqArgs["initialDelaySeconds"] = SerializeValue(initialDelaySeconds)
+	}
+	if periodSeconds != nil {
+		reqArgs["periodSeconds"] = SerializeValue(periodSeconds)
+	}
+	if timeoutSeconds != nil {
+		reqArgs["timeoutSeconds"] = SerializeValue(timeoutSeconds)
+	}
+	if failureThreshold != nil {
+		reqArgs["failureThreshold"] = SerializeValue(failureThreshold)
+	}
+	if successThreshold != nil {
+		reqArgs["successThreshold"] = SerializeValue(successThreshold)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpProbe", reqArgs)
 	if err != nil {
 		return nil, err
@@ -13233,7 +16532,7 @@ func (s *TestVaultResource) WithRemoteImageTag(remoteImageTag string) (*ICompute
 }
 
 // WithPipelineStepFactory adds a pipeline step to the resource
-func (s *TestVaultResource) WithPipelineStepFactory(stepName string, callback func(...any) any, dependsOn []string, requiredBy []string, tags []string, description string) (*IResource, error) {
+func (s *TestVaultResource) WithPipelineStepFactory(stepName string, callback func(...any) any, dependsOn []string, requiredBy []string, tags []string, description *string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
@@ -13241,10 +16540,18 @@ func (s *TestVaultResource) WithPipelineStepFactory(stepName string, callback fu
 	if callback != nil {
 		reqArgs["callback"] = RegisterCallback(callback)
 	}
-	reqArgs["dependsOn"] = SerializeValue(dependsOn)
-	reqArgs["requiredBy"] = SerializeValue(requiredBy)
-	reqArgs["tags"] = SerializeValue(tags)
-	reqArgs["description"] = SerializeValue(description)
+	if dependsOn != nil {
+		reqArgs["dependsOn"] = SerializeValue(dependsOn)
+	}
+	if requiredBy != nil {
+		reqArgs["requiredBy"] = SerializeValue(requiredBy)
+	}
+	if tags != nil {
+		reqArgs["tags"] = SerializeValue(tags)
+	}
+	if description != nil {
+		reqArgs["description"] = SerializeValue(description)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withPipelineStepFactory", reqArgs)
 	if err != nil {
 		return nil, err
@@ -13283,13 +16590,17 @@ func (s *TestVaultResource) WithPipelineConfiguration(callback func(...any) any)
 }
 
 // WithVolume adds a volume
-func (s *TestVaultResource) WithVolume(target string, name string, isReadOnly bool) (*ContainerResource, error) {
+func (s *TestVaultResource) WithVolume(target string, name *string, isReadOnly *bool) (*ContainerResource, error) {
 	reqArgs := map[string]any{
 		"resource": SerializeValue(s.Handle()),
 	}
 	reqArgs["target"] = SerializeValue(target)
-	reqArgs["name"] = SerializeValue(name)
-	reqArgs["isReadOnly"] = SerializeValue(isReadOnly)
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if isReadOnly != nil {
+		reqArgs["isReadOnly"] = SerializeValue(isReadOnly)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withVolume", reqArgs)
 	if err != nil {
 		return nil, err
@@ -13309,13 +16620,92 @@ func (s *TestVaultResource) GetResourceName() (*string, error) {
 	return result.(*string), nil
 }
 
-// WithOptionalString adds an optional string parameter
-func (s *TestVaultResource) WithOptionalString(value string, enabled bool) (*IResource, error) {
+// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event
+func (s *TestVaultResource) OnBeforeResourceStarted(callback func(...any) any) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["value"] = SerializeValue(value)
-	reqArgs["enabled"] = SerializeValue(enabled)
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onBeforeResourceStarted", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnResourceStopped subscribes to the ResourceStopped event
+func (s *TestVaultResource) OnResourceStopped(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceStopped", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnInitializeResource subscribes to the InitializeResource event
+func (s *TestVaultResource) OnInitializeResource(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onInitializeResource", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated event
+func (s *TestVaultResource) OnResourceEndpointsAllocated(callback func(...any) any) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceEndpointsAllocated", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
+}
+
+// OnResourceReady subscribes to the ResourceReady event
+func (s *TestVaultResource) OnResourceReady(callback func(...any) any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/onResourceReady", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithOptionalString adds an optional string parameter
+func (s *TestVaultResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if value != nil {
+		reqArgs["value"] = SerializeValue(value)
+	}
+	if enabled != nil {
+		reqArgs["enabled"] = SerializeValue(enabled)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalString", reqArgs)
 	if err != nil {
 		return nil, err
@@ -13538,6 +16928,31 @@ func NewUpdateCommandStateContext(handle *Handle, client *AspireClient) *UpdateC
 	}
 }
 
+// ServiceProvider gets the ServiceProvider property
+func (s *UpdateCommandStateContext) ServiceProvider() (*IServiceProvider, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.serviceProvider", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IServiceProvider), nil
+}
+
+// SetServiceProvider sets the ServiceProvider property
+func (s *UpdateCommandStateContext) SetServiceProvider(value *IServiceProvider) (*UpdateCommandStateContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.setServiceProvider", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*UpdateCommandStateContext), nil
+}
+
 // ============================================================================
 // Handle wrapper registrations
 // ============================================================================
@@ -13597,8 +17012,23 @@ func init() {
 	RegisterHandleWrapper("Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfiguration", func(h *Handle, c *AspireClient) any {
 		return NewIConfiguration(h, c)
 	})
+	RegisterHandleWrapper("Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfigurationSection", func(h *Handle, c *AspireClient) any {
+		return NewIConfigurationSection(h, c)
+	})
 	RegisterHandleWrapper("Microsoft.Extensions.Hosting.Abstractions/Microsoft.Extensions.Hosting.IHostEnvironment", func(h *Handle, c *AspireClient) any {
 		return NewIHostEnvironment(h, c)
+	})
+	RegisterHandleWrapper("Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILogger", func(h *Handle, c *AspireClient) any {
+		return NewILogger(h, c)
+	})
+	RegisterHandleWrapper("Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILoggerFactory", func(h *Handle, c *AspireClient) any {
+		return NewILoggerFactory(h, c)
+	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.IReportingStep", func(h *Handle, c *AspireClient) any {
+		return NewIReportingStep(h, c)
+	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.IReportingTask", func(h *Handle, c *AspireClient) any {
+		return NewIReportingTask(h, c)
 	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.Eventing.DistributedApplicationEventSubscription", func(h *Handle, c *AspireClient) any {
 		return NewDistributedApplicationEventSubscription(h, c)
@@ -13612,14 +17042,26 @@ func init() {
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions", func(h *Handle, c *AspireClient) any {
 		return NewProjectResourceOptions(h, c)
 	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.IUserSecretsManager", func(h *Handle, c *AspireClient) any {
+		return NewIUserSecretsManager(h, c)
+	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineConfigurationContext", func(h *Handle, c *AspireClient) any {
 		return NewPipelineConfigurationContext(h, c)
+	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineContext", func(h *Handle, c *AspireClient) any {
+		return NewPipelineContext(h, c)
 	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStep", func(h *Handle, c *AspireClient) any {
 		return NewPipelineStep(h, c)
 	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepContext", func(h *Handle, c *AspireClient) any {
 		return NewPipelineStepContext(h, c)
+	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepFactoryContext", func(h *Handle, c *AspireClient) any {
+		return NewPipelineStepFactoryContext(h, c)
+	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineSummary", func(h *Handle, c *AspireClient) any {
+		return NewPipelineSummary(h, c)
 	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.Eventing.DistributedApplicationResourceEventSubscription", func(h *Handle, c *AspireClient) any {
 		return NewDistributedApplicationResourceEventSubscription(h, c)
@@ -13633,14 +17075,32 @@ func init() {
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationEventing", func(h *Handle, c *AspireClient) any {
 		return NewIDistributedApplicationEventing(h, c)
 	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.AfterResourcesCreatedEvent", func(h *Handle, c *AspireClient) any {
+		return NewAfterResourcesCreatedEvent(h, c)
+	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeResourceStartedEvent", func(h *Handle, c *AspireClient) any {
+		return NewBeforeResourceStartedEvent(h, c)
+	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeStartEvent", func(h *Handle, c *AspireClient) any {
+		return NewBeforeStartEvent(h, c)
+	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext", func(h *Handle, c *AspireClient) any {
 		return NewCommandLineArgsCallbackContext(h, c)
+	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ConnectionStringAvailableEvent", func(h *Handle, c *AspireClient) any {
+		return NewConnectionStringAvailableEvent(h, c)
+	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DistributedApplicationModel", func(h *Handle, c *AspireClient) any {
+		return NewDistributedApplicationModel(h, c)
 	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression", func(h *Handle, c *AspireClient) any {
 		return NewEndpointReferenceExpression(h, c)
 	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext", func(h *Handle, c *AspireClient) any {
 		return NewEnvironmentCallbackContext(h, c)
+	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent", func(h *Handle, c *AspireClient) any {
+		return NewInitializeResourceEvent(h, c)
 	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpressionBuilder", func(h *Handle, c *AspireClient) any {
 		return NewReferenceExpressionBuilder(h, c)
@@ -13650,6 +17110,15 @@ func init() {
 	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext", func(h *Handle, c *AspireClient) any {
 		return NewExecuteCommandContext(h, c)
+	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceEndpointsAllocatedEvent", func(h *Handle, c *AspireClient) any {
+		return NewResourceEndpointsAllocatedEvent(h, c)
+	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceReadyEvent", func(h *Handle, c *AspireClient) any {
+		return NewResourceReadyEvent(h, c)
+	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceStoppedEvent", func(h *Handle, c *AspireClient) any {
+		return NewResourceStoppedEvent(h, c)
 	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext", func(h *Handle, c *AspireClient) any {
 		return NewResourceUrlsCallbackContext(h, c)
@@ -13668,9 +17137,6 @@ func init() {
 	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CSharpAppResource", func(h *Handle, c *AspireClient) any {
 		return NewCSharpAppResource(h, c)
-	})
-	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.IResourceWithServiceDiscovery", func(h *Handle, c *AspireClient) any {
-		return NewIResourceWithServiceDiscovery(h, c)
 	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.IResourceWithContainerFiles", func(h *Handle, c *AspireClient) any {
 		return NewIResourceWithContainerFiles(h, c)

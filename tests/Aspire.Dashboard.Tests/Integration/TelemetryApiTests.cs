@@ -182,25 +182,6 @@ public class TelemetryApiTests
     }
 
     [Fact]
-    public async Task GetSpans_ApiDisabled_Returns404()
-    {
-        // Arrange - disable the Telemetry API explicitly
-        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(_testOutputHelper, config =>
-        {
-            config[DashboardConfigNames.DashboardApiEnabledName.ConfigKey] = "false";
-        });
-        await app.StartAsync().DefaultTimeout();
-
-        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
-
-        // Act
-        var response = await httpClient.GetAsync("/api/telemetry/spans").DefaultTimeout();
-
-        // Assert
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-    }
-
-    [Fact]
     public async Task GetLogs_UnsecuredMode_Returns200()
     {
         // Arrange

@@ -21,9 +21,11 @@ const _clusterConnectionString = await kusto.connectionStringExpression.get();
 const _defaultDatabaseName: string = await defaultDatabase.databaseName.get();
 const _defaultDatabaseParent = await defaultDatabase.parent.get();
 const _defaultDatabaseConnectionString = await defaultDatabase.connectionStringExpression.get();
+const _defaultDatabaseCreationScript = await defaultDatabase.getDatabaseCreationScript();
 
 const _customDatabaseName: string = await customDatabase.databaseName.get();
 const _customDatabaseParent = await customDatabase.parent.get();
 const _customDatabaseConnectionString = await customDatabase.connectionStringExpression.get();
+const _customDatabaseCreationScript = await customDatabase.getDatabaseCreationScript();
 
 await builder.build().run();

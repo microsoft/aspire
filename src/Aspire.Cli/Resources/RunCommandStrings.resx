@@ -118,25 +118,25 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>Run an Aspire AppHost interactively for development.</value>
+    <value>Run an Aspire apphost interactively for development</value>
   </data>
   <data name="ForceArgumentDescription" xml:space="preserve">
-    <value>Stop any running instance of the AppHost without prompting.</value>
+    <value>Stop any running instance of the apphost without prompting</value>
   </data>
   <data name="ProjectArgumentDescription" xml:space="preserve">
-    <value>The path to the Aspire AppHost project file.</value>
+    <value>The path to the Aspire apphost project file</value>
   </data>
   <data name="DetachArgumentDescription" xml:space="preserve">
-    <value>Run the AppHost in the background and exit after it starts.</value>
+    <value>Run the apphost in the background and exit after it starts</value>
   </data>
   <data name="JsonArgumentDescription" xml:space="preserve">
-    <value>Output format for detached AppHost results.</value>
+    <value>Output format for detached apphost results</value>
   </data>
   <data name="WatchArgumentDescription" xml:space="preserve">
-    <value>Start project resources in watch mode.</value>
+    <value>Start project resources in watch mode</value>
   </data>
   <data name="StartDebugSessionArgumentDescription" xml:space="preserve">
-    <value>Whether to start a debug session, if running in an Aspire Terminal.</value>
+    <value>Whether to start a debug session, if running in an Aspire Terminal</value>
   </data>
   <data name="IsCompatibleAppHostIsNull" xml:space="preserve">
     <value>IsCompatibleAppHost is null</value>
@@ -212,22 +212,22 @@
     <value>Starting Aspire apphost in the background...</value>
   </data>
   <data name="AppHostStartedSuccessfully" xml:space="preserve">
-    <value>AppHost started successfully.</value>
+    <value>Apphost started successfully.</value>
   </data>
   <data name="FailedToStartAppHost" xml:space="preserve">
-    <value>Failed to start the AppHost.</value>
+    <value>Failed to start the apphost.</value>
   </data>
   <data name="WaitingForAppHostToStart" xml:space="preserve">
     <value>Waiting for apphost to start...</value>
   </data>
   <data name="AppHostExitedWithCode" xml:space="preserve">
-    <value>AppHost process exited with code {0}.</value>
+    <value>Apphost process exited with code {0}.</value>
   </data>
   <data name="AppHostFailedToBuild" xml:space="preserve">
-    <value>AppHost failed to build.</value>
+    <value>Apphost failed to build.</value>
   </data>
   <data name="TimeoutWaitingForAppHost" xml:space="preserve">
-    <value>Timeout waiting for AppHost to start.</value>
+    <value>Timeout waiting for apphost to start.</value>
   </data>
   <data name="CheckLogsForDetails" xml:space="preserve">
     <value>Check logs for details: {0}</value>
@@ -239,16 +239,16 @@
     <value>The --format option can only be used together with --detach.</value>
   </data>
   <data name="IsolatedArgumentDescription" xml:space="preserve">
-    <value>Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously.</value>
+    <value>Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously</value>
   </data>
   <data name="CopyingUserSecrets" xml:space="preserve">
     <value>Copying user secrets for isolated mode...</value>
   </data>
   <data name="IsolatedModeRunningInstanceWarning" xml:space="preserve">
-    <value>A running instance of this AppHost was found and will be stopped. To run multiple isolated instances simultaneously, run from different directories such as git worktree directories.</value>
+    <value>A running instance of this apphost was found and will be stopped. To run multiple isolated instances simultaneously, run from different directories such as git worktree directories.</value>
   </data>
   <data name="NoBuildArgumentDescription" xml:space="preserve">
-    <value>Do not build or restore the project before running.</value>
+    <value>Do not build or restore the project before running</value>
   </data>
   <data name="NoBuildNotSupportedWithWatchMode" xml:space="preserve">
     <value>The --no-build option cannot be used when watch mode is enabled.</value>

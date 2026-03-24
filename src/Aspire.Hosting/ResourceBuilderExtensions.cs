@@ -3,6 +3,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography.X509Certificates;
 using Aspire.Dashboard.Model;
@@ -21,6 +22,7 @@ namespace Aspire.Hosting;
 public static class ResourceBuilderExtensions
 {
     private const string ConnectionStringEnvironmentName = "ConnectionStrings__";
+    private static readonly MethodInfo s_dispatchCustomWithReferenceMethod = typeof(ResourceBuilderExtensions).GetMethod(nameof(DispatchCustomWithReference), BindingFlags.NonPublic | BindingFlags.Static)!;
 
     /// <summary>
     /// Adds an environment variable to the resource.
@@ -545,6 +547,136 @@ public static class ResourceBuilderExtensions
         return builder.WithAnnotation(new ReferenceEnvironmentInjectionAnnotation(flags));
     }
 
+    [AspireExport("withReference", Description = "Adds a reference to another resource")]
+    internal static IResourceBuilder<TDestination> WithReference<TDestination>(
+        this IResourceBuilder<TDestination> builder,
+        IResourceBuilder<IResource> source,
+        string? connectionName = null,
+        bool optional = false,
+        string? name = null)
+        where TDestination : IResourceWithEnvironment
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(source);
+
+        if (TryDispatchCustomWithReference(builder, source, connectionName, optional, name, out var customDispatch))
+        {
+            return customDispatch;
+        }
+
+        var connectionStringSource = source as IResourceBuilder<IResourceWithConnectionString>;
+        var serviceDiscoverySource = source as IResourceBuilder<IResourceWithServiceDiscovery>;
+        var externalServiceSource = source as IResourceBuilder<ExternalServiceResource>;
+        var hasConnectionString = source.Resource is IResourceWithConnectionString && connectionStringSource is not null;
+        var hasServiceDiscovery = source.Resource is IResourceWithServiceDiscovery && serviceDiscoverySource is not null;
+        var hasExternalService = source.Resource is ExternalServiceResource && externalServiceSource is not null;
+
+        if (hasExternalService && (connectionName is not null || name is not null))
+        {
+            throw new InvalidOperationException("Reference names are not supported for external services.");
+        }
+
+        if (name is not null && !hasServiceDiscovery)
+        {
+            throw new InvalidOperationException("Named service references are only supported for resources with service discovery.");
+        }
+
+        if (connectionName is not null && name is not null && !hasConnectionString)
+        {
+            throw new InvalidOperationException("Specify either connectionName or name for service discovery references, but not both.");
+        }
+
+        if (optional && !hasConnectionString)
+        {
+            throw new InvalidOperationException("Optional references are only supported for connection string resources.");
+        }
+
+        var appliedReference = false;
+
+        if (hasConnectionString)
+        {
+            builder = WithReference(builder, connectionStringSource!, connectionName, optional);
+            appliedReference = true;
+        }
+
+        if (hasServiceDiscovery)
+        {
+            var serviceName = hasConnectionString ? name : name ?? connectionName;
+            builder = serviceName is null
+                ? WithReference(builder, serviceDiscoverySource!)
+                : WithReference(builder, serviceDiscoverySource!, serviceName);
+            appliedReference = true;
+        }
+
+        if (hasExternalService)
+        {
+            builder = WithReference(builder, externalServiceSource!);
+            appliedReference = true;
+        }
+
+        if (appliedReference)
+        {
+            return builder;
+        }
+
+        throw new InvalidOperationException($"The resource '{source.Resource.Name}' can't be used with withReference because it doesn't provide a connection string, service discovery, or a custom withReference implementation.");
+    }
+
+    private static bool TryDispatchCustomWithReference<TDestination>(
+        IResourceBuilder<TDestination> builder,
+        IResourceBuilder<IResource> source,
+        string? connectionName,
+        bool optional,
+        string? name,
+        [NotNullWhen(true)] out IResourceBuilder<TDestination>? dispatchedBuilder)
+        where TDestination : IResourceWithEnvironment
+    {
+        if (TryDispatchCustomWithReference(builder, source, connectionName, optional, name, typeof(TDestination), out dispatchedBuilder))
+        {
+            return true;
+        }
+
+        return TryDispatchCustomWithReference(builder, source, connectionName, optional, name, source.Resource.GetType(), out dispatchedBuilder);
+    }
+
+    private static bool TryDispatchCustomWithReference<TDestination>(
+        IResourceBuilder<TDestination> builder,
+        IResourceBuilder<IResource> source,
+        string? connectionName,
+        bool optional,
+        string? name,
+        Type customType,
+        [NotNullWhen(true)] out IResourceBuilder<TDestination>? dispatchedBuilder)
+        where TDestination : IResourceWithEnvironment
+    {
+        var customWithReferenceInterface = customType.GetInterfaces()
+            .FirstOrDefault(i => i.IsGenericType
+                && i.GetGenericTypeDefinition() == typeof(IResourceWithCustomWithReference<>)
+                && i.GetGenericArguments()[0] == customType);
+
+        if (customWithReferenceInterface is null)
+        {
+            dispatchedBuilder = null;
+            return false;
+        }
+
+        var dispatchMethod = s_dispatchCustomWithReferenceMethod.MakeGenericMethod(typeof(TDestination), customType);
+        dispatchedBuilder = (IResourceBuilder<TDestination>?)dispatchMethod.Invoke(null, [builder, source, connectionName, optional, name]);
+        return dispatchedBuilder is not null;
+    }
+
+    private static IResourceBuilder<TDestination>? DispatchCustomWithReference<TDestination, TCustom>(
+        IResourceBuilder<TDestination> builder,
+        IResourceBuilder<IResource> source,
+        string? connectionName,
+        bool optional,
+        string? name)
+        where TDestination : IResourceWithEnvironment
+        where TCustom : class, IResource, IResourceWithCustomWithReference<TCustom>
+    {
+        return TCustom.TryWithReference(builder, source, connectionName, optional, name);
+    }
+
     /// <summary>
     /// Injects a connection string as an environment variable from the source resource into the destination resource, using the source resource's name as the connection string name (if not overridden).
     /// The format of the environment variable will be "ConnectionStrings__{sourceResourceName}={connectionString}".
@@ -564,7 +696,7 @@ public static class ResourceBuilderExtensions
     /// <param name="optional"><see langword="true"/> to allow a missing connection string; <see langword="false"/> to throw an exception if the connection string is not found.</param>
     /// <exception cref="DistributedApplicationException">Throws an exception if the connection string resolves to null. It can be null if the resource has no connection string, and if the configuration has no connection string for the source resource.</exception>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withReference", Description = "Adds a reference to another resource")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withReference dispatcher export.")]
     public static IResourceBuilder<TDestination> WithReference<TDestination>(this IResourceBuilder<TDestination> builder, IResourceBuilder<IResourceWithConnectionString> source, string? connectionName = null, bool optional = false)
         where TDestination : IResourceWithEnvironment
     {
@@ -649,7 +781,7 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">The resource where the service discovery information will be injected.</param>
     /// <param name="source">The resource from which to extract service discovery information.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withServiceReference", Description = "Adds a service discovery reference to another resource")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference export.")]
     public static IResourceBuilder<TDestination> WithReference<TDestination>(this IResourceBuilder<TDestination> builder, IResourceBuilder<IResourceWithServiceDiscovery> source)
         where TDestination : IResourceWithEnvironment
     {
@@ -670,7 +802,7 @@ public static class ResourceBuilderExtensions
     /// <param name="source">The resource from which to extract service discovery information.</param>
     /// <param name="name">The name of the resource for the environment variable.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withServiceReferenceNamed", Description = "Adds a named service discovery reference")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference export.")]
     public static IResourceBuilder<TDestination> WithReference<TDestination>(this IResourceBuilder<TDestination> builder, IResourceBuilder<IResourceWithServiceDiscovery> source, string name)
         where TDestination : IResourceWithEnvironment
     {
@@ -910,8 +1042,7 @@ public static class ResourceBuilderExtensions
 
         var endpoint = builder.Resource.Annotations
             .OfType<EndpointAnnotation>()
-            .Where(ea => StringComparers.EndpointAnnotationName.Equals(ea.Name, endpointName))
-            .SingleOrDefault();
+            .SingleOrDefault(ea => string.Equals(ea.Name, endpointName, StringComparisons.EndpointAnnotationName));
 
         if (endpoint != null)
         {

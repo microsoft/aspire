@@ -51,4 +51,55 @@ internal static class FileSystemHelper
             }
         }
     }
+
+    /// <summary>
+    /// Recursively searches for the first file matching any of the given patterns.
+    /// Stops immediately when a match is found.
+    /// </summary>
+    /// <param name="root">Root folder to start search</param>
+    /// <param name="recurseLimit">Maximum directory depth to search. Use 0 to search only the root, or -1 for unlimited depth.</param>
+    /// <param name="patterns">File name patterns, e.g., "*.csproj", "apphost.cs"</param>
+    /// <returns>Full path to first matching file, or null if none found</returns>
+    public static string? FindFirstFile(string root, int recurseLimit = -1, params string[] patterns)
+    {
+        if (!Directory.Exists(root) || patterns.Length == 0)
+        {
+            return null;
+        }
+
+        var dirs = new Stack<(string Path, int Depth)>();
+        dirs.Push((root, 0));
+
+        while (dirs.Count > 0)
+        {
+            var (dir, depth) = dirs.Pop();
+
+            try
+            {
+                // Check for each pattern in this directory
+                foreach (var pattern in patterns)
+                {
+                    foreach (var file in Directory.EnumerateFiles(dir, pattern))
+                    {
+                        return file; // first match, exit immediately
+                    }
+                }
+
+                // Push subdirectories for further search if within depth limit
+                if (recurseLimit < 0 || depth < recurseLimit)
+                {
+                    foreach (var sub in Directory.EnumerateDirectories(dir))
+                    {
+                        dirs.Push((sub, depth + 1));
+                    }
+                }
+            }
+            catch
+            {
+                // Skip directories we can't access (permissions, etc.)
+            }
+        }
+
+        return null;
+    }
 }

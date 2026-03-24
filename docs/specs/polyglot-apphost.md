@@ -563,6 +563,14 @@ Callbacks are passed as string IDs **when invoking a capability that accepts a d
 
 When the host later invokes that callback, arguments use **positional keys** (`p0`, `p1`, ...), not parameter names. See [invokeCallback](#invokecallback-host--guest) for the wire format.
 
+`CancellationToken` is special in generated TypeScript:
+
+- **User-authored inputs** accept `AbortSignal | CancellationToken`
+- **Host-provided values** are materialized as `CancellationToken`
+
+This keeps local TypeScript ergonomic while preserving remote token handles that
+need to round-trip back through the transport layer.
+
 #### Callback Handle Wrapping (TypeScript)
 
 When the host invokes a callback, handle parameters are automatically converted to typed wrapper classes:
@@ -755,9 +763,10 @@ Cancellation tokens enable cooperative cancellation of long-running callbacks.
 
 **Token flow:**
 1. Host creates token when invoking a callback that accepts `CancellationToken`
-2. Host passes token ID in callback args as `$cancellationToken`
-3. Guest can cancel by calling `cancelToken` RPC method
-4. Host disposes token when callback completes
+2. If `CancellationToken` is part of the callback signature, the host passes the token ID in the matching positional `pN` argument
+3. Host also includes the same token ID as `$cancellationToken` metadata for transport-level cancellation wiring
+4. Guest can cancel by calling `cancelToken` RPC method
+5. Host disposes token when callback completes
 
 ```json
 // Callback request with cancellation token
@@ -765,6 +774,7 @@ Cancellation tokens enable cooperative cancellation of long-running callbacks.
     "callback_1_1234567890",
     {
         "p0": {"$handle": "5", "$type": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext"},
+        "p1": "ct_a1b2c3d4-e5f6-7890-abcd-ef1234567890",
         "$cancellationToken": "ct_a1b2c3d4-e5f6-7890-abcd-ef1234567890"
     }
 ]}
@@ -971,6 +981,7 @@ Primitive type mapping:
 | `number` | `number` |
 | `boolean` | `boolean` |
 | `any` | `any` |
+| `CancellationToken` | `CancellationToken` for returned/host-provided values; `AbortSignal \| CancellationToken` for generated input parameters |
 | `{Assembly}/{Type}` | `Handle<'{Assembly}/{Type}'>` (typed handle alias) |
 
 ---
@@ -1013,6 +1024,32 @@ const api = await builder
 // Build and run
 await builder.build().run();
 ```
+
+### Cancellation Ergonomics
+
+Generated TypeScript APIs accept either `AbortSignal` or `CancellationToken`
+for user-supplied cancellation input.
+
+Use `AbortSignal` when you create cancellation in TypeScript:
+
+```typescript
+const controller = new AbortController();
+const connectionStringExpression = await db.uriExpression.get();
+const connectionString = await connectionStringExpression.getValue(controller.signal);
+```
+
+When the host gives you a token through callback context or another generated API,
+the generated SDK returns a `CancellationToken` so the remote handle can be passed
+through other generated calls without losing identity:
+
+```typescript
+const cancellationToken = await context.cancellationToken.get();
+const connectionStringExpression = await db.uriExpression.get();
+const connectionString = await connectionStringExpression.getValue(cancellationToken);
+```
+
+Both shapes are accepted by generated input parameters, so local and remote
+cancellation can be mixed naturally in the same AppHost.
 
 ### Fluent Async Chaining
 
@@ -1414,7 +1451,7 @@ This section explains how to develop and test custom language SDKs using a local
 1. Clone the Aspire repository:
 
    ```bash
-   git clone https://github.com/dotnet/aspire.git
+   git clone https://github.com/microsoft/aspire.git
    cd aspire
    ```
 

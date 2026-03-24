@@ -33,18 +33,18 @@
         <note />
       </trans-unit>
       <trans-unit id="AppHostExitedWithCode">
-        <source>AppHost process exited with code {0}.</source>
-        <target state="translated">Processus AppHost arrêté avec le code {0}.</target>
+        <source>Apphost process exited with code {0}.</source>
+        <target state="needs-review-translation">Processus AppHost arrêté avec le code {0}.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostFailedToBuild">
-        <source>AppHost failed to build.</source>
-        <target state="translated">La génération de la cible AppHost a échoué.</target>
+        <source>Apphost failed to build.</source>
+        <target state="new">Apphost failed to build.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostStartedSuccessfully">
-        <source>AppHost started successfully.</source>
-        <target state="translated">AppHost a démarré correctement.</target>
+        <source>Apphost started successfully.</source>
+        <target state="needs-review-translation">AppHost a démarré correctement.</target>
         <note />
       </trans-unit>
       <trans-unit id="CheckLogsForDetails">
@@ -73,13 +73,13 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Run an Aspire AppHost interactively for development.</source>
-        <target state="translated">Exécuter un AppHost Aspire de manière interactive pour le développement.</target>
+        <source>Run an Aspire apphost interactively for development</source>
+        <target state="needs-review-translation">Exécutez un hôte d’application Aspire en mode développement.</target>
         <note />
       </trans-unit>
       <trans-unit id="DetachArgumentDescription">
-        <source>Run the AppHost in the background and exit after it starts.</source>
-        <target state="translated">Exécuter AppHost en arrière-plan et le quitter après son démarrage.</target>
+        <source>Run the apphost in the background and exit after it starts</source>
+        <target state="needs-review-translation">Exécuter AppHost en arrière-plan et le quitter après son démarrage.</target>
         <note />
       </trans-unit>
       <trans-unit id="Endpoints">
@@ -88,13 +88,13 @@
         <note />
       </trans-unit>
       <trans-unit id="FailedToStartAppHost">
-        <source>Failed to start the AppHost.</source>
-        <target state="translated">Échec du démarrage d’AppHost.</target>
+        <source>Failed to start the apphost.</source>
+        <target state="needs-review-translation">Échec du démarrage d’AppHost.</target>
         <note />
       </trans-unit>
       <trans-unit id="ForceArgumentDescription">
-        <source>Stop any running instance of the AppHost without prompting.</source>
-        <target state="translated">Arrêtez les instances en cours d’exécution de AppHost sans requête.</target>
+        <source>Stop any running instance of the apphost without prompting</source>
+        <target state="needs-review-translation">Arrêtez les instances en cours d’exécution de AppHost sans requête.</target>
         <note />
       </trans-unit>
       <trans-unit id="FormatRequiresDetach">
@@ -113,18 +113,18 @@
         <note />
       </trans-unit>
       <trans-unit id="JsonArgumentDescription">
-        <source>Output format for detached AppHost results.</source>
-        <target state="translated">Format de sortie pour les résultats AppHost détachés.</target>
+        <source>Output format for detached apphost results</source>
+        <target state="needs-review-translation">Afficher le résultat au format JSON (valide uniquement avec --detach).</target>
         <note />
       </trans-unit>
       <trans-unit id="IsolatedArgumentDescription">
-        <source>Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously.</source>
-        <target state="translated">Exécuter en mode isolé avec des ports aléatoires et des secrets utilisateur isolés, ce qui permet à plusieurs instances de fonctionner simultanément.</target>
+        <source>Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously</source>
+        <target state="needs-review-translation">Exécuter en mode isolé avec des ports aléatoires et des secrets utilisateur isolés, ce qui permet à plusieurs instances de fonctionner simultanément.</target>
         <note />
       </trans-unit>
       <trans-unit id="IsolatedModeRunningInstanceWarning">
-        <source>A running instance of this AppHost was found and will be stopped. To run multiple isolated instances simultaneously, run from different directories such as git worktree directories.</source>
-        <target state="translated">Une instance en cours d’exécution de cet AppHost a été détectée et va être arrêtée. Pour exécuter plusieurs instances isolées simultanément, lancez-les depuis des répertoires différents, comme des répertoires git worktree.</target>
+        <source>A running instance of this apphost was found and will be stopped. To run multiple isolated instances simultaneously, run from different directories such as git worktree directories.</source>
+        <target state="needs-review-translation">Une instance en cours d’exécution de cet AppHost a été détectée et va être arrêtée. Pour exécuter plusieurs instances isolées simultanément, lancez-les depuis des répertoires différents, comme des répertoires git worktree.</target>
         <note />
       </trans-unit>
       <trans-unit id="Logs">
@@ -133,8 +133,8 @@
         <note />
       </trans-unit>
       <trans-unit id="NoBuildArgumentDescription">
-        <source>Do not build or restore the project before running.</source>
-        <target state="translated">Ne générer ni ne restaurer le projet avant l’exécution.</target>
+        <source>Do not build or restore the project before running</source>
+        <target state="new">Do not build or restore the project before running</target>
         <note />
       </trans-unit>
       <trans-unit id="NoBuildNotSupportedWithWatchMode">
@@ -153,8 +153,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="translated">Chemin d’accès au fichier projet AppHost Aspire.</target>
+        <source>The path to the Aspire apphost project file</source>
+        <target state="needs-review-translation">Chemin d’accès au fichier projet AppHost Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeRun">
@@ -173,8 +173,8 @@
         <note />
       </trans-unit>
       <trans-unit id="StartDebugSessionArgumentDescription">
-        <source>Whether to start a debug session, if running in an Aspire Terminal.</source>
-        <target state="translated">Indique s’il faut démarrer une session de débogage lorsqu’il s’exécute dans un terminal Aspire.</target>
+        <source>Whether to start a debug session, if running in an Aspire Terminal</source>
+        <target state="needs-review-translation">Indique s’il faut démarrer une session de débogage lorsqu’il s’exécute dans un terminal Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="StartingAppHost">
@@ -203,8 +203,8 @@
         <note>The state of the resource, eg Running</note>
       </trans-unit>
       <trans-unit id="TimeoutWaitingForAppHost">
-        <source>Timeout waiting for AppHost to start.</source>
-        <target state="translated">Délai d’attente pour le démarrage d’AppHost.</target>
+        <source>Timeout waiting for apphost to start.</source>
+        <target state="needs-review-translation">Délai d’attente pour le démarrage d’AppHost.</target>
         <note />
       </trans-unit>
       <trans-unit id="Type">
@@ -218,8 +218,8 @@
         <note />
       </trans-unit>
       <trans-unit id="WatchArgumentDescription">
-        <source>Start project resources in watch mode.</source>
-        <target state="translated">Démarrez les ressources du projet en mode surveillance.</target>
+        <source>Start project resources in watch mode</source>
+        <target state="needs-review-translation">Démarrez les ressources du projet en mode surveillance.</target>
         <note />
       </trans-unit>
     </body>

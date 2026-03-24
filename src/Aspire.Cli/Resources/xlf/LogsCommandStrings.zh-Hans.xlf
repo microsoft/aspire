@@ -3,18 +3,18 @@
   <file datatype="xml" source-language="en" target-language="zh-Hans" original="../LogsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Display logs from resources in a running apphost.</source>
-        <target state="translated">显示正在运行的 apphost 中资源的日志。</target>
+        <source>Display logs from resources in a running apphost</source>
+        <target state="needs-review-translation">显示正在运行的 Aspire 应用主机中资源的日志。</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
-        <source>Stream logs in real-time as they are written.</source>
-        <target state="translated">在写入日志时实时流式传输这些日志。</target>
+        <source>Stream logs in real-time as they are written</source>
+        <target state="needs-review-translation">在写入日志时实时流式传输这些日志。</target>
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">输出格式(表格或 Json)。</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">以 JSON 格式输出日志(NDJSON)。</target>
         <note />
       </trans-unit>
       <trans-unit id="NoResourcesFound">
@@ -24,7 +24,7 @@
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The name of the resource to get logs for. If not specified, logs from all resources are shown.</source>
-        <target state="translated">要获取其日志的资源的名称。如果未指定，则显示所有资源的日志。</target>
+        <target state="needs-review-translation">要获取其日志的资源的名称。如果未指定，则显示所有资源的日志。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">
@@ -48,8 +48,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TailOptionDescription">
-        <source>Number of lines to show from the end of logs (default: all).</source>
-        <target state="translated">要在日志末尾显示的行数(默认: 全部)。</target>
+        <source>Number of lines to show from the end of logs (default: all)</source>
+        <target state="needs-review-translation">要在日志末尾显示的行数(默认: 全部)。</target>
         <note />
       </trans-unit>
       <trans-unit id="TailRequiresResource">
@@ -58,8 +58,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TimestampsOptionDescription">
-        <source>Show timestamps for each log line.</source>
-        <target state="translated">显示每个日志行的时间戳。</target>
+        <source>Show timestamps for each log line</source>
+        <target state="new">Show timestamps for each log line</target>
         <note />
       </trans-unit>
       <trans-unit id="GettingLogs">

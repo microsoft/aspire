@@ -128,10 +128,10 @@
     <comment>{1} is a comma-separated list of locales.</comment>
   </data>
   <data name="AlreadyConnectedToBackchannel" xml:space="preserve">
-    <value>Already connected to AppHost backchannel.</value>
+    <value>Already connected to apphost backchannel.</value>
   </data>
   <data name="AppHostIncompatibleWithCli" xml:space="preserve">
-    <value>AppHost is incompatible with the CLI. The AppHost must be updated to a version that supports the {0} capability.</value>
+    <value>Apphost is incompatible with the CLI. The apphost must be updated to a version that supports the {0} capability.</value>
   </data>
   <data name="ExtensionIncompatibleWithCli" xml:space="preserve">
     <value>Aspire Extension is incompatible with the CLI. The Extension must be updated to a version that supports the {0} capability.</value>
@@ -150,7 +150,7 @@
     <comment>{0} is a number</comment>
   </data>
   <data name="AppHostWasSpecifiedButDoesntExist" xml:space="preserve">
-    <value>AppHost file was specified in '{0}' but it does not exist at '{1}'.</value>
+    <value>Apphost file was specified in '{0}' but it does not exist at '{1}'.</value>
     <comment>{0} is a path</comment>
   </data>
   <data name="ProjectFileDoesntExist" xml:space="preserve">
@@ -184,7 +184,7 @@
     <value>No project file found.</value>
   </data>
   <data name="ProjectFileNotAppHostProject" xml:space="preserve">
-    <value>Project file is not an Aspire AppHost project.</value>
+    <value>Project file is not an Aspire apphost project.</value>
   </data>
   <data name="AspireHostingVersionNull" xml:space="preserve">
     <value>AspireHostingVersion is null</value>
@@ -221,12 +221,16 @@
     <value>No buildable app hosts were found, but there may have been unbuildable app hosts.</value>
   </data>
   <data name="SingleFileAppHostFeatureNotEnabled" xml:space="preserve">
-    <value>Single file AppHost feature is not enabled. To use .cs AppHost files, enable the feature using configuration.</value>
+    <value>Single file apphost feature is not enabled. To use .cs apphost files, enable the feature using configuration.</value>
   </data>
   <data name="CommandNotSupportedWithSingleFileAppHost" xml:space="preserve">
-    <value>This command is not yet supported with single file AppHosts.</value>
+    <value>This command is not yet supported with single file apphosts.</value>
   </data>
   <data name="ProjectFileUnsupportedInCurrentEnvironment" xml:space="preserve">
     <value>Project is not supported in the current environment: {0}</value>
+  </data>
+  <data name="InvalidJsonInConfigFile" xml:space="preserve">
+    <value>The configuration file '{0}' contains invalid JSON: {1}</value>
+    <comment>{0} is the file path, {1} is the exception message</comment>
   </data>
 </root>

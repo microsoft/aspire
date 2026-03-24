@@ -214,8 +214,12 @@ jobs:
           name: aspire-extension
           path: extension/out/aspire-extension.vsix
 
+  typescript_sdk_tests:
+    name: TypeScript SDK Unit Tests
+    uses: ./.github/workflows/typescript-sdk-tests.yml
+
   results:
-    if: ${{ always() && github.repository_owner == 'dotnet' }}
+    if: ${{ always() && github.repository_owner == 'microsoft' }}
     runs-on: ubuntu-latest
     name: Final Test Results
     needs: [
@@ -225,6 +229,7 @@ jobs:
       build_cli_archive_windows,
       build_cli_archive_macos,
       extension_tests_win,
+      typescript_sdk_tests,
       tests_no_nugets,
       tests_no_nugets_overflow,
       tests_requires_nugets_linux,
@@ -289,6 +294,7 @@ jobs:
                 contains(needs.*.result, 'cancelled') ||
                 (github.event_name == 'pull_request' &&
                  (needs.extension_tests_win.result == 'skipped' ||
+                   needs.typescript_sdk_tests.result == 'skipped' ||
                    needs.tests_no_nugets.result == 'skipped' ||
                    needs.tests_requires_nugets_linux.result == 'skipped' ||
                    needs.tests_requires_nugets_windows.result == 'skipped' ||
@@ -298,6 +304,7 @@ jobs:
                   needs.polyglot_validation.result == 'skipped')) ||
                 (github.event_name != 'pull_request' &&
                  (needs.extension_tests_win.result == 'skipped' ||
+                   needs.typescript_sdk_tests.result == 'skipped' ||
                    needs.tests_no_nugets.result == 'skipped' ||
                    needs.tests_requires_nugets_linux.result == 'skipped' ||
                    needs.tests_requires_nugets_windows.result == 'skipped' ||

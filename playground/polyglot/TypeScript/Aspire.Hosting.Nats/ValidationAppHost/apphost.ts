@@ -36,8 +36,8 @@ const nats4 = await builder.addNats("messaging4", {
 const consumer = await builder.addContainer("consumer", "myimage");
 await consumer.withReference(nats);
 
-// withServiceReference — service discovery reference
-await consumer.withServiceReference(nats);
+// withReference — with explicit connection name option
+await consumer.withReference(nats4, { connectionName: "messaging4-connection" });
 
 // ---- Property access on NatsServerResource ----
 const _endpoint = await nats.primaryEndpoint.get();

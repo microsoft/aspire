@@ -78,7 +78,7 @@ internal sealed class PlaywrightCliRunner(ILogger<PlaywrightCliRunner> logger) :
     }
 
     /// <inheritdoc />
-    public async Task<bool> InstallSkillsAsync(CancellationToken cancellationToken)
+    public async Task<bool> InstallSkillsAsync(string workingDirectory, CancellationToken cancellationToken)
     {
         var executablePath = PathLookupHelper.FindFullPathFromPath("playwright-cli");
         if (executablePath is null)
@@ -94,7 +94,8 @@ internal sealed class PlaywrightCliRunner(ILogger<PlaywrightCliRunner> logger) :
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
-                CreateNoWindow = true
+                CreateNoWindow = true,
+                WorkingDirectory = workingDirectory
             };
 
             startInfo.ArgumentList.Add("install");

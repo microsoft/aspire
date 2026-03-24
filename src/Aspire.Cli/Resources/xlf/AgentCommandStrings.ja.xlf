@@ -23,8 +23,8 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Manage AI agent specific setup.</source>
-        <target state="translated">AI エージェント固有のセットアップを管理します。</target>
+        <source>Manage AI agent environment configuration</source>
+        <target state="needs-review-translation">AI エージェントの統合を管理します。</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigureMcpServer">
@@ -33,8 +33,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_Description">
-        <source>Initialize agent environment configuration for detected agents.</source>
-        <target state="translated">検出されたエージェントのエージェント環境構成を初期化します。</target>
+        <source>Initialize agent environment configuration for detected agents</source>
+        <target state="needs-review-translation">検出されたエージェントのエージェント環境構成を初期化します。</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstallSkillFile">
@@ -58,8 +58,8 @@
         <note />
       </trans-unit>
       <trans-unit id="McpCommand_Description">
-        <source>Start the MCP (Model Context Protocol) server.</source>
-        <target state="translated">MCP (モデル コンテキスト プロトコル) サーバーを起動します。</target>
+        <source>Start the MCP (Model Context Protocol) server</source>
+        <target state="needs-review-translation">MCP (モデル コンテキスト プロトコル) サーバーを起動します。</target>
         <note />
       </trans-unit>
       <trans-unit id="SkipNoneDescription">

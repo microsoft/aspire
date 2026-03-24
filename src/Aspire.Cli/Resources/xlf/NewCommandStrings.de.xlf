@@ -13,8 +13,8 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Create a new app from an Aspire starter template.</source>
-        <target state="translated">Erstellen Sie eine neue App aus einer Aspire-Startervorlage.</target>
+        <source>Create a new app from an Aspire starter template</source>
+        <target state="needs-review-translation">Erstellen Sie ein neues Aspire-Projekt.</target>
         <note />
       </trans-unit>
       <trans-unit id="EnterTheOutputPath">
@@ -33,18 +33,18 @@
         <note />
       </trans-unit>
       <trans-unit id="LanguageOptionDescription">
-        <source>The programming language for the AppHost.</source>
-        <target state="translated">Die Programmiersprache für den AppHost.</target>
+        <source>The programming language for the apphost</source>
+        <target state="new">The programming language for the apphost</target>
         <note />
       </trans-unit>
       <trans-unit id="NameArgumentDescription">
-        <source>The name of the project to create.</source>
-        <target state="translated">Der Name des zu erstellenden Projekts.</target>
+        <source>The name of the project to create</source>
+        <target state="needs-review-translation">Der Name des zu erstellenden Projekts.</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputArgumentDescription">
-        <source>The output path for the project.</source>
-        <target state="translated">Der Ausgabepfad für das Projekt.</target>
+        <source>The output path for the project</source>
+        <target state="needs-review-translation">Der Ausgabepfad für das Projekt.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResolvingTemplateVersion">
@@ -63,8 +63,8 @@
         <note />
       </trans-unit>
       <trans-unit id="SourceArgumentDescription">
-        <source>The NuGet source to use for the project templates.</source>
-        <target state="translated">Die NuGet-Quelle, die für die Projektvorlagen verwendet werden soll.</target>
+        <source>The NuGet source to use for the project templates</source>
+        <target state="needs-review-translation">Die NuGet-Quelle, die für die Projektvorlagen verwendet werden soll.</target>
         <note />
       </trans-unit>
       <trans-unit id="UsePrereleaseTemplates">
@@ -73,8 +73,8 @@
         <note />
       </trans-unit>
       <trans-unit id="VersionArgumentDescription">
-        <source>The version of the project templates to use.</source>
-        <target state="translated">Die Version der zu verwendenden Projektvorlagen.</target>
+        <source>The version of the project templates to use</source>
+        <target state="needs-review-translation">Die Version der zu verwendenden Projektvorlagen.</target>
         <note />
       </trans-unit>
     </body>

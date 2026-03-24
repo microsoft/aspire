@@ -77,97 +77,79 @@ public sealed class AcaExistingRegistryDeploymentTests(ITestOutputHelper output)
             using var terminal = DeploymentE2ETestHelpers.CreateTestTerminal();
             var pendingRun = terminal.RunAsync(cancellationToken);
 
-            // Pattern searchers for aspire add prompts
-            var waitingForAddVersionSelectionPrompt = new CellPatternSearcher()
-                .Find("(based on NuGet.config)");
-
-            // Pattern searchers for deployment completion
-            var waitingForPipelineSucceeded = new CellPatternSearcher()
-                .Find("PIPELINE SUCCEEDED");
-
-            var waitingForPipelineFailed = new CellPatternSearcher()
-                .Find("PIPELINE FAILED");
-
             var counter = new SequenceCounter();
-            var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+            var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
             // Step 1: Prepare environment
             output.WriteLine("Step 1: Preparing environment...");
-            sequenceBuilder.PrepareEnvironment(workspace, counter);
+            await auto.PrepareEnvironmentAsync(workspace, counter);
 
             // Step 2: Set up CLI environment (in CI)
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
                 output.WriteLine("Step 2: Using pre-installed Aspire CLI from local build...");
-                sequenceBuilder.SourceAspireCliEnvironment(counter);
+                await auto.SourceAspireCliEnvironmentAsync(counter);
             }
 
             // Step 3: Pre-create resource group and ACR via az CLI
             output.WriteLine("Step 3: Pre-creating resource group and ACR...");
-            sequenceBuilder
-                .Type($"az group create --name {resourceGroupName} --location westus3 -o none")
-                .Enter()
-                .WaitForSuccessPrompt(counter, TimeSpan.FromSeconds(60));
+            await auto.TypeAsync($"az group create --name {resourceGroupName} --location westus3 -o none");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
-            sequenceBuilder
-                .Type($"az acr create --name {acrName} --resource-group {resourceGroupName} --sku Basic --admin-enabled false -o none")
-                .Enter()
-                .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(3));
+            await auto.TypeAsync($"az acr create --name {acrName} --resource-group {resourceGroupName} --sku Basic --admin-enabled false -o none");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(3));
 
             output.WriteLine($"Pre-created ACR: {acrName} in resource group: {resourceGroupName}");
 
             // Step 4: Create starter project using aspire new with interactive prompts
             output.WriteLine("Step 4: Creating starter project...");
-            sequenceBuilder.AspireNew(projectName, counter, useRedisCache: false);
+            await auto.AspireNewAsync(projectName, counter, useRedisCache: false);
 
             // Step 5: Navigate to project directory
             output.WriteLine("Step 5: Navigating to project directory...");
-            sequenceBuilder
-                .Type($"cd {projectName}")
-                .Enter()
-                .WaitForSuccessPrompt(counter);
+            await auto.TypeAsync($"cd {projectName}");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
 
             // Step 6: Add Aspire.Hosting.Azure.AppContainers package
             output.WriteLine("Step 6: Adding Azure Container Apps hosting package...");
-            sequenceBuilder.Type("aspire add Aspire.Hosting.Azure.AppContainers")
-                .Enter();
+            await auto.TypeAsync("aspire add Aspire.Hosting.Azure.AppContainers");
+            await auto.EnterAsync();
 
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
-                sequenceBuilder
-                    .WaitUntil(s => waitingForAddVersionSelectionPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(60))
-                    .Enter();
+                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
+                await auto.EnterAsync();
             }
 
-            sequenceBuilder.WaitForSuccessPrompt(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
 
             // Step 7: Add Aspire.Hosting.Azure.ContainerRegistry package
             output.WriteLine("Step 7: Adding Azure Container Registry hosting package...");
-            sequenceBuilder.Type("aspire add Aspire.Hosting.Azure.ContainerRegistry")
-                .Enter();
+            await auto.TypeAsync("aspire add Aspire.Hosting.Azure.ContainerRegistry");
+            await auto.EnterAsync();
 
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
-                sequenceBuilder
-                    .WaitUntil(s => waitingForAddVersionSelectionPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(60))
-                    .Enter();
+                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
+                await auto.EnterAsync();
             }
 
-            sequenceBuilder.WaitForSuccessPrompt(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
 
             // Step 8: Modify AppHost.cs to reference the existing ACR
-            sequenceBuilder.ExecuteCallback(() =>
-            {
-                var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
-                var appHostDir = Path.Combine(projectDir, $"{projectName}.AppHost");
-                var appHostFilePath = Path.Combine(appHostDir, "AppHost.cs");
+            var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
+            var appHostDir = Path.Combine(projectDir, $"{projectName}.AppHost");
+            var appHostFilePath = Path.Combine(appHostDir, "AppHost.cs");
 
-                output.WriteLine($"Looking for AppHost.cs at: {appHostFilePath}");
+            output.WriteLine($"Looking for AppHost.cs at: {appHostFilePath}");
 
-                var content = File.ReadAllText(appHostFilePath);
+            var content = File.ReadAllText(appHostFilePath);
 
-                var buildRunPattern = "builder.Build().Run();";
-                var replacement = """
+            var buildRunPattern = "builder.Build().Run();";
+            var replacement = """
 // Reference existing Azure Container Registry via parameter
 var acrName = builder.AddParameter("acrName");
 var acr = builder.AddAzureContainerRegistry("existingacr").AsExisting(acrName, null);
@@ -176,56 +158,52 @@ builder.AddAzureContainerAppEnvironment("infra").WithAzureContainerRegistry(acr)
 builder.Build().Run();
 """;
 
-                content = content.Replace(buildRunPattern, replacement);
-                File.WriteAllText(appHostFilePath, content);
+            content = content.Replace(buildRunPattern, replacement);
+            File.WriteAllText(appHostFilePath, content);
 
-                output.WriteLine($"Modified AppHost.cs at: {appHostFilePath}");
-            });
+            output.WriteLine($"Modified AppHost.cs at: {appHostFilePath}");
 
             // Step 9: Navigate to AppHost project directory
             output.WriteLine("Step 9: Navigating to AppHost directory...");
-            sequenceBuilder
-                .Type($"cd {projectName}.AppHost")
-                .Enter()
-                .WaitForSuccessPrompt(counter);
+            await auto.TypeAsync($"cd {projectName}.AppHost");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
 
             // Step 10: Set environment variables for deployment including ACR parameter
-            sequenceBuilder.Type(
-                    $"unset ASPIRE_PLAYGROUND && " +
-                    $"export AZURE__LOCATION=westus3 && " +
-                    $"export AZURE__RESOURCEGROUP={resourceGroupName} && " +
-                    $"export Parameters__acrName={acrName}")
-                .Enter()
-                .WaitForSuccessPrompt(counter);
+            await auto.TypeAsync(
+                $"unset ASPIRE_PLAYGROUND && " +
+                $"export AZURE__LOCATION=westus3 && " +
+                $"export AZURE__RESOURCEGROUP={resourceGroupName} && " +
+                $"export Parameters__acrName={acrName}");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
 
             // Step 11: Deploy to Azure Container Apps using aspire deploy
             output.WriteLine("Step 11: Starting Azure Container Apps deployment...");
             var pipelineSucceeded = false;
-            sequenceBuilder
-                .Type("aspire deploy --clear-cache")
-                .Enter()
-                .WaitUntil(s =>
+            await auto.TypeAsync("aspire deploy --clear-cache");
+            await auto.EnterAsync();
+            await auto.WaitUntilAsync(s =>
+            {
+                if (s.ContainsText("PIPELINE SUCCEEDED"))
                 {
-                    if (waitingForPipelineSucceeded.Search(s).Count > 0)
-                    {
-                        pipelineSucceeded = true;
-                        return true;
-                    }
-                    return waitingForPipelineFailed.Search(s).Count > 0;
-                }, TimeSpan.FromMinutes(35))
-                .ExecuteCallback(() =>
-                {
-                    if (!pipelineSucceeded)
-                    {
-                        throw new InvalidOperationException("Deployment pipeline failed. Check the terminal output for details.");
-                    }
-                })
-                .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(2));
+                    pipelineSucceeded = true;
+                    return true;
+                }
+                return s.ContainsText("PIPELINE FAILED");
+            }, timeout: TimeSpan.FromMinutes(35), description: "pipeline succeeded or failed");
+
+            if (!pipelineSucceeded)
+            {
+                throw new InvalidOperationException("Deployment pipeline failed. Check the terminal output for details.");
+            }
+
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
             // Step 12: Extract deployment URLs and verify endpoints with retry
             output.WriteLine("Step 12: Verifying deployed endpoints...");
-            sequenceBuilder
-                .Type($"RG_NAME=\"{resourceGroupName}\" && " +
+            await auto.TypeAsync(
+                $"RG_NAME=\"{resourceGroupName}\" && " +
                       "echo \"Resource group: $RG_NAME\" && " +
                       "if ! az group show -n \"$RG_NAME\" &>/dev/null; then echo \"❌ Resource group not found\"; exit 1; fi && " +
                       "urls=$(az containerapp list -g \"$RG_NAME\" --query \"[].properties.configuration.ingress.fqdn\" -o tsv 2>/dev/null | grep -v '\\.internal\\.') && " +
@@ -241,14 +219,14 @@ builder.Build().Run();
                       "done; " +
                       "if [ \"$success\" -eq 0 ]; then echo \"  ❌ Failed after 18 attempts\"; failed=1; fi; " +
                       "done && " +
-                      "if [ \"$failed\" -ne 0 ]; then echo \"❌ One or more endpoint checks failed\"; exit 1; fi")
-                .Enter()
-                .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(5));
+                "if [ \"$failed\" -ne 0 ]; then echo \"❌ One or more endpoint checks failed\"; exit 1; fi");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
 
             // Step 13: Verify the pre-existing ACR contains container images
             output.WriteLine("Step 13: Verifying container images in pre-existing ACR...");
-            sequenceBuilder
-                .Type($"echo \"ACR: {acrName}\" && " +
+            await auto.TypeAsync(
+                $"echo \"ACR: {acrName}\" && " +
                       $"REPOS=$(az acr repository list --name \"{acrName}\" -o tsv) && " +
                       "echo \"Repositories: $REPOS\" && " +
                       "if [ -z \"$REPOS\" ]; then echo \"❌ No container images found in ACR\"; exit 1; fi && " +
@@ -257,17 +235,14 @@ builder.Build().Run();
                       "echo \"  $repo: $TAGS\"; " +
                       "if [ -z \"$TAGS\" ]; then echo \"  ❌ No tags for $repo\"; exit 1; fi; " +
                       "done && " +
-                      "echo \"✅ All container images verified in ACR\"")
-                .Enter()
-                .WaitForSuccessPrompt(counter, TimeSpan.FromSeconds(60));
+                "echo \"✅ All container images verified in ACR\"");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
             // Step 14: Exit terminal
-            sequenceBuilder
-                .Type("exit")
-                .Enter();
+            await auto.TypeAsync("exit");
+            await auto.EnterAsync();
 
-            var sequence = sequenceBuilder.Build();
-            await sequence.ApplyAsync(terminal, cancellationToken);
             await pendingRun;
 
             var duration = DateTime.UtcNow - startTime;

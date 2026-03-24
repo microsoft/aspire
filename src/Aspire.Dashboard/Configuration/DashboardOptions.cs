@@ -150,7 +150,7 @@ public sealed class ApiOptions
     /// <summary>
     /// Gets or sets whether the Telemetry HTTP API is enabled.
     /// When false, the /api/telemetry/* endpoints are not registered.
-    /// Defaults to true.
+    /// Defaults to false.
     /// </summary>
     public bool? Enabled { get; set; }
 

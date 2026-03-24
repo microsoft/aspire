@@ -3,7 +3,7 @@
 
 using System.Globalization;
 using System.Reflection;
-using Aspire.Hosting.Ats;
+using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.Python;
 
@@ -187,7 +187,7 @@ public sealed class AtsPythonCodeGenerator : ICodeGenerator
         AtsConstants.Void => "None",
         AtsConstants.Any => "typing.Any",
         AtsConstants.DateTime => "datetime.datetime",
-        AtsConstants.DateTimeOffset => "datetime.timedelta",
+        AtsConstants.DateTimeOffset => "datetime.datetime",
         AtsConstants.DateOnly => "datetime.date",
         AtsConstants.TimeOnly => "datetime.time",
         AtsConstants.TimeSpan => "float",

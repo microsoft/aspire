@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Xunit;
@@ -26,83 +27,60 @@ public sealed class PsCommandTests(ITestOutputHelper output)
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
-        // Pattern searchers for start/stop/ps commands
-        var waitForAppHostStartedSuccessfully = new CellPatternSearcher()
-            .Find("AppHost started successfully.");
-
-        var waitForAppHostStoppedSuccessfully = new CellPatternSearcher()
-            .Find("AppHost stopped successfully.");
-
-        // Pattern for aspire ps output - should show the AppHost path and PID columns
-        var waitForPsOutputWithAppHost = new CellPatternSearcher()
-            .Find("AspirePsTestApp.AppHost");
-
-        // Pattern for aspire ps JSON output
-        var waitForPsJsonOutput = new CellPatternSearcher()
-            .Find("\"appHostPath\":");
-
-        // Pattern for aspire ps when no AppHosts running
-        var waitForNoRunningAppHosts = new CellPatternSearcher()
-            .Find("No running AppHost found");
-
         var counter = new SequenceCounter();
-        var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
-        sequenceBuilder.PrepareDockerEnvironment(counter, workspace);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        sequenceBuilder.InstallAspireCliInDocker(installMode, counter);
+        await auto.InstallAspireCliInDockerAsync(installMode, counter);
 
         // Create a new project using aspire new
-        sequenceBuilder.AspireNew("AspirePsTestApp", counter);
+        await auto.AspireNewAsync("AspirePsTestApp", counter);
 
         // Navigate to the AppHost directory
-        sequenceBuilder.Type("cd AspirePsTestApp/AspirePsTestApp.AppHost")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("cd AspirePsTestApp/AspirePsTestApp.AppHost");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // First, verify aspire ps shows no running AppHosts
-        sequenceBuilder.Type("aspire ps")
-            .Enter()
-            .WaitUntil(s => waitForNoRunningAppHosts.Search(s).Count > 0, TimeSpan.FromSeconds(30))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire ps");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(SharedCommandStrings.AppHostNotRunning, timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Start the AppHost in the background using aspire start
-        sequenceBuilder.Type("aspire start")
-            .Enter()
-            .WaitUntil(s => waitForAppHostStartedSuccessfully.Search(s).Count > 0, TimeSpan.FromMinutes(3))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire start");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Now verify aspire ps shows the running AppHost
-        sequenceBuilder.Type("aspire ps")
-            .Enter()
-            .WaitUntil(s => waitForPsOutputWithAppHost.Search(s).Count > 0, TimeSpan.FromSeconds(30))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire ps");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("AspirePsTestApp.AppHost", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Test aspire ps --format json output
-        sequenceBuilder.Type("aspire ps --format json")
-            .Enter()
-            .WaitUntil(s => waitForPsJsonOutput.Search(s).Count > 0, TimeSpan.FromSeconds(30))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire ps --format json");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("\"appHostPath\":", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Stop the AppHost using aspire stop
-        sequenceBuilder.Type("aspire stop")
-            .Enter()
-            .WaitUntil(s => waitForAppHostStoppedSuccessfully.Search(s).Count > 0, TimeSpan.FromMinutes(1))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire stop");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(StopCommandStrings.AppHostStoppedSuccessfully, timeout: TimeSpan.FromMinutes(1));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Verify aspire ps shows no running AppHosts again after stop
-        sequenceBuilder.Type("aspire ps")
-            .Enter()
-            .WaitUntil(s => waitForNoRunningAppHosts.Search(s).Count > 0, TimeSpan.FromSeconds(30))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire ps");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(SharedCommandStrings.AppHostNotRunning, timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Exit the shell
-        sequenceBuilder.Type("exit")
-            .Enter();
-
-        var sequence = sequenceBuilder.Build();
-
-        await sequence.ApplyAsync(terminal, TestContext.Current.CancellationToken);
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
 
         await pendingRun;
     }
@@ -120,11 +98,11 @@ public sealed class PsCommandTests(ITestOutputHelper output)
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
         var counter = new SequenceCounter();
-        var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
-        sequenceBuilder.PrepareDockerEnvironment(counter, workspace);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        sequenceBuilder.InstallAspireCliInDocker(installMode, counter);
+        await auto.InstallAspireCliInDockerAsync(installMode, counter);
 
         var outputFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "ps-output.json");
         var containerOutputFilePath = CliE2ETestHelpers.ToContainerPath(outputFilePath, workspace);
@@ -134,24 +112,17 @@ public sealed class PsCommandTests(ITestOutputHelper output)
         // JSON output goes to stdout (redirected to the file).
         // We only wait for the success prompt since the Spectre status spinner is
         // transient and erased before WaitUntil polling can observe it.
-        sequenceBuilder.Type($"aspire ps --format json > {containerOutputFilePath}")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync($"aspire ps --format json > {containerOutputFilePath}");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Verify the file contains only the expected JSON output (empty array).
-        sequenceBuilder.ExecuteCallback(() =>
-        {
-            var content = File.ReadAllText(outputFilePath).Trim();
-            Assert.Equal("[]", content);
-        });
+        var content = File.ReadAllText(outputFilePath).Trim();
+        Assert.Equal("[]", content);
 
         // Exit the shell
-        sequenceBuilder.Type("exit")
-            .Enter();
-
-        var sequence = sequenceBuilder.Build();
-
-        await sequence.ApplyAsync(terminal, TestContext.Current.CancellationToken);
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
 
         await pendingRun;
     }

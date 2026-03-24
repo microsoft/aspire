@@ -41,8 +41,8 @@ await oracle.withReference(otherDb);
 // ---- withReference: with connection name option ----
 await oracle.withReference(otherDb, { connectionName: "secondary-db" });
 
-// ---- withServiceReference: service discovery reference (from core) ----
-await oracle.withServiceReference(otherOracle);
+// ---- withReference: unified reference to another Oracle server resource ----
+await oracle.withReference(otherOracle);
 
 // ---- Fluent chaining: multiple methods chained ----
 const oracle3 = await builder.addOracle("oracledb3")

@@ -8,8 +8,8 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Add a hosting integration to the apphost.</source>
-        <target state="translated">AppHost にホスティング統合を追加します。</target>
+        <source>Add a hosting integration to the apphost</source>
+        <target state="needs-review-translation">Aspire AppHost にホスティング統合を追加します。</target>
         <note />
       </trans-unit>
       <trans-unit id="ErrorOccurredWhileAddingPackage">
@@ -18,8 +18,8 @@
         <note />
       </trans-unit>
       <trans-unit id="IntegrationArgumentDescription">
-        <source>The name of the integration to add (e.g. redis, postgres).</source>
-        <target state="translated">追加する統合の名前 (例: redis、postgres)。</target>
+        <source>The name of the integration to add (e.g. redis, postgres)</source>
+        <target state="needs-review-translation">追加する統合の名前 (例: redis、postgres)。</target>
         <note />
       </trans-unit>
       <trans-unit id="NoIntegrationPackagesFound">
@@ -48,8 +48,8 @@
         <note>{0} is a number, {1} is the log file path</note>
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file to add the integration to.</source>
-        <target state="translated">統合を追加する Aspire AppHost プロジェクト ファイルへのパス。</target>
+        <source>The path to the Aspire apphost project file to add the integration to</source>
+        <target state="needs-review-translation">統合を追加するプロジェクト ファイルへのパス。</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchingForAspirePackages">
@@ -68,17 +68,17 @@
         <note />
       </trans-unit>
       <trans-unit id="SourceArgumentDescription">
-        <source>The NuGet source to use for the integration.</source>
-        <target state="translated">統合に使用する NuGet ソース。</target>
+        <source>The NuGet source to use for the integration</source>
+        <target state="needs-review-translation">統合に使用する NuGet ソース。</target>
         <note />
       </trans-unit>
       <trans-unit id="StoppedRunningInstance" translate="yes" xml:space="preserve">
-          <source>Stopped a running Aspire AppHost instance to allow package modification.</source>
-          <target state="translated">パッケージの変更を可能にするため、実行中の Aspire AppHost インスタンスを停止しました。</target><note />
+          <source>Stopped a running Aspire apphost instance to allow package modification.</source>
+          <target state="new">Stopped a running Aspire apphost instance to allow package modification.</target><note />
         </trans-unit>
       <trans-unit id="UnableToStopRunningInstances">
-        <source>Unable to stop one or more running Aspire AppHost instances. Please stop the application and try again.</source>
-        <target state="translated">実行中の 1 つ以上の Aspire AppHost インスタンスを停止できませんでした。アプリケーションを停止して、もう一度お試しください。</target>
+        <source>Unable to stop one or more running Aspire apphost instances. Please stop the application and try again.</source>
+        <target state="new">Unable to stop one or more running Aspire apphost instances. Please stop the application and try again.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnexpectedNumberOfPackagesFound">
@@ -92,8 +92,8 @@
         <note />
       </trans-unit>
       <trans-unit id="VersionArgumentDescription">
-        <source>The version of the integration to add.</source>
-        <target state="translated">追加する統合のバージョン。</target>
+        <source>The version of the integration to add</source>
+        <target state="needs-review-translation">追加する統合のバージョン。</target>
         <note />
       </trans-unit>
     </body>

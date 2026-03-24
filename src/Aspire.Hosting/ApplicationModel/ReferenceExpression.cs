@@ -221,6 +221,7 @@ public class ReferenceExpression : IManifestExpressionProvider, IValueProvider, 
     /// Gets the value of the expression. The final string value after evaluating the format string and its parameters.
     /// </summary>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/>.</param>
+    [AspireExport("getValue", Description = "Gets the resolved string value of the reference expression asynchronously")]
     public ValueTask<string?> GetValueAsync(CancellationToken cancellationToken)
     {
         return this.GetValueAsync(new(), cancellationToken);

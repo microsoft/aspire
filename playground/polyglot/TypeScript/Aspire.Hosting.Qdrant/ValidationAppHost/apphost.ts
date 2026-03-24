@@ -7,7 +7,7 @@ await builder.addQdrant('qdrant-custom', { apiKey: customApiKey, grpcPort: 16334
 const qdrant = await builder.addQdrant('qdrant');
 await qdrant.withDataVolume({ name: 'qdrant-data' }).withDataBindMount('.', { isReadOnly: true });
 const consumer = await builder.addContainer('consumer', 'busybox');
-await consumer.withQdrantReference(qdrant, { connectionName: 'qdrant' });
+await consumer.withReference(qdrant, { connectionName: 'qdrant' });
 
 // ---- Property access on QdrantServerResource ----
 const _endpoint = await qdrant.primaryEndpoint.get();

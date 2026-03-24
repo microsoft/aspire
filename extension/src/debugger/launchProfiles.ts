@@ -4,6 +4,7 @@ import { ExecutableLaunchConfiguration, EnvVar, ProjectLaunchConfiguration } fro
 import { extensionLogOutputChannel } from '../utils/logging';
 import { isFileBasedApp } from './languages/dotnet';
 import { stripComments } from 'jsonc-parser';
+import { aspireConfigFileName, AspireConfigProfile } from '../utils/cliTypes';
 
 /*
  * Represents a launchSettings.json profile.
@@ -50,18 +51,43 @@ export async function readLaunchSettings(projectPath: string): Promise<LaunchSet
             launchSettingsPath = path.join(projectDir, 'Properties', 'launchSettings.json');
         }
 
-        if (!fs.existsSync(launchSettingsPath)) {
-            extensionLogOutputChannel.debug(`Launch settings file not found at: ${launchSettingsPath}`);
-            return null;
+        if (fs.existsSync(launchSettingsPath)) {
+            let content = fs.readFileSync(launchSettingsPath, 'utf8');
+            // We need to strip comments from the JSON file before parsing
+            content = stripComments(content);
+            const launchSettings = JSON.parse(content) as LaunchSettings;
+
+            extensionLogOutputChannel.debug(`Successfully read launch settings from: ${launchSettingsPath}`);
+            return launchSettings;
         }
 
-        let content = fs.readFileSync(launchSettingsPath, 'utf8');
-        // We need to strip comments from the JSON file before parsing
-        content = stripComments(content);
-        const launchSettings = JSON.parse(content) as LaunchSettings;
+        extensionLogOutputChannel.debug(`Launch settings file not found at: ${launchSettingsPath}`);
 
-        extensionLogOutputChannel.debug(`Successfully read launch settings from: ${launchSettingsPath}`);
-        return launchSettings;
+        // Fall back to aspire.config.json profiles
+        const aspireConfigPath = path.join(path.dirname(projectPath), aspireConfigFileName);
+        if (fs.existsSync(aspireConfigPath)) {
+            let content = fs.readFileSync(aspireConfigPath, 'utf8');
+            content = stripComments(content);
+            const aspireConfig = JSON.parse(content);
+
+            if (aspireConfig?.profiles && typeof aspireConfig.profiles === 'object') {
+                // Convert aspire.config.json profiles to LaunchSettings format
+                const profiles: { [key: string]: LaunchProfile } = {};
+                for (const [name, profile] of Object.entries(aspireConfig.profiles)) {
+                    const p = profile as AspireConfigProfile;
+                    profiles[name] = {
+                        commandName: 'Project',
+                        applicationUrl: p.applicationUrl,
+                        environmentVariables: p.environmentVariables,
+                    };
+                }
+
+                extensionLogOutputChannel.debug(`Successfully read launch profiles from: ${aspireConfigPath}`);
+                return { profiles };
+            }
+        }
+
+        return null;
     } catch (error) {
         extensionLogOutputChannel.error(`Failed to read launch settings for project ${projectPath}: ${error}`);
         return null;

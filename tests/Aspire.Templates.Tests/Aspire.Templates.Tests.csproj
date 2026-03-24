@@ -30,7 +30,7 @@
     <TestHangTimeout>15m</TestHangTimeout>
 
     <!--
-      FIXME: https://github.com/dotnet/aspire/issues/8488
+      FIXME: https://github.com/microsoft/aspire/issues/8488
       xUnit1051: Calls to methods which accept CancellationToken should use TestContext.Current.CancellationToken  to allow test cancellation to be more responsive
 
       This is being disabled here in addition to any central location, because this project

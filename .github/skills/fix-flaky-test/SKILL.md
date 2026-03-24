@@ -3,7 +3,7 @@ name: fix-flaky-test
 description: Reproduces and fixes flaky or quarantined tests. Tries local reproduction first (fast), then falls back to CI reproduce workflow (reproduce-flaky-tests.yml). Use this when asked to investigate, reproduce, debug, or fix a flaky test, a quarantined test, or an intermittently failing test.
 ---
 
-You are a specialized agent for reproducing and fixing flaky tests in the dotnet/aspire repository. You try local reproduction first using `run-test-repeatedly.sh` (Linux/macOS) or `run-test-repeatedly.ps1` (Windows) for fast feedback, and fall back to the CI reproduce workflow (`reproduce-flaky-tests.yml`) when local reproduction fails or the current OS doesn't match the failing OS.
+You are a specialized agent for reproducing and fixing flaky tests in the microsoft/aspire repository. You try local reproduction first using `run-test-repeatedly.sh` (Linux/macOS) or `run-test-repeatedly.ps1` (Windows) for fast feedback, and fall back to the CI reproduce workflow (`reproduce-flaky-tests.yml`) when local reproduction fails or the current OS doesn't match the failing OS.
 
 ## ⛔ MANDATORY: Follow the investigate→reproduce→fix→verify cycle
 
@@ -134,7 +134,7 @@ The steps below are sequential and gated. Complete each step fully before moving
 
 The user may provide:
 - A **test method name** (e.g., `DeployAsync_WithMultipleComputeEnvironments_Works`)
-- A **GitHub issue URL** (e.g., `https://github.com/dotnet/aspire/issues/13287`)
+- A **GitHub issue URL** (e.g., `https://github.com/microsoft/aspire/issues/13287`)
 - Both
 
 **If you only have the test name**, find the tracking issue:
@@ -144,9 +144,9 @@ The user may provide:
    grep -rn "QuarantinedTest" tests/ --include="*.cs" | grep "TestMethodName"
    ```
 
-2. If not found there, look up the test in the **quarantine tracking meta-issue** https://github.com/dotnet/aspire/issues/8813 — this issue tracks all quarantined tests with links to their individual issues:
+2. If not found there, look up the test in the **quarantine tracking meta-issue** https://github.com/microsoft/aspire/issues/8813 — this issue tracks all quarantined tests with links to their individual issues:
    ```bash
-   gh issue view 8813 --repo dotnet/aspire
+   gh issue view 8813 --repo microsoft/aspire
    ```
    Search the output for the test name to find its linked issue.
 
@@ -162,7 +162,7 @@ Quarantined test issues contain tracking tables with per-OS failure rates over t
 
 ```bash
 # Read the issue to get failure data
-gh issue view <issue-number> --repo dotnet/aspire
+gh issue view <issue-number> --repo microsoft/aspire
 ```
 
 ### From the Test Code
@@ -213,7 +213,7 @@ The tracking issue contains ❌ links to failed quarantine runs. Use those run I
 
 ```bash
 # Find the failed job for your test project in a quarantine run
-gh api "repos/dotnet/aspire/actions/runs/<run_id>/jobs?per_page=100&filter=latest" \
+gh api "repos/microsoft/aspire/actions/runs/<run_id>/jobs?per_page=100&filter=latest" \
   --jq '.jobs[] | select(.name | contains("<ProjectShortname>")) | select(.conclusion == "failure") | {id: .id, name: .name}'
 ```
 
@@ -224,7 +224,7 @@ Then download the logs for that job:
 # Use get_job_logs with the job_id, return_content: true, tail_lines: 300
 
 # Or via CLI
-gh api "repos/dotnet/aspire/actions/jobs/<job_id>/logs" > quarantine-failure.log
+gh api "repos/microsoft/aspire/actions/jobs/<job_id>/logs" > quarantine-failure.log
 ```
 
 Search the logs for the test name, error message, and stack trace:
@@ -457,7 +457,7 @@ git push --set-upstream origin <fix-branch>-investigate
 Open a draft PR with prominent WIP marking:
 
 ```bash
-gh pr create --draft --repo dotnet/aspire \
+gh pr create --draft --repo microsoft/aspire \
   --title "🔍 [DO NOT MERGE] Investigation: <test name>" \
   --body "## ⚠️ DO NOT MERGE — Investigation Branch
 
@@ -483,7 +483,7 @@ This branch will be deleted after the fix is verified and a clean PR is created.
 ### 3.3: Trigger the Reproduce Workflow
 
 ```bash
-gh workflow run reproduce-flaky-tests.yml --repo dotnet/aspire --ref <fix-branch>-investigate
+gh workflow run reproduce-flaky-tests.yml --repo microsoft/aspire --ref <fix-branch>-investigate
 ```
 
 This dispatches the workflow from `main` but runs the version from your branch, so your env var edits will be used.
@@ -496,7 +496,7 @@ This dispatches the workflow from `main` but runs the version from your branch, 
 
 ```bash
 # Find the run ID
-gh run list --repo dotnet/aspire --branch <branch> --limit 1 --json databaseId,status
+gh run list --repo microsoft/aspire --branch <branch> --limit 1 --json databaseId,status
 ```
 
 Store the run ID, then poll periodically for completion:
@@ -507,10 +507,10 @@ INSERT OR REPLACE INTO session_state (key, value) VALUES ('reproduce_run_id', '<
 ```bash
 # Poll for completion (use bash mode="async", then read_bash with increasing delays)
 # Avoid `gh run watch` — it produces excessive output that floods the context window.
-gh run view <run-id> --repo dotnet/aspire --json status,conclusion --jq '{status, conclusion}'
+gh run view <run-id> --repo microsoft/aspire --json status,conclusion --jq '{status, conclusion}'
 
 # Check individual job results as they complete
-gh run view <run-id> --repo dotnet/aspire --json jobs \
+gh run view <run-id> --repo microsoft/aspire --json jobs \
   --jq '.jobs[] | select(.status == "completed") | {name: .name, conclusion: .conclusion}'
 ```
 
@@ -518,11 +518,11 @@ gh run view <run-id> --repo dotnet/aspire --json jobs \
 
 ```bash
 # Cancel a specific run
-gh run cancel <run-id> --repo dotnet/aspire
+gh run cancel <run-id> --repo microsoft/aspire
 
 # Cancel all in-progress runs on your branch (useful when iterating)
-gh run list --repo dotnet/aspire --branch <branch> --status in_progress --json databaseId --jq '.[].databaseId' | \
-  xargs -I {} gh run cancel {} --repo dotnet/aspire
+gh run list --repo microsoft/aspire --branch <branch> --status in_progress --json databaseId --jq '.[].databaseId' | \
+  xargs -I {} gh run cancel {} --repo microsoft/aspire
 ```
 
 Always cancel previous reproduce/verify runs before pushing a new configuration. `workflow_dispatch` runs are NOT auto-cancelled, so you must cancel them manually.
@@ -535,10 +535,10 @@ If there are failure artifacts, download them:
 
 ```bash
 # Download failure artifacts
-gh run download <run-id> --repo dotnet/aspire --dir /tmp/failure-logs
+gh run download <run-id> --repo microsoft/aspire --dir /tmp/failure-logs
 
 # Or get logs directly via the GitHub API / MCP tools
-gh api "repos/dotnet/aspire/actions/jobs/<job_id>/logs" > /tmp/failure.log
+gh api "repos/microsoft/aspire/actions/jobs/<job_id>/logs" > /tmp/failure.log
 ```
 
 **Distinguishing test failures from infrastructure failures:**
@@ -637,7 +637,7 @@ Failure logs may come from local runs (Step 2, in `/tmp/test-results-*/`), CI re
 ```bash
 # Get job logs via GitHub MCP tool: get_job_logs with job_id, return_content: true, tail_lines: 300
 # Or via CLI:
-gh api "repos/dotnet/aspire/actions/jobs/<job_id>/logs" > /tmp/failure.log
+gh api "repos/microsoft/aspire/actions/jobs/<job_id>/logs" > /tmp/failure.log
 ```
 
 **Delegate log analysis to a sub-agent** to keep the main context clean:
@@ -757,7 +757,7 @@ git push
 Then trigger the reproduce workflow to verify:
 
 ```bash
-gh workflow run reproduce-flaky-tests.yml --repo dotnet/aspire --ref <fix-branch>-investigate
+gh workflow run reproduce-flaky-tests.yml --repo microsoft/aspire --ref <fix-branch>-investigate
 ```
 
 If the workflow dispatch fails due to permissions (HTTP 403), see the guidance in Step 3.3. Continue to Step 6 but document the failure in the PR description.
@@ -784,7 +784,7 @@ VALUES ('fix_attempt', CAST((SELECT CAST(value AS INTEGER) FROM session_state WH
 
 1. Download the new failure logs:
    ```bash
-   gh run download <run-id> --repo dotnet/aspire --dir /tmp/failure-logs
+   gh run download <run-id> --repo microsoft/aspire --dir /tmp/failure-logs
    ```
 2. Analyze the new failure pattern — is it the same error or a different one?
 3. Refine the fix based on the new evidence
@@ -802,8 +802,8 @@ Cancel any in-progress reproduce or verify runs that are no longer needed:
 
 ```bash
 # List and cancel any remaining runs on your branch
-gh run list --repo dotnet/aspire --branch <branch> --status in_progress --json databaseId,name --jq '.[] | "\(.databaseId) \(.name)"'
-gh run cancel <run-id> --repo dotnet/aspire
+gh run list --repo microsoft/aspire --branch <branch> --status in_progress --json databaseId,name --jq '.[] | "\(.databaseId) \(.name)"'
+gh run cancel <run-id> --repo microsoft/aspire
 ```
 
 ### 6.1: Cherry-Pick Fix to the Clean Branch
@@ -858,7 +858,7 @@ SELECT value FROM session_state WHERE key = 'user_interaction';
 Open a non-draft PR with the fix. The PR body **must** include a note that it was created using the fix-flaky-test skill:
 
 ```bash
-gh pr create --repo dotnet/aspire \
+gh pr create --repo microsoft/aspire \
   --title "<prefix>Fix flaky test: <description>" \
   --body "## Flaky Test Fix
 
@@ -895,19 +895,19 @@ gh pr create --repo dotnet/aspire \
 > **Note:** This PR intentionally does not close #<issue-number>. The test will remain quarantined until a separate unquarantine process confirms it has been stable (zero failures) for a sufficient period. Once stability is confirmed, the test will be unquarantined and the issue will be closed.
 
 ---
-*This fix was generated using the [fix-flaky-test skill](https://github.com/dotnet/aspire/blob/main/.github/skills/fix-flaky-test/SKILL.md).*"
+*This fix was generated using the [fix-flaky-test skill](https://github.com/microsoft/aspire/blob/main/.github/skills/fix-flaky-test/SKILL.md).*"
 ```
 
 **If `gh pr create` fails** (e.g. permissions error, API failure): Do **NOT** delete the branch or undo the work. Instead:
 1. Ensure the clean fix branch is pushed to the remote
 2. Tell the user the PR could not be opened, include the exact error message
-3. Provide the branch name and a direct link they can use to open the PR manually (e.g. `https://github.com/dotnet/aspire/compare/main...<branch-name>`)
+3. Provide the branch name and a direct link they can use to open the PR manually (e.g. `https://github.com/microsoft/aspire/compare/main...<branch-name>`)
 
 ### 6.3: Close the Investigation PR
 
 ```bash
 # Close the investigation draft PR
-gh pr close <investigation-pr-number> --repo dotnet/aspire --delete-branch
+gh pr close <investigation-pr-number> --repo microsoft/aspire --delete-branch
 ```
 
 ### 6.4: Verify No CI Regressions
@@ -916,7 +916,7 @@ After opening the final PR, the regular CI pipeline (`ci.yml`) will run automati
 
 ```bash
 # Find the CI run for your PR
-gh pr checks <pr-number> --repo dotnet/aspire
+gh pr checks <pr-number> --repo microsoft/aspire
 ```
 
 If CI fails on unrelated tests, that's not your problem — note it in the PR. If CI fails on your changed files or the test project you modified, investigate and fix before marking the task complete.

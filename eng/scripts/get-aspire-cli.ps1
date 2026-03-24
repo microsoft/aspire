@@ -341,7 +341,7 @@ function Get-CLIArchitectureFromArchitecture {
             return "arm64"
         }
         default {
-            throw "Architecture '$Architecture' not supported. If you think this is a bug, report it at https://github.com/dotnet/aspire/issues"
+            throw "Architecture '$Architecture' not supported. If you think this is a bug, report it at https://github.com/microsoft/aspire/issues"
         }
     }
 }
@@ -467,6 +467,49 @@ function Invoke-SecureWebRequest {
     }
     catch {
         throw $_.Exception
+    }
+}
+
+# Builds a compact display string for download messages without exposing the full URL.
+function Get-DownloadDescriptor {
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Uri
+    )
+
+    try {
+        $downloadUri = [System.Uri]$Uri
+        $fileName = [System.IO.Path]::GetFileName($downloadUri.AbsolutePath)
+        $trimmedPath = $downloadUri.AbsolutePath.Trim("/")
+        $source = $downloadUri.Host
+
+        if ($trimmedPath -match "^dotnet/[^/]+/aspire/(?<source>.+)/(?<file>[^/]+)$") {
+            $source = $Matches["source"]
+            $fileName = $Matches["file"]
+        }
+        elseif ($trimmedPath -match "^public(?:-checksums)?/aspire/+(?<version>[^/]+)/(?<file>[^/]+)$") {
+            $source = "version/$($Matches["version"])"
+            $fileName = $Matches["file"]
+        }
+        elseif ($trimmedPath -match "^(?<source>.+)/(?<file>[^/]+)$") {
+            $source = $Matches["source"]
+            $fileName = $Matches["file"]
+        }
+
+        if ([string]::IsNullOrWhiteSpace($fileName)) {
+            return $Uri
+        }
+
+        if ([string]::IsNullOrWhiteSpace($source)) {
+            return $fileName
+        }
+
+        return "$fileName from '$source'"
+    }
+    catch {
+        return $Uri
     }
 }
 
@@ -919,11 +962,12 @@ function Get-AspireExtension {
     Write-Message "Downloading Aspire VS Code extension" -Level Info
 
     $extensionUrl = Get-AspireExtensionUrl -Version $Version -Quality $Quality
+    $extensionDescriptor = Get-DownloadDescriptor -Uri $extensionUrl
     $extensionArchive = Join-Path $TempDir $Script:ExtensionArtifactName
 
     try {
-        if ($PSCmdlet.ShouldProcess($extensionArchive, "Download extension from $extensionUrl")) {
-            Write-Message "Downloading from: $extensionUrl" -Level Info
+        if ($PSCmdlet.ShouldProcess($extensionArchive, "Download extension ($extensionDescriptor)")) {
+            Write-Message "Downloading $extensionDescriptor" -Level Info
             Invoke-FileDownload -Uri $extensionUrl -OutputPath $extensionArchive -TimeoutSec $Script:ArchiveDownloadTimeoutSec
             Write-Message "Successfully downloaded extension archive" -Level Verbose
         }
@@ -1144,17 +1188,19 @@ function Install-AspireCli {
         $runtimeIdentifier = "$targetOS-$targetArch"
         $extension = if ($targetOS -eq "win") { "zip" } else { "tar.gz" }
         $urls = Get-AspireCliUrl -Version $Version -Quality $Quality -RuntimeIdentifier $runtimeIdentifier -Extension $extension
+        $archiveDescriptor = Get-DownloadDescriptor -Uri $urls.ArchiveUrl
+        $checksumDescriptor = Get-DownloadDescriptor -Uri $urls.ChecksumUrl
 
         $archivePath = Join-Path $tempDir $urls.ArchiveFilename
         $checksumPath = Join-Path $tempDir $urls.ChecksumFilename
 
-        if ($PSCmdlet.ShouldProcess($urls.ArchiveUrl, "Download CLI archive")) {
+        if ($PSCmdlet.ShouldProcess($archivePath, "Download CLI archive ($archiveDescriptor)")) {
             # Download the Aspire CLI archive
-            Write-Message "Downloading from: $($urls.ArchiveUrl)" -Level Info
+            Write-Message "Downloading $archiveDescriptor" -Level Info
             Invoke-FileDownload -Uri $urls.ArchiveUrl -TimeoutSec $Script:ArchiveDownloadTimeoutSec -OutputPath $archivePath
         }
 
-        if ($PSCmdlet.ShouldProcess($urls.ChecksumUrl, "Download CLI archive checksum")) {
+        if ($PSCmdlet.ShouldProcess($checksumPath, "Download CLI archive checksum ($checksumDescriptor)")) {
             # Download and test the checksum
             Invoke-FileDownload -Uri $urls.ChecksumUrl -TimeoutSec $Script:ChecksumDownloadTimeoutSec -OutputPath $checksumPath
             Test-FileChecksum -ArchiveFile $archivePath -ChecksumFile $checksumPath

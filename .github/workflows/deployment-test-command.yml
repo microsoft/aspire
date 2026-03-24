@@ -23,7 +23,7 @@ jobs:
       ${{
         github.event.comment.body == '/deployment-test' &&
         github.event.issue.pull_request &&
-        github.repository_owner == 'dotnet'
+        github.repository_owner == 'microsoft'
       }}
     runs-on: ubuntu-latest
 

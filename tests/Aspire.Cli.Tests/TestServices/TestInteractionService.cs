@@ -4,6 +4,7 @@
 using System.Collections;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Utils;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
@@ -153,7 +154,7 @@ internal sealed class TestInteractionService : IInteractionService
     {
     }
 
-    public void DisplayLines(IEnumerable<(string Stream, string Line)> lines)
+    public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines)
     {
     }
 

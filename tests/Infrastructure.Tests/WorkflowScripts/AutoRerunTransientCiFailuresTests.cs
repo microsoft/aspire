@@ -64,7 +64,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
 
         Assert.Empty(result.RetryableJobs);
         Assert.Single(result.SkippedJobs);
-        Assert.Equal("Failed steps are outside the retry-safe allowlist.", result.SkippedJobs[0].Reason);
+        Assert.Equal("Failed step 'Compile project' is not covered by the retry-safe rerun rules.", result.SkippedJobs[0].Reason);
     }
 
     [Fact]
@@ -77,7 +77,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
 
         Assert.Empty(result.RetryableJobs);
         Assert.Single(result.SkippedJobs);
-        Assert.Equal("Annotations did not match the transient allowlist.", result.SkippedJobs[0].Reason);
+        Assert.Equal("Failed step 'Set up .NET Core' did not include a retry-safe transient infrastructure signal in the job annotations.", result.SkippedJobs[0].Reason);
     }
 
     [Theory]
@@ -105,7 +105,9 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
 
         Assert.Empty(result.RetryableJobs);
         Assert.Single(result.SkippedJobs);
-        Assert.Equal("Annotations did not match the transient allowlist.", result.SkippedJobs[0].Reason);
+        Assert.Equal(
+            "Failed steps 'Run tests (Windows) | Upload logs, and test results' include a test execution failure, so the job was not retried without a high-confidence infrastructure override.",
+            result.SkippedJobs[0].Reason);
     }
 
     [Fact]
@@ -156,7 +158,9 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
 
         Assert.Empty(result.RetryableJobs);
         Assert.Single(result.SkippedJobs);
-        Assert.Equal("Annotations did not match the transient allowlist.", result.SkippedJobs[0].Reason);
+        Assert.Equal(
+            "Failed steps 'Run tests (Windows) | Upload logs, and test results | Generate test results summary' include a test execution failure, so the job was not retried without a high-confidence infrastructure override.",
+            result.SkippedJobs[0].Reason);
     }
 
     [Fact]
@@ -171,7 +175,9 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
             "error : Unable to load the service index for source https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public/nuget/v3/index.json.");
 
         Assert.Single(result.RetryableJobs);
-        Assert.Equal("Ignored failed step 'Build test project' matched the feed network failure override allowlist.", result.RetryableJobs[0].Reason);
+        Assert.Equal(
+            "Failed step 'Build test project' will be retried because the job log shows a likely transient infrastructure network failure. Matched pattern: `/Unable to load the service index for source https:\\/\\/(?:pkgs\\.dev\\.azure\\.com\\/dnceng|dnceng\\.pkgs\\.visualstudio\\.com)\\/public\\/_packaging\\//i`.",
+            result.RetryableJobs[0].Reason);
     }
 
     [Theory]
@@ -190,7 +196,75 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
             "error : Unable to load the service index for source https://dnceng.pkgs.visualstudio.com/public/_packaging/dotnet9-transport/nuget/v3/index.json.");
 
         Assert.Single(result.RetryableJobs);
-        Assert.Equal($"Ignored failed step '{failedStep}' matched the feed network failure override allowlist.", result.RetryableJobs[0].Reason);
+        Assert.Equal(
+            $"Failed step '{failedStep}' will be retried because the job log shows a likely transient infrastructure network failure. Matched pattern: `/Unable to load the service index for source https:\\/\\/(?:pkgs\\.dev\\.azure\\.com\\/dnceng|dnceng\\.pkgs\\.visualstudio\\.com)\\/public\\/_packaging\\//i`.",
+            result.RetryableJobs[0].Reason);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task AllowsSameNetworkOverrideForBroaderBootstrapStepsOutsideTheOldAllowlist()
+    {
+        WorkflowJob job = CreateJob(failedSteps: ["Run ./.github/actions/enumerate-tests"]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeSingleJobAsync(
+            job,
+            "Process completed with exit code 1.",
+            "error : Unable to load the service index for source https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public/nuget/v3/index.json.");
+
+        Assert.Single(result.RetryableJobs);
+        Assert.Equal(
+            "Failed step 'Run ./.github/actions/enumerate-tests' will be retried because the job log shows a likely transient infrastructure network failure. Matched pattern: `/Unable to load the service index for source https:\\/\\/(?:pkgs\\.dev\\.azure\\.com\\/dnceng|dnceng\\.pkgs\\.visualstudio\\.com)\\/public\\/_packaging\\//i`.",
+            result.RetryableJobs[0].Reason);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task UsesPluralFailedStepLabelWhenMultipleFailedStepsShareALogBasedOverride()
+    {
+        WorkflowJob job = CreateJob(failedSteps: ["Build test project", "Check validation results"]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeSingleJobAsync(
+            job,
+            "Process completed with exit code 1.",
+            "error : Unable to load the service index for source https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public/nuget/v3/index.json.");
+
+        Assert.Single(result.RetryableJobs);
+        Assert.Equal(
+            "Failed steps 'Build test project | Check validation results' will be retried because the job log shows a likely transient infrastructure network failure. Matched pattern: `/Unable to load the service index for source https:\\/\\/(?:pkgs\\.dev\\.azure\\.com\\/dnceng|dnceng\\.pkgs\\.visualstudio\\.com)\\/public\\/_packaging\\//i`.",
+            result.RetryableJobs[0].Reason);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task UsesLongerMarkdownFenceWhenMatchedPatternContainsBackticks()
+    {
+        string result = await InvokeHarnessAsync<string>(
+            "formatMatchedPatternForMarkdown",
+            new
+            {
+                matchedPattern = "/foo`bar/i"
+            });
+
+        Assert.Equal(" Matched pattern: ``/foo`bar/i``.", result);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task DoesNotApplyBroadNetworkOverrideWhenTestExecutionFailed()
+    {
+        WorkflowJob job = CreateJob(failedSteps: ["Run tests (Windows)"]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeSingleJobAsync(
+            job,
+            "Process completed with exit code 1.",
+            "error : Unable to load the service index for source https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public/nuget/v3/index.json.");
+
+        Assert.Empty(result.RetryableJobs);
+        Assert.Single(result.SkippedJobs);
+        Assert.Equal(
+            "Failed step 'Run tests (Windows)' includes a test execution failure, so the job was not retried without a high-confidence infrastructure override.",
+            result.SkippedJobs[0].Reason);
     }
 
     [Fact]
@@ -206,7 +280,53 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
 
         Assert.Empty(result.RetryableJobs);
         Assert.Single(result.SkippedJobs);
-        Assert.Equal("Annotations did not match the transient allowlist.", result.SkippedJobs[0].Reason);
+        Assert.Equal(
+            "Failed step 'Build test project' is only retried when the job shows a high-confidence infrastructure override, and none was found.",
+            result.SkippedJobs[0].Reason);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task UsesAvailableDiagnosticsMessageWhenNoSignalsWereInspectedFromFailedStepsOrLogs()
+    {
+        WorkflowJob job = CreateJob(failedSteps: []);
+
+        AnalyzeFailedJobsResult result = await AnalyzeSingleJobAsync(job, string.Empty);
+
+        Assert.Empty(result.RetryableJobs);
+        Assert.Single(result.SkippedJobs);
+        Assert.Equal(
+            "No retry-safe transient infrastructure signal was found in the available job diagnostics.",
+            result.SkippedJobs[0].Reason);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ContinuesInspectingLaterLogsWhenEarlierCandidatesAreNotRetryable()
+    {
+        WorkflowJob firstJob = CreateJob(id: 1, failedSteps: ["Build test project"]);
+        WorkflowJob secondJob = CreateJob(id: 2, failedSteps: ["Build test project"]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeJobsAsync(
+            [firstJob, secondJob],
+            new Dictionary<string, string>
+            {
+                ["1"] = "Process completed with exit code 1.",
+                ["2"] = "Process completed with exit code 1."
+            },
+            new Dictionary<string, string>
+            {
+                ["1"] = "error MSB4236: The SDK specified could not be found.",
+                ["2"] = "error : Unable to load the service index for source https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public/nuget/v3/index.json."
+            },
+            maxRetryableJobs: 1);
+
+        Assert.Equal([1, 2], result.LogRequestJobIds);
+        Assert.Single(result.RetryableJobs);
+        Assert.Equal(2, result.RetryableJobs[0].Id);
+        Assert.Equal(1, result.LogRequestJobIds[0]);
+        Assert.Single(result.SkippedJobs);
+        Assert.Equal(1, result.SkippedJobs[0].Id);
     }
 
     [Fact]
@@ -220,7 +340,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                 job = new WorkflowJob
                 {
                     Id = 10,
-                    CheckRunUrl = "https://api.github.com/repos/dotnet/aspire/check-runs/123456789"
+                    CheckRunUrl = "https://api.github.com/repos/microsoft/aspire/check-runs/123456789"
                 }
             });
 
@@ -238,7 +358,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                 job = new WorkflowJob { Id = 42 },
                 workflowJob = new WorkflowJob
                 {
-                    CheckRunUrl = "https://api.github.com/repos/dotnet/aspire/check-runs/987654321"
+                    CheckRunUrl = "https://api.github.com/repos/microsoft/aspire/check-runs/987654321"
                 }
             });
 
@@ -256,7 +376,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                 job = new WorkflowJob
                 {
                     Id = 42,
-                    CheckRunUrl = "https://api.github.com/repos/dotnet/aspire/actions/jobs/42"
+                    CheckRunUrl = "https://api.github.com/repos/microsoft/aspire/actions/jobs/42"
                 },
                 workflowJob = new WorkflowJob()
             });
@@ -266,7 +386,241 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
-    public async Task WorkflowDispatchStaysDryRunEvenWhenRetryableJobsExist()
+    public async Task GetAssociatedPullRequestNumbersPrefersWorkflowRunPayloadWhenPresent()
+    {
+        AssociatedPullRequestNumbersResult result = await InvokeHarnessAsync<AssociatedPullRequestNumbersResult>(
+            "getAssociatedPullRequestNumbers",
+            new
+            {
+                workflowRun = new
+                {
+                    pull_requests = new[]
+                    {
+                        new { number = 15110 },
+                        new { number = 15110 },
+                        new { number = 15111 }
+                    }
+                }
+            });
+
+        Assert.Equal([15110, 15111], result.PullRequestNumbers);
+        Assert.Empty(result.Requests);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task GetAssociatedPullRequestNumbersFallsBackToHeadLookupWhenPayloadOmitsPullRequests()
+    {
+        AssociatedPullRequestNumbersResult result = await InvokeHarnessAsync<AssociatedPullRequestNumbersResult>(
+            "getAssociatedPullRequestNumbers",
+            new
+            {
+                workflowRun = new
+                {
+                    head_branch = "conditional-test-runs",
+                    head_sha = "5ccc5540dcc68f57dbe10ff941d1f39bab9f9336",
+                    head_repository = new
+                    {
+                        owner = new
+                        {
+                            login = "radical"
+                        }
+                    }
+                },
+                pullRequestsByHead = new Dictionary<string, object[]>
+                {
+                    ["radical:conditional-test-runs"] =
+                    [
+                        new
+                        {
+                            number = 13832,
+                            head = new
+                            {
+                                @ref = "conditional-test-runs",
+                                sha = "5ccc5540dcc68f57dbe10ff941d1f39bab9f9336",
+                                repo = new
+                                {
+                                    owner = new
+                                    {
+                                        login = "radical"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            });
+
+        Assert.Equal([13832], result.PullRequestNumbers);
+
+        RequestRecord request = Assert.Single(result.Requests);
+        Assert.Equal("GET /repos/{owner}/{repo}/pulls", request.Route);
+        Assert.Equal("radical:conditional-test-runs", request.Payload.GetProperty("head").GetString());
+        Assert.Equal("all", request.Payload.GetProperty("state").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task GetAssociatedPullRequestNumbersPaginatesFallbackLookupUntilItFindsTheMatchingSha()
+    {
+        AssociatedPullRequestNumbersResult result = await InvokeHarnessAsync<AssociatedPullRequestNumbersResult>(
+            "getAssociatedPullRequestNumbers",
+            new
+            {
+                workflowRun = new
+                {
+                    head_branch = "conditional-test-runs",
+                    head_sha = "wanted-sha",
+                    head_repository = new
+                    {
+                        owner = new
+                        {
+                            login = "radical"
+                        }
+                    }
+                },
+                pullRequestsByHeadPages = new Dictionary<string, object[][]>
+                {
+                    ["radical:conditional-test-runs"] =
+                    [
+                        [
+                            new
+                            {
+                                number = 11111,
+                                head = new
+                                {
+                                    @ref = "conditional-test-runs",
+                                    sha = "old-sha",
+                                    repo = new
+                                    {
+                                        owner = new
+                                        {
+                                            login = "radical"
+                                        }
+                                    }
+                                }
+                            }
+                        ],
+                        [
+                            new
+                            {
+                                number = 13832,
+                                head = new
+                                {
+                                    @ref = "conditional-test-runs",
+                                    sha = "wanted-sha",
+                                    repo = new
+                                    {
+                                        owner = new
+                                        {
+                                            login = "radical"
+                                        }
+                                    }
+                                }
+                            }
+                        ]
+                    ]
+                }
+            });
+
+        Assert.Equal([13832], result.PullRequestNumbers);
+        Assert.Equal(2, result.Requests.Length);
+        Assert.Equal(1, result.Requests[0].Payload.GetProperty("page").GetInt32());
+        Assert.Equal(2, result.Requests[1].Payload.GetProperty("page").GetInt32());
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task GetAssociatedPullRequestNumbersRejectsAmbiguousFallbackMatches()
+    {
+        AssociatedPullRequestNumbersResult result = await InvokeHarnessAsync<AssociatedPullRequestNumbersResult>(
+            "getAssociatedPullRequestNumbers",
+            new
+            {
+                workflowRun = new
+                {
+                    head_branch = "conditional-test-runs",
+                    head_repository = new
+                    {
+                        owner = new
+                        {
+                            login = "radical"
+                        }
+                    }
+                },
+                pullRequestsByHead = new Dictionary<string, object[]>
+                {
+                    ["radical:conditional-test-runs"] =
+                    [
+                        new
+                        {
+                            number = 13832,
+                            head = new
+                            {
+                                @ref = "conditional-test-runs",
+                                sha = "first-sha",
+                                repo = new
+                                {
+                                    owner = new
+                                    {
+                                        login = "radical"
+                                    }
+                                }
+                            }
+                        },
+                        new
+                        {
+                            number = 15177,
+                            head = new
+                            {
+                                @ref = "conditional-test-runs",
+                                sha = "second-sha",
+                                repo = new
+                                {
+                                    owner = new
+                                    {
+                                        login = "radical"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            });
+
+        Assert.Empty(result.PullRequestNumbers);
+        Assert.Single(result.Requests);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task GetAssociatedPullRequestNumbersReturnsEmptyWhenFallbackLookupFails()
+    {
+        AssociatedPullRequestNumbersResult result = await InvokeHarnessAsync<AssociatedPullRequestNumbersResult>(
+            "getAssociatedPullRequestNumbers",
+            new
+            {
+                workflowRun = new
+                {
+                    head_branch = "conditional-test-runs",
+                    head_repository = new
+                    {
+                        owner = new
+                        {
+                            login = "radical"
+                        }
+                    }
+                },
+                failPullRequestLookup = "HTTP 502"
+            });
+
+        Assert.Empty(result.PullRequestNumbers);
+        Assert.Single(result.Requests);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ComputeRerunEligibilityStillReportsSafeCandidatesDuringDryRun()
     {
         bool rerunEligible = await InvokeHarnessAsync<bool>(
             "computeRerunEligibility",
@@ -276,7 +630,22 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                 retryableCount = 1
             });
 
-        Assert.False(rerunEligible);
+        Assert.True(rerunEligible);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ComputeRerunExecutionEligibilityDisablesRerunsWhenDryRunIsEnabled()
+    {
+        bool rerunExecutionEligible = await InvokeHarnessAsync<bool>(
+            "computeRerunExecutionEligibility",
+            new
+            {
+                dryRun = true,
+                retryableCount = 1
+            });
+
+        Assert.False(rerunExecutionEligible);
     }
 
     [Fact]
@@ -287,7 +656,6 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
             "computeRerunEligibility",
             new
             {
-                dryRun = false,
                 retryableCount = 0
             });
 
@@ -302,7 +670,6 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
             "computeRerunEligibility",
             new
             {
-                dryRun = false,
                 retryableCount = 2
             });
 
@@ -317,11 +684,46 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
             "computeRerunEligibility",
             new
             {
-                dryRun = false,
                 retryableCount = 6
             });
 
         Assert.False(rerunEligible);
+    }
+
+    [Theory]
+    [RequiresTools(["node"])]
+    [InlineData(5, 1, true)]
+    [InlineData(5, 2, false)]
+    [InlineData(4, 2, true)]
+    [InlineData(5, 3, false)]
+    [InlineData(1, 4, false)]
+    public async Task AttemptSpecificEligibilityRulesAreApplied(int retryableCount, int runAttempt, bool expectedEligible)
+    {
+        bool rerunEligible = await InvokeHarnessAsync<bool>(
+            "computeRerunEligibility",
+            new
+            {
+                retryableCount,
+                runAttempt
+            });
+
+        Assert.Equal(expectedEligible, rerunEligible);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ExecutionEligibilityAppliesTheStricterCapAfterTheFirstAttempt()
+    {
+        bool rerunExecutionEligible = await InvokeHarnessAsync<bool>(
+            "computeRerunExecutionEligibility",
+            new
+            {
+                dryRun = false,
+                retryableCount = 5,
+                runAttempt = 2
+            });
+
+        Assert.False(rerunExecutionEligible);
     }
 
     [Fact]
@@ -356,6 +758,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
             ],
             [".github/workflows/tests.yml"] =
             [
+                "- uses: ./.github/actions/enumerate-tests",
                 "name: Final Test Results",
             ],
         };
@@ -377,13 +780,21 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         string workflowText = await ReadRepoFileAsync(".github/workflows/auto-rerun-transient-ci-failures.yml");
 
         Assert.Contains("workflow_dispatch:", workflowText);
-        Assert.Contains("github.event.workflow_run.run_attempt == 1", workflowText);
-        Assert.Contains("needs.analyze-transient-failures.outputs.rerun_eligible == 'true'", workflowText);
+        Assert.Contains("dry_run:", workflowText);
+        Assert.Contains("default: false", workflowText);
+        Assert.Contains("rerun_execution_eligible", workflowText);
+        Assert.Contains("needs.analyze-transient-failures.outputs.rerun_execution_eligible == 'true'", workflowText);
+        Assert.Contains("MANUAL_DRY_RUN", workflowText);
+        Assert.Contains("function parseManualDryRun()", workflowText);
+        Assert.Contains("const dryRun = parseManualDryRun();", workflowText);
+        Assert.Contains("computeRerunExecutionEligibility", workflowText);
+        Assert.Contains("getAssociatedPullRequestNumbers", workflowText);
+        Assert.Contains("github.event.workflow_run.run_attempt <= 3", workflowText);
     }
 
     [Fact]
     [RequiresTools(["node"])]
-    public async Task WriteAnalysisSummaryLinksTheAnalyzedWorkflowRun()
+    public async Task WriteAnalysisSummaryUsesExplicitOutcomeHeadingAndClickableAnalyzedRunLink()
     {
         SummaryResult result = await InvokeHarnessAsync<SummaryResult>(
             "writeAnalysisSummary",
@@ -400,11 +811,50 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                 skippedJobs = Array.Empty<SummaryJob>(),
                 dryRun = false,
                 rerunEligible = true,
-                sourceRunUrl = "https://github.com/dotnet/aspire/actions/runs/123"
+                sourceRunAttempt = 1,
+                sourceRunUrl = "https://github.com/microsoft/aspire/actions/runs/123"
             });
 
-        SummaryEvent rawEvent = Assert.Single(result.Events, e => e.Type == "raw");
-        Assert.Equal("Source run: [workflow run](https://github.com/dotnet/aspire/actions/runs/123)\n\n", rawEvent.Text);
+        SummaryEvent headingEvent = Assert.Single(result.Events, e => e.Type == "heading" && e.Level == 1);
+        Assert.Equal("Rerun eligible", headingEvent.Text);
+
+        SummaryEvent linkEvent = Assert.Single(result.Events, e => e.Type == "link" && e.Text == "workflow run attempt 1");
+        Assert.Equal("https://github.com/microsoft/aspire/actions/runs/123/attempts/1", linkEvent.Href);
+
+        SummaryEvent rawEvent = Assert.Single(result.Events, e => e.Type == "raw" && e.Text == "Matched 1 retry-safe job for rerun.");
+        Assert.Equal("Matched 1 retry-safe job for rerun.", rawEvent.Text);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task WriteAnalysisSummaryShowsWouldRerunDuringDryRun()
+    {
+        SummaryResult result = await InvokeHarnessAsync<SummaryResult>(
+            "writeAnalysisSummary",
+            new
+            {
+                failedJobs = new[]
+                {
+                    new SummaryJob { Id = 11, Name = "Tests / One", Reason = "Reason one" }
+                },
+                retryableJobs = new[]
+                {
+                    new SummaryJob { Id = 11, Name = "Tests / One", Reason = "Reason one" }
+                },
+                skippedJobs = Array.Empty<SummaryJob>(),
+                dryRun = true,
+                rerunEligible = true,
+                sourceRunAttempt = 1,
+                sourceRunUrl = "https://github.com/microsoft/aspire/actions/runs/123"
+            });
+
+        SummaryEvent headingEvent = Assert.Single(result.Events, e => e.Type == "heading" && e.Level == 1);
+        Assert.Equal("Rerun eligible", headingEvent.Text);
+
+        SummaryEvent rawEvent = Assert.Single(
+            result.Events,
+            e => e.Type == "raw" && e.Text == "Matched 1 retry-safe job that would be rerun if dry run were disabled.");
+        Assert.Equal("Matched 1 retry-safe job that would be rerun if dry run were disabled.", rawEvent.Text);
     }
 
     [Fact]
@@ -418,7 +868,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                 owner = "dotnet",
                 repo = "aspire",
                 retryableJobs = Array.Empty<RetryableJobInput>(),
-                sourceRunUrl = "https://github.com/dotnet/aspire/actions/runs/123"
+                sourceRunUrl = "https://github.com/microsoft/aspire/actions/runs/123"
             });
 
         Assert.Empty(result.Requests);
@@ -427,7 +877,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
-    public async Task RerunMatchedJobsRequestsOneRerunPerSelectedJobAndWritesTheSummary()
+    public async Task RerunMatchedJobsRequestsOneRunLevelRerunAndWritesTheSummary()
     {
         RerunMatchedJobsResult result = await InvokeHarnessAsync<RerunMatchedJobsResult>(
             "rerunMatchedJobs",
@@ -441,14 +891,14 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                     {
                         Id = 11,
                         Name = "Tests / One",
-                        HtmlUrl = "https://github.com/dotnet/aspire/actions/runs/123/job/11",
+                        HtmlUrl = "https://github.com/microsoft/aspire/actions/runs/123/job/11",
                         Reason = "Reason one"
                     },
                     new RetryableJobInput
                     {
                         Id = 22,
                         Name = "Tests / Two",
-                        HtmlUrl = "https://github.com/dotnet/aspire/actions/runs/123/job/22",
+                        HtmlUrl = "https://github.com/microsoft/aspire/actions/runs/123/job/22",
                         Reason = "Reason two"
                     }
                 },
@@ -457,10 +907,14 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                 {
                     ["15110"] = "open"
                 },
+                commentHtmlUrlByNumber = new Dictionary<string, string>
+                {
+                    ["15110"] = "https://github.com/microsoft/aspire/pull/15110#issuecomment-123"
+                },
                 latestRunAttempt = 2,
                 sourceRunId = 123,
                 sourceRunAttempt = 1,
-                sourceRunUrl = "https://github.com/dotnet/aspire/actions/runs/123"
+                sourceRunUrl = "https://github.com/microsoft/aspire/actions/runs/123"
             });
 
         Assert.Collection(
@@ -474,13 +928,8 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
             },
             request =>
             {
-                Assert.Equal("POST /repos/{owner}/{repo}/actions/jobs/{job_id}/rerun", request.Route);
-                Assert.Equal(11, request.Payload.GetProperty("job_id").GetInt32());
-            },
-            request =>
-            {
-                Assert.Equal("POST /repos/{owner}/{repo}/actions/jobs/{job_id}/rerun", request.Route);
-                Assert.Equal(22, request.Payload.GetProperty("job_id").GetInt32());
+                Assert.Equal("POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs", request.Route);
+                Assert.Equal(123, request.Payload.GetProperty("run_id").GetInt32());
             },
             request =>
             {
@@ -492,13 +941,27 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                 Assert.Equal("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", request.Route);
                 Assert.Equal(15110, request.Payload.GetProperty("issue_number").GetInt32());
                 Assert.Equal(
-                    "The transient CI rerun workflow requested reruns for the following jobs after analyzing [the failed attempt](https://github.com/dotnet/aspire/actions/runs/123/attempts/1).\nGitHub's job rerun API also reruns dependent jobs, so the retry is being tracked in [the rerun attempt](https://github.com/dotnet/aspire/actions/runs/123/attempts/2).\nThe job links below point to the failed attempt that matched the retry-safe transient failure rules.\n\n- [Tests / One](https://github.com/dotnet/aspire/actions/runs/123/job/11) - Reason one\n- [Tests / Two](https://github.com/dotnet/aspire/actions/runs/123/job/22) - Reason two",
+                    "Re-running the failed jobs in the CI workflow for this pull request because 2 jobs were identified as retry-safe transient failures in [the CI run attempt](https://github.com/microsoft/aspire/actions/runs/123/attempts/1).\nGitHub was asked to rerun all failed jobs for that attempt, and the rerun is being tracked in [the rerun attempt](https://github.com/microsoft/aspire/actions/runs/123/attempts/2).\nThe job links below point to the failed attempt jobs that matched the retry-safe transient failure rules.\n\n- [Tests / One](https://github.com/microsoft/aspire/actions/runs/123/job/11) - Reason one\n- [Tests / Two](https://github.com/microsoft/aspire/actions/runs/123/job/22) - Reason two",
                     request.Payload.GetProperty("body").GetString());
             });
 
-        SummaryEvent rawEvent = Assert.Single(result.Events, e => e.Type == "raw" && e.Text is not null && e.Text.Contains("Failed attempt:"));
-        Assert.Contains("Failed attempt: [workflow run attempt 1](https://github.com/dotnet/aspire/actions/runs/123/attempts/1)", rawEvent.Text);
-        Assert.Contains("Rerun attempt: [workflow run attempt 2](https://github.com/dotnet/aspire/actions/runs/123/attempts/2)", rawEvent.Text);
+        SummaryEvent headingEvent = Assert.Single(result.Events, e => e.Type == "heading" && e.Level == 1);
+        Assert.Equal("Rerun requested", headingEvent.Text);
+
+        SummaryEvent failedAttemptLink = Assert.Single(result.Events, e => e.Type == "link" && e.Text == "workflow run attempt 1");
+        Assert.Equal("https://github.com/microsoft/aspire/actions/runs/123/attempts/1", failedAttemptLink.Href);
+
+        SummaryEvent rerunAttemptLink = Assert.Single(result.Events, e => e.Type == "link" && e.Text == "workflow run attempt 2");
+        Assert.Equal("https://github.com/microsoft/aspire/actions/runs/123/attempts/2", rerunAttemptLink.Href);
+
+        SummaryEvent commentLink = Assert.Single(result.Events, e => e.Type == "link" && e.Text == "PR #15110 comment");
+        Assert.Equal("https://github.com/microsoft/aspire/pull/15110#issuecomment-123", commentLink.Href);
+
+        SummaryEvent rerunExplanation = Assert.Single(result.Events, e => e.Type == "raw" && e.Text == "The matched jobs below made the run eligible for rerun. GitHub was asked to rerun all failed jobs for the failed attempt.");
+        Assert.Equal("The matched jobs below made the run eligible for rerun. GitHub was asked to rerun all failed jobs for the failed attempt.", rerunExplanation.Text);
+
+        SummaryEvent retryableJobsHeading = Assert.Single(result.Events, e => e.Type == "heading" && e.Level == 2 && e.Text == "Retryable jobs");
+        Assert.Equal("Retryable jobs", retryableJobsHeading.Text);
 
         SummaryEvent tableEvent = Assert.Single(result.Events, e => e.Type == "table");
         Assert.Equal("Job", tableEvent.Rows[0][0].GetProperty("data").GetString());
@@ -508,8 +971,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         Assert.Equal("Tests / Two", tableEvent.Rows[2][0].GetString());
         Assert.Equal("Reason two", tableEvent.Rows[2][1].GetString());
 
-        SummaryEvent commentEvent = Assert.Single(result.Events, e => e.Type == "raw" && e.Text is not null && e.Text.Contains("Posted rerun details to #15110."));
-        Assert.Contains("Posted rerun details to #15110.", commentEvent.Text);
+        Assert.Contains(result.Events, e => e.Type == "raw" && e.Text == "Pull request comments:");
     }
 
     [Fact]
@@ -528,7 +990,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                     {
                         Id = 11,
                         Name = "Tests / One",
-                        HtmlUrl = "https://github.com/dotnet/aspire/actions/runs/123/job/11",
+                        HtmlUrl = "https://github.com/microsoft/aspire/actions/runs/123/job/11",
                         Reason = "Reason one"
                     }
                 },
@@ -537,43 +999,85 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                 {
                     ["15110"] = "closed"
                 },
-                sourceRunUrl = "https://github.com/dotnet/aspire/actions/runs/123"
+                sourceRunUrl = "https://github.com/microsoft/aspire/actions/runs/123"
             });
 
         RequestRecord request = Assert.Single(result.Requests);
         Assert.Equal("GET /repos/{owner}/{repo}/issues/{issue_number}", request.Route);
         Assert.Equal(15110, request.Payload.GetProperty("issue_number").GetInt32());
 
-        SummaryEvent skippedHeading = Assert.Single(result.Events, e => e.Type == "heading" && e.Text == "Automatic rerun skipped");
+        SummaryEvent skippedHeading = Assert.Single(result.Events, e => e.Type == "heading" && e.Text == "Rerun skipped");
         Assert.Equal(1, skippedHeading.Level);
+
+        SummaryEvent analyzedRunLink = Assert.Single(result.Events, e => e.Type == "link" && e.Text == "workflow run");
+        Assert.Equal("https://github.com/microsoft/aspire/actions/runs/123", analyzedRunLink.Href);
 
         SummaryEvent skippedRaw = Assert.Single(result.Events, e => e.Type == "raw" && e.Text is not null && e.Text.Contains("All associated pull requests are closed."));
         Assert.Contains("All associated pull requests are closed. No jobs were rerun.", skippedRaw.Text);
     }
 
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RerunMatchedJobsDoesNotFabricateCommentLinksWhenGitHubDoesNotReturnACommentUrl()
+    {
+        RerunMatchedJobsResult result = await InvokeHarnessAsync<RerunMatchedJobsResult>(
+            "rerunMatchedJobs",
+            new
+            {
+                owner = "dotnet",
+                repo = "aspire",
+                retryableJobs = new[]
+                {
+                    new RetryableJobInput
+                    {
+                        Id = 11,
+                        Name = "Tests / One",
+                        HtmlUrl = "https://github.com/microsoft/aspire/actions/runs/123/job/11",
+                        Reason = "Reason one"
+                    }
+                },
+                pullRequestNumbers = new[] { 15110 },
+                issueStatesByNumber = new Dictionary<string, string>
+                {
+                    ["15110"] = "open"
+                },
+                latestRunAttempt = 2,
+                sourceRunId = 123,
+                sourceRunAttempt = 1,
+                sourceRunUrl = "https://github.com/microsoft/aspire/actions/runs/123"
+            });
+
+        Assert.Contains(result.Events, e => e.Type == "raw" && e.Text == "Pull request comments:");
+        Assert.DoesNotContain(result.Events, e => e.Type == "link" && e.Text == "PR #15110 comment");
+        Assert.Contains(result.Events, e => e.Type == "raw" && e.Text == "PR #15110 comment");
+    }
+
     private async Task<AnalyzeFailedJobsResult> AnalyzeSingleJobAsync(WorkflowJob job, string annotationsOrText, string jobLogText = "")
     {
-        Dictionary<string, string> annotationTextByJobId = new()
-        {
-            [job.Id.ToString()] = annotationsOrText
-        };
-
         Dictionary<string, string>? jobLogTextByJobId = string.IsNullOrEmpty(jobLogText)
             ? null
-            : new Dictionary<string, string>
-            {
-                [job.Id.ToString()] = jobLogText
-            };
+            : new Dictionary<string, string> { [job.Id.ToString()] = jobLogText };
 
-        return await InvokeHarnessAsync<AnalyzeFailedJobsResult>(
+        return await AnalyzeJobsAsync(
+            [job],
+            new Dictionary<string, string> { [job.Id.ToString()] = annotationsOrText },
+            jobLogTextByJobId);
+    }
+
+    private Task<AnalyzeFailedJobsResult> AnalyzeJobsAsync(
+        WorkflowJob[] jobs,
+        Dictionary<string, string> annotationTextByJobId,
+        Dictionary<string, string>? jobLogTextByJobId = null,
+        int? maxRetryableJobs = null)
+        => InvokeHarnessAsync<AnalyzeFailedJobsResult>(
             "analyzeFailedJobs",
             new AnalyzeFailedJobsRequest
             {
-                Jobs = [job],
+                Jobs = jobs,
                 AnnotationTextByJobId = annotationTextByJobId,
-                JobLogTextByJobId = jobLogTextByJobId
+                JobLogTextByJobId = jobLogTextByJobId,
+                MaxRetryableJobs = maxRetryableJobs
             });
-    }
 
     private async Task<T> InvokeHarnessAsync<T>(string operation, object payload)
     {
@@ -647,6 +1151,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         public WorkflowJob[] Jobs { get; init; } = [];
         public Dictionary<string, string> AnnotationTextByJobId { get; init; } = [];
         public Dictionary<string, string>? JobLogTextByJobId { get; init; }
+        public int? MaxRetryableJobs { get; init; }
     }
 
     private sealed class AnalyzeFailedJobsResult
@@ -654,6 +1159,13 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         public AnalyzedJob[] FailedJobs { get; init; } = [];
         public AnalyzedJob[] RetryableJobs { get; init; } = [];
         public AnalyzedJob[] SkippedJobs { get; init; } = [];
+        public int[] LogRequestJobIds { get; init; } = [];
+    }
+
+    private sealed class AssociatedPullRequestNumbersResult
+    {
+        public int[] PullRequestNumbers { get; init; } = [];
+        public RequestRecord[] Requests { get; init; } = [];
     }
 
     private sealed class AnalyzedJob
@@ -691,6 +1203,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
     {
         public string Type { get; init; } = string.Empty;
         public string? Text { get; init; }
+        public string? Href { get; init; }
         public int? Level { get; init; }
         public bool? AddEol { get; init; }
         public JsonElement[][] Rows { get; init; } = [];

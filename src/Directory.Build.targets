@@ -3,6 +3,7 @@
     <DisablePackageBaselineValidation Condition="'$(DisablePackageBaselineValidation)' == '' And '$(SuppressFinalPackageVersion)' == 'true'">true</DisablePackageBaselineValidation>
     <!-- If the project is packable, we generate its API surface in a separate file to be used by the API review process. -->
     <GenAPITargetPath Condition="'$(IsPackable)' == 'true'">$(MSBuildProjectDirectory)/api/$(AssemblyName).cs</GenAPITargetPath>
+    <SkipAspireIntegrationAnalyzersReference Condition="'$(SkipAspireIntegrationAnalyzersReference)' == '' And '$(IsRoslynComponent)' == 'true'">true</SkipAspireIntegrationAnalyzersReference>
   </PropertyGroup>
 
   <ItemGroup>
@@ -15,17 +16,15 @@
 
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.targets', '$(MSBuildThisFileDirectory)../'))" />
 
-   <ItemGroup Condition="
-             $([System.String]::Copy('$(MSBuildProjectName)').StartsWith('Aspire.Hosting.'))
-             and
-             '$(MSBuildProjectName)' != 'Aspire.Hosting.Analyzers'">
-    <ProjectReference Include="$(MSBuildThisFileDirectory)\Aspire.Hosting.Analyzers\Aspire.Hosting.Analyzers.csproj"
+  <ItemGroup Condition="$([System.String]::Copy('$(MSBuildProjectName)').StartsWith('Aspire.Hosting.'))
+                        and
+                        '$(SkipAspireIntegrationAnalyzersReference)' != 'true'">
+    <ProjectReference Include="$(MSBuildThisFileDirectory)\Aspire.Hosting.Integration.Analyzers\Aspire.Hosting.Integration.Analyzers.csproj"
                     PrivateAssets="all"
                     ReferenceOutputAssembly="false"
-                    OutputItemType="Analyzer"
-                    SetTargetFramework="TargetFramework=netstandard2.0"
-                    GlobalPropertiesToRemove="RuntimeIdentifier;PlatformTarget;SelfContained" />
+                    OutputItemType="Analyzer" />
   </ItemGroup>
+
   <!-- Used by Aspire.Workload.Testing.targets -->
   <Target Name="GetPackageName" Returns="@(PackageName)">
     <ItemGroup>

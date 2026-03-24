@@ -170,7 +170,8 @@ internal sealed class DashboardClient : IDashboardClient
                     HttpHandler = httpHandler,
                     ServiceConfig = new() { MethodConfigs = { methodConfig } },
                     LoggerFactory = _loggerFactory,
-                    ThrowOperationCanceledOnCancellation = true
+                    ThrowOperationCanceledOnCancellation = true,
+                    MaxReceiveMessageSize = 16 * 1024 * 1024 // 16 MB
                 });
 
             X509CertificateCollection GetFileCertificate()

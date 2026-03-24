@@ -4,6 +4,7 @@
 using Xunit;
 using Aspire.TestProject;
 using Aspire.Templates.Tests;
+using Aspire.TestUtilities;
 
 namespace Aspire.EndToEnd.Tests;
 
@@ -19,6 +20,7 @@ public class IntegrationServicesTests : IClassFixture<IntegrationServicesFixture
     }
 
     [Theory]
+    [OuterloopTest("EndToEnd tests require Docker and are slow")]
     [Trait("scenario", "basicservices")]
     [InlineData(TestResourceNames.postgres)]
     [InlineData(TestResourceNames.efnpgsql)]
@@ -42,6 +44,7 @@ public class IntegrationServicesTests : IClassFixture<IntegrationServicesFixture
         });
 
     [Fact]
+    [OuterloopTest("EndToEnd tests require Docker and are slow")]
     [Trait("scenario", "basicservices")]
     public Task VerifyHealthyOnIntegrationServiceA()
         => RunTestAsync(async (cancellationToken) =>

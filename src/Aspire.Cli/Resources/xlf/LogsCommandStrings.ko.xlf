@@ -3,18 +3,18 @@
   <file datatype="xml" source-language="en" target-language="ko" original="../LogsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Display logs from resources in a running apphost.</source>
-        <target state="translated">실행 중인 Aspire AppHost에서 리소스의 로그를 표시합니다.</target>
+        <source>Display logs from resources in a running apphost</source>
+        <target state="needs-review-translation">실행 중인 Aspire AppHost에서 리소스의 로그를 표시합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
-        <source>Stream logs in real-time as they are written.</source>
-        <target state="translated">로그가 기록되는 대로 실시간으로 스트리밍합니다.</target>
+        <source>Stream logs in real-time as they are written</source>
+        <target state="needs-review-translation">로그가 기록되는 대로 실시간으로 스트리밍합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">출력 형식(테이블 또는 JSON)입니다.</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">JSON 형식(NDJSON)으로 로그를 출력합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoResourcesFound">
@@ -24,7 +24,7 @@
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The name of the resource to get logs for. If not specified, logs from all resources are shown.</source>
-        <target state="translated">로그를 가져올 리소스의 이름입니다. 지정하지 않으면 모든 리소스의 로그가 표시됩니다.</target>
+        <target state="needs-review-translation">로그를 가져올 리소스의 이름입니다. 지정하지 않으면 모든 리소스의 로그가 표시됩니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">
@@ -48,8 +48,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TailOptionDescription">
-        <source>Number of lines to show from the end of logs (default: all).</source>
-        <target state="translated">로그 끝에서 표시할 줄 수입니다(기본값: 모두).</target>
+        <source>Number of lines to show from the end of logs (default: all)</source>
+        <target state="needs-review-translation">로그 끝에서 표시할 줄 수입니다(기본값: 모두).</target>
         <note />
       </trans-unit>
       <trans-unit id="TailRequiresResource">
@@ -58,8 +58,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TimestampsOptionDescription">
-        <source>Show timestamps for each log line.</source>
-        <target state="translated">각 로그 줄에 타임스탬프를 표시합니다.</target>
+        <source>Show timestamps for each log line</source>
+        <target state="new">Show timestamps for each log line</target>
         <note />
       </trans-unit>
       <trans-unit id="GettingLogs">

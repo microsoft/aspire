@@ -24,6 +24,7 @@ internal sealed class SecretCommand : BaseCommand
         SecretSetCommand setCommand,
         SecretGetCommand getCommand,
         SecretListCommand listCommand,
+        SecretPathCommand pathCommand,
         SecretDeleteCommand deleteCommand,
         IInteractionService interactionService,
         IFeatures features,
@@ -35,6 +36,7 @@ internal sealed class SecretCommand : BaseCommand
         Subcommands.Add(getCommand);
         Subcommands.Add(setCommand);
         Subcommands.Add(listCommand);
+        Subcommands.Add(pathCommand);
         Subcommands.Add(deleteCommand);
     }
 

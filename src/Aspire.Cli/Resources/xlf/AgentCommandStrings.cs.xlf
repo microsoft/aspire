@@ -23,8 +23,8 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Manage AI agent specific setup.</source>
-        <target state="translated">Umožňuje spravovat nastavení specifické pro AI agenta.</target>
+        <source>Manage AI agent environment configuration</source>
+        <target state="needs-review-translation">Spravujte integrace agentů AI.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigureMcpServer">
@@ -33,8 +33,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_Description">
-        <source>Initialize agent environment configuration for detected agents.</source>
-        <target state="translated">Inicializujte konfiguraci prostředí agentů pro zjištěné agenty.</target>
+        <source>Initialize agent environment configuration for detected agents</source>
+        <target state="needs-review-translation">Inicializujte konfiguraci prostředí agentů pro zjištěné agenty.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstallSkillFile">
@@ -58,8 +58,8 @@
         <note />
       </trans-unit>
       <trans-unit id="McpCommand_Description">
-        <source>Start the MCP (Model Context Protocol) server.</source>
-        <target state="translated">Spusťte server MCP (Model Context Protocol).</target>
+        <source>Start the MCP (Model Context Protocol) server</source>
+        <target state="needs-review-translation">Spusťte server MCP (Model Context Protocol).</target>
         <note />
       </trans-unit>
       <trans-unit id="SkipNoneDescription">

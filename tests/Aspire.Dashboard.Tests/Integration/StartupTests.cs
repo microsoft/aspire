@@ -725,6 +725,11 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
             {
                 Assert.Equal("MCP server is unsecured. Untrusted apps can access sensitive information.", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
                 Assert.Equal(LogLevel.Warning, w.LogLevel);
+            },
+            w =>
+            {
+                Assert.Equal("Dashboard API is unsecured. Untrusted apps can access sensitive telemetry data.", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
+                Assert.Equal(LogLevel.Warning, w.LogLevel);
             });
     }
 
@@ -765,6 +770,11 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
             {
                 Assert.Equal("MCP server is unsecured. Untrusted apps can access sensitive information.", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
                 Assert.Equal(LogLevel.Warning, w.LogLevel);
+            },
+            w =>
+            {
+                Assert.Equal("Dashboard API is unsecured. Untrusted apps can access sensitive telemetry data.", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
+                Assert.Equal(LogLevel.Warning, w.LogLevel);
             });
     }
 
@@ -788,6 +798,53 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
 
         // Should have no MCP unsecured warning when MCP is disabled
         Assert.DoesNotContain(l, w => LogTestHelpers.GetValue(w, "{OriginalFormat}")?.ToString()?.Contains("MCP server is unsecured") == true);
+    }
+
+    [Theory]
+    [InlineData(null, HttpStatusCode.NotFound)]
+    [InlineData(true, HttpStatusCode.OK)]
+    [InlineData(false, HttpStatusCode.NotFound)]
+    public async Task ApiEnabled_ReturnsExpectedStatusAndWarning(bool? enabled, HttpStatusCode expectedStatusCode)
+    {
+        const string ApiUnsecuredWarning = "Dashboard API is unsecured. Untrusted apps can access sensitive telemetry data.";
+
+        // Arrange
+        var testSink = new TestSink();
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
+            additionalConfiguration: config =>
+            {
+                if (enabled is not null)
+                {
+                    config[DashboardConfigNames.DashboardApiEnabledName.ConfigKey] = enabled.Value.ToString();
+                }
+                else
+                {
+                    config.Remove(DashboardConfigNames.DashboardApiEnabledName.ConfigKey);
+                }
+            },
+            testSink: testSink);
+        await app.StartAsync().DefaultTimeout();
+
+        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
+
+        // Act
+        var response = await httpClient.GetAsync("/api/telemetry/spans").DefaultTimeout();
+
+        // Assert
+        Assert.Equal(expectedStatusCode, response.StatusCode);
+
+        var warnings = testSink.Writes
+            .Where(w => w.LoggerName == typeof(DashboardWebApplication).FullName && w.LogLevel >= LogLevel.Warning)
+            .ToList();
+
+        if (enabled == true)
+        {
+            Assert.Contains(warnings, w => LogTestHelpers.GetValue(w, "{OriginalFormat}")?.ToString() == ApiUnsecuredWarning);
+        }
+        else
+        {
+            Assert.DoesNotContain(warnings, w => LogTestHelpers.GetValue(w, "{OriginalFormat}")?.ToString() == ApiUnsecuredWarning);
+        }
     }
 
     [Fact]
@@ -884,6 +941,11 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
             w =>
             {
                 Assert.Equal("MCP server is unsecured. Untrusted apps can access sensitive information.", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
+                Assert.Equal(LogLevel.Warning, w.LogLevel);
+            },
+            w =>
+            {
+                Assert.Equal("Dashboard API is unsecured. Untrusted apps can access sensitive telemetry data.", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
                 Assert.Equal(LogLevel.Warning, w.LogLevel);
             });
     }

@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="es" original="../RootCommandStrings.resx">
     <body>
       <trans-unit id="BannerArgumentDescription">
-        <source>Display the animated Aspire CLI welcome banner.</source>
-        <target state="translated">Muestra el banner de bienvenida animado de la CLI de Aspire.</target>
+        <source>Display the animated Aspire CLI welcome banner</source>
+        <target state="needs-review-translation">Muestra el banner de bienvenida animado de la CLI de Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="BannerVersionFormat">
@@ -18,23 +18,23 @@
         <note />
       </trans-unit>
       <trans-unit id="CliWaitForDebuggerArgumentDescription">
-        <source>Wait for a debugger to attach before executing the command.</source>
-        <target state="translated">Espere a que se asocie un depurador antes de ejecutar el comando.</target>
+        <source>Wait for a debugger to attach before executing the command</source>
+        <target state="needs-review-translation">Espere a que se asocie un depurador antes de ejecutar el comando.</target>
         <note />
       </trans-unit>
       <trans-unit id="DebugArgumentDescription">
-        <source>Enable debug logging to the console.</source>
-        <target state="translated">Habilite el registro de depuración en la consola.</target>
+        <source>Enable debug logging to the console</source>
+        <target state="needs-review-translation">Habilite el registro de depuración en la consola.</target>
         <note />
       </trans-unit>
       <trans-unit id="DebugLevelArgumentDescription">
-        <source>Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical).</source>
-        <target state="translated">Establezca el nivel de registro mínimo para la salida de la consola (Seguimiento, Depuración, Información, Advertencia, Error, Crítico).</target>
+        <source>Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)</source>
+        <target state="new">Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>The Aspire CLI can be used to create, run, and publish Aspire-based applications.</source>
-        <target state="translated">La CLI de Aspire puede utilizarse para crear, ejecutar y publicar aplicaciones basadas en Aspire.</target>
+        <source>The Aspire CLI can be used to create, run, and publish Aspire-based applications</source>
+        <target state="needs-review-translation">La CLI de Aspire puede utilizarse para crear, ejecutar y publicar aplicaciones basadas en Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="FirstTimeUseTelemetryNotice">
@@ -58,18 +58,18 @@ Más información acerca de la telemetría de la CLI de Aspire: https://aka.ms/a
         <note />
       </trans-unit>
       <trans-unit id="NoLogoArgumentDescription">
-        <source>Suppress the startup banner and telemetry notice.</source>
-        <target state="translated">Suprima el banner de inicio y el aviso de telemetría.</target>
+        <source>Suppress the startup banner and telemetry notice</source>
+        <target state="needs-review-translation">Suprima el banner de inicio y el aviso de telemetría.</target>
         <note />
       </trans-unit>
       <trans-unit id="NonInteractiveArgumentDescription">
-        <source>Run the command in non-interactive mode, disabling all interactive prompts and spinners.</source>
-        <target state="translated">Ejecute el comando en modo no interactivo, deshabilitando todos los indicadores interactivos y los indicadores giratorios.</target>
+        <source>Run the command in non-interactive mode, disabling all interactive prompts and spinners</source>
+        <target state="new">Run the command in non-interactive mode, disabling all interactive prompts and spinners</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitForDebuggerArgumentDescription">
-        <source>Wait for a debugger to attach before executing the command.</source>
-        <target state="translated">Espere a que se asocie un depurador antes de ejecutar el comando.</target>
+        <source>Wait for a debugger to attach before executing the command</source>
+        <target state="needs-review-translation">Espere a que se asocie un depurador antes de ejecutar el comando.</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitingForDebugger">

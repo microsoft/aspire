@@ -30,7 +30,7 @@ public class ContainerTunnelTests(ITestOutputHelper testOutputHelper)
         using var app = builder.Build();
 
         // Use extra long timeout because if this is first time the tunnel is being used,
-        // getting the base images and building the tunnel (client) proxy image may take a while. 
+        // getting the base images and building the tunnel (client) proxy image may take a while.
         await app.StartAsync().DefaultTimeout(TestConstants.ExtraLongTimeoutDuration);
         await app.WaitForTextAsync("Application started.").DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
 
@@ -45,6 +45,7 @@ public class ContainerTunnelTests(ITestOutputHelper testOutputHelper)
 
     [Fact]
     [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/15358")]
     public async Task ProxylessEndpointWorksWithContainerTunnel()
     {
         var port = await Helpers.Network.GetAvailablePortAsync();
@@ -69,7 +70,7 @@ public class ContainerTunnelTests(ITestOutputHelper testOutputHelper)
         await using var app = builder.Build();
 
         // Use extra long timeout because if this is first time the tunnel is being used,
-        // getting the base images and building the tunnel (client) proxy image may take a while. 
+        // getting the base images and building the tunnel (client) proxy image may take a while.
         await app.StartAsync().DefaultTimeout(TestConstants.ExtraLongTimeoutDuration);
         await app.WaitForTextAsync("Application started.").DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
 

@@ -8,13 +8,13 @@
         <note />
       </trans-unit>
       <trans-unit id="AnalyzeAppHost">
-        <source>Analyze App Host</source>
-        <target state="translated">Analizar host de aplicación</target>
+        <source>Analyze apphost</source>
+        <target state="needs-review-translation">Analizar host de aplicación</target>
         <note />
       </trans-unit>
       <trans-unit id="AnalyzeAppHostSdk">
-        <source>Analyze App Host SDK</source>
-        <target state="translated">Analizar el SDK de host de aplicaciones</target>
+        <source>Analyze apphost SDK</source>
+        <target state="needs-review-translation">Analizar el SDK de host de aplicaciones</target>
         <note />
       </trans-unit>
       <trans-unit id="AnalyzeProjectFormat">
@@ -73,8 +73,8 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Update integrations in the Aspire project. (Preview)</source>
-        <target state="translated">Actualizar las integraciones en el proyecto Aspire. (Versión preliminar)</target>
+        <source>Update integrations in the Aspire project (Preview)</source>
+        <target state="needs-review-translation">Actualizar las integraciones en el proyecto Aspire. (Versión preliminar)</target>
         <note />
       </trans-unit>
       <trans-unit id="DotNetToolSelfUpdateMessage">
@@ -113,8 +113,8 @@
         <note />
       </trans-unit>
       <trans-unit id="FallbackParsingWarning">
-        <source>Note: Update plan generated using fallback parsing due to unresolvable AppHost SDK. Dependency analysis may have reduced accuracy.</source>
-        <target state="translated">Nota: El plan de actualización se generó usando un análisis alternativo debido a un SDK de AppHost no resoluble. El análisis de dependencias puede ser menos preciso.</target>
+        <source>Note: Update plan generated using fallback parsing due to unresolvable apphost SDK. Dependency analysis may have reduced accuracy.</source>
+        <target state="needs-review-translation">Nota: El plan de actualización se generó usando un análisis alternativo debido a un SDK de AppHost no resoluble. El análisis de dependencias puede ser menos preciso.</target>
         <note />
       </trans-unit>
       <trans-unit id="MappingAddedFormat">
@@ -138,8 +138,8 @@
         <note />
       </trans-unit>
       <trans-unit id="NoAppHostFoundUpdateCliPrompt">
-        <source>No Aspire AppHost project found. Would you like to update the Aspire CLI instead?</source>
-        <target state="translated">No se encontró ningún proyecto de AppHost. ¿Quiere actualizar la CLI de Aspire en su lugar?</target>
+        <source>No Aspire apphost project found. Would you like to update the Aspire CLI instead?</source>
+        <target state="needs-review-translation">No se encontró ningún proyecto de AppHost. ¿Quiere actualizar la CLI de Aspire en su lugar?</target>
         <note />
       </trans-unit>
       <trans-unit id="NoChangesDetectedInNuGetConfig">
@@ -173,8 +173,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="translated">La ruta de acceso al archivo del proyecto host de la AppHost Aspire.</target>
+        <source>The path to the Aspire apphost project file</source>
+        <target state="needs-review-translation">La ruta de acceso al archivo del proyecto host de la AppHost Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectReferenceNoFullPath">
@@ -225,6 +225,11 @@
       <trans-unit id="SelectChannelPrompt">
         <source>Select a channel:</source>
         <target state="translated">Seleccionar un canal:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SelfOptionDescription">
+        <source>Update the Aspire CLI itself to the latest version</source>
+        <target state="new">Update the Aspire CLI itself to the latest version</target>
         <note />
       </trans-unit>
       <trans-unit id="UnxpectedCodePath">

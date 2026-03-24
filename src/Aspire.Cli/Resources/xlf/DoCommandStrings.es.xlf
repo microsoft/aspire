@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="es" original="../DoCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Execute a specific pipeline step and its dependencies. (Preview)</source>
-        <target state="translated">Ejecute un paso de canalización específico y sus dependencias. (Versión preliminar)</target>
+        <source>Execute a specific pipeline step and its dependencies (Preview)</source>
+        <target state="needs-review-translation">Ejecute un paso de canalización específico y sus dependencias. (Versión preliminar)</target>
         <note />
       </trans-unit>
       <trans-unit id="GeneratingArtifacts">
@@ -28,13 +28,13 @@
         <note />
       </trans-unit>
       <trans-unit id="OutputPathArgumentDescription">
-        <source>The optional output path for artifacts.</source>
-        <target state="translated">Ruta de acceso de salida opcional para los artefactos.</target>
+        <source>The optional output path for artifacts</source>
+        <target state="needs-review-translation">Ruta de acceso de salida opcional para los artefactos.</target>
         <note />
       </trans-unit>
       <trans-unit id="StepArgumentDescription">
-        <source>The name of the step to execute.</source>
-        <target state="translated">Nombre del paso que se va a ejecutar.</target>
+        <source>The name of the step to execute</source>
+        <target state="needs-review-translation">Nombre del paso que se va a ejecutar.</target>
         <note />
       </trans-unit>
     </body>

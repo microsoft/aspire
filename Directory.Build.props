@@ -11,10 +11,10 @@
     <TestsSharedRepoTestingDir>$([MSBuild]::NormalizeDirectory($(TestsSharedDir), 'RepoTesting'))</TestsSharedRepoTestingDir>
     <VendoringDir>$(MSBuildThisFileDirectory)/src/Vendoring/</VendoringDir>
     <!-- Capture PackageIconFullPath into DefaultDotnetIconFullPath before we overwrite PackageIconFullPath. -->
-    <!-- DefaultDotnetIconFullPath is only needed for the ServiceDisovery packages. The property can be removed when these libraries move. See https://github.com/dotnet/aspire/issues/170 -->
+    <!-- DefaultDotnetIconFullPath is only needed for the ServiceDisovery packages. The property can be removed when these libraries move. See https://github.com/microsoft/aspire/issues/170 -->
     <DefaultDotnetIconFullPath>$(PackageIconFullPath)</DefaultDotnetIconFullPath>
     <PackageIconFullPath>$(SharedDir)Aspire_icon_256.png</PackageIconFullPath>
-    <PackageProjectUrl>https://github.com/dotnet/aspire</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/microsoft/aspire</PackageProjectUrl>
     <WarnOnPackingNonPackableProject>false</WarnOnPackingNonPackableProject>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
@@ -34,9 +34,9 @@
     <DashboardPublishedArtifactsOutputDir>$([MSBuild]::NormalizeDirectory('$(ArtifactsDir)', 'DashboardArtifacts', '$(Configuration)'))</DashboardPublishedArtifactsOutputDir>
     <WorkloadsPackageSource>$(ArtifactsShippingPackagesDir)</WorkloadsPackageSource>
 
-    <!-- Issue: https://github.com/dotnet/aspire/issues/8488 -->
+    <!-- Issue: https://github.com/microsoft/aspire/issues/8488 -->
     <!-- xUnit1051: Calls to methods which accept CancellationToken should use TestContext.Current.CancellationToken to allow test cancellation to be more responsive. -->
-    <!-- Issue: https://github.com/dotnet/aspire/issues/10175 -->
+    <!-- Issue: https://github.com/microsoft/aspire/issues/10175 -->
     <!-- NU1510: The project does not reference any target framework and will not be restored. -->
     <!-- TODO: Re-enable and remove this. -->
     <!-- ASPIREATS001: Aspire Type System APIs are experimental -->

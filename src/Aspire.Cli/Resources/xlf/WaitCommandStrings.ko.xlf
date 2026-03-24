@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="ko" original="../WaitCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Wait for a resource to reach a target status.</source>
-        <target state="translated">리소스가 목표 상태에 도달할 때까지 기다립니다.</target>
+        <source>Wait for a resource to reach a target status</source>
+        <target state="new">Wait for a resource to reach a target status</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidStatusValue">
@@ -13,8 +13,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
-        <source>The name of the resource to wait for.</source>
-        <target state="translated">대기할 리소스의 이름입니다.</target>
+        <source>The name of the resource to wait for</source>
+        <target state="new">The name of the resource to wait for</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceEnteredFailedState">

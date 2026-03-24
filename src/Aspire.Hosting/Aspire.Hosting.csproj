@@ -11,6 +11,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Include="buildTransitive\Aspire.Hosting.targets" Pack="true" PackagePath="buildTransitive\$(DefaultTargetFramework)" />
+  </ItemGroup>
+  
+  <ItemGroup>
     <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Dcp\BundleDiscovery.cs" />
     <Compile Include="$(SharedDir)ChannelExtensions.cs" Link="ChannelExtensions.cs" />
     <Compile Include="$(SharedDir)CircularBuffer.cs" Link="CircularBuffer.cs" />
@@ -124,20 +128,29 @@
     <InternalsVisibleTo Include="Aspire.Hosting.DotnetTool.Tests" />
     <InternalsVisibleTo Include="Aspire.TestUtilities" />
     <InternalsVisibleTo Include="Aspire.Cli.Tests" />
-    <InternalsVisibleTo Include="aspire-server" />
     <InternalsVisibleTo Include="Aspire.Hosting.Kubernetes" />
-    <InternalsVisibleTo Include="Aspire.Hosting.RemoteHost" />
     <InternalsVisibleTo Include="Aspire.Hosting.RemoteHost.Tests" />
-    <InternalsVisibleTo Include="Aspire.Hosting.CodeGeneration.TypeScript" />
-    <InternalsVisibleTo Include="Aspire.Hosting.CodeGeneration.TypeScript.Tests" />
-    <InternalsVisibleTo Include="Aspire.Hosting.CodeGeneration.Python" />
-    <InternalsVisibleTo Include="Aspire.Hosting.CodeGeneration.Python.Tests" />
-    <InternalsVisibleTo Include="Aspire.Hosting.CodeGeneration.Go" />
-    <InternalsVisibleTo Include="Aspire.Hosting.CodeGeneration.Go.Tests" />
-    <InternalsVisibleTo Include="Aspire.Hosting.CodeGeneration.Java" />
-    <InternalsVisibleTo Include="Aspire.Hosting.CodeGeneration.Java.Tests" />
-    <InternalsVisibleTo Include="Aspire.Hosting.CodeGeneration.Rust" />
-    <InternalsVisibleTo Include="Aspire.Hosting.CodeGeneration.Rust.Tests" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- Reference the analyzer to ensure it's built but don't reference its output -->
+    <ProjectReference Include="..\Aspire.Hosting.Integration.Analyzers\Aspire.Hosting.Integration.Analyzers.csproj" ReferenceOutputAssembly="false" Private="true" />
+  </ItemGroup>
+
+  <!-- Include the integration analyzer in the package -->
+  <PropertyGroup>
+    <BeforePack>$(BeforePack);IncludeIntegrationAnalyzerInPackage</BeforePack>
+  </PropertyGroup>
+  <Target Name="IncludeIntegrationAnalyzerInPackage">
+    <MSBuild Projects="..\Aspire.Hosting.Integration.Analyzers\Aspire.Hosting.Integration.Analyzers.csproj" Targets="GetTargetPath">
+      <Output TaskParameter="TargetOutputs" PropertyName="AspireIntegrationAnalyzerFile" />
+    </MSBuild>
+
+    <Error Condition="'$(AspireIntegrationAnalyzerFile)' == ''" Text="Could not find Aspire.Hosting.Integration.Analyzers.dll." />
+
+    <ItemGroup>
+      <None Include="$(AspireIntegrationAnalyzerFile)" Pack="True" PackagePath="buildTransitive\$(DefaultTargetFramework)" />
+    </ItemGroup>
+  </Target>
 
 </Project>

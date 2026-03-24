@@ -121,6 +121,11 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
         Assert.Collection(config,
             e =>
             {
+                Assert.Equal(KnownConfigNames.DashboardApiEnabled, e.Key);
+                Assert.Equal("true", e.Value);
+            },
+            e =>
+            {
                 Assert.Equal(KnownConfigNames.DashboardMcpEndpointUrl, e.Key);
                 Assert.Equal("http://localhost:5004", e.Value);
             },

@@ -342,9 +342,11 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         Debug.Assert(result);
     }
 
-    public void DisplayLines(IEnumerable<(string Stream, string Line)> lines)
+    public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines)
     {
-        var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.DisplayLinesAsync(lines.Select(line => new DisplayLineState(line.Stream.RemoveSpectreFormatting(), line.Line.RemoveSpectreFormatting())), _cancellationToken));
+        var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.DisplayLinesAsync(lines.Select(line => new DisplayLineState(
+            line.Stream == OutputLineStream.StdOut ? "stdout" : "stderr",
+            line.Line.RemoveSpectreFormatting())), _cancellationToken));
         Debug.Assert(result);
         _consoleInteractionService.DisplayLines(lines);
     }

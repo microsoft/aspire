@@ -49,7 +49,7 @@ public static class ParameterResourceBuilderExtensions
     /// <remarks>publishValueAsDefault and secret are mutually exclusive.</remarks>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0026:Do not add multiple public overloads with optional parameters",
                                                      Justification = "third parameters are mutually exclusive.")]
-    [AspireExport("addParameterWithValue", MethodName = "addParameter", Description = "Adds a parameter with a default value")]
+    [AspireExport("addParameterWithValue", Description = "Adds a parameter with a default value")]
     public static IResourceBuilder<ParameterResource> AddParameter(this IDistributedApplicationBuilder builder, [ResourceName] string name, string value, bool publishValueAsDefault = false, bool secret = false)
     {
         ArgumentNullException.ThrowIfNull(builder);

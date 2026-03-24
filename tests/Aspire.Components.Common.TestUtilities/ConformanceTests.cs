@@ -128,7 +128,7 @@ public abstract class ConformanceTests<TService, TOptions>
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public void HealthChecksRegistersHealthCheckService(bool enabled)
     {
         SkipIfHealthChecksAreNotSupported();
@@ -168,7 +168,7 @@ public abstract class ConformanceTests<TService, TOptions>
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public void TracingRegistersTraceProvider(bool enabled)
     {
         SkipIfTracingIsNotSupported();
@@ -184,7 +184,7 @@ public abstract class ConformanceTests<TService, TOptions>
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public void MetricsRegistersMeterProvider(bool enabled)
     {
         SkipIfMetricsAreNotSupported();
@@ -199,7 +199,7 @@ public abstract class ConformanceTests<TService, TOptions>
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public void ServiceLifetimeIsAsExpected(bool useKey)
     {
         SkipIfRequiredServerConnectionCanNotBeEstablished();
@@ -289,7 +289,7 @@ public abstract class ConformanceTests<TService, TOptions>
     [InlineData(true, false)]
     [InlineData(false, true)]
     [InlineData(false, false)]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public void LoggerFactoryIsUsedByRegisteredClient(bool registerAfterLoggerFactory, bool useKey)
     {
         SkipIfRequiredServerConnectionCanNotBeEstablished();
@@ -366,7 +366,7 @@ public abstract class ConformanceTests<TService, TOptions>
     [Theory]
     [InlineData(null)]
     [InlineData("key")]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public virtual async Task HealthCheckReportsExpectedStatus(string? key)
     {
         SkipIfHealthChecksAreNotSupported();
@@ -419,7 +419,7 @@ public abstract class ConformanceTests<TService, TOptions>
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public void ConnectionInformationIsDelayValidated(bool useKey)
     {
         SkipIfComponentIsBuiltBeforeHost();

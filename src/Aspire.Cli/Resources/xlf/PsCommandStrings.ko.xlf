@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="ko" original="../PsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>List running apphosts.</source>
-        <target state="translated">실행 중인 AppHost를 나열합니다.</target>
+        <source>List running apphosts</source>
+        <target state="needs-review-translation">실행 중인 Aspire AppHost를 나열합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderCliPid">
@@ -28,13 +28,13 @@
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">출력 형식(테이블 또는 JSON)입니다.</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">JSON 형식의 출력입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesOptionDescription">
-        <source>Include resource details for each running app host. Only applies to JSON output.</source>
-        <target state="translated">실행 중인 각 앱 호스트의 리소스 세부 정보를 포함합니다. JSON 출력에만 적용됩니다.</target>
+        <source>Include resource details for each running apphost. Only applies to JSON output.</source>
+        <target state="new">Include resource details for each running apphost. Only applies to JSON output.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnknownPath">

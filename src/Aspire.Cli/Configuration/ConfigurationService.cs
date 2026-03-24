@@ -4,10 +4,11 @@
 using System.Text.Json.Nodes;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Configuration;
 
-internal sealed class ConfigurationService(IConfiguration configuration, CliExecutionContext executionContext, FileInfo globalSettingsFile) : IConfigurationService
+internal sealed class ConfigurationService(IConfiguration configuration, CliExecutionContext executionContext, FileInfo globalSettingsFile, ILogger<ConfigurationService> logger) : IConfigurationService
 {
     public async Task SetConfigurationAsync(string key, string value, bool isGlobal = false, CancellationToken cancellationToken = default)
     {
@@ -22,7 +23,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
             // Handle empty files or whitespace-only content
             settings = string.IsNullOrWhiteSpace(existingContent)
                 ? new JsonObject()
-                : JsonNode.Parse(existingContent)?.AsObject() ?? new JsonObject();
+                : JsonNode.Parse(existingContent, nodeOptions: null, ConfigurationHelper.ParseOptions)?.AsObject() ?? new JsonObject();
         }
         else
         {
@@ -54,7 +55,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
                 return false;
             }
 
-            var settings = JsonNode.Parse(existingContent)?.AsObject();
+            var settings = JsonNode.Parse(existingContent, nodeOptions: null, ConfigurationHelper.ParseOptions)?.AsObject();
 
             if (settings is null)
             {
@@ -96,18 +97,31 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         // Walk up the directory tree to find existing settings file
         while (searchDirectory is not null)
         {
-            var settingsFilePath = ConfigurationHelper.BuildPathToSettingsJsonFile(searchDirectory.FullName);
-
-            if (File.Exists(settingsFilePath))
+            // Prefer aspire.config.json (new format)
+            var newSettingsPath = Path.Combine(searchDirectory.FullName, AspireConfigFile.FileName);
+            if (File.Exists(newSettingsPath))
             {
-                return settingsFilePath;
+                logger.LogInformation("Found settings file at {Path}", newSettingsPath);
+                return newSettingsPath;
+            }
+
+            // TODO: Remove legacy .aspire/settings.json fallback once confident most users have migrated.
+            // Tracked by https://github.com/microsoft/aspire/issues/15239
+            // Fall back to .aspire/settings.json (legacy)
+            var legacySettingsPath = ConfigurationHelper.BuildPathToSettingsJsonFile(searchDirectory.FullName);
+            if (File.Exists(legacySettingsPath))
+            {
+                logger.LogInformation("Found legacy settings file at {Path}", legacySettingsPath);
+                return legacySettingsPath;
             }
 
             searchDirectory = searchDirectory.Parent;
         }
 
-        // If no existing settings file found, create one in current directory
-        return ConfigurationHelper.BuildPathToSettingsJsonFile(executionContext.WorkingDirectory.FullName);
+        // If no existing settings file found, default to aspire.config.json in current directory
+        var defaultPath = Path.Combine(executionContext.WorkingDirectory.FullName, AspireConfigFile.FileName);
+        logger.LogDebug("No existing settings file found, defaulting to {Path}", defaultPath);
+        return defaultPath;
     }
 
     public async Task<Dictionary<string, string>> GetAllConfigurationAsync(CancellationToken cancellationToken = default)
@@ -148,7 +162,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
                 return;
             }
 
-            var settings = JsonNode.Parse(content)?.AsObject();
+            var settings = JsonNode.Parse(content, nodeOptions: null, ConfigurationHelper.ParseOptions)?.AsObject();
 
             if (settings is not null)
             {

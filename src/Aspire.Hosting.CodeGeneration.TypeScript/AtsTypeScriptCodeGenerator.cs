@@ -3,7 +3,7 @@
 
 using System.Globalization;
 using System.Reflection;
-using Aspire.Hosting.Ats;
+using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.TypeScript;
 
@@ -183,7 +183,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         AtsConstants.DateOnly or AtsConstants.TimeOnly => "string",
         AtsConstants.TimeSpan => "number",
         AtsConstants.Guid or AtsConstants.Uri => "string",
-        AtsConstants.CancellationToken => "AbortSignal",
+        AtsConstants.CancellationToken => "CancellationToken",
         _ => typeId
     };
 
@@ -243,8 +243,27 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     }
 
     /// <summary>
+    /// Maps a user-supplied input type to TypeScript.
+    /// For interface handle types, generated APIs accept wrapper instances.
+    /// For cancellation tokens, generated APIs accept either an AbortSignal or a transport-safe CancellationToken.
+    /// </summary>
+    private string MapInputTypeToTypeScript(AtsTypeRef? typeRef)
+    {
+        if (IsInterfaceHandleType(typeRef))
+        {
+            return "ResourceBuilderBase";
+        }
+
+        if (IsCancellationTokenType(typeRef))
+        {
+            return "AbortSignal | CancellationToken";
+        }
+
+        return MapTypeRefToTypeScript(typeRef);
+    }
+
+    /// <summary>
     /// Maps a parameter to its TypeScript type, handling callbacks specially.
-    /// For interface handle types, generates union types to accept both handles and wrapper classes.
     /// </summary>
     private string MapParameterToTypeScript(AtsParameterInfo param)
     {
@@ -253,16 +272,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             return GenerateCallbackTypeSignature(param.CallbackParameters, param.CallbackReturnType);
         }
 
-        var baseType = MapTypeRefToTypeScript(param.Type);
-
-        // For interface handle types, use ResourceBuilderBase as the parameter type
-        // All wrapper classes extend ResourceBuilderBase and have toJSON() for serialization
-        if (IsInterfaceHandleType(param.Type))
-        {
-            return "ResourceBuilderBase";
-        }
-
-        return baseType;
+        return MapInputTypeToTypeScript(param.Type);
     }
 
     /// <summary>
@@ -276,6 +286,41 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             return false;
         }
         return typeRef.Category == AtsTypeCategory.Handle && typeRef.IsInterface;
+    }
+
+    private static bool IsCancellationTokenType(AtsTypeRef? typeRef) => typeRef?.TypeId == AtsConstants.CancellationToken;
+
+    private static string GetRpcArgumentValueExpression(string parameterName, AtsTypeRef? typeRef)
+        => IsCancellationTokenType(typeRef)
+            ? $"CancellationToken.fromValue({parameterName})"
+            : parameterName;
+
+    private static string GetRpcArgumentEntry(string parameterName, AtsTypeRef? typeRef)
+    {
+        var valueExpression = GetRpcArgumentValueExpression(parameterName, typeRef);
+        return valueExpression == parameterName
+            ? parameterName
+            : $"{parameterName}: {valueExpression}";
+    }
+
+    private static string GetRpcArgumentEntry(AtsParameterInfo param, bool useRegisteredCallback = true)
+    {
+        if (useRegisteredCallback && param.IsCallback)
+        {
+            return $"{param.Name}: {param.Name}Id";
+        }
+
+        return GetRpcArgumentEntry(param.Name, param.Type);
+    }
+
+    private static string GetRpcArgumentExpression(AtsParameterInfo param, bool useRegisteredCallback = true)
+    {
+        if (useRegisteredCallback && param.IsCallback)
+        {
+            return $"{param.Name}Id";
+        }
+
+        return GetRpcArgumentValueExpression(param.Name, param.Type);
     }
 
     /// <summary>
@@ -343,6 +388,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 Handle,
                 MarshalledHandle,
                 AppHostUsageError,
+                CancellationToken,
                 CapabilityError,
                 registerCallback,
                 wrapIfHandle,
@@ -1005,20 +1051,24 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 GenerateCallbackRegistration(callbackParam);
             }
 
-            // Handle cancellation token registration if any
-            var cancellationParams2 = capability.Parameters.Where(IsCancellationToken).ToList();
-            foreach (var ctParam in cancellationParams2)
-            {
-                GenerateCancellationRegistration(ctParam);
-            }
-
             // Build args object with conditional inclusion
-            GenerateArgsObjectWithConditionals(targetParamName, requiredParams, optionalParams, cancellationParams2);
+            GenerateArgsObjectWithConditionals(targetParamName, requiredParams, optionalParams);
 
-            WriteLine($"        return await this._client.invokeCapability<{returnType}>(");
-            WriteLine($"            '{capability.CapabilityId}',");
-            WriteLine($"            rpcArgs");
-            WriteLine("        );");
+            if (capability.ReturnType?.TypeId == AtsConstants.CancellationToken)
+            {
+                WriteLine("        const result = await this._client.invokeCapability<string | null>(");
+                WriteLine($"            '{capability.CapabilityId}',");
+                WriteLine("            rpcArgs");
+                WriteLine("        );");
+                WriteLine("        return CancellationToken.fromValue(result);");
+            }
+            else
+            {
+                WriteLine($"        return await this._client.invokeCapability<{returnType}>(");
+                WriteLine($"            '{capability.CapabilityId}',");
+                WriteLine($"            rpcArgs");
+                WriteLine("        );");
+            }
             WriteLine("    }");
             WriteLine();
             return;
@@ -1038,15 +1088,8 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             GenerateCallbackRegistration(callbackParam);
         }
 
-        // Handle cancellation token registration if any
-        var cancellationParams = capability.Parameters.Where(IsCancellationToken).ToList();
-        foreach (var ctParam in cancellationParams)
-        {
-            GenerateCancellationRegistration(ctParam);
-        }
-
         // Build args object with conditional inclusion
-        GenerateArgsObjectWithConditionals(targetParamName, requiredParams, optionalParams, cancellationParams);
+        GenerateArgsObjectWithConditionals(targetParamName, requiredParams, optionalParams);
 
         if (returnsBuilder)
         {
@@ -1099,29 +1142,13 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     private void GenerateArgsObjectWithConditionals(
         string targetParamName,
         List<AtsParameterInfo> requiredParams,
-        List<AtsParameterInfo> optionalParams,
-        List<AtsParameterInfo>? cancellationParams = null)
+        List<AtsParameterInfo> optionalParams)
     {
-        var cancellationParamNames = new HashSet<string>(cancellationParams?.Select(p => p.Name) ?? []);
-
         // Build the required args inline
         var requiredArgs = new List<string> { $"{targetParamName}: this._handle" };
         foreach (var param in requiredParams)
         {
-            if (param.IsCallback)
-            {
-                // Use the actual parameter name for the RPC call, not a hardcoded "callback"
-                requiredArgs.Add($"{param.Name}: {param.Name}Id");
-            }
-            else if (cancellationParamNames.Contains(param.Name))
-            {
-                // Use the registered cancellation ID
-                requiredArgs.Add($"{param.Name}: {param.Name}Id");
-            }
-            else
-            {
-                requiredArgs.Add(param.Name);
-            }
+            requiredArgs.Add(GetRpcArgumentEntry(param));
         }
 
         WriteLine($"        const rpcArgs: Record<string, unknown> = {{ {string.Join(", ", requiredArgs)} }};");
@@ -1129,11 +1156,8 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         // Conditionally add optional params
         foreach (var param in optionalParams)
         {
-            var isCancellation = cancellationParamNames.Contains(param.Name);
-            var argName = param.IsCallback || isCancellation ? $"{param.Name}Id" : param.Name;
-            var paramName = param.Name;
-            // Use the actual parameter name for the RPC call
-            WriteLine($"        if ({paramName} !== undefined) rpcArgs.{paramName} = {argName};");
+            var rpcExpression = GetRpcArgumentExpression(param);
+            WriteLine($"        if ({param.Name} !== undefined) rpcArgs.{param.Name} = {rpcExpression};");
         }
     }
 
@@ -1274,20 +1298,15 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
         // Build parameter list
         var paramDefs = new List<string> { "client: AspireClientRpc" };
-        var paramArgs = new List<string>();
-
         foreach (var param in capability.Parameters)
         {
             var tsType = MapParameterToTypeScript(param);
             var optional = param.IsOptional || param.IsNullable ? "?" : "";
             paramDefs.Add($"{param.Name}{optional}: {tsType}");
-            paramArgs.Add(param.Name);
         }
 
         var paramsString = string.Join(", ", paramDefs);
-        var argsObject = paramArgs.Count > 0
-            ? $"{{ {string.Join(", ", paramArgs)} }}"
-            : "{}";
+        var (requiredParams, optionalParams) = SeparateParameters(capability.Parameters);
 
         // Determine return type - check if return type has a Promise wrapper
         var capReturnTypeId = GetReturnTypeId(capability);
@@ -1312,9 +1331,17 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             Write($"export function {methodName}(");
             Write(paramsString);
             WriteLine($"): {returnPromiseWrapper} {{");
+            var requiredArgs = requiredParams
+                .Select(param => GetRpcArgumentEntry(param, useRegisteredCallback: false))
+                .ToList();
+            WriteLine($"    const rpcArgs: Record<string, unknown> = {{ {string.Join(", ", requiredArgs)} }};");
+            foreach (var param in optionalParams)
+            {
+                WriteLine($"    if ({param.Name} !== undefined) rpcArgs.{param.Name} = {GetRpcArgumentExpression(param, useRegisteredCallback: false)};");
+            }
             WriteLine($"    const promise = client.invokeCapability<{handleType}>(");
             WriteLine($"        '{capability.CapabilityId}',");
-            WriteLine($"        {argsObject}");
+            WriteLine("        rpcArgs");
             WriteLine($"    ).then(handle => new {returnWrapperClass}(handle, client));");
             WriteLine($"    return new {returnPromiseWrapper}(promise);");
             WriteLine("}");
@@ -1329,16 +1356,35 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             Write($"export async function {methodName}(");
             Write(paramsString);
             WriteLine($"): Promise<{returnType}> {{");
+            var requiredArgs = requiredParams
+                .Select(param => GetRpcArgumentEntry(param, useRegisteredCallback: false))
+                .ToList();
+            WriteLine($"    const rpcArgs: Record<string, unknown> = {{ {string.Join(", ", requiredArgs)} }};");
+            foreach (var param in optionalParams)
+            {
+                WriteLine($"    if ({param.Name} !== undefined) rpcArgs.{param.Name} = {GetRpcArgumentExpression(param, useRegisteredCallback: false)};");
+            }
             if (returnType == "void")
             {
                 WriteLine($"    await client.invokeCapability<void>(");
+            }
+            else if (capability.ReturnType?.TypeId == AtsConstants.CancellationToken)
+            {
+                WriteLine("    const result = await client.invokeCapability<string | null>(");
+                WriteLine($"        '{capability.CapabilityId}',");
+                WriteLine("        rpcArgs");
+                WriteLine("    );");
+                WriteLine("    return CancellationToken.fromValue(result);");
+                WriteLine("}");
+                WriteLine();
+                return;
             }
             else
             {
                 WriteLine($"    return await client.invokeCapability<{returnType}>(");
             }
             WriteLine($"        '{capability.CapabilityId}',");
-            WriteLine($"        {argsObject}");
+            WriteLine("        rpcArgs");
             WriteLine("    );");
             WriteLine("}");
         }
@@ -1387,7 +1433,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         }
         else
         {
-            paramSignature = "argsData: unknown";
+            paramSignature = string.Join(", ", callbackParameters.Select(p => $"{p.Name}Data: unknown"));
         }
 
         // For optional callbacks, wrap the registration in a conditional
@@ -1415,33 +1461,6 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     }
 
     /// <summary>
-    /// Checks if a parameter is a CancellationToken type.
-    /// </summary>
-    private static bool IsCancellationToken(AtsParameterInfo param)
-    {
-        return param.Type?.TypeId == AtsConstants.CancellationToken;
-    }
-
-    /// <summary>
-    /// Generates cancellation registration for a CancellationToken parameter.
-    /// </summary>
-    private void GenerateCancellationRegistration(AtsParameterInfo param)
-    {
-        var isOptional = param.IsOptional || param.IsNullable;
-        var paramName = param.Name;
-
-        // For optional cancellation tokens, wrap the registration in a conditional
-        if (isOptional)
-        {
-            WriteLine($"        const {paramName}Id = {paramName} ? registerCancellation({paramName}) : undefined;");
-        }
-        else
-        {
-            WriteLine($"        const {paramName}Id = registerCancellation({paramName});");
-        }
-    }
-
-    /// <summary>
     /// Generates the body of a callback function.
     /// </summary>
     private void GenerateCallbackBody(AtsParameterInfo callbackParam, IReadOnlyList<AtsCallbackParameterInfo>? callbackParameters)
@@ -1465,7 +1484,11 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             var tsType = MapTypeRefToTypeScript(cbParam.Type);
             var cbTypeId = cbParam.Type.TypeId;
 
-            if (_wrapperClassNames.TryGetValue(cbTypeId, out var wrapperClassName))
+            if (cbTypeId == AtsConstants.CancellationToken)
+            {
+                WriteLine($"            const {cbParam.Name} = CancellationToken.fromValue({cbParam.Name}Data);");
+            }
+            else if (_wrapperClassNames.TryGetValue(cbTypeId, out var wrapperClassName))
             {
                 // For types with wrapper classes, create an instance of the wrapper
                 var handleType = GetHandleTypeName(cbTypeId);
@@ -1482,30 +1505,29 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         }
         else
         {
-            // Multi-parameter callback - .NET sends as { p0, p1, ... }
-            var paramNames = callbackParameters.Select((p, i) => $"p{i}").ToList();
-            var destructureWithTypes = string.Join(", ", paramNames.Select(p => $"{p}: unknown"));
-
-            WriteLine($"            const args = argsData as {{ {destructureWithTypes} }};");
-
             var callArgs = new List<string>();
             for (var i = 0; i < callbackParameters.Count; i++)
             {
                 var cbParam = callbackParameters[i];
                 var tsType = MapTypeRefToTypeScript(cbParam.Type);
                 var cbTypeId = cbParam.Type.TypeId;
+                var callbackArgName = $"{cbParam.Name}Data";
 
-                if (_wrapperClassNames.TryGetValue(cbTypeId, out var wrapperClassName))
+                if (cbTypeId == AtsConstants.CancellationToken)
+                {
+                    WriteLine($"            const {cbParam.Name} = CancellationToken.fromValue(args.p{i});");
+                }
+                else if (_wrapperClassNames.TryGetValue(cbTypeId, out var wrapperClassName))
                 {
                     // For types with wrapper classes, create an instance of the wrapper
                     var handleType = GetHandleTypeName(cbTypeId);
-                    WriteLine($"            const {cbParam.Name}Handle = wrapIfHandle(args.p{i}) as {handleType};");
+                    WriteLine($"            const {cbParam.Name}Handle = wrapIfHandle({callbackArgName}) as {handleType};");
                     WriteLine($"            const {cbParam.Name} = new {wrapperClassName}({cbParam.Name}Handle, this._client);");
                 }
                 else
                 {
                     // For raw handle types, just wrap and cast
-                    WriteLine($"            const {cbParam.Name} = wrapIfHandle(args.p{i}) as {tsType};");
+                    WriteLine($"            const {cbParam.Name} = wrapIfHandle({callbackArgName}) as {tsType};");
                 }
                 callArgs.Add(cbParam.Name);
             }
@@ -1582,7 +1604,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             }
 
             // Re-export commonly used types
-            export { Handle, AppHostUsageError, CapabilityError, registerCallback } from './transport.js';
+            export { Handle, AppHostUsageError, CancellationToken, CapabilityError, registerCallback } from './transport.js';
             export { refExpr, ReferenceExpression } from './base.js';
             """);
         WriteLine();
@@ -1848,10 +1870,21 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         if (getter != null)
         {
             WriteLine($"        get: async (): Promise<{returnType}> => {{");
-            WriteLine($"            return await this._client.invokeCapability<{returnType}>(");
-            WriteLine($"                '{getter.CapabilityId}',");
-            WriteLine($"                {{ context: this._handle }}");
-            WriteLine("            );");
+            if (getter.ReturnType?.TypeId == AtsConstants.CancellationToken)
+            {
+                WriteLine("            const result = await this._client.invokeCapability<string | null>(");
+                WriteLine($"                '{getter.CapabilityId}',");
+                WriteLine("                { context: this._handle }");
+                WriteLine("            );");
+                WriteLine("            return CancellationToken.fromValue(result);");
+            }
+            else
+            {
+                WriteLine($"            return await this._client.invokeCapability<{returnType}>(");
+                WriteLine($"                '{getter.CapabilityId}',");
+                WriteLine($"                {{ context: this._handle }}");
+                WriteLine("            );");
+            }
             WriteLine("        },");
         }
 
@@ -1861,11 +1894,11 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             var valueParam = setter.Parameters.FirstOrDefault(p => p.Name == "value");
             if (valueParam != null)
             {
-                var valueType = MapTypeRefToTypeScript(valueParam.Type);
+                var valueType = MapInputTypeToTypeScript(valueParam.Type);
                 WriteLine($"        set: async (value: {valueType}): Promise<void> => {{");
                 WriteLine($"            await this._client.invokeCapability<void>(");
                 WriteLine($"                '{setter.CapabilityId}',");
-                WriteLine($"                {{ context: this._handle, value }}");
+                WriteLine($"                {{ context: this._handle, {GetRpcArgumentEntry("value", valueParam.Type)} }}");
                 WriteLine("            );");
                 WriteLine("        }");
             }
@@ -2056,17 +2089,28 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var requiredArgs = new List<string> { $"{targetParamName}: this._handle" };
         foreach (var param in requiredParams)
         {
-            requiredArgs.Add(param.Name);
+            requiredArgs.Add(GetRpcArgumentEntry(param.Name, param.Type));
         }
         WriteLine($"        const rpcArgs: Record<string, unknown> = {{ {string.Join(", ", requiredArgs)} }};");
         foreach (var param in optionalParams)
         {
-            WriteLine($"        if ({param.Name} !== undefined) rpcArgs.{param.Name} = {param.Name};");
+            WriteLine($"        if ({param.Name} !== undefined) rpcArgs.{param.Name} = {GetRpcArgumentValueExpression(param.Name, param.Type)};");
         }
 
         if (returnType == "void")
         {
             WriteLine($"        await this._client.invokeCapability<void>(");
+        }
+        else if (method.ReturnType?.TypeId == AtsConstants.CancellationToken)
+        {
+            WriteLine("        const result = await this._client.invokeCapability<string | null>(");
+            WriteLine($"            '{method.CapabilityId}',");
+            WriteLine("            rpcArgs");
+            WriteLine("        );");
+            WriteLine("        return CancellationToken.fromValue(result);");
+            WriteLine("    }");
+            WriteLine();
+            return;
         }
         else
         {
@@ -2134,12 +2178,12 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var requiredArgs = new List<string> { $"{firstParamName}: this._handle" };
         foreach (var param in requiredParams)
         {
-            requiredArgs.Add(param.Name);
+            requiredArgs.Add(GetRpcArgumentEntry(param.Name, param.Type));
         }
         WriteLine($"        const rpcArgs: Record<string, unknown> = {{ {string.Join(", ", requiredArgs)} }};");
         foreach (var param in optionalParams)
         {
-            WriteLine($"        if ({param.Name} !== undefined) rpcArgs.{param.Name} = {param.Name};");
+            WriteLine($"        if ({param.Name} !== undefined) rpcArgs.{param.Name} = {GetRpcArgumentValueExpression(param.Name, param.Type)};");
         }
 
         if (returnType == "void")
@@ -2329,10 +2373,21 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             // Build args with conditional inclusion
             GenerateArgsObjectWithConditionals(targetParamName, requiredParams, optionalParams);
 
-            WriteLine($"        return await this._client.invokeCapability<{returnType}>(");
-            WriteLine($"            '{capability.CapabilityId}',");
-            WriteLine($"            rpcArgs");
-            WriteLine("        );");
+            if (capability.ReturnType?.TypeId == AtsConstants.CancellationToken)
+            {
+                WriteLine("        const result = await this._client.invokeCapability<string | null>(");
+                WriteLine($"            '{capability.CapabilityId}',");
+                WriteLine("            rpcArgs");
+                WriteLine("        );");
+                WriteLine("        return CancellationToken.fromValue(result);");
+            }
+            else
+            {
+                WriteLine($"        return await this._client.invokeCapability<{returnType}>(");
+                WriteLine($"            '{capability.CapabilityId}',");
+                WriteLine($"            rpcArgs");
+                WriteLine("        );");
+            }
             WriteLine("    }");
         }
         WriteLine();
@@ -2486,6 +2541,13 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
             // Use category-based check instead of string parsing
             if (targetTypeRef.Category != AtsTypeCategory.Handle)
+            {
+                continue;
+            }
+
+            // ReferenceExpression is implemented manually in base.ts, including its handle wrapper
+            // registration, so it must not also generate a duplicate wrapper class in aspire.ts.
+            if (targetTypeId == AtsConstants.ReferenceExpressionTypeId)
             {
                 continue;
             }

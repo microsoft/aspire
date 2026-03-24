@@ -26,8 +26,8 @@ const keycloak2 = await builder.addKeycloak("keycloak2")
     .withOtlpExporterWithProtocol(OtlpProtocol.HttpProtobuf);
 
 await builder.addContainer("consumer", "nginx")
-    .withServiceReference(keycloak)
-    .withServiceReference(keycloak2);
+    .withReference(keycloak)
+    .withReference(keycloak2);
 
 const _keycloakName = await keycloak.name.get();
 const _keycloakEntrypoint = await keycloak.entrypoint.get();

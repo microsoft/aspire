@@ -3,18 +3,18 @@
   <file datatype="xml" source-language="en" target-language="de" original="../LogsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Display logs from resources in a running apphost.</source>
-        <target state="translated">Protokolle von Ressourcen in einem laufenden AppHost anzeigen.</target>
+        <source>Display logs from resources in a running apphost</source>
+        <target state="needs-review-translation">Protokolle von Ressourcen in einem laufenden Aspire-AppHost anzeigen.</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
-        <source>Stream logs in real-time as they are written.</source>
-        <target state="translated">Streamen Sie Protokolle in Echtzeit, während sie geschrieben werden.</target>
+        <source>Stream logs in real-time as they are written</source>
+        <target state="needs-review-translation">Streamen Sie Protokolle in Echtzeit, während sie geschrieben werden.</target>
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">Ausgabeformat (Tabelle oder JSON).</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">Protokolle im JSON-Format (NDJSON) ausgeben.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoResourcesFound">
@@ -24,7 +24,7 @@
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The name of the resource to get logs for. If not specified, logs from all resources are shown.</source>
-        <target state="translated">Name der Ressource, für die Protokolle abgerufen werden sollen. Wenn keine Angabe erfolgt, werden Protokolle von allen Ressourcen angezeigt.</target>
+        <target state="needs-review-translation">Name der Ressource, für die Protokolle abgerufen werden sollen. Wenn keine Angabe erfolgt, werden Protokolle von allen Ressourcen angezeigt.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">
@@ -48,8 +48,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TailOptionDescription">
-        <source>Number of lines to show from the end of logs (default: all).</source>
-        <target state="translated">Anzahl der Zeilen, die vom Ende der Protokolle angezeigt werden sollen (Standard: alle).</target>
+        <source>Number of lines to show from the end of logs (default: all)</source>
+        <target state="needs-review-translation">Anzahl der Zeilen, die vom Ende der Protokolle angezeigt werden sollen (Standard: alle).</target>
         <note />
       </trans-unit>
       <trans-unit id="TailRequiresResource">
@@ -58,8 +58,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TimestampsOptionDescription">
-        <source>Show timestamps for each log line.</source>
-        <target state="translated">Zeitstempel für jede Protokollzeile anzeigen.</target>
+        <source>Show timestamps for each log line</source>
+        <target state="new">Show timestamps for each log line</target>
         <note />
       </trans-unit>
       <trans-unit id="GettingLogs">

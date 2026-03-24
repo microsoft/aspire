@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Xunit;
@@ -10,7 +11,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 
 /// <summary>
 /// End-to-end tests for aspire stop in non-interactive mode.
-/// Validates fix for https://github.com/dotnet/aspire/issues/14558.
+/// Validates fix for https://github.com/microsoft/aspire/issues/14558.
 /// </summary>
 public sealed class StopNonInteractiveTests(ITestOutputHelper output)
 {
@@ -26,62 +27,47 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
-        // Pattern searchers for start/stop commands
-        var waitForAppHostStartedSuccessfully = new CellPatternSearcher()
-            .Find("AppHost started successfully.");
-
-        var waitForAppHostStoppedSuccessfully = new CellPatternSearcher()
-            .Find("AppHost stopped successfully.");
-
-        var waitForNoRunningAppHostsFound = new CellPatternSearcher()
-            .Find("No running AppHost found");
-
         var counter = new SequenceCounter();
-        var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
-        sequenceBuilder.PrepareDockerEnvironment(counter, workspace);
-
-        sequenceBuilder.InstallAspireCliInDocker(installMode, counter);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliInDockerAsync(installMode, counter);
 
         // Create a new project using aspire new
-        sequenceBuilder.AspireNew("TestStopApp", counter);
+        await auto.AspireNewAsync("TestStopApp", counter);
 
         // Navigate to the AppHost directory
-        sequenceBuilder.Type("cd TestStopApp/TestStopApp.AppHost")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("cd TestStopApp/TestStopApp.AppHost");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Start the AppHost in the background using aspire start
-        sequenceBuilder.Type("aspire start")
-            .Enter()
-            .WaitUntil(s => waitForAppHostStartedSuccessfully.Search(s).Count > 0, TimeSpan.FromMinutes(3))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire start");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Clear screen to avoid matching old patterns
-        sequenceBuilder.ClearScreen(counter);
+        await auto.ClearScreenAsync(counter);
 
         // Stop the AppHost using aspire stop --non-interactive --project (targets specific AppHost)
-        sequenceBuilder.Type("aspire stop --non-interactive --project TestStopApp.AppHost.csproj")
-            .Enter()
-            .WaitUntil(s => waitForAppHostStoppedSuccessfully.Search(s).Count > 0, TimeSpan.FromMinutes(1))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire stop --non-interactive --project TestStopApp.AppHost.csproj");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(StopCommandStrings.AppHostStoppedSuccessfully, timeout: TimeSpan.FromMinutes(1));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Clear screen
-        sequenceBuilder.ClearScreen(counter);
+        await auto.ClearScreenAsync(counter);
 
         // Verify that stop --non-interactive handles no running AppHosts gracefully
-        sequenceBuilder.Type("aspire stop --non-interactive")
-            .Enter()
-            .WaitUntil(s => waitForNoRunningAppHostsFound.Search(s).Count > 0, TimeSpan.FromSeconds(30))
-            .WaitForAnyPrompt(counter, TimeSpan.FromSeconds(30));
+        await auto.TypeAsync("aspire stop --non-interactive");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(SharedCommandStrings.AppHostNotRunning, timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitForAnyPromptAsync(counter, TimeSpan.FromSeconds(30));
 
         // Exit the shell
-        sequenceBuilder.Type("exit")
-            .Enter();
-
-        var sequence = sequenceBuilder.Build();
-
-        await sequence.ApplyAsync(terminal, TestContext.Current.CancellationToken);
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
 
         await pendingRun;
     }
@@ -98,72 +84,57 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
-        // Pattern searchers for start/stop commands
-        var waitForAppHostStartedSuccessfully = new CellPatternSearcher()
-            .Find("AppHost started successfully.");
-
-        var waitForAppHostStoppedSuccessfully = new CellPatternSearcher()
-            .Find("AppHost stopped successfully.");
-
-        var waitForNoRunningAppHostsFound = new CellPatternSearcher()
-            .Find("No running AppHost found");
-
         var counter = new SequenceCounter();
-        var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
-        sequenceBuilder.PrepareDockerEnvironment(counter, workspace);
-
-        sequenceBuilder.InstallAspireCliInDocker(installMode, counter);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliInDockerAsync(installMode, counter);
 
         // Create first project
-        sequenceBuilder.AspireNew("App1", counter);
+        await auto.AspireNewAsync("App1", counter);
 
         // Clear screen before second project creation
-        sequenceBuilder.ClearScreen(counter);
+        await auto.ClearScreenAsync(counter);
 
         // Create second project
-        sequenceBuilder.AspireNew("App2", counter);
+        await auto.AspireNewAsync("App2", counter);
 
         // Start first AppHost in background
-        sequenceBuilder.Type("cd App1/App1.AppHost && aspire start")
-            .Enter()
-            .WaitUntil(s => waitForAppHostStartedSuccessfully.Search(s).Count > 0, TimeSpan.FromMinutes(3))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("cd App1/App1.AppHost && aspire start");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Clear screen before starting second apphost
-        sequenceBuilder.ClearScreen(counter);
+        await auto.ClearScreenAsync(counter);
 
         // Navigate back and start second AppHost in background
-        sequenceBuilder.Type("cd ../../App2/App2.AppHost && aspire start")
-            .Enter()
-            .WaitUntil(s => waitForAppHostStartedSuccessfully.Search(s).Count > 0, TimeSpan.FromMinutes(3))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("cd ../../App2/App2.AppHost && aspire start");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Clear screen
-        sequenceBuilder.ClearScreen(counter);
+        await auto.ClearScreenAsync(counter);
 
         // Stop all AppHosts from within an AppHost directory using --non-interactive --all
-        sequenceBuilder.Type("aspire stop --non-interactive --all")
-            .Enter()
-            .WaitUntil(s => waitForAppHostStoppedSuccessfully.Search(s).Count > 0, TimeSpan.FromMinutes(1))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire stop --non-interactive --all");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(StopCommandStrings.AppHostStoppedSuccessfully, timeout: TimeSpan.FromMinutes(1));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Clear screen
-        sequenceBuilder.ClearScreen(counter);
+        await auto.ClearScreenAsync(counter);
 
         // Verify no AppHosts are running
-        sequenceBuilder.Type("aspire stop --non-interactive")
-            .Enter()
-            .WaitUntil(s => waitForNoRunningAppHostsFound.Search(s).Count > 0, TimeSpan.FromSeconds(30))
-            .WaitForAnyPrompt(counter, TimeSpan.FromSeconds(30));
+        await auto.TypeAsync("aspire stop --non-interactive");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(SharedCommandStrings.AppHostNotRunning, timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitForAnyPromptAsync(counter, TimeSpan.FromSeconds(30));
 
         // Exit the shell
-        sequenceBuilder.Type("exit")
-            .Enter();
-
-        var sequence = sequenceBuilder.Build();
-
-        await sequence.ApplyAsync(terminal, TestContext.Current.CancellationToken);
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
 
         await pendingRun;
     }
@@ -180,77 +151,62 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
-        // Pattern searchers for start/stop commands
-        var waitForAppHostStartedSuccessfully = new CellPatternSearcher()
-            .Find("AppHost started successfully.");
-
-        var waitForAppHostStoppedSuccessfully = new CellPatternSearcher()
-            .Find("AppHost stopped successfully.");
-
-        var waitForNoRunningAppHostsFound = new CellPatternSearcher()
-            .Find("No running AppHost found");
-
         var counter = new SequenceCounter();
-        var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
-        sequenceBuilder.PrepareDockerEnvironment(counter, workspace);
-
-        sequenceBuilder.InstallAspireCliInDocker(installMode, counter);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliInDockerAsync(installMode, counter);
 
         // Create first project
-        sequenceBuilder.AspireNew("App1", counter);
+        await auto.AspireNewAsync("App1", counter);
 
         // Clear screen before second project creation
-        sequenceBuilder.ClearScreen(counter);
+        await auto.ClearScreenAsync(counter);
 
         // Create second project
-        sequenceBuilder.AspireNew("App2", counter);
+        await auto.AspireNewAsync("App2", counter);
 
         // Start first AppHost in background
-        sequenceBuilder.Type("cd App1/App1.AppHost && aspire start")
-            .Enter()
-            .WaitUntil(s => waitForAppHostStartedSuccessfully.Search(s).Count > 0, TimeSpan.FromMinutes(3))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("cd App1/App1.AppHost && aspire start");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Clear screen before starting second apphost
-        sequenceBuilder.ClearScreen(counter);
+        await auto.ClearScreenAsync(counter);
 
         // Navigate back and start second AppHost in background
-        sequenceBuilder.Type("cd ../../App2/App2.AppHost && aspire start")
-            .Enter()
-            .WaitUntil(s => waitForAppHostStartedSuccessfully.Search(s).Count > 0, TimeSpan.FromMinutes(3))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("cd ../../App2/App2.AppHost && aspire start");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Navigate to workspace root (unrelated to any AppHost directory)
-        sequenceBuilder.Type($"cd {CliE2ETestHelpers.ToContainerPath(workspace.WorkspaceRoot.FullName, workspace)}")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync($"cd {CliE2ETestHelpers.ToContainerPath(workspace.WorkspaceRoot.FullName, workspace)}");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Clear screen
-        sequenceBuilder.ClearScreen(counter);
+        await auto.ClearScreenAsync(counter);
 
         // Stop all AppHosts from an unrelated directory using --non-interactive --all
-        sequenceBuilder.Type("aspire stop --non-interactive --all")
-            .Enter()
-            .WaitUntil(s => waitForAppHostStoppedSuccessfully.Search(s).Count > 0, TimeSpan.FromMinutes(1))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire stop --non-interactive --all");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(StopCommandStrings.AppHostStoppedSuccessfully, timeout: TimeSpan.FromMinutes(1));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Clear screen
-        sequenceBuilder.ClearScreen(counter);
+        await auto.ClearScreenAsync(counter);
 
         // Verify no AppHosts are running
-        sequenceBuilder.Type("aspire stop --non-interactive")
-            .Enter()
-            .WaitUntil(s => waitForNoRunningAppHostsFound.Search(s).Count > 0, TimeSpan.FromSeconds(30))
-            .WaitForAnyPrompt(counter, TimeSpan.FromSeconds(30));
+        await auto.TypeAsync("aspire stop --non-interactive");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(SharedCommandStrings.AppHostNotRunning, timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitForAnyPromptAsync(counter, TimeSpan.FromSeconds(30));
 
         // Exit the shell
-        sequenceBuilder.Type("exit")
-            .Enter();
-
-        var sequence = sequenceBuilder.Build();
-
-        await sequence.ApplyAsync(terminal, TestContext.Current.CancellationToken);
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
 
         await pendingRun;
     }
@@ -267,77 +223,62 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
-        // Pattern searchers for start/stop commands
-        var waitForAppHostStartedSuccessfully = new CellPatternSearcher()
-            .Find("AppHost started successfully.");
-
-        var waitForMultipleAppHostsError = new CellPatternSearcher()
-            .Find("Multiple AppHosts are running");
-
-        var waitForAppHostStoppedSuccessfully = new CellPatternSearcher()
-            .Find("AppHost stopped successfully.");
-
         var counter = new SequenceCounter();
-        var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
-        sequenceBuilder.PrepareDockerEnvironment(counter, workspace);
-
-        sequenceBuilder.InstallAspireCliInDocker(installMode, counter);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliInDockerAsync(installMode, counter);
 
         // Create first project
-        sequenceBuilder.AspireNew("App1", counter);
+        await auto.AspireNewAsync("App1", counter);
 
         // Clear screen before second project creation
-        sequenceBuilder.ClearScreen(counter);
+        await auto.ClearScreenAsync(counter);
 
         // Create second project
-        sequenceBuilder.AspireNew("App2", counter);
+        await auto.AspireNewAsync("App2", counter);
 
         // Start first AppHost in background
-        sequenceBuilder.Type("cd App1/App1.AppHost && aspire start")
-            .Enter()
-            .WaitUntil(s => waitForAppHostStartedSuccessfully.Search(s).Count > 0, TimeSpan.FromMinutes(3))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("cd App1/App1.AppHost && aspire start");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Clear screen before starting second apphost
-        sequenceBuilder.ClearScreen(counter);
+        await auto.ClearScreenAsync(counter);
 
         // Navigate back and start second AppHost in background
-        sequenceBuilder.Type("cd ../../App2/App2.AppHost && aspire start")
-            .Enter()
-            .WaitUntil(s => waitForAppHostStartedSuccessfully.Search(s).Count > 0, TimeSpan.FromMinutes(3))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("cd ../../App2/App2.AppHost && aspire start");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Navigate to workspace root
-        sequenceBuilder.Type($"cd {CliE2ETestHelpers.ToContainerPath(workspace.WorkspaceRoot.FullName, workspace)}")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync($"cd {CliE2ETestHelpers.ToContainerPath(workspace.WorkspaceRoot.FullName, workspace)}");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Clear screen
-        sequenceBuilder.ClearScreen(counter);
+        await auto.ClearScreenAsync(counter);
 
         // Try to stop in non-interactive mode - should get an error about multiple AppHosts
-        sequenceBuilder.Type("aspire stop --non-interactive")
-            .Enter()
-            .WaitUntil(s => waitForMultipleAppHostsError.Search(s).Count > 0, TimeSpan.FromSeconds(30))
-            .WaitForAnyPrompt(counter, TimeSpan.FromSeconds(30));
+        await auto.TypeAsync("aspire stop --non-interactive");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Multiple apphosts are running", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitForAnyPromptAsync(counter, TimeSpan.FromSeconds(30));
 
         // Clear screen
-        sequenceBuilder.ClearScreen(counter);
+        await auto.ClearScreenAsync(counter);
 
         // Now use --all to stop all AppHosts
-        sequenceBuilder.Type("aspire stop --all")
-            .Enter()
-            .WaitUntil(s => waitForAppHostStoppedSuccessfully.Search(s).Count > 0, TimeSpan.FromMinutes(1))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire stop --all");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(StopCommandStrings.AppHostStoppedSuccessfully, timeout: TimeSpan.FromMinutes(1));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Exit the shell
-        sequenceBuilder.Type("exit")
-            .Enter();
-
-        var sequence = sequenceBuilder.Build();
-
-        await sequence.ApplyAsync(terminal, TestContext.Current.CancellationToken);
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
 
         await pendingRun;
     }

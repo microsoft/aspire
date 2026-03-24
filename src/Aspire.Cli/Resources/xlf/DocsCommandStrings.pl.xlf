@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="pl" original="../DocsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Browse and search Aspire documentation from aspire.dev.</source>
-        <target state="translated">Przeglądaj i przeszukuj dokumentację Aspire z Aspire.dev.</target>
+        <source>Browse and search Aspire documentation from aspire.dev</source>
+        <target state="needs-review-translation">Przeglądaj i przeszukuj dokumentację Aspire z Aspire.dev.</target>
         <note />
       </trans-unit>
       <trans-unit id="DocumentNotFound">
@@ -13,8 +13,8 @@
         <note />
       </trans-unit>
       <trans-unit id="FormatOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">Format danych wyjściowych (Tabela lub JSON).</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">Format danych wyjściowych (Tabela lub JSON).</target>
         <note />
       </trans-unit>
       <trans-unit id="FoundDocumentationPages">
@@ -28,8 +28,8 @@
         <note />
       </trans-unit>
       <trans-unit id="GetDescription">
-        <source>Get the full content of a documentation page by its slug.</source>
-        <target state="translated">Pobierz pełną zawartość strony dokumentacji przy użyciu jej fragmentu.</target>
+        <source>Get the full content of a documentation page by its slug</source>
+        <target state="needs-review-translation">Pobierz pełną zawartość strony dokumentacji przy użyciu jej fragmentu.</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderScore">
@@ -58,13 +58,13 @@
         <note />
       </trans-unit>
       <trans-unit id="LimitOptionDescription">
-        <source>Maximum number of search results to return (default: 5, max: 10).</source>
-        <target state="translated">Maksymalna liczba wyników wyszukiwania do zwrócenia (wartość domyślna: 5, maksimum: 10).</target>
+        <source>Maximum number of search results to return (default: 5, max: 10)</source>
+        <target state="needs-review-translation">Maksymalna liczba wyników wyszukiwania do zwrócenia (wartość domyślna: 5, maksimum: 10).</target>
         <note />
       </trans-unit>
       <trans-unit id="ListDescription">
-        <source>List all available Aspire documentation pages.</source>
-        <target state="translated">Wyświetl listę wszystkich dostępnych stron dokumentacji.</target>
+        <source>List all available Aspire documentation pages</source>
+        <target state="needs-review-translation">Wyświetl listę wszystkich dostępnych stron dokumentacji.</target>
         <note />
       </trans-unit>
       <trans-unit id="LoadingDocumentation">
@@ -83,23 +83,23 @@
         <note />
       </trans-unit>
       <trans-unit id="QueryArgumentDescription">
-        <source>The search query.</source>
-        <target state="translated">Zapytanie wyszukiwania.</target>
+        <source>The search query</source>
+        <target state="needs-review-translation">Zapytanie wyszukiwania.</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchDescription">
-        <source>Search Aspire documentation by keywords.</source>
-        <target state="translated">Wyszukaj dokumentację aplikacji Wyszukaj według słów kluczowych.</target>
+        <source>Search Aspire documentation by keywords</source>
+        <target state="needs-review-translation">Wyszukaj dokumentację aplikacji Wyszukaj według słów kluczowych.</target>
         <note />
       </trans-unit>
       <trans-unit id="SectionOptionDescription">
-        <source>Return only the specified section of the page.</source>
-        <target state="translated">Zwróć tylko określoną sekcję strony.</target>
+        <source>Return only the specified section of the page</source>
+        <target state="needs-review-translation">Zwróć tylko określoną sekcję strony.</target>
         <note />
       </trans-unit>
       <trans-unit id="SlugArgumentDescription">
-        <source>The slug of the documentation page (e.g., 'redis-integration').</source>
-        <target state="translated">Fragment strony dokumentacji (np. „redis-integration”).</target>
+        <source>The slug of the documentation page (e.g., 'redis-integration')</source>
+        <target state="needs-review-translation">Fragment strony dokumentacji (np. „redis-integration”).</target>
         <note />
       </trans-unit>
     </body>

@@ -78,10 +78,10 @@ internal static class CliTestHelper
 
         services.AddLogging(b => b.SetMinimumLevel(LogLevel.Trace)).AddXunitLogging(outputHelper);
 
-        // Register a FileLoggerProvider that writes to a test-specific temp directory
+        // Register logging options for test
         var testLogsDirectory = Path.Combine(options.WorkingDirectory.FullName, ".aspire", "logs");
-        var fileLoggerProvider = new FileLoggerProvider(testLogsDirectory, TimeProvider.System);
-        services.AddSingleton(fileLoggerProvider);
+        var testLogFilePath = FileLoggerProvider.GenerateLogFilePath(testLogsDirectory, TimeProvider.System);
+        services.AddSingleton(new FileLoggerProvider(testLogFilePath, new TestStartupErrorWriter()));
 
         services.AddMemoryCache();
 
@@ -180,6 +180,9 @@ internal static class CliTestHelper
         services.AddTransient<PublishCommand>();
         services.AddTransient<ConfigCommand>();
         services.AddTransient<CacheCommand>();
+        services.AddTransient<CertificatesCommand>();
+        services.AddTransient<CertificatesCleanCommand>();
+        services.AddTransient<CertificatesTrustCommand>();
         services.AddTransient<DoctorCommand>();
         services.AddTransient<UpdateCommand>();
         services.AddTransient<SetupCommand>();
@@ -211,6 +214,7 @@ internal static class CliTestHelper
         services.AddTransient<SecretSetCommand>();
         services.AddTransient<SecretGetCommand>();
         services.AddTransient<SecretListCommand>();
+        services.AddTransient<SecretPathCommand>();
         services.AddTransient<SecretDeleteCommand>();
         services.AddTransient<SecretStoreResolver>();
 #if DEBUG
@@ -320,7 +324,7 @@ internal sealed class CliServiceCollectionTestOptions
     {
         var configuration = serviceProvider.GetRequiredService<IConfiguration>();
         var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
-        return new ConfigurationService(configuration, executionContext, GetGlobalSettingsFile(WorkingDirectory));
+        return new ConfigurationService(configuration, executionContext, GetGlobalSettingsFile(WorkingDirectory), NullLogger<ConfigurationService>.Instance);
     }
 
     private static FileInfo GetGlobalSettingsFile(DirectoryInfo workingDirectory)
@@ -480,7 +484,8 @@ internal sealed class CliServiceCollectionTestOptions
         var cliTemplateLogger = serviceProvider.GetRequiredService<ILogger<CliTemplateFactory>>();
         var templateNuGetConfigService = new TemplateNuGetConfigService(interactionService, executionContext, packagingService, configurationService);
         var dotNetFactory = new DotNetTemplateFactory(interactionService, runner, certificateService, packagingService, prompter, templateVersionPrompter, executionContext, sdkInstaller, features, configurationService, telemetry, hostEnvironment, templateNuGetConfigService);
-        var cliFactory = new CliTemplateFactory(languageDiscovery, scaffoldingService, prompter, executionContext, interactionService, hostEnvironment, templateNuGetConfigService, cliTemplateLogger);
+        var projectFactory = serviceProvider.GetRequiredService<IAppHostProjectFactory>();
+        var cliFactory = new CliTemplateFactory(languageDiscovery, projectFactory, scaffoldingService, prompter, executionContext, interactionService, hostEnvironment, templateNuGetConfigService, cliTemplateLogger);
         return new TemplateProvider([dotNetFactory, cliFactory]);
     };
 

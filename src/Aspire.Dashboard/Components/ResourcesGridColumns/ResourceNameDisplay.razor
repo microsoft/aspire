@@ -19,7 +19,7 @@
     }
     @if (Resource.Properties.TryGetValue(KnownProperties.Container.Lifetime, out var value) &&
         value.Value.HasStringValue &&
-        StringComparer.Ordinal.Equals(value.Value.StringValue, KnownContainerLifetimes.Persistent))
+        string.Equals(value.Value.StringValue, KnownContainerLifetimes.Persistent, StringComparison.Ordinal))
     {
         <FluentIcon Icon="Icons.Regular.Size16.Pin" Title="@Loc[nameof(Columns.PersistentContainerIconTooltip)]"
             Color="Color.Neutral" Class="persistent-container-icon" />

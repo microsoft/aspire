@@ -2,8 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Telemetry;
+using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 #if DEBUG
 using Microsoft.AspNetCore.InternalTesting;
 #endif
@@ -12,14 +15,21 @@ namespace Aspire.Cli.Tests.Telemetry;
 
 public class TelemetryConfigurationTests
 {
+    private static async Task<IHost> BuildHostAsync(Dictionary<string, string?>? config = null)
+    {
+        var loggingOptions = Program.ParseLoggingOptions([]);
+        var errorWriter = new TestStartupErrorWriter();
+        var (loggerFactory, fileLoggerProvider) = Program.CreateLoggerFactory([], loggingOptions, errorWriter);
+        var startupContext = new Program.CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, loggerFactory.CreateLogger<Program>());
+        return await Program.BuildApplicationAsync([], startupContext, config);
+    }
+
     [Fact]
     public async Task AzureMonitor_Enabled_ByDefault()
     {
         // The Application Insights connection string is now hardcoded, so Azure Monitor
         // should be enabled by default when telemetry is not opted out
-        var config = new Dictionary<string, string?>();
-
-        using var host = await Program.BuildApplicationAsync([], config);
+        using var host = await BuildHostAsync();
 
         var telemetryManager = host.Services.GetService<TelemetryManager>();
         Assert.NotNull(telemetryManager);
@@ -36,7 +46,7 @@ public class TelemetryConfigurationTests
             [AspireCliTelemetry.TelemetryOptOutConfigKey] = optOutValue
         };
 
-        using var host = await Program.BuildApplicationAsync([], config);
+        using var host = await BuildHostAsync(config);
 
         var telemetryManager = host.Services.GetRequiredService<TelemetryManager>();
         // When telemetry is opted out, Azure Monitor should not be enabled
@@ -51,7 +61,7 @@ public class TelemetryConfigurationTests
             [AspireCliTelemetry.OtlpExporterEndpointConfigKey] = "http://localhost:4317"
         };
 
-        using var host = await Program.BuildApplicationAsync([], config);
+        using var host = await BuildHostAsync(config);
 
         var telemetryManager = host.Services.GetRequiredService<TelemetryManager>();
 
@@ -75,7 +85,7 @@ public class TelemetryConfigurationTests
             [AspireCliTelemetry.ConsoleExporterLevelConfigKey] = "Diagnostic"
         };
 
-        using var host = await Program.BuildApplicationAsync([], config);
+        using var host = await BuildHostAsync(config);
 
         var telemetryManager = host.Services.GetRequiredService<TelemetryManager>();
         Assert.True(telemetryManager.HasDiagnosticProvider);

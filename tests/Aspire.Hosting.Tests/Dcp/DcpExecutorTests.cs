@@ -1276,7 +1276,7 @@ public class DcpExecutorTests
 
         HasKnownCommandAnnotations(exe.Resource);
         HasKnownCommandAnnotations(container.Resource);
-        HasKnownCommandAnnotations(project.Resource);
+        HasKnownProjectCommandAnnotations(project.Resource);
     }
 
     [Fact]
@@ -1419,6 +1419,39 @@ public class DcpExecutorTests
         Assert.NotNull(plc);
         Assert.False(plc!.DisableLaunchProfile);
         Assert.Equal("http", plc.LaunchProfile);
+    }
+
+    [Theory]
+    [InlineData("Debug", ExecutableLaunchMode.Debug)]
+    [InlineData("NoDebug", ExecutableLaunchMode.NoDebug)]
+    public async Task ProjectLaunchConfiguration_RespectsDebugSessionRunMode(string runMode, string expectedMode)
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddProject<Projects.ServiceA>("proj", launchProfileName: "http");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var kubernetes = new TestKubernetesService();
+        var configBuilder = new ConfigurationBuilder();
+        configBuilder.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = "http://localhost",
+            ["AppHost:BrowserToken"] = "token",
+            ["AppHost:OtlpApiKey"] = "otlp-key",
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionRunMode] = runMode
+        });
+        var configuration = configBuilder.Build();
+
+        var executor = CreateAppExecutor(model, configuration: configuration, kubernetesService: kubernetes);
+
+        await executor.RunApplicationAsync();
+
+        var exe = Assert.Single(kubernetes.CreatedResources.OfType<Executable>());
+        Assert.True(exe.TryGetProjectLaunchConfiguration(out var plc));
+        Assert.NotNull(plc);
+        Assert.Equal(expectedMode, plc!.Mode);
     }
 
     [Fact]
@@ -2297,6 +2330,16 @@ public class DcpExecutorTests
             a => Assert.Equal(KnownResourceCommands.StartCommand, a.Name),
             a => Assert.Equal(KnownResourceCommands.StopCommand, a.Name),
             a => Assert.Equal(KnownResourceCommands.RestartCommand, a.Name));
+    }
+
+    private static void HasKnownProjectCommandAnnotations(IResource resource)
+    {
+        var commandAnnotations = resource.Annotations.OfType<ResourceCommandAnnotation>().ToList();
+        Assert.Collection(commandAnnotations,
+            a => Assert.Equal(KnownResourceCommands.StartCommand, a.Name),
+            a => Assert.Equal(KnownResourceCommands.StopCommand, a.Name),
+            a => Assert.Equal(KnownResourceCommands.RestartCommand, a.Name),
+            a => Assert.Equal(KnownResourceCommands.RebuildCommand, a.Name));
     }
 
     [Fact]

@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="zh-Hant" original="../DocsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Browse and search Aspire documentation from aspire.dev.</source>
-        <target state="translated">瀏覽並搜尋 aspire.dev 上的 Aspire 文件。</target>
+        <source>Browse and search Aspire documentation from aspire.dev</source>
+        <target state="needs-review-translation">瀏覽並搜尋 aspire.dev 上的 Aspire 文件。</target>
         <note />
       </trans-unit>
       <trans-unit id="DocumentNotFound">
@@ -13,8 +13,8 @@
         <note />
       </trans-unit>
       <trans-unit id="FormatOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">輸出格式 (資料表或 Json)。</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">輸出格式 (資料表或 Json)。</target>
         <note />
       </trans-unit>
       <trans-unit id="FoundDocumentationPages">
@@ -28,8 +28,8 @@
         <note />
       </trans-unit>
       <trans-unit id="GetDescription">
-        <source>Get the full content of a documentation page by its slug.</source>
-        <target state="translated">依據識別字串取得文件頁面的完整內容。</target>
+        <source>Get the full content of a documentation page by its slug</source>
+        <target state="needs-review-translation">依據識別字串取得文件頁面的完整內容。</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderScore">
@@ -58,13 +58,13 @@
         <note />
       </trans-unit>
       <trans-unit id="LimitOptionDescription">
-        <source>Maximum number of search results to return (default: 5, max: 10).</source>
-        <target state="translated">最多回傳的搜尋結果數量 (預設: 5，最大值: 10)。</target>
+        <source>Maximum number of search results to return (default: 5, max: 10)</source>
+        <target state="needs-review-translation">最多回傳的搜尋結果數量 (預設: 5，最大值: 10)。</target>
         <note />
       </trans-unit>
       <trans-unit id="ListDescription">
-        <source>List all available Aspire documentation pages.</source>
-        <target state="translated">列出所有可用的 Aspire 文件頁面。</target>
+        <source>List all available Aspire documentation pages</source>
+        <target state="needs-review-translation">列出所有可用的 Aspire 文件頁面。</target>
         <note />
       </trans-unit>
       <trans-unit id="LoadingDocumentation">
@@ -83,23 +83,23 @@
         <note />
       </trans-unit>
       <trans-unit id="QueryArgumentDescription">
-        <source>The search query.</source>
-        <target state="translated">搜尋查詢。</target>
+        <source>The search query</source>
+        <target state="needs-review-translation">搜尋查詢。</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchDescription">
-        <source>Search Aspire documentation by keywords.</source>
-        <target state="translated">依關鍵字搜尋 Aspire 文件。</target>
+        <source>Search Aspire documentation by keywords</source>
+        <target state="needs-review-translation">依關鍵字搜尋 Aspire 文件。</target>
         <note />
       </trans-unit>
       <trans-unit id="SectionOptionDescription">
-        <source>Return only the specified section of the page.</source>
-        <target state="translated">僅回傳頁面指定的區段。</target>
+        <source>Return only the specified section of the page</source>
+        <target state="needs-review-translation">僅回傳頁面指定的區段。</target>
         <note />
       </trans-unit>
       <trans-unit id="SlugArgumentDescription">
-        <source>The slug of the documentation page (e.g., 'redis-integration').</source>
-        <target state="translated">文件頁面的識別字串 (例如 'redis-integration')。</target>
+        <source>The slug of the documentation page (e.g., 'redis-integration')</source>
+        <target state="needs-review-translation">文件頁面的識別字串 (例如 'redis-integration')。</target>
         <note />
       </trans-unit>
     </body>

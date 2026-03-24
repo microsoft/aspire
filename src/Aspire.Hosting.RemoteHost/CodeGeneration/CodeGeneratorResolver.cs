@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Reflection;
-using Aspire.Hosting.Ats;
+using Aspire.TypeSystem;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -42,7 +42,6 @@ internal sealed class CodeGeneratorResolver
         IReadOnlyList<Assembly> assemblies)
     {
         var generators = new Dictionary<string, ICodeGenerator>(StringComparer.OrdinalIgnoreCase);
-        var generatorInterface = typeof(ICodeGenerator);
 
         foreach (var assembly in assemblies)
         {
@@ -60,16 +59,15 @@ internal sealed class CodeGeneratorResolver
 
             foreach (var type in types)
             {
-                if (!type.IsAbstract && !type.IsInterface && generatorInterface.IsAssignableFrom(type))
+                if (!type.IsAbstract &&
+                    !type.IsInterface &&
+                    typeof(ICodeGenerator).IsAssignableFrom(type))
                 {
                     try
                     {
-                        var generator = (ICodeGenerator?)ActivatorUtilities.CreateInstance(serviceProvider, type);
-                        if (generator is not null)
-                        {
-                            generators[generator.Language] = generator;
-                            _logger.LogDebug("Discovered code generator: {TypeName} for language '{Language}'", type.Name, generator.Language);
-                        }
+                        var generator = (ICodeGenerator)ActivatorUtilities.CreateInstance(serviceProvider, type);
+                        generators[generator.Language] = generator;
+                        _logger.LogDebug("Discovered code generator: {TypeName} for language '{Language}'", type.Name, generator.Language);
                     }
                     catch (Exception ex)
                     {

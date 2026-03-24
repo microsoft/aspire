@@ -126,6 +126,9 @@ type FoundryDeploymentResourceHandle = Handle<'Aspire.Hosting.Foundry/Aspire.Hos
 /** Handle to FoundryResource */
 type FoundryResourceHandle = Handle<'Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryResource'>;
 
+/** Handle to HostedAgentConfiguration */
+type HostedAgentConfigurationHandle = Handle<'Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentConfiguration'>;
+
 /** Handle to CommandLineArgsCallbackContext */
 type CommandLineArgsCallbackContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext'>;
 
@@ -573,6 +576,11 @@ export interface RunAsPreviewEmulatorOptions {
 
 export interface RunOptions {
     cancellationToken?: AbortSignal;
+}
+
+export interface PublishAsHostedAgentOptions {
+    project?: AzureCognitiveServicesProjectResource;
+    configure?: (obj: HostedAgentConfiguration) => Promise<void>;
 }
 
 export interface WaitForCompletionOptions {
@@ -1606,6 +1614,96 @@ export class ProjectResourceOptions {
 }
 
 // ============================================================================
+// HostedAgentConfiguration
+// ============================================================================
+
+/**
+ * Type class for HostedAgentConfiguration.
+ */
+export class HostedAgentConfiguration {
+    constructor(private _handle: HostedAgentConfigurationHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    /** Gets the Description property */
+    description = {
+        get: async (): Promise<string> => {
+            return await this._client.invokeCapability<string>(
+                'Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentConfiguration.description',
+                { context: this._handle }
+            );
+        },
+        set: async (value: string): Promise<void> => {
+            await this._client.invokeCapability<void>(
+                'Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentConfiguration.setDescription',
+                { context: this._handle, value }
+            );
+        }
+    };
+
+    /** Gets the Metadata property */
+    private _metadata?: AspireDict<string, string>;
+    get metadata(): AspireDict<string, string> {
+        if (!this._metadata) {
+            this._metadata = new AspireDict<string, string>(
+                this._handle,
+                this._client,
+                'Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentConfiguration.metadata',
+                'Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentConfiguration.metadata'
+            );
+        }
+        return this._metadata;
+    }
+
+    /** Gets the Cpu property */
+    cpu = {
+        get: async (): Promise<number | null> => {
+            return await this._client.invokeCapability<number | null>(
+                'Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentConfiguration.cpu',
+                { context: this._handle }
+            );
+        },
+        set: async (value: number | null): Promise<void> => {
+            await this._client.invokeCapability<void>(
+                'Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentConfiguration.setCpu',
+                { context: this._handle, value }
+            );
+        }
+    };
+
+    /** Gets the Memory property */
+    memory = {
+        get: async (): Promise<number | null> => {
+            return await this._client.invokeCapability<number | null>(
+                'Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentConfiguration.memory',
+                { context: this._handle }
+            );
+        },
+        set: async (value: number | null): Promise<void> => {
+            await this._client.invokeCapability<void>(
+                'Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentConfiguration.setMemory',
+                { context: this._handle, value }
+            );
+        }
+    };
+
+    /** Gets the EnvironmentVariables property */
+    private _environmentVariables?: AspireDict<string, string>;
+    get environmentVariables(): AspireDict<string, string> {
+        if (!this._environmentVariables) {
+            this._environmentVariables = new AspireDict<string, string>(
+                this._handle,
+                this._client,
+                'Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentConfiguration.environmentVariables',
+                'Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentConfiguration.environmentVariables'
+            );
+        }
+        return this._environmentVariables;
+    }
+}
+
+// ============================================================================
 // ReferenceExpressionBuilder
 // ============================================================================
 
@@ -2085,21 +2183,6 @@ export class DistributedApplicationBuilder {
         return new FoundryResourcePromise(this._addFoundryInternal(name));
     }
 
-    /** Adds a Microsoft Foundry project resource and its parent Microsoft Foundry resource to the application model. */
-    /** @internal */
-    async _addFoundryProjectInternal(name: string): Promise<AzureCognitiveServicesProjectResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
-        const result = await this._client.invokeCapability<AzureCognitiveServicesProjectResourceHandle>(
-            'Aspire.Hosting.Foundry/addFoundryProject',
-            rpcArgs
-        );
-        return new AzureCognitiveServicesProjectResource(result, this._client);
-    }
-
-    addFoundryProject(name: string): AzureCognitiveServicesProjectResourcePromise {
-        return new AzureCognitiveServicesProjectResourcePromise(this._addFoundryProjectInternal(name));
-    }
-
     /** Adds an Azure Bicep template resource from a file */
     /** @internal */
     async _addBicepTemplateInternal(name: string, bicepFile: string): Promise<AzureBicepResource> {
@@ -2393,11 +2476,6 @@ export class DistributedApplicationBuilderPromise implements PromiseLike<Distrib
     /** Adds a Microsoft Foundry resource to the distributed application model. */
     addFoundry(name: string): FoundryResourcePromise {
         return new FoundryResourcePromise(this._promise.then(obj => obj.addFoundry(name)));
-    }
-
-    /** Adds a Microsoft Foundry project resource and its parent Microsoft Foundry resource to the application model. */
-    addFoundryProject(name: string): AzureCognitiveServicesProjectResourcePromise {
-        return new AzureCognitiveServicesProjectResourcePromise(this._promise.then(obj => obj.addFoundryProject(name)));
     }
 
     /** Adds an Azure Bicep template resource from a file */
@@ -35125,6 +35203,30 @@ export class ExecutableResource extends ResourceBuilderBase<ExecutableResourceHa
     }
 
     /** @internal */
+    private async _publishAsHostedAgentInternal(project?: AzureCognitiveServicesProjectResource, configure?: (obj: HostedAgentConfiguration) => Promise<void>): Promise<ExecutableResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const objHandle = wrapIfHandle(objData) as HostedAgentConfigurationHandle;
+            const obj = new HostedAgentConfiguration(objHandle, this._client);
+            await configure(obj);
+        }) : undefined;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (project !== undefined) rpcArgs.project = project;
+        if (configure !== undefined) rpcArgs.configure = configureId;
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting.Foundry/publishAsHostedAgentExecutable',
+            rpcArgs
+        );
+        return new ExecutableResource(result, this._client);
+    }
+
+    /** Publishes an executable resource as a hosted agent in Microsoft Foundry. */
+    publishAsHostedAgent(options?: PublishAsHostedAgentOptions): ExecutableResourcePromise {
+        const project = options?.project;
+        const configure = options?.configure;
+        return new ExecutableResourcePromise(this._publishAsHostedAgentInternal(project, configure));
+    }
+
+    /** @internal */
     private async _withoutHttpsCertificateInternal(): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
@@ -35732,6 +35834,11 @@ export class ExecutableResourcePromise implements PromiseLike<ExecutableResource
     /** Configures HTTPS with a developer certificate */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ExecutableResourcePromise {
         return new ExecutableResourcePromise(this._promise.then(obj => obj.withHttpsDeveloperCertificate(options)));
+    }
+
+    /** Publishes an executable resource as a hosted agent in Microsoft Foundry. */
+    publishAsHostedAgent(options?: PublishAsHostedAgentOptions): ExecutableResourcePromise {
+        return new ExecutableResourcePromise(this._promise.then(obj => obj.publishAsHostedAgent(options)));
     }
 
     /** Removes HTTPS certificate configuration */
@@ -42954,6 +43061,7 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineConfigura
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStep', (handle, client) => new PipelineStep(handle as PipelineStepHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepContext', (handle, client) => new PipelineStepContext(handle as PipelineStepContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions', (handle, client) => new ProjectResourceOptions(handle as ProjectResourceOptionsHandle, client));
+registerHandleWrapper('Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentConfiguration', (handle, client) => new HostedAgentConfiguration(handle as HostedAgentConfigurationHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpressionBuilder', (handle, client) => new ReferenceExpressionBuilder(handle as ReferenceExpressionBuilderHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext', (handle, client) => new ResourceUrlsCallbackContext(handle as ResourceUrlsCallbackContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder', (handle, client) => new DistributedApplicationBuilder(handle as IDistributedApplicationBuilderHandle, client));
@@ -43006,4 +43114,3 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceW
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment', (handle, client) => new ResourceWithEnvironment(handle as IResourceWithEnvironmentHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.IResourceWithServiceDiscovery', (handle, client) => new ResourceWithServiceDiscovery(handle as IResourceWithServiceDiscoveryHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithWaitSupport', (handle, client) => new ResourceWithWaitSupport(handle as IResourceWithWaitSupportHandle, client));
-

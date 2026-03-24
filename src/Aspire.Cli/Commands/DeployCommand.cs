@@ -26,7 +26,7 @@ internal sealed class DeployCommand : PipelineCommandBase
     {
         _clearCacheOption = new Option<bool>("--clear-cache")
         {
-            Description = "Clear the deployment cache associated with the current environment and do not save deployment state"
+            Description = DeployCommandStrings.ClearCacheOptionDescription
         };
         Options.Add(_clearCacheOption);
     }

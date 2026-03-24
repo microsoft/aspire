@@ -117,7 +117,7 @@ internal sealed class PlaywrightCliInstaller(
                     packageInfo.Version);
 
                 // Still install skills in case they're missing.
-                var skillsInstalled = await playwrightCliRunner.InstallSkillsAsync(cancellationToken);
+                var skillsInstalled = await playwrightCliRunner.InstallSkillsAsync(context.RepositoryRoot.FullName, cancellationToken);
                 if (skillsInstalled)
                 {
                     MirrorSkillFiles(context);
@@ -219,7 +219,7 @@ internal sealed class PlaywrightCliInstaller(
 
             // Step 7: Generate skill files.
             logger.LogDebug("Generating Playwright CLI skill files");
-            var skillsResult = await playwrightCliRunner.InstallSkillsAsync(cancellationToken);
+            var skillsResult = await playwrightCliRunner.InstallSkillsAsync(context.RepositoryRoot.FullName, cancellationToken);
             if (skillsResult)
             {
                 MirrorSkillFiles(context);

@@ -15,38 +15,34 @@ namespace Aspire.Cli.EndToEnd.Tests;
 public sealed class EmptyAppHostTemplateTests(ITestOutputHelper output)
 {
     [Fact]
-    public async Task CreateEmptyAppHostProject()
+    public async Task CreateAndRunEmptyAppHostProject()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, workspace: workspace);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, mountDockerSocket: true, workspace: workspace);
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
-        // The purpose of this is to keep track of the number of actual shell commands we have
-        // executed. This is important because we customize the shell prompt to show either
-        // "[n OK] $ " or "[n ERR:exitcode] $ ". This allows us to deterministically wait for a
-        // command to complete and for the shell to be ready for more input rather than relying
-        // on arbitrary timeouts of mid-command strings.
         var counter = new SequenceCounter();
-        var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
-        sequenceBuilder.PrepareDockerEnvironment(counter, workspace);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliInDockerAsync(installMode, counter);
 
-        sequenceBuilder.InstallAspireCliInDocker(installMode, counter);
+        await auto.AspireNewAsync("AspireEmptyApp", counter, template: AspireTemplate.EmptyAppHost);
 
-        sequenceBuilder.AspireNew("AspireEmptyApp", counter, template: AspireTemplate.EmptyAppHost);
+        // Start the empty AppHost to verify the scaffolded project works
+        await auto.TypeAsync("cd AspireEmptyApp");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
-        // Note: We don't run 'aspire run' for Empty AppHost since there's nothing to run
-        sequenceBuilder
-            .Type("exit")
-            .Enter();
+        await auto.AspireStartAsync(counter);
+        await auto.AspireStopAsync(counter);
 
-        var sequence = sequenceBuilder.Build();
-
-        await sequence.ApplyAsync(terminal, TestContext.Current.CancellationToken);
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
 
         await pendingRun;
     }

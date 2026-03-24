@@ -35,7 +35,7 @@ jobs:
   notify-start:
     name: Notify PR
     runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'dotnet' && inputs.pr_number != '' }}
+    if: ${{ github.repository_owner == 'microsoft' && inputs.pr_number != '' }}
     permissions:
       pull-requests: write
     steps:
@@ -57,7 +57,7 @@ jobs:
   enumerate:
     name: Enumerate Tests
     runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'dotnet' }}
+    if: ${{ github.repository_owner == 'microsoft' }}
     permissions:
       contents: read
     outputs:
@@ -79,7 +79,7 @@ jobs:
   build:
     name: Build
     runs-on: 8-core-ubuntu-latest
-    if: ${{ github.repository_owner == 'dotnet' }}
+    if: ${{ github.repository_owner == 'microsoft' }}
     permissions:
       contents: read
     steps:
@@ -307,7 +307,7 @@ jobs:
             ### Labels
             This issue was automatically created by the deployment E2E test workflow.
 
-            /cc @dotnet/aspire-team
+            /cc @microsoft/aspire-team
             `;
 
             // Check if a similar issue already exists (created today)
@@ -456,12 +456,24 @@ jobs:
           for zipfile in recordings/*.zip; do
             if [ -f "$zipfile" ]; then
               echo "Extracting $zipfile..."
-              unzip -o "$zipfile" -d "recordings/extracted_$(basename "$zipfile" .zip)" || true
+              # Artifact zip name: deployment-test-recordings-{shortname}.zip
+              ARTIFACT_NAME=$(basename "$zipfile" .zip)
+              SHORTNAME=${ARTIFACT_NAME#deployment-test-recordings-}
+              EXTRACT_DIR="recordings/extracted_${ARTIFACT_NAME}"
+              unzip -o "$zipfile" -d "$EXTRACT_DIR" || true
+
+              # Rename .cast files to use the shortname (matching the job/test name)
+              CAST_INDEX=0
+              while IFS= read -r -d '' castfile; do
+                if [ $CAST_INDEX -eq 0 ]; then
+                  cp "$castfile" "cast_files/${SHORTNAME}.cast"
+                else
+                  cp "$castfile" "cast_files/${SHORTNAME}-${CAST_INDEX}.cast"
+                fi
+                CAST_INDEX=$((CAST_INDEX + 1))
+              done < <(find "$EXTRACT_DIR" -name "*.cast" -print0)
             fi
           done
-
-          # Find and copy all .cast files
-          find recordings -name "*.cast" -exec cp {} cast_files/ \; 2>/dev/null || true
 
           echo "Found recordings:"
           ls -la cast_files/ || echo "No .cast files found"
@@ -500,87 +512,138 @@ jobs:
             STATUS="unknown"
           fi
 
-          # Build the comment header
-          COMMENT_BODY="${EMOJI} **Deployment E2E Tests ${STATUS}**
-
-          **Summary:** ${PASSED_COUNT} passed, ${FAILED_COUNT} failed, ${CANCELLED_COUNT} cancelled
-
-          [View workflow run](${RUN_URL})"
-
-          # Add passed tests section if any
-          if [ "$PASSED_COUNT" -gt 0 ]; then
-            PASSED_LIST=$(echo "$PASSED_TESTS" | jq -r '.[]' | while read test; do echo "- ✅ ${test}"; done)
-            COMMENT_BODY="${COMMENT_BODY}
-
-          ### Passed Tests
-          ${PASSED_LIST}"
-          fi
-
-          # Add failed tests section if any
-          if [ "$FAILED_COUNT" -gt 0 ]; then
-            FAILED_LIST=$(echo "$FAILED_TESTS" | jq -r '.[]' | while read test; do echo "- ❌ ${test}"; done)
-            COMMENT_BODY="${COMMENT_BODY}
-
-          ### Failed Tests
-          ${FAILED_LIST}"
-          fi
-
-          # Add cancelled tests section if any
-          if [ "$CANCELLED_COUNT" -gt 0 ]; then
-            CANCELLED_LIST=$(echo "$CANCELLED_TESTS" | jq -r '.[]' | while read test; do echo "- ⚠️ ${test}"; done)
-            COMMENT_BODY="${COMMENT_BODY}
-
-          ### Cancelled Tests
-          ${CANCELLED_LIST}"
-          fi
-
-          # Check for recordings and upload them
+          # Upload recordings first so we can include links in the unified table
           RECORDINGS_DIR="cast_files"
+          declare -A RECORDING_URLS
 
           if [ -d "$RECORDINGS_DIR" ] && compgen -G "$RECORDINGS_DIR"/*.cast > /dev/null; then
-            # Install asciinema
             pip install --quiet asciinema
 
-            RECORDING_TABLE="
-
-          ### 🎬 Terminal Recordings
-
-          | Test | Recording |
-          |------|-----------|"
+            # Retry configuration for asciinema uploads
+            MAX_UPLOAD_RETRIES=5
+            RETRY_BASE_DELAY_SECONDS=30
 
             UPLOAD_COUNT=0
-
             for castfile in "$RECORDINGS_DIR"/*.cast; do
               if [ -f "$castfile" ]; then
                 filename=$(basename "$castfile" .cast)
                 echo "Uploading $castfile..."
 
-                # Upload to asciinema and capture URL
-                UPLOAD_OUTPUT=$(asciinema upload "$castfile" 2>&1) || true
-                ASCIINEMA_URL=$(echo "$UPLOAD_OUTPUT" | grep -oP 'https://asciinema\.org/a/[a-zA-Z0-9_-]+' | head -1) || true
+                # Upload to asciinema with retry logic for transient failures
+                ASCIINEMA_URL=""
+                for attempt in $(seq 1 "$MAX_UPLOAD_RETRIES"); do
+                  UPLOAD_OUTPUT=$(asciinema upload "$castfile" 2>&1) || true
+                  ASCIINEMA_URL=$(echo "$UPLOAD_OUTPUT" | grep -oP 'https://asciinema\.org/a/[a-zA-Z0-9_-]+' | head -1) || true
+                  if [ -n "$ASCIINEMA_URL" ]; then
+                    break
+                  fi
+                  if [ "$attempt" -lt "$MAX_UPLOAD_RETRIES" ]; then
+                    DELAY=$((attempt * RETRY_BASE_DELAY_SECONDS))
+                    echo "Upload attempt $attempt failed, retrying in ${DELAY}s..."
+                    sleep "$DELAY"
+                  fi
+                done
 
                 if [ -n "$ASCIINEMA_URL" ]; then
-                  RECORDING_TABLE="${RECORDING_TABLE}
-          | ${filename} | [▶️ View Recording](${ASCIINEMA_URL}) |"
+                  RECORDING_URLS["$filename"]="$ASCIINEMA_URL"
                   echo "Uploaded: $ASCIINEMA_URL"
                   UPLOAD_COUNT=$((UPLOAD_COUNT + 1))
                 else
-                  RECORDING_TABLE="${RECORDING_TABLE}
-          | ${filename} | ❌ Upload failed |"
-                  echo "Failed to upload $castfile"
+                  RECORDING_URLS["$filename"]="FAILED"
+                  echo "Failed to upload $castfile after $MAX_UPLOAD_RETRIES attempts"
                 fi
               fi
             done
-
-            if [ $UPLOAD_COUNT -gt 0 ]; then
-              COMMENT_BODY="${COMMENT_BODY}${RECORDING_TABLE}"
-            fi
-
             echo "Uploaded $UPLOAD_COUNT recordings"
           else
             echo "No recordings found in $RECORDINGS_DIR"
           fi
 
-          # Post the comment
+          # Build the comment with summary outside collapsible and details inside
+          COMMENT_MARKER="<!-- deployment-e2e-tests -->"
+
+          COMMENT_BODY="${COMMENT_MARKER}
+          ${EMOJI} **Deployment E2E Tests ${STATUS}** — ${PASSED_COUNT} passed, ${FAILED_COUNT} failed, ${CANCELLED_COUNT} cancelled
+
+          <details>
+          <summary>View test results and recordings</summary>
+
+          [View workflow run](${RUN_URL})
+
+          | Test | Result | Recording |
+          |------|--------|-----------|"
+
+          # Add passed tests
+          while IFS= read -r test; do
+            RECORDING_LINK=""
+            if [ -n "${RECORDING_URLS[$test]+x}" ]; then
+              if [ "${RECORDING_URLS[$test]}" = "FAILED" ]; then
+                RECORDING_LINK="❌ Upload failed"
+              else
+                RECORDING_LINK="[▶️ View Recording](${RECORDING_URLS[$test]})"
+              fi
+            fi
+            COMMENT_BODY="${COMMENT_BODY}
+          | ${test} | ✅ Passed | ${RECORDING_LINK} |"
+          done < <(echo "$PASSED_TESTS" | jq -r '.[]')
+
+          # Add failed tests
+          while IFS= read -r test; do
+            RECORDING_LINK=""
+            if [ -n "${RECORDING_URLS[$test]+x}" ]; then
+              if [ "${RECORDING_URLS[$test]}" = "FAILED" ]; then
+                RECORDING_LINK="❌ Upload failed"
+              else
+                RECORDING_LINK="[▶️ View Recording](${RECORDING_URLS[$test]})"
+              fi
+            fi
+            COMMENT_BODY="${COMMENT_BODY}
+          | ${test} | ❌ Failed | ${RECORDING_LINK} |"
+          done < <(echo "$FAILED_TESTS" | jq -r '.[]')
+
+          # Add cancelled tests
+          while IFS= read -r test; do
+            RECORDING_LINK=""
+            if [ -n "${RECORDING_URLS[$test]+x}" ]; then
+              if [ "${RECORDING_URLS[$test]}" = "FAILED" ]; then
+                RECORDING_LINK="❌ Upload failed"
+              else
+                RECORDING_LINK="[▶️ View Recording](${RECORDING_URLS[$test]})"
+              fi
+            fi
+            COMMENT_BODY="${COMMENT_BODY}
+          | ${test} | ⚠️ Cancelled | ${RECORDING_LINK} |"
+          done < <(echo "$CANCELLED_TESTS" | jq -r '.[]')
+
+          COMMENT_BODY="${COMMENT_BODY}
+
+          </details>"
+
+          # Delete any existing deployment test comments, then post the new one
+          EXISTING_COMMENT_IDS=$(gh api graphql -f query='
+            query($owner: String!, $repo: String!, $pr: Int!) {
+              repository(owner: $owner, name: $repo) {
+                pullRequest(number: $pr) {
+                  comments(first: 100) {
+                    nodes {
+                      databaseId
+                      author { login }
+                      body
+                    }
+                  }
+                }
+              }
+            }' -f owner="${{ github.repository_owner }}" -f repo="${{ github.event.repository.name }}" -F pr="$PR_NUMBER" \
+            --jq '.data.repository.pullRequest.comments.nodes[] | select(.author.login == "github-actions" and (.body | contains("'"${COMMENT_MARKER}"'"))) | .databaseId') || true
+
+          for COMMENT_ID in $EXISTING_COMMENT_IDS; do
+            echo "Deleting old comment $COMMENT_ID"
+            gh api \
+              --method DELETE \
+              -H "Accept: application/vnd.github+json" \
+              "/repos/${{ github.repository }}/issues/comments/${COMMENT_ID}" || true
+          done
+
+          echo "Creating new comment on PR #${PR_NUMBER}"
           gh pr comment "${PR_NUMBER}" --repo "${{ github.repository }}" --body "$COMMENT_BODY"
           echo "Posted comment to PR #${PR_NUMBER}"

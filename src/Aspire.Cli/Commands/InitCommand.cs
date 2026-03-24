@@ -16,6 +16,7 @@ using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Utils;
+using Microsoft.Extensions.Configuration;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 using Semver;
 using Spectre.Console;
@@ -84,7 +85,8 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
         ILanguageDiscovery languageDiscovery,
         IScaffoldingService scaffoldingService,
         AgentInitCommand agentInitCommand,
-        ICliHostEnvironment hostEnvironment)
+        ICliHostEnvironment hostEnvironment,
+        IConfiguration configuration)
         : base("init", InitCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _runner = runner;
@@ -107,7 +109,7 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
         Options.Add(s_versionOption);
 
         // Customize description based on whether staging channel is enabled
-        var isStagingEnabled = features.IsFeatureEnabled(KnownFeatures.StagingChannelEnabled, false);
+        var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(features, configuration);
         _channelOption = new Option<string?>("--channel")
         {
             Description = isStagingEnabled
@@ -119,7 +121,7 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
         _languageOption = new Option<string?>("--language")
         {
-            Description = "The programming language for the AppHost (csharp, typescript)"
+            Description = InitCommandStrings.LanguageOptionDescription
         };
         Options.Add(_languageOption);
     }
@@ -585,7 +587,11 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
         // Create the apphost project using the scaffolding service
         var context = new ScaffoldContext(language, workingDirectory, ProjectName: null);
-        await _scaffoldingService.ScaffoldAsync(context, cancellationToken);
+        var scaffolded = await _scaffoldingService.ScaffoldAsync(context, cancellationToken);
+        if (!scaffolded)
+        {
+            return ExitCodeConstants.FailedToCreateNewProject;
+        }
 
         InteractionService.DisplaySuccess($"Created {appHostFileName}");
         InteractionService.DisplayMessage(KnownEmojis.Information, $"Run 'aspire run' to start your AppHost.");

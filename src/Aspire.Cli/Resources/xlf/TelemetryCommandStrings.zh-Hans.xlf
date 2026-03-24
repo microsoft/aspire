@@ -3,13 +3,13 @@
   <file datatype="xml" source-language="en" target-language="zh-Hans" original="../TelemetryCommandStrings.resx">
     <body>
       <trans-unit id="DashboardApiNotAvailable">
-        <source>Dashboard API is not available. Ensure the AppHost is running with Dashboard enabled.</source>
-        <target state="translated">仪表板 API 不可用。请确保 AppHost 在运行时启用了仪表板。</target>
+        <source>Dashboard API is not available. Ensure the apphost is running with Dashboard enabled.</source>
+        <target state="needs-review-translation">仪表板 API 不可用。请确保 AppHost 在运行时启用了仪表板。</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>View OpenTelemetry data (logs, spans, traces) from a running apphost.</source>
-        <target state="translated">查看正在运行的 apphost 中的 OpenTelemetry 数据(日志、跨度、跟踪)。</target>
+        <source>View OpenTelemetry data (logs, spans, traces) from a running apphost</source>
+        <target state="needs-review-translation">查看正在运行的 Aspire 应用程序中的遥测数据(日志、跨度、跟踪)。</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedToFetchTelemetry">
@@ -18,18 +18,18 @@
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
-        <source>Stream telemetry in real-time as it arrives.</source>
-        <target state="translated">在遥测数据到来时，将其实时流式传输。</target>
+        <source>Stream telemetry in real-time as it arrives</source>
+        <target state="needs-review-translation">在遥测数据到来时，将其实时流式传输。</target>
         <note />
       </trans-unit>
       <trans-unit id="FormatOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">输出格式(表格或 Json)。</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">输出格式(表格或 Json)。</target>
         <note />
       </trans-unit>
       <trans-unit id="HasErrorOptionDescription">
-        <source>Filter by error status (true to show only errors, false to exclude errors).</source>
-        <target state="translated">按错误状态筛选(true 表示仅显示错误，false 表示排除错误)。</target>
+        <source>Filter by error status (true to show only errors, false to exclude errors)</source>
+        <target state="needs-review-translation">按错误状态筛选(true 表示仅显示错误，false 表示排除错误)。</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderDuration">
@@ -63,18 +63,18 @@
         <note />
       </trans-unit>
       <trans-unit id="LimitOptionDescription">
-        <source>Maximum number of items to return.</source>
-        <target state="translated">要返回的最大项目数。</target>
+        <source>Maximum number of items to return</source>
+        <target state="needs-review-translation">要返回的最大项目数。</target>
         <note />
       </trans-unit>
       <trans-unit id="LogsDescription">
-        <source>View structured logs from the Dashboard telemetry API.</source>
-        <target state="translated">查看仪表板遥测 API 中的结构化日志。</target>
+        <source>View structured logs from the Dashboard telemetry API</source>
+        <target state="needs-review-translation">查看仪表板遥测 API 中的结构化日志。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
-        <source>Filter by resource name.</source>
-        <target state="translated">按资源名称筛选。</target>
+        <source>Filter by resource name</source>
+        <target state="needs-review-translation">按资源名称筛选。</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">
@@ -83,23 +83,23 @@
         <note />
       </trans-unit>
       <trans-unit id="SeverityOptionDescription">
-        <source>Filter logs by minimum severity (Trace, Debug, Information, Warning, Error, Critical).</source>
-        <target state="translated">按最低严重级别(跟踪、调试、信息、警告、错误、严重)筛选日志。</target>
+        <source>Filter logs by minimum severity (Trace, Debug, Information, Warning, Error, Critical)</source>
+        <target state="needs-review-translation">按最低严重级别(跟踪、调试、信息、警告、错误、严重)筛选日志。</target>
         <note />
       </trans-unit>
       <trans-unit id="SpansDescription">
-        <source>View spans from the Dashboard telemetry API.</source>
-        <target state="translated">查看仪表板遥测 API 中的跨度。</target>
+        <source>View spans from the Dashboard telemetry API</source>
+        <target state="needs-review-translation">查看仪表板遥测 API 中的跨度。</target>
         <note />
       </trans-unit>
       <trans-unit id="TraceIdArgumentDescription">
         <source>The trace ID to view. If not specified, lists all traces.</source>
-        <target state="translated">要查看的跟踪 ID。如果未指定，则列出所有跟踪。</target>
+        <target state="needs-review-translation">要查看的跟踪 ID。如果未指定，则列出所有跟踪。</target>
         <note />
       </trans-unit>
       <trans-unit id="TraceIdOptionDescription">
-        <source>Filter by trace ID.</source>
-        <target state="translated">按跟踪 ID 筛选。</target>
+        <source>Filter by trace ID</source>
+        <target state="needs-review-translation">按跟踪 ID 筛选。</target>
         <note />
       </trans-unit>
       <trans-unit id="TraceNotFound">
@@ -108,8 +108,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TracesDescription">
-        <source>View traces from the Dashboard telemetry API.</source>
-        <target state="translated">查看仪表板遥测 API 中的跟踪。</target>
+        <source>View traces from the Dashboard telemetry API</source>
+        <target state="needs-review-translation">查看仪表板遥测 API 中的跟踪。</target>
         <note />
       </trans-unit>
       <trans-unit id="UnexpectedContentType">

@@ -10,6 +10,7 @@ namespace Aspire.Hosting.Pipelines;
 /// Provides contextual information for creating pipeline steps from a <see cref="PipelineStepAnnotation"/>.
 /// </summary>
 [Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExport(ExposeProperties = true)]
 public class PipelineStepFactoryContext
 {
     /// <summary>

@@ -15,6 +15,11 @@ on:
         description: 'CI workflow run ID to inspect'
         required: true
         type: number
+      dry_run:
+        description: 'Inspect and summarize without requesting reruns'
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && inputs.run_id || github.event.workflow_run.id }}
@@ -25,11 +30,11 @@ jobs:
     name: Analyze transient CI failures
     if: >-
       ${{
-          github.repository_owner == 'dotnet' &&
+          github.repository_owner == 'microsoft' &&
           (github.event_name == 'workflow_dispatch' ||
            (github.event.workflow_run.event == 'pull_request' &&
             github.event.workflow_run.conclusion == 'failure' &&
-            github.event.workflow_run.run_attempt == 1))
+            github.event.workflow_run.run_attempt <= 3))
       }}
     runs-on: ubuntu-latest
     permissions:
@@ -45,6 +50,7 @@ jobs:
       retryable_count: ${{ steps.analyze.outputs.retryable_count }}
       skipped_count: ${{ steps.analyze.outputs.skipped_count }}
       rerun_eligible: ${{ steps.analyze.outputs.rerun_eligible }}
+      rerun_execution_eligible: ${{ steps.analyze.outputs.rerun_execution_eligible }}
       dry_run: ${{ steps.analyze.outputs.dry_run }}
       max_retryable_jobs: ${{ steps.analyze.outputs.max_retryable_jobs }}
     steps:
@@ -57,6 +63,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           MANUAL_RUN_ID: ${{ inputs.run_id }}
+          MANUAL_DRY_RUN: ${{ inputs.dry_run }}
         with:
           script: |
             const rerunWorkflow = require('./.github/workflows/auto-rerun-transient-ci-failures.js');
@@ -64,6 +71,7 @@ jobs:
             const repo = context.repo.repo;
             const isWorkflowDispatch = context.eventName === 'workflow_dispatch';
             const maxRetryableJobs = rerunWorkflow.defaultMaxRetryableJobs;
+            const maxJobLogInspectionBytes = 256 * 1024;
 
             async function paginate(route, parameters, selectItems) {
               const items = [];
@@ -101,6 +109,14 @@ jobs:
               });
 
               return response.data;
+            }
+
+            function parseManualDryRun() {
+              if (!isWorkflowDispatch) {
+                return false;
+              }
+
+              return String(process.env.MANUAL_DRY_RUN).toLowerCase() === 'true';
             }
 
             async function listJobsForAttempt(runId, attemptNumber) {
@@ -164,7 +180,7 @@ jobs:
                   throw new Error(`HTTP ${response.status}`);
                 }
 
-                return await response.text();
+                return (await response.text()).slice(-maxJobLogInspectionBytes);
               }
               catch (error) {
                 core.warning(`Failed to fetch logs for job ${jobId}: ${error.message}`);
@@ -173,7 +189,7 @@ jobs:
             }
 
             const workflowRun = await getWorkflowRun();
-            const dryRun = isWorkflowDispatch;
+            const dryRun = parseManualDryRun();
             const sourceRunUrl = workflowRun.html_url || `https://github.com/${owner}/${repo}/actions/runs/${workflowRun.id}`;
 
             core.setOutput('source_run_id', String(workflowRun.id));
@@ -186,19 +202,24 @@ jobs:
             core.setOutput('retryable_count', '0');
             core.setOutput('skipped_count', '0');
             core.setOutput('rerun_eligible', 'false');
+            core.setOutput('rerun_execution_eligible', 'false');
 
             if (workflowRun.name && workflowRun.name !== 'CI') {
               console.log(`Workflow run ${workflowRun.id} is '${workflowRun.name}', not 'CI'. Skipping.`);
               return;
             }
 
-            const pullRequestNumbers = [...new Set((workflowRun.pull_requests || [])
-              .map(pullRequest => pullRequest.number)
-              .filter(Number.isInteger))];
+            const pullRequestNumbers = await rerunWorkflow.getAssociatedPullRequestNumbers({
+              github,
+              owner,
+              repo,
+              workflowRun,
+              warn: message => core.warning(message),
+            });
             core.setOutput('pull_request_numbers', JSON.stringify(pullRequestNumbers));
 
             if (pullRequestNumbers.length === 0) {
-              console.log('No pull request is associated with this workflow run. Skipping.');
+              console.log('No associated pull request could be resolved for this workflow run. Skipping.');
               return;
             }
 
@@ -209,6 +230,7 @@ jobs:
               jobs,
               getAnnotationsForJob: async job => listAnnotations(job),
               getJobLogTextForJob: async job => getJobLogText(job.id),
+              maxRetryableJobs,
             });
 
             core.setOutput('retryable_jobs', JSON.stringify(retryableJobs.map(job => ({
@@ -221,11 +243,18 @@ jobs:
             core.setOutput('skipped_count', String(skippedJobs.length));
 
             const rerunEligible = rerunWorkflow.computeRerunEligibility({
+              retryableCount: retryableJobs.length,
+              maxRetryableJobs,
+              runAttempt,
+            });
+            const rerunExecutionEligible = rerunWorkflow.computeRerunExecutionEligibility({
               dryRun,
               retryableCount: retryableJobs.length,
               maxRetryableJobs,
+              runAttempt,
             });
             core.setOutput('rerun_eligible', String(rerunEligible));
+            core.setOutput('rerun_execution_eligible', String(rerunExecutionEligible));
 
             await rerunWorkflow.writeAnalysisSummary({
               summary: core.summary,
@@ -236,6 +265,7 @@ jobs:
               dryRun,
               rerunEligible,
               sourceRunUrl,
+              sourceRunAttempt: runAttempt,
             });
 
             if (retryableJobs.length === 0) {
@@ -243,15 +273,10 @@ jobs:
               return;
             }
 
-            if (dryRun) {
-              console.log('workflow_dispatch runs in dry-run mode. No jobs will be rerun.');
-              return;
-            }
-
   rerun-transient-failures:
     name: Rerun transient CI failures
     needs: [analyze-transient-failures]
-    if: ${{ needs.analyze-transient-failures.outputs.rerun_eligible == 'true' }}
+    if: ${{ needs.analyze-transient-failures.outputs.rerun_execution_eligible == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       actions: write

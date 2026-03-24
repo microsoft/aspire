@@ -3,8 +3,8 @@
 
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -61,23 +61,7 @@ internal sealed partial class CliTemplateFactory
                     _logger.LogDebug("Copying embedded TypeScript starter template files to '{OutputPath}'.", outputPath);
                     await CopyTemplateTreeToDiskAsync("ts-starter", outputPath, ApplyAllTokens, cancellationToken);
 
-                    if (!CommandPathResolver.TryResolveCommand("npm", out var npmPath, out var errorMessage))
-                    {
-                        _interactionService.DisplayError(errorMessage!);
-                        return new TemplateResult(ExitCodeConstants.InvalidCommand);
-                    }
-
-                    // Run npm install in the output directory (non-fatal — package may not be published yet)
-                    _logger.LogDebug("Running npm install for TypeScript starter in '{OutputPath}'.", outputPath);
-                    var npmInstallResult = await RunProcessAsync(npmPath!, "install", outputPath, cancellationToken);
-                    if (npmInstallResult.ExitCode != 0)
-                    {
-                        _interactionService.DisplaySubtleMessage("npm install had warnings or errors. You may need to run 'npm install' manually after dependencies are available.");
-                        DisplayProcessOutput(npmInstallResult, treatStandardErrorAsError: false);
-                    }
-
-                    // Write channel to settings.json if available so that aspire add
-                    // knows which channel to use for package resolution
+                    // Write channel to settings.json before restore so package resolution uses the selected channel.
                     if (!string.IsNullOrEmpty(inputs.Channel))
                     {
                         var config = AspireJsonConfiguration.Load(outputPath);
@@ -86,6 +70,21 @@ internal sealed partial class CliTemplateFactory
                             config.Channel = inputs.Channel;
                             config.Save(outputPath);
                         }
+                    }
+
+                    var appHostProject = _projectFactory.TryGetProject(new FileInfo(Path.Combine(outputPath, "apphost.ts")));
+                    if (appHostProject is not IGuestAppHostSdkGenerator guestProject)
+                    {
+                        _interactionService.DisplayError("Automatic 'aspire restore' is unavailable for the new TypeScript starter project because no TypeScript AppHost SDK generator was found.");
+                        return new TemplateResult(ExitCodeConstants.FailedToBuildArtifacts, outputPath);
+                    }
+
+                    _logger.LogDebug("Generating SDK code for TypeScript starter in '{OutputPath}'.", outputPath);
+                    var restoreSucceeded = await guestProject.BuildAndGenerateSdkAsync(new DirectoryInfo(outputPath), cancellationToken);
+                    if (!restoreSucceeded)
+                    {
+                        _interactionService.DisplayError("Automatic 'aspire restore' failed for the new TypeScript starter project. Run 'aspire restore' in the project directory for more details.");
+                        return new TemplateResult(ExitCodeConstants.FailedToBuildArtifacts, outputPath);
                     }
 
                     return new TemplateResult(ExitCodeConstants.Success, outputPath);

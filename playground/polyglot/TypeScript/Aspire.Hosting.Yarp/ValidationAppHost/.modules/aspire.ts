@@ -192,6 +192,13 @@ export enum ContainerLifetime {
     Persistent = "Persistent",
 }
 
+/** Enum type for CookieSecurePolicy */
+export enum CookieSecurePolicy {
+    SameAsRequest = "SameAsRequest",
+    Always = "Always",
+    None = "None",
+}
+
 /** Enum type for DistributedApplicationOperation */
 export enum DistributedApplicationOperation {
     Run = "Run",
@@ -216,6 +223,23 @@ export enum ForwardedTransformActions {
     Set = "Set",
     Append = "Append",
     Remove = "Remove",
+}
+
+/** Enum type for HeaderMatchMode */
+export enum HeaderMatchMode {
+    ExactHeader = "ExactHeader",
+    HeaderPrefix = "HeaderPrefix",
+    Contains = "Contains",
+    NotContains = "NotContains",
+    Exists = "Exists",
+    NotExists = "NotExists",
+}
+
+/** Enum type for HttpVersionPolicy */
+export enum HttpVersionPolicy {
+    RequestVersionOrLower = "RequestVersionOrLower",
+    RequestVersionOrHigher = "RequestVersionOrHigher",
+    RequestVersionExact = "RequestVersionExact",
 }
 
 /** Enum type for IconVariant */
@@ -289,11 +313,28 @@ export enum ProtocolType {
     Unknown = "Unknown",
 }
 
+/** Enum type for QueryParameterMatchMode */
+export enum QueryParameterMatchMode {
+    Exact = "Exact",
+    Contains = "Contains",
+    NotContains = "NotContains",
+    Prefix = "Prefix",
+    Exists = "Exists",
+}
+
 /** Enum type for ResponseCondition */
 export enum ResponseCondition {
     Always = "Always",
     Success = "Success",
     Failure = "Failure",
+}
+
+/** Enum type for SameSiteMode */
+export enum SameSiteMode {
+    None = "None",
+    Lax = "Lax",
+    Strict = "Strict",
+    Unspecified = "Unspecified",
 }
 
 /** Enum type for UrlDisplayLocation */
@@ -306,6 +347,13 @@ export enum UrlDisplayLocation {
 export enum WaitBehavior {
     WaitOnResourceUnavailable = "WaitOnResourceUnavailable",
     StopOnResourceUnavailable = "StopOnResourceUnavailable",
+}
+
+/** Enum type for YarpSslProtocol */
+export enum YarpSslProtocol {
+    None = "None",
+    Tls12 = "Tls12",
+    Tls13 = "Tls13",
 }
 
 // ============================================================================
@@ -358,6 +406,102 @@ export interface ResourceUrlAnnotation {
     displayText?: string;
     endpoint?: EndpointReferenceHandle;
     displayLocation?: UrlDisplayLocation;
+}
+
+/** DTO interface for YarpActiveHealthCheckConfig */
+export interface YarpActiveHealthCheckConfig {
+    enabled?: boolean;
+    interval?: number;
+    path?: string;
+    policy?: string;
+    query?: string;
+    timeout?: number;
+}
+
+/** DTO interface for YarpForwarderRequestConfig */
+export interface YarpForwarderRequestConfig {
+    activityTimeout?: number;
+    allowResponseBuffering?: boolean;
+    version?: string;
+    versionPolicy?: HttpVersionPolicy;
+}
+
+/** DTO interface for YarpHealthCheckConfig */
+export interface YarpHealthCheckConfig {
+    active?: YarpActiveHealthCheckConfig;
+    availableDestinationsPolicy?: string;
+    passive?: YarpPassiveHealthCheckConfig;
+}
+
+/** DTO interface for YarpHttpClientConfig */
+export interface YarpHttpClientConfig {
+    dangerousAcceptAnyServerCertificate?: boolean;
+    enableMultipleHttp2Connections?: boolean;
+    maxConnectionsPerServer?: number;
+    requestHeaderEncoding?: string;
+    responseHeaderEncoding?: string;
+    sslProtocols?: YarpSslProtocol[];
+    webProxy?: YarpWebProxyConfig;
+}
+
+/** DTO interface for YarpPassiveHealthCheckConfig */
+export interface YarpPassiveHealthCheckConfig {
+    enabled?: boolean;
+    policy?: string;
+    reactivationPeriod?: number;
+}
+
+/** DTO interface for YarpRouteHeaderMatch */
+export interface YarpRouteHeaderMatch {
+    name?: string;
+    values?: string[];
+    isCaseSensitive?: boolean;
+    mode?: HeaderMatchMode;
+}
+
+/** DTO interface for YarpRouteMatch */
+export interface YarpRouteMatch {
+    path?: string;
+    methods?: string[];
+    hosts?: string[];
+    headers?: YarpRouteHeaderMatch[];
+    queryParameters?: YarpRouteQueryParameterMatch[];
+}
+
+/** DTO interface for YarpRouteQueryParameterMatch */
+export interface YarpRouteQueryParameterMatch {
+    name?: string;
+    values?: string[];
+    isCaseSensitive?: boolean;
+    mode?: QueryParameterMatchMode;
+}
+
+/** DTO interface for YarpSessionAffinityConfig */
+export interface YarpSessionAffinityConfig {
+    affinityKeyName?: string;
+    cookie?: YarpSessionAffinityCookieConfig;
+    enabled?: boolean;
+    failurePolicy?: string;
+    policy?: string;
+}
+
+/** DTO interface for YarpSessionAffinityCookieConfig */
+export interface YarpSessionAffinityCookieConfig {
+    domain?: string;
+    expiration?: number;
+    httpOnly?: boolean;
+    isEssential?: boolean;
+    maxAge?: number;
+    path?: string;
+    sameSite?: SameSiteMode;
+    securePolicy?: CookieSecurePolicy;
+}
+
+/** DTO interface for YarpWebProxyConfig */
+export interface YarpWebProxyConfig {
+    address?: string;
+    bypassOnLocal?: boolean;
+    useDefaultCredentials?: boolean;
 }
 
 // ============================================================================
@@ -502,6 +646,10 @@ export interface WithImageOptions {
 export interface WithMcpServerOptions {
     path?: string;
     endpointName?: string;
+}
+
+export interface WithOrderOptions {
+    order?: number;
 }
 
 export interface WithPipelineStepFactoryOptions {
@@ -1564,6 +1712,156 @@ export class ResourceUrlsCallbackContext {
 }
 
 // ============================================================================
+// YarpCluster
+// ============================================================================
+
+/**
+ * Type class for YarpCluster.
+ */
+export class YarpCluster {
+    constructor(private _handle: YarpClusterHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    /** Sets the forwarder request configuration for the cluster. */
+    /** @internal */
+    async _withForwarderRequestConfigInternal(config: YarpForwarderRequestConfig): Promise<YarpCluster> {
+        const rpcArgs: Record<string, unknown> = { cluster: this._handle, config };
+        const result = await this._client.invokeCapability<YarpClusterHandle>(
+            'Aspire.Hosting.Yarp/withForwarderRequestConfig',
+            rpcArgs
+        );
+        return new YarpCluster(result, this._client);
+    }
+
+    withForwarderRequestConfig(config: YarpForwarderRequestConfig): YarpClusterPromise {
+        return new YarpClusterPromise(this._withForwarderRequestConfigInternal(config));
+    }
+
+    /** Sets the HTTP client configuration for the cluster. */
+    /** @internal */
+    async _withHttpClientConfigInternal(config: YarpHttpClientConfig): Promise<YarpCluster> {
+        const rpcArgs: Record<string, unknown> = { cluster: this._handle, config };
+        const result = await this._client.invokeCapability<YarpClusterHandle>(
+            'Aspire.Hosting.Yarp/withHttpClientConfig',
+            rpcArgs
+        );
+        return new YarpCluster(result, this._client);
+    }
+
+    withHttpClientConfig(config: YarpHttpClientConfig): YarpClusterPromise {
+        return new YarpClusterPromise(this._withHttpClientConfigInternal(config));
+    }
+
+    /** Sets the session affinity configuration for the cluster. */
+    /** @internal */
+    async _withSessionAffinityConfigInternal(config: YarpSessionAffinityConfig): Promise<YarpCluster> {
+        const rpcArgs: Record<string, unknown> = { cluster: this._handle, config };
+        const result = await this._client.invokeCapability<YarpClusterHandle>(
+            'Aspire.Hosting.Yarp/withSessionAffinityConfig',
+            rpcArgs
+        );
+        return new YarpCluster(result, this._client);
+    }
+
+    withSessionAffinityConfig(config: YarpSessionAffinityConfig): YarpClusterPromise {
+        return new YarpClusterPromise(this._withSessionAffinityConfigInternal(config));
+    }
+
+    /** Sets the health check configuration for the cluster. */
+    /** @internal */
+    async _withHealthCheckConfigInternal(config: YarpHealthCheckConfig): Promise<YarpCluster> {
+        const rpcArgs: Record<string, unknown> = { cluster: this._handle, config };
+        const result = await this._client.invokeCapability<YarpClusterHandle>(
+            'Aspire.Hosting.Yarp/withHealthCheckConfig',
+            rpcArgs
+        );
+        return new YarpCluster(result, this._client);
+    }
+
+    withHealthCheckConfig(config: YarpHealthCheckConfig): YarpClusterPromise {
+        return new YarpClusterPromise(this._withHealthCheckConfigInternal(config));
+    }
+
+    /** Sets the load balancing policy for the cluster. */
+    /** @internal */
+    async _withLoadBalancingPolicyInternal(policy: string): Promise<YarpCluster> {
+        const rpcArgs: Record<string, unknown> = { cluster: this._handle, policy };
+        const result = await this._client.invokeCapability<YarpClusterHandle>(
+            'Aspire.Hosting.Yarp/withLoadBalancingPolicy',
+            rpcArgs
+        );
+        return new YarpCluster(result, this._client);
+    }
+
+    withLoadBalancingPolicy(policy: string): YarpClusterPromise {
+        return new YarpClusterPromise(this._withLoadBalancingPolicyInternal(policy));
+    }
+
+    /** Sets metadata for the cluster. */
+    /** @internal */
+    async _withMetadataInternal(metadata: Record<string, string>): Promise<YarpCluster> {
+        const rpcArgs: Record<string, unknown> = { cluster: this._handle, metadata };
+        const result = await this._client.invokeCapability<YarpClusterHandle>(
+            'Aspire.Hosting.Yarp/withClusterMetadata',
+            rpcArgs
+        );
+        return new YarpCluster(result, this._client);
+    }
+
+    withMetadata(metadata: Record<string, string>): YarpClusterPromise {
+        return new YarpClusterPromise(this._withMetadataInternal(metadata));
+    }
+
+}
+
+/**
+ * Thenable wrapper for YarpCluster that enables fluent chaining.
+ */
+export class YarpClusterPromise implements PromiseLike<YarpCluster> {
+    constructor(private _promise: Promise<YarpCluster>) {}
+
+    then<TResult1 = YarpCluster, TResult2 = never>(
+        onfulfilled?: ((value: YarpCluster) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    /** Sets the forwarder request configuration for the cluster. */
+    withForwarderRequestConfig(config: YarpForwarderRequestConfig): YarpClusterPromise {
+        return new YarpClusterPromise(this._promise.then(obj => obj.withForwarderRequestConfig(config)));
+    }
+
+    /** Sets the HTTP client configuration for the cluster. */
+    withHttpClientConfig(config: YarpHttpClientConfig): YarpClusterPromise {
+        return new YarpClusterPromise(this._promise.then(obj => obj.withHttpClientConfig(config)));
+    }
+
+    /** Sets the session affinity configuration for the cluster. */
+    withSessionAffinityConfig(config: YarpSessionAffinityConfig): YarpClusterPromise {
+        return new YarpClusterPromise(this._promise.then(obj => obj.withSessionAffinityConfig(config)));
+    }
+
+    /** Sets the health check configuration for the cluster. */
+    withHealthCheckConfig(config: YarpHealthCheckConfig): YarpClusterPromise {
+        return new YarpClusterPromise(this._promise.then(obj => obj.withHealthCheckConfig(config)));
+    }
+
+    /** Sets the load balancing policy for the cluster. */
+    withLoadBalancingPolicy(policy: string): YarpClusterPromise {
+        return new YarpClusterPromise(this._promise.then(obj => obj.withLoadBalancingPolicy(policy)));
+    }
+
+    /** Sets metadata for the cluster. */
+    withMetadata(metadata: Record<string, string>): YarpClusterPromise {
+        return new YarpClusterPromise(this._promise.then(obj => obj.withMetadata(metadata)));
+    }
+
+}
+
+// ============================================================================
 // YarpRoute
 // ============================================================================
 
@@ -1575,6 +1873,173 @@ export class YarpRoute {
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    /** Sets the route match criteria. */
+    /** @internal */
+    async _withMatchInternal(match: YarpRouteMatch): Promise<YarpRoute> {
+        const rpcArgs: Record<string, unknown> = { route: this._handle, match };
+        const result = await this._client.invokeCapability<YarpRouteHandle>(
+            'Aspire.Hosting.Yarp/withMatch',
+            rpcArgs
+        );
+        return new YarpRoute(result, this._client);
+    }
+
+    withMatch(match: YarpRouteMatch): YarpRoutePromise {
+        return new YarpRoutePromise(this._withMatchInternal(match));
+    }
+
+    /** Matches requests with the specified path pattern. */
+    /** @internal */
+    async _withMatchPathInternal(path: string): Promise<YarpRoute> {
+        const rpcArgs: Record<string, unknown> = { route: this._handle, path };
+        const result = await this._client.invokeCapability<YarpRouteHandle>(
+            'Aspire.Hosting.Yarp/withMatchPath',
+            rpcArgs
+        );
+        return new YarpRoute(result, this._client);
+    }
+
+    withMatchPath(path: string): YarpRoutePromise {
+        return new YarpRoutePromise(this._withMatchPathInternal(path));
+    }
+
+    /** Matches requests that use the specified HTTP methods. */
+    /** @internal */
+    async _withMatchMethodsInternal(methods: string[]): Promise<YarpRoute> {
+        const rpcArgs: Record<string, unknown> = { route: this._handle, methods };
+        const result = await this._client.invokeCapability<YarpRouteHandle>(
+            'Aspire.Hosting.Yarp/withMatchMethods',
+            rpcArgs
+        );
+        return new YarpRoute(result, this._client);
+    }
+
+    withMatchMethods(methods: string[]): YarpRoutePromise {
+        return new YarpRoutePromise(this._withMatchMethodsInternal(methods));
+    }
+
+    /** Matches requests that contain the specified headers. */
+    /** @internal */
+    async _withMatchHeadersInternal(headers: YarpRouteHeaderMatch[]): Promise<YarpRoute> {
+        const rpcArgs: Record<string, unknown> = { route: this._handle, headers };
+        const result = await this._client.invokeCapability<YarpRouteHandle>(
+            'Aspire.Hosting.Yarp/withMatchHeaders',
+            rpcArgs
+        );
+        return new YarpRoute(result, this._client);
+    }
+
+    withMatchHeaders(headers: YarpRouteHeaderMatch[]): YarpRoutePromise {
+        return new YarpRoutePromise(this._withMatchHeadersInternal(headers));
+    }
+
+    /** Matches requests that contain the specified host headers. */
+    /** @internal */
+    async _withMatchHostsInternal(hosts: string[]): Promise<YarpRoute> {
+        const rpcArgs: Record<string, unknown> = { route: this._handle, hosts };
+        const result = await this._client.invokeCapability<YarpRouteHandle>(
+            'Aspire.Hosting.Yarp/withMatchHosts',
+            rpcArgs
+        );
+        return new YarpRoute(result, this._client);
+    }
+
+    withMatchHosts(hosts: string[]): YarpRoutePromise {
+        return new YarpRoutePromise(this._withMatchHostsInternal(hosts));
+    }
+
+    /** Matches requests that contain the specified query parameters. */
+    /** @internal */
+    async _withMatchRouteQueryParameterInternal(queryParameters: YarpRouteQueryParameterMatch[]): Promise<YarpRoute> {
+        const rpcArgs: Record<string, unknown> = { route: this._handle, queryParameters };
+        const result = await this._client.invokeCapability<YarpRouteHandle>(
+            'Aspire.Hosting.Yarp/withMatchRouteQueryParameter',
+            rpcArgs
+        );
+        return new YarpRoute(result, this._client);
+    }
+
+    withMatchRouteQueryParameter(queryParameters: YarpRouteQueryParameterMatch[]): YarpRoutePromise {
+        return new YarpRoutePromise(this._withMatchRouteQueryParameterInternal(queryParameters));
+    }
+
+    /** Sets the route order. */
+    /** @internal */
+    async _withOrderInternal(order?: number): Promise<YarpRoute> {
+        const rpcArgs: Record<string, unknown> = { route: this._handle };
+        if (order !== undefined) rpcArgs.order = order;
+        const result = await this._client.invokeCapability<YarpRouteHandle>(
+            'Aspire.Hosting.Yarp/withOrder',
+            rpcArgs
+        );
+        return new YarpRoute(result, this._client);
+    }
+
+    withOrder(options?: WithOrderOptions): YarpRoutePromise {
+        const order = options?.order;
+        return new YarpRoutePromise(this._withOrderInternal(order));
+    }
+
+    /** Sets the maximum request body size for the route. */
+    /** @internal */
+    async _withMaxRequestBodySizeInternal(maxRequestBodySize: number): Promise<YarpRoute> {
+        const rpcArgs: Record<string, unknown> = { route: this._handle, maxRequestBodySize };
+        const result = await this._client.invokeCapability<YarpRouteHandle>(
+            'Aspire.Hosting.Yarp/withMaxRequestBodySize',
+            rpcArgs
+        );
+        return new YarpRoute(result, this._client);
+    }
+
+    withMaxRequestBodySize(maxRequestBodySize: number): YarpRoutePromise {
+        return new YarpRoutePromise(this._withMaxRequestBodySizeInternal(maxRequestBodySize));
+    }
+
+    /** Sets metadata for the route. */
+    /** @internal */
+    async _withMetadataInternal(metadata: Record<string, string>): Promise<YarpRoute> {
+        const rpcArgs: Record<string, unknown> = { route: this._handle, metadata };
+        const result = await this._client.invokeCapability<YarpRouteHandle>(
+            'Aspire.Hosting.Yarp/withRouteMetadata',
+            rpcArgs
+        );
+        return new YarpRoute(result, this._client);
+    }
+
+    withMetadata(metadata: Record<string, string>): YarpRoutePromise {
+        return new YarpRoutePromise(this._withMetadataInternal(metadata));
+    }
+
+    /** Sets the transforms for the route. */
+    /** @internal */
+    async _withTransformsInternal(transforms: Record<string, string>[]): Promise<YarpRoute> {
+        const rpcArgs: Record<string, unknown> = { route: this._handle, transforms };
+        const result = await this._client.invokeCapability<YarpRouteHandle>(
+            'Aspire.Hosting.Yarp/withTransforms',
+            rpcArgs
+        );
+        return new YarpRoute(result, this._client);
+    }
+
+    withTransforms(transforms: Record<string, string>[]): YarpRoutePromise {
+        return new YarpRoutePromise(this._withTransformsInternal(transforms));
+    }
+
+    /** Adds a transform to the route. */
+    /** @internal */
+    async _withTransformInternal(transform: Record<string, string>): Promise<YarpRoute> {
+        const rpcArgs: Record<string, unknown> = { route: this._handle, transform };
+        const result = await this._client.invokeCapability<YarpRouteHandle>(
+            'Aspire.Hosting.Yarp/withTransform',
+            rpcArgs
+        );
+        return new YarpRoute(result, this._client);
+    }
+
+    withTransform(transform: Record<string, string>): YarpRoutePromise {
+        return new YarpRoutePromise(this._withTransformInternal(transform));
+    }
 
     /** Adds the transform which will add X-Forwarded-* headers. */
     /** @internal */
@@ -2014,6 +2479,61 @@ export class YarpRoutePromise implements PromiseLike<YarpRoute> {
         onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
     ): PromiseLike<TResult1 | TResult2> {
         return this._promise.then(onfulfilled, onrejected);
+    }
+
+    /** Sets the route match criteria. */
+    withMatch(match: YarpRouteMatch): YarpRoutePromise {
+        return new YarpRoutePromise(this._promise.then(obj => obj.withMatch(match)));
+    }
+
+    /** Matches requests with the specified path pattern. */
+    withMatchPath(path: string): YarpRoutePromise {
+        return new YarpRoutePromise(this._promise.then(obj => obj.withMatchPath(path)));
+    }
+
+    /** Matches requests that use the specified HTTP methods. */
+    withMatchMethods(methods: string[]): YarpRoutePromise {
+        return new YarpRoutePromise(this._promise.then(obj => obj.withMatchMethods(methods)));
+    }
+
+    /** Matches requests that contain the specified headers. */
+    withMatchHeaders(headers: YarpRouteHeaderMatch[]): YarpRoutePromise {
+        return new YarpRoutePromise(this._promise.then(obj => obj.withMatchHeaders(headers)));
+    }
+
+    /** Matches requests that contain the specified host headers. */
+    withMatchHosts(hosts: string[]): YarpRoutePromise {
+        return new YarpRoutePromise(this._promise.then(obj => obj.withMatchHosts(hosts)));
+    }
+
+    /** Matches requests that contain the specified query parameters. */
+    withMatchRouteQueryParameter(queryParameters: YarpRouteQueryParameterMatch[]): YarpRoutePromise {
+        return new YarpRoutePromise(this._promise.then(obj => obj.withMatchRouteQueryParameter(queryParameters)));
+    }
+
+    /** Sets the route order. */
+    withOrder(options?: WithOrderOptions): YarpRoutePromise {
+        return new YarpRoutePromise(this._promise.then(obj => obj.withOrder(options)));
+    }
+
+    /** Sets the maximum request body size for the route. */
+    withMaxRequestBodySize(maxRequestBodySize: number): YarpRoutePromise {
+        return new YarpRoutePromise(this._promise.then(obj => obj.withMaxRequestBodySize(maxRequestBodySize)));
+    }
+
+    /** Sets metadata for the route. */
+    withMetadata(metadata: Record<string, string>): YarpRoutePromise {
+        return new YarpRoutePromise(this._promise.then(obj => obj.withMetadata(metadata)));
+    }
+
+    /** Sets the transforms for the route. */
+    withTransforms(transforms: Record<string, string>[]): YarpRoutePromise {
+        return new YarpRoutePromise(this._promise.then(obj => obj.withTransforms(transforms)));
+    }
+
+    /** Adds a transform to the route. */
+    withTransform(transform: Record<string, string>): YarpRoutePromise {
+        return new YarpRoutePromise(this._promise.then(obj => obj.withTransform(transform)));
     }
 
     /** Adds the transform which will add X-Forwarded-* headers. */
@@ -2617,7 +3137,7 @@ export class YarpConfigurationBuilder {
 
     /** Invokes the AddRoute method */
     /** @internal */
-    async _addRouteInternal(path: string, cluster: YarpClusterHandle): Promise<YarpRoute> {
+    async _addRouteInternal(path: string, cluster: YarpCluster): Promise<YarpRoute> {
         const rpcArgs: Record<string, unknown> = { context: this._handle, path, cluster };
         const result = await this._client.invokeCapability<YarpRouteHandle>(
             'Aspire.Hosting/IYarpConfigurationBuilder.addRoute',
@@ -2626,53 +3146,188 @@ export class YarpConfigurationBuilder {
         return new YarpRoute(result, this._client);
     }
 
-    addRoute(path: string, cluster: YarpClusterHandle): YarpRoutePromise {
+    addRoute(path: string, cluster: YarpCluster): YarpRoutePromise {
         return new YarpRoutePromise(this._addRouteInternal(path, cluster));
     }
 
     /** Adds a YARP cluster for an endpoint reference. */
-    async addClusterFromEndpoint(endpoint: EndpointReference): Promise<YarpClusterHandle> {
+    /** @internal */
+    async _addClusterFromEndpointInternal(endpoint: EndpointReference): Promise<YarpCluster> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, endpoint };
-        return await this._client.invokeCapability<YarpClusterHandle>(
+        const result = await this._client.invokeCapability<YarpClusterHandle>(
             'Aspire.Hosting.Yarp/addClusterFromEndpoint',
             rpcArgs
         );
+        return new YarpCluster(result, this._client);
+    }
+
+    addClusterFromEndpoint(endpoint: EndpointReference): YarpClusterPromise {
+        return new YarpClusterPromise(this._addClusterFromEndpointInternal(endpoint));
     }
 
     /** Adds a YARP cluster for a resource that supports service discovery. */
-    async addCluster(resource: ResourceBuilderBase): Promise<YarpClusterHandle> {
+    /** @internal */
+    async _addClusterFromResourceInternal(resource: ResourceBuilderBase): Promise<YarpCluster> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, resource };
-        return await this._client.invokeCapability<YarpClusterHandle>(
+        const result = await this._client.invokeCapability<YarpClusterHandle>(
             'Aspire.Hosting.Yarp/addClusterFromResource',
             rpcArgs
         );
+        return new YarpCluster(result, this._client);
+    }
+
+    addClusterFromResource(resource: ResourceBuilderBase): YarpClusterPromise {
+        return new YarpClusterPromise(this._addClusterFromResourceInternal(resource));
     }
 
     /** Adds a YARP cluster for an external service resource. */
-    async addClusterFromExternalService(externalService: ExternalServiceResource): Promise<YarpClusterHandle> {
+    /** @internal */
+    async _addClusterFromExternalServiceInternal(externalService: ExternalServiceResource): Promise<YarpCluster> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, externalService };
-        return await this._client.invokeCapability<YarpClusterHandle>(
+        const result = await this._client.invokeCapability<YarpClusterHandle>(
             'Aspire.Hosting.Yarp/addClusterFromExternalService',
             rpcArgs
         );
+        return new YarpCluster(result, this._client);
+    }
+
+    addClusterFromExternalService(externalService: ExternalServiceResource): YarpClusterPromise {
+        return new YarpClusterPromise(this._addClusterFromExternalServiceInternal(externalService));
     }
 
     /** Adds a YARP cluster with multiple destinations. */
-    async addClusterWithDestinations(clusterName: string, destinations: any[]): Promise<YarpClusterHandle> {
+    /** @internal */
+    async _addClusterWithDestinationsInternal(clusterName: string, destinations: any[]): Promise<YarpCluster> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, clusterName, destinations };
-        return await this._client.invokeCapability<YarpClusterHandle>(
+        const result = await this._client.invokeCapability<YarpClusterHandle>(
             'Aspire.Hosting.Yarp/addClusterWithDestinations',
             rpcArgs
         );
+        return new YarpCluster(result, this._client);
+    }
+
+    addClusterWithDestinations(clusterName: string, destinations: any[]): YarpClusterPromise {
+        return new YarpClusterPromise(this._addClusterWithDestinationsInternal(clusterName, destinations));
     }
 
     /** Adds a YARP cluster with a single destination. */
-    async addClusterWithDestination(clusterName: string, destination: any): Promise<YarpClusterHandle> {
+    /** @internal */
+    async _addClusterWithDestinationInternal(clusterName: string, destination: any): Promise<YarpCluster> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, clusterName, destination };
-        return await this._client.invokeCapability<YarpClusterHandle>(
+        const result = await this._client.invokeCapability<YarpClusterHandle>(
             'Aspire.Hosting.Yarp/addClusterWithDestination',
             rpcArgs
         );
+        return new YarpCluster(result, this._client);
+    }
+
+    addClusterWithDestination(clusterName: string, destination: any): YarpClusterPromise {
+        return new YarpClusterPromise(this._addClusterWithDestinationInternal(clusterName, destination));
+    }
+
+    /** Adds a YARP catch-all route for an existing cluster. */
+    /** @internal */
+    async _addCatchAllRouteInternal(cluster: YarpCluster): Promise<YarpRoute> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, cluster };
+        const result = await this._client.invokeCapability<YarpRouteHandle>(
+            'Aspire.Hosting.Yarp/addCatchAllRoute',
+            rpcArgs
+        );
+        return new YarpRoute(result, this._client);
+    }
+
+    addCatchAllRoute(cluster: YarpCluster): YarpRoutePromise {
+        return new YarpRoutePromise(this._addCatchAllRouteInternal(cluster));
+    }
+
+    /** Adds a YARP catch-all route for an endpoint reference. */
+    /** @internal */
+    async _addCatchAllRouteFromEndpointInternal(endpoint: EndpointReference): Promise<YarpRoute> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpoint };
+        const result = await this._client.invokeCapability<YarpRouteHandle>(
+            'Aspire.Hosting.Yarp/addCatchAllRouteFromEndpoint',
+            rpcArgs
+        );
+        return new YarpRoute(result, this._client);
+    }
+
+    addCatchAllRouteFromEndpoint(endpoint: EndpointReference): YarpRoutePromise {
+        return new YarpRoutePromise(this._addCatchAllRouteFromEndpointInternal(endpoint));
+    }
+
+    /** Adds a YARP catch-all route for a resource that supports service discovery. */
+    /** @internal */
+    async _addCatchAllRouteFromResourceInternal(resource: ResourceBuilderBase): Promise<YarpRoute> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resource };
+        const result = await this._client.invokeCapability<YarpRouteHandle>(
+            'Aspire.Hosting.Yarp/addCatchAllRouteFromResource',
+            rpcArgs
+        );
+        return new YarpRoute(result, this._client);
+    }
+
+    addCatchAllRouteFromResource(resource: ResourceBuilderBase): YarpRoutePromise {
+        return new YarpRoutePromise(this._addCatchAllRouteFromResourceInternal(resource));
+    }
+
+    /** Adds a YARP route for an endpoint reference. */
+    /** @internal */
+    async _addRouteFromEndpointInternal(path: string, endpoint: EndpointReference): Promise<YarpRoute> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, endpoint };
+        const result = await this._client.invokeCapability<YarpRouteHandle>(
+            'Aspire.Hosting.Yarp/addRouteFromEndpoint',
+            rpcArgs
+        );
+        return new YarpRoute(result, this._client);
+    }
+
+    addRouteFromEndpoint(path: string, endpoint: EndpointReference): YarpRoutePromise {
+        return new YarpRoutePromise(this._addRouteFromEndpointInternal(path, endpoint));
+    }
+
+    /** Adds a YARP route for a resource that supports service discovery. */
+    /** @internal */
+    async _addRouteFromResourceInternal(path: string, resource: ResourceBuilderBase): Promise<YarpRoute> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, resource };
+        const result = await this._client.invokeCapability<YarpRouteHandle>(
+            'Aspire.Hosting.Yarp/addRouteFromResource',
+            rpcArgs
+        );
+        return new YarpRoute(result, this._client);
+    }
+
+    addRouteFromResource(path: string, resource: ResourceBuilderBase): YarpRoutePromise {
+        return new YarpRoutePromise(this._addRouteFromResourceInternal(path, resource));
+    }
+
+    /** Adds a YARP route for an external service resource. */
+    /** @internal */
+    async _addRouteFromExternalServiceInternal(path: string, externalService: ExternalServiceResource): Promise<YarpRoute> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, externalService };
+        const result = await this._client.invokeCapability<YarpRouteHandle>(
+            'Aspire.Hosting.Yarp/addRouteFromExternalService',
+            rpcArgs
+        );
+        return new YarpRoute(result, this._client);
+    }
+
+    addRouteFromExternalService(path: string, externalService: ExternalServiceResource): YarpRoutePromise {
+        return new YarpRoutePromise(this._addRouteFromExternalServiceInternal(path, externalService));
+    }
+
+    /** Adds a YARP catch-all route for an external service resource. */
+    /** @internal */
+    async _addCatchAllRouteFromExternalServiceInternal(externalService: ExternalServiceResource): Promise<YarpRoute> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, externalService };
+        const result = await this._client.invokeCapability<YarpRouteHandle>(
+            'Aspire.Hosting.Yarp/addCatchAllRouteFromExternalService',
+            rpcArgs
+        );
+        return new YarpRoute(result, this._client);
+    }
+
+    addCatchAllRouteFromExternalService(externalService: ExternalServiceResource): YarpRoutePromise {
+        return new YarpRoutePromise(this._addCatchAllRouteFromExternalServiceInternal(externalService));
     }
 
 }
@@ -2691,33 +3346,68 @@ export class YarpConfigurationBuilderPromise implements PromiseLike<YarpConfigur
     }
 
     /** Invokes the AddRoute method */
-    addRoute(path: string, cluster: YarpClusterHandle): YarpRoutePromise {
+    addRoute(path: string, cluster: YarpCluster): YarpRoutePromise {
         return new YarpRoutePromise(this._promise.then(obj => obj.addRoute(path, cluster)));
     }
 
     /** Adds a YARP cluster for an endpoint reference. */
-    addClusterFromEndpoint(endpoint: EndpointReference): Promise<YarpClusterHandle> {
-        return this._promise.then(obj => obj.addClusterFromEndpoint(endpoint));
+    addClusterFromEndpoint(endpoint: EndpointReference): YarpClusterPromise {
+        return new YarpClusterPromise(this._promise.then(obj => obj.addClusterFromEndpoint(endpoint)));
     }
 
     /** Adds a YARP cluster for a resource that supports service discovery. */
-    addCluster(resource: ResourceBuilderBase): Promise<YarpClusterHandle> {
-        return this._promise.then(obj => obj.addCluster(resource));
+    addClusterFromResource(resource: ResourceBuilderBase): YarpClusterPromise {
+        return new YarpClusterPromise(this._promise.then(obj => obj.addClusterFromResource(resource)));
     }
 
     /** Adds a YARP cluster for an external service resource. */
-    addClusterFromExternalService(externalService: ExternalServiceResource): Promise<YarpClusterHandle> {
-        return this._promise.then(obj => obj.addClusterFromExternalService(externalService));
+    addClusterFromExternalService(externalService: ExternalServiceResource): YarpClusterPromise {
+        return new YarpClusterPromise(this._promise.then(obj => obj.addClusterFromExternalService(externalService)));
     }
 
     /** Adds a YARP cluster with multiple destinations. */
-    addClusterWithDestinations(clusterName: string, destinations: any[]): Promise<YarpClusterHandle> {
-        return this._promise.then(obj => obj.addClusterWithDestinations(clusterName, destinations));
+    addClusterWithDestinations(clusterName: string, destinations: any[]): YarpClusterPromise {
+        return new YarpClusterPromise(this._promise.then(obj => obj.addClusterWithDestinations(clusterName, destinations)));
     }
 
     /** Adds a YARP cluster with a single destination. */
-    addClusterWithDestination(clusterName: string, destination: any): Promise<YarpClusterHandle> {
-        return this._promise.then(obj => obj.addClusterWithDestination(clusterName, destination));
+    addClusterWithDestination(clusterName: string, destination: any): YarpClusterPromise {
+        return new YarpClusterPromise(this._promise.then(obj => obj.addClusterWithDestination(clusterName, destination)));
+    }
+
+    /** Adds a YARP catch-all route for an existing cluster. */
+    addCatchAllRoute(cluster: YarpCluster): YarpRoutePromise {
+        return new YarpRoutePromise(this._promise.then(obj => obj.addCatchAllRoute(cluster)));
+    }
+
+    /** Adds a YARP catch-all route for an endpoint reference. */
+    addCatchAllRouteFromEndpoint(endpoint: EndpointReference): YarpRoutePromise {
+        return new YarpRoutePromise(this._promise.then(obj => obj.addCatchAllRouteFromEndpoint(endpoint)));
+    }
+
+    /** Adds a YARP catch-all route for a resource that supports service discovery. */
+    addCatchAllRouteFromResource(resource: ResourceBuilderBase): YarpRoutePromise {
+        return new YarpRoutePromise(this._promise.then(obj => obj.addCatchAllRouteFromResource(resource)));
+    }
+
+    /** Adds a YARP route for an endpoint reference. */
+    addRouteFromEndpoint(path: string, endpoint: EndpointReference): YarpRoutePromise {
+        return new YarpRoutePromise(this._promise.then(obj => obj.addRouteFromEndpoint(path, endpoint)));
+    }
+
+    /** Adds a YARP route for a resource that supports service discovery. */
+    addRouteFromResource(path: string, resource: ResourceBuilderBase): YarpRoutePromise {
+        return new YarpRoutePromise(this._promise.then(obj => obj.addRouteFromResource(path, resource)));
+    }
+
+    /** Adds a YARP route for an external service resource. */
+    addRouteFromExternalService(path: string, externalService: ExternalServiceResource): YarpRoutePromise {
+        return new YarpRoutePromise(this._promise.then(obj => obj.addRouteFromExternalService(path, externalService)));
+    }
+
+    /** Adds a YARP catch-all route for an external service resource. */
+    addCatchAllRouteFromExternalService(externalService: ExternalServiceResource): YarpRoutePromise {
+        return new YarpRoutePromise(this._promise.then(obj => obj.addCatchAllRouteFromExternalService(externalService)));
     }
 
 }
@@ -15527,6 +16217,7 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepConte
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions', (handle, client) => new ProjectResourceOptions(handle as ProjectResourceOptionsHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpressionBuilder', (handle, client) => new ReferenceExpressionBuilder(handle as ReferenceExpressionBuilderHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext', (handle, client) => new ResourceUrlsCallbackContext(handle as ResourceUrlsCallbackContextHandle, client));
+registerHandleWrapper('Aspire.Hosting.Yarp/Aspire.Hosting.Yarp.YarpCluster', (handle, client) => new YarpCluster(handle as YarpClusterHandle, client));
 registerHandleWrapper('Aspire.Hosting.Yarp/Aspire.Hosting.Yarp.YarpRoute', (handle, client) => new YarpRoute(handle as YarpRouteHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder', (handle, client) => new DistributedApplicationBuilder(handle as IDistributedApplicationBuilderHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationEventing', (handle, client) => new DistributedApplicationEventing(handle as IDistributedApplicationEventingHandle, client));

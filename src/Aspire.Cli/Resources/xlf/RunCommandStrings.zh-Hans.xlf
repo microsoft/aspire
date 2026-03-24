@@ -33,18 +33,18 @@
         <note />
       </trans-unit>
       <trans-unit id="AppHostExitedWithCode">
-        <source>AppHost process exited with code {0}.</source>
-        <target state="translated">AppHost 进程已退出，代码为 {0}。</target>
+        <source>Apphost process exited with code {0}.</source>
+        <target state="needs-review-translation">AppHost 进程已退出，代码为 {0}。</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostFailedToBuild">
-        <source>AppHost failed to build.</source>
-        <target state="translated">AppHost 构建失败。</target>
+        <source>Apphost failed to build.</source>
+        <target state="new">Apphost failed to build.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostStartedSuccessfully">
-        <source>AppHost started successfully.</source>
-        <target state="translated">已成功启动 AppHost。</target>
+        <source>Apphost started successfully.</source>
+        <target state="needs-review-translation">已成功启动 AppHost。</target>
         <note />
       </trans-unit>
       <trans-unit id="CheckLogsForDetails">
@@ -73,13 +73,13 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Run an Aspire AppHost interactively for development.</source>
-        <target state="translated">以交互方式运行 Aspire AppHost 以进行开发。</target>
+        <source>Run an Aspire apphost interactively for development</source>
+        <target state="needs-review-translation">在开发模式下运行 Aspire 应用主机。</target>
         <note />
       </trans-unit>
       <trans-unit id="DetachArgumentDescription">
-        <source>Run the AppHost in the background and exit after it starts.</source>
-        <target state="translated">在后台运行 AppHost，并在其启动后退出。</target>
+        <source>Run the apphost in the background and exit after it starts</source>
+        <target state="needs-review-translation">在后台运行 AppHost，并在其启动后退出。</target>
         <note />
       </trans-unit>
       <trans-unit id="Endpoints">
@@ -88,13 +88,13 @@
         <note />
       </trans-unit>
       <trans-unit id="FailedToStartAppHost">
-        <source>Failed to start the AppHost.</source>
-        <target state="translated">启动 AppHost 失败。</target>
+        <source>Failed to start the apphost.</source>
+        <target state="needs-review-translation">启动 AppHost 失败。</target>
         <note />
       </trans-unit>
       <trans-unit id="ForceArgumentDescription">
-        <source>Stop any running instance of the AppHost without prompting.</source>
-        <target state="translated">在不提示的情况下停止任何正在运行的 AppHost 实例。</target>
+        <source>Stop any running instance of the apphost without prompting</source>
+        <target state="needs-review-translation">在不提示的情况下停止任何正在运行的 AppHost 实例。</target>
         <note />
       </trans-unit>
       <trans-unit id="FormatRequiresDetach">
@@ -113,18 +113,18 @@
         <note />
       </trans-unit>
       <trans-unit id="JsonArgumentDescription">
-        <source>Output format for detached AppHost results.</source>
-        <target state="translated">分离的 AppHost 结果的输出格式。</target>
+        <source>Output format for detached apphost results</source>
+        <target state="needs-review-translation">以 JSON 格式输出结果(仅在使用 --detach 时有效)。</target>
         <note />
       </trans-unit>
       <trans-unit id="IsolatedArgumentDescription">
-        <source>Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously.</source>
-        <target state="translated">使用随机端口和独立的用户机密以独立模式运行，支持多个实例同时运行。</target>
+        <source>Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously</source>
+        <target state="needs-review-translation">使用随机端口和独立的用户机密以独立模式运行，支持多个实例同时运行。</target>
         <note />
       </trans-unit>
       <trans-unit id="IsolatedModeRunningInstanceWarning">
-        <source>A running instance of this AppHost was found and will be stopped. To run multiple isolated instances simultaneously, run from different directories such as git worktree directories.</source>
-        <target state="translated">已发现此 AppHost 有正在运行的实例，并且该实例将停止。若要同时运行多个独立实例，请从不同目录(如 Git 工作树目录)运行。</target>
+        <source>A running instance of this apphost was found and will be stopped. To run multiple isolated instances simultaneously, run from different directories such as git worktree directories.</source>
+        <target state="needs-review-translation">已发现此 AppHost 有正在运行的实例，并且该实例将停止。若要同时运行多个独立实例，请从不同目录(如 Git 工作树目录)运行。</target>
         <note />
       </trans-unit>
       <trans-unit id="Logs">
@@ -133,8 +133,8 @@
         <note />
       </trans-unit>
       <trans-unit id="NoBuildArgumentDescription">
-        <source>Do not build or restore the project before running.</source>
-        <target state="translated">运行之前不要生成或还原项目。</target>
+        <source>Do not build or restore the project before running</source>
+        <target state="new">Do not build or restore the project before running</target>
         <note />
       </trans-unit>
       <trans-unit id="NoBuildNotSupportedWithWatchMode">
@@ -153,8 +153,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="translated">Aspire AppHost 项目文件的路径。</target>
+        <source>The path to the Aspire apphost project file</source>
+        <target state="needs-review-translation">Aspire AppHost 项目文件的路径。</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeRun">
@@ -173,8 +173,8 @@
         <note />
       </trans-unit>
       <trans-unit id="StartDebugSessionArgumentDescription">
-        <source>Whether to start a debug session, if running in an Aspire Terminal.</source>
-        <target state="translated">是否在 Aspire 终端中运行时启动调试会话。</target>
+        <source>Whether to start a debug session, if running in an Aspire Terminal</source>
+        <target state="needs-review-translation">是否在 Aspire 终端中运行时启动调试会话。</target>
         <note />
       </trans-unit>
       <trans-unit id="StartingAppHost">
@@ -203,8 +203,8 @@
         <note>The state of the resource, eg Running</note>
       </trans-unit>
       <trans-unit id="TimeoutWaitingForAppHost">
-        <source>Timeout waiting for AppHost to start.</source>
-        <target state="translated">等待 AppHost 启动超时。</target>
+        <source>Timeout waiting for apphost to start.</source>
+        <target state="needs-review-translation">等待 AppHost 启动超时。</target>
         <note />
       </trans-unit>
       <trans-unit id="Type">
@@ -218,8 +218,8 @@
         <note />
       </trans-unit>
       <trans-unit id="WatchArgumentDescription">
-        <source>Start project resources in watch mode.</source>
-        <target state="translated">在监视模式下启动项目资源。</target>
+        <source>Start project resources in watch mode</source>
+        <target state="needs-review-translation">在监视模式下启动项目资源。</target>
         <note />
       </trans-unit>
     </body>

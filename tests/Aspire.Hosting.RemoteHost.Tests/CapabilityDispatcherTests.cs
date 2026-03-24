@@ -3,8 +3,8 @@
 
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Ats;
 using Aspire.Hosting.RemoteHost.Ats;
+using Aspire.TypeSystem;
 using Xunit;
 
 namespace Aspire.Hosting.RemoteHost.Tests;
@@ -278,6 +278,29 @@ public class CapabilityDispatcherTests
     }
 
     [Fact]
+    public void Invoke_CancellationTokenPropertyResultCanBePassedToCapability()
+    {
+        var handles = new HandleRegistry();
+        var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles), [typeof(TestCancellationTokenContext).Assembly]);
+        using var cts = new CancellationTokenSource();
+
+        var context = new TestCancellationTokenContext { CancellationToken = cts.Token };
+        var handleId = handles.Register(context, "Aspire.Hosting.RemoteHost.Tests/Aspire.Hosting.RemoteHost.Tests.TestCancellationTokenContext");
+        var getArgs = new JsonObject { ["context"] = new JsonObject { ["$handle"] = handleId } };
+
+        var tokenResult = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/TestCancellationTokenContext.cancellationToken", getArgs);
+
+        Assert.NotNull(tokenResult);
+        cts.Cancel();
+
+        var invokeArgs = new JsonObject { ["cancellationToken"] = tokenResult };
+        var result = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/canObserveCancellation", invokeArgs);
+
+        Assert.NotNull(result);
+        Assert.True(result.GetValue<bool>());
+    }
+
+    [Fact]
     public void Constructor_RegistersVersionedContextTypeProperties()
     {
         var dispatcher = CreateDispatcher(typeof(VersionedContextType).Assembly);
@@ -544,6 +567,38 @@ public class CapabilityDispatcherTests
     }
 
     [Fact]
+    public void Invoke_ValueTaskInstanceMethod()
+    {
+        var handles = new HandleRegistry();
+        var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles), [typeof(TestTypeWithMethods).Assembly]);
+
+        var context = new TestTypeWithMethods();
+        var handleId = handles.Register(context, "Aspire.Hosting.RemoteHost.Tests/Aspire.Hosting.RemoteHost.Tests.TestTypeWithMethods");
+        var args = new JsonObject
+        {
+            ["context"] = new JsonObject { ["$handle"] = handleId },
+            ["input"] = "value-task"
+        };
+
+        var result = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/TestTypeWithMethods.processValueTaskAsync", args);
+
+        Assert.NotNull(result);
+        Assert.Equal("VALUE-TASK", result.GetValue<string>());
+    }
+
+    [Fact]
+    public void Invoke_StaticValueTaskMethod()
+    {
+        var dispatcher = CreateDispatcher(typeof(TestCapabilities).Assembly);
+        var args = new JsonObject { ["value"] = "value-task" };
+
+        var result = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/asyncValueTaskWithResult", args);
+
+        Assert.NotNull(result);
+        Assert.Equal("VALUE-TASK", result.GetValue<string>());
+    }
+
+    [Fact]
     public void Constructor_SkipsNonPublicMethods()
     {
         var dispatcher = CreateDispatcher(typeof(TestTypeWithMethods).Assembly);
@@ -676,6 +731,31 @@ public class CapabilityDispatcherTests
 
         Assert.NotNull(result);
         Assert.NotEqual(callerThreadId, result.GetValue<int>());
+    }
+
+    [Fact]
+    public void Invoke_ValueTaskCapabilityWithBackgroundThreadOptIn_RunsInline()
+    {
+        var dispatcher = CreateDispatcher(typeof(TestCapabilitiesWithBackgroundThreadDispatch).Assembly);
+        var callerThreadId = Environment.CurrentManagedThreadId;
+
+        var result = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/valueTaskBackgroundThreadProbe", null);
+
+        Assert.NotNull(result);
+        Assert.Equal(callerThreadId, result.GetValue<int>());
+    }
+
+    [Fact]
+    public void Invoke_NonGenericValueTaskCapabilityWithBackgroundThreadOptIn_RunsInline()
+    {
+        var dispatcher = CreateDispatcher(typeof(TestCapabilitiesWithBackgroundThreadDispatch).Assembly);
+        var callerThreadId = Environment.CurrentManagedThreadId;
+
+        TestCapabilitiesWithBackgroundThreadDispatch.ResetLastObservedThreadId();
+
+        dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/nonGenericValueTaskBackgroundThreadProbe", null);
+
+        Assert.Equal(callerThreadId, TestCapabilitiesWithBackgroundThreadDispatch.LastObservedThreadId);
     }
 
     [Fact]
@@ -1398,11 +1478,24 @@ internal static class TestCapabilities
         return value.ToUpperInvariant();
     }
 
+    [AspireExport("asyncValueTaskWithResult", Description = "Async method returning ValueTask<T>")]
+    public static async ValueTask<string> AsyncValueTaskWithResult(string value)
+    {
+        await Task.Delay(1);
+        return value.ToUpperInvariant();
+    }
+
     [AspireExport("asyncThrows", Description = "Async method that throws")]
     public static async Task<string> AsyncThrows(string value)
     {
         await Task.Delay(1);
         throw new InvalidOperationException("Async error: " + value);
+    }
+
+    [AspireExport("canObserveCancellation", Description = "Tests cancellation token round-tripping")]
+    public static bool CanObserveCancellation(CancellationToken cancellationToken)
+    {
+        return cancellationToken.IsCancellationRequested;
     }
 }
 
@@ -1418,6 +1511,12 @@ internal sealed class TestContextType
 
     // This property should be skipped - IDisposable is not ATS-compatible
     public IDisposable? NonAtsProperty { get; set; }
+}
+
+[AspireExport(ExposeProperties = true)]
+internal sealed class TestCancellationTokenContext
+{
+    public CancellationToken CancellationToken { get; set; }
 }
 
 /// <summary>
@@ -1485,6 +1584,12 @@ internal sealed class TestTypeWithMethods
         return input.ToUpperInvariant();
     }
 
+    public async ValueTask<string> ProcessValueTaskAsync(string input)
+    {
+        await Task.Delay(1);
+        return input.ToUpperInvariant();
+    }
+
     // This should NOT be exposed - private method
 #pragma warning disable IDE0051 // Remove unused private member - testing that private methods are not exposed
     private void PrivateMethod()
@@ -1540,6 +1645,13 @@ internal static class TestCapabilitiesWithCallback
 
 internal static class TestCapabilitiesWithBackgroundThreadDispatch
 {
+    public static int LastObservedThreadId { get; private set; }
+
+    public static void ResetLastObservedThreadId()
+    {
+        LastObservedThreadId = 0;
+    }
+
     [AspireExport("syncInlineThreadProbe", Description = "Captures the current thread for inline sync invocation")]
     public static int SyncInlineThreadProbe()
     {
@@ -1550,6 +1662,19 @@ internal static class TestCapabilitiesWithBackgroundThreadDispatch
     public static int SyncBackgroundThreadProbe()
     {
         return Environment.CurrentManagedThreadId;
+    }
+
+    [AspireExport("valueTaskBackgroundThreadProbe", Description = "Captures the current thread for ValueTask<T> invocation", RunSyncOnBackgroundThread = true)]
+    public static ValueTask<int> ValueTaskBackgroundThreadProbe()
+    {
+        return ValueTask.FromResult(Environment.CurrentManagedThreadId);
+    }
+
+    [AspireExport("nonGenericValueTaskBackgroundThreadProbe", Description = "Captures the current thread for ValueTask invocation", RunSyncOnBackgroundThread = true)]
+    public static ValueTask NonGenericValueTaskBackgroundThreadProbe()
+    {
+        LastObservedThreadId = Environment.CurrentManagedThreadId;
+        return ValueTask.CompletedTask;
     }
 }
 

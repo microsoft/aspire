@@ -52,10 +52,16 @@ internal enum AspireTemplate
     PythonReact,
 
     /// <summary>
-    /// Empty AppHost — 5th option.
-    /// Prompts: template, language (C#), project name, output path, URLs. No Redis or test project prompt.
+    /// Empty (C# AppHost) — 5th option.
+    /// Prompts: template, project name, output path, URLs. No language, Redis, or test project prompt.
     /// </summary>
     EmptyAppHost,
+
+    /// <summary>
+    /// Empty (TypeScript AppHost) — 6th option.
+    /// Prompts: template, project name, output path, URLs. No language, Redis, or test project prompt.
+    /// </summary>
+    TypeScriptEmptyAppHost,
 }
 
 /// <summary>
@@ -498,6 +504,34 @@ internal static class Hex1bTestHelpers
     }
 
     /// <summary>
+    /// Runs <c>aspire init --language csharp</c> and handles the NuGet.config and agent init prompts.
+    /// Explicitly waits for the NuGet.config prompt (or init completion) rather than using a blind timer,
+    /// then declines the agent init prompt so the command exits cleanly.
+    /// </summary>
+    internal static Hex1bTerminalInputSequenceBuilder AspireInit(
+        this Hex1bTerminalInputSequenceBuilder builder,
+        SequenceCounter counter)
+    {
+        var waitingForNuGetConfigPrompt = new CellPatternSearcher()
+            .Find("NuGet.config");
+
+        var waitingForInitComplete = new CellPatternSearcher()
+            .Find("Aspire initialization complete");
+
+        return builder
+            .Type("aspire init --language csharp")
+            .Enter()
+            // NuGet.config prompt may or may not appear depending on environment.
+            // Wait for either the NuGet.config prompt or init completion.
+            .WaitUntil(s => waitingForNuGetConfigPrompt.Search(s).Count > 0
+                || waitingForInitComplete.Search(s).Count > 0, TimeSpan.FromMinutes(2))
+            .Enter()  // Dismiss NuGet.config prompt if present
+            .WaitUntil(s => waitingForInitComplete.Search(s).Count > 0, TimeSpan.FromMinutes(2))
+            .DeclineAgentInitPrompt()
+            .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(2));
+    }
+
+    /// <summary>
     /// Installs the Aspire CLI Bundle from a specific pull request's artifacts.
     /// The bundle is a self-contained distribution that includes:
     /// - Native AOT Aspire CLI
@@ -522,14 +556,14 @@ internal static class Hex1bTestHelpers
         if (OperatingSystem.IsWindows())
         {
             // PowerShell: Get PR head SHA, then fetch and run install script from that SHA
-            command = $"$ref = (gh api repos/dotnet/aspire/pulls/{prNumber} --jq '.head.sha'); " +
-                      $"iex \"& {{ $(irm https://raw.githubusercontent.com/dotnet/aspire/$ref/eng/scripts/get-aspire-cli-pr.ps1) }} {prNumber}\"";
+            command = $"$ref = (gh api repos/microsoft/aspire/pulls/{prNumber} --jq '.head.sha'); " +
+                      $"iex \"& {{ $(irm https://raw.githubusercontent.com/microsoft/aspire/$ref/eng/scripts/get-aspire-cli-pr.ps1) }} {prNumber}\"";
         }
         else
         {
             // Bash: Get PR head SHA, then fetch and run install script from that SHA
-            command = $"ref=$(gh api repos/dotnet/aspire/pulls/{prNumber} --jq '.head.sha') && " +
-                      $"curl -fsSL https://raw.githubusercontent.com/dotnet/aspire/$ref/eng/scripts/get-aspire-cli-pr.sh | bash -s -- {prNumber}";
+            command = $"ref=$(gh api repos/microsoft/aspire/pulls/{prNumber} --jq '.head.sha') && " +
+                      $"curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/$ref/eng/scripts/get-aspire-cli-pr.sh | bash -s -- {prNumber}";
         }
 
         return builder

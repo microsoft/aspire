@@ -118,10 +118,10 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>The Aspire CLI can be used to create, run, and publish Aspire-based applications.</value>
+    <value>The Aspire CLI can be used to create, run, and publish Aspire-based applications</value>
   </data>
   <data name="BannerArgumentDescription" xml:space="preserve">
-    <value>Display the animated Aspire CLI welcome banner.</value>
+    <value>Display the animated Aspire CLI welcome banner</value>
   </data>
   <data name="BannerWelcomeText" xml:space="preserve">
     <value>Welcome to the</value>
@@ -130,25 +130,25 @@
     <value>CLI — version {0}</value>
   </data>
   <data name="DebugArgumentDescription" xml:space="preserve">
-    <value>Enable debug logging to the console.</value>
+    <value>Enable debug logging to the console</value>
   </data>
   <data name="DebugLevelArgumentDescription" xml:space="preserve">
-    <value>Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical).</value>
+    <value>Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)</value>
   </data>
   <data name="NoLogoArgumentDescription" xml:space="preserve">
-    <value>Suppress the startup banner and telemetry notice.</value>
+    <value>Suppress the startup banner and telemetry notice</value>
   </data>
   <data name="WaitForDebuggerArgumentDescription" xml:space="preserve">
-    <value>Wait for a debugger to attach before executing the command.</value>
+    <value>Wait for a debugger to attach before executing the command</value>
   </data>
   <data name="CliWaitForDebuggerArgumentDescription" xml:space="preserve">
-    <value>Wait for a debugger to attach before executing the command.</value>
+    <value>Wait for a debugger to attach before executing the command</value>
   </data>
   <data name="WaitingForDebugger" xml:space="preserve">
     <value>Waiting for debugger to attach to CLI process ID: {0}</value>
   </data>
   <data name="NonInteractiveArgumentDescription" xml:space="preserve">
-    <value>Run the command in non-interactive mode, disabling all interactive prompts and spinners.</value>
+    <value>Run the command in non-interactive mode, disabling all interactive prompts and spinners</value>
   </data>
   <data name="FirstTimeUseWelcome" xml:space="preserve">
     <value>Welcome to Aspire! Learn more about Aspire at https://aspire.dev</value>

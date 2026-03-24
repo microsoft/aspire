@@ -7,7 +7,7 @@ using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Commands.Sdk;
-using Aspire.Hosting.Ats;
+using Aspire.TypeSystem;
 using Spectre.Console;
 using StreamJsonRpc;
 using StreamJsonRpc.Protocol;

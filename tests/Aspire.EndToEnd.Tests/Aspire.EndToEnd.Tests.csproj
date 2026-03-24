@@ -2,6 +2,8 @@
 
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <SkipTests Condition="'$(IsGitHubActionsRunner)' == 'true' and '$(RunOuterloopTests)' != 'true'">true</SkipTests>
+    <GithubActionsRunnerLinux>8-core-ubuntu-latest</GithubActionsRunnerLinux>
     <!-- Only run on Linux; no docker support on Windows yet -->
     <RunOnGithubActionsWindows>false</RunOnGithubActionsWindows>
     <RunOnAzdoCIWindows>false</RunOnAzdoCIWindows>

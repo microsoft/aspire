@@ -14,7 +14,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Aspire.Hosting.Foundry;
 
 /// <summary>
-/// The Azure Cognitive Services project resource that can be used for Microsoft Foundry AI agents.
+/// The Microsoft Foundry project resource that can be used for Microsoft Foundry AI agents.
 ///
 /// This also functions as an Aspire compute environment resource for deployment.
 /// </summary>
@@ -24,7 +24,7 @@ public class AzureCognitiveServicesProjectResource :
     IAzureComputeEnvironmentResource
 {
     /// <summary>
-    /// Creates a new Azure Cognitive Services project resource.
+    /// Creates a new Microsoft Foundry project resource.
     /// </summary>
     /// <param name="name">The name of the resource.</param>
     /// <param name="configureInfrastructure">Configures the underlying Azure resource using Azure.Provisioning.</param>
@@ -101,7 +101,7 @@ public class AzureCognitiveServicesProjectResource :
     public ReferenceExpression UriExpression => ReferenceExpression.Create($"{Endpoint}");
 
     /// <summary>
-    /// Gets the "endpoint" output reference from the Azure Cognitive Services project resource.
+    /// Gets the "endpoint" output reference from the Microsoft Foundry project resource.
     ///
     /// This will be used to instantiate the AI project clients.
     ///
@@ -226,7 +226,7 @@ public class AzureCognitiveServicesProjectResource :
 }
 
 /// <summary>
-/// Configuration for an Azure Cognitive Services capability host.
+/// Configuration for a Microsoft Foundry capability host.
 /// </summary>
 /// <param name="name">The name of the capability host.</param>
 public class CapabilityHostConfiguration(string name)
@@ -279,7 +279,7 @@ public class CapabilityHostConfiguration(string name)
 }
 
 /// <summary>
-/// A fluent builder for configuring a capability host on an Azure Cognitive Services project.
+/// A fluent builder for configuring a capability host on a Microsoft Foundry project.
 /// </summary>
 public class CapabilityHostBuilder(IResourceBuilder<AzureCognitiveServicesProjectResource> projectBuilder, CapabilityHostConfiguration configuration)
 {

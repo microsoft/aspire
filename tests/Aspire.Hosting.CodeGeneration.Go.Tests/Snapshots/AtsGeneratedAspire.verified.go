@@ -102,12 +102,14 @@ func NewIDistributedApplicationBuilder(handle *Handle, client *AspireClient) *ID
 }
 
 // AddTestRedis adds a test Redis resource
-func (s *IDistributedApplicationBuilder) AddTestRedis(name string, port float64) (*TestRedisResource, error) {
+func (s *IDistributedApplicationBuilder) AddTestRedis(name string, port *float64) (*TestRedisResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["name"] = SerializeValue(name)
-	reqArgs["port"] = SerializeValue(port)
+	if port != nil {
+		reqArgs["port"] = SerializeValue(port)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/addTestRedis", reqArgs)
 	if err != nil {
 		return nil, err
@@ -308,12 +310,16 @@ func NewTestDatabaseResource(handle *Handle, client *AspireClient) *TestDatabase
 }
 
 // WithOptionalString adds an optional string parameter
-func (s *TestDatabaseResource) WithOptionalString(value string, enabled bool) (*IResource, error) {
+func (s *TestDatabaseResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["value"] = SerializeValue(value)
-	reqArgs["enabled"] = SerializeValue(enabled)
+	if value != nil {
+		reqArgs["value"] = SerializeValue(value)
+	}
+	if enabled != nil {
+		reqArgs["enabled"] = SerializeValue(enabled)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalString", reqArgs)
 	if err != nil {
 		return nil, err
@@ -512,11 +518,13 @@ func (s *TestDatabaseResource) WithCancellableOperation(operation func(...any) a
 }
 
 // WithDataVolume adds a data volume
-func (s *TestDatabaseResource) WithDataVolume(name string) (*TestDatabaseResource, error) {
+func (s *TestDatabaseResource) WithDataVolume(name *string) (*TestDatabaseResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["name"] = SerializeValue(name)
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withDataVolume", reqArgs)
 	if err != nil {
 		return nil, err
@@ -626,12 +634,14 @@ func NewTestRedisResource(handle *Handle, client *AspireClient) *TestRedisResour
 }
 
 // AddTestChildDatabase adds a child database to a test Redis resource
-func (s *TestRedisResource) AddTestChildDatabase(name string, databaseName string) (*TestDatabaseResource, error) {
+func (s *TestRedisResource) AddTestChildDatabase(name string, databaseName *string) (*TestDatabaseResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["name"] = SerializeValue(name)
-	reqArgs["databaseName"] = SerializeValue(databaseName)
+	if databaseName != nil {
+		reqArgs["databaseName"] = SerializeValue(databaseName)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/addTestChildDatabase", reqArgs)
 	if err != nil {
 		return nil, err
@@ -640,11 +650,13 @@ func (s *TestRedisResource) AddTestChildDatabase(name string, databaseName strin
 }
 
 // WithPersistence configures the Redis resource with persistence
-func (s *TestRedisResource) WithPersistence(mode TestPersistenceMode) (*TestRedisResource, error) {
+func (s *TestRedisResource) WithPersistence(mode *TestPersistenceMode) (*TestRedisResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["mode"] = SerializeValue(mode)
+	if mode != nil {
+		reqArgs["mode"] = SerializeValue(mode)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withPersistence", reqArgs)
 	if err != nil {
 		return nil, err
@@ -653,12 +665,16 @@ func (s *TestRedisResource) WithPersistence(mode TestPersistenceMode) (*TestRedi
 }
 
 // WithOptionalString adds an optional string parameter
-func (s *TestRedisResource) WithOptionalString(value string, enabled bool) (*IResource, error) {
+func (s *TestRedisResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["value"] = SerializeValue(value)
-	reqArgs["enabled"] = SerializeValue(enabled)
+	if value != nil {
+		reqArgs["value"] = SerializeValue(value)
+	}
+	if enabled != nil {
+		reqArgs["enabled"] = SerializeValue(enabled)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalString", reqArgs)
 	if err != nil {
 		return nil, err
@@ -970,12 +986,16 @@ func (s *TestRedisResource) WithMultiParamHandleCallback(callback func(...any) a
 }
 
 // WithDataVolume adds a data volume with persistence
-func (s *TestRedisResource) WithDataVolume(name string, isReadOnly bool) (*TestRedisResource, error) {
+func (s *TestRedisResource) WithDataVolume(name *string, isReadOnly *bool) (*TestRedisResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["name"] = SerializeValue(name)
-	reqArgs["isReadOnly"] = SerializeValue(isReadOnly)
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if isReadOnly != nil {
+		reqArgs["isReadOnly"] = SerializeValue(isReadOnly)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withDataVolume", reqArgs)
 	if err != nil {
 		return nil, err
@@ -1092,12 +1112,16 @@ func NewTestVaultResource(handle *Handle, client *AspireClient) *TestVaultResour
 }
 
 // WithOptionalString adds an optional string parameter
-func (s *TestVaultResource) WithOptionalString(value string, enabled bool) (*IResource, error) {
+func (s *TestVaultResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["value"] = SerializeValue(value)
-	reqArgs["enabled"] = SerializeValue(enabled)
+	if value != nil {
+		reqArgs["value"] = SerializeValue(value)
+	}
+	if enabled != nil {
+		reqArgs["enabled"] = SerializeValue(enabled)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalString", reqArgs)
 	if err != nil {
 		return nil, err

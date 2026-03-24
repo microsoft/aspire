@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.DotNet;
+using Microsoft.AspNetCore.Certificates.Generation;
 
 namespace Aspire.Cli.Certificates;
 
@@ -11,16 +11,17 @@ namespace Aspire.Cli.Certificates;
 internal interface ICertificateToolRunner
 {
     /// <summary>
-    /// Checks certificate trust status using machine-readable output.
+    /// Checks certificate trust status, returning structured certificate information.
     /// </summary>
-    Task<(int ExitCode, CertificateTrustResult? Result)> CheckHttpCertificateMachineReadableAsync(
-        DotNetCliRunnerInvocationOptions options,
-        CancellationToken cancellationToken);
+    CertificateTrustResult CheckHttpCertificate();
 
     /// <summary>
-    /// Trusts the HTTPS development certificate.
+    /// Trusts the HTTPS development certificate, creating one if necessary.
     /// </summary>
-    Task<int> TrustHttpCertificateAsync(
-        DotNetCliRunnerInvocationOptions options,
-        CancellationToken cancellationToken);
+    EnsureCertificateResult TrustHttpCertificate();
+
+    /// <summary>
+    /// Removes all HTTPS development certificates.
+    /// </summary>
+    CertificateCleanResult CleanHttpCertificate();
 }

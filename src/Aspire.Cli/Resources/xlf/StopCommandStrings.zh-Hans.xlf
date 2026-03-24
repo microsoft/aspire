@@ -3,38 +3,38 @@
   <file datatype="xml" source-language="en" target-language="zh-Hans" original="../StopCommandStrings.resx">
     <body>
       <trans-unit id="AllOptionDescription">
-        <source>Stop all running AppHosts.</source>
-        <target state="translated">停止所有正在运行的 AppHost。</target>
+        <source>Stop all running apphosts</source>
+        <target state="new">Stop all running apphosts</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostStoppedSuccessfully">
-        <source>AppHost stopped successfully.</source>
-        <target state="translated">已成功停止 AppHost。</target>
+        <source>Apphost stopped successfully.</source>
+        <target state="needs-review-translation">已成功停止 AppHost。</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Stop a running apphost.</source>
-        <target state="translated">停止正在运行的应用主机。</target>
+        <source>Stop a running apphost</source>
+        <target state="needs-review-translation">停止一个正在运行的 Aspire AppHost。</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedToStopAppHost">
-        <source>Failed to stop the AppHost.</source>
-        <target state="translated">停止 AppHost 失败。</target>
+        <source>Failed to stop the apphost.</source>
+        <target state="needs-review-translation">停止 AppHost 失败。</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleAppHostsNonInteractive">
-        <source>Multiple AppHosts are running. Use {0} to specify which one to stop, or use {1} to stop all of them.</source>
-        <target state="translated">多个 AppHost 正在运行。使用 {0} 指定要停止的项，或使用 {1} 停止所有项。</target>
+        <source>Multiple apphosts are running. Use {0} to specify which one to stop, or use {1} to stop all of them.</source>
+        <target state="new">Multiple apphosts are running. Use {0} to specify which one to stop, or use {1} to stop all of them.</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleAppHostsRunning">
-        <source>Multiple AppHosts are running. Use --apphost to specify which one to stop, or select one:</source>
-        <target state="translated">多个 AppHost 正在运行。使用 --apphost 指定要停止哪项，或选择一项:</target>
+        <source>Multiple apphosts are running. Use --apphost to specify which one to stop, or select one:</source>
+        <target state="needs-review-translation">多个 AppHost 正在运行。使用 --apphost 指定要停止哪一个，或者选择一个:</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="translated">Aspire AppHost 项目文件的路径。</target>
+        <source>The path to the Aspire apphost project file</source>
+        <target state="needs-review-translation">Aspire AppHost 项目文件的路径。</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">

@@ -145,7 +145,7 @@ internal static class ResourceExtensions
         // (matching the core framework's SetBothPortsEnvVariables behavior). This dedup
         // remains as a safety net for edge cases where multiple endpoints might still
         // resolve to the same port value.
-        // See: https://github.com/dotnet/aspire/issues/14029
+        // See: https://github.com/microsoft/aspire/issues/14029
         var addedPorts = new HashSet<(string Port, string Protocol)>();
         foreach (var (_, mapping) in context.EndpointMappings)
         {

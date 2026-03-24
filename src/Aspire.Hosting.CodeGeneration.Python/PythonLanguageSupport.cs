@@ -4,7 +4,7 @@
 using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using Aspire.Hosting.Ats;
+using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.Python;
 
@@ -284,7 +284,11 @@ public sealed class PythonLanguageSupport : ILanguageSupport
                 return false;
             }
 
-            process.WaitForExit(5000);
+            if (!process.WaitForExit(5000))
+            {
+                return false;
+            }
+
             return process.ExitCode == 0;
         }
         catch

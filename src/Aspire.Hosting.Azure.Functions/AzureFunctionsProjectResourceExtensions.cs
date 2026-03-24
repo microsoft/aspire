@@ -351,6 +351,37 @@ public static class AzureFunctionsProjectResourceExtensions
         });
     }
 
+    internal static IResourceBuilder<AzureFunctionsProjectResource>? TryWithReference(
+        IResourceBuilder<AzureFunctionsProjectResource> destination,
+        IResourceBuilder<IResource> source,
+        string? connectionName,
+        bool optional,
+        string? name)
+    {
+        if (source.Resource is not IResourceWithConnectionString || source.Resource is not IResourceWithAzureFunctionsConfig azureFunctionsConfig)
+        {
+            return null;
+        }
+
+        if (optional)
+        {
+            throw new InvalidOperationException("Optional references are not supported for Azure Functions resources.");
+        }
+
+        if (name is not null)
+        {
+            throw new InvalidOperationException("Named service references are not supported for Azure Functions resources.");
+        }
+
+        destination.WithReferenceRelationship(source.Resource);
+
+        return destination.WithEnvironment(context =>
+        {
+            connectionName ??= source.Resource.Name;
+            azureFunctionsConfig.ApplyAzureFunctionsConfiguration(context.EnvironmentVariables, connectionName);
+        });
+    }
+
     private static string CreateDefaultStorageName(this IDistributedApplicationBuilder builder)
     {
         // Use ProjectNameSha256 for stable naming across deployments regardless of path

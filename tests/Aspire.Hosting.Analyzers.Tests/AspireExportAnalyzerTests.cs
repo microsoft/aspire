@@ -1335,6 +1335,112 @@ public class AspireExportAnalyzerTests
         await test.RunAsync();
     }
 
+    [Fact]
+    public async Task MissingExportAttribute_OnAspireExportedTypeExtension_ReportsASPIREEXPORT008()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_missingExportAttribute;
+
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            [AspireExport]
+            public interface IExportedHandle
+            {
+            }
+
+            public static class TestExports
+            {
+                public static void Configure(this IExportedHandle handle) { }
+            }
+            """,
+            [new DiagnosticResult(diagnostic).WithLocation(12, 24).WithArguments("Configure", "Add [AspireExport] if ATS-compatible, or [AspireExportIgnore] with a reason.")]);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task MissingExportAttribute_OnAssemblyExportedTypeExtension_ReportsASPIREEXPORT008()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_missingExportAttribute;
+
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            [assembly: AspireExport(typeof(AssemblyExportedHandle))]
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public class AssemblyExportedHandle
+            {
+            }
+
+            public static class TestExports
+            {
+                public static void Configure(this AssemblyExportedHandle handle) { }
+            }
+            """,
+            [new DiagnosticResult(diagnostic).WithLocation(13, 24).WithArguments("Configure", "Add [AspireExport] if ATS-compatible, or [AspireExportIgnore] with a reason.")]);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task MissingExportAttribute_OnImplicitlyExportedResourceTypeExtension_ReportsASPIREEXPORT008()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_missingExportAttribute;
+
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+            using Aspire.Hosting.ApplicationModel;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public class MyResource : IResource
+            {
+                public string Name => "test";
+                public ResourceAnnotationCollection Annotations { get; } = new();
+            }
+
+            public static class ExportedMethods
+            {
+                [AspireExport("addThing")]
+                public static IResourceBuilder<MyResource> AddThing(this IDistributedApplicationBuilder builder, string name) => throw null!;
+            }
+
+            public static class ResourceExtensions
+            {
+                public static void Configure(this MyResource resource) { }
+            }
+            """,
+            [new DiagnosticResult(diagnostic).WithLocation(20, 24).WithArguments("Configure", "Add [AspireExport] if ATS-compatible, or [AspireExportIgnore] with a reason.")]);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task MissingExportAttribute_OnExportedTypeInternalExtensionMethod_NoDiagnostics()
+    {
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            [AspireExport]
+            public interface IExportedHandle
+            {
+            }
+
+            public static class TestExports
+            {
+                internal static void Configure(this IExportedHandle handle) { }
+            }
+            """, []);
+
+        await test.RunAsync();
+    }
+
     // ASPIREEXPORT009 Tests - Export name should be unique for target-specific methods
 
     [Fact]

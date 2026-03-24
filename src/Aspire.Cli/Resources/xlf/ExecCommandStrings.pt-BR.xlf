@@ -4,18 +4,18 @@
     <body>
       <trans-unit id="CommandArgumentDescription">
         <source>The command to execute in the target resource's context. Commands can be specified directly after options or after a -- separator.</source>
-        <target state="translated">O comando a ser executado no contexto do recurso alvo. Os comandos podem ser especificados diretamente após as opções ou após um separador --.</target>
+        <target state="needs-review-translation">O comando a ser executado no contexto do recurso alvo. Os comandos podem ser especificados diretamente após as opções ou após um separador --.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Execute commands in the context of an Aspire application resource. Starts the AppHost, waits for resources to initialize, then runs the specified command in the target resource's environment. (Preview)
+        <source>Execute commands in the context of an Aspire application resource. Starts the apphost, waits for resources to initialize, then runs the specified command in the target resource's environment (Preview)
 
 Examples:
   aspire exec --resource api dotnet build
   aspire exec --resource api -- dotnet test --logger console
   aspire exec --start-resource worker pwsh -c "Get-Process"
     </source>
-        <target state="translated">Execute comandos no contexto de um recurso de aplicativo Aspire. Inicia o AppHost, espera os recursos serem inicializados e então executa o comando especificado no ambiente do recurso alvo. (Prévia)
+        <target state="needs-review-translation">Execute comandos no contexto de um recurso de aplicativo Aspire. Inicia o AppHost, espera os recursos serem inicializados e então executa o comando especificado no ambiente do recurso alvo. (Prévia)
 
 Exemplos:
   aspire exec --resource api dotnet build
@@ -35,8 +35,8 @@ Exemplos:
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file. If not specified, searches for a project file in the current directory.</source>
-        <target state="translated">O caminho para o arquivo de projeto Aspire AppHost. Se não especificado, procura por um arquivo de projeto no diretório atual.</target>
+        <source>The path to the Aspire apphost project file. If not specified, searches for a project file in the current directory.</source>
+        <target state="needs-review-translation">O caminho para o arquivo de projeto Aspire AppHost. Se não especificado, procura por um arquivo de projeto no diretório atual.</target>
         <note />
       </trans-unit>
       <trans-unit id="Running">
@@ -46,7 +46,7 @@ Exemplos:
       </trans-unit>
       <trans-unit id="StartTargetResourceArgumentDescription">
         <source>The name of the target resource to execute the command against. The command will only be executed after the target resource has successfully started and is running.</source>
-        <target state="translated">O nome do recurso alvo para executar o comando contra. O comando só será executado após o recurso alvo ter sido iniciado com sucesso e estar em execução.</target>
+        <target state="needs-review-translation">O nome do recurso alvo para executar o comando contra. O comando só será executado após o recurso alvo ter sido iniciado com sucesso e estar em execução.</target>
         <note />
       </trans-unit>
       <trans-unit id="StoppingAppHost">
@@ -55,8 +55,8 @@ Exemplos:
         <note />
       </trans-unit>
       <trans-unit id="TargetResourceArgumentDescription">
-        <source>The name of the target resource to execute the command against. The command will be executed as soon as the AppHost starts, without waiting for the resource to be ready.</source>
-        <target state="translated">O nome do recurso alvo para executar o comando contra. O comando será executado assim que o AppHost iniciar, sem esperar que o recurso esteja pronto.</target>
+        <source>The name of the target resource to execute the command against. The command will be executed as soon as the apphost starts, without waiting for the resource to be ready.</source>
+        <target state="needs-review-translation">O nome do recurso alvo para executar o comando contra. O comando será executado assim que o AppHost iniciar, sem esperar que o recurso esteja pronto.</target>
         <note />
       </trans-unit>
       <trans-unit id="TargetResourceNotSpecified">
@@ -65,8 +65,8 @@ Exemplos:
         <note />
       </trans-unit>
       <trans-unit id="WorkdirArgumentDescription">
-        <source>The working directory to execute the command in.</source>
-        <target state="translated">O diretório de trabalho no qual executar o comando.</target>
+        <source>The working directory to execute the command in</source>
+        <target state="needs-review-translation">O diretório de trabalho no qual executar o comando.</target>
         <note />
       </trans-unit>
     </body>

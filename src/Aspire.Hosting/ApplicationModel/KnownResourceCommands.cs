@@ -26,6 +26,11 @@ public static class KnownResourceCommands
     public static readonly string RestartCommand = "restart";
 
     /// <summary>
+    /// The command name for rebuilding a project resource.
+    /// </summary>
+    public static readonly string RebuildCommand = "rebuild";
+
+    /// <summary>
     /// The command name for setting a parameter value.
     /// </summary>
     public static readonly string SetParameterCommand = "parameter-set";

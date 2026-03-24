@@ -4,6 +4,7 @@
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Tests.Projects;
 
@@ -165,7 +166,7 @@ public class ExtensionGuestLauncherTests
         public void DisplayError(string errorMessage) => throw new NotImplementedException();
         public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false) => throw new NotImplementedException();
         public void DisplaySuccess(string message, bool allowMarkup = false) => throw new NotImplementedException();
-        public void DisplayLines(IEnumerable<(string Stream, string Line)> lines) => throw new NotImplementedException();
+        public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines) => throw new NotImplementedException();
         public void DisplayCancellationMessage() => throw new NotImplementedException();
         public Task<bool> ConfirmAsync(string promptText, bool defaultValue = true, CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public void DisplaySubtleMessage(string message, bool allowMarkup = false) => throw new NotImplementedException();

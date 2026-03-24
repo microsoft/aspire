@@ -51,9 +51,9 @@
         <source>Are you sure you want to delete the value for parameter `{0}`?
 
 The value is currently saved in [user secrets](https://aka.ms/aspire/user-secrets). You can choose to also delete it from there.</source>
-        <target state="translated">`{0}` 매개 변수의 값을 삭제하시겠습니까?
+        <target state="needs-review-translation">`{0}` 매개 변수의 값을 삭제하시겠습니까?
 
-이 값은 현재 [사용자 비밀](https://aka.ms/aspire/user-secrets)에 저장되어 있습니다. 여기에서 삭제하도록 선택할 수도 있습니다.</target>
+이 값은 현재 [사용자 비밀](https://learn.microsoft.com/aspnet/core/security/app-secrets)에 저장되어 있습니다. 여기에서 삭제하도록 선택할 수도 있습니다.</target>
         <note>Contains markdown. {0} is the parameter name.</note>
       </trans-unit>
       <trans-unit id="DeleteParameterPrimaryButtonText">
@@ -127,8 +127,8 @@ The value is currently saved in [user secrets](https://aka.ms/aspire/user-secret
         <note />
       </trans-unit>
       <trans-unit id="ParametersInputsRememberDescriptionNotConfigured">
-        <source>Requires a `UserSecretsId` to be configured in the AppHost project file. Run `aspire secret set &lt;key&gt; &lt;value&gt;` to initialize user secrets, or see [user secrets](https://aka.ms/aspire/user-secrets) for more information.</source>
-        <target state="translated">AppHost 프로젝트 파일에서 `UserSecretsId`를 구성해야 합니다. 사용자 비밀을 초기화하려면 `aspire secret set &lt;key&gt; &lt;value&gt;` 명령을 실행하거나, 자세한 내용은 [user secrets](https://aka.ms/aspire/user-secrets)에서 확인할 수 있습니다.</target>
+        <source>Requires user secrets to be configured for the AppHost. Run `aspire secret set &lt;key&gt; &lt;value&gt;` to initialize user secrets, or see [user secrets](https://aka.ms/aspire/user-secrets) for more information.</source>
+        <target state="new">Requires user secrets to be configured for the AppHost. Run `aspire secret set &lt;key&gt; &lt;value&gt;` to initialize user secrets, or see [user secrets](https://aka.ms/aspire/user-secrets) for more information.</target>
         <note />
       </trans-unit>
       <trans-unit id="ParametersInputsRememberLabel">
@@ -165,7 +165,7 @@ The value is currently saved in [user secrets](https://aka.ms/aspire/user-secret
         <source>Please provide a value for the parameter. The parameter can be saved to [user secrets](https://aka.ms/aspire/user-secrets) for future use.
 
 New parameter values may not be used until dependent resources are restarted.</source>
-        <target state="translated">매개 변수에 대한 값을 제공하세요. 나중에 사용할 수 있도록 매개 변수를 [사용자 비밀](https://aka.ms/aspire/user-secrets)에 저장할 수 있습니다.
+        <target state="needs-review-translation">매개 변수에 대한 값을 제공하세요. 나중에 사용할 수 있도록 매개 변수를 [사용자 비밀](https://learn.microsoft.com/aspnet/core/security/app-secrets)에 저장할 수 있습니다.
 
 종속 리소스를 다시 시작할 때까지 새 매개 변수 값을 사용할 수 없습니다.</target>
         <note>Contains markdown</note>

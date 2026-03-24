@@ -7,10 +7,11 @@ namespace Aspire.Cli.Tests.TestServices;
 
 /// <summary>
 /// Test implementation of <see cref="ILanguageDiscovery"/> that includes C# support for testing.
+/// Optionally accepts additional languages for polyglot scenarios.
 /// </summary>
 internal sealed class TestLanguageDiscovery : ILanguageDiscovery
 {
-    private static readonly LanguageInfo[] s_allLanguages =
+    private static readonly LanguageInfo[] s_defaultLanguages =
     [
         new LanguageInfo(
             LanguageId: new LanguageId(KnownLanguageId.CSharp),
@@ -21,19 +22,26 @@ internal sealed class TestLanguageDiscovery : ILanguageDiscovery
             AppHostFileName: null),
     ];
 
+    private readonly LanguageInfo[] _allLanguages;
+
+    public TestLanguageDiscovery(params LanguageInfo[] additionalLanguages)
+    {
+        _allLanguages = [.. s_defaultLanguages, .. additionalLanguages];
+    }
+
     public Task<IEnumerable<LanguageInfo>> GetAvailableLanguagesAsync(CancellationToken cancellationToken = default)
-        => Task.FromResult<IEnumerable<LanguageInfo>>(s_allLanguages);
+        => Task.FromResult<IEnumerable<LanguageInfo>>(_allLanguages);
 
     public Task<string?> GetPackageForLanguageAsync(LanguageId languageId, CancellationToken cancellationToken = default)
     {
-        var language = s_allLanguages.FirstOrDefault(l =>
+        var language = _allLanguages.FirstOrDefault(l =>
             string.Equals(l.LanguageId.Value, languageId.Value, StringComparison.OrdinalIgnoreCase));
         return Task.FromResult(language?.PackageName);
     }
 
     public Task<LanguageId?> DetectLanguageAsync(DirectoryInfo directory, CancellationToken cancellationToken = default)
     {
-        foreach (var language in s_allLanguages)
+        foreach (var language in _allLanguages)
         {
             foreach (var pattern in language.DetectionPatterns)
             {
@@ -60,13 +68,13 @@ internal sealed class TestLanguageDiscovery : ILanguageDiscovery
 
     public LanguageInfo? GetLanguageById(LanguageId languageId)
     {
-        return s_allLanguages.FirstOrDefault(l =>
+        return _allLanguages.FirstOrDefault(l =>
             string.Equals(l.LanguageId.Value, languageId.Value, StringComparison.OrdinalIgnoreCase));
     }
 
     public LanguageInfo? GetLanguageByFile(FileInfo file)
     {
-        return s_allLanguages.FirstOrDefault(l =>
+        return _allLanguages.FirstOrDefault(l =>
             l.DetectionPatterns.Any(p => MatchesPattern(file.Name, p)));
     }
 

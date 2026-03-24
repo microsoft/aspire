@@ -1,23 +1,27 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Azure.AI.Projects;
 using Azure.AI.Projects.OpenAI;
 
 namespace Aspire.Hosting.Foundry;
 
 /// <summary>
-/// A configuration helper for Python hosted agents.
-///
-/// This is used instead of AzureAgentVersionCreationOptions to provide better static
-/// typing of the agent definition.
+/// A configuration helper for hosted agents.
 /// </summary>
+/// <remarks>
+/// This type is used instead of <see cref="AgentVersionCreationOptions"/> to provide a strongly typed
+/// configuration surface for hosted agent definitions. When used from polyglot app hosts, only the
+/// ATS-compatible properties are exported; Azure SDK-specific members remain .NET-only.
+/// </remarks>
+[AspireExport(ExposeProperties = true)]
 public class HostedAgentConfiguration(string image)
 {
     /// <summary>
     /// The description of the hosted agent.
     /// </summary>
-    public string Description { get; set; } = "Python Hosted Agent";
+    public string Description { get; set; } = "Hosted Agent";
 
     /// <summary>
     /// Additional metadata to associate with the hosted agent.
@@ -25,22 +29,25 @@ public class HostedAgentConfiguration(string image)
     public IDictionary<string, string> Metadata { get; init; } = new Dictionary<string, string>()
     {
         { "DeployedBy", "Aspire Hosting Framework" },
-        { "DeployedOn", DateTime.UtcNow.ToString("o") }
+        { "DeployedOn", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture) }
     };
 
     /// <summary>
     /// Configuration for Responsible AI (RAI) content filtering and safety features.
     /// </summary>
+    [AspireExportIgnore(Reason = "Azure SDK-specific type not usable from polyglot hosts.")]
     public ContentFilterConfiguration? ContentFilterConfiguration { get; set; }
 
     /// <summary>
     /// Tools available to the hosted agent.
     /// </summary>
+    [AspireExportIgnore(Reason = "Azure SDK-specific type not usable from polyglot hosts.")]
     public IList<AgentTool> Tools { get; init; } = [];
 
     /// <summary>
     /// The protocols that the agent supports for ingress communication of the containers.
     /// </summary>
+    [AspireExportIgnore(Reason = "Azure SDK-specific type not usable from polyglot hosts.")]
     public IList<ProtocolVersionRecord> ContainerProtocolVersions { get; init; } = [
         new ProtocolVersionRecord(AgentCommunicationMethod.Responses, "v1")
     ];
@@ -66,7 +73,8 @@ public class HostedAgentConfiguration(string image)
     /// <summary>
     /// CPU allocation as a string.
     /// </summary>
-    public string CpuString { get => _cpu.ToString(System.Globalization.CultureInfo.InvariantCulture); }
+    [AspireExportIgnore(Reason = "Derived formatting property used internally by Azure provisioning.")]
+    public string CpuString { get => _cpu.ToString(CultureInfo.InvariantCulture); }
 
     /// <summary>
     /// Memory allocation for each hosted agent instance, in GiB.
@@ -88,7 +96,8 @@ public class HostedAgentConfiguration(string image)
     /// <summary>
     /// Memory allocation as a string.
     /// </summary>
-    public string MemoryString { get => Memory.ToString(System.Globalization.CultureInfo.InvariantCulture) + "Gi"; }
+    [AspireExportIgnore(Reason = "Derived formatting property used internally by Azure provisioning.")]
+    public string MemoryString { get => Memory.ToString(CultureInfo.InvariantCulture) + "Gi"; }
 
     /// <summary>
     /// Environment variables to set in the hosted agent container.
@@ -98,6 +107,7 @@ public class HostedAgentConfiguration(string image)
     /// <summary>
     /// The fully qualified container image name for the hosted agent.
     /// </summary>
+    [AspireExportIgnore(Reason = "Image comes from the executable resource and is not configured from polyglot hosted agent callbacks.")]
     public string Image { get; set; } = image;
 
     /// <summary>

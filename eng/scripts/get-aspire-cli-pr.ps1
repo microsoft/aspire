@@ -71,7 +71,7 @@
 
 .EXAMPLE
     Piped execution
-    iex "& { $(irm https://raw.githubusercontent.com/dotnet/aspire/main/eng/scripts/get-aspire-cli-pr.ps1) } <PR_NUMBER>
+    iex "& { $(irm https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.ps1) } <PR_NUMBER>
 
 .NOTES
     Requires GitHub CLI (gh) to be installed and authenticated
@@ -79,7 +79,7 @@
     VS Code extension installation requires VS Code CLI (code) to be available in PATH
 
 .PARAMETER ASPIRE_REPO (environment variable)
-    Override repository (owner/name). Default: dotnet/aspire
+    Override repository (owner/name). Default: microsoft/aspire
     Example: $env:ASPIRE_REPO = 'myfork/aspire'
 #>
 
@@ -128,7 +128,7 @@ $Script:AspireCliArtifactNamePrefix = "aspire-cli"
 $Script:ExtensionArtifactName = "aspire-extension"
 $Script:IsModernPowerShell = $PSVersionTable.PSVersion.Major -ge 6 -and $PSVersionTable.PSEdition -eq "Core"
 $Script:HostOS = "unset"
-$Script:Repository = if ($env:ASPIRE_REPO -and $env:ASPIRE_REPO.Trim()) { $env:ASPIRE_REPO.Trim() } else { 'dotnet/aspire' }
+$Script:Repository = if ($env:ASPIRE_REPO -and $env:ASPIRE_REPO.Trim()) { $env:ASPIRE_REPO.Trim() } else { 'microsoft/aspire' }
 $Script:GHReposBase = "repos/$($Script:Repository)"
 
 # True if the script is executed from a file (pwsh -File … or .\get-aspire-cli-pr.ps1)
@@ -299,11 +299,11 @@ function Get-MachineArchitecture {
                                 { @("x86_64", "amd64") -contains $_ } { return "x64" }
                                 { @("aarch64", "arm64") -contains $_ } { return "arm64" }
                                 default {
-                                    throw "Architecture '$unameArch' not supported. If you think this is a bug, report it at https://github.com/dotnet/aspire/issues"
+                                    throw "Architecture '$unameArch' not supported. If you think this is a bug, report it at https://github.com/microsoft/aspire/issues"
                                 }
                             }
                         } else {
-                            throw "Architecture '$runtimeArch' not supported (uname unavailable). If you think this is a bug, report it at https://github.com/dotnet/aspire/issues"
+                            throw "Architecture '$runtimeArch' not supported (uname unavailable). If you think this is a bug, report it at https://github.com/microsoft/aspire/issues"
                         }
                     }
                 }
@@ -313,7 +313,7 @@ function Get-MachineArchitecture {
             }
         }
 
-        throw "Architecture detection failed (no supported detection path). If you think this is a bug, report it at https://github.com/dotnet/aspire/issues"
+        throw "Architecture detection failed (no supported detection path). If you think this is a bug, report it at https://github.com/microsoft/aspire/issues"
     }
     catch {
         throw "Architecture detection failed: $($_.Exception.Message)"
@@ -343,7 +343,7 @@ function Get-CLIArchitectureFromArchitecture {
             return "arm64"
         }
         default {
-            throw "Architecture '$Architecture' not supported. If you think this is a bug, report it at https://github.com/dotnet/aspire/issues"
+            throw "Architecture '$Architecture' not supported. If you think this is a bug, report it at https://github.com/microsoft/aspire/issues"
         }
     }
 }
@@ -908,7 +908,7 @@ function Find-WorkflowRun {
     $runId = Invoke-GitHubAPICall -Endpoint "$Script:GHReposBase/actions/workflows/ci.yml/runs?event=pull_request&head_sha=$HeadSHA" -JqFilter ".workflow_runs | sort_by(.created_at, .updated_at) | reverse | .[0].id" -ErrorMessage "Failed to query workflow runs for SHA: $HeadSHA"
 
     if ([string]::IsNullOrWhiteSpace($runId) -or $runId -eq "null") {
-        throw "No ci.yml workflow run found for PR SHA: $HeadSHA. This could mean no workflow has been triggered for this SHA $HeadSHA . Check at https://github.com/dotnet/aspire/actions/workflows/ci.yml"
+        throw "No ci.yml workflow run found for PR SHA: $HeadSHA. This could mean no workflow has been triggered for this SHA $HeadSHA . Check at https://github.com/microsoft/aspire/actions/workflows/ci.yml"
     }
 
     Write-Message "Found workflow run ID: $runId" -Level Verbose
@@ -938,7 +938,7 @@ function Invoke-ArtifactDownload {
 
         if ($LASTEXITCODE -ne 0) {
             Write-Message "gh run download command failed with exit code $LASTEXITCODE . Command: $($downloadCommand -join ' ')" -Level Verbose
-            throw "Failed to download artifact '$ArtifactName' from run: $RunId . If the workflow is still running then the artifact named '$ArtifactName' may not be available yet. Check at https://github.com/dotnet/aspire/actions/runs/$RunId#artifacts"
+            throw "Failed to download artifact '$ArtifactName' from run: $RunId . If the workflow is still running then the artifact named '$ArtifactName' may not be available yet. Check at https://github.com/microsoft/aspire/actions/runs/$RunId#artifacts"
         }
     }
 }

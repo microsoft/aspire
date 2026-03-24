@@ -1875,7 +1875,7 @@ class AbstractResource(abc.ABC):
         """Sets the created timestamp"""
 
     @abc.abstractmethod
-    def with_modified_at(self, modified_at: datetime.timedelta) -> typing.Self:
+    def with_modified_at(self, modified_at: datetime.datetime) -> typing.Self:
         """Sets the modified timestamp"""
 
     @abc.abstractmethod
@@ -1993,7 +1993,7 @@ class _BaseResourceKwargs(typing.TypedDict, total=False):
     optional_string: OptionalStringParameters | typing.Literal[True]
     config: TestConfigDto
     created_at: datetime.datetime
-    modified_at: datetime.timedelta
+    modified_at: datetime.datetime
     correlation_id: str
     optional_callback: typing.Callable[[TestCallbackContext], None] | typing.Literal[True]
     status: TestResourceStatus
@@ -2057,7 +2057,7 @@ class _BaseResource(AbstractResource):
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_modified_at(self, modified_at: datetime.timedelta) -> typing.Self:
+    def with_modified_at(self, modified_at: datetime.datetime) -> typing.Self:
         """Sets the modified timestamp"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['modifiedAt'] = modified_at
@@ -2259,12 +2259,12 @@ class _BaseResource(AbstractResource):
             else:
                 raise TypeError("Invalid type for option 'created_at'. Expected: datetime.datetime")
         if _modified_at := kwargs.pop("modified_at", None):
-            if _validate_type(_modified_at, datetime.timedelta):
+            if _validate_type(_modified_at, datetime.datetime):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["modifiedAt"] = typing.cast(datetime.timedelta, _modified_at)
+                rpc_args["modifiedAt"] = typing.cast(datetime.datetime, _modified_at)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withModifiedAt', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'modified_at'. Expected: datetime.timedelta")
+                raise TypeError("Invalid type for option 'modified_at'. Expected: datetime.datetime")
         if _correlation_id := kwargs.pop("correlation_id", None):
             if _validate_type(_correlation_id, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}

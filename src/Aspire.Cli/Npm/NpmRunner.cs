@@ -21,41 +21,54 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
             return null;
         }
 
-        // Resolve version: npm view <package>@<range> version
-        var versionOutput = await RunNpmCommandAsync(
-            npmPath,
-            ["view", $"{packageName}@{versionRange}", "version"],
-            cancellationToken);
+        // Use an isolated temp subdirectory so npm doesn't pick up .npmrc or
+        // other config files from the shared temp root or the user's CWD.
+        var tempDir = CreateIsolatedTempDirectory();
 
-        if (versionOutput is null)
+        try
         {
-            return null;
+            // Resolve version: npm view <package>@<range> version
+            var versionOutput = await RunNpmCommandInDirectoryAsync(
+                npmPath,
+                ["view", $"{packageName}@{versionRange}", "version"],
+                tempDir,
+                cancellationToken);
+
+            if (versionOutput is null)
+            {
+                return null;
+            }
+
+            var versionString = versionOutput.Trim();
+            if (!SemVersion.TryParse(versionString, SemVersionStyles.Any, out var version))
+            {
+                logger.LogDebug("Could not parse npm version from output: {Output}", versionString);
+                return null;
+            }
+
+            // Resolve integrity hash: npm view <package>@<version> dist.integrity
+            var integrityOutput = await RunNpmCommandInDirectoryAsync(
+                npmPath,
+                ["view", $"{packageName}@{version}", "dist.integrity"],
+                tempDir,
+                cancellationToken);
+
+            if (string.IsNullOrWhiteSpace(integrityOutput))
+            {
+                logger.LogDebug("Could not resolve integrity hash for {Package}@{Version}", packageName, version);
+                return null;
+            }
+
+            return new NpmPackageInfo
+            {
+                Version = version,
+                Integrity = integrityOutput.Trim()
+            };
         }
-
-        var versionString = versionOutput.Trim();
-        if (!SemVersion.TryParse(versionString, SemVersionStyles.Any, out var version))
+        finally
         {
-            logger.LogDebug("Could not parse npm version from output: {Output}", versionString);
-            return null;
+            CleanupTempDirectory(tempDir);
         }
-
-        // Resolve integrity hash: npm view <package>@<version> dist.integrity
-        var integrityOutput = await RunNpmCommandAsync(
-            npmPath,
-            ["view", $"{packageName}@{version}", "dist.integrity"],
-            cancellationToken);
-
-        if (string.IsNullOrWhiteSpace(integrityOutput))
-        {
-            logger.LogDebug("Could not resolve integrity hash for {Package}@{Version}", packageName, version);
-            return null;
-        }
-
-        return new NpmPackageInfo
-        {
-            Version = version,
-            Integrity = integrityOutput.Trim()
-        };
     }
 
     /// <inheritdoc />
@@ -67,9 +80,10 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
             return null;
         }
 
-        var output = await RunNpmCommandAsync(
+        var output = await RunNpmCommandInDirectoryAsync(
             npmPath,
             ["pack", $"{packageName}@{version}", "--pack-destination", outputDirectory],
+            outputDirectory,
             cancellationToken);
 
         if (output is null)
@@ -108,8 +122,7 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
         // For global tool installs there is no project, so we create a temporary one.
         // The package must be installed from the registry (not a local tarball) because
         // npm audit signatures skips packages with "resolved: file:..." in the lockfile.
-        var tempDir = Path.Combine(Path.GetTempPath(), $"aspire-npm-audit-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(tempDir);
+        var tempDir = CreateIsolatedTempDirectory();
 
         try
         {
@@ -144,17 +157,7 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
         }
         finally
         {
-            try
-            {
-                if (Directory.Exists(tempDir))
-                {
-                    Directory.Delete(tempDir, recursive: true);
-                }
-            }
-            catch (IOException ex)
-            {
-                logger.LogDebug(ex, "Failed to clean up temporary audit directory: {TempDir}", tempDir);
-            }
+            CleanupTempDirectory(tempDir);
         }
     }
 
@@ -167,12 +170,24 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
             return false;
         }
 
-        var output = await RunNpmCommandAsync(
-            npmPath,
-            ["install", "-g", tarballPath],
-            cancellationToken);
+        // Use an isolated temp subdirectory so npm doesn't pick up .npmrc or
+        // other config files from the shared temp root or the user's CWD.
+        var tempDir = CreateIsolatedTempDirectory();
 
-        return output is not null;
+        try
+        {
+            var output = await RunNpmCommandInDirectoryAsync(
+                npmPath,
+                ["install", "-g", tarballPath],
+                tempDir,
+                cancellationToken);
+
+            return output is not null;
+        }
+        finally
+        {
+            CleanupTempDirectory(tempDir);
+        }
     }
 
     private string? FindNpmPath()
@@ -184,6 +199,28 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
         }
 
         return npmPath;
+    }
+
+    private static string CreateIsolatedTempDirectory()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"aspire-npm-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+        return tempDir;
+    }
+
+    private void CleanupTempDirectory(string tempDir)
+    {
+        try
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+        catch (IOException ex)
+        {
+            logger.LogDebug(ex, "Failed to clean up temporary directory: {TempDir}", tempDir);
+        }
     }
 
     private async Task<string?> RunNpmCommandInDirectoryAsync(string npmPath, string[] args, string workingDirectory, CancellationToken cancellationToken)
@@ -231,47 +268,4 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
         }
     }
 
-    private async Task<string?> RunNpmCommandAsync(string npmPath, string[] args, CancellationToken cancellationToken)
-    {
-        var argsString = string.Join(" ", args);
-        logger.LogDebug("Running npm {Args}", argsString);
-
-        try
-        {
-            var startInfo = new ProcessStartInfo(npmPath)
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            foreach (var arg in args)
-            {
-                startInfo.ArgumentList.Add(arg);
-            }
-
-            using var process = new Process { StartInfo = startInfo };
-            process.Start();
-
-            var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-            var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
-
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-
-            if (process.ExitCode != 0)
-            {
-                var errorOutput = await errorTask.ConfigureAwait(false);
-                logger.LogDebug("npm {Args} returned non-zero exit code {ExitCode}: {Error}", argsString, process.ExitCode, errorOutput.Trim());
-                return null;
-            }
-
-            return await outputTask.ConfigureAwait(false);
-        }
-        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
-        {
-            logger.LogDebug(ex, "Failed to run npm {Args}", argsString);
-            return null;
-        }
-    }
 }

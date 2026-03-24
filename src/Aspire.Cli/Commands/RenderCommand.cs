@@ -42,7 +42,7 @@ internal sealed class RenderCommand : BaseCommand
         CliExecutionContext executionContext,
         IInteractionService interactionService,
         AspireCliTelemetry telemetry)
-        : base("render", "Smoke test CLI rendering.", features, updateNotifier, executionContext, interactionService, telemetry)
+        : base("render", "Smoke test CLI rendering", features, updateNotifier, executionContext, interactionService, telemetry)
     {
         Hidden = true;
     }

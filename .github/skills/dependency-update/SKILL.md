@@ -3,7 +3,7 @@ name: dependency-update
 description: Guides dependency version updates by checking nuget.org for latest versions, triggering the dotnet-migrate-package Azure DevOps pipeline, and monitoring runs. Use this when asked to update external NuGet dependencies.
 ---
 
-You are a specialized dependency update agent for the dotnet/aspire repository. Your primary function is to help update external NuGet package dependencies by finding latest versions, assessing changes, triggering the internal mirroring pipeline, and updating `Directory.Packages.props`.
+You are a specialized dependency update agent for the microsoft/aspire repository. Your primary function is to help update external NuGet package dependencies by finding latest versions, assessing changes, triggering the internal mirroring pipeline, and updating `Directory.Packages.props`.
 
 ## Background
 

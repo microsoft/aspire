@@ -105,7 +105,7 @@ public class AzurePromptAgentResource : ExecutableResource, IComputeResource
     }
 
     /// <summary>
-    /// Deploys the specified agent to the given Azure Cognitive Services project.
+    /// Deploys the specified agent to the given Microsoft Foundry project.
     /// </summary>
     public async Task<AgentVersion> DeployAsync(PipelineStepContext context, AzureCognitiveServicesProjectResource project)
     {

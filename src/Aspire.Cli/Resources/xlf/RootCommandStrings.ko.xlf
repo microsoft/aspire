@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="ko" original="../RootCommandStrings.resx">
     <body>
       <trans-unit id="BannerArgumentDescription">
-        <source>Display the animated Aspire CLI welcome banner.</source>
-        <target state="translated">애니메이션 Aspire CLI 환영 배너를 표시합니다.</target>
+        <source>Display the animated Aspire CLI welcome banner</source>
+        <target state="needs-review-translation">애니메이션 Aspire CLI 환영 배너를 표시합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="BannerVersionFormat">
@@ -18,23 +18,23 @@
         <note />
       </trans-unit>
       <trans-unit id="CliWaitForDebuggerArgumentDescription">
-        <source>Wait for a debugger to attach before executing the command.</source>
-        <target state="translated">명령을 실행하기 전에 디버거가 연결되기를 기다리세요.</target>
+        <source>Wait for a debugger to attach before executing the command</source>
+        <target state="needs-review-translation">명령을 실행하기 전에 디버거가 연결되기를 기다리세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="DebugArgumentDescription">
-        <source>Enable debug logging to the console.</source>
-        <target state="translated">콘솔에 디버그 로깅을 활성화하세요.</target>
+        <source>Enable debug logging to the console</source>
+        <target state="needs-review-translation">콘솔에 디버그 로깅을 활성화하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="DebugLevelArgumentDescription">
-        <source>Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical).</source>
-        <target state="translated">콘솔 출력에 대한 최소 로그 수준(추적, 디버그, 정보, 경고, 오류, 위험)을 설정합니다.</target>
+        <source>Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)</source>
+        <target state="new">Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>The Aspire CLI can be used to create, run, and publish Aspire-based applications.</source>
-        <target state="translated">Aspire CLI를 사용하여 Aspire 기반 애플리케이션을 만들고, 실행하고, 게시할 수 있습니다.</target>
+        <source>The Aspire CLI can be used to create, run, and publish Aspire-based applications</source>
+        <target state="needs-review-translation">Aspire CLI를 사용하여 Aspire 기반 애플리케이션을 만들고, 실행하고, 게시할 수 있습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="FirstTimeUseTelemetryNotice">
@@ -58,18 +58,18 @@ Aspire CLI 원격 분석에 대해 자세히 알아보기: https://aka.ms/aspire
         <note />
       </trans-unit>
       <trans-unit id="NoLogoArgumentDescription">
-        <source>Suppress the startup banner and telemetry notice.</source>
-        <target state="translated">시작 배너 및 원격 분석 알림을 표시하지 않습니다.</target>
+        <source>Suppress the startup banner and telemetry notice</source>
+        <target state="needs-review-translation">시작 배너 및 원격 분석 알림을 표시하지 않습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="NonInteractiveArgumentDescription">
-        <source>Run the command in non-interactive mode, disabling all interactive prompts and spinners.</source>
-        <target state="translated">비대화형 모드에서 명령을 실행하여 모든 대화형 프롬프트와 스피너를 비활성화합니다.</target>
+        <source>Run the command in non-interactive mode, disabling all interactive prompts and spinners</source>
+        <target state="new">Run the command in non-interactive mode, disabling all interactive prompts and spinners</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitForDebuggerArgumentDescription">
-        <source>Wait for a debugger to attach before executing the command.</source>
-        <target state="translated">명령을 실행하기 전에 디버거가 연결되기를 기다리세요.</target>
+        <source>Wait for a debugger to attach before executing the command</source>
+        <target state="needs-review-translation">명령을 실행하기 전에 디버거가 연결되기를 기다리세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitingForDebugger">

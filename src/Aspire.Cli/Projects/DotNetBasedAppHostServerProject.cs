@@ -33,26 +33,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     /// <summary>
     /// Gets the default Aspire SDK version based on the CLI version.
     /// </summary>
-    public static string DefaultSdkVersion => GetEffectiveVersion();
-
-    private static string GetEffectiveVersion()
-    {
-        var version = VersionHelper.GetDefaultTemplateVersion();
-
-        // Strip the commit SHA suffix (e.g., "9.2.0+abc123" -> "9.2.0")
-        var plusIndex = version.IndexOf('+');
-        if (plusIndex > 0)
-        {
-            version = version[..plusIndex];
-        }
-
-        // Dev versions (e.g., "13.2.0-dev") don't exist on NuGet, fall back to latest stable
-        if (version.EndsWith("-dev", StringComparison.OrdinalIgnoreCase))
-        {
-            return "13.1.0";
-        }
-        return version;
-    }
+    public static string DefaultSdkVersion => VersionHelper.GetDefaultSdkVersion();
 
     private readonly string _projectModelPath;
     private readonly string _appPath;

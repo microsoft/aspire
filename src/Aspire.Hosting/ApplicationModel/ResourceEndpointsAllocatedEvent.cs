@@ -11,6 +11,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <remarks>
 /// Any resources that customize their URLs via a <see cref="ResourceUrlsCallbackAnnotation"/> will have their callbacks invoked during this event.
 /// </remarks>
+[AspireExport(ExposeProperties = true)]
 public class ResourceEndpointsAllocatedEvent(IResource resource, IServiceProvider services) : IDistributedApplicationResourceEvent
 {
     /// <inheritdoc />

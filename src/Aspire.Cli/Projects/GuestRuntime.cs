@@ -1,8 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Utils;
-using Aspire.Hosting.Ats;
+using Aspire.TypeSystem;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Projects;
@@ -15,6 +16,7 @@ internal sealed class GuestRuntime
 {
     private readonly RuntimeSpec _spec;
     private readonly ILogger _logger;
+    private readonly FileLoggerProvider? _fileLoggerProvider;
     private readonly Func<string, string?> _commandResolver;
 
     /// <summary>
@@ -22,11 +24,13 @@ internal sealed class GuestRuntime
     /// </summary>
     /// <param name="spec">The runtime specification describing how to execute the guest language.</param>
     /// <param name="logger">Logger for debugging output.</param>
+    /// <param name="fileLoggerProvider">Optional file logger for writing output to disk.</param>
     /// <param name="commandResolver">Optional command resolver used to locate executables on PATH.</param>
-    public GuestRuntime(RuntimeSpec spec, ILogger logger, Func<string, string?>? commandResolver = null)
+    public GuestRuntime(RuntimeSpec spec, ILogger logger, FileLoggerProvider? fileLoggerProvider = null, Func<string, string?>? commandResolver = null)
     {
         _spec = spec;
         _logger = logger;
+        _fileLoggerProvider = fileLoggerProvider;
         _commandResolver = commandResolver ?? PathLookupHelper.FindFullPathFromPath;
     }
 
@@ -189,7 +193,7 @@ internal sealed class GuestRuntime
     /// <summary>
     /// Creates the default process-based launcher for this runtime.
     /// </summary>
-    public ProcessGuestLauncher CreateDefaultLauncher() => new(_spec.Language, _logger, _commandResolver);
+    public ProcessGuestLauncher CreateDefaultLauncher() => new(_spec.Language, _logger, _fileLoggerProvider, _commandResolver);
 
     /// <summary>
     /// Replaces placeholders in command arguments with actual values.

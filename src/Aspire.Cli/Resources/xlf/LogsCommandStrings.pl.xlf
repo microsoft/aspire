@@ -3,18 +3,18 @@
   <file datatype="xml" source-language="en" target-language="pl" original="../LogsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Display logs from resources in a running apphost.</source>
-        <target state="translated">Wyświetl dzienniki z zasobów w działającym hoście aplikacji.</target>
+        <source>Display logs from resources in a running apphost</source>
+        <target state="needs-review-translation">Wyświetl dzienniki z zasobów w działającym hoście usługi Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
-        <source>Stream logs in real-time as they are written.</source>
-        <target state="translated">Przesyłaj dzienniki w czasie rzeczywistym podczas ich zapisywania.</target>
+        <source>Stream logs in real-time as they are written</source>
+        <target state="needs-review-translation">Przesyłaj dzienniki w czasie rzeczywistym podczas ich zapisywania.</target>
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">Format danych wyjściowych (Tabela lub JSON).</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">Dzienniki wyjściowe w formacie JSON (NDJSON).</target>
         <note />
       </trans-unit>
       <trans-unit id="NoResourcesFound">
@@ -24,7 +24,7 @@
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The name of the resource to get logs for. If not specified, logs from all resources are shown.</source>
-        <target state="translated">Nazwa zasobu, którego dzienniki mają zostać pobrane. Jeśli nie podasz nazwy, pokażą się dzienniki ze wszystkich zasobów.</target>
+        <target state="needs-review-translation">Nazwa zasobu, którego dzienniki mają zostać pobrane. Jeśli nie podasz nazwy, pokażą się dzienniki ze wszystkich zasobów.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">
@@ -48,8 +48,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TailOptionDescription">
-        <source>Number of lines to show from the end of logs (default: all).</source>
-        <target state="translated">Liczba linii wyświetlanych od końca dzienników (domyślnie: wszystkie).</target>
+        <source>Number of lines to show from the end of logs (default: all)</source>
+        <target state="needs-review-translation">Liczba linii wyświetlanych od końca dzienników (domyślnie: wszystkie).</target>
         <note />
       </trans-unit>
       <trans-unit id="TailRequiresResource">
@@ -58,8 +58,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TimestampsOptionDescription">
-        <source>Show timestamps for each log line.</source>
-        <target state="translated">Pokaż znaczniki czasu dla każdego wiersza dziennika.</target>
+        <source>Show timestamps for each log line</source>
+        <target state="new">Show timestamps for each log line</target>
         <note />
       </trans-unit>
       <trans-unit id="GettingLogs">

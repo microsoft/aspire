@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="ja" original="../DocsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Browse and search Aspire documentation from aspire.dev.</source>
-        <target state="translated">aspire.dev から Aspire ドキュメントを参照して検索します。</target>
+        <source>Browse and search Aspire documentation from aspire.dev</source>
+        <target state="needs-review-translation">aspire.dev から Aspire ドキュメントを参照して検索します。</target>
         <note />
       </trans-unit>
       <trans-unit id="DocumentNotFound">
@@ -13,8 +13,8 @@
         <note />
       </trans-unit>
       <trans-unit id="FormatOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">出力形式 (テーブルまたは JSON)。</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">出力形式 (テーブルまたは JSON)。</target>
         <note />
       </trans-unit>
       <trans-unit id="FoundDocumentationPages">
@@ -28,8 +28,8 @@
         <note />
       </trans-unit>
       <trans-unit id="GetDescription">
-        <source>Get the full content of a documentation page by its slug.</source>
-        <target state="translated">スラッグを指定してドキュメント ページのすべてのコンテンツを取得します。</target>
+        <source>Get the full content of a documentation page by its slug</source>
+        <target state="needs-review-translation">スラッグを指定してドキュメント ページのすべてのコンテンツを取得します。</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderScore">
@@ -58,13 +58,13 @@
         <note />
       </trans-unit>
       <trans-unit id="LimitOptionDescription">
-        <source>Maximum number of search results to return (default: 5, max: 10).</source>
-        <target state="translated">返される検索結果の最大数 (既定値: 5、最大値: 10)。</target>
+        <source>Maximum number of search results to return (default: 5, max: 10)</source>
+        <target state="needs-review-translation">返される検索結果の最大数 (既定値: 5、最大値: 10)。</target>
         <note />
       </trans-unit>
       <trans-unit id="ListDescription">
-        <source>List all available Aspire documentation pages.</source>
-        <target state="translated">利用可能なすべての Aspire ドキュメント ページを一覧表示します。</target>
+        <source>List all available Aspire documentation pages</source>
+        <target state="needs-review-translation">利用可能なすべての Aspire ドキュメント ページを一覧表示します。</target>
         <note />
       </trans-unit>
       <trans-unit id="LoadingDocumentation">
@@ -83,23 +83,23 @@
         <note />
       </trans-unit>
       <trans-unit id="QueryArgumentDescription">
-        <source>The search query.</source>
-        <target state="translated">検索クエリ。</target>
+        <source>The search query</source>
+        <target state="needs-review-translation">検索クエリ。</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchDescription">
-        <source>Search Aspire documentation by keywords.</source>
-        <target state="translated">キーワードを指定して Aspire ドキュメントを検索します。</target>
+        <source>Search Aspire documentation by keywords</source>
+        <target state="needs-review-translation">キーワードを指定して Aspire ドキュメントを検索します。</target>
         <note />
       </trans-unit>
       <trans-unit id="SectionOptionDescription">
-        <source>Return only the specified section of the page.</source>
-        <target state="translated">ページの指定したセクションのみを返します。</target>
+        <source>Return only the specified section of the page</source>
+        <target state="needs-review-translation">ページの指定したセクションのみを返します。</target>
         <note />
       </trans-unit>
       <trans-unit id="SlugArgumentDescription">
-        <source>The slug of the documentation page (e.g., 'redis-integration').</source>
-        <target state="translated">ドキュメント ページのスラッグ (例: 'redis-integration')。</target>
+        <source>The slug of the documentation page (e.g., 'redis-integration')</source>
+        <target state="needs-review-translation">ドキュメント ページのスラッグ (例: 'redis-integration')。</target>
         <note />
       </trans-unit>
     </body>

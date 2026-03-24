@@ -28,18 +28,18 @@
         <note>{0} is the key, {1} is the value</note>
       </trans-unit>
       <trans-unit id="DeleteCommand_Description">
-        <source>Delete a configuration value.</source>
-        <target state="translated">構成値を削除します。</target>
+        <source>Delete a configuration value</source>
+        <target state="needs-review-translation">構成値を削除します。</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteCommand_GlobalArgumentDescription">
-        <source>Delete the configuration value from the global $HOME/.aspire/settings.json instead of the local settings file.</source>
-        <target state="translated">ローカル設定ファイルではなく、グローバルの $HOME/.aspire/settings.json から構成値を削除します。</target>
+        <source>Delete the configuration value from the global $HOME/.aspire/settings.json instead of the local settings file</source>
+        <target state="needs-review-translation">ローカル設定ファイルではなく、グローバルの $HOME/.aspire/settings.json から構成値を削除します。</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteCommand_KeyArgumentDescription">
-        <source>The configuration key to delete.</source>
-        <target state="translated">削除する構成キー。</target>
+        <source>The configuration key to delete</source>
+        <target state="needs-review-translation">削除する構成キー。</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteCommand_PromptForGlobal">
@@ -53,8 +53,8 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Manage CLI configuration including feature flags.</source>
-        <target state="translated">機能フラグを含む CLI 構成を管理します。</target>
+        <source>Manage CLI configuration including feature flags</source>
+        <target state="needs-review-translation">構成設定を管理します。</target>
         <note />
       </trans-unit>
       <trans-unit id="ExtensionActionPrompt">
@@ -63,13 +63,13 @@
         <note />
       </trans-unit>
       <trans-unit id="GetCommand_Description">
-        <source>Get a configuration value.</source>
-        <target state="translated">構成値を取得します。</target>
+        <source>Get a configuration value</source>
+        <target state="needs-review-translation">構成値を取得します。</target>
         <note />
       </trans-unit>
       <trans-unit id="GetCommand_KeyArgumentDescription">
-        <source>The configuration key to retrieve.</source>
-        <target state="translated">取得する構成キー。</target>
+        <source>The configuration key to retrieve</source>
+        <target state="needs-review-translation">取得する構成キー。</target>
         <note />
       </trans-unit>
       <trans-unit id="GetCommand_PromptForKey">
@@ -98,8 +98,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InfoCommand_Description">
-        <source>Display configuration file paths and available features.</source>
-        <target state="translated">構成ファイルのパスと使用可能な機能を表示します。</target>
+        <source>Display configuration file paths and available features</source>
+        <target state="needs-review-translation">構成ファイルのパスと使用可能な機能を表示します。</target>
         <note />
       </trans-unit>
       <trans-unit id="InfoCommand_GlobalSettingsPath">
@@ -108,8 +108,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InfoCommand_JsonOptionDescription">
-        <source>Output information in JSON format.</source>
-        <target state="translated">情報を JSON 形式で出力します。</target>
+        <source>Output information in JSON format</source>
+        <target state="needs-review-translation">情報を JSON 形式で出力します。</target>
         <note />
       </trans-unit>
       <trans-unit id="InfoCommand_LocalSettingsPath">
@@ -128,13 +128,13 @@
         <note />
       </trans-unit>
       <trans-unit id="ListCommand_AllOptionDescription">
-        <source>Show all available features that can be configured.</source>
-        <target state="new">Show all available features that can be configured.</target>
+        <source>Show all available features that can be configured</source>
+        <target state="new">Show all available features that can be configured</target>
         <note />
       </trans-unit>
       <trans-unit id="ListCommand_Description">
-        <source>List all configuration values.</source>
-        <target state="translated">すべての構成値を一覧表示します。</target>
+        <source>List all configuration values</source>
+        <target state="needs-review-translation">すべての構成値を一覧表示します。</target>
         <note />
       </trans-unit>
       <trans-unit id="LocalConfigurationHeader">
@@ -158,18 +158,18 @@
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_Description">
-        <source>Set a configuration value.</source>
-        <target state="translated">構成値を設定します。</target>
+        <source>Set a configuration value</source>
+        <target state="needs-review-translation">構成値を設定します。</target>
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_GlobalArgumentDescription">
-        <source>Set the configuration value globally in $HOME/.aspire/settings.json instead of the local settings file.</source>
-        <target state="translated">ローカル設定ファイルではなく、$HOME/.aspire/settings.json で構成値をグローバルに設定します。</target>
+        <source>Set the configuration value globally in $HOME/.aspire/settings.json instead of the local settings file</source>
+        <target state="needs-review-translation">ローカル設定ファイルではなく、$HOME/.aspire/settings.json で構成値をグローバルに設定します。</target>
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_KeyArgumentDescription">
-        <source>The configuration key to set.</source>
-        <target state="translated">設定する構成キー。</target>
+        <source>The configuration key to set</source>
+        <target state="needs-review-translation">設定する構成キー。</target>
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_PromptForGlobal">
@@ -198,8 +198,8 @@
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_ValueArgumentDescription">
-        <source>The configuration value to set.</source>
-        <target state="translated">設定する構成値。</target>
+        <source>The configuration value to set</source>
+        <target state="needs-review-translation">設定する構成値。</target>
         <note />
       </trans-unit>
       <trans-unit id="SetFeatureHint">

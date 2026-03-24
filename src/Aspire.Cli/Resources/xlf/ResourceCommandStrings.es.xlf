@@ -3,18 +3,18 @@
   <file datatype="xml" source-language="en" target-language="es" original="../ResourceCommandStrings.resx">
     <body>
       <trans-unit id="CommandDescription">
-        <source>Execute a command on a resource (e.g. start, stop, restart).</source>
-        <target state="translated">Ejecute un comando en un recurso (por ejemplo, iniciar, detener o reiniciar).</target>
+        <source>Execute a command on a resource (e.g. start, stop, restart)</source>
+        <target state="needs-review-translation">Ejecute un comando en un recurso.</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandNameArgumentDescription">
-        <source>The name of the command to execute (e.g. start, stop, restart).</source>
-        <target state="translated">Nombre del comando que se va a ejecutar (por ejemplo, iniciar, detener o reiniciar).</target>
+        <source>The name of the command to execute (e.g. start, stop, restart)</source>
+        <target state="needs-review-translation">Nombre del comando que se va a ejecutar.</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandResourceArgumentDescription">
-        <source>The name of the resource to execute the command on.</source>
-        <target state="translated">El nombre del recurso de destino en el que se ejecutará el comando.</target>
+        <source>The name of the resource to execute the command on</source>
+        <target state="needs-review-translation">El nombre del recurso de destino en el que se ejecutará el comando.</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">

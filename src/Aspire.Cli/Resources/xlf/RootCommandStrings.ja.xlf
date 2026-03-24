@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="ja" original="../RootCommandStrings.resx">
     <body>
       <trans-unit id="BannerArgumentDescription">
-        <source>Display the animated Aspire CLI welcome banner.</source>
-        <target state="translated">アニメーション化された Aspire CLI のウェルカム バナーを表示します。</target>
+        <source>Display the animated Aspire CLI welcome banner</source>
+        <target state="needs-review-translation">アニメーション化された Aspire CLI のウェルカム バナーを表示します。</target>
         <note />
       </trans-unit>
       <trans-unit id="BannerVersionFormat">
@@ -18,23 +18,23 @@
         <note />
       </trans-unit>
       <trans-unit id="CliWaitForDebuggerArgumentDescription">
-        <source>Wait for a debugger to attach before executing the command.</source>
-        <target state="translated">デバッガーがアタッチされるまで待ってから、コマンドを実行します。</target>
+        <source>Wait for a debugger to attach before executing the command</source>
+        <target state="needs-review-translation">デバッガーがアタッチされるまで待ってから、コマンドを実行します。</target>
         <note />
       </trans-unit>
       <trans-unit id="DebugArgumentDescription">
-        <source>Enable debug logging to the console.</source>
-        <target state="translated">コンソールへのデバッグ ログを有効にします。</target>
+        <source>Enable debug logging to the console</source>
+        <target state="needs-review-translation">コンソールへのデバッグ ログを有効にします。</target>
         <note />
       </trans-unit>
       <trans-unit id="DebugLevelArgumentDescription">
-        <source>Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical).</source>
-        <target state="translated">コンソール出力の最小ログ レベル (トレース、デバッグ、情報、警告、エラー、クリティカル) を設定します。</target>
+        <source>Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)</source>
+        <target state="new">Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>The Aspire CLI can be used to create, run, and publish Aspire-based applications.</source>
-        <target state="translated">Aspire CLI を使用して、Aspire ベースのアプリケーションを作成、実行、発行できます。</target>
+        <source>The Aspire CLI can be used to create, run, and publish Aspire-based applications</source>
+        <target state="needs-review-translation">Aspire CLI を使用して、Aspire ベースのアプリケーションを作成、実行、発行できます。</target>
         <note />
       </trans-unit>
       <trans-unit id="FirstTimeUseTelemetryNotice">
@@ -58,18 +58,18 @@ Aspire CLI テレメトリの詳細情報: https://aka.ms/aspire/cli-telemetry</
         <note />
       </trans-unit>
       <trans-unit id="NoLogoArgumentDescription">
-        <source>Suppress the startup banner and telemetry notice.</source>
-        <target state="translated">スタートアップ バナーとテレメトリ通知を非表示にします。</target>
+        <source>Suppress the startup banner and telemetry notice</source>
+        <target state="needs-review-translation">スタートアップ バナーとテレメトリ通知を非表示にします。</target>
         <note />
       </trans-unit>
       <trans-unit id="NonInteractiveArgumentDescription">
-        <source>Run the command in non-interactive mode, disabling all interactive prompts and spinners.</source>
-        <target state="translated">非対話型モードでコマンドを実行し、すべての対話型プロンプトとスピナーを無効にします。</target>
+        <source>Run the command in non-interactive mode, disabling all interactive prompts and spinners</source>
+        <target state="new">Run the command in non-interactive mode, disabling all interactive prompts and spinners</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitForDebuggerArgumentDescription">
-        <source>Wait for a debugger to attach before executing the command.</source>
-        <target state="translated">デバッガーがアタッチされるまで待ってから、コマンドを実行します。</target>
+        <source>Wait for a debugger to attach before executing the command</source>
+        <target state="needs-review-translation">デバッガーがアタッチされるまで待ってから、コマンドを実行します。</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitingForDebugger">

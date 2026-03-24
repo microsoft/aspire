@@ -235,7 +235,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         ArgumentNullException.ThrowIfNull(request);
 
         var appModel = serviceProvider.GetService<DistributedApplicationModel>();
-        if (appModel is not null && !appModel.Resources.Any(r => StringComparers.ResourceName.Equals(r.Name, request.ResourceName)))
+        if (appModel is not null && !appModel.Resources.Any(r => string.Equals(r.Name, request.ResourceName, StringComparisons.ResourceName)))
         {
             return new WaitForResourceResponse
             {
@@ -378,7 +378,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         }
 
         // Find the dashboard resource
-        if (appModel.Resources.SingleOrDefault(r => StringComparers.ResourceName.Equals(r.Name, KnownResourceNames.AspireDashboard)) is not IResourceWithEndpoints dashboardResource)
+        if (appModel.Resources.SingleOrDefault(r => string.Equals(r.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName)) is not IResourceWithEndpoints dashboardResource)
         {
             logger.LogDebug("Dashboard resource not found in application model.");
             return null;
@@ -446,7 +446,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         foreach (var resource in appModel.Resources)
         {
             // Skip the dashboard resource
-            if (StringComparers.ResourceName.Equals(resource.Name, KnownResourceNames.AspireDashboard))
+            if (string.Equals(resource.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName))
             {
                 continue;
             }
@@ -486,7 +486,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         await foreach (var resourceEvent in resourceEvents.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
             // Skip the dashboard resource
-            if (StringComparers.ResourceName.Equals(resourceEvent.Resource.Name, KnownResourceNames.AspireDashboard))
+            if (string.Equals(resourceEvent.Resource.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName))
             {
                 continue;
             }
@@ -661,7 +661,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         if (resourceName is not null)
         {
-            var resource = appModel.Resources.FirstOrDefault(r => StringComparers.ResourceName.Equals(r.Name, resourceName));
+            var resource = appModel.Resources.FirstOrDefault(r => string.Equals(r.Name, resourceName, StringComparisons.ResourceName));
             if (resource is null)
             {
                 logger.LogWarning("Resource '{ResourceName}' not found. No logs will be returned.", resourceName);
@@ -675,7 +675,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             foreach (var resource in appModel.Resources)
             {
                 // Skip the dashboard
-                if (StringComparers.ResourceName.Equals(resource.Name, KnownResourceNames.AspireDashboard))
+                if (string.Equals(resource.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName))
                 {
                     continue;
                 }

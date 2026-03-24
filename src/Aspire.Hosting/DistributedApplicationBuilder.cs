@@ -29,6 +29,7 @@ using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Pipelines.Internal;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.UserSecrets;
+using Aspire.Shared.UserSecrets;
 using Microsoft.Extensions.Configuration.UserSecrets;
 using Aspire.Hosting.VersionChecking;
 using Microsoft.Extensions.Configuration;
@@ -187,19 +188,9 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         LogBuilderConstructing(options, innerBuilderOptions);
         _innerBuilder = new HostApplicationBuilder(innerBuilderOptions);
 
-        // Resolve the effective UserSecretsId: assembly attribute for .NET, env var for polyglot
-        var userSecretsId = AppHostAssembly?.GetCustomAttribute<UserSecretsIdAttribute>()?.UserSecretsId
-            ?? _innerBuilder.Configuration[KnownConfigNames.AspireUserSecretsId];
-
-        // For polyglot AppHosts (no assembly attribute), add user secrets early so they have the
-        // same precedence as the default AddUserSecrets called by HostApplicationBuilder for .NET projects.
-        // Only add in Development environment, matching the behavior of the default AddUserSecrets.
-        if (!string.IsNullOrEmpty(userSecretsId) &&
-            AppHostAssembly?.GetCustomAttribute<UserSecretsIdAttribute>() is null &&
-            _innerBuilder.Environment.IsDevelopment())
-        {
-            _innerBuilder.Configuration.AddUserSecrets(userSecretsId);
-        }
+        var configuredUserSecretsId = _innerBuilder.Configuration[KnownConfigNames.AspireUserSecretsId];
+        var userSecretsId = ResolveUserSecretsId(AppHostAssembly, _innerBuilder.Configuration);
+        AddConfiguredUserSecrets(_innerBuilder.Configuration, AppHostAssembly, configuredUserSecretsId, _innerBuilder.Environment.IsDevelopment());
 
         _innerBuilder.Services.AddSingleton(TimeProvider.System);
 
@@ -220,7 +211,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         }
 
         // This is so that we can see certificate errors in the resource server in the console logs.
-        // See: https://github.com/dotnet/aspire/issues/2914
+        // See: https://github.com/microsoft/aspire/issues/2914
         _innerBuilder.Logging.AddFilter("Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServer", LogLevel.Warning);
 
         // Add the logging configuration again to allow the user to override the defaults
@@ -787,6 +778,68 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         return builder;
     }
 
+    internal static string? ResolveUserSecretsId(Assembly? appHostAssembly, IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        // An explicitly configured value should win over any assembly-level UserSecretsId so guest AppHosts can
+        // direct secrets to their synthetic store instead of the generated server project's store.
+        var configuredUserSecretsId = configuration[KnownConfigNames.AspireUserSecretsId];
+        var assemblyUserSecretsId = appHostAssembly?.GetCustomAttribute<UserSecretsIdAttribute>()?.UserSecretsId;
+        return string.IsNullOrWhiteSpace(configuredUserSecretsId) ? assemblyUserSecretsId : configuredUserSecretsId;
+    }
+
+    internal static void AddConfiguredUserSecrets(IConfigurationManager configuration, Assembly? appHostAssembly, string? configuredUserSecretsId, bool isDevelopment)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        // Add explicitly configured user secrets early so they have the same precedence as the default AddUserSecrets
+        // called by HostApplicationBuilder for .NET projects, and can replace any assembly-level store when needed.
+        // Only add in Development environment, matching the behavior of the default AddUserSecrets.
+        if (!string.IsNullOrWhiteSpace(configuredUserSecretsId) && isDevelopment)
+        {
+            // Remove only the file-backed source for the assembly-derived user-secrets ID so the configured
+            // user-secrets store replaces that single source without affecting other configuration providers.
+            RemoveUserSecretsSource(configuration, appHostAssembly?.GetCustomAttribute<UserSecretsIdAttribute>()?.UserSecretsId);
+            configuration.AddUserSecrets(configuredUserSecretsId);
+        }
+    }
+
+    internal static void RemoveUserSecretsSource(IConfigurationManager configuration, string? userSecretsId)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        if (string.IsNullOrWhiteSpace(userSecretsId))
+        {
+            return;
+        }
+
+        var userSecretsFilePath = Path.GetFullPath(UserSecretsPathHelper.GetSecretsPathFromSecretsId(userSecretsId));
+
+        for (var i = configuration.Sources.Count - 1; i >= 0; i--)
+        {
+            if (configuration.Sources[i] is not FileConfigurationSource fileSource)
+            {
+                continue;
+            }
+
+            if (fileSource.Path is null)
+            {
+                continue;
+            }
+
+            var filePath = fileSource.FileProvider?.GetFileInfo(fileSource.Path).PhysicalPath;
+
+            if (filePath is not null && PathsEqual(filePath, userSecretsFilePath))
+            {
+                configuration.Sources.RemoveAt(i);
+            }
+        }
+    }
+
+    private static bool PathsEqual(string left, string right) =>
+        string.Equals(Path.GetFullPath(left), Path.GetFullPath(right), OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+
     private static DiagnosticListener LogBuilderConstructing(DistributedApplicationOptions appBuilderOptions, HostApplicationBuilderSettings hostBuilderOptions)
     {
         var diagnosticListener = new DiagnosticListener(HostingDiagnosticListenerName);
@@ -879,4 +932,3 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
     private static string? GetMetadataValue(IEnumerable<AssemblyMetadataAttribute>? assemblyMetadata, string key) =>
         assemblyMetadata?.FirstOrDefault(a => string.Equals(a.Key, key, StringComparison.OrdinalIgnoreCase))?.Value;
 }
-

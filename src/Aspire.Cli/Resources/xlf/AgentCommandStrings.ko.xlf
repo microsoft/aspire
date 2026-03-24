@@ -23,8 +23,8 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Manage AI agent specific setup.</source>
-        <target state="translated">AI 에이전트 관련 설정을 관리합니다.</target>
+        <source>Manage AI agent environment configuration</source>
+        <target state="needs-review-translation">AI 에이전트 통합을 관리합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigureMcpServer">
@@ -33,8 +33,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_Description">
-        <source>Initialize agent environment configuration for detected agents.</source>
-        <target state="translated">감지된 에이전트에 대한 에이전트 환경 구성을 초기화합니다.</target>
+        <source>Initialize agent environment configuration for detected agents</source>
+        <target state="needs-review-translation">감지된 에이전트에 대한 에이전트 환경 구성을 초기화합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstallSkillFile">
@@ -58,8 +58,8 @@
         <note />
       </trans-unit>
       <trans-unit id="McpCommand_Description">
-        <source>Start the MCP (Model Context Protocol) server.</source>
-        <target state="translated">MCP(모델 컨텍스트 프로토콜) 서버를 시작합니다.</target>
+        <source>Start the MCP (Model Context Protocol) server</source>
+        <target state="needs-review-translation">MCP(모델 컨텍스트 프로토콜) 서버를 시작합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="SkipNoneDescription">

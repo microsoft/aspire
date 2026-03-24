@@ -6,6 +6,7 @@ using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -172,6 +173,8 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         {
             throw new Aspire.Cli.Projects.ProjectLocatorException("Project file does not exist.", Aspire.Cli.Projects.ProjectLocatorFailureReason.ProjectFileDoesntExist);
         }
+
+        public Task<FileInfo?> GetAppHostFromSettingsAsync(CancellationToken cancellationToken = default) => Task.FromResult<FileInfo?>(null);
     }
 
     [Fact]
@@ -225,6 +228,8 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         {
             throw new Aspire.Cli.Projects.ProjectLocatorException("No project file found.", Aspire.Cli.Projects.ProjectLocatorFailureReason.NoProjectFileFound);
         }
+
+        public Task<FileInfo?> GetAppHostFromSettingsAsync(CancellationToken cancellationToken = default) => Task.FromResult<FileInfo?>(null);
     }
 
     private sealed class MultipleProjectFilesProjectLocator : IProjectLocator
@@ -238,6 +243,8 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         {
             throw new Aspire.Cli.Projects.ProjectLocatorException("Multiple project files found.", Aspire.Cli.Projects.ProjectLocatorFailureReason.MultipleProjectFilesFound);
         }
+
+        public Task<FileInfo?> GetAppHostFromSettingsAsync(CancellationToken cancellationToken = default) => Task.FromResult<FileInfo?>(null);
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
@@ -476,7 +483,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/14321")]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/14321")]
     public async Task RunCommand_SkipsBuild_WhenExtensionDevKitCapabilityIsAvailable()
     {
         var buildCalled = false;
@@ -1266,6 +1273,8 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             // Return a .cs file to simulate single file AppHost
             return Task.FromResult<FileInfo?>(new FileInfo("/tmp/apphost.cs"));
         }
+
+        public Task<FileInfo?> GetAppHostFromSettingsAsync(CancellationToken cancellationToken = default) => Task.FromResult<FileInfo?>(null);
     }
 
     [Fact]
@@ -1486,6 +1495,68 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         public bool IsFeatureEnabled(string featureName, bool defaultValue = false)
         {
             return _features.TryGetValue(featureName, out var value) ? value : defaultValue;
+        }
+    }
+
+    [Fact]
+    public async Task CaptureAppHostLogsAsync_WritesCategoryWithAppHostPrefix()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "test.log");
+        var errorWriter = new TestStartupErrorWriter();
+        using var fileLoggerProvider = new FileLoggerProvider(logFilePath, errorWriter);
+
+        var entries = new BackchannelLogEntry[]
+        {
+            new()
+            {
+                Timestamp = new DateTimeOffset(2026, 3, 16, 12, 0, 0, TimeSpan.Zero),
+                LogLevel = LogLevel.Information,
+                Message = "Application started",
+                EventId = new EventId(),
+                CategoryName = "Microsoft.Hosting.Lifetime"
+            },
+            new()
+            {
+                Timestamp = new DateTimeOffset(2026, 3, 16, 12, 0, 1, TimeSpan.Zero),
+                LogLevel = LogLevel.Warning,
+                Message = "Slow response",
+                EventId = new EventId(),
+                CategoryName = "Microsoft.AspNetCore.Server.Kestrel"
+            },
+            new()
+            {
+                Timestamp = new DateTimeOffset(2026, 3, 16, 12, 0, 2, TimeSpan.Zero),
+                LogLevel = LogLevel.Error,
+                Message = "Connection refused",
+                EventId = new EventId(),
+                CategoryName = "SimpleCategory"
+            },
+        };
+
+        var backchannel = new TestAppHostBackchannel();
+        backchannel.GetAppHostLogEntriesAsyncCallback = YieldEntries;
+        var interactionService = new TestInteractionService();
+
+        await RunCommand.CaptureAppHostLogsAsync(fileLoggerProvider, backchannel, interactionService, CancellationToken.None);
+
+        fileLoggerProvider.Dispose();
+
+        var lines = await File.ReadAllLinesAsync(logFilePath);
+        var nonEmptyLines = lines.Where(l => !string.IsNullOrWhiteSpace(l)).ToArray();
+
+        Assert.Collection(nonEmptyLines,
+            line => Assert.Equal("[2026-03-16 12:00:00.000] [INFO] [AppHost/Lifetime] Application started", line),
+            line => Assert.Equal("[2026-03-16 12:00:01.000] [WARN] [AppHost/Kestrel] Slow response", line),
+            line => Assert.Equal("[2026-03-16 12:00:02.000] [FAIL] [AppHost/SimpleCategory] Connection refused", line));
+
+        async IAsyncEnumerable<BackchannelLogEntry> YieldEntries([EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            foreach (var entry in entries)
+            {
+                yield return entry;
+            }
+            await Task.CompletedTask;
         }
     }
 

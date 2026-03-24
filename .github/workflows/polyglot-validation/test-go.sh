@@ -40,7 +40,7 @@ aspire add Aspire.Hosting.Redis --non-interactive -d 2>&1 || {
 # Insert Redis code into apphost.go
 echo "Configuring apphost.go with Redis..."
 if grep -q "builder.Build()" apphost.go; then
-    sed -i '/builder.Build()/i\// Add Redis cache resource\n\tredis, err := builder.AddRedis("cache", 0, nil)\n\tif err != nil {\n\t\tlog.Fatalf("Failed to add Redis: %v", err)\n\t}\n\t_, err = redis.WithImageRegistry("netaspireci.azurecr.io")\n\tif err != nil {\n\t\tlog.Fatalf("Failed to set image registry: %v", err)\n\t}' apphost.go
+    sed -i '/builder.Build()/i\// Add Redis cache resource\n\tredisPort := 0.0\n\tredis, err := builder.AddRedis("cache", \&redisPort, nil)\n\tif err != nil {\n\t\tlog.Fatalf("Failed to add Redis: %v", err)\n\t}\n\t_, err = redis.WithImageRegistry("netaspireci.azurecr.io")\n\tif err != nil {\n\t\tlog.Fatalf("Failed to set image registry: %v", err)\n\t}' apphost.go
     echo "✅ Redis configuration added to apphost.go"
 fi
 

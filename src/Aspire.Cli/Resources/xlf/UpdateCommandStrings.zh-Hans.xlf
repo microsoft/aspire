@@ -8,13 +8,13 @@
         <note />
       </trans-unit>
       <trans-unit id="AnalyzeAppHost">
-        <source>Analyze App Host</source>
-        <target state="translated">分析应用主机</target>
+        <source>Analyze apphost</source>
+        <target state="needs-review-translation">分析应用主机</target>
         <note />
       </trans-unit>
       <trans-unit id="AnalyzeAppHostSdk">
-        <source>Analyze App Host SDK</source>
-        <target state="translated">分析应用主机 SDK</target>
+        <source>Analyze apphost SDK</source>
+        <target state="needs-review-translation">分析应用主机 SDK</target>
         <note />
       </trans-unit>
       <trans-unit id="AnalyzeProjectFormat">
@@ -73,8 +73,8 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Update integrations in the Aspire project. (Preview)</source>
-        <target state="translated">更新 Aspire 项目中的集成。(预览版)</target>
+        <source>Update integrations in the Aspire project (Preview)</source>
+        <target state="needs-review-translation">更新 Aspire 项目中的集成。(预览版)</target>
         <note />
       </trans-unit>
       <trans-unit id="DotNetToolSelfUpdateMessage">
@@ -113,8 +113,8 @@
         <note />
       </trans-unit>
       <trans-unit id="FallbackParsingWarning">
-        <source>Note: Update plan generated using fallback parsing due to unresolvable AppHost SDK. Dependency analysis may have reduced accuracy.</source>
-        <target state="translated">注意: 由于 AppHost SDK 无法解析，已采用回退解析生成更新计划。依赖项分析的准确性可能有所降低。</target>
+        <source>Note: Update plan generated using fallback parsing due to unresolvable apphost SDK. Dependency analysis may have reduced accuracy.</source>
+        <target state="needs-review-translation">注意: 由于 AppHost SDK 无法解析，已采用回退解析生成更新计划。依赖项分析的准确性可能有所降低。</target>
         <note />
       </trans-unit>
       <trans-unit id="MappingAddedFormat">
@@ -138,8 +138,8 @@
         <note />
       </trans-unit>
       <trans-unit id="NoAppHostFoundUpdateCliPrompt">
-        <source>No Aspire AppHost project found. Would you like to update the Aspire CLI instead?</source>
-        <target state="translated">找不到 Aspire AppHost 项目。是否改为更新 Aspire CLI?</target>
+        <source>No Aspire apphost project found. Would you like to update the Aspire CLI instead?</source>
+        <target state="needs-review-translation">找不到 Aspire AppHost 项目。是否改为更新 Aspire CLI?</target>
         <note />
       </trans-unit>
       <trans-unit id="NoChangesDetectedInNuGetConfig">
@@ -173,8 +173,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="translated">Aspire AppHost 项目文件的路径。</target>
+        <source>The path to the Aspire apphost project file</source>
+        <target state="needs-review-translation">Aspire AppHost 项目文件的路径。</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectReferenceNoFullPath">
@@ -225,6 +225,11 @@
       <trans-unit id="SelectChannelPrompt">
         <source>Select a channel:</source>
         <target state="translated">选择频道:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SelfOptionDescription">
+        <source>Update the Aspire CLI itself to the latest version</source>
+        <target state="new">Update the Aspire CLI itself to the latest version</target>
         <note />
       </trans-unit>
       <trans-unit id="UnxpectedCodePath">

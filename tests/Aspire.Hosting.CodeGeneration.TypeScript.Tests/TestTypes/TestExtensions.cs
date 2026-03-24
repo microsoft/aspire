@@ -602,7 +602,7 @@ public static class TestExtensions
     // ===== CancellationToken Tests =====
 
     /// <summary>
-    /// Tests CancellationToken parameter - verifies mapping to AbortSignal in TypeScript.
+    /// Tests CancellationToken parameter - generated TypeScript should accept AbortSignal or CancellationToken for inputs.
     /// </summary>
     [AspireExport("getStatusAsync", Description = "Gets the status of the resource asynchronously")]
     public static Task<string> GetStatusAsync(
@@ -613,7 +613,7 @@ public static class TestExtensions
     }
 
     /// <summary>
-    /// Tests CancellationToken in callback parameter.
+    /// Tests CancellationToken in callback parameter - generated TypeScript should materialize host values as CancellationToken.
     /// </summary>
     [AspireExport("withCancellableOperation", Description = "Performs a cancellable operation")]
     public static IResourceBuilder<T> WithCancellableOperation<T>(

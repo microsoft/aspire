@@ -61,7 +61,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Manage AI agent integrations..
+        ///   Looks up a localized string similar to Manage AI agent environment configuration..
         /// </summary>
         internal static string Description {
             get {

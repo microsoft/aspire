@@ -23,8 +23,8 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Manage AI agent specific setup.</source>
-        <target state="translated">管理特定于 AI 智能体的设置。</target>
+        <source>Manage AI agent environment configuration</source>
+        <target state="needs-review-translation">管理 AI 智能体集成。</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigureMcpServer">
@@ -33,8 +33,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_Description">
-        <source>Initialize agent environment configuration for detected agents.</source>
-        <target state="translated">初始化检测到的智能体的智能体环境配置。</target>
+        <source>Initialize agent environment configuration for detected agents</source>
+        <target state="needs-review-translation">初始化检测到的智能体的智能体环境配置。</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstallSkillFile">
@@ -58,8 +58,8 @@
         <note />
       </trans-unit>
       <trans-unit id="McpCommand_Description">
-        <source>Start the MCP (Model Context Protocol) server.</source>
-        <target state="translated">启动 MCP (模型上下文协议)服务器。</target>
+        <source>Start the MCP (Model Context Protocol) server</source>
+        <target state="needs-review-translation">启动 MCP (模型上下文协议)服务器。</target>
         <note />
       </trans-unit>
       <trans-unit id="SkipNoneDescription">

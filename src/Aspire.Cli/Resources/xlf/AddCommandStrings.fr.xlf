@@ -8,8 +8,8 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Add a hosting integration to the apphost.</source>
-        <target state="translated">Ajoutez une intégration d’hébergement à l’apphost.</target>
+        <source>Add a hosting integration to the apphost</source>
+        <target state="needs-review-translation">Ajoutez une intégration d’hébergement à l’Aspire AppHost.</target>
         <note />
       </trans-unit>
       <trans-unit id="ErrorOccurredWhileAddingPackage">
@@ -18,8 +18,8 @@
         <note />
       </trans-unit>
       <trans-unit id="IntegrationArgumentDescription">
-        <source>The name of the integration to add (e.g. redis, postgres).</source>
-        <target state="translated">Nom de l’intégration à ajouter (par exemple, redis, postgres).</target>
+        <source>The name of the integration to add (e.g. redis, postgres)</source>
+        <target state="needs-review-translation">Nom de l’intégration à ajouter (par exemple, redis, postgres).</target>
         <note />
       </trans-unit>
       <trans-unit id="NoIntegrationPackagesFound">
@@ -48,8 +48,8 @@
         <note>{0} is a number, {1} is the log file path</note>
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file to add the integration to.</source>
-        <target state="translated">Chemin d’accès au fichier de projet Aspire AppHost auquel ajouter l’intégration.</target>
+        <source>The path to the Aspire apphost project file to add the integration to</source>
+        <target state="needs-review-translation">Chemin du fichier projet auquel ajouter l’intégration.</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchingForAspirePackages">
@@ -68,17 +68,17 @@
         <note />
       </trans-unit>
       <trans-unit id="SourceArgumentDescription">
-        <source>The NuGet source to use for the integration.</source>
-        <target state="translated">Source NuGet à utiliser pour l’intégration.</target>
+        <source>The NuGet source to use for the integration</source>
+        <target state="needs-review-translation">Source NuGet à utiliser pour l’intégration.</target>
         <note />
       </trans-unit>
       <trans-unit id="StoppedRunningInstance" translate="yes" xml:space="preserve">
-          <source>Stopped a running Aspire AppHost instance to allow package modification.</source>
-          <target state="translated">Arrêt d’une instance AppHost Aspire en cours d’exécution pour permettre la modification du package.</target><note />
+          <source>Stopped a running Aspire apphost instance to allow package modification.</source>
+          <target state="new">Stopped a running Aspire apphost instance to allow package modification.</target><note />
         </trans-unit>
       <trans-unit id="UnableToStopRunningInstances">
-        <source>Unable to stop one or more running Aspire AppHost instances. Please stop the application and try again.</source>
-        <target state="translated">Impossible d’arrêter une ou plusieurs instances AppHost Aspire en cours d’exécution. Veuillez arrêter l’application puis réessayez.</target>
+        <source>Unable to stop one or more running Aspire apphost instances. Please stop the application and try again.</source>
+        <target state="new">Unable to stop one or more running Aspire apphost instances. Please stop the application and try again.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnexpectedNumberOfPackagesFound">
@@ -92,8 +92,8 @@
         <note />
       </trans-unit>
       <trans-unit id="VersionArgumentDescription">
-        <source>The version of the integration to add.</source>
-        <target state="translated">Version de l’intégration à ajouter.</target>
+        <source>The version of the integration to add</source>
+        <target state="needs-review-translation">Version de l’intégration à ajouter.</target>
         <note />
       </trans-unit>
     </body>

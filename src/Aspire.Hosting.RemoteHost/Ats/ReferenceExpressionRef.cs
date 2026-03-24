@@ -1,13 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Reflection;
 using System.Text.Json.Nodes;
-using Aspire.Hosting.ApplicationModel;
+using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.RemoteHost.Ats;
 
 /// <summary>
-/// Reference to a ReferenceExpression in the ATS protocol.
+/// Reference to a <c>ReferenceExpression</c> in the ATS protocol.
 /// Used when passing reference expressions as arguments.
 /// </summary>
 /// <remarks>
@@ -138,15 +139,15 @@ internal sealed class ReferenceExpressionRef
     }
 
     /// <summary>
-    /// Creates a ReferenceExpression from this reference by resolving handles.
+    /// Creates a <c>ReferenceExpression</c> from this reference by resolving handles.
     /// Handles both value mode and conditional mode.
     /// </summary>
     /// <param name="handles">The handle registry to resolve handles from.</param>
     /// <param name="capabilityId">The capability ID for error messages.</param>
     /// <param name="paramName">The parameter name for error messages.</param>
-    /// <returns>A constructed ReferenceExpression.</returns>
+    /// <returns>A constructed <c>ReferenceExpression</c>.</returns>
     /// <exception cref="CapabilityException">Thrown if handles cannot be resolved or are invalid types.</exception>
-    public ReferenceExpression ToReferenceExpression(
+    public object ToReferenceExpression(
         HandleRegistry handles,
         string capabilityId,
         string paramName)
@@ -159,7 +160,7 @@ internal sealed class ReferenceExpressionRef
         return ToValueReferenceExpression(handles, capabilityId, paramName);
     }
 
-    private ReferenceExpression ToConditionalReferenceExpression(
+    private object ToConditionalReferenceExpression(
         HandleRegistry handles,
         string capabilityId,
         string paramName)
@@ -174,7 +175,8 @@ internal sealed class ReferenceExpressionRef
             throw CapabilityException.HandleNotFound(conditionHandleRef.HandleId, capabilityId);
         }
 
-        if (conditionObj is not IValueProvider condition)
+        var valueProviderType = GetRequiredHostingType(HostingTypeNames.ValueProviderInterface, conditionObj);
+        if (conditionObj is null || !valueProviderType.IsAssignableFrom(conditionObj.GetType()))
         {
             throw CapabilityException.InvalidArgument(capabilityId, $"{paramName}.condition",
                 $"Condition handle must resolve to an IValueProvider, got {conditionObj?.GetType().Name ?? "null"}");
@@ -192,20 +194,20 @@ internal sealed class ReferenceExpressionRef
                 "whenFalse must be a reference expression ({ $expr: { ... } })");
         var whenFalse = whenFalseExprRef.ToReferenceExpression(handles, capabilityId, $"{paramName}.whenFalse");
 
-        return ReferenceExpression.CreateConditional(condition, MatchValue ?? bool.TrueString, whenTrue, whenFalse);
+        return CreateConditionalReferenceExpression(conditionObj, MatchValue ?? bool.TrueString, whenTrue, whenFalse);
     }
 
-    private ReferenceExpression ToValueReferenceExpression(
+    private object ToValueReferenceExpression(
         HandleRegistry handles,
         string capabilityId,
         string paramName)
     {
-        var builder = new ReferenceExpressionBuilder();
+        var builder = CreateReferenceExpressionBuilder();
 
         if (ValueProviders == null || ValueProviders.Length == 0)
         {
             // No value providers - just a literal string
-            builder.AppendLiteral(Format!);
+            AppendLiteral(builder, Format!);
         }
         else
         {
@@ -249,22 +251,22 @@ internal sealed class ReferenceExpressionRef
                     if (provider is string literalString)
                     {
                         // String value providers are treated as literals
-                        builder.AppendLiteral(literalString);
+                        AppendLiteral(builder, literalString);
                     }
                     else if (provider != null)
                     {
                         // Object value providers (handles) are appended as value providers
-                        builder.AppendValueProvider(provider);
+                        AppendValueProvider(builder, provider);
                     }
                 }
                 else
                 {
-                    builder.AppendLiteral(part);
+                    AppendLiteral(builder, part);
                 }
             }
         }
 
-        return builder.Build();
+        return BuildReferenceExpression(builder);
     }
 
     /// <summary>
@@ -312,5 +314,95 @@ internal sealed class ReferenceExpressionRef
         }
 
         return [.. parts];
+    }
+
+    private static object CreateReferenceExpressionBuilder()
+    {
+        var builderType = GetRequiredHostingType(HostingTypeNames.ReferenceExpressionBuilder);
+        return Activator.CreateInstance(builderType)
+            ?? throw new InvalidOperationException($"Failed to create '{builderType.FullName}'.");
+    }
+
+    private static void AppendLiteral(object builder, string value)
+    {
+        var appendLiteralMethod = builder.GetType().GetMethod(
+            "AppendLiteral",
+            BindingFlags.Instance | BindingFlags.Public,
+            binder: null,
+            [typeof(string)],
+            modifiers: null)
+            ?? throw new InvalidOperationException($"'{builder.GetType().FullName}' is missing AppendLiteral(string).");
+
+        appendLiteralMethod.Invoke(builder, [value]);
+    }
+
+    private static void AppendValueProvider(object builder, object valueProvider)
+    {
+        var appendValueProviderMethod = builder.GetType().GetMethod(
+            "AppendValueProvider",
+            BindingFlags.Instance | BindingFlags.Public,
+            binder: null,
+            [typeof(object), typeof(string)],
+            modifiers: null)
+            ?? throw new InvalidOperationException($"'{builder.GetType().FullName}' is missing AppendValueProvider(object, string).");
+
+        appendValueProviderMethod.Invoke(builder, [valueProvider, null]);
+    }
+
+    private static object BuildReferenceExpression(object builder)
+    {
+        var buildMethod = builder.GetType().GetMethod("Build", BindingFlags.Instance | BindingFlags.Public)
+            ?? throw new InvalidOperationException($"'{builder.GetType().FullName}' is missing Build().");
+
+        return buildMethod.Invoke(builder, null)
+            ?? throw new InvalidOperationException($"'{builder.GetType().FullName}.Build()' returned null.");
+    }
+
+    private static object CreateConditionalReferenceExpression(
+        object condition,
+        string matchValue,
+        object whenTrue,
+        object whenFalse)
+    {
+        var referenceExpressionType = GetRequiredHostingType(HostingTypeNames.ReferenceExpression, condition);
+        var valueProviderType = GetRequiredHostingType(HostingTypeNames.ValueProviderInterface, condition);
+
+        var createConditionalMethod = referenceExpressionType.GetMethod(
+            "CreateConditional",
+            BindingFlags.Public | BindingFlags.Static,
+            binder: null,
+            [valueProviderType, typeof(string), referenceExpressionType, referenceExpressionType],
+            modifiers: null)
+            ?? throw new InvalidOperationException($"'{referenceExpressionType.FullName}' is missing CreateConditional(...).");
+
+        return createConditionalMethod.Invoke(null, [condition, matchValue, whenTrue, whenFalse])
+            ?? throw new InvalidOperationException($"'{referenceExpressionType.FullName}.CreateConditional(...)' returned null.");
+    }
+
+    private static Type GetRequiredHostingType(string fullName, object? anchor = null) =>
+        FindHostingType(fullName, anchor) ??
+        throw new InvalidOperationException($"Could not resolve runtime type '{fullName}'.");
+
+    private static Type? FindHostingType(string fullName, object? anchor = null)
+    {
+        if (anchor is not null)
+        {
+            var anchoredType = anchor.GetType().Assembly.GetType(fullName, throwOnError: false);
+            if (anchoredType is not null)
+            {
+                return anchoredType;
+            }
+        }
+
+        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            var type = assembly.GetType(fullName, throwOnError: false);
+            if (type is not null)
+            {
+                return type;
+            }
+        }
+
+        return null;
     }
 }

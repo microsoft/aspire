@@ -63,108 +63,79 @@ public sealed class AzureContainerRegistryDeploymentTests(ITestOutputHelper outp
             using var terminal = DeploymentE2ETestHelpers.CreateTestTerminal();
             var pendingRun = terminal.RunAsync(cancellationToken);
 
-            // Pattern searchers for aspire init
-            var waitingForInitComplete = new CellPatternSearcher()
-                .Find("Aspire initialization complete");
-
-            // Pattern searchers for aspire add prompts
-            var waitingForAddVersionSelectionPrompt = new CellPatternSearcher()
-                .Find("(based on NuGet.config)");
-
-            // Pattern searcher for deployment success
-            var waitingForPipelineSucceeded = new CellPatternSearcher()
-                .Find("PIPELINE SUCCEEDED");
-
             var counter = new SequenceCounter();
-            var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+            var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
             // Step 1: Prepare environment
             output.WriteLine("Step 1: Preparing environment...");
-            sequenceBuilder.PrepareEnvironment(workspace, counter);
+            await auto.PrepareEnvironmentAsync(workspace, counter);
 
             // Step 2: Set up CLI environment (in CI)
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
                 output.WriteLine("Step 2: Using pre-installed Aspire CLI from local build...");
-                sequenceBuilder.SourceAspireCliEnvironment(counter);
+                await auto.SourceAspireCliEnvironmentAsync(counter);
             }
 
             // Step 3: Create single-file AppHost using aspire init
             output.WriteLine("Step 3: Creating single-file AppHost with aspire init...");
-            sequenceBuilder.Type("aspire init --language csharp")
-                .Enter()
-                // NuGet.config prompt may or may not appear depending on environment.
-                // Wait a moment then press Enter to dismiss if present, then wait for completion.
-                .Wait(TimeSpan.FromSeconds(5))
-                .Enter()  // Dismiss NuGet.config prompt if present (no-op if already auto-accepted)
-                .WaitUntil(s => waitingForInitComplete.Search(s).Count > 0, TimeSpan.FromMinutes(2))
-                .DeclineAgentInitPrompt()
-                .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(2));
+            await auto.AspireInitAsync(counter);
 
             // Step 4: Add Aspire.Hosting.Azure.ContainerRegistry package
             output.WriteLine("Step 4: Adding Azure Container Registry hosting package...");
-            sequenceBuilder.Type("aspire add Aspire.Hosting.Azure.ContainerRegistry")
-                .Enter();
+            await auto.TypeAsync("aspire add Aspire.Hosting.Azure.ContainerRegistry");
+            await auto.EnterAsync();
 
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
-                sequenceBuilder
-                    .WaitUntil(s => waitingForAddVersionSelectionPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(60))
-                    .Enter();
+                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
+                await auto.EnterAsync();
             }
 
-            sequenceBuilder.WaitForSuccessPrompt(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
 
             // Step 5: Modify apphost.cs to add Azure Container Registry resource
-            sequenceBuilder.ExecuteCallback(() =>
-            {
-                var appHostFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
+            var appHostFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
 
-                output.WriteLine($"Looking for apphost.cs at: {appHostFilePath}");
+            output.WriteLine($"Looking for apphost.cs at: {appHostFilePath}");
 
-                var content = File.ReadAllText(appHostFilePath);
+            var content = File.ReadAllText(appHostFilePath);
 
-                var buildRunPattern = "builder.Build().Run();";
-                var replacement = """
+            var buildRunPattern = "builder.Build().Run();";
+            var replacement = """
 // Add Azure Container Registry resource for deployment testing
 builder.AddAzureContainerRegistry("acr");
 
 builder.Build().Run();
 """;
 
-                content = content.Replace(buildRunPattern, replacement);
-                File.WriteAllText(appHostFilePath, content);
+            content = content.Replace(buildRunPattern, replacement);
+            File.WriteAllText(appHostFilePath, content);
 
-                output.WriteLine($"Modified apphost.cs to add Azure Container Registry resource");
-            });
+            output.WriteLine($"Modified apphost.cs to add Azure Container Registry resource");
 
             // Step 6: Set environment variables for deployment
-            sequenceBuilder.Type($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}")
-                .Enter()
-                .WaitForSuccessPrompt(counter);
+            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
 
             // Step 7: Deploy to Azure using aspire deploy
             output.WriteLine("Step 7: Starting Azure deployment...");
-            sequenceBuilder
-                .Type("aspire deploy --clear-cache")
-                .Enter()
-                .WaitUntil(s => waitingForPipelineSucceeded.Search(s).Count > 0, TimeSpan.FromMinutes(20))
-                .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(2));
+            await auto.TypeAsync("aspire deploy --clear-cache");
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("PIPELINE SUCCEEDED", timeout: TimeSpan.FromMinutes(20));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
             // Step 8: Verify the Azure Container Registry was created
             output.WriteLine("Step 8: Verifying Azure Container Registry...");
-            sequenceBuilder
-                .Type($"az acr list -g \"{resourceGroupName}\" --query \"[].name\" -o tsv")
-                .Enter()
-                .WaitForSuccessPrompt(counter, TimeSpan.FromSeconds(30));
+            await auto.TypeAsync($"az acr list -g \"{resourceGroupName}\" --query \"[].name\" -o tsv");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
             // Step 9: Exit terminal
-            sequenceBuilder
-                .Type("exit")
-                .Enter();
+            await auto.TypeAsync("exit");
+            await auto.EnterAsync();
 
-            var sequence = sequenceBuilder.Build();
-            await sequence.ApplyAsync(terminal, cancellationToken);
             await pendingRun;
 
             var duration = DateTime.UtcNow - startTime;

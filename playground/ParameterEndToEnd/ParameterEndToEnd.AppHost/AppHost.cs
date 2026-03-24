@@ -36,7 +36,7 @@ var parameterWithMarkdownDescription = builder.AddParameter("markdownDescription
 
         And a list:
         - Item 1
-        - Item 2 (and a [hyperlink](https://github.com/dotnet/aspire))
+        - Item 2 (and a [hyperlink](https://github.com/microsoft/aspire))
         - Item 3
         """, enableMarkdown: true);
 

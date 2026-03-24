@@ -2,9 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Foundry;
 using Aspire.Hosting.Utils;
 using Microsoft.AI.Foundry.Local;
-using Aspire.Hosting.Foundry;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Azure.Tests;
@@ -176,8 +176,62 @@ public class FoundryExtensionsTests
         var roles = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(), r => r.Name == "foundry-roles");
         var rolesManifest = await AzureManifestUtils.GetManifestWithBicep(model, roles);
 
+        Assert.Contains("name: 'foundry-caphost'", manifest.BicepText);
+
         await Verify(manifest.BicepText, extension: "bicep")
             .AppendContentAsFile(rolesManifest.BicepText, "bicep");
+    }
+
+    [Fact]
+    public void AddProject_SetsParentFoundryForProvisioningOrdering()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var foundry = builder.AddFoundry("myAIFoundry");
+        var project = foundry
+            .AddProject("my-project");
+
+        Assert.Same(foundry.Resource, project.Resource.Parent);
+    }
+
+    [Fact]
+    public async Task AddProject_WithPublishAsExistingFoundry_GeneratesBicepThatReferencesExistingParent()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var project = builder.AddFoundry("foundry")
+            .PublishAsExisting("existing-foundry", "existing-rg")
+            .AddProject("project");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var (_, bicepText) = await AzureManifestUtils.GetManifestWithBicep(model, project.Resource);
+
+        Assert.Contains("resource foundry 'Microsoft.CognitiveServices/accounts@", bicepText);
+        Assert.Contains("existing = {", bicepText);
+        Assert.Contains("name: 'existing-foundry'", bicepText);
+        Assert.Contains("scope: resourceGroup('existing-rg')", bicepText);
+        Assert.DoesNotContain("kind: 'AIServices'", bicepText);
+    }
+
+    [Fact]
+    public async Task AddFoundry_WithPublishAsExisting_UsesStableDefaultCapabilityHostName()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var foundry = builder.AddFoundry("logical-foundry")
+            .PublishAsExisting("existing-foundry", "existing-rg");
+
+        foundry.AddDeployment("chat", "gpt-4", "1.0", "OpenAI");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var (_, bicepText) = await AzureManifestUtils.GetManifestWithBicep(model, foundry.Resource);
+
+        Assert.Contains("name: 'foundry-caphost'", bicepText);
+        Assert.DoesNotContain("logical-foundry-caphost", bicepText);
     }
 
     [Fact]
@@ -194,4 +248,5 @@ public class FoundryExtensionsTests
         // Assert - Both calls should return the same resource instance, not duplicates
         Assert.Same(firstResult, secondResult);
     }
+
 }

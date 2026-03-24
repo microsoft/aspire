@@ -3,13 +3,13 @@
   <file datatype="xml" source-language="en" target-language="ja" original="../DescribeCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Describe resources in a running apphost.</source>
-        <target state="translated">実行中の AppHost のリソースを説明します。</target>
+        <source>Describe resources in a running apphost</source>
+        <target state="needs-review-translation">実行中の Aspire apphost からのリソース スナップショットを表示します。</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
-        <source>Continuously stream resource state changes.</source>
-        <target state="translated">リソースの状態の変化を継続的にストリームします。</target>
+        <source>Continuously stream resource state changes</source>
+        <target state="new">Continuously stream resource state changes</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderEndpoints">
@@ -38,18 +38,18 @@
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">出力形式 (テーブルまたは JSON)。</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">機械処理用の JSON 形式で出力します。</target>
         <note />
       </trans-unit>
       <trans-unit id="NoAppHostFound">
-        <source>No AppHost project found.</source>
-        <target state="translated">AppHost プロジェクトは見つかりません。</target>
+        <source>No apphost project found.</source>
+        <target state="needs-review-translation">AppHost プロジェクトは見つかりません。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The name of the resource to display. If not specified, all resources are shown.</source>
-        <target state="translated">表示するリソースの名前。指定しない場合は、すべてのリソースが表示されます。</target>
+        <target state="needs-review-translation">表示するリソースの名前。指定しない場合は、すべてのリソースが表示されます。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">

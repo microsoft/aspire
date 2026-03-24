@@ -1,14 +1,17 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Hosting.Orchestrator;
 using Aspire.Hosting.Resources;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.ApplicationModel;
 
 internal static class CommandsConfigurationExtensions
 {
+    private const string BuildLogPrefix = "[build] ";
     internal static void AddLifeCycleCommands(this IResource resource)
     {
         if (resource.TryGetLastAnnotation<ExcludeLifecycleCommandsAnnotation>(out _))
@@ -29,7 +32,7 @@ internal static class CommandsConfigurationExtensions
             updateState: context =>
             {
                 var state = context.ResourceSnapshot.State?.Text;
-                if (IsStarting(state) || IsRuntimeUnhealthy(state) || HasNoState(state))
+                if (IsStarting(state) || IsBuilding(state) || IsRuntimeUnhealthy(state) || HasNoState(state))
                 {
                     return ResourceCommandState.Disabled;
                 }
@@ -66,7 +69,7 @@ internal static class CommandsConfigurationExtensions
                 {
                     return ResourceCommandState.Disabled;
                 }
-                else if (!IsStopped(state) && !IsStarting(state) && !IsWaiting(state) && !IsRuntimeUnhealthy(state) && !HasNoState(state))
+                else if (!IsStopped(state) && !IsStarting(state) && !IsWaiting(state) && !IsBuilding(state) && !IsRuntimeUnhealthy(state) && !HasNoState(state))
                 {
                     return ResourceCommandState.Enabled;
                 }
@@ -102,7 +105,7 @@ internal static class CommandsConfigurationExtensions
             updateState: context =>
             {
                 var state = context.ResourceSnapshot.State?.Text;
-                if (IsStarting(state) || IsStopping(state) || IsStopped(state) || IsWaiting(state) || IsRuntimeUnhealthy(state) || HasNoState(state))
+                if (IsStarting(state) || IsStopping(state) || IsStopped(state) || IsWaiting(state) || IsBuilding(state) || IsRuntimeUnhealthy(state) || HasNoState(state))
                 {
                     return ResourceCommandState.Disabled;
                 }
@@ -118,13 +121,266 @@ internal static class CommandsConfigurationExtensions
             iconVariant: IconVariant.Regular,
             isHighlighted: false));
 
+        if (resource is ProjectResource projectResource)
+        {
+            var projectMetadata = projectResource.Annotations.OfType<IProjectMetadata>().SingleOrDefault();
+            if (projectMetadata is null || !projectMetadata.IsFileBasedApp)
+            {
+                AddRebuildCommand(projectResource);
+            }
+        }
+
         // Treat "Unknown" as stopped so the command to start the resource is available when "Unknown".
-        // There is a situation where a container can be stopped with this state: https://github.com/dotnet/aspire/issues/5977
+        // There is a situation where a container can be stopped with this state: https://github.com/microsoft/aspire/issues/5977
         static bool IsStopped(string? state) => KnownResourceStates.TerminalStates.Contains(state) || state == KnownResourceStates.NotStarted || state == "Unknown";
         static bool IsStopping(string? state) => state == KnownResourceStates.Stopping;
         static bool IsStarting(string? state) => state == KnownResourceStates.Starting;
         static bool IsWaiting(string? state) => state == KnownResourceStates.Waiting;
+        static bool IsBuilding(string? state) => state == KnownResourceStates.Building;
         static bool IsRuntimeUnhealthy(string? state) => state == KnownResourceStates.RuntimeUnhealthy;
         static bool HasNoState(string? state) => string.IsNullOrEmpty(state);
+    }
+
+    private static void AddRebuildCommand(ProjectResource projectResource)
+    {
+        // When a resource has replicas, the command framework invokes the handler
+        // once per replica in parallel. We use a shared task so only a single build
+        // runs and every replica handler awaits the same result.
+        Task<ExecuteCommandResult>? activeRebuildTask = null;
+        var rebuildLock = new object();
+
+        projectResource.Annotations.Add(new ResourceCommandAnnotation(
+            name: KnownResourceCommands.RebuildCommand,
+            displayName: CommandStrings.RebuildName,
+            executeCommand: context =>
+            {
+                lock (rebuildLock)
+                {
+                    if (activeRebuildTask is null || activeRebuildTask.IsCompleted)
+                    {
+                        activeRebuildTask = ExecuteRebuildAsync(context, projectResource);
+                    }
+                }
+
+                return activeRebuildTask;
+            },
+            updateState: context =>
+            {
+                var state = context.ResourceSnapshot.State?.Text;
+                return state is not null && KnownResourceStates.BuildableStates.Contains(state)
+                    ? ResourceCommandState.Enabled
+                    : ResourceCommandState.Disabled;
+            },
+            displayDescription: CommandStrings.RebuildDescription,
+            parameter: null,
+            confirmationMessage: null,
+            iconName: "ArrowSync",
+            iconVariant: IconVariant.Regular,
+            isHighlighted: false));
+    }
+
+    private static async Task<ExecuteCommandResult> ExecuteRebuildAsync(ExecuteCommandContext context, ProjectResource projectResource)
+    {
+        var orchestrator = context.ServiceProvider.GetRequiredService<ApplicationOrchestrator>();
+        var resourceNotificationService = context.ServiceProvider.GetRequiredService<ResourceNotificationService>();
+        var loggerService = context.ServiceProvider.GetRequiredService<ResourceLoggerService>();
+        var model = context.ServiceProvider.GetRequiredService<DistributedApplicationModel>();
+
+        var rebuilderResource = model.Resources.OfType<ProjectRebuilderResource>().FirstOrDefault(r => r.Parent == projectResource);
+        if (rebuilderResource is null)
+        {
+            return new ExecuteCommandResult { Success = false, ErrorMessage = string.Format(CultureInfo.InvariantCulture, CommandStrings.RebuilderResourceNotFound, projectResource.Name) };
+        }
+
+        var mainLogger = loggerService.GetLogger(projectResource);
+        var replicaNames = projectResource.GetResolvedResourceNames();
+
+        // Capture each replica's state before rebuild so we can restore inactive replicas.
+        var preRebuildStates = new Dictionary<string, string?>(StringComparer.Ordinal);
+        foreach (var name in replicaNames)
+        {
+            if (resourceNotificationService.TryGetCurrentState(name, out var evt))
+            {
+                preRebuildStates[name] = evt.Snapshot.State?.Text;
+            }
+        }
+
+        // Stop non-waiting replicas. Waiting replicas have no running process — their DCP
+        // lifecycle is blocked at WaitForInBeforeResourceStartedEvent waiting for dependencies.
+        // Attempting to stop them would fail because no DCP Executable has been created yet.
+        var replicasToStop = replicaNames.Where(name =>
+            !preRebuildStates.TryGetValue(name, out var state)
+            || state != KnownResourceStates.Waiting);
+
+        mainLogger.LogInformation(BuildLogPrefix + "Stopping resource for rebuild...");
+        await Task.WhenAll(replicasToStop.Select(name => orchestrator.StopResourceAsync(name, context.CancellationToken))).ConfigureAwait(false);
+
+        // Set state to Building after replicas are stopped. Leave Waiting replicas in their
+        // current state — changing their state text would unblock WaitForInBeforeResourceStartedEvent,
+        // causing CreateExecutableAsync to launch the OLD binary while the build is in progress.
+        await resourceNotificationService.PublishUpdateAsync(projectResource, s =>
+            s.State?.Text == KnownResourceStates.Waiting
+                ? s
+                : s with { State = new ResourceStateSnapshot(KnownResourceStates.Building, KnownResourceStateStyles.Info) }
+        ).ConfigureAwait(false);
+
+        // Start forwarding logs from the rebuilder to the main resource's console.
+        using var logCts = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
+        var rebuilderInstanceName = rebuilderResource.GetResolvedResourceNames()[0];
+        var logForwardTask = ForwardLogsAsync(loggerService, rebuilderInstanceName, mainLogger, logCts.Token);
+
+        try
+        {
+            // Start the rebuilder resource (runs dotnet build).
+            mainLogger.LogInformation(BuildLogPrefix + "Building project...");
+            await orchestrator.StartResourceAsync(rebuilderInstanceName, context.CancellationToken).ConfigureAwait(false);
+
+            // Wait for the rebuilder to reach a terminal state, with a timeout.
+            int? exitCode = null;
+            using var buildTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
+            buildTimeoutCts.CancelAfter(TimeSpan.FromMinutes(10));
+
+            try
+            {
+                await foreach (var evt in resourceNotificationService.WatchAsync(buildTimeoutCts.Token).ConfigureAwait(false))
+                {
+                    if (evt.Resource == rebuilderResource &&
+                        KnownResourceStates.TerminalStates.Contains(evt.Snapshot.State?.Text))
+                    {
+                        exitCode = evt.Snapshot.ExitCode;
+                        break;
+                    }
+                }
+            }
+            catch (OperationCanceledException) when (!context.CancellationToken.IsCancellationRequested)
+            {
+                // Build timed out.
+                mainLogger.LogError(BuildLogPrefix + "Build timed out.");
+
+                await resourceNotificationService.PublishUpdateAsync(projectResource, s => s with
+                {
+                    State = new ResourceStateSnapshot(KnownResourceStates.FailedToStart, KnownResourceStateStyles.Error)
+                }).ConfigureAwait(false);
+                return new ExecuteCommandResult { Success = false, ErrorMessage = "Build timed out." };
+            }
+
+            if (exitCode == 0)
+            {
+                // Restart replicas that were Running before the rebuild.
+                // Waiting replicas are already in the startup pipeline — when their deps become
+                // ready, CreateExecutableAsync will launch the freshly-built binary automatically.
+                mainLogger.LogInformation(BuildLogPrefix + "Build succeeded. Restarting resource...");
+                var anyRestarted = false;
+                foreach (var name in replicaNames)
+                {
+                    var wasActive = preRebuildStates.TryGetValue(name, out var priorState)
+                        && priorState == KnownResourceStates.Running;
+
+                    var wasWaiting = preRebuildStates.TryGetValue(name, out var waitState)
+                        && waitState == KnownResourceStates.Waiting;
+
+                    if (wasWaiting)
+                    {
+                        // The resource is still waiting for dependencies. The build output on disk
+                        // has been updated, so when dependencies become ready the new binary will
+                        // be launched. Log a message so the user knows the build succeeded.
+                        mainLogger.LogInformation(BuildLogPrefix + "Build succeeded. Resource will start with the updated binary when dependencies are ready.");
+                        anyRestarted = true;
+                    }
+                    else if (wasActive)
+                    {
+                        anyRestarted = true;
+                        await resourceNotificationService.PublishUpdateAsync(projectResource, name, s => s with
+                        {
+                            State = new ResourceStateSnapshot(KnownResourceStates.Starting, KnownResourceStateStyles.Info)
+                        }).ConfigureAwait(false);
+
+                        await orchestrator.StartResourceAsync(name, context.CancellationToken).ConfigureAwait(false);
+                    }
+                }
+
+                if (!anyRestarted)
+                {
+                    // No replicas were running before rebuild (e.g. resource was stopped).
+                    // Restore each replica to its pre-build state so it doesn't stay stuck
+                    // in "Building" indefinitely.
+                    foreach (var name in replicaNames)
+                    {
+                        if (preRebuildStates.TryGetValue(name, out var priorState) && priorState is not null)
+                        {
+                            await resourceNotificationService.PublishUpdateAsync(projectResource, name, s => s with
+                            {
+                                State = new ResourceStateSnapshot(priorState, KnownResourceStateStyles.Info)
+                            }).ConfigureAwait(false);
+                        }
+                    }
+                }
+
+                return CommandResults.Success();
+            }
+            else
+            {
+                mainLogger.LogError(BuildLogPrefix + "Build failed with exit code {ExitCode}.", exitCode);
+                await resourceNotificationService.PublishUpdateAsync(projectResource, s => s with
+                {
+                    State = new ResourceStateSnapshot(KnownResourceStates.FailedToStart, KnownResourceStateStyles.Error)
+                }).ConfigureAwait(false);
+                return new ExecuteCommandResult { Success = false, ErrorMessage = $"Build failed with exit code {exitCode}." };
+            }
+        }
+        catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
+        {
+            // The command was cancelled (e.g. user navigated away or the dashboard closed).
+            // The replicas were already stopped for the rebuild, so set them to Exited.
+            mainLogger.LogWarning(BuildLogPrefix + "Rebuild was cancelled.");
+            await resourceNotificationService.PublishUpdateAsync(projectResource, s => s with
+            {
+                State = new ResourceStateSnapshot(KnownResourceStates.Finished, KnownResourceStateStyles.Info)
+            }).ConfigureAwait(false);
+            return new ExecuteCommandResult { Success = false, ErrorMessage = "Rebuild was cancelled." };
+        }
+        finally
+        {
+            await StopLogForwardingAsync(logCts, logForwardTask).ConfigureAwait(false);
+        }
+    }
+
+    private static async Task StopLogForwardingAsync(CancellationTokenSource logCts, Task logForwardTask)
+    {
+        await logCts.CancelAsync().ConfigureAwait(false);
+
+        try
+        {
+            await logForwardTask.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected when cancelling the log forwarder.
+        }
+    }
+
+    private static async Task ForwardLogsAsync(ResourceLoggerService loggerService, string sourceResourceName, ILogger targetLogger, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await foreach (var batch in loggerService.WatchAsync(sourceResourceName).WithCancellation(cancellationToken).ConfigureAwait(false))
+            {
+                foreach (var line in batch)
+                {
+                    if (line.IsErrorMessage)
+                    {
+                        targetLogger.LogWarning(BuildLogPrefix + "{Content}", line.Content);
+                    }
+                    else
+                    {
+                        targetLogger.LogInformation(BuildLogPrefix + "{Content}", line.Content);
+                    }
+                }
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Expected when the log forwarding is cancelled.
+        }
     }
 }

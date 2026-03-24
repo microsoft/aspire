@@ -98,7 +98,8 @@
                                     {
                                         <span class="error-message-text">@itemPart.ErrorMessage</span>
                                     }
-                                    else if (TryGetDataPart(itemPart, MimeTypeHelpers.SupportedImageTypes, out var imageData))
+
+                                    if (TryGetDataPart(itemPart, MimeTypeHelpers.SupportedImageTypes, out var imageData))
                                     {
                                         <img src="@imageData.Url" />
                                     }
@@ -140,6 +141,10 @@
                                                 </FluentAccordionItem>
                                             </FluentAccordion>
                                         </div>
+                                    }
+                                    else if (itemPart.ErrorMessage == itemPart.TextVisualizerViewModel.Text)
+                                    {
+                                        // Don't display text if it is the same as error message.
                                     }
                                     else
                                     {
@@ -498,7 +503,9 @@
                                 {
                                     <div class="error-message-text">@itemPart.ErrorMessage</div>
                                 }
-                                else
+
+                                // Don't display text if it is a copy of the error message
+                                if (itemPart.ErrorMessage != itemPart.TextVisualizerViewModel.Text)
                                 {
                                     <TextVisualizer ViewModel="@itemPart.TextVisualizerViewModel" HideLineNumbers="true" Virtualize="false" />
                                 }
