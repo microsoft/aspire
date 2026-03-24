@@ -136,6 +136,7 @@ public static class AzureCosmosExtensions
         if (useVNextPreview)
         {
             builder.WithHttpEndpoint(name: EmulatorHealthEndpointName, targetPort: 8080)
+                .WithEndpoint(EmulatorHealthEndpointName, e => e.IsDefaultReferenceEndpoint = false)
                 .WithHttpHealthCheck(endpointName: EmulatorHealthEndpointName, path: "/ready")
                 .WithUrlForEndpoint(EmulatorHealthEndpointName, u => u.DisplayLocation = UrlDisplayLocation.DetailsOnly);
 

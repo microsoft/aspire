@@ -801,6 +801,135 @@ public class WithReferenceTests
             ReferenceExpression.Create($"{ConnectionString}");
     }
 
+    [Fact]
+    public async Task NonDefaultReferenceEndpointExcludedFromUseAllEndpoints()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var projectA = builder.AddProject<ProjectA>("projecta")
+                              .WithHttpEndpoint(1000, 2000, "api")
+                              .WithEndpoint("api", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 2000))
+                              .WithHttpEndpoint(1000, 3000, "management")
+                              .WithEndpoint("management", e =>
+                              {
+                                  e.IsDefaultReferenceEndpoint = false;
+                                  e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 3000);
+                              });
+
+        var projectB = builder.AddProject<ProjectB>("projectb")
+                              .WithReference(projectA);
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectB.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+
+        // The "api" endpoint should be included (it's a default reference endpoint)
+        Assert.Equal("http://localhost:2000", config["services__projecta__http__0"]);
+        Assert.Equal("http://localhost:2000", config["PROJECTA_API"]);
+
+        // The "management" endpoint should NOT be included (IsDefaultReferenceEndpoint = false)
+        Assert.False(config.ContainsKey("services__projecta__http__1"));
+        Assert.False(config.ContainsKey("PROJECTA_MANAGEMENT"));
+    }
+
+    [Fact]
+    public async Task NonDefaultReferenceEndpointCanBeReferencedExplicitly()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var projectA = builder.AddProject<ProjectA>("projecta")
+                              .WithHttpEndpoint(1000, 2000, "api")
+                              .WithEndpoint("api", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 2000))
+                              .WithHttpEndpoint(1000, 3000, "management")
+                              .WithEndpoint("management", e =>
+                              {
+                                  e.IsDefaultReferenceEndpoint = false;
+                                  e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 3000);
+                              });
+
+        // Explicitly reference the non-default endpoint
+        var projectB = builder.AddProject<ProjectB>("projectb")
+                              .WithReference(projectA.GetEndpoint("management"));
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectB.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+
+        // The "management" endpoint should be included because it was explicitly referenced
+        Assert.Equal("http://localhost:3000", config["services__projecta__http__0"]);
+        Assert.Equal("http://localhost:3000", config["PROJECTA_MANAGEMENT"]);
+
+        // The "api" endpoint should NOT be included (wasn't referenced)
+        Assert.False(config.ContainsKey("PROJECTA_API"));
+    }
+
+    [Fact]
+    public async Task CombinedWithReferenceAndExplicitEndpointIncludesBoth()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var projectA = builder.AddProject<ProjectA>("projecta")
+                              .WithHttpEndpoint(1000, 2000, "api")
+                              .WithEndpoint("api", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 2000))
+                              .WithHttpEndpoint(1000, 3000, "management")
+                              .WithEndpoint("management", e =>
+                              {
+                                  e.IsDefaultReferenceEndpoint = false;
+                                  e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 3000);
+                              });
+
+        // Reference all default endpoints AND the non-default management endpoint explicitly
+        var projectB = builder.AddProject<ProjectB>("projectb")
+                              .WithReference(projectA)
+                              .WithReference(projectA.GetEndpoint("management"));
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectB.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+
+        // Both endpoints should be included
+        Assert.Equal("http://localhost:2000", config["services__projecta__http__0"]);
+        Assert.Equal("http://localhost:3000", config["services__projecta__http__1"]);
+        Assert.Equal("http://localhost:2000", config["PROJECTA_API"]);
+        Assert.Equal("http://localhost:3000", config["PROJECTA_MANAGEMENT"]);
+    }
+
+    [Fact]
+    public void IsDefaultReferenceEndpointDefaultsToTrue()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var container = builder.AddContainer("mycontainer", "myimage")
+                               .WithHttpEndpoint(targetPort: 8080);
+
+        var endpoint = container.Resource.Annotations.OfType<EndpointAnnotation>().Single();
+        Assert.True(endpoint.IsDefaultReferenceEndpoint);
+    }
+
+    [Fact]
+    public void WithEndpointCallbackCanSetIsDefaultReferenceEndpoint()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var container = builder.AddContainer("mycontainer", "myimage")
+                               .WithHttpEndpoint(targetPort: 8080, name: "api")
+                               .WithEndpoint("api", e => e.IsDefaultReferenceEndpoint = false);
+
+        var endpoint = container.Resource.Annotations.OfType<EndpointAnnotation>().Single();
+        Assert.False(endpoint.IsDefaultReferenceEndpoint);
+    }
+
+    [Fact]
+    public void EndpointReferenceReflectsIsDefaultReferenceEndpoint()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var container = builder.AddContainer("mycontainer", "myimage")
+                               .WithHttpEndpoint(targetPort: 8080, name: "primary")
+                               .WithHttpEndpoint(targetPort: 9000, name: "management")
+                               .WithEndpoint("management", e => e.IsDefaultReferenceEndpoint = false);
+
+        var primaryRef = container.GetEndpoint("primary");
+        var managementRef = container.GetEndpoint("management");
+
+        Assert.True(primaryRef.IsDefaultReferenceEndpoint);
+        Assert.False(managementRef.IsDefaultReferenceEndpoint);
+    }
+
     private sealed class TestResourceWithConnectionStringAndServiceDiscovery(string name) : ContainerResource(name), IResourceWithConnectionString, IResourceWithServiceDiscovery
     {
         public string? ConnectionString { get; set; }

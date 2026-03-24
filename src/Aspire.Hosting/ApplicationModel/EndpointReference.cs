@@ -69,6 +69,15 @@ public sealed class EndpointReference : IManifestExpressionProvider, IValueProvi
     /// </remarks>
     public bool TlsEnabled => Exists && EndpointAnnotation.TlsEnabled;
 
+    /// <summary>
+    /// Gets a value indicating whether this endpoint is included by default when referencing the resource's endpoints.
+    /// </summary>
+    /// <remarks>
+    /// Returns <see langword="true"/> if the endpoint annotation has not been added to the resource yet.
+    /// Once the annotation exists, this property delegates to <see cref="EndpointAnnotation.IsDefaultReferenceEndpoint"/>.
+    /// </remarks>
+    public bool IsDefaultReferenceEndpoint => !Exists || EndpointAnnotation.IsDefaultReferenceEndpoint;
+
     string IManifestExpressionProvider.ValueExpression => GetExpression();
 
     /// <summary>

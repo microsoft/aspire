@@ -186,6 +186,20 @@ public sealed class EndpointAnnotation : IResourceAnnotation
     public bool IsProxied { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets a value indicating whether this endpoint is included by default when referencing the resource's endpoints
+    /// via <c>WithReference(resource)</c>. When <c>false</c>, the endpoint is excluded from the default set and must be
+    /// referenced explicitly using <c>WithReference(resource.GetEndpoint("name"))</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>Defaults to <c>true</c>.</para>
+    /// <para>
+    /// This is useful for resources that expose auxiliary endpoints (e.g., management dashboards, health check ports)
+    /// that should not be included in service discovery by default.
+    /// </para>
+    /// </remarks>
+    public bool IsDefaultReferenceEndpoint { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets a value indicating whether TLS is enabled for this endpoint.
     /// </summary>
     /// <remarks>
