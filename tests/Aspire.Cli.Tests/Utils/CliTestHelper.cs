@@ -392,7 +392,8 @@ internal sealed class CliServiceCollectionTestOptions
         var consoleEnvironment = serviceProvider.GetRequiredService<ConsoleEnvironment>();
         var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
         var hostEnvironment = serviceProvider.GetRequiredService<ICliHostEnvironment>();
-        return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment);
+        var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
+        return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment, loggerFactory);
     };
 
     public Func<IServiceProvider, ICertificateToolRunner> CertificateToolRunnerFactory { get; set; } = (IServiceProvider _) =>
