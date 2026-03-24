@@ -52,11 +52,6 @@
         <target state="translated">Más información</target>
         <note />
       </trans-unit>
-      <trans-unit id="MessageUnsecuredEndpointMcpBody">
-        <source>Untrusted apps can access sensitive information about the running services.</source>
-        <target state="translated">Las aplicaciones que no son de confianza pueden acceder a información confidencial sobre los servicios en ejecución.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="MessageUnsecuredEndpointTelemetryBody">
         <source>Untrusted apps can send telemetry to the dashboard.</source>
         <target state="translated">Las aplicaciones que no son de confianza pueden enviar telemetría al panel.</target>

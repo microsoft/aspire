@@ -101,7 +101,7 @@ internal static class AuxiliaryBackchannelCapabilities
 
 | Version | Capability | Methods |
 |---------|------------|---------|
-| 13.1 | `aux.v1` | `GetAppHostInformationAsync()`, `GetDashboardMcpConnectionInfoAsync()`, `StopAppHostAsync()` |
+| 13.1 | `aux.v1` | `GetAppHostInformationAsync()`, `StopAppHostAsync()` |
 | 13.2 | `aux.v2` | All v1 methods + new request-object-based methods |
 
 ### Compatibility Matrix

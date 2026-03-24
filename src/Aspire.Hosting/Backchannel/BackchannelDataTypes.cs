@@ -34,7 +34,7 @@ using ModelContextProtocol.Protocol;
 internal static class AuxiliaryBackchannelCapabilities
 {
     /// <summary>
-    /// Version 1 capabilities (13.1 baseline): GetAppHostInformationAsync, GetDashboardMcpConnectionInfoAsync, StopAppHostAsync.
+    /// Version 1 capabilities (13.1 baseline): GetAppHostInformationAsync, StopAppHostAsync.
     /// </summary>
     public const string V1 = "aux.v1";
 
@@ -110,16 +110,6 @@ internal sealed class GetDashboardInfoRequest { }
 /// </summary>
 internal sealed class GetDashboardInfoResponse
 {
-    /// <summary>
-    /// Gets the base URL of the Dashboard MCP endpoint.
-    /// </summary>
-    public string? McpBaseUrl { get; init; }
-
-    /// <summary>
-    /// Gets the Dashboard MCP API token.
-    /// </summary>
-    public string? McpApiToken { get; init; }
-
     /// <summary>
     /// Gets the base URL of the Dashboard API (without login token).
     /// Use this for API calls like /api/telemetry/*.
@@ -625,22 +615,6 @@ internal class PublishingPromptInputAnswer
 {
     public string? Name { get; set; }
     public string? Value { get; set; }
-}
-
-/// <summary>
-/// Represents the connection information for the Dashboard MCP server.
-/// </summary>
-internal sealed class DashboardMcpConnectionInfo
-{
-    /// <summary>
-    /// Gets or sets the endpoint URL for the Dashboard MCP server.
-    /// </summary>
-    public required string EndpointUrl { get; init; }
-
-    /// <summary>
-    /// Gets or sets the API token for authenticating with the Dashboard MCP server.
-    /// </summary>
-    public required string ApiToken { get; init; }
 }
 
 /// <summary>

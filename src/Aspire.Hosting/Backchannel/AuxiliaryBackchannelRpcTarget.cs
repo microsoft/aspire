@@ -6,25 +6,22 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Threading.Channels;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Dashboard;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
 namespace Aspire.Hosting.Backchannel;
 
 /// <summary>
-/// RPC target for the auxiliary backchannel that provides MCP-related operations.
+/// RPC target for the auxiliary backchannel.
 /// </summary>
 internal sealed class AuxiliaryBackchannelRpcTarget(
     ILogger<AuxiliaryBackchannelRpcTarget> logger,
     IServiceProvider serviceProvider)
 {
-    private const string McpEndpointName = "mcp";
     private static readonly TimeSpan s_mcpDiscoveryTimeout = TimeSpan.FromSeconds(5);
 
     #region V2 API Methods
@@ -94,8 +91,6 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         return new GetDashboardInfoResponse
         {
-            McpBaseUrl = info.McpBaseUrl,
-            McpApiToken = info.McpApiToken,
             ApiBaseUrl = info.ApiBaseUrl,
             ApiToken = info.ApiToken,
             DashboardUrls = urls.ToArray(),
@@ -361,58 +356,6 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             CliProcessId = cliProcessId,
             StartedAt = new DateTimeOffset(Process.GetCurrentProcess().StartTime)
         });
-    }
-
-    /// <summary>
-    /// Gets the Dashboard MCP connection information including endpoint URL and API token.
-    /// </summary>
-    /// <param name="cancellationToken">A cancellation token.</param>
-    /// <returns>The MCP connection information, or null if the dashboard is not part of the application model.</returns>
-    public async Task<DashboardMcpConnectionInfo?> GetDashboardMcpConnectionInfoAsync(CancellationToken cancellationToken = default)
-    {
-        var appModel = serviceProvider.GetService<DistributedApplicationModel>();
-        if (appModel is null)
-        {
-            logger.LogWarning("Application model not found.");
-            return null;
-        }
-
-        // Find the dashboard resource
-        if (appModel.Resources.SingleOrDefault(r => string.Equals(r.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName)) is not IResourceWithEndpoints dashboardResource)
-        {
-            logger.LogDebug("Dashboard resource not found in application model.");
-            return null;
-        }
-
-        var mcpEndpoint = dashboardResource.GetEndpoint(McpEndpointName);
-        if (!mcpEndpoint.Exists)
-        {
-            logger.LogWarning("Dashboard MCP endpoint not found or not allocated.");
-            return null;
-        }
-
-        var endpointUrl = await mcpEndpoint.GetValueAsync(cancellationToken).ConfigureAwait(false);
-        if (string.IsNullOrEmpty(endpointUrl))
-        {
-            logger.LogWarning("Dashboard MCP endpoint URL is not allocated.");
-            return null;
-        }
-
-        // Get the API key from dashboard options
-        var dashboardOptions = serviceProvider.GetService<IOptions<DashboardOptions>>();
-        var mcpApiKey = dashboardOptions?.Value.McpApiKey;
-
-        if (string.IsNullOrEmpty(mcpApiKey))
-        {
-            logger.LogWarning("Dashboard MCP API key is not available.");
-            return null;
-        }
-
-        return new DashboardMcpConnectionInfo
-        {
-            EndpointUrl = $"{endpointUrl}/mcp",
-            ApiToken = mcpApiKey
-        };
     }
 
     /// <summary>

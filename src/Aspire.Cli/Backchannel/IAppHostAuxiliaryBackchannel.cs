@@ -22,11 +22,6 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     string SocketPath { get; }
 
     /// <summary>
-    /// Gets the MCP connection information for the Dashboard.
-    /// </summary>
-    DashboardMcpConnectionInfo? McpInfo { get; }
-
-    /// <summary>
     /// Gets the AppHost information.
     /// </summary>
     AppHostInformation? AppHostInfo { get; }

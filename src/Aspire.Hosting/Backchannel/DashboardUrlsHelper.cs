@@ -16,7 +16,6 @@ namespace Aspire.Hosting.Backchannel;
 /// </summary>
 internal static class DashboardUrlsHelper
 {
-    private const string McpEndpointName = "mcp";
 
     /// <summary>
     /// Gets all dashboard connection information in a single call.
@@ -60,7 +59,6 @@ internal static class DashboardUrlsHelper
             r => string.Equals(r.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName)) as IResourceWithEndpoints;
 
         string? apiBaseUrl = null;
-        string? mcpBaseUrl = null;
 
         if (dashboardResource is not null)
         {
@@ -71,17 +69,6 @@ internal static class DashboardUrlsHelper
             if (apiEndpoint.Exists)
             {
                 apiBaseUrl = await EndpointHostHelpers.GetUrlWithTargetHostAsync(apiEndpoint, cancellationToken).ConfigureAwait(false);
-            }
-
-            // MCP endpoint
-            var mcpEndpoint = dashboardResource.GetEndpoint(McpEndpointName);
-            if (mcpEndpoint.Exists)
-            {
-                var mcpUrl = await mcpEndpoint.GetValueAsync(cancellationToken).ConfigureAwait(false);
-                if (!string.IsNullOrEmpty(mcpUrl))
-                {
-                    mcpBaseUrl = $"{mcpUrl}/mcp";
-                }
             }
         }
 
@@ -114,8 +101,6 @@ internal static class DashboardUrlsHelper
             IsHealthy = true,
             ApiBaseUrl = apiBaseUrl,
             ApiToken = dashboardOptions.ApiKey,
-            McpBaseUrl = mcpBaseUrl,
-            McpApiToken = dashboardOptions.McpApiKey,
             BaseUrlWithLoginToken = baseUrlWithLoginToken,
             CodespacesUrlWithLoginToken = codespacesUrlWithLoginToken
         };
@@ -154,8 +139,6 @@ internal sealed class DashboardConnectionInfo
     public bool IsHealthy { get; init; }
     public string? ApiBaseUrl { get; init; }
     public string? ApiToken { get; init; }
-    public string? McpBaseUrl { get; init; }
-    public string? McpApiToken { get; init; }
     public string? BaseUrlWithLoginToken { get; init; }
     public string? CodespacesUrlWithLoginToken { get; init; }
 }

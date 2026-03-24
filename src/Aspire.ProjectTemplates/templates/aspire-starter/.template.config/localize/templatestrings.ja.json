@@ -1,4 +1,4 @@
-﻿{
+{
   "author": "Microsoft",
   "name": "Aspire スターター アプリ (ASP.NET Core/Blazor)",
   "description": "Blazor Web フロントエンドと Web API バックエンド サービスを使用して Aspire アプリを作成するためのプロジェクト テンプレート。必要に応じて、Redis キャッシュを使用します。",
@@ -24,11 +24,9 @@
   "symbols/XUnitVersion/choices/v3mtp/description": "Microsoft Test Platform 付きの xUnit.net v3 を選択します",
   "symbols/appHostHttpPort/description": "AppHost プロジェクトの launchSettings.json の HTTP エンドポイントに使用するポート番号。",
   "symbols/appHostOtlpHttpPort/description": "AppHost プロジェクトの launchSettings.json で OTLP HTTP エンドポイントに使用するポート番号。",
-  "symbols/appHostMcpHttpPort/description": "AppHost プロジェクトの launchSettings.json で MCP HTTP エンドポイントに使用するポート番号。",
   "symbols/appHostResourceHttpPort/description": "AppHost プロジェクトの launchSettings.json のリソース サービス HTTP エンドポイントに使用するポート番号。",
   "symbols/appHostHttpsPort/description": "AppHost プロジェクトの launchSettings.json の HTTPS エンドポイントに使用するポート番号。このオプションは、パラメーター no-https を使用しない場合にのみ適用されます。",
   "symbols/appHostOtlpHttpsPort/description": "AppHost プロジェクトの launchSettings.json で OTLP HTTPS エンドポイントに使用するポート番号。",
-  "symbols/appHostMcpHttpsPort/description": "AppHost プロジェクトの launchSettings.json で MCP HTTPS エンドポイントに使用するポート番号。",
   "symbols/appHostResourceHttpsPort/description": "AppHost プロジェクトの launchSettings.json のリソース サービス HTTPS エンドポイントに使用するポート番号。",
   "symbols/webHttpPort/description": "Web プロジェクトの launchSettings.json の HTTP エンドポイントに使用するポート番号。",
   "symbols/webHttpsPort/description": "Web プロジェクトの launchSettings.json の HTTPS エンドポイントに使用するポート番号。このオプションは、パラメーター no-https を使用しない場合にのみ適用されます。",

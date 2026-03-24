@@ -3,7 +3,6 @@
 
 using Aspire.Dashboard.Api;
 using Aspire.Dashboard.Configuration;
-using Aspire.Dashboard.Mcp;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
 using Aspire.Otlp.Serialization;
@@ -90,20 +89,6 @@ public static class DashboardEndpointsBuilder
 
             return Results.LocalRedirect(redirectUrl);
         }).SkipStatusCodePages();
-    }
-
-    public static void MapDashboardMcp(this IEndpointRouteBuilder endpoints, DashboardOptions dashboardOptions)
-    {
-        IEndpointConventionBuilder builder;
-        if (!dashboardOptions.Mcp.Disabled.GetValueOrDefault())
-        {
-            builder = endpoints.MapMcp("/mcp").RequireAuthorization(McpApiKeyAuthenticationHandler.PolicyName);
-        }
-        else
-        {
-            builder = endpoints.MapPostNotFound("/mcp");
-        }
-        builder.SkipStatusCodePages();
     }
 
     public static void MapTelemetryApi(this IEndpointRouteBuilder endpoints, DashboardOptions dashboardOptions)

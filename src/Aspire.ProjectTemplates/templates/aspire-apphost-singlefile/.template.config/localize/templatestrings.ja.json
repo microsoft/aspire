@@ -1,15 +1,13 @@
-﻿{
+{
   "author": "Microsoft",
   "name": "Aspire 単一ファイル アプリ ホスト",
   "description": "単一ファイル シナリオ向けの最小構成の Aspire AppHost (.NET 10 以降)。",
   "symbols/Framework/choices/net10.0/description": "ターゲット net10.0",
   "symbols/appHostHttpPort/description": "AppHost プロジェクトの launchSettings.json の HTTP エンドポイントに使用するポート番号。",
   "symbols/appHostOtlpHttpPort/description": "AppHost プロジェクトの launchSettings.json で OTLP HTTP エンドポイントに使用するポート番号。",
-  "symbols/appHostMcpHttpPort/description": "AppHost プロジェクトの launchSettings.json で MCP HTTP エンドポイントに使用するポート番号。",
   "symbols/appHostResourceHttpPort/description": "AppHost プロジェクトの launchSettings.json のリソース サービス HTTP エンドポイントに使用するポート番号。",
   "symbols/appHostHttpsPort/description": "AppHost プロジェクトの launchSettings.json の HTTPS エンドポイントに使用するポート番号。このオプションは、パラメーター no-https を使用しない場合にのみ適用されます。",
   "symbols/appHostOtlpHttpsPort/description": "AppHost プロジェクトの launchSettings.json で OTLP HTTPS エンドポイントに使用するポート番号。",
-  "symbols/appHostMcpHttpsPort/description": "AppHost プロジェクトの launchSettings.json で MCP HTTPS エンドポイントに使用するポート番号。",
   "symbols/appHostResourceHttpsPort/description": "AppHost プロジェクトの launchSettings.json のリソース サービス HTTPS エンドポイントに使用するポート番号。",
   "symbols/NoHttps/description": "HTTPS をオフにするかどうか。",
   "symbols/LocalhostTld/displayName": "アプリケーション URL で .dev.localhost TLD を使用する",
