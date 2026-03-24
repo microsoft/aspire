@@ -674,7 +674,7 @@ internal abstract class PipelineCommandBase : BaseCommand
                     }
                 }
 
-                // Build duration breakdown (sorted by duration desc)
+                // Build duration breakdown, ordered by step sequence
                 var now = DateTime.UtcNow;
                 var earliestStartTime = steps.Count > 0
                     ? steps.Values.Min(s => s.StartTime)

@@ -354,7 +354,7 @@ internal sealed class ConsoleActivityLogger
     {
         var orderedRecords = OrderStepDurationsHierarchically(records);
         var durationWidth = Math.Max(10, orderedRecords.Max(r => DurationFormatter.FormatDuration(r.Duration, CultureInfo.InvariantCulture, DecimalDurationDisplay.Fixed).Length));
-        var nameWidth = orderedRecords.Max(r => GetIndentedDisplayName(r).Length);
+        var nameWidth = Math.Max("Step timeline:".Length, orderedRecords.Max(r => GetIndentedDisplayName(r).Length));
         var totalTimeline = orderedRecords.Max(r => r.EndOffset > TimeSpan.Zero ? r.EndOffset : r.Duration);
         var timelinePrefix = $"  {new string(' ', durationWidth)}    {new string(' ', nameWidth)}  ";
         var timelineLabelPrefix = $"  {new string(' ', durationWidth)}    {"Step timeline:".PadRight(nameWidth)}  ";
