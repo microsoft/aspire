@@ -201,7 +201,7 @@ public static class AzureCognitiveServicesProjectExtensions
     /// <param name="builder">The resource builder for the Microsoft Foundry project.</param>
     /// <param name="cosmosDb">The Cosmos DB resource builder.</param>
     /// <returns>A reference to the project builder for chaining capability host configuration.</returns>
-    [AspireExport("withCapabilityHostCosmosDb", MethodName = "withCapabilityHostCosmosDB", Description = "Associates a Cosmos DB resource with a capability host on a Microsoft Foundry project.")]
+    [AspireExportIgnore(Reason = "Use the polyglot withCapabilityHost overload instead.")]
     internal static IResourceBuilder<AzureCognitiveServicesProjectResource> WithCapabilityHostCosmosDB(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         IResourceBuilder<AzureCosmosDBResource> cosmosDb)
@@ -219,7 +219,7 @@ public static class AzureCognitiveServicesProjectExtensions
     /// <param name="builder">The resource builder for the Microsoft Foundry project.</param>
     /// <param name="storage">The Storage resource builder.</param>
     /// <returns>A reference to the project builder for chaining capability host configuration.</returns>
-    [AspireExport("withCapabilityHostStorage", Description = "Associates a Storage resource with a capability host on a Microsoft Foundry project.")]
+    [AspireExportIgnore(Reason = "Use the polyglot withCapabilityHost overload instead.")]
     internal static IResourceBuilder<AzureCognitiveServicesProjectResource> WithCapabilityHostStorage(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         IResourceBuilder<AzureStorageResource> storage)
@@ -237,7 +237,7 @@ public static class AzureCognitiveServicesProjectExtensions
     /// <param name="builder">The resource builder for the Microsoft Foundry project.</param>
     /// <param name="search">The Azure Search resource builder.</param>
     /// <returns>A reference to the project builder for chaining capability host configuration.</returns>
-    [AspireExport("withCapabilityHostSearch", Description = "Associates an Azure Search resource with a capability host on a Microsoft Foundry project.")]
+    [AspireExportIgnore(Reason = "Use the polyglot withCapabilityHost overload instead.")]
     internal static IResourceBuilder<AzureCognitiveServicesProjectResource> WithCapabilityHostSearch(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         IResourceBuilder<AzureSearchResource> search)
@@ -255,7 +255,7 @@ public static class AzureCognitiveServicesProjectExtensions
     /// <param name="builder">The resource builder for the Microsoft Foundry project.</param>
     /// <param name="openAI">The Microsoft Foundry resource builder.</param>
     /// <returns>A reference to the project builder for chaining capability host configuration.</returns>
-    [AspireExport("withCapabilityHostAzureOpenAi", MethodName = "withCapabilityHostAzureOpenAI", Description = "Associates a Microsoft Foundry resource with a capability host on a Microsoft Foundry project.")]
+    [AspireExportIgnore(Reason = "Use the polyglot withCapabilityHost overload instead.")]
     internal static IResourceBuilder<AzureCognitiveServicesProjectResource> WithCapabilityHostAzureOpenAI(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         IResourceBuilder<FoundryResource> openAI)
@@ -265,6 +265,34 @@ public static class AzureCognitiveServicesProjectExtensions
 
         GetCapabilityHostConfiguration(builder).AzureOpenAI = openAI.Resource;
         return builder;
+    }
+
+    /// <summary>
+    /// Associates a supported resource with a capability host on a Microsoft Foundry project.
+    /// </summary>
+    /// <param name="builder">The resource builder for the Microsoft Foundry project.</param>
+    /// <param name="resource">The supported capability host resource.</param>
+    /// <returns>A reference to the project builder for chaining capability host configuration.</returns>
+    [AspireExport("withCapabilityHost", Description = "Associates a supported resource with a capability host on a Microsoft Foundry project.")]
+    internal static IResourceBuilder<AzureCognitiveServicesProjectResource> WithCapabilityHost(
+        this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
+        [AspireUnion(
+            typeof(IResourceBuilder<AzureCosmosDBResource>),
+            typeof(IResourceBuilder<AzureStorageResource>),
+            typeof(IResourceBuilder<AzureSearchResource>),
+            typeof(IResourceBuilder<FoundryResource>))] object resource)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(resource);
+
+        return resource switch
+        {
+            IResourceBuilder<AzureCosmosDBResource> cosmosDb => builder.WithCapabilityHostCosmosDB(cosmosDb),
+            IResourceBuilder<AzureStorageResource> storage => builder.WithCapabilityHostStorage(storage),
+            IResourceBuilder<AzureSearchResource> search => builder.WithCapabilityHostSearch(search),
+            IResourceBuilder<FoundryResource> openAI => builder.WithCapabilityHostAzureOpenAI(openAI),
+            _ => throw new ArgumentException("Resource must be a supported capability host resource.", nameof(resource))
+        };
     }
 
     /// <summary>

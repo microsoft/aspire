@@ -37,10 +37,10 @@ await project.withContainerRegistry(registry);
 await project.withKeyVault(keyVault);
 await project.withAppInsights(appInsights);
 await project.addCapabilityHost('cap-host');
-await project.withCapabilityHostCosmosDB(cosmos);
-await project.withCapabilityHostStorage(storage);
-await project.withCapabilityHostSearch(search);
-await project.withCapabilityHostAzureOpenAI(foundry);
+await project.withCapabilityHost(cosmos);
+await project.withCapabilityHost(storage);
+await project.withCapabilityHost(search);
+await project.withCapabilityHost(foundry);
 
 const _cosmosConnection = await project.addCosmosConnection(cosmos);
 const _storageConnection = await project.addStorageConnection(storage);
