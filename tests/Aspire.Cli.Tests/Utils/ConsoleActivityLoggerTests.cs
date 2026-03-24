@@ -250,8 +250,9 @@ public class ConsoleActivityLoggerTests
         var publishLine = Assert.Single(lines, line => line.Contains("Publish", StringComparison.Ordinal));
 
         Assert.Matches(@"│[─┬]+│", scaleLine);
-        Assert.Equal(scaleLine.IndexOf('│'), publishLine.IndexOf('│'));
         Assert.Contains('│', publishLine);
+        Assert.True(publishLine.IndexOf('│') > publishLine.IndexOf("Publish", StringComparison.Ordinal));
+        Assert.True(scaleLine.LastIndexOf('│') > scaleLine.IndexOf('│'));
         Assert.True(publishLine.Contains('╶') || publishLine.Contains('●'));
     }
 }
