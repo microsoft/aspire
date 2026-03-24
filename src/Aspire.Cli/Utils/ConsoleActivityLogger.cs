@@ -50,6 +50,8 @@ internal sealed class ConsoleActivityLogger
     private const string WarningSymbol = "⚠";
     private const string InProgressSymbol = "→";
     private const string InfoSymbol = "i";
+    private const int SummaryTimelineWidth = 28;
+    private const int SummaryTimelineTicks = 4;
 
     public ConsoleActivityLogger(IAnsiConsole console, ICliHostEnvironment hostEnvironment, bool isDebugOrTraceLoggingEnabled = false, bool? forceColor = null)
     {
@@ -243,32 +245,7 @@ internal sealed class ConsoleActivityLogger
 
             if (_durationRecords is { Count: > 0 })
             {
-                _console.WriteLine();
-                _console.MarkupLine("Steps Summary:");
-                foreach (var rec in _durationRecords)
-                {
-                    // PadLeft(10) accommodates split units like "2h 30m", decimal units like "1.5s", and very long durations like "999d 23h"
-                    var durStr = DurationFormatter.FormatDuration(rec.Duration, CultureInfo.InvariantCulture, DecimalDurationDisplay.Fixed).PadLeft(10);
-                    var symbol = rec.State switch
-                    {
-                        ActivityState.Success => _enableColor ? "[green]" + SuccessSymbol + "[/]" : SuccessSymbol,
-                        ActivityState.Warning => _enableColor ? "[yellow]" + WarningSymbol + "[/]" : WarningSymbol,
-                        ActivityState.Failure => _enableColor ? "[red]" + FailureSymbol + "[/]" : FailureSymbol,
-                        _ => _enableColor ? "[cyan]" + InProgressSymbol + "[/]" : InProgressSymbol
-                    };
-                    var name = rec.DisplayName.EscapeMarkup();
-                    var reason = rec.State == ActivityState.Failure && !string.IsNullOrEmpty(rec.FailureReason)
-                        ? ( _enableColor ? $" [red]— {HighlightMessage(rec.FailureReason!.EscapeMarkup())}[/]" : $" — {rec.FailureReason!.EscapeMarkup()}" )
-                        : string.Empty;
-                    var lineSb = new StringBuilder();
-                    lineSb.Append("  ")
-                        .Append(durStr).Append("  ")
-                        .Append(symbol).Append(' ')
-                        .Append("[dim]").Append(name).Append("[/]")
-                        .Append(reason);
-                    _console.MarkupLine(lineSb.ToString());
-                }
-                _console.WriteLine();
+                WriteStepDurationsSummary(_durationRecords);
             }
 
             // If a caller provided a final status line via SetFinalResult, print it now
@@ -354,14 +331,250 @@ internal sealed class ConsoleActivityLogger
     }
 
     /// <summary>
-    /// Provides per-step duration data (already sorted) for inclusion in the summary.
+    /// Provides per-step duration data for inclusion in the summary.
     /// </summary>
     public void SetStepDurations(IEnumerable<StepDurationRecord> records)
     {
         _durationRecords = records.ToList();
     }
 
-    public readonly record struct StepDurationRecord(string Key, string DisplayName, ActivityState State, TimeSpan Duration, string? FailureReason);
+    public readonly record struct StepDurationRecord(
+        string Key,
+        string DisplayName,
+        ActivityState State,
+        TimeSpan Duration,
+        string? FailureReason,
+        string? ParentKey = null,
+        int Level = 0,
+        int Sequence = 0,
+        TimeSpan StartOffset = default,
+        TimeSpan EndOffset = default);
+
+    private void WriteStepDurationsSummary(IReadOnlyList<StepDurationRecord> records)
+    {
+        var orderedRecords = OrderStepDurationsHierarchically(records);
+        var durationWidth = Math.Max(10, orderedRecords.Max(r => DurationFormatter.FormatDuration(r.Duration, CultureInfo.InvariantCulture, DecimalDurationDisplay.Fixed).Length));
+        var nameWidth = orderedRecords.Max(r => GetIndentedDisplayName(r).Length);
+        var totalTimeline = orderedRecords.Max(r => r.EndOffset > TimeSpan.Zero ? r.EndOffset : r.Duration);
+        var timelinePrefix = $"  {new string(' ', durationWidth)}    {new string(' ', nameWidth)}  ";
+        var timelineLabelPrefix = $"  {new string(' ', durationWidth)}    {"Step timeline:".PadRight(nameWidth)}  ";
+
+        _console.WriteLine();
+        _console.MarkupLine("Steps Summary:");
+
+        _console.MarkupLine($"{timelineLabelPrefix}[dim]{BuildTimelineLabels(totalTimeline, SummaryTimelineWidth).EscapeMarkup()}[/]");
+        _console.MarkupLine($"{timelinePrefix}[dim]{BuildTimelineScale(SummaryTimelineWidth).EscapeMarkup()}[/]");
+
+        foreach (var rec in orderedRecords)
+        {
+            var durStr = DurationFormatter.FormatDuration(rec.Duration, CultureInfo.InvariantCulture, DecimalDurationDisplay.Fixed).PadLeft(durationWidth);
+            var symbol = rec.State switch
+            {
+                ActivityState.Success => _enableColor ? "[green]" + SuccessSymbol + "[/]" : SuccessSymbol,
+                ActivityState.Warning => _enableColor ? "[yellow]" + WarningSymbol + "[/]" : WarningSymbol,
+                ActivityState.Failure => _enableColor ? "[red]" + FailureSymbol + "[/]" : FailureSymbol,
+                _ => _enableColor ? "[cyan]" + InProgressSymbol + "[/]" : InProgressSymbol
+            };
+            var name = GetIndentedDisplayName(rec).PadRight(nameWidth).EscapeMarkup();
+            var timelineBar = ColorizeSummaryBar(BuildTimelineBar(rec, totalTimeline, SummaryTimelineWidth), rec.State);
+            var reason = rec.State == ActivityState.Failure && !string.IsNullOrEmpty(rec.FailureReason)
+                ? (_enableColor ? $" [red]— {HighlightMessage(rec.FailureReason!.EscapeMarkup())}[/]" : $" — {rec.FailureReason!.EscapeMarkup()}")
+                : string.Empty;
+
+            var lineSb = new StringBuilder();
+            lineSb.Append("  ")
+                .Append(durStr).Append("  ")
+                .Append(symbol).Append(' ')
+                .Append("[dim]").Append(name).Append("[/]")
+                .Append("  ")
+                .Append(timelineBar)
+                .Append(reason);
+            _console.MarkupLine(lineSb.ToString());
+        }
+
+        _console.WriteLine();
+    }
+
+    private static List<StepDurationRecord> OrderStepDurationsHierarchically(IReadOnlyList<StepDurationRecord> records)
+    {
+        var orderedRecords = records
+            .OrderBy(r => r.Sequence)
+            .ThenBy(r => r.DisplayName, StringComparer.Ordinal)
+            .ToList();
+        var recordsByKey = orderedRecords.ToDictionary(r => r.Key, StringComparer.Ordinal);
+        var childrenByParent = new Dictionary<string, List<StepDurationRecord>>(StringComparer.Ordinal);
+
+        foreach (var record in orderedRecords)
+        {
+            if (record.ParentKey is { Length: > 0 } parentKey &&
+                !string.Equals(parentKey, record.Key, StringComparison.Ordinal) &&
+                recordsByKey.ContainsKey(parentKey))
+            {
+                if (!childrenByParent.TryGetValue(parentKey, out var children))
+                {
+                    children = [];
+                    childrenByParent[parentKey] = children;
+                }
+
+                children.Add(record);
+            }
+        }
+
+        foreach (var children in childrenByParent.Values)
+        {
+            children.Sort(static (left, right) =>
+            {
+                var sequenceComparison = left.Sequence.CompareTo(right.Sequence);
+                return sequenceComparison != 0
+                    ? sequenceComparison
+                    : StringComparer.Ordinal.Compare(left.DisplayName, right.DisplayName);
+            });
+        }
+
+        var result = new List<StepDurationRecord>(orderedRecords.Count);
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var root in orderedRecords.Where(r => r.ParentKey is null || !recordsByKey.ContainsKey(r.ParentKey)))
+        {
+            VisitRecord(root, childrenByParent, visited, result);
+        }
+
+        foreach (var record in orderedRecords)
+        {
+            if (visited.Add(record.Key))
+            {
+                result.Add(record);
+            }
+        }
+
+        return result;
+    }
+
+    private static void VisitRecord(
+        StepDurationRecord record,
+        IReadOnlyDictionary<string, List<StepDurationRecord>> childrenByParent,
+        ISet<string> visited,
+        ICollection<StepDurationRecord> result)
+    {
+        if (!visited.Add(record.Key))
+        {
+            return;
+        }
+
+        result.Add(record);
+
+        if (!childrenByParent.TryGetValue(record.Key, out var children))
+        {
+            return;
+        }
+
+        foreach (var child in children)
+        {
+            VisitRecord(child, childrenByParent, visited, result);
+        }
+    }
+
+    private static string GetIndentedDisplayName(StepDurationRecord record)
+    {
+        var level = Math.Max(record.Level, 0);
+        return level == 0
+            ? record.DisplayName
+            : $"{new string(' ', level * 2)}{record.DisplayName}";
+    }
+
+    private static string BuildTimelineScale(int width)
+    {
+        if (width <= 0)
+        {
+            return "││";
+        }
+
+        var chars = Enumerable.Repeat('─', width).ToArray();
+        for (var tick = 1; tick < SummaryTimelineTicks; tick++)
+        {
+            var position = (int)Math.Round((double)tick * (width - 1) / SummaryTimelineTicks);
+            if (position >= 0 && position < chars.Length)
+            {
+                chars[position] = '┬';
+            }
+        }
+
+        return $"│{new string(chars)}│";
+    }
+
+    private static string BuildTimelineLabels(TimeSpan totalTimeline, int width)
+    {
+        var startText = "0s";
+        var endText = DurationFormatter.FormatDuration(totalTimeline, CultureInfo.InvariantCulture, DecimalDurationDisplay.Fixed);
+        var labelWidth = Math.Max(width + 2, startText.Length + 1 + endText.Length);
+        var spacing = Math.Max(1, labelWidth - startText.Length - endText.Length);
+
+        return $"{startText}{new string(' ', spacing)}{endText}";
+    }
+
+    private static string BuildTimelineBar(StepDurationRecord record, TimeSpan totalTimeline, int width)
+    {
+        if (width <= 0)
+        {
+            return "││";
+        }
+
+        var chars = Enumerable.Repeat(' ', width).ToArray();
+        var start = record.StartOffset;
+        var end = record.EndOffset > start ? record.EndOffset : start + record.Duration;
+
+        int startIndex;
+        int endIndex;
+
+        if (totalTimeline <= TimeSpan.Zero)
+        {
+            startIndex = 0;
+            endIndex = 0;
+        }
+        else
+        {
+            startIndex = (int)Math.Floor(start.TotalMilliseconds / totalTimeline.TotalMilliseconds * (width - 1));
+            endIndex = (int)Math.Ceiling(end.TotalMilliseconds / totalTimeline.TotalMilliseconds * (width - 1));
+        }
+
+        startIndex = Math.Clamp(startIndex, 0, width - 1);
+        endIndex = Math.Clamp(endIndex, startIndex, width - 1);
+
+        if (startIndex == endIndex)
+        {
+            chars[startIndex] = '●';
+        }
+        else
+        {
+            chars[startIndex] = '╶';
+            chars[endIndex] = '╴';
+
+            for (var i = startIndex + 1; i < endIndex; i++)
+            {
+                chars[i] = '─';
+            }
+        }
+
+        return $"│{new string(chars)}│";
+    }
+
+    private string ColorizeSummaryBar(string bar, ActivityState state)
+    {
+        var escapedBar = bar.EscapeMarkup();
+
+        if (!_enableColor)
+        {
+            return escapedBar;
+        }
+
+        return state switch
+        {
+            ActivityState.Success => $"[green]{escapedBar}[/]",
+            ActivityState.Warning => $"[yellow]{escapedBar}[/]",
+            ActivityState.Failure => $"[red]{escapedBar}[/]",
+            _ => $"[cyan]{escapedBar}[/]"
+        };
+    }
 
     private void WriteCompletion(string taskKey, string symbol, string message, ActivityState state, double? seconds)
     {

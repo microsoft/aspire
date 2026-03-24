@@ -38,21 +38,34 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
         _ => CompletionStates.InProgress
     };
 
+    private static PublishingActivityData CreateStepActivityData(ReportingStep step, string statusText, CompletionState completionState, bool enableMarkdown)
+    {
+        return new PublishingActivityData
+        {
+            Id = step.Id,
+            StatusText = statusText,
+            CompletionState = ToBackchannelCompletionState(completionState),
+            StepId = null,
+            ParentStepId = step.ParentStepId,
+            HierarchyLevel = step.HierarchyLevel,
+            EnableMarkdown = enableMarkdown
+        };
+    }
+
     public async Task<IReportingStep> CreateStepAsync(string title, CancellationToken cancellationToken = default)
     {
-        var step = new ReportingStep(this, Guid.NewGuid().ToString(), title);
+        return await CreateStepAsync(title, parentStepId: null, hierarchyLevel: 0, cancellationToken).ConfigureAwait(false);
+    }
+
+    internal async Task<ReportingStep> CreateStepAsync(string title, string? parentStepId, int hierarchyLevel, CancellationToken cancellationToken = default)
+    {
+        var step = new ReportingStep(this, Guid.NewGuid().ToString(), title, parentStepId, hierarchyLevel);
         _steps.TryAdd(step.Id, step);
 
         var state = new PublishingActivity
         {
             Type = PublishingActivityTypes.Step,
-            Data = new PublishingActivityData
-            {
-                Id = step.Id,
-                StatusText = step.Title,
-                CompletionState = ToBackchannelCompletionState(CompletionState.InProgress),
-                StepId = null
-            }
+            Data = CreateStepActivityData(step, step.Title, CompletionState.InProgress, enableMarkdown: false)
         };
 
         await ActivityItemUpdated.Writer.WriteAsync(state, cancellationToken).ConfigureAwait(false);
@@ -113,14 +126,7 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
         var state = new PublishingActivity
         {
             Type = PublishingActivityTypes.Step,
-            Data = new PublishingActivityData
-            {
-                Id = step.Id,
-                StatusText = completionText,
-                CompletionState = ToBackchannelCompletionState(completionState),
-                StepId = null,
-                EnableMarkdown = enableMarkdown
-            }
+            Data = CreateStepActivityData(step, completionText, completionState, enableMarkdown)
         };
 
         await ActivityItemUpdated.Writer.WriteAsync(state, cancellationToken).ConfigureAwait(false);

@@ -50,6 +50,32 @@ public class PublishingActivityReporterTests
     }
 
     [Fact]
+    public async Task CreateStepAsync_WithHierarchyMetadata_EmitsMetadataOnCreateAndComplete()
+    {
+        // Arrange
+        var reporter = CreatePublishingReporter();
+
+        // Act
+        var step = await reporter.CreateStepAsync("Child Step", "parent-step-id", 2, CancellationToken.None);
+
+        // Assert
+        var stepInternal = Assert.IsType<ReportingStep>(step);
+        Assert.Equal("parent-step-id", stepInternal.ParentStepId);
+        Assert.Equal(2, stepInternal.HierarchyLevel);
+
+        var activityReader = reporter.ActivityItemUpdated.Reader;
+        Assert.True(activityReader.TryRead(out var createActivity));
+        Assert.Equal("parent-step-id", createActivity.Data.ParentStepId);
+        Assert.Equal(2, createActivity.Data.HierarchyLevel);
+
+        await step.CompleteAsync("Done", CompletionState.Completed, CancellationToken.None);
+
+        Assert.True(activityReader.TryRead(out var completeActivity));
+        Assert.Equal("parent-step-id", completeActivity.Data.ParentStepId);
+        Assert.Equal(2, completeActivity.Data.HierarchyLevel);
+    }
+
+    [Fact]
     public async Task CreateTaskAsync_CreatesTaskAndEmitsActivity()
     {
         // Arrange

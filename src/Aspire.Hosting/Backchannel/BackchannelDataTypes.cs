@@ -466,6 +466,16 @@ internal sealed class PublishingActivityData
     public string? StepId { get; init; }
 
     /// <summary>
+    /// Gets the identifier of the parent step used for hierarchical step summaries.
+    /// </summary>
+    public string? ParentStepId { get; init; }
+
+    /// <summary>
+    /// Gets the hierarchical level of the step used for display purposes.
+    /// </summary>
+    public int? HierarchyLevel { get; init; }
+
+    /// <summary>
     /// Gets the optional completion message for tasks (appears as dimmed child text).
     /// </summary>
     public string? CompletionMessage { get; init; }

@@ -192,4 +192,66 @@ public class ConsoleActivityLoggerTests
         // The literal bracket text from the failure reason should appear
         Assert.Contains("Type[T]", result);
     }
+
+    [Fact]
+    public void WriteSummary_WithHierarchicalStepDurations_RendersIndentedTreeOrder()
+    {
+        var output = new StringBuilder();
+        var logger = CreateLogger(output, interactive: false, color: false);
+
+        var records = new[]
+        {
+            new ConsoleActivityLogger.StepDurationRecord("root", "Prepare", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromSeconds(10), null, null, 0, 1, TimeSpan.Zero, TimeSpan.FromSeconds(10)),
+            new ConsoleActivityLogger.StepDurationRecord("child-a", "Build", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromSeconds(3), null, "root", 1, 2, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(4)),
+            new ConsoleActivityLogger.StepDurationRecord("grandchild", "Package", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromSeconds(1), null, "child-a", 2, 3, TimeSpan.FromSeconds(1.5), TimeSpan.FromSeconds(2.5)),
+            new ConsoleActivityLogger.StepDurationRecord("child-b", "Publish", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromSeconds(2), null, "root", 1, 4, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(7)),
+            new ConsoleActivityLogger.StepDurationRecord("finalize", "Finalize", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromSeconds(1), null, null, 0, 5, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(11)),
+        };
+
+        logger.SetStepDurations(records);
+        logger.SetFinalResult(true);
+        logger.WriteSummary();
+
+        var result = output.ToString();
+
+        var prepareIndex = result.IndexOf("Prepare", StringComparison.Ordinal);
+        var buildIndex = result.IndexOf("  Build", StringComparison.Ordinal);
+        var packageIndex = result.IndexOf("    Package", StringComparison.Ordinal);
+        var publishIndex = result.IndexOf("  Publish", StringComparison.Ordinal);
+        var finalizeIndex = result.IndexOf("Finalize", StringComparison.Ordinal);
+
+        Assert.True(prepareIndex >= 0);
+        Assert.True(buildIndex > prepareIndex);
+        Assert.True(packageIndex > buildIndex);
+        Assert.True(publishIndex > packageIndex);
+        Assert.True(finalizeIndex > publishIndex);
+    }
+
+    [Fact]
+    public void WriteSummary_WithStepDurations_RendersTimelineScaleAndBars()
+    {
+        var output = new StringBuilder();
+        var logger = CreateLogger(output, interactive: false, color: false);
+
+        var records = new[]
+        {
+            new ConsoleActivityLogger.StepDurationRecord("root", "Prepare", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromSeconds(8), null, null, 0, 1, TimeSpan.Zero, TimeSpan.FromSeconds(8)),
+            new ConsoleActivityLogger.StepDurationRecord("child", "Publish", ConsoleActivityLogger.ActivityState.Warning, TimeSpan.FromSeconds(2), null, "root", 1, 2, TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(6)),
+        };
+
+        logger.SetStepDurations(records);
+        logger.SetFinalResult(true);
+        logger.WriteSummary();
+
+        var lines = output.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+        Assert.Contains(lines, line => line.Contains("Step timeline:", StringComparison.Ordinal));
+
+        var scaleLine = Assert.Single(lines, line => line.Contains('┬'));
+        var publishLine = Assert.Single(lines, line => line.Contains("Publish", StringComparison.Ordinal));
+
+        Assert.Matches(@"│[─┬]+│", scaleLine);
+        Assert.Equal(scaleLine.IndexOf('│'), publishLine.IndexOf('│'));
+        Assert.Contains('│', publishLine);
+        Assert.True(publishLine.Contains('╶') || publishLine.Contains('●'));
+    }
 }
