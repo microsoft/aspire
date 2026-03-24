@@ -58,6 +58,14 @@ jobs:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       targets: '[{"os": "windows-latest", "runner": "windows-latest", "rids": "win-x64"}]'
 
+  build_cli_archive_windows_arm:
+    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' }}
+    name: Build native CLI archive (Windows ARM64)
+    uses: ./.github/workflows/build-cli-native-archives.yml
+    with:
+      versionOverrideArg: ${{ inputs.versionOverrideArg }}
+      targets: '[{"os": "windows-11-arm", "runner": "windows-11-arm", "rids": "win-arm64"}]'
+
   build_cli_archive_macos:
     name: Build native CLI archive (macOS)
     uses: ./.github/workflows/build-cli-native-archives.yml
@@ -189,12 +197,22 @@ jobs:
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
 
-  cli_starter_validation_win:
-    name: Aspire CLI Starter Validation (Windows)
-    runs-on: windows-latest
+  cli_starter_validation_windows:
+    name: Aspire CLI Starter Validation (${{ matrix.os.name }})
+    runs-on: ${{ matrix.os.runner }}
     timeout-minutes: 10
-    needs: [build_packages, build_cli_archive_windows]
+    needs: [build_packages, build_cli_archive_windows, build_cli_archive_windows_arm]
     if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: Windows
+            runner: windows-latest
+            artifact_suffix: windows-x64
+          - name: Windows ARM64
+            runner: windows-11-arm
+            artifact_suffix: windows-arm64
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -251,7 +269,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
         with:
-          name: cli-starter-validation-windows
+          name: cli-starter-validation-${{ matrix.os.artifact_suffix }}
           path: ${{ runner.temp }}/aspire-cli-starter-validation
           if-no-files-found: ignore
 
@@ -295,7 +313,7 @@ jobs:
       build_cli_archive_windows,
       build_cli_archive_macos,
       extension_tests_win,
-      cli_starter_validation_win,
+      cli_starter_validation_windows,
       typescript_sdk_tests,
       tests_no_nugets,
       tests_no_nugets_overflow,
@@ -354,7 +372,7 @@ jobs:
         #   primary no-nugets matrix exceeds the overflow threshold.
         # - tests_requires_nugets_macos: some runs intentionally produce no macOS requires-nugets
         #   tests, so an empty matrix and 'skipped' result are expected.
-        # - cli_starter_validation_win: this job only runs for pull requests and is expected to
+        # - cli_starter_validation_windows: this job only runs for pull requests and is expected to
         #   be skipped for other workflow events.
         # All other jobs in this gate are required, and a 'skipped' result is treated as a failure.
         if: >-
@@ -363,7 +381,7 @@ jobs:
                 contains(needs.*.result, 'cancelled') ||
                 (github.event_name == 'pull_request' &&
                  (needs.extension_tests_win.result == 'skipped' ||
-                    needs.cli_starter_validation_win.result == 'skipped' ||
+                    needs.cli_starter_validation_windows.result == 'skipped' ||
                     needs.typescript_sdk_tests.result == 'skipped' ||
                     needs.tests_no_nugets.result == 'skipped' ||
                     needs.tests_requires_nugets_linux.result == 'skipped' ||
