@@ -36,11 +36,19 @@ public sealed class TypeScriptLanguageSupportTests
         Assert.Equal("aspire run", scripts["aspire:start"]?.GetValue<string>());
         Assert.Equal("tsc -p tsconfig.apphost.json", scripts["aspire:build"]?.GetValue<string>());
         Assert.Equal("tsc --watch -p tsconfig.apphost.json", scripts["aspire:dev"]?.GetValue<string>());
+        Assert.Equal("eslint apphost.ts", scripts["aspire:lint"]?.GetValue<string>());
         Assert.False(scripts.ContainsKey("start"));
         Assert.False(scripts.ContainsKey("build"));
         Assert.False(scripts.ContainsKey("dev"));
-        Assert.Equal("^4.19.0", devDependencies["tsx"]?.GetValue<string>());
-        Assert.Equal("^5.3.0", devDependencies["typescript"]?.GetValue<string>());
+        Assert.Equal("^4.21.0", devDependencies["tsx"]?.GetValue<string>());
+        Assert.Equal("^5.9.3", devDependencies["typescript"]?.GetValue<string>());
+        Assert.Equal("^10.0.3", devDependencies["eslint"]?.GetValue<string>());
+        Assert.Equal("^8.57.1", devDependencies["typescript-eslint"]?.GetValue<string>());
+
+        var engines = packageJson["engines"]!.AsObject();
+        Assert.Equal("^20.19.0 || ^22.13.0 || >=24", engines["node"]?.GetValue<string>());
+
+        Assert.Contains("eslint.config.mjs", files.Keys);
 
         var tsConfig = ParseJson(files["tsconfig.apphost.json"]);
         Assert.Equal("./dist/apphost", tsConfig["compilerOptions"]?["outDir"]?.GetValue<string>());
@@ -94,9 +102,9 @@ public sealed class TypeScriptLanguageSupportTests
         Assert.Equal("^9.9.9", dependencies["vscode-jsonrpc"]?.GetValue<string>());
         Assert.Equal("^9.9.9", devDependencies["tsx"]?.GetValue<string>());
         Assert.Equal("^7.0.0", devDependencies["vite"]?.GetValue<string>());
-        Assert.Equal("^20.0.0", devDependencies["@types/node"]?.GetValue<string>());
-        Assert.Equal("^3.1.11", devDependencies["nodemon"]?.GetValue<string>());
-        Assert.Equal("^5.3.0", devDependencies["typescript"]?.GetValue<string>());
+        Assert.Equal("^22.0.0", devDependencies["@types/node"]?.GetValue<string>());
+        Assert.Equal("^3.1.14", devDependencies["nodemon"]?.GetValue<string>());
+        Assert.Equal("^5.9.3", devDependencies["typescript"]?.GetValue<string>());
     }
 
     [Fact]
@@ -129,10 +137,10 @@ public sealed class TypeScriptLanguageSupportTests
         var devDependencies = packageJson["devDependencies"]!.AsObject();
 
         Assert.Equal("^8.2.0", dependencies["vscode-jsonrpc"]?.GetValue<string>());
-        Assert.Equal("^20.0.0", devDependencies["@types/node"]?.GetValue<string>());
-        Assert.Equal("^3.1.11", devDependencies["nodemon"]?.GetValue<string>());
-        Assert.Equal("^4.19.0", devDependencies["tsx"]?.GetValue<string>());
-        Assert.Equal("^5.3.0", devDependencies["typescript"]?.GetValue<string>());
+        Assert.Equal("^22.0.0", devDependencies["@types/node"]?.GetValue<string>());
+        Assert.Equal("^3.1.14", devDependencies["nodemon"]?.GetValue<string>());
+        Assert.Equal("^4.21.0", devDependencies["tsx"]?.GetValue<string>());
+        Assert.Equal("^5.9.3", devDependencies["typescript"]?.GetValue<string>());
     }
 
     [Fact]

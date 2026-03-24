@@ -153,7 +153,7 @@ public sealed class TypeScriptLanguageSupport : ILanguageSupport
         var scripts = EnsureObject(packageJson, "scripts");
         scripts["aspire:lint"] = "eslint apphost.ts";
         scripts["aspire:start"] = "aspire run";
-        scripts["aspire:build"] = $"npm run aspire:lint && tsc -p {AppHostTsConfigFileName}";
+        scripts["aspire:build"] = $"tsc -p {AppHostTsConfigFileName}";
         scripts["aspire:dev"] = $"tsc --watch -p {AppHostTsConfigFileName}";
 
         EnsureDependency(packageJson, "dependencies", "vscode-jsonrpc", "^8.2.0");

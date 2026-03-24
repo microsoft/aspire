@@ -7,8 +7,8 @@
     "predev": "npm run lint",
     "dev": "aspire run",
     "prebuild": "npm run lint",
-    "build": "tsc",
-    "watch": "tsc --watch"
+    "build": "tsc -p tsconfig.apphost.json",
+    "watch": "tsc --watch -p tsconfig.apphost.json"
   },
   "dependencies": {
     "vscode-jsonrpc": "^8.2.0"
