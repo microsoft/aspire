@@ -4,6 +4,7 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Scaffolding;
@@ -16,6 +17,8 @@ namespace Aspire.Cli.Scaffolding;
 internal static class PackageJsonMerger
 {
     private const string ScriptsKey = "scripts";
+    private const string DependenciesKey = "dependencies";
+    private const string DevDependenciesKey = "devDependencies";
     private const string AspirePrefix = "aspire:";
 
     private static readonly JsonSerializerOptions s_jsonOptions = new()
@@ -60,7 +63,8 @@ internal static class PackageJsonMerger
 
     /// <summary>
     /// Merges all top-level properties from scaffold into existing.
-    /// Scripts get special conflict-aware handling; everything else uses deep merge.
+    /// Scripts get special conflict-aware handling, dependency sections use semver-aware merging,
+    /// and everything else uses deep merge.
     /// </summary>
     private static void MergeObjects(JsonObject existing, JsonObject scaffold)
     {
@@ -72,10 +76,14 @@ internal static class PackageJsonMerger
             MergeScripts(existingScripts, scaffoldScripts);
         }
 
+        // Handle dependency sections with semver-aware merging
+        MergeDependencySection(existing, scaffold, DependenciesKey);
+        MergeDependencySection(existing, scaffold, DevDependenciesKey);
+
         // Deep merge everything else
         foreach (var (key, sourceValue) in scaffold)
         {
-            if (key == ScriptsKey || sourceValue is null)
+            if (key is ScriptsKey or DependenciesKey or DevDependenciesKey || sourceValue is null)
             {
                 continue;
             }
@@ -163,6 +171,46 @@ internal static class PackageJsonMerger
             if (scripts[unprefixed] is null)
             {
                 scripts[unprefixed] = $"npm run {prefixed}";
+            }
+        }
+    }
+
+    /// <summary>
+    /// Merges a dependency section (e.g., "dependencies", "devDependencies") from scaffold into existing
+    /// using semver-aware comparison. New packages are added; existing packages are upgraded only when
+    /// the scaffold specifies a newer version. Unparseable version ranges (union ranges, workspace
+    /// references, etc.) are preserved as-is.
+    /// </summary>
+    private static void MergeDependencySection(JsonObject existing, JsonObject scaffold, string sectionName)
+    {
+        var scaffoldDeps = scaffold[sectionName]?.AsObject();
+        if (scaffoldDeps is null)
+        {
+            return;
+        }
+
+        var existingDeps = EnsureObject(existing, sectionName);
+
+        foreach (var (packageName, versionNode) in scaffoldDeps)
+        {
+            var desiredVersion = versionNode?.GetValue<string>();
+            if (desiredVersion is null)
+            {
+                continue;
+            }
+
+            var existingVersionNode = existingDeps[packageName];
+            if (existingVersionNode is null)
+            {
+                existingDeps[packageName] = desiredVersion;
+            }
+            else
+            {
+                var existingVersion = existingVersionNode.GetValue<string>();
+                if (NpmVersionHelper.ShouldUpgrade(existingVersion, desiredVersion))
+                {
+                    existingDeps[packageName] = desiredVersion;
+                }
             }
         }
     }
