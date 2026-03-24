@@ -100,7 +100,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Set up .NET Core
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         # Used for running tests outside the repo
         if: ${{ inputs.requiresNugets }}
         with:
@@ -527,7 +527,7 @@ jobs:
       - name: Upload logs, and test results
         id: upload-logs
         if: always()
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: logs-${{ inputs.testShortName }}-${{ inputs.os }}
           path: |
@@ -549,7 +549,7 @@ jobs:
 
       - name: Upload CLI E2E recordings
         if: always()
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: cli-e2e-recordings-${{ inputs.testShortName }}
           path: cli-e2e-recordings/*.cast
