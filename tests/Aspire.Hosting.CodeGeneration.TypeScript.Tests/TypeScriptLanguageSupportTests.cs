@@ -48,6 +48,9 @@ public sealed class TypeScriptLanguageSupportTests
         var engines = packageJson["engines"]!.AsObject();
         Assert.Equal("^20.19.0 || ^22.13.0 || >=24", engines["node"]?.GetValue<string>());
 
+        // Verify the raw JSON does not contain unicode escapes for >= (fidelity check)
+        Assert.DoesNotContain("\\u003E", files["package.json"]);
+
         Assert.Contains("eslint.config.mjs", files.Keys);
 
         var tsConfig = ParseJson(files["tsconfig.apphost.json"]);
