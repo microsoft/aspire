@@ -104,7 +104,8 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
         var workspace = TemporaryWorkspace.Create(output);
-        var localChannel = PrepareLocalChannel(repoRoot, workspace, installMode);
+        var localChannel = CliE2ETestHelpers.PrepareLocalChannel(repoRoot, workspace, installMode,
+            ["Aspire.Hosting.CodeGeneration.TypeScript.", "Aspire.Hosting.JavaScript."]);
         var channelArgument = localChannel is not null ? " --channel local" : string.Empty;
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, variant: CliE2ETestHelpers.DockerfileVariant.DotNet, mountDockerSocket: true, workspace: workspace);
@@ -241,55 +242,4 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
 
         File.WriteAllText(configPath, config.ToJsonString());
     }
-
-    private static LocalChannelInfo? PrepareLocalChannel(
-        string repoRoot,
-        TemporaryWorkspace workspace,
-        CliE2ETestHelpers.DockerInstallMode installMode)
-    {
-        if (installMode != CliE2ETestHelpers.DockerInstallMode.SourceBuild)
-        {
-            return null;
-        }
-
-        var shippingPackagesDirectory = Path.Combine(repoRoot, "artifacts", "packages", "Debug", "Shipping");
-        if (!Directory.Exists(shippingPackagesDirectory))
-        {
-            throw new InvalidOperationException("Local source-built TypeScript E2E tests require packed Aspire packages. Run './build.sh --bundle --pack' first.");
-        }
-
-        var packageFiles = Directory.EnumerateFiles(shippingPackagesDirectory, "Aspire*.nupkg", SearchOption.TopDirectoryOnly)
-            .Where(file => !file.EndsWith(".symbols.nupkg", StringComparison.OrdinalIgnoreCase))
-            .ToArray();
-
-        if (!packageFiles.Any(file => Path.GetFileName(file).StartsWith("Aspire.Hosting.CodeGeneration.TypeScript.", StringComparison.OrdinalIgnoreCase)) ||
-            !packageFiles.Any(file => Path.GetFileName(file).StartsWith("Aspire.Hosting.JavaScript.", StringComparison.OrdinalIgnoreCase)) ||
-            !packageFiles.Any(file => Path.GetFileName(file).StartsWith("Aspire.Hosting.", StringComparison.OrdinalIgnoreCase)))
-        {
-            throw new InvalidOperationException("Local source-built TypeScript E2E tests require packed Aspire.Hosting, Aspire.Hosting.JavaScript, and Aspire.Hosting.CodeGeneration.TypeScript packages. Run './build.sh --bundle --pack' first.");
-        }
-
-        var localChannelPackagesPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire-local", "packages");
-        Directory.CreateDirectory(localChannelPackagesPath);
-
-        foreach (var packageFile in packageFiles)
-        {
-            File.Copy(packageFile, Path.Combine(localChannelPackagesPath, Path.GetFileName(packageFile)), overwrite: true);
-        }
-
-        var sdkVersion = packageFiles
-            .Select(Path.GetFileName)
-            .FirstOrDefault(fileName => fileName is not null && System.Text.RegularExpressions.Regex.IsMatch(fileName, @"^Aspire\.Hosting\.\d+\.\d+\.\d+.*\.nupkg$", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
-            ?.Replace("Aspire.Hosting.", string.Empty, StringComparison.OrdinalIgnoreCase)
-            ?.Replace(".nupkg", string.Empty, StringComparison.OrdinalIgnoreCase);
-
-        if (string.IsNullOrEmpty(sdkVersion))
-        {
-            throw new InvalidOperationException("Local source-built TypeScript E2E tests could not determine the Aspire SDK version from packed packages.");
-        }
-
-        return new LocalChannelInfo(localChannelPackagesPath, sdkVersion);
-    }
-
-    private sealed record LocalChannelInfo(string PackagesPath, string SdkVersion);
 }
