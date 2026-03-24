@@ -140,8 +140,18 @@ jobs:
       - name: Copy nugets to the correct location
         if: ${{ inputs.requiresNugets }}
         shell: pwsh
-        run:
-          Move-Item -Path "${{ github.workspace }}/artifacts/packages/built-nugets/Debug" -Destination "${{ github.workspace }}/artifacts/packages"
+        run: |
+          $packageRoot = "${{ github.workspace }}/artifacts/packages"
+          $nestedDebugPath = Join-Path $packageRoot "built-nugets/Debug"
+          $directDebugPath = Join-Path $packageRoot "Debug"
+
+          if (Test-Path $nestedDebugPath) {
+            Move-Item -Path $nestedDebugPath -Destination $packageRoot
+          }
+          elseif (-not (Test-Path $directDebugPath)) {
+            Get-ChildItem -Path $packageRoot -Recurse | Select-Object -ExpandProperty FullName
+            Write-Error "Unable to find downloaded NuGet packages at '$nestedDebugPath' or '$directDebugPath'."
+          }
 
       - name: Compute RID for arch-specific packages
         if: ${{ inputs.requiresNugets }}
