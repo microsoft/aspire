@@ -1052,7 +1052,7 @@ class CancellationToken:
     
     def cancel(self) -> None:
         '''Cancel the token, which will signal the server to cancel the associated operation.'''
-        self._client._send_request("cancelToken", self.handle)
+        self._client._send_request("cancelToken", self.handle.handle_id)
         raise OperationCancelled(self.handle.handle_id)
 
 
