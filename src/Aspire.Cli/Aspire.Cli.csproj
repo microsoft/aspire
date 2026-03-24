@@ -60,6 +60,7 @@
     <PackageReference Include="Sigstore" />
     <PackageReference Include="Tuf" />
     <PackageReference Include="ModelContextProtocol" />
+    <PackageReference Include="YamlDotNet" />
   </ItemGroup>
 
   <ItemGroup>

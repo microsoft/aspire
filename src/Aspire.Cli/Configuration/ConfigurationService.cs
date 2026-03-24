@@ -21,9 +21,20 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         {
             var existingContent = await File.ReadAllTextAsync(settingsFilePath, cancellationToken);
             // Handle empty files or whitespace-only content
-            settings = string.IsNullOrWhiteSpace(existingContent)
-                ? new JsonObject()
-                : JsonNode.Parse(existingContent, nodeOptions: null, ConfigurationHelper.ParseOptions)?.AsObject() ?? new JsonObject();
+            if (string.IsNullOrWhiteSpace(existingContent))
+            {
+                settings = new JsonObject();
+            }
+            else
+            {
+                // Convert YAML to JSON before parsing
+                if (AspireConfigFile.IsYamlFile(Path.GetFileName(settingsFilePath)))
+                {
+                    existingContent = YamlJsonConverter.YamlToJson(existingContent);
+                }
+
+                settings = JsonNode.Parse(existingContent, nodeOptions: null, ConfigurationHelper.ParseOptions)?.AsObject() ?? new JsonObject();
+            }
         }
         else
         {
@@ -53,6 +64,12 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
             if (string.IsNullOrWhiteSpace(existingContent))
             {
                 return false;
+            }
+
+            // Convert YAML to JSON before parsing
+            if (AspireConfigFile.IsYamlFile(Path.GetFileName(settingsFilePath)))
+            {
+                existingContent = YamlJsonConverter.YamlToJson(existingContent);
             }
 
             var settings = JsonNode.Parse(existingContent, nodeOptions: null, ConfigurationHelper.ParseOptions)?.AsObject();
@@ -97,12 +114,12 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         // Walk up the directory tree to find existing settings file
         while (searchDirectory is not null)
         {
-            // Prefer aspire.config.json (new format)
-            var newSettingsPath = Path.Combine(searchDirectory.FullName, AspireConfigFile.FileName);
-            if (File.Exists(newSettingsPath))
+            // Check for any aspire config file (JSON, YAML, YML)
+            var found = AspireConfigFile.FindConfigFile(searchDirectory.FullName);
+            if (found is not null)
             {
-                logger.LogInformation("Found settings file at {Path}", newSettingsPath);
-                return newSettingsPath;
+                logger.LogInformation("Found settings file at {Path}", found.Value.filePath);
+                return found.Value.filePath;
             }
 
             // TODO: Remove legacy .aspire/settings.json fallback once confident most users have migrated.
@@ -160,6 +177,12 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
             if (string.IsNullOrWhiteSpace(content))
             {
                 return;
+            }
+
+            // Convert YAML to JSON before parsing
+            if (AspireConfigFile.IsYamlFile(Path.GetFileName(filePath)))
+            {
+                content = YamlJsonConverter.YamlToJson(content);
             }
 
             var settings = JsonNode.Parse(content, nodeOptions: null, ConfigurationHelper.ParseOptions)?.AsObject();

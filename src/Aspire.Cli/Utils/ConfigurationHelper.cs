@@ -25,16 +25,16 @@ internal static class ConfigurationHelper
     {
         var currentDirectory = workingDirectory;
 
-        // Find the nearest local settings file (prefer aspire.config.json, fall back to .aspire/settings.json)
+        // Find the nearest local settings file (prefer aspire config files, fall back to .aspire/settings.json)
         FileInfo? localSettingsFile = null;
 
         while (currentDirectory is not null)
         {
-            // Check for aspire.config.json first (new format)
-            var newSettingsPath = Path.Combine(currentDirectory.FullName, AspireConfigFile.FileName);
-            if (File.Exists(newSettingsPath))
+            // Check for any aspire config file (JSON, YAML, YML)
+            var found = AspireConfigFile.FindConfigFile(currentDirectory.FullName);
+            if (found is not null)
             {
-                localSettingsFile = new FileInfo(newSettingsPath);
+                localSettingsFile = new FileInfo(found.Value.filePath);
                 break;
             }
 
@@ -71,24 +71,44 @@ internal static class ConfigurationHelper
 
     /// <summary>
     /// Serializes a JsonObject and writes it to a settings file, creating the directory if needed.
+    /// YAML files are written as YAML; all others as JSON.
     /// </summary>
     internal static async Task WriteSettingsFileAsync(string filePath, JsonObject settings, CancellationToken cancellationToken = default)
     {
         var jsonContent = JsonSerializer.Serialize(settings, JsonSourceGenerationContext.Default.JsonObject);
 
         EnsureDirectoryExists(filePath);
-        await File.WriteAllTextAsync(filePath, jsonContent, cancellationToken);
+
+        if (AspireConfigFile.IsYamlFile(Path.GetFileName(filePath)))
+        {
+            var yamlContent = YamlJsonConverter.JsonToYaml(jsonContent);
+            await File.WriteAllTextAsync(filePath, yamlContent, cancellationToken);
+        }
+        else
+        {
+            await File.WriteAllTextAsync(filePath, jsonContent, cancellationToken);
+        }
     }
 
     /// <summary>
     /// Serializes a JsonObject and writes it to a settings file, creating the directory if needed.
+    /// YAML files are written as YAML; all others as JSON.
     /// </summary>
     internal static void WriteSettingsFile(string filePath, JsonObject settings)
     {
         var jsonContent = JsonSerializer.Serialize(settings, JsonSourceGenerationContext.Default.JsonObject);
 
         EnsureDirectoryExists(filePath);
-        File.WriteAllText(filePath, jsonContent);
+
+        if (AspireConfigFile.IsYamlFile(Path.GetFileName(filePath)))
+        {
+            var yamlContent = YamlJsonConverter.JsonToYaml(jsonContent);
+            File.WriteAllText(filePath, yamlContent);
+        }
+        else
+        {
+            File.WriteAllText(filePath, jsonContent);
+        }
     }
 
     private static void EnsureDirectoryExists(string filePath)
@@ -102,6 +122,31 @@ internal static class ConfigurationHelper
 
     private static void AddSettingsFile(IConfigurationBuilder configuration, string filePath)
     {
+        // YAML files are converted to JSON and loaded via stream
+        if (AspireConfigFile.IsYamlFile(Path.GetFileName(filePath)))
+        {
+            try
+            {
+                var yamlContent = File.ReadAllText(filePath);
+                if (string.IsNullOrWhiteSpace(yamlContent))
+                {
+                    return;
+                }
+
+                var json = YamlJsonConverter.YamlToJson(yamlContent);
+                var bytes = System.Text.Encoding.UTF8.GetBytes(json);
+                configuration.AddJsonStream(new MemoryStream(bytes));
+            }
+            catch (Exception ex) when (ex is YamlDotNet.Core.YamlException or JsonException)
+            {
+                throw new InvalidOperationException(
+                    string.Format(CultureInfo.CurrentCulture, ErrorStrings.InvalidYamlInConfigFile, filePath, ex.Message),
+                    ex);
+            }
+
+            return;
+        }
+
         // Proactively normalize the settings file to prevent duplicate key errors.
         // This handles files corrupted by mixing colon and dot notation
         // (e.g., both "features:key" flat entry and "features" nested object).

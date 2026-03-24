@@ -122,10 +122,20 @@
         <target state="translated">Der angegebene Erweiterungssocketpfad benötigt zwei gültige Teile.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidYamlInConfigFile">
+        <source>The configuration file '{0}' contains invalid YAML: {1}</source>
+        <target state="new">The configuration file '{0}' contains invalid YAML: {1}</target>
+        <note>{0} is the file path, {1} is the exception message</note>
+      </trans-unit>
       <trans-unit id="MinimumSdkVersionNotMet">
         <source>The Aspire CLI requires .NET SDK version {0} or later. Detected: {1}.</source>
         <target state="translated">Die Aspire-CLI erfordert .NET SDK-Version {0} oder höher. Erkannt: {1}.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="MultipleConfigFormatsFound">
+        <source>Multiple configuration files found in '{0}': {1}. Only one format is allowed. Remove the extra file(s) and keep the one you want to use.</source>
+        <target state="new">Multiple configuration files found in '{0}': {1}. Only one format is allowed. Remove the extra file(s) and keep the one you want to use.</target>
+        <note>{0} is the directory path, {1} is the comma-separated list of file names</note>
       </trans-unit>
       <trans-unit id="MultipleProjectFilesFound">
         <source>Multiple project files found.</source>

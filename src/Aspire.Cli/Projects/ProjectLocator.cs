@@ -202,7 +202,7 @@ internal sealed class ProjectLocator(
                 }
                 else
                 {
-                    var configFilePath = Path.Combine(searchDirectory.FullName, AspireConfigFile.FileName);
+                    var configFilePath = Path.Combine(searchDirectory.FullName, aspireConfig.SourceFileName ?? AspireConfigFile.FileName);
                     interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.AppHostWasSpecifiedButDoesntExist, configFilePath, qualifiedPath));
                     return null;
                 }

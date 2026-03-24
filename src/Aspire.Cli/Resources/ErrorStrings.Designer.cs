@@ -345,5 +345,23 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InvalidJsonInConfigFile", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The configuration file '{0}' contains invalid YAML: {1}.
+        /// </summary>
+        public static string InvalidYamlInConfigFile {
+            get {
+                return ResourceManager.GetString("InvalidYamlInConfigFile", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Multiple configuration files found in '{0}': {1}. Only one format is allowed. Remove the extra file(s) and keep the one you want to use..
+        /// </summary>
+        public static string MultipleConfigFormatsFound {
+            get {
+                return ResourceManager.GetString("MultipleConfigFormatsFound", resourceCulture);
+            }
+        }
     }
 }

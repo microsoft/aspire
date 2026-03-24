@@ -12,12 +12,13 @@ using Microsoft.Extensions.Logging;
 namespace Aspire.Cli.Configuration;
 
 /// <summary>
-/// Represents the aspire.config.json configuration file.
+/// Represents the aspire.config.json (or aspire.config.yaml/.yml) configuration file.
 /// Consolidates apphost location, launch settings, and CLI config into one file.
 /// </summary>
 /// <remarks>
-/// <para>The new unified format (<c>aspire.config.json</c>) replaces the legacy split across
-/// <c>.aspire/settings.json</c> (local settings) and <c>apphost.run.json</c> (launch profiles).</para>
+/// <para>The new unified format (<c>aspire.config.json</c> or <c>aspire.config.yaml</c>) replaces
+/// the legacy split across <c>.aspire/settings.json</c> (local settings) and
+/// <c>apphost.run.json</c> (launch profiles).</para>
 /// <para>Example <c>aspire.config.json</c>:</para>
 /// <code>
 /// {
@@ -34,6 +35,24 @@ namespace Aspire.Cli.Configuration;
 ///   "packages": { "Aspire.Hosting.Redis": "9.2.0" }
 /// }
 /// </code>
+/// <para>Equivalent <c>aspire.config.yaml</c>:</para>
+/// <code>
+/// appHost:
+///   path: app.ts
+///   language: typescript/nodejs
+/// sdk:
+///   version: "9.2.0"
+/// channel: stable
+/// features:
+///   polyglotSupportEnabled: true
+/// profiles:
+///   default:
+///     applicationUrl: "https://localhost:17000;http://localhost:15000"
+///     environmentVariables:
+///       ASPNETCORE_ENVIRONMENT: Development
+/// packages:
+///   Aspire.Hosting.Redis: "9.2.0"
+/// </code>
 /// <para>Legacy <c>.aspire/settings.json</c> (flat keys):</para>
 /// <code>
 /// { "appHostPath": "app.ts", "language": "typescript/nodejs", "sdkVersion": "9.2.0" }
@@ -46,6 +65,20 @@ namespace Aspire.Cli.Configuration;
 internal sealed class AspireConfigFile
 {
     public const string FileName = "aspire.config.json";
+    public const string FileNameYaml = "aspire.config.yaml";
+    public const string FileNameYml = "aspire.config.yml";
+
+    /// <summary>
+    /// All recognized config file names, in precedence order.
+    /// </summary>
+    internal static readonly string[] s_allFileNames = [FileNameYaml, FileNameYml, FileName];
+
+    /// <summary>
+    /// Tracks which file name was used when loading, so <see cref="Save"/> can write back
+    /// in the same format. <c>null</c> means the config was created in memory (defaults to JSON).
+    /// </summary>
+    [JsonIgnore]
+    public string? SourceFileName { get; set; }
 
     /// <summary>
     /// The JSON Schema URL for this configuration file.
@@ -109,18 +142,63 @@ internal sealed class AspireConfigFile
     public Dictionary<string, string>? Packages { get; set; }
 
     /// <summary>
-    /// Loads aspire.config.json from the specified directory.
+    /// Finds the config file in a directory. Returns the full path and file name,
+    /// or <c>null</c> if no config file exists. Throws if multiple formats are present.
     /// </summary>
-    /// <returns>The deserialized config, or <c>null</c> if the file does not exist.</returns>
-    /// <exception cref="InvalidOperationException">Thrown when the file exists but contains invalid JSON.</exception>
-    public static AspireConfigFile? Load(string directory)
+    internal static (string filePath, string fileName)? FindConfigFile(string directory)
     {
-        var filePath = Path.Combine(directory, FileName);
-        if (!File.Exists(filePath))
+        var found = new List<string>();
+
+        foreach (var name in s_allFileNames)
+        {
+            if (File.Exists(Path.Combine(directory, name)))
+            {
+                found.Add(name);
+            }
+        }
+
+        if (found.Count == 0)
         {
             return null;
         }
 
+        if (found.Count > 1)
+        {
+            throw new InvalidOperationException(
+                string.Format(CultureInfo.CurrentCulture, ErrorStrings.MultipleConfigFormatsFound,
+                    directory, string.Join(", ", found)));
+        }
+
+        return (Path.Combine(directory, found[0]), found[0]);
+    }
+
+    /// <summary>
+    /// Loads the aspire config file (JSON, YAML, or YML) from the specified directory.
+    /// </summary>
+    /// <returns>The deserialized config, or <c>null</c> if the file does not exist.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when multiple config formats exist in the same directory.</exception>
+    /// <exception cref="JsonException">Thrown when a JSON config file contains invalid JSON.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when a YAML config file contains invalid YAML.</exception>
+    public static AspireConfigFile? Load(string directory)
+    {
+        var found = FindConfigFile(directory);
+        if (found is null)
+        {
+            return null;
+        }
+
+        var (filePath, fileName) = found.Value;
+
+        var config = IsYamlFile(fileName)
+            ? LoadYaml(filePath)
+            : LoadJson(filePath);
+
+        config.SourceFileName = fileName;
+        return config;
+    }
+
+    private static AspireConfigFile LoadJson(string filePath)
+    {
         try
         {
             var json = File.ReadAllText(filePath);
@@ -135,21 +213,65 @@ internal sealed class AspireConfigFile
         }
     }
 
+    private static AspireConfigFile LoadYaml(string filePath)
+    {
+        try
+        {
+            var yaml = File.ReadAllText(filePath);
+            var json = YamlJsonConverter.YamlToJson(yaml);
+            return JsonSerializer.Deserialize(json, JsonSourceGenerationContext.Default.AspireConfigFile)
+                ?? new AspireConfigFile();
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException(
+                string.Format(CultureInfo.CurrentCulture, ErrorStrings.InvalidYamlInConfigFile, filePath, ex.Message),
+                ex);
+        }
+        catch (YamlDotNet.Core.YamlException ex)
+        {
+            throw new InvalidOperationException(
+                string.Format(CultureInfo.CurrentCulture, ErrorStrings.InvalidYamlInConfigFile, filePath, ex.Message),
+                ex);
+        }
+    }
+
     /// <summary>
-    /// Saves aspire.config.json to the specified directory.
+    /// Returns true if the file name indicates a YAML config file.
+    /// </summary>
+    internal static bool IsYamlFile(string fileName)
+    {
+        return string.Equals(fileName, FileNameYaml, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(fileName, FileNameYml, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Saves the config to the specified directory, preserving the format it was loaded from.
+    /// New configs (or those loaded from JSON) are saved as <c>aspire.config.json</c>;
+    /// configs loaded from YAML are saved back as YAML.
     /// Uses relaxed JSON escaping so non-ASCII characters (CJK, etc.) are preserved as-is.
     /// </summary>
     public void Save(string directory)
     {
         Directory.CreateDirectory(directory);
-        var filePath = Path.Combine(directory, FileName);
+        var targetFileName = SourceFileName ?? FileName;
+        var filePath = Path.Combine(directory, targetFileName);
         var json = JsonSerializer.Serialize(this, JsonSourceGenerationContext.RelaxedEscaping.AspireConfigFile);
-        File.WriteAllText(filePath, json);
+
+        if (IsYamlFile(targetFileName))
+        {
+            var yaml = YamlJsonConverter.JsonToYaml(json);
+            File.WriteAllText(filePath, yaml);
+        }
+        else
+        {
+            File.WriteAllText(filePath, json);
+        }
     }
 
     /// <summary>
-    /// Loads aspire.config.json from the specified directory, falling back to legacy
-    /// .aspire/settings.json + apphost.run.json and migrating if needed.
+    /// Loads the aspire config file (JSON, YAML, or YML) from the specified directory,
+    /// falling back to legacy .aspire/settings.json + apphost.run.json and migrating if needed.
     /// </summary>
     public static AspireConfigFile LoadOrCreate(string directory, string? defaultSdkVersion = null)
     {
@@ -358,11 +480,19 @@ internal sealed class AspireConfigFile
     }
 
     /// <summary>
-    /// Checks if aspire.config.json exists in the specified directory.
+    /// Checks if any aspire config file (JSON, YAML, or YML) exists in the specified directory.
     /// </summary>
     public static bool Exists(string directory)
     {
-        return File.Exists(Path.Combine(directory, FileName));
+        foreach (var name in s_allFileNames)
+        {
+            if (File.Exists(Path.Combine(directory, name)))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

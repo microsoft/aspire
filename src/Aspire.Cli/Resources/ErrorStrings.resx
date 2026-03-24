@@ -233,4 +233,12 @@
     <value>The configuration file '{0}' contains invalid JSON: {1}</value>
     <comment>{0} is the file path, {1} is the exception message</comment>
   </data>
+  <data name="InvalidYamlInConfigFile" xml:space="preserve">
+    <value>The configuration file '{0}' contains invalid YAML: {1}</value>
+    <comment>{0} is the file path, {1} is the exception message</comment>
+  </data>
+  <data name="MultipleConfigFormatsFound" xml:space="preserve">
+    <value>Multiple configuration files found in '{0}': {1}. Only one format is allowed. Remove the extra file(s) and keep the one you want to use.</value>
+    <comment>{0} is the directory path, {1} is the comma-separated list of file names</comment>
+  </data>
 </root>
