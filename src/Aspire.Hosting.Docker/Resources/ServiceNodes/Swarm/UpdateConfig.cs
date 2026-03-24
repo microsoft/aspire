@@ -21,7 +21,7 @@ public sealed class UpdateConfig
     /// be updated simultaneously.
     /// </summary>
     [YamlMember(Alias = "parallelism")]
-    public string? Parallelism { get; set; }
+    public int? Parallelism { get; set; }
 
     /// <summary>
     /// Represents the delay between each update operation for a service node in a swarm configuration.
@@ -30,10 +30,11 @@ public sealed class UpdateConfig
     public string? Delay { get; set; }
 
     /// <summary>
-    /// Indicates whether the update process should stop and fail upon encountering an error.
+    /// Gets or sets the action to take when an update fails.
+    /// Valid values are "continue", "rollback", or "pause" (default).
     /// </summary>
     [YamlMember(Alias = "failure_action")]
-    public bool? FailOnError { get; set; }
+    public string? FailureAction { get; set; }
 
     /// <summary>
     /// Gets or sets the duration or interval for monitoring the progress of an update.
