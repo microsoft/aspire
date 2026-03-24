@@ -179,7 +179,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         Assert.Equal("aspire run", scripts["aspire:start"]?.GetValue<string>());
         Assert.Equal("tsc -p tsconfig.apphost.json", scripts["aspire:build"]?.GetValue<string>());
         Assert.Equal("tsc --watch -p tsconfig.apphost.json", scripts["aspire:dev"]?.GetValue<string>());
-        Assert.False(scripts.ContainsKey("start"));
+        Assert.Equal("npm run aspire:start", scripts["start"]?.GetValue<string>());
 
         Assert.Equal("module", packageJson["type"]?.GetValue<string>());
         Assert.NotNull(dependencies["vscode-jsonrpc"]);
