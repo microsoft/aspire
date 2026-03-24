@@ -17,6 +17,8 @@ await customDatabase.withCreationScript(".create database AnalyticsDb ifnotexist
 const _isEmulator: boolean = await kusto.isEmulator.get();
 const _clusterUri = await kusto.uriExpression.get();
 const _clusterConnectionString = await kusto.connectionStringExpression.get();
+const _clusterNameOutput = await kusto.nameOutputReference.get();
+const _clusterUriOutput = await kusto.clusterUri.get();
 
 const _defaultDatabaseName: string = await defaultDatabase.databaseName.get();
 const _defaultDatabaseParent = await defaultDatabase.parent.get();

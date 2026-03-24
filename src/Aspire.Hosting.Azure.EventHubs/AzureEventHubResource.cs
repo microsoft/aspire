@@ -36,15 +36,11 @@ public class AzureEventHubResource(string name, string hubName, AzureEventHubsRe
     /// <summary>
     /// Gets the parent Azure Event Hubs resource.
     /// </summary>
-    /// <remarks>This property is not available in polyglot app hosts.</remarks>
-    [AspireExportIgnore]
     public AzureEventHubsResource Parent { get; } = parent ?? throw new ArgumentNullException(nameof(parent));
 
     /// <summary>
     /// Gets the connection string expression for the Azure Event Hub.
     /// </summary>
-    /// <remarks>This property is not available in polyglot app hosts.</remarks>
-    [AspireExportIgnore]
     public ReferenceExpression ConnectionStringExpression => Parent.GetConnectionString(HubName);
 
     /// <summary>

@@ -26,11 +26,9 @@ await fileBicep.publishAsConnectionString();
 await fileBicep.clearDefaultRoleAssignments();
 await fileBicep.getBicepIdentifier();
 await fileBicep.isExisting();
-await fileBicep.runAsExisting("file-bicep-existing", "rg-bicep");
-await fileBicep.runAsExistingFromParameters(existingName, existingResourceGroup);
-await fileBicep.publishAsExisting("file-bicep-existing", "rg-bicep");
-await fileBicep.publishAsExistingFromParameters(existingName, existingResourceGroup);
-await fileBicep.asExisting(existingName, existingResourceGroup);
+await fileBicep.runAsExisting("file-bicep-existing", { resourceGroup: "rg-bicep" });
+await fileBicep.publishAsExisting("file-bicep-existing", { resourceGroup: "rg-bicep" });
+await fileBicep.asExisting("file-bicep-existing", { resourceGroup: "rg-bicep" });
 
 const inlineBicep = await builder.addBicepTemplateString("inline-bicep", `
 output inlineUrl string = 'https://inline.example.com'
@@ -60,11 +58,9 @@ await infrastructure.publishAsConnectionString();
 await infrastructure.clearDefaultRoleAssignments();
 await infrastructure.getBicepIdentifier();
 await infrastructure.isExisting();
-await infrastructure.runAsExisting("infra-existing", "rg-infra");
-await infrastructure.runAsExistingFromParameters(existingName, existingResourceGroup);
-await infrastructure.publishAsExisting("infra-existing", "rg-infra");
-await infrastructure.publishAsExistingFromParameters(existingName, existingResourceGroup);
-await infrastructure.asExisting(existingName, existingResourceGroup);
+await infrastructure.runAsExisting(existingName, { resourceGroup: existingResourceGroup });
+await infrastructure.publishAsExisting(existingName, { resourceGroup: existingResourceGroup });
+await infrastructure.asExisting(existingName, { resourceGroup: existingResourceGroup });
 
 const identity = await builder.addAzureUserAssignedIdentity("identity");
 await identity.configureInfrastructure(async infrastructureContext => {
@@ -83,11 +79,10 @@ await identity.publishAsConnectionString();
 await identity.clearDefaultRoleAssignments();
 await identity.getBicepIdentifier();
 await identity.isExisting();
-await identity.runAsExisting("identity-existing", "rg-identity");
-await identity.runAsExistingFromParameters(existingName, existingResourceGroup);
-await identity.publishAsExisting("identity-existing", "rg-identity");
-await identity.publishAsExistingFromParameters(existingName, existingResourceGroup);
-await identity.asExisting(existingName, existingResourceGroup);
+await identity.runAsExisting("identity-existing", { resourceGroup: "rg-identity" });
+await identity.publishAsExisting("identity-existing", { resourceGroup: "rg-identity" });
+await identity.publishAsExisting(existingName, { resourceGroup: existingResourceGroup });
+await identity.asExisting("identity-existing", { resourceGroup: "rg-identity" });
 
 await container.withEnvironmentFromOutput("INFRA_URL", infrastructureOutput);
 await container.withEnvironmentFromKeyVaultSecret("SECRET_FROM_IDENTITY", identity);

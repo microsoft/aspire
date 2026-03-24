@@ -8,6 +8,7 @@ using System.Runtime.CompilerServices;
 using System.Security.Cryptography.X509Certificates;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Ats;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -351,7 +352,7 @@ public static class ResourceBuilderExtensions
     /// <param name="name">The name of the connection property to annotate. Cannot be null.</param>
     /// <param name="value">The value of the connection property, specified as a reference expression.</param>
     /// <returns>The same resource builder instance with the connection property annotation applied.</returns>
-    [AspireExport("withConnectionProperty", Description = "Adds a connection property with a reference expression")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withConnectionProperty dispatcher export.")]
     public static IResourceBuilder<T> WithConnectionProperty<T>(this IResourceBuilder<T> builder, string name, ReferenceExpression value) where T : IResourceWithConnectionString
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -369,13 +370,41 @@ public static class ResourceBuilderExtensions
     /// <param name="name">The name of the connection property to add. Cannot be null.</param>
     /// <param name="value">The value to assign to the connection property.</param>
     /// <returns>The same resource builder instance with the specified connection property annotation applied.</returns>
-    [AspireExport("withConnectionPropertyValue", Description = "Adds a connection property with a string value")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withConnectionProperty dispatcher export.")]
     public static IResourceBuilder<T> WithConnectionProperty<T>(this IResourceBuilder<T> builder, string name, string value) where T : IResourceWithConnectionString
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(name);
 
         return builder.WithAnnotation(new ConnectionPropertyAnnotation(name, ReferenceExpression.Create($"{value}")));
+    }
+
+    /// <summary>
+    /// Adds a connection property annotation to the resource being built.
+    /// </summary>
+    /// <typeparam name="T">The type of resource that implements <see cref="IResourceWithConnectionString"/>.</typeparam>
+    /// <param name="builder">The resource builder to which the connection property will be added.</param>
+    /// <param name="name">The name of the connection property to add.</param>
+    /// <param name="value">The value to assign to the connection property, specified as a string or reference expression.</param>
+    /// <returns>The same resource builder instance with the specified connection property annotation applied.</returns>
+    [AspireExport("withConnectionProperty", Description = "Adds a connection property with a string or reference expression value")]
+    internal static IResourceBuilder<T> WithConnectionPropertyExport<T>(
+        this IResourceBuilder<T> builder,
+        string name,
+        [AspireUnion(typeof(string), typeof(ReferenceExpression))] object value) where T : IResourceWithConnectionString
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(value);
+
+        return value switch
+        {
+            string stringValue => builder.WithConnectionProperty(name, stringValue),
+            ReferenceExpression referenceExpression => builder.WithConnectionProperty(name, referenceExpression),
+            _ => throw new ArgumentException(
+                $"Unsupported connection property type '{value.GetType().Name}'. Expected string or ReferenceExpression.",
+                nameof(value))
+        };
     }
 
     /// <summary>
@@ -581,6 +610,25 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
 
         return builder.WithAnnotation(new ReferenceEnvironmentInjectionAnnotation(flags));
+    }
+
+    /// <summary>
+    /// Configures how information is injected into environment variables when the resource references other resources.
+    /// </summary>
+    /// <typeparam name="TDestination">The destination resource.</typeparam>
+    /// <param name="builder">The resource to configure.</param>
+    /// <param name="options">Options controlling which reference information is emitted.</param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("withReferenceEnvironment", Description = "Configures which reference values are injected into environment variables")]
+    internal static IResourceBuilder<TDestination> WithReferenceEnvironmentExport<TDestination>(
+        this IResourceBuilder<TDestination> builder,
+        ReferenceEnvironmentInjectionOptions options)
+        where TDestination : IResourceWithEnvironment
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(options);
+
+        return builder.WithReferenceEnvironment(options.ToFlags());
     }
 
     [AspireExport("withReference", Description = "Adds a reference to another resource")]
@@ -3027,6 +3075,26 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(type);
 
         return builder.WithAnnotation(new ResourceRelationshipAnnotation(resource, type));
+    }
+
+    /// <summary>
+    /// Adds a relationship to another resource using its builder.
+    /// </summary>
+    /// <typeparam name="T">The type of the resource.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="resourceBuilder">The resource builder that the relationship is to.</param>
+    /// <param name="type">The relationship type.</param>
+    /// <returns>A resource builder.</returns>
+    [AspireExport("withBuilderRelationship", MethodName = "withRelationship", Description = "Adds a relationship to another resource")]
+    public static IResourceBuilder<T> WithRelationship<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<IResource> resourceBuilder,
+        string type) where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(resourceBuilder);
+
+        return builder.WithRelationship(resourceBuilder.Resource, type);
     }
 
     /// <summary>

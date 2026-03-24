@@ -1,4 +1,4 @@
-// aspire.ts - Core Aspire types: base classes, ReferenceExpression
+// base.ts - Core Aspire types: base classes, ReferenceExpression
 import { Handle, AspireClient, MarshalledHandle, CancellationToken, registerCancellation, registerHandleWrapper, unregisterCancellation } from './transport.js';
 
 // Re-export transport types for convenience
@@ -165,7 +165,7 @@ export class ReferenceExpression {
         if (!this._handle || !this._client) {
             throw new Error('getValue is only available on server-returned ReferenceExpression instances');
         }
-        const cancellationTokenId = registerCancellation(cancellationToken);
+        const cancellationTokenId = registerCancellation(this._client, cancellationToken);
         try {
             const rpcArgs: Record<string, unknown> = { context: this._handle };
             if (cancellationTokenId !== undefined) rpcArgs.cancellationToken = cancellationTokenId;
@@ -392,11 +392,20 @@ export class AspireList<T> {
         }) as T[];
     }
 
-    toJSON(): MarshalledHandle { 
-        if (this._resolvedHandle) {
-            return this._resolvedHandle.toJSON();
+    async toTransportValue(): Promise<MarshalledHandle> {
+        const handle = await this._ensureHandle();
+        return handle.toJSON();
+    }
+
+    toJSON(): MarshalledHandle {
+        if (!this._resolvedHandle) {
+            throw new Error(
+                'AspireList must be resolved before it can be serialized directly. ' +
+                'Pass it to generated SDK methods instead of calling JSON.stringify directly.'
+            );
         }
-        return this._handleOrContext.toJSON(); 
+
+        return this._resolvedHandle.toJSON();
     }
 }
 
@@ -551,8 +560,19 @@ export class AspireDict<K, V> {
         }) as Record<string, V>;
     }
 
-    async toJSON(): Promise<MarshalledHandle> {
+    async toTransportValue(): Promise<MarshalledHandle> {
         const handle = await this._ensureHandle();
         return handle.toJSON();
+    }
+
+    toJSON(): MarshalledHandle {
+        if (!this._resolvedHandle) {
+            throw new Error(
+                'AspireDict must be resolved before it can be serialized directly. ' +
+                'Pass it to generated SDK methods instead of calling JSON.stringify directly.'
+            );
+        }
+
+        return this._resolvedHandle.toJSON();
     }
 }

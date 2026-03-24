@@ -110,8 +110,11 @@ public static class ContainerResourceBuilderExtensions
     /// <param name="image">The container image name.</param>
     /// <param name="tag">The container image tag.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    /// <remarks>This method is not available in polyglot app hosts. Use <see cref="AddContainer(IDistributedApplicationBuilder, string, string)"/> with <see cref="ContainerResourceBuilderExtensions.WithImageTag{T}"/> instead.</remarks>
-    [AspireExportIgnore(Reason = "Use AddContainer with WithImageTag instead for a cleaner API.")]
+    /// <remarks>
+    /// This overload is also exported to polyglot app hosts as <c>addContainerWithTag</c> for scenarios where the
+    /// image tag is already available as a separate value.
+    /// </remarks>
+    [AspireExport("addContainerWithTag", Description = "Adds a container resource with an explicit image tag")]
     public static IResourceBuilder<ContainerResource> AddContainer(this IDistributedApplicationBuilder builder, [ResourceName] string name, string image, string tag)
     {
         return AddContainer(builder, name, image)
@@ -1039,7 +1042,7 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <remarks>This method is not available in polyglot app hosts. Use the ParameterResource overload instead.</remarks>
+    /// <remarks>This method is not available in polyglot app hosts. Use the ATS dispatcher overload instead.</remarks>
     [AspireExportIgnore(Reason = "Uses object parameter which is not ATS-compatible.")]
     public static IResourceBuilder<T> WithBuildArg<T>(this IResourceBuilder<T> builder, string name, object? value) where T : ContainerResource
     {
@@ -1091,7 +1094,7 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("withParameterBuildArg", MethodName = "withBuildArg", Description = "Adds a build argument from a parameter resource")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withBuildArg dispatcher export.")]
     public static IResourceBuilder<T> WithBuildArg<T>(this IResourceBuilder<T> builder, string name, IResourceBuilder<ParameterResource> value) where T : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -1104,6 +1107,34 @@ public static class ContainerResourceBuilderExtensions
         }
 
         return builder.WithBuildArg(name, value.Resource);
+    }
+
+    /// <summary>
+    /// Adds a build argument when the container is built from a Dockerfile.
+    /// </summary>
+    /// <typeparam name="T">The type of container resource.</typeparam>
+    /// <param name="builder">The resource builder for the container resource.</param>
+    /// <param name="name">The name of the build argument.</param>
+    /// <param name="value">The build argument value, either a string or a parameter resource.</param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("withBuildArg", Description = "Adds a build argument from a string value or parameter resource")]
+    internal static IResourceBuilder<T> WithBuildArgExport<T>(
+        this IResourceBuilder<T> builder,
+        string name,
+        [AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object value) where T : ContainerResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentNullException.ThrowIfNull(value);
+
+        return value switch
+        {
+            string stringValue => builder.WithBuildArg(name, (object?)stringValue),
+            IResourceBuilder<ParameterResource> parameter => builder.WithBuildArg(name, parameter),
+            _ => throw new ArgumentException(
+                $"Unsupported build argument type '{value.GetType().Name}'. Expected string or ParameterResource.",
+                nameof(value))
+        };
     }
 
     /// <summary>
@@ -1168,7 +1199,7 @@ public static class ContainerResourceBuilderExtensions
     /// <param name="defaultCertificateBundlePaths">List of default certificate bundle paths in the container that will be replaced in <see cref="CertificateTrustScope.Override"/> or <see cref="CertificateTrustScope.System"/> modes. If not specified, defaults to <c>/etc/ssl/certs/ca-certificates.crt</c> for Linux containers.</param>
     /// <param name="defaultCertificateDirectoryPaths">List of default certificate directory paths in the container that may be appended to the custom certificates directory in <see cref="CertificateTrustScope.Append"/> mode. If not specified, defaults to <c>/usr/local/share/ca-certificates/</c> for Linux containers.</param>
     /// <returns>The updated resource builder.</returns>
-    /// <remarks>This method is not available in polyglot app hosts.</remarks>
+    /// <remarks>This method is not available in polyglot app hosts. Use the ATS wrapper overload instead.</remarks>
     [AspireExportIgnore(Reason = "Uses List<string> which is not ATS-compatible (only T[] is supported, not List<T>).")]
     public static IResourceBuilder<TResource> WithContainerCertificatePaths<TResource>(this IResourceBuilder<TResource> builder, string? customCertificatesDestination = null, List<string>? defaultCertificateBundlePaths = null, List<string>? defaultCertificateDirectoryPaths = null)
         where TResource : ContainerResource
@@ -1181,6 +1212,31 @@ public static class ContainerResourceBuilderExtensions
             DefaultCertificateBundles = defaultCertificateBundlePaths,
             DefaultCertificateDirectories = defaultCertificateDirectoryPaths,
         }, ResourceAnnotationMutationBehavior.Replace);
+    }
+
+    /// <summary>
+    /// Adds container certificate path overrides used for certificate trust at run time.
+    /// </summary>
+    /// <typeparam name="TResource">The type of the resource.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="customCertificatesDestination">The destination path in the container where custom certificates will be copied.</param>
+    /// <param name="defaultCertificateBundlePaths">Default certificate bundle paths in the container that will be replaced.</param>
+    /// <param name="defaultCertificateDirectoryPaths">Default certificate directory paths in the container that may be appended.</param>
+    /// <returns>The updated resource builder.</returns>
+    [AspireExport("withContainerCertificatePaths", Description = "Overrides container certificate bundle and directory paths used for trust configuration")]
+    internal static IResourceBuilder<TResource> WithContainerCertificatePathsExport<TResource>(
+        this IResourceBuilder<TResource> builder,
+        string? customCertificatesDestination = null,
+        string[]? defaultCertificateBundlePaths = null,
+        string[]? defaultCertificateDirectoryPaths = null)
+        where TResource : ContainerResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithContainerCertificatePaths(
+            customCertificatesDestination,
+            defaultCertificateBundlePaths?.ToList(),
+            defaultCertificateDirectoryPaths?.ToList());
     }
 
     /// <summary>

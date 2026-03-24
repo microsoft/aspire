@@ -14,6 +14,7 @@ const builder = await createBuilder();
 
 // addContainer (pre-existing)
 const container = await builder.addContainer("mycontainer", "nginx");
+const taggedContainer = await builder.addContainerWithTag("mytaggedcontainer", "nginx", "stable-alpine");
 
 // addDockerfile
 const dockerContainer = await builder.addDockerfile("dockerapp", "./app");
@@ -23,6 +24,11 @@ const exe = await builder.addExecutable("myexe", "echo", ".", ["hello"]);
 
 // addProject (pre-existing)
 const project = await builder.addProject("myproject", "./src/MyProject", "https");
+const projectWithoutLaunchProfile = await builder.addProjectWithoutLaunchProfile("myproject-noprofile", "./src/MyProject");
+await project.withReferenceEnvironment({
+    connectionString: true,
+    serviceDiscovery: true,
+});
 
 // addCSharpApp
 const csharpApp = await builder.addCSharpApp("csharpapp", "./src/CSharpApp");
@@ -36,6 +42,18 @@ const tool = await builder.addDotnetTool("mytool", "dotnet-ef");
 // addParameterFromConfiguration
 const configParam = await builder.addParameterFromConfiguration("myconfig", "MyConfig:Key");
 const secretParam = await builder.addParameterFromConfiguration("mysecret", "MyConfig:Secret", { secret: true });
+const generatedParam = await builder.addParameterWithGeneratedValue("generated-secret", {
+    minLength: 24,
+    lower: true,
+    upper: true,
+    numeric: true,
+    special: false,
+    minUpper: 2,
+    minNumeric: 2,
+}, {
+    secret: true,
+    persist: true,
+});
 
 // ===================================================================
 // Container-specific methods on ContainerResource
@@ -43,6 +61,13 @@ const secretParam = await builder.addParameterFromConfiguration("mysecret", "MyC
 
 // withDockerfileBaseImage
 await container.withDockerfileBaseImage({ buildImage: "mcr.microsoft.com/dotnet/sdk:8.0" });
+await dockerContainer.withBuildArg("STATIC_BRANDING", "/app/static/branding/custom");
+await dockerContainer.withBuildArg("CONFIG_BRANDING", configParam);
+await container.withContainerCertificatePaths({
+    customCertificatesDestination: "/usr/lib/ssl/aspire/custom",
+    defaultCertificateBundlePaths: ["/etc/ssl/certs/ca-certificates.crt"],
+    defaultCertificateDirectoryPaths: ["/etc/ssl/certs", "/usr/local/share/ca-certificates"],
+});
 
 // withContainerRegistry
 await container.withContainerRegistry(container);
@@ -67,7 +92,7 @@ const builtConnectionString = await builder.addConnectionStringBuilder("customcs
 });
 
 await builtConnectionString.withConnectionProperty("Host", expr);
-await builtConnectionString.withConnectionPropertyValue("Mode", "Development");
+await builtConnectionString.withConnectionProperty("Mode", "Development");
 
 const envConnectionString = await builder.addConnectionString("envcs");
 
@@ -83,6 +108,7 @@ await container.withEnvironment("MY_EXPR", expr);
 
 // withEnvironment — with ParameterResource
 await container.withEnvironment("MY_PARAM", configParam);
+await container.withEnvironment("MY_GENERATED_PARAM", generatedParam);
 
 // withEnvironment — with connection string resource
 await container.withEnvironment("MY_CONN", envConnectionString);
@@ -90,8 +116,8 @@ await container.withEnvironment("MY_CONN", envConnectionString);
 // withConnectionProperty — with ReferenceExpression
 await builtConnectionString.withConnectionProperty("Endpoint", expr);
 
-// withConnectionPropertyValue — with string
-await builtConnectionString.withConnectionPropertyValue("Protocol", "https");
+// withConnectionProperty — with string
+await builtConnectionString.withConnectionProperty("Protocol", "https");
 
 // excludeFromManifest
 await container.excludeFromManifest();
@@ -116,6 +142,10 @@ await container.withoutHttpsCertificate();
 
 // withChildRelationship
 await container.withChildRelationship(exe);
+
+// withRelationship
+await container.withRelationship(taggedContainer, "peer");
+await project.withReference(cache);
 
 // withIconName
 await container.withIconName("Database", { iconVariant: IconVariant.Filled });
@@ -393,6 +423,7 @@ await container.withArgs(["--verbose"]);
 
 // withParentRelationship
 await container.withParentRelationship(exe);
+await projectWithoutLaunchProfile.withParentRelationship(project);
 
 // withExplicitStart
 await container.withExplicitStart();

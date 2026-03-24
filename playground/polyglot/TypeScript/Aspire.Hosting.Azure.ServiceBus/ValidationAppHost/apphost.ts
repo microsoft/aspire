@@ -39,6 +39,13 @@ const subscription = await topic.addServiceBusSubscription("audit", {
     subscriptionName: "audit-sub",
 });
 
+const _queueParent = await queue.parent.get();
+const _queueConnectionString = await queue.connectionStringExpression.get();
+const _topicParent = await topic.parent.get();
+const _topicConnectionString = await topic.connectionStringExpression.get();
+const _subscriptionParent = await subscription.parent.get();
+const _subscriptionConnectionString = await subscription.connectionStringExpression.get();
+
 // ── DTO types ───────────────────────────────────────────────────────────────
 const filter: AzureServiceBusCorrelationFilter = {
     correlationId: "order-123",

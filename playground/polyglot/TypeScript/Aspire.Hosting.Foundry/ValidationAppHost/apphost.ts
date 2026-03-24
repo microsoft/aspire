@@ -30,11 +30,17 @@ const keyVault = await builder.addAzureKeyVault('vault');
 const appInsights = await builder.addAzureApplicationInsights('insights');
 const cosmos = await builder.addAzureCosmosDB('cosmos');
 const storage = await builder.addAzureStorage('storage');
+const search = await builder.addAzureSearch('search');
 
 const project = await foundry.addProject('project');
 await project.withContainerRegistry(registry);
 await project.withKeyVault(keyVault);
 await project.withAppInsights(appInsights);
+await project.addCapabilityHost('cap-host');
+await project.withCapabilityHostCosmosDB(cosmos);
+await project.withCapabilityHostStorage(storage);
+await project.withCapabilityHostSearch(search);
+await project.withCapabilityHostAzureOpenAI(foundry);
 
 const _cosmosConnection = await project.addCosmosConnection(cosmos);
 const _storageConnection = await project.addStorageConnection(storage);
@@ -95,5 +101,6 @@ const _modelName = await chat.modelName.get();
 const _format = await chat.format.get();
 const _version = await chat.modelVersion.get();
 const _connectionString = await chat.connectionStringExpression.get();
+const _deploymentParent = await chat.parent.get();
 
 await builder.build().run();

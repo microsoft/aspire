@@ -13,6 +13,7 @@ namespace Aspire.Hosting.Foundry;
 /// </summary>
 /// <param name="name">The name of the resource.</param>
 /// <param name="configureInfrastructure">Configures the underlying Azure resource using Azure.Provisioning.</param>
+[AspireExport]
 public class FoundryResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure) :
     AzureProvisioningResource(name, configureInfrastructure), IResourceWithEndpoints, IResourceWithConnectionString
 {
