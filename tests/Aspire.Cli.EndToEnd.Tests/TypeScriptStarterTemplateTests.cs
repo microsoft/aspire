@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.RegularExpressions;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
@@ -22,7 +21,7 @@ public sealed class TypeScriptStarterTemplateTests(ITestOutputHelper output)
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
         var workspace = TemporaryWorkspace.Create(output);
-        var localChannel = PrepareLocalChannel(repoRoot, workspace, installMode);
+        var localChannel = CliE2ETestHelpers.PrepareLocalChannel(repoRoot, workspace, installMode);
         var bundlePath = FindLocalBundlePath(repoRoot, installMode);
 
         var additionalVolumes = new List<string>();
@@ -107,53 +106,6 @@ public sealed class TypeScriptStarterTemplateTests(ITestOutputHelper output)
     /// Copies locally-built NuGet packages to the workspace for SourceBuild mode.
     /// Returns null for non-SourceBuild modes (CI installs packages via the PR script).
     /// </summary>
-    private static LocalChannelInfo? PrepareLocalChannel(
-        string repoRoot,
-        TemporaryWorkspace workspace,
-        CliE2ETestHelpers.DockerInstallMode installMode)
-    {
-        if (installMode != CliE2ETestHelpers.DockerInstallMode.SourceBuild)
-        {
-            return null;
-        }
-
-        var shippingPackagesDirectory = Path.Combine(repoRoot, "artifacts", "packages", "Debug", "Shipping");
-        if (!Directory.Exists(shippingPackagesDirectory))
-        {
-            throw new InvalidOperationException("Local source-built TypeScript E2E tests require packed Aspire packages. Run './build.sh --bundle --pack' first.");
-        }
-
-        var packageFiles = Directory.EnumerateFiles(shippingPackagesDirectory, "Aspire*.nupkg", SearchOption.TopDirectoryOnly)
-            .Where(file => !file.EndsWith(".symbols.nupkg", StringComparison.OrdinalIgnoreCase))
-            .ToArray();
-
-        if (!packageFiles.Any(file => Path.GetFileName(file).StartsWith("Aspire.Hosting.", StringComparison.OrdinalIgnoreCase)))
-        {
-            throw new InvalidOperationException("Local source-built TypeScript E2E tests require packed Aspire.Hosting packages. Run './build.sh --bundle --pack' first.");
-        }
-
-        var localChannelPackagesPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire-local", "packages");
-        Directory.CreateDirectory(localChannelPackagesPath);
-
-        foreach (var packageFile in packageFiles)
-        {
-            File.Copy(packageFile, Path.Combine(localChannelPackagesPath, Path.GetFileName(packageFile)), overwrite: true);
-        }
-
-        var sdkVersion = packageFiles
-            .Select(Path.GetFileName)
-            .FirstOrDefault(fileName => fileName is not null && Regex.IsMatch(fileName, @"^Aspire\.Hosting\.\d+\.\d+\.\d+.*\.nupkg$", RegexOptions.IgnoreCase))
-            ?.Replace("Aspire.Hosting.", string.Empty, StringComparison.OrdinalIgnoreCase)
-            ?.Replace(".nupkg", string.Empty, StringComparison.OrdinalIgnoreCase);
-
-        if (string.IsNullOrEmpty(sdkVersion))
-        {
-            throw new InvalidOperationException("Local source-built TypeScript E2E tests could not determine the Aspire SDK version from packed packages.");
-        }
-
-        return new LocalChannelInfo(localChannelPackagesPath, sdkVersion);
-    }
-
     /// <summary>
     /// Finds the extracted bundle layout directory for SourceBuild mode.
     /// The bundle provides the aspire-managed server and DCP needed for template creation.
@@ -180,6 +132,4 @@ public sealed class TypeScriptStarterTemplateTests(ITestOutputHelper output)
 
         return bundlePath;
     }
-
-    private sealed record LocalChannelInfo(string PackagesPath, string SdkVersion);
 }

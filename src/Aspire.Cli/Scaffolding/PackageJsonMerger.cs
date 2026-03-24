@@ -56,7 +56,7 @@ internal static class PackageJsonMerger
         }
         catch (Exception ex)
         {
-            logger?.LogDebug(ex, "Failed to merge existing package.json, using scaffold output as-is");
+            logger?.LogWarning(ex, "Failed to merge existing package.json, using scaffold output as-is");
             return scaffoldContent;
         }
     }
@@ -119,8 +119,7 @@ internal static class PackageJsonMerger
     {
         foreach (var (name, value) in scaffoldScripts)
         {
-            var command = value?.GetValue<string>();
-            if (command is null)
+            if (value is not JsonValue scriptValue || !scriptValue.TryGetValue<string>(out var command))
             {
                 continue;
             }
@@ -193,8 +192,7 @@ internal static class PackageJsonMerger
 
         foreach (var (packageName, versionNode) in scaffoldDeps)
         {
-            var desiredVersion = versionNode?.GetValue<string>();
-            if (desiredVersion is null)
+            if (versionNode is not JsonValue desiredValue || !desiredValue.TryGetValue<string>(out var desiredVersion))
             {
                 continue;
             }
@@ -206,8 +204,9 @@ internal static class PackageJsonMerger
             }
             else
             {
-                var existingVersion = existingVersionNode.GetValue<string>();
-                if (NpmVersionHelper.ShouldUpgrade(existingVersion, desiredVersion))
+                if (existingVersionNode is JsonValue existingValue
+                    && existingValue.TryGetValue<string>(out var existingVersion)
+                    && NpmVersionHelper.ShouldUpgrade(existingVersion, desiredVersion))
                 {
                     existingDeps[packageName] = desiredVersion;
                 }

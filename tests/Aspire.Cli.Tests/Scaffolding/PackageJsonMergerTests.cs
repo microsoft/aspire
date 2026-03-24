@@ -810,4 +810,212 @@ public class PackageJsonMergerTests
         Assert.Equal("^4.18.0", GetDep(result, "dependencies", "express"));
         Assert.Equal("^8.2.0", GetDep(result, "dependencies", "vscode-jsonrpc"));
     }
+
+    [Fact]
+    public void NonStringScriptValue_SkippedGracefully()
+    {
+        var existing = """
+            {
+              "name": "my-app",
+              "scripts": {
+                "dev": "vite"
+              }
+            }
+            """;
+
+        // Scaffold has an array value for a script (unusual but should not crash)
+        var scaffold = """
+            {
+              "scripts": {
+                "aspire:start": "aspire run",
+                "bad-script": [1, 2, 3]
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.Merge(existing, scaffold);
+
+        // Valid scripts still merged, invalid ones skipped
+        Assert.Equal("vite", GetScript(result, "dev"));
+        Assert.Equal("aspire run", GetScript(result, "aspire:start"));
+        Assert.Null(ParseJson(result)["scripts"]!["bad-script"]);
+    }
+
+    [Fact]
+    public void NonStringDependencyValue_SkippedGracefully()
+    {
+        var existing = """
+            {
+              "name": "my-app",
+              "dependencies": {
+                "express": "^4.18.0"
+              }
+            }
+            """;
+
+        var scaffold = """
+            {
+              "dependencies": {
+                "vscode-jsonrpc": "^8.2.0",
+                "bad-dep": ["1.0.0"]
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.Merge(existing, scaffold);
+
+        // Valid deps merged, non-string ones skipped
+        Assert.Equal("^4.18.0", GetDep(result, "dependencies", "express"));
+        Assert.Equal("^8.2.0", GetDep(result, "dependencies", "vscode-jsonrpc"));
+        Assert.Null(GetDep(result, "dependencies", "bad-dep"));
+    }
+
+    [Fact]
+    public void NonStringExistingDependency_PreservedNotCrashed()
+    {
+        var existing = """
+            {
+              "name": "my-app",
+              "dependencies": {
+                "weird-pkg": { "version": "1.0.0", "optional": true }
+              }
+            }
+            """;
+
+        var scaffold = """
+            {
+              "dependencies": {
+                "weird-pkg": "^2.0.0",
+                "vscode-jsonrpc": "^8.2.0"
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.Merge(existing, scaffold);
+
+        // Non-string existing dep preserved (upgrade skipped due to type mismatch)
+        var weirdPkg = ParseJson(result)["dependencies"]!["weird-pkg"];
+        Assert.NotNull(weirdPkg);
+        Assert.True(weirdPkg is JsonObject);
+
+        // New deps still added
+        Assert.Equal("^8.2.0", GetDep(result, "dependencies", "vscode-jsonrpc"));
+    }
+
+    [Fact]
+    public void DependenciesSectionIsArray_HandledGracefully()
+    {
+        var existing = """
+            {
+              "name": "my-app",
+              "dependencies": ["express", "react"]
+            }
+            """;
+
+        var scaffold = """
+            {
+              "dependencies": {
+                "vscode-jsonrpc": "^8.2.0"
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.Merge(existing, scaffold);
+
+        // EnsureObject replaces the array with a proper object containing scaffold deps
+        Assert.Equal("^8.2.0", GetDep(result, "dependencies", "vscode-jsonrpc"));
+    }
+
+    [Fact]
+    public void JsonRootIsArray_ReturnsScaffold()
+    {
+        var existing = """["not", "an", "object"]""";
+
+        var scaffold = """
+            {
+              "name": "scaffold",
+              "scripts": { "dev": "aspire run" }
+            }
+            """;
+
+        var result = PackageJsonMerger.Merge(existing, scaffold);
+
+        // Can't merge into an array — returns scaffold as-is
+        Assert.Equal("scaffold", ParseJson(result)["name"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void WildcardVersion_Preserved()
+    {
+        var existing = """
+            {
+              "dependencies": {
+                "some-pkg": "*"
+              }
+            }
+            """;
+
+        var scaffold = """
+            {
+              "dependencies": {
+                "some-pkg": "^2.0.0"
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.Merge(existing, scaffold);
+
+        // "*" is unparseable — existing preserved
+        Assert.Equal("*", GetDep(result, "dependencies", "some-pkg"));
+    }
+
+    [Fact]
+    public void LatestTag_Preserved()
+    {
+        var existing = """
+            {
+              "dependencies": {
+                "some-pkg": "latest"
+              }
+            }
+            """;
+
+        var scaffold = """
+            {
+              "dependencies": {
+                "some-pkg": "^2.0.0"
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.Merge(existing, scaffold);
+
+        // "latest" is unparseable — existing preserved
+        Assert.Equal("latest", GetDep(result, "dependencies", "some-pkg"));
+    }
+
+    [Fact]
+    public void PreReleaseVersion_ComparedCorrectly()
+    {
+        var existing = """
+            {
+              "devDependencies": {
+                "typescript": "^5.9.3-beta.1"
+              }
+            }
+            """;
+
+        var scaffold = """
+            {
+              "devDependencies": {
+                "typescript": "^5.9.3"
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.Merge(existing, scaffold);
+
+        // 5.9.3 release is newer than 5.9.3-beta.1 pre-release
+        Assert.Equal("^5.9.3", GetDep(result, "devDependencies", "typescript"));
+    }
 }

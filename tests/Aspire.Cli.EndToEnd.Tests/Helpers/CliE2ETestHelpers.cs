@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 using Aspire.Cli.Tests.Utils;
 using Hex1b;
 using Xunit;
@@ -309,4 +310,83 @@ internal static class CliE2ETestHelpers
         var relativePath = Path.GetRelativePath(workspace.WorkspaceRoot.FullName, hostPath);
         return $"/workspace/{workspace.WorkspaceRoot.Name}/" + relativePath.Replace('\\', '/');
     }
+
+    /// <summary>
+    /// Prepares a local NuGet package channel for source-build E2E tests.
+    /// Copies packed Aspire.*.nupkg files to a workspace-local directory and extracts the SDK version.
+    /// Returns <c>null</c> for non-SourceBuild modes.
+    /// </summary>
+    /// <param name="repoRoot">The repo root directory containing artifacts/.</param>
+    /// <param name="workspace">The temporary workspace where the local channel directory will be created.</param>
+    /// <param name="installMode">The detected install mode.</param>
+    /// <param name="requiredPackagePrefixes">
+    /// Optional additional package name prefixes to validate beyond <c>Aspire.Hosting.</c>.
+    /// For example, <c>["Aspire.Hosting.CodeGeneration.TypeScript.", "Aspire.Hosting.JavaScript."]</c>.
+    /// </param>
+    /// <returns>A <see cref="LocalChannelInfo"/> with the packages path and SDK version, or <c>null</c> for non-SourceBuild.</returns>
+    internal static LocalChannelInfo? PrepareLocalChannel(
+        string repoRoot,
+        TemporaryWorkspace workspace,
+        DockerInstallMode installMode,
+        string[]? requiredPackagePrefixes = null)
+    {
+        if (installMode != DockerInstallMode.SourceBuild)
+        {
+            return null;
+        }
+
+        var shippingPackagesDirectory = Path.Combine(repoRoot, "artifacts", "packages", "Debug", "Shipping");
+        if (!Directory.Exists(shippingPackagesDirectory))
+        {
+            throw new InvalidOperationException("Local source-built E2E tests require packed Aspire packages. Run './build.sh --bundle --pack' first.");
+        }
+
+        var packageFiles = Directory.EnumerateFiles(shippingPackagesDirectory, "Aspire*.nupkg", SearchOption.TopDirectoryOnly)
+            .Where(file => !file.EndsWith(".symbols.nupkg", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        if (!packageFiles.Any(file => Path.GetFileName(file).StartsWith("Aspire.Hosting.", StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException("Local source-built E2E tests require packed Aspire.Hosting packages. Run './build.sh --bundle --pack' first.");
+        }
+
+        if (requiredPackagePrefixes is not null)
+        {
+            foreach (var prefix in requiredPackagePrefixes)
+            {
+                if (!packageFiles.Any(file => Path.GetFileName(file).StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+                {
+                    throw new InvalidOperationException($"Local source-built E2E tests require packed {prefix.TrimEnd('.')} packages. Run './build.sh --bundle --pack' first.");
+                }
+            }
+        }
+
+        var localChannelPackagesPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire-local", "packages");
+        Directory.CreateDirectory(localChannelPackagesPath);
+
+        foreach (var packageFile in packageFiles)
+        {
+            File.Copy(packageFile, Path.Combine(localChannelPackagesPath, Path.GetFileName(packageFile)), overwrite: true);
+        }
+
+        var sdkVersion = packageFiles
+            .Select(Path.GetFileName)
+            .FirstOrDefault(fileName => fileName is not null && Regex.IsMatch(fileName, @"^Aspire\.Hosting\.\d+\.\d+\.\d+.*\.nupkg$", RegexOptions.IgnoreCase))
+            ?.Replace("Aspire.Hosting.", string.Empty, StringComparison.OrdinalIgnoreCase)
+            ?.Replace(".nupkg", string.Empty, StringComparison.OrdinalIgnoreCase);
+
+        if (string.IsNullOrEmpty(sdkVersion))
+        {
+            throw new InvalidOperationException("Local source-built E2E tests could not determine the Aspire SDK version from packed packages.");
+        }
+
+        return new LocalChannelInfo(localChannelPackagesPath, sdkVersion);
+    }
+
+    /// <summary>
+    /// Information about a local NuGet package channel for source-build E2E tests.
+    /// </summary>
+    /// <param name="PackagesPath">The directory path containing the local .nupkg files.</param>
+    /// <param name="SdkVersion">The Aspire SDK version extracted from the package filenames.</param>
+    internal sealed record LocalChannelInfo(string PackagesPath, string SdkVersion);
 }
