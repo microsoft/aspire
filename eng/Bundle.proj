@@ -110,7 +110,10 @@
       <!-- Map TargetRid to DCP BuildOs/BuildArch so the AppHost restore downloads
            the correct DCP package for the target platform, not the build machine's platform.
            Without this, cross-compiled bundles (e.g., win-arm64 built on win-x64) would
-           be missing DCP because the default BuildOs/BuildArch resolve to the build machine. -->
+           be missing DCP because the default BuildOs/BuildArch resolve to the build machine.
+           
+           Supported RID format: {os}-{arch} where os is win/osx/linux/linux-musl
+           and arch is x64/arm64/x86. Update this mapping when adding new RID patterns. -->
       <_BundleBuildOs Condition="$(TargetRid.StartsWith('win-'))">windows</_BundleBuildOs>
       <_BundleBuildOs Condition="$(TargetRid.StartsWith('osx-'))">darwin</_BundleBuildOs>
       <_BundleBuildOs Condition="$(TargetRid.StartsWith('linux-musl-'))">linux-musl</_BundleBuildOs>
@@ -120,6 +123,8 @@
       <_BundleBuildArch Condition="$(TargetRid.EndsWith('-arm64'))">arm64</_BundleBuildArch>
       <_BundleBuildArch Condition="$(TargetRid.EndsWith('-x86'))">386</_BundleBuildArch>
     </PropertyGroup>
+    <Error Condition="'$(_BundleBuildOs)' == '' or '$(_BundleBuildArch)' == ''"
+           Text="Could not map TargetRid '$(TargetRid)' to DCP BuildOs/BuildArch. Supported RID patterns: win-x64, win-arm64, linux-x64, linux-arm64, linux-musl-x64, osx-x64, osx-arm64." />
     <Message Importance="high" Text="Restoring DCP package for $(TargetRid) (BuildOs=$(_BundleBuildOs), BuildArch=$(_BundleBuildArch))..." />
     <Exec Command="dotnet restore &quot;$(AppHostProjectPath)&quot; /p:BuildOs=$(_BundleBuildOs) /p:BuildArch=$(_BundleBuildArch) $(_DcpBinlog)" />
   </Target>
