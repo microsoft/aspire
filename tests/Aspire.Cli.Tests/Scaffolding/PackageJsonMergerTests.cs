@@ -254,7 +254,7 @@ public class PackageJsonMergerTests
     }
 
     [Fact]
-    public void Dependencies_DeepMerged_ExistingWins()
+    public void Dependencies_SemverAwareMerge()
     {
         var existing = """
             {
@@ -285,9 +285,11 @@ public class PackageJsonMergerTests
 
         var result = PackageJsonMerger.Merge(existing, scaffold);
 
-        // Existing dep versions preserved (deep merge — existing wins)
-        Assert.Equal("^4.18.0", GetDep(result, "dependencies", "express"));
-        Assert.Equal("^5.0.0", GetDep(result, "devDependencies", "typescript"));
+        // Scaffold is newer — upgraded
+        Assert.Equal("^5.0.0", GetDep(result, "dependencies", "express"));
+        Assert.Equal("^5.9.3", GetDep(result, "devDependencies", "typescript"));
+
+        // Not in scaffold — preserved
         Assert.Equal("^5.0.0", GetDep(result, "devDependencies", "vite"));
 
         // New deps added
@@ -514,10 +516,10 @@ public class PackageJsonMergerTests
         // Non-conflicting scaffold script added directly
         Assert.Equal("tsc --watch -p tsconfig.apphost.json", scripts["watch"]?.GetValue<string>());
 
-        // Existing deps preserved, new deps added
+        // Existing deps preserved, new deps added, older deps upgraded
         Assert.Equal("^18.2.0", GetDep(result, "dependencies", "react"));
         Assert.Equal("^8.2.0", GetDep(result, "dependencies", "vscode-jsonrpc"));
-        Assert.Equal("^5.2.0", GetDep(result, "devDependencies", "typescript"));
+        Assert.Equal("^5.9.3", GetDep(result, "devDependencies", "typescript")); // upgraded from ^5.2.0
         Assert.Equal("^5.0.0", GetDep(result, "devDependencies", "vite"));
         Assert.Equal("^22.0.0", GetDep(result, "devDependencies", "@types/node"));
         Assert.Equal("^4.21.0", GetDep(result, "devDependencies", "tsx"));
@@ -655,5 +657,157 @@ public class PackageJsonMergerTests
         Assert.Contains("tsc -p tsconfig.apphost.json && echo 'build done'", result);
         Assert.DoesNotContain("\\u0026", result);
         Assert.DoesNotContain("\\u0027", result);
+    }
+
+    [Fact]
+    public void Dependencies_ScaffoldNewerVersion_Upgrades()
+    {
+        var existing = """
+            {
+              "name": "my-app",
+              "devDependencies": {
+                "typescript": "^4.0.0"
+              }
+            }
+            """;
+
+        var scaffold = """
+            {
+              "devDependencies": {
+                "typescript": "^5.9.3"
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.Merge(existing, scaffold);
+        Assert.Equal("^5.9.3", GetDep(result, "devDependencies", "typescript"));
+    }
+
+    [Fact]
+    public void Dependencies_ExistingNewerVersion_Preserved()
+    {
+        var existing = """
+            {
+              "name": "my-app",
+              "devDependencies": {
+                "typescript": "^6.0.0"
+              }
+            }
+            """;
+
+        var scaffold = """
+            {
+              "devDependencies": {
+                "typescript": "^5.9.3"
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.Merge(existing, scaffold);
+        Assert.Equal("^6.0.0", GetDep(result, "devDependencies", "typescript"));
+    }
+
+    [Fact]
+    public void Dependencies_TildeRange_Compared()
+    {
+        var existing = """
+            {
+              "name": "my-app",
+              "devDependencies": {
+                "typescript": "~5.0.0"
+              }
+            }
+            """;
+
+        var scaffold = """
+            {
+              "devDependencies": {
+                "typescript": "^5.9.3"
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.Merge(existing, scaffold);
+
+        // Scaffold is newer (5.9.3 > 5.0.0), upgrades — entire value replaced including range operator
+        Assert.Equal("^5.9.3", GetDep(result, "devDependencies", "typescript"));
+    }
+
+    [Fact]
+    public void Dependencies_UnionRange_Preserved()
+    {
+        var existing = """
+            {
+              "name": "my-app",
+              "dependencies": {
+                "some-pkg": "^1.0.0 || ^2.0.0"
+              }
+            }
+            """;
+
+        var scaffold = """
+            {
+              "dependencies": {
+                "some-pkg": "^3.0.0"
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.Merge(existing, scaffold);
+
+        // Union ranges are unparseable — existing preserved
+        Assert.Equal("^1.0.0 || ^2.0.0", GetDep(result, "dependencies", "some-pkg"));
+    }
+
+    [Fact]
+    public void Dependencies_WorkspaceRef_Preserved()
+    {
+        var existing = """
+            {
+              "name": "my-app",
+              "dependencies": {
+                "shared-lib": "workspace:*"
+              }
+            }
+            """;
+
+        var scaffold = """
+            {
+              "dependencies": {
+                "shared-lib": "^1.0.0"
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.Merge(existing, scaffold);
+
+        // Workspace refs are not parseable as semver — existing preserved
+        Assert.Equal("workspace:*", GetDep(result, "dependencies", "shared-lib"));
+    }
+
+    [Fact]
+    public void Dependencies_NewDependency_Added()
+    {
+        var existing = """
+            {
+              "name": "my-app",
+              "dependencies": {
+                "express": "^4.18.0"
+              }
+            }
+            """;
+
+        var scaffold = """
+            {
+              "dependencies": {
+                "vscode-jsonrpc": "^8.2.0"
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.Merge(existing, scaffold);
+
+        Assert.Equal("^4.18.0", GetDep(result, "dependencies", "express"));
+        Assert.Equal("^8.2.0", GetDep(result, "dependencies", "vscode-jsonrpc"));
     }
 }
