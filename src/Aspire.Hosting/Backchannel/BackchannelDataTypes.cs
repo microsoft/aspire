@@ -34,7 +34,7 @@ using ModelContextProtocol.Protocol;
 internal static class AuxiliaryBackchannelCapabilities
 {
     /// <summary>
-    /// Version 1 capabilities (13.1 baseline): GetAppHostInformationAsync, StopAppHostAsync.
+    /// Version 1 capabilities (13.1 baseline): GetAppHostInformationAsync, GetDashboardMcpConnectionInfoAsync, StopAppHostAsync.
     /// </summary>
     public const string V1 = "aux.v1";
 
@@ -130,6 +130,23 @@ internal sealed class GetDashboardInfoResponse
     /// Gets whether the Dashboard is healthy.
     /// </summary>
     public bool IsHealthy { get; init; }
+}
+
+/// <summary>
+/// Connection information for the Dashboard MCP server.
+/// Preserved for backwards compatibility with older CLI versions.
+/// </summary>
+internal sealed class DashboardMcpConnectionInfo
+{
+    /// <summary>
+    /// Gets the base URL of the MCP server.
+    /// </summary>
+    public string? McpBaseUrl { get; init; }
+
+    /// <summary>
+    /// Gets the API token for authenticated MCP calls.
+    /// </summary>
+    public string? McpApiToken { get; init; }
 }
 
 /// <summary>

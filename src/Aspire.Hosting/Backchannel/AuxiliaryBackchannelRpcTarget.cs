@@ -370,6 +370,18 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     }
 
     /// <summary>
+    /// Preserved for backwards compatibility with older CLI versions that call this RPC method.
+    /// Always returns <see langword="null"/> because the dashboard MCP server has been removed.
+    /// </summary>
+#pragma warning disable CA1822 // Mark members as static - RPC methods cannot be static
+    public Task<DashboardMcpConnectionInfo?> GetDashboardMcpConnectionInfoAsync(CancellationToken cancellationToken = default)
+    {
+        _ = cancellationToken;
+        return Task.FromResult<DashboardMcpConnectionInfo?>(null);
+    }
+#pragma warning restore CA1822
+
+    /// <summary>
     /// Gets the current resource snapshots for all resources.
     /// </summary>
     /// <param name="cancellationToken">A cancellation token.</param>
