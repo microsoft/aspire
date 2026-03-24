@@ -32,6 +32,7 @@ public sealed class TypeScriptLanguageSupportTests
 
         Assert.Equal("brownfieldapp", packageJson["name"]?.GetValue<string>());
         Assert.Equal("1.0.0", packageJson["version"]?.GetValue<string>());
+        Assert.True(packageJson["private"]?.GetValue<bool>());
         Assert.Equal("module", packageJson["type"]?.GetValue<string>());
         Assert.Equal("aspire run", scripts["aspire:start"]?.GetValue<string>());
         Assert.Equal("tsc -p tsconfig.apphost.json", scripts["aspire:build"]?.GetValue<string>());
@@ -108,6 +109,13 @@ public sealed class TypeScriptLanguageSupportTests
         Assert.Equal("^22.0.0", devDependencies["@types/node"]?.GetValue<string>());
         Assert.Equal("^3.1.14", devDependencies["nodemon"]?.GetValue<string>());
         Assert.Equal("^5.9.3", devDependencies["typescript"]?.GetValue<string>());
+
+        // engines.node is always set — Aspire requires specific Node versions for ESLint 10
+        var engines = packageJson["engines"]!.AsObject();
+        Assert.Equal("^20.19.0 || ^22.13.0 || >=24", engines["node"]?.GetValue<string>());
+
+        // private is NOT forced on brownfield projects — existing project may be intentionally publishable
+        Assert.Null(packageJson["private"]);
     }
 
     [Fact]
