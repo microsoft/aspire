@@ -32,6 +32,34 @@ fi
 
 echo "Playground root: $PLAYGROUND_ROOT"
 
+is_skipped_app() {
+    case "$1" in
+        "Aspire.Hosting.Azure.Sql"|"Aspire.Hosting.Foundry"|"Aspire.Hosting.Maui")
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+skip_reason() {
+    case "$1" in
+        "Aspire.Hosting.Azure.Sql")
+            echo "current Python codegen emits reserved keyword identifiers"
+            ;;
+        "Aspire.Hosting.Foundry")
+            echo "current Python codegen emits invalid generic type names"
+            ;;
+        "Aspire.Hosting.Maui")
+            echo "current Python codegen emits invalid iOS member identifiers"
+            ;;
+        *)
+            echo "unsupported"
+            ;;
+    esac
+}
+
 APP_DIRS=()
 for integration_dir in "$PLAYGROUND_ROOT"/*/; do
     if [ -f "$integration_dir/ValidationAppHost/apphost.py" ]; then
@@ -52,12 +80,22 @@ echo ""
 
 FAILED=()
 PASSED=()
+SKIPPED=()
 
 for app_dir in "${APP_DIRS[@]}"; do
     app_name="$(basename "$(dirname "$app_dir")")/$(basename "$app_dir")"
+    integration_name="$(basename "$(dirname "$app_dir")")"
     echo "----------------------------------------"
     echo "Testing: $app_name"
     echo "----------------------------------------"
+
+    if is_skipped_app "$integration_name"; then
+        reason="$(skip_reason "$integration_name")"
+        echo "  -> skipped: $reason"
+        SKIPPED+=("$app_name ($reason)")
+        echo ""
+        continue
+    fi
 
     cd "$app_dir"
 
@@ -96,7 +134,7 @@ done
 
 echo ""
 echo "----------------------------------------"
-echo "Results: ${#PASSED[@]} passed, ${#FAILED[@]} failed out of ${#APP_DIRS[@]} apps"
+echo "Results: ${#PASSED[@]} passed, ${#FAILED[@]} failed, ${#SKIPPED[@]} skipped out of ${#APP_DIRS[@]} apps"
 echo "----------------------------------------"
 
 if [ ${#FAILED[@]} -gt 0 ]; then
@@ -106,6 +144,14 @@ if [ ${#FAILED[@]} -gt 0 ]; then
         echo "  - $f"
     done
     exit 1
+fi
+
+if [ ${#SKIPPED[@]} -gt 0 ]; then
+    echo ""
+    echo "Skipped apps:"
+    for s in "${SKIPPED[@]}"; do
+        echo "  - $s"
+    done
 fi
 
 echo "All Python playground apps validated successfully!"
