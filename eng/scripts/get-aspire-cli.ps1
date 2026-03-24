@@ -766,11 +766,19 @@ function Expand-AspireCliArchive {
         Write-Message "Successfully unpacked archive" -Level Verbose
     }
     catch {
+        $unpackErrorMessage = $_.Exception.Message
+
         # If anything goes wrong and we have a backup, restore it
         if ($backupPath -and (Test-Path $backupPath)) {
-            Restore-CliExecutableFromBackup -BackupPath $backupPath -TargetExePath $targetExePath
+            try {
+                Restore-CliExecutableFromBackup -BackupPath $backupPath -TargetExePath $targetExePath
+            }
+            catch {
+                throw "Failed to unpack archive: $unpackErrorMessage. Restore from backup also failed: $($_.Exception.Message)"
+            }
         }
-        throw "Failed to unpack archive: $($_.Exception.Message)"
+
+        throw "Failed to unpack archive: $unpackErrorMessage"
     }
 }
 
