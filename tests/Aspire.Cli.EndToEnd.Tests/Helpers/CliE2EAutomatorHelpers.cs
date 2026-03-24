@@ -160,10 +160,10 @@ internal static class CliE2EAutomatorHelpers
         await auto.EnterAsync();
 
         // When the build is stabilized (StabilizePackageVersion=true), the CLI version
-        // is just "13.2.0" with no commit SHA suffix. When not stabilized, it includes
-        // the SHA (e.g., "13.2.0-preview.1.g<sha>"). In both cases, "13.2.0" is present.
+        // is just "13.2.1" with no commit SHA suffix. When not stabilized, it includes
+        // the SHA (e.g., "13.2.1-preview.1.g<sha>"). In both cases, "13.2.1" is present.
         // TODO: This change should be reverted on the integration to the main branch.
-        await auto.WaitUntilTextAsync("13.2.0", timeout: TimeSpan.FromSeconds(10));
+        await auto.WaitUntilTextAsync("13.2.1", timeout: TimeSpan.FromSeconds(10));
 
         await auto.WaitForSuccessPromptAsync(counter);
     }
