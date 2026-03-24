@@ -12,7 +12,7 @@ namespace Aspire.Hosting.CodeGeneration.TypeScript;
 /// Provides language support for TypeScript AppHosts.
 /// Implements scaffolding, detection, and runtime configuration.
 /// </summary>
-public sealed class TypeScriptLanguageSupport : ILanguageSupport
+internal sealed class TypeScriptLanguageSupport : ILanguageSupport
 {
     /// <summary>
     /// The language/runtime identifier for TypeScript with Node.js.
@@ -143,16 +143,17 @@ public sealed class TypeScriptLanguageSupport : ILanguageSupport
             {
                 ["name"] = packageName,
                 ["version"] = "1.0.0",
+                ["private"] = true,
                 ["type"] = "module"
             };
-
-            // NOTE: The engines.node constraint must match ESLint 10's own requirement
-            // (^20.19.0 || ^22.13.0 || >=24) to avoid install/runtime failures on unsupported Node versions.
-            packageJson["engines"] = new JsonObject
-            {
-                ["node"] = "^20.19.0 || ^22.13.0 || >=24"
-            };
         }
+
+        // NOTE: The engines.node constraint must match ESLint 10's own requirement
+        // (^20.19.0 || ^22.13.0 || >=24) to avoid install/runtime failures on unsupported Node versions.
+        // This is set for both greenfield and brownfield scenarios — the user is opting into Aspire
+        // which requires these Node versions. The CLI-side MergeEngines also enforces this during merge.
+        var engines = EnsureObject(packageJson, "engines");
+        engines["node"] = "^20.19.0 || ^22.13.0 || >=24";
 
         var scripts = EnsureObject(packageJson, "scripts");
         scripts["aspire:lint"] = "eslint apphost.ts";
@@ -178,13 +179,22 @@ public sealed class TypeScriptLanguageSupport : ILanguageSupport
             return null;
         }
 
-        var content = File.ReadAllText(packageJsonPath);
-        if (string.IsNullOrWhiteSpace(content))
+        try
         {
+            var content = File.ReadAllText(packageJsonPath);
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                return new JsonObject();
+            }
+
+            return JsonNode.Parse(content) as JsonObject ?? new JsonObject();
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            // Malformed JSON or I/O errors — return empty object so scaffolding can proceed.
+            // The CLI-side PackageJsonMerger provides additional fallback safety.
             return new JsonObject();
         }
-
-        return JsonNode.Parse(content)?.AsObject() ?? new JsonObject();
     }
 
     private static void EnsureDependency(JsonObject packageJson, string sectionName, string packageName, string version)

@@ -103,10 +103,6 @@ public sealed class TypeScriptStarterTemplateTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// Copies locally-built NuGet packages to the workspace for SourceBuild mode.
-    /// Returns null for non-SourceBuild modes (CI installs packages via the PR script).
-    /// </summary>
-    /// <summary>
     /// Finds the extracted bundle layout directory for SourceBuild mode.
     /// The bundle provides the aspire-managed server and DCP needed for template creation.
     /// Returns null for non-SourceBuild modes (CI installs the full bundle via the PR script).
