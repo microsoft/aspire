@@ -29,7 +29,11 @@ public sealed class TypeScriptLanguageSupport : ILanguageSupport
     private const string AppHostFileName = "apphost.ts";
     private const string PackageJsonFileName = "package.json";
     private const string AppHostTsConfigFileName = "tsconfig.apphost.json";
-    private static readonly JsonSerializerOptions s_jsonSerializerOptions = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions s_jsonSerializerOptions = new()
+    {
+        WriteIndented = true,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
     private static readonly string[] s_detectionPatterns = ["apphost.ts"];
 
     /// <inheritdoc />
