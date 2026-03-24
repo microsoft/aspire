@@ -60,6 +60,46 @@ internal sealed class BuilderModel
 /// </remarks>
 public sealed class AtsPythonCodeGenerator : ICodeGenerator
 {
+    private static readonly HashSet<string> s_pythonKeywords = new(StringComparer.Ordinal)
+    {
+        "False",
+        "None",
+        "True",
+        "and",
+        "as",
+        "assert",
+        "async",
+        "await",
+        "break",
+        "class",
+        "continue",
+        "def",
+        "del",
+        "elif",
+        "else",
+        "except",
+        "finally",
+        "for",
+        "from",
+        "global",
+        "if",
+        "import",
+        "in",
+        "is",
+        "lambda",
+        "match",
+        "nonlocal",
+        "not",
+        "or",
+        "pass",
+        "raise",
+        "return",
+        "try",
+        "while",
+        "with",
+        "yield"
+    };
+
     private sealed record OptionVariation(
         string OptionType,
         List<AtsParameterInfo> RequiredParameters,
@@ -771,7 +811,7 @@ public sealed class AtsPythonCodeGenerator : ICodeGenerator
         resultStr = resultStr.Replace("application", "app");
         resultStr = resultStr.Replace("variable", "var");
         resultStr = resultStr.Replace("directory", "dir");
-        return resultStr;
+        return SanitizePythonIdentifier(resultStr);
     }
 
     /// <summary>
@@ -1162,15 +1202,15 @@ public sealed class AtsPythonCodeGenerator : ICodeGenerator
             var baseType = builder.TargetType?.BaseType;
             var baseTypeInterfaces = new List<string>();
             
-            if (baseType != null)
-            {
-                baseTypeInterfaces = baseType.ImplementedInterfaces.Select(i => i.TypeId).ToList();
-                var baseTypeName = DeriveClassName(baseType.TypeId);
-                if (baseTypeName != "AbstractResource")
+                if (baseType != null)
                 {
-                    baseClass = baseTypeName;
-                    optionsBaseClass = $"{baseTypeName}Kwargs";
-                }
+                    baseTypeInterfaces = baseType.ImplementedInterfaces.Select(i => i.TypeId).ToList();
+                    var baseTypeName = DeriveClassName(baseType);
+                    if (baseTypeName != "AbstractResource")
+                    {
+                        baseClass = baseTypeName;
+                        optionsBaseClass = $"{baseTypeName}Kwargs";
+                    }
             }
             baseBuilderClassName = baseClass;
             var implementedInterfaces = builder.TargetType?.ImplementedInterfaces.Where(i => !baseTypeInterfaces.Contains(i.TypeId)).ToList();
@@ -1190,16 +1230,16 @@ public sealed class AtsPythonCodeGenerator : ICodeGenerator
                 {
                     if (i.ClrType!.IsGenericType)
                     {
-                        if (i.ClrType!.GenericTypeArguments == null || i.ClrType!.GenericTypeArguments.Length != 1)
+                        if (i.ClrType.GenericTypeArguments == null || i.ClrType.GenericTypeArguments.Length != 1)
                         {
                             throw new InvalidOperationException("Cannot support a generic interface that doesn't have exactly 1 argument.");
                         }
-                        var genericSubType = i.ClrType!.GenericTypeArguments[0];
-                        baseClass += $", {DeriveClassName(i.TypeId.Split("`")[0])}T[\"{DeriveClassName(genericSubType.FullName!)}\"]";
+                        var genericSubType = i.ClrType.GenericTypeArguments[0];
+                        baseClass += $", {DeriveClassName(i)}[\"{DeriveClassName(genericSubType)}\"]";
                     }
                     else
                     {
-                        baseClass += ", " + DeriveClassName(i.TypeId);
+                        baseClass += ", " + DeriveClassName(i);
                     }
                 }
             }
@@ -1605,8 +1645,8 @@ public sealed class AtsPythonCodeGenerator : ICodeGenerator
         var builders = new List<BuilderModel>();
         foreach (var (typeId, typeCapabilities) in capabilitiesByTypeId)
         {
-            var builderClassName = DeriveClassName(typeId);
             var typeRef = typeRefsByTypeId.GetValueOrDefault(typeId);
+            var builderClassName = typeRef is not null ? DeriveClassName(typeRef) : DeriveClassName(typeId);
 
             // Deduplicate capabilities by CapabilityId
             var uniqueCapabilities = typeCapabilities
@@ -1634,8 +1674,8 @@ public sealed class AtsPythonCodeGenerator : ICodeGenerator
                 continue;
             }
 
-            var builderClassName = DeriveClassName(interfaceTypeId);
             var typeRef = typeRefsByTypeId.GetValueOrDefault(interfaceTypeId);
+            var builderClassName = typeRef is not null ? DeriveClassName(typeRef) : DeriveClassName(interfaceTypeId);
 
             var uniqueCapabilities = caps
                 .GroupBy(c => c.CapabilityId)
@@ -1670,7 +1710,7 @@ public sealed class AtsPythonCodeGenerator : ICodeGenerator
                 continue;
             }
 
-            var builderClassName = DeriveClassName(typeIdReference);
+            var builderClassName = DeriveClassName(typeRef);
 
             // For non-interface resource builder types, find capabilities that target this type or an interface it implements
             // This is essentially here to make sure we can move common capabilities onto the _ResourceBase class.
@@ -1734,7 +1774,7 @@ public sealed class AtsPythonCodeGenerator : ICodeGenerator
             // Visit base type first
             if (builder.TargetType?.BaseType != null)
             {
-                var baseTypeId = builder.TargetType.BaseType.TypeId;
+                var baseTypeId = GetBuilderTypeId(builder.TargetType.BaseType);
                 if (buildersByTypeId.TryGetValue(baseTypeId, out var baseBuilder))
                 {
                     Visit(baseBuilder);
@@ -1746,7 +1786,7 @@ public sealed class AtsPythonCodeGenerator : ICodeGenerator
             {
                 foreach (var iface in builder.TargetType.ImplementedInterfaces)
                 {
-                    if (buildersByTypeId.TryGetValue(iface.TypeId, out var ifaceBuilder))
+                    if (buildersByTypeId.TryGetValue(GetBuilderTypeId(iface), out var ifaceBuilder))
                     {
                         Visit(ifaceBuilder);
                     }
@@ -1855,6 +1895,34 @@ public sealed class AtsPythonCodeGenerator : ICodeGenerator
     {
         var typeName = ExtractSimpleTypeName(typeId);
 
+        return DeriveClassNameFromTypeName(typeName);
+    }
+
+    private static string DeriveClassName(AtsTypeRef typeRef)
+    {
+        if (typeRef.ClrType is { } clrType)
+        {
+            if (clrType.IsGenericType)
+            {
+                return DeriveClassName(clrType.GetGenericTypeDefinition()) + "T";
+            }
+
+            return DeriveClassName(clrType);
+        }
+
+        return DeriveClassName(typeRef.TypeId);
+    }
+
+    private static string DeriveClassName(Type clrType)
+    {
+        var typeName = GetClrTypeName(clrType);
+
+        return DeriveClassNameFromTypeName(typeName);
+    }
+
+    private static string DeriveClassNameFromTypeName(string typeName)
+    {
+
         if (typeName == "Resource")
         {
             return "_BaseResource";
@@ -1876,13 +1944,6 @@ public sealed class AtsPythonCodeGenerator : ICodeGenerator
     {
         var typeName = ExtractSimpleTypeName(typeId);
 
-        // Sanitize generic types like "Dict<String,Object>" -> "DictStringObject"
-        typeName = typeName
-            .Replace("[]", "Array", StringComparison.Ordinal)
-            .Replace("<", "", StringComparison.Ordinal)
-            .Replace(">", "", StringComparison.Ordinal)
-            .Replace(",", "", StringComparison.Ordinal);
-        
         // Strip leading 'I' from interface types
         if (typeName.StartsWith('I') && typeName.Length > 1 && char.IsUpper(typeName[1]))
         {
@@ -1900,8 +1961,134 @@ public sealed class AtsPythonCodeGenerator : ICodeGenerator
         var slashIndex = typeId.LastIndexOf('/');
         var fullTypeName = slashIndex >= 0 ? typeId[(slashIndex + 1)..] : typeId;
 
+        var bracketIndex = fullTypeName.IndexOf('[');
+        if (bracketIndex >= 0)
+        {
+            fullTypeName = fullTypeName[..bracketIndex];
+        }
+
+        var commaIndex = fullTypeName.IndexOf(',');
+        if (commaIndex >= 0)
+        {
+            fullTypeName = fullTypeName[..commaIndex];
+        }
+
         var dotIndex = fullTypeName.LastIndexOf('.');
-        return dotIndex >= 0 ? fullTypeName[(dotIndex + 1)..] : fullTypeName;
+        var simpleTypeName = dotIndex >= 0 ? fullTypeName[(dotIndex + 1)..] : fullTypeName;
+
+        return SanitizePythonTypeName(StripGenericArity(simpleTypeName));
+    }
+
+    private static string GetClrTypeName(Type clrType)
+    {
+        if (clrType.IsArray)
+        {
+            return GetClrTypeName(clrType.GetElementType()!) + "Array";
+        }
+
+        var typeName = StripGenericArity(clrType.Name);
+        if (clrType.IsGenericType)
+        {
+            return SanitizePythonTypeName(typeName + string.Concat(clrType.GetGenericArguments().Select(GetClrTypeName)));
+        }
+
+        return SanitizePythonTypeName(typeName);
+    }
+
+    private static string StripGenericArity(string typeName)
+    {
+        var backtickIndex = typeName.IndexOf('`');
+        return backtickIndex >= 0 ? typeName[..backtickIndex] : typeName;
+    }
+
+    private static string SanitizePythonIdentifier(string identifier)
+    {
+        if (string.IsNullOrEmpty(identifier))
+        {
+            return identifier;
+        }
+
+        var sb = new System.Text.StringBuilder(identifier.Length + 1);
+        var previousWasSeparator = false;
+
+        foreach (var c in identifier)
+        {
+            if (char.IsLetterOrDigit(c) || c == '_')
+            {
+                if (sb.Length == 0 && char.IsDigit(c))
+                {
+                    sb.Append('_');
+                }
+
+                sb.Append(c);
+                previousWasSeparator = false;
+            }
+            else if (!previousWasSeparator && sb.Length > 0)
+            {
+                sb.Append('_');
+                previousWasSeparator = true;
+            }
+        }
+
+        var sanitized = sb.ToString().TrimEnd('_');
+        if (string.IsNullOrEmpty(sanitized))
+        {
+            sanitized = "_";
+        }
+
+        if (s_pythonKeywords.Contains(sanitized))
+        {
+            sanitized += "_";
+        }
+
+        return sanitized;
+    }
+
+    private static string SanitizePythonTypeName(string typeName)
+    {
+        if (string.IsNullOrEmpty(typeName))
+        {
+            return typeName;
+        }
+
+        var sb = new System.Text.StringBuilder(typeName.Length + 1);
+
+        foreach (var c in typeName)
+        {
+            if (char.IsLetterOrDigit(c) || c == '_')
+            {
+                if (sb.Length == 0 && char.IsDigit(c))
+                {
+                    sb.Append('_');
+                }
+
+                sb.Append(c);
+            }
+        }
+
+        var sanitized = sb.Length > 0 ? sb.ToString() : "_";
+        if (s_pythonKeywords.Contains(sanitized))
+        {
+            sanitized += "_";
+        }
+
+        return sanitized;
+    }
+
+    private static string GetBuilderTypeId(AtsTypeRef typeRef)
+    {
+        if (typeRef.ClrType?.IsGenericType == true)
+        {
+            var tickIndex = typeRef.TypeId.IndexOf('`');
+            if (tickIndex >= 0)
+            {
+                return typeRef.TypeId[..tickIndex] + "T";
+            }
+
+            return typeRef.TypeId + "T";
+        }
+
+        return typeRef.TypeId;
     }
 
     private List<OptionVariation> CreateOptionVariations(
