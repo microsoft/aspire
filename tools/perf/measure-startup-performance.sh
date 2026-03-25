@@ -247,7 +247,14 @@ cleanup() {
     fi
 
     # Clean up temp files
-    rm -f "$APP_STDOUT_FILE" "$APP_STDERR_FILE" "$TRACE_STDOUT_FILE" "$TRACE_STDERR_FILE"
+    local files_to_remove=()
+    [[ -n "${APP_STDOUT_FILE:-}" ]] && files_to_remove+=("$APP_STDOUT_FILE")
+    [[ -n "${APP_STDERR_FILE:-}" ]] && files_to_remove+=("$APP_STDERR_FILE")
+    [[ -n "${TRACE_STDOUT_FILE:-}" ]] && files_to_remove+=("$TRACE_STDOUT_FILE")
+    [[ -n "${TRACE_STDERR_FILE:-}" ]] && files_to_remove+=("$TRACE_STDERR_FILE")
+    if [[ ${#files_to_remove[@]} -gt 0 ]]; then
+        rm -f "${files_to_remove[@]}"
+    fi
 
     # Clean up diagnostic port socket
     if [[ -n "$DIAG_PORT_PATH" ]]; then
