@@ -1124,6 +1124,46 @@ builder.Build().Run();");
         Assert.Equal(normalProject.FullName, foundFiles[0].FullName);
     }
 
+    [Fact]
+    public async Task FindAppHostProjectFilesAsync_DoesNotExcludeSiblingDirectoriesOfNuGetCache()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Use a custom non-hidden cache path so the test isn't affected by hidden-directory skipping
+        var customCacheDir = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget-cache");
+
+        // Create a project inside a sibling directory whose name shares a prefix with the cache
+        var siblingDir = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget-cache-extra", "MyApp");
+        Directory.CreateDirectory(siblingDir);
+        var siblingProject = new FileInfo(Path.Combine(siblingDir, "AppHost.csproj"));
+        await File.WriteAllTextAsync(siblingProject.FullName, "Not a real project file.");
+
+        // Create a project inside the actual cache that should be excluded
+        var cachedProjectDir = Path.Combine(customCacheDir, "aspire.projecttemplates", "9.1.0", "content");
+        Directory.CreateDirectory(cachedProjectDir);
+        var cachedProject = new FileInfo(Path.Combine(cachedProjectDir, "Aspire.AppHost1.csproj"));
+        await File.WriteAllTextAsync(cachedProject.FullName, "Not a real project file.");
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostCallback = _ => new AppHostValidationResult(IsValid: true)
+        };
+
+        var envVars = new Dictionary<string, string?>
+        {
+            ["NUGET_PACKAGES"] = customCacheDir
+        };
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot, environmentVariables: envVars);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
+
+        var foundFiles = await projectLocator.FindAppHostProjectFilesAsync(
+            workspace.WorkspaceRoot.FullName, CancellationToken.None).DefaultTimeout();
+
+        // Should find the sibling project but not the one inside the cache
+        Assert.Single(foundFiles);
+        Assert.Equal(siblingProject.FullName, foundFiles[0].FullName);
+    }
+
     private static ProjectLocator CreateProjectLocator(
         CliExecutionContext executionContext,
         IInteractionService? interactionService = null,

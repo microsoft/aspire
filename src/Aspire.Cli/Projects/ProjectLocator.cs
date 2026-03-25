@@ -97,8 +97,15 @@ internal sealed class ProjectLocator(
                     ShouldIncludePredicate = (ref FileSystemEntry entry) =>
                         !entry.IsDirectory && FileSystemName.MatchesSimpleExpression(pattern, entry.FileName),
                     ShouldRecursePredicate = (ref FileSystemEntry entry) =>
-                        nugetCachePath is null ||
-                        !entry.ToFullPath().StartsWith(nugetCachePath, pathComparison)
+                    {
+                        if (nugetCachePath is null)
+                        {
+                            return true;
+                        }
+                        var dirPath = entry.ToFullPath();
+                        return !dirPath.Equals(nugetCachePath, pathComparison)
+                            && !dirPath.StartsWith(nugetCachePath + Path.DirectorySeparatorChar, pathComparison);
+                    }
                 };
                 var candidateFiles = enumerable.ToArray();
                 logger.LogDebug("Found {CandidateCount} files matching pattern '{Pattern}'", candidateFiles.Length, pattern);
