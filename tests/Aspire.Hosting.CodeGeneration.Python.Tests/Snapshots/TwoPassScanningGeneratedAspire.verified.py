@@ -111,6 +111,17 @@ class TestResourceStatus(str, Enum):
 # ============================================================================
 
 @dataclass
+class AddContainerOptions:
+    image: str
+    tag: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "Image": serialize_value(self.image),
+            "Tag": serialize_value(self.tag),
+        }
+
+@dataclass
 class CreateBuilderOptions:
     args: list[str]
     project_directory: str
@@ -153,6 +164,21 @@ class ResourceEventDto:
         }
 
 @dataclass
+class ReferenceEnvironmentInjectionOptions:
+    connection_string: bool
+    connection_properties: bool
+    service_discovery: bool
+    endpoints: bool
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "ConnectionString": serialize_value(self.connection_string),
+            "ConnectionProperties": serialize_value(self.connection_properties),
+            "ServiceDiscovery": serialize_value(self.service_discovery),
+            "Endpoints": serialize_value(self.endpoints),
+        }
+
+@dataclass
 class CommandOptions:
     description: str
     parameter: Any
@@ -171,6 +197,31 @@ class CommandOptions:
             "IconVariant": serialize_value(self.icon_variant),
             "IsHighlighted": serialize_value(self.is_highlighted),
             "UpdateState": serialize_value(self.update_state),
+        }
+
+@dataclass
+class GenerateParameterDefault:
+    min_length: float
+    lower: bool
+    upper: bool
+    numeric: bool
+    special: bool
+    min_lower: float
+    min_upper: float
+    min_numeric: float
+    min_special: float
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "MinLength": serialize_value(self.min_length),
+            "Lower": serialize_value(self.lower),
+            "Upper": serialize_value(self.upper),
+            "Numeric": serialize_value(self.numeric),
+            "Special": serialize_value(self.special),
+            "MinLower": serialize_value(self.min_lower),
+            "MinUpper": serialize_value(self.min_upper),
+            "MinNumeric": serialize_value(self.min_numeric),
+            "MinSpecial": serialize_value(self.min_special),
         }
 
 @dataclass
@@ -413,6 +464,12 @@ class CSharpAppResource(ResourceBuilderBase):
         if callback_id is not None:
             args["callback"] = callback_id
         return self._client.invoke_capability("Aspire.Hosting/withArgsCallbackAsync", args)
+
+    def with_reference_environment(self, options: ReferenceEnvironmentInjectionOptions) -> IResourceWithEnvironment:
+        """Configures which reference values are injected into environment variables"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["options"] = serialize_value(options)
+        return self._client.invoke_capability("Aspire.Hosting/withReferenceEnvironment", args)
 
     def with_reference(self, source: IResource, connection_name: str | None = None, optional: bool = False, name: str | None = None) -> IResourceWithEnvironment:
         """Adds a reference to another resource"""
@@ -660,6 +717,13 @@ class CSharpAppResource(ResourceBuilderBase):
         """Removes HTTPS certificate configuration"""
         args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
         return self._client.invoke_capability("Aspire.Hosting/withoutHttpsCertificate", args)
+
+    def with_relationship(self, resource_builder: IResource, type: str) -> IResource:
+        """Adds a relationship to another resource"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["resourceBuilder"] = serialize_value(resource_builder)
+        args["type"] = serialize_value(type)
+        return self._client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)
 
     def with_parent_relationship(self, parent: IResource) -> IResource:
         """Sets the parent relationship"""
@@ -992,19 +1056,12 @@ class ConnectionStringResource(ResourceBuilderBase):
             args["helpLink"] = serialize_value(help_link)
         return self._client.invoke_capability("Aspire.Hosting/withRequiredCommand", args)
 
-    def with_connection_property(self, name: str, value: ReferenceExpression) -> IResourceWithConnectionString:
-        """Adds a connection property with a reference expression"""
+    def with_connection_property(self, name: str, value: str | ReferenceExpression) -> IResourceWithConnectionString:
+        """Adds a connection property with a string or reference expression value"""
         args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
         args["name"] = serialize_value(name)
         args["value"] = serialize_value(value)
         return self._client.invoke_capability("Aspire.Hosting/withConnectionProperty", args)
-
-    def with_connection_property_value(self, name: str, value: str) -> IResourceWithConnectionString:
-        """Adds a connection property with a string value"""
-        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
-        args["name"] = serialize_value(name)
-        args["value"] = serialize_value(value)
-        return self._client.invoke_capability("Aspire.Hosting/withConnectionPropertyValue", args)
 
     def get_connection_property(self, key: str) -> ReferenceExpression:
         """Gets a connection property by key"""
@@ -1113,6 +1170,13 @@ class ConnectionStringResource(ResourceBuilderBase):
         if command_options is not None:
             args["commandOptions"] = serialize_value(command_options)
         return self._client.invoke_capability("Aspire.Hosting/withCommand", args)
+
+    def with_relationship(self, resource_builder: IResource, type: str) -> IResource:
+        """Adds a relationship to another resource"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["resourceBuilder"] = serialize_value(resource_builder)
+        args["type"] = serialize_value(type)
+        return self._client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)
 
     def with_parent_relationship(self, parent: IResource) -> IResource:
         """Sets the parent relationship"""
@@ -1411,6 +1475,13 @@ class ContainerRegistryResource(ResourceBuilderBase):
             args["commandOptions"] = serialize_value(command_options)
         return self._client.invoke_capability("Aspire.Hosting/withCommand", args)
 
+    def with_relationship(self, resource_builder: IResource, type: str) -> IResource:
+        """Adds a relationship to another resource"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["resourceBuilder"] = serialize_value(resource_builder)
+        args["type"] = serialize_value(type)
+        return self._client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)
+
     def with_parent_relationship(self, parent: IResource) -> IResource:
         """Sets the parent relationship"""
         args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
@@ -1681,12 +1752,12 @@ class ContainerResource(ResourceBuilderBase):
         args["name"] = serialize_value(name)
         return self._client.invoke_capability("Aspire.Hosting/withContainerName", args)
 
-    def with_build_arg(self, name: str, value: ParameterResource) -> ContainerResource:
-        """Adds a build argument from a parameter resource"""
+    def with_build_arg(self, name: str, value: str | ParameterResource) -> ContainerResource:
+        """Adds a build argument from a string value or parameter resource"""
         args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
         args["name"] = serialize_value(name)
         args["value"] = serialize_value(value)
-        return self._client.invoke_capability("Aspire.Hosting/withParameterBuildArg", args)
+        return self._client.invoke_capability("Aspire.Hosting/withBuildArg", args)
 
     def with_build_secret(self, name: str, value: ParameterResource) -> ContainerResource:
         """Adds a build secret from a parameter resource"""
@@ -1694,6 +1765,17 @@ class ContainerResource(ResourceBuilderBase):
         args["name"] = serialize_value(name)
         args["value"] = serialize_value(value)
         return self._client.invoke_capability("Aspire.Hosting/withParameterBuildSecret", args)
+
+    def with_container_certificate_paths(self, custom_certificates_destination: str | None = None, default_certificate_bundle_paths: list[str] | None = None, default_certificate_directory_paths: list[str] | None = None) -> ContainerResource:
+        """Overrides container certificate bundle and directory paths used for trust configuration"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        if custom_certificates_destination is not None:
+            args["customCertificatesDestination"] = serialize_value(custom_certificates_destination)
+        if default_certificate_bundle_paths is not None:
+            args["defaultCertificateBundlePaths"] = serialize_value(default_certificate_bundle_paths)
+        if default_certificate_directory_paths is not None:
+            args["defaultCertificateDirectoryPaths"] = serialize_value(default_certificate_directory_paths)
+        return self._client.invoke_capability("Aspire.Hosting/withContainerCertificatePaths", args)
 
     def with_endpoint_proxy_support(self, proxy_enabled: bool) -> ContainerResource:
         """Configures endpoint proxy support"""
@@ -1805,6 +1887,12 @@ class ContainerResource(ResourceBuilderBase):
         if callback_id is not None:
             args["callback"] = callback_id
         return self._client.invoke_capability("Aspire.Hosting/withArgsCallbackAsync", args)
+
+    def with_reference_environment(self, options: ReferenceEnvironmentInjectionOptions) -> IResourceWithEnvironment:
+        """Configures which reference values are injected into environment variables"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["options"] = serialize_value(options)
+        return self._client.invoke_capability("Aspire.Hosting/withReferenceEnvironment", args)
 
     def with_reference(self, source: IResource, connection_name: str | None = None, optional: bool = False, name: str | None = None) -> IResourceWithEnvironment:
         """Adds a reference to another resource"""
@@ -2045,6 +2133,13 @@ class ContainerResource(ResourceBuilderBase):
         """Removes HTTPS certificate configuration"""
         args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
         return self._client.invoke_capability("Aspire.Hosting/withoutHttpsCertificate", args)
+
+    def with_relationship(self, resource_builder: IResource, type: str) -> IResource:
+        """Adds a relationship to another resource"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["resourceBuilder"] = serialize_value(resource_builder)
+        args["type"] = serialize_value(type)
+        return self._client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)
 
     def with_parent_relationship(self, parent: IResource) -> IResource:
         """Sets the parent relationship"""
@@ -2536,6 +2631,12 @@ class DotnetToolResource(ResourceBuilderBase):
             args["callback"] = callback_id
         return self._client.invoke_capability("Aspire.Hosting/withArgsCallbackAsync", args)
 
+    def with_reference_environment(self, options: ReferenceEnvironmentInjectionOptions) -> IResourceWithEnvironment:
+        """Configures which reference values are injected into environment variables"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["options"] = serialize_value(options)
+        return self._client.invoke_capability("Aspire.Hosting/withReferenceEnvironment", args)
+
     def with_reference(self, source: IResource, connection_name: str | None = None, optional: bool = False, name: str | None = None) -> IResourceWithEnvironment:
         """Adds a reference to another resource"""
         args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
@@ -2775,6 +2876,13 @@ class DotnetToolResource(ResourceBuilderBase):
         """Removes HTTPS certificate configuration"""
         args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
         return self._client.invoke_capability("Aspire.Hosting/withoutHttpsCertificate", args)
+
+    def with_relationship(self, resource_builder: IResource, type: str) -> IResource:
+        """Adds a relationship to another resource"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["resourceBuilder"] = serialize_value(resource_builder)
+        args["type"] = serialize_value(type)
+        return self._client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)
 
     def with_parent_relationship(self, parent: IResource) -> IResource:
         """Sets the parent relationship"""
@@ -3293,6 +3401,12 @@ class ExecutableResource(ResourceBuilderBase):
             args["callback"] = callback_id
         return self._client.invoke_capability("Aspire.Hosting/withArgsCallbackAsync", args)
 
+    def with_reference_environment(self, options: ReferenceEnvironmentInjectionOptions) -> IResourceWithEnvironment:
+        """Configures which reference values are injected into environment variables"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["options"] = serialize_value(options)
+        return self._client.invoke_capability("Aspire.Hosting/withReferenceEnvironment", args)
+
     def with_reference(self, source: IResource, connection_name: str | None = None, optional: bool = False, name: str | None = None) -> IResourceWithEnvironment:
         """Adds a reference to another resource"""
         args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
@@ -3532,6 +3646,13 @@ class ExecutableResource(ResourceBuilderBase):
         """Removes HTTPS certificate configuration"""
         args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
         return self._client.invoke_capability("Aspire.Hosting/withoutHttpsCertificate", args)
+
+    def with_relationship(self, resource_builder: IResource, type: str) -> IResource:
+        """Adds a relationship to another resource"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["resourceBuilder"] = serialize_value(resource_builder)
+        args["type"] = serialize_value(type)
+        return self._client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)
 
     def with_parent_relationship(self, parent: IResource) -> IResource:
         """Sets the parent relationship"""
@@ -3913,6 +4034,13 @@ class ExternalServiceResource(ResourceBuilderBase):
             args["commandOptions"] = serialize_value(command_options)
         return self._client.invoke_capability("Aspire.Hosting/withCommand", args)
 
+    def with_relationship(self, resource_builder: IResource, type: str) -> IResource:
+        """Adds a relationship to another resource"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["resourceBuilder"] = serialize_value(resource_builder)
+        args["type"] = serialize_value(type)
+        return self._client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)
+
     def with_parent_relationship(self, parent: IResource) -> IResource:
         """Sets the parent relationship"""
         args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
@@ -4184,7 +4312,7 @@ class IDistributedApplicationBuilder(HandleWrapperBase):
             args["repository"] = serialize_value(repository)
         return self._client.invoke_capability("Aspire.Hosting/addContainerRegistryFromString", args)
 
-    def add_container(self, name: str, image: str) -> ContainerResource:
+    def add_container(self, name: str, image: str | AddContainerOptions) -> ContainerResource:
         """Adds a container resource"""
         args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
         args["name"] = serialize_value(name)
@@ -4293,6 +4421,15 @@ class IDistributedApplicationBuilder(HandleWrapperBase):
         args["secret"] = serialize_value(secret)
         return self._client.invoke_capability("Aspire.Hosting/addParameterFromConfiguration", args)
 
+    def add_parameter_with_generated_value(self, name: str, value: GenerateParameterDefault, secret: bool = False, persist: bool = False) -> ParameterResource:
+        """Adds a parameter with a generated default value"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["name"] = serialize_value(name)
+        args["value"] = serialize_value(value)
+        args["secret"] = serialize_value(secret)
+        args["persist"] = serialize_value(persist)
+        return self._client.invoke_capability("Aspire.Hosting/addParameterWithGeneratedValue", args)
+
     def add_connection_string(self, name: str, environment_variable_name: str | None = None) -> IResourceWithConnectionString:
         """Adds a connection string resource"""
         args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
@@ -4300,6 +4437,13 @@ class IDistributedApplicationBuilder(HandleWrapperBase):
         if environment_variable_name is not None:
             args["environmentVariableName"] = serialize_value(environment_variable_name)
         return self._client.invoke_capability("Aspire.Hosting/addConnectionString", args)
+
+    def add_project_without_launch_profile(self, name: str, project_path: str) -> ProjectResource:
+        """Adds a .NET project resource without a launch profile"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["name"] = serialize_value(name)
+        args["projectPath"] = serialize_value(project_path)
+        return self._client.invoke_capability("Aspire.Hosting/addProjectWithoutLaunchProfile", args)
 
     def add_project(self, name: str, project_path: str, launch_profile_name: str) -> ProjectResource:
         """Adds a .NET project resource"""
@@ -4855,6 +4999,13 @@ class ParameterResource(ResourceBuilderBase):
         if command_options is not None:
             args["commandOptions"] = serialize_value(command_options)
         return self._client.invoke_capability("Aspire.Hosting/withCommand", args)
+
+    def with_relationship(self, resource_builder: IResource, type: str) -> IResource:
+        """Adds a relationship to another resource"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["resourceBuilder"] = serialize_value(resource_builder)
+        args["type"] = serialize_value(type)
+        return self._client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)
 
     def with_parent_relationship(self, parent: IResource) -> IResource:
         """Sets the parent relationship"""
@@ -5455,6 +5606,12 @@ class ProjectResource(ResourceBuilderBase):
             args["callback"] = callback_id
         return self._client.invoke_capability("Aspire.Hosting/withArgsCallbackAsync", args)
 
+    def with_reference_environment(self, options: ReferenceEnvironmentInjectionOptions) -> IResourceWithEnvironment:
+        """Configures which reference values are injected into environment variables"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["options"] = serialize_value(options)
+        return self._client.invoke_capability("Aspire.Hosting/withReferenceEnvironment", args)
+
     def with_reference(self, source: IResource, connection_name: str | None = None, optional: bool = False, name: str | None = None) -> IResourceWithEnvironment:
         """Adds a reference to another resource"""
         args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
@@ -5701,6 +5858,13 @@ class ProjectResource(ResourceBuilderBase):
         """Removes HTTPS certificate configuration"""
         args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
         return self._client.invoke_capability("Aspire.Hosting/withoutHttpsCertificate", args)
+
+    def with_relationship(self, resource_builder: IResource, type: str) -> IResource:
+        """Adds a relationship to another resource"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["resourceBuilder"] = serialize_value(resource_builder)
+        args["type"] = serialize_value(type)
+        return self._client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)
 
     def with_parent_relationship(self, parent: IResource) -> IResource:
         """Sets the parent relationship"""
@@ -6341,12 +6505,12 @@ class TestDatabaseResource(ResourceBuilderBase):
         args["name"] = serialize_value(name)
         return self._client.invoke_capability("Aspire.Hosting/withContainerName", args)
 
-    def with_build_arg(self, name: str, value: ParameterResource) -> ContainerResource:
-        """Adds a build argument from a parameter resource"""
+    def with_build_arg(self, name: str, value: str | ParameterResource) -> ContainerResource:
+        """Adds a build argument from a string value or parameter resource"""
         args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
         args["name"] = serialize_value(name)
         args["value"] = serialize_value(value)
-        return self._client.invoke_capability("Aspire.Hosting/withParameterBuildArg", args)
+        return self._client.invoke_capability("Aspire.Hosting/withBuildArg", args)
 
     def with_build_secret(self, name: str, value: ParameterResource) -> ContainerResource:
         """Adds a build secret from a parameter resource"""
@@ -6354,6 +6518,17 @@ class TestDatabaseResource(ResourceBuilderBase):
         args["name"] = serialize_value(name)
         args["value"] = serialize_value(value)
         return self._client.invoke_capability("Aspire.Hosting/withParameterBuildSecret", args)
+
+    def with_container_certificate_paths(self, custom_certificates_destination: str | None = None, default_certificate_bundle_paths: list[str] | None = None, default_certificate_directory_paths: list[str] | None = None) -> ContainerResource:
+        """Overrides container certificate bundle and directory paths used for trust configuration"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        if custom_certificates_destination is not None:
+            args["customCertificatesDestination"] = serialize_value(custom_certificates_destination)
+        if default_certificate_bundle_paths is not None:
+            args["defaultCertificateBundlePaths"] = serialize_value(default_certificate_bundle_paths)
+        if default_certificate_directory_paths is not None:
+            args["defaultCertificateDirectoryPaths"] = serialize_value(default_certificate_directory_paths)
+        return self._client.invoke_capability("Aspire.Hosting/withContainerCertificatePaths", args)
 
     def with_endpoint_proxy_support(self, proxy_enabled: bool) -> ContainerResource:
         """Configures endpoint proxy support"""
@@ -6465,6 +6640,12 @@ class TestDatabaseResource(ResourceBuilderBase):
         if callback_id is not None:
             args["callback"] = callback_id
         return self._client.invoke_capability("Aspire.Hosting/withArgsCallbackAsync", args)
+
+    def with_reference_environment(self, options: ReferenceEnvironmentInjectionOptions) -> IResourceWithEnvironment:
+        """Configures which reference values are injected into environment variables"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["options"] = serialize_value(options)
+        return self._client.invoke_capability("Aspire.Hosting/withReferenceEnvironment", args)
 
     def with_reference(self, source: IResource, connection_name: str | None = None, optional: bool = False, name: str | None = None) -> IResourceWithEnvironment:
         """Adds a reference to another resource"""
@@ -6705,6 +6886,13 @@ class TestDatabaseResource(ResourceBuilderBase):
         """Removes HTTPS certificate configuration"""
         args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
         return self._client.invoke_capability("Aspire.Hosting/withoutHttpsCertificate", args)
+
+    def with_relationship(self, resource_builder: IResource, type: str) -> IResource:
+        """Adds a relationship to another resource"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["resourceBuilder"] = serialize_value(resource_builder)
+        args["type"] = serialize_value(type)
+        return self._client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)
 
     def with_parent_relationship(self, parent: IResource) -> IResource:
         """Sets the parent relationship"""
@@ -7077,12 +7265,12 @@ class TestRedisResource(ResourceBuilderBase):
         args["name"] = serialize_value(name)
         return self._client.invoke_capability("Aspire.Hosting/withContainerName", args)
 
-    def with_build_arg(self, name: str, value: ParameterResource) -> ContainerResource:
-        """Adds a build argument from a parameter resource"""
+    def with_build_arg(self, name: str, value: str | ParameterResource) -> ContainerResource:
+        """Adds a build argument from a string value or parameter resource"""
         args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
         args["name"] = serialize_value(name)
         args["value"] = serialize_value(value)
-        return self._client.invoke_capability("Aspire.Hosting/withParameterBuildArg", args)
+        return self._client.invoke_capability("Aspire.Hosting/withBuildArg", args)
 
     def with_build_secret(self, name: str, value: ParameterResource) -> ContainerResource:
         """Adds a build secret from a parameter resource"""
@@ -7090,6 +7278,17 @@ class TestRedisResource(ResourceBuilderBase):
         args["name"] = serialize_value(name)
         args["value"] = serialize_value(value)
         return self._client.invoke_capability("Aspire.Hosting/withParameterBuildSecret", args)
+
+    def with_container_certificate_paths(self, custom_certificates_destination: str | None = None, default_certificate_bundle_paths: list[str] | None = None, default_certificate_directory_paths: list[str] | None = None) -> ContainerResource:
+        """Overrides container certificate bundle and directory paths used for trust configuration"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        if custom_certificates_destination is not None:
+            args["customCertificatesDestination"] = serialize_value(custom_certificates_destination)
+        if default_certificate_bundle_paths is not None:
+            args["defaultCertificateBundlePaths"] = serialize_value(default_certificate_bundle_paths)
+        if default_certificate_directory_paths is not None:
+            args["defaultCertificateDirectoryPaths"] = serialize_value(default_certificate_directory_paths)
+        return self._client.invoke_capability("Aspire.Hosting/withContainerCertificatePaths", args)
 
     def with_endpoint_proxy_support(self, proxy_enabled: bool) -> ContainerResource:
         """Configures endpoint proxy support"""
@@ -7180,19 +7379,12 @@ class TestRedisResource(ResourceBuilderBase):
         args["resource"] = serialize_value(resource)
         return self._client.invoke_capability("Aspire.Hosting/withEnvironmentConnectionString", args)
 
-    def with_connection_property(self, name: str, value: ReferenceExpression) -> IResourceWithConnectionString:
-        """Adds a connection property with a reference expression"""
+    def with_connection_property(self, name: str, value: str | ReferenceExpression) -> IResourceWithConnectionString:
+        """Adds a connection property with a string or reference expression value"""
         args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
         args["name"] = serialize_value(name)
         args["value"] = serialize_value(value)
         return self._client.invoke_capability("Aspire.Hosting/withConnectionProperty", args)
-
-    def with_connection_property_value(self, name: str, value: str) -> IResourceWithConnectionString:
-        """Adds a connection property with a string value"""
-        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
-        args["name"] = serialize_value(name)
-        args["value"] = serialize_value(value)
-        return self._client.invoke_capability("Aspire.Hosting/withConnectionPropertyValue", args)
 
     def with_args(self, args: list[str]) -> IResourceWithArgs:
         """Adds arguments"""
@@ -7215,6 +7407,12 @@ class TestRedisResource(ResourceBuilderBase):
         if callback_id is not None:
             args["callback"] = callback_id
         return self._client.invoke_capability("Aspire.Hosting/withArgsCallbackAsync", args)
+
+    def with_reference_environment(self, options: ReferenceEnvironmentInjectionOptions) -> IResourceWithEnvironment:
+        """Configures which reference values are injected into environment variables"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["options"] = serialize_value(options)
+        return self._client.invoke_capability("Aspire.Hosting/withReferenceEnvironment", args)
 
     def with_reference(self, source: IResource, connection_name: str | None = None, optional: bool = False, name: str | None = None) -> IResourceWithEnvironment:
         """Adds a reference to another resource"""
@@ -7461,6 +7659,13 @@ class TestRedisResource(ResourceBuilderBase):
         """Removes HTTPS certificate configuration"""
         args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
         return self._client.invoke_capability("Aspire.Hosting/withoutHttpsCertificate", args)
+
+    def with_relationship(self, resource_builder: IResource, type: str) -> IResource:
+        """Adds a relationship to another resource"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["resourceBuilder"] = serialize_value(resource_builder)
+        args["type"] = serialize_value(type)
+        return self._client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)
 
     def with_parent_relationship(self, parent: IResource) -> IResource:
         """Sets the parent relationship"""
@@ -7939,12 +8144,12 @@ class TestVaultResource(ResourceBuilderBase):
         args["name"] = serialize_value(name)
         return self._client.invoke_capability("Aspire.Hosting/withContainerName", args)
 
-    def with_build_arg(self, name: str, value: ParameterResource) -> ContainerResource:
-        """Adds a build argument from a parameter resource"""
+    def with_build_arg(self, name: str, value: str | ParameterResource) -> ContainerResource:
+        """Adds a build argument from a string value or parameter resource"""
         args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
         args["name"] = serialize_value(name)
         args["value"] = serialize_value(value)
-        return self._client.invoke_capability("Aspire.Hosting/withParameterBuildArg", args)
+        return self._client.invoke_capability("Aspire.Hosting/withBuildArg", args)
 
     def with_build_secret(self, name: str, value: ParameterResource) -> ContainerResource:
         """Adds a build secret from a parameter resource"""
@@ -7952,6 +8157,17 @@ class TestVaultResource(ResourceBuilderBase):
         args["name"] = serialize_value(name)
         args["value"] = serialize_value(value)
         return self._client.invoke_capability("Aspire.Hosting/withParameterBuildSecret", args)
+
+    def with_container_certificate_paths(self, custom_certificates_destination: str | None = None, default_certificate_bundle_paths: list[str] | None = None, default_certificate_directory_paths: list[str] | None = None) -> ContainerResource:
+        """Overrides container certificate bundle and directory paths used for trust configuration"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        if custom_certificates_destination is not None:
+            args["customCertificatesDestination"] = serialize_value(custom_certificates_destination)
+        if default_certificate_bundle_paths is not None:
+            args["defaultCertificateBundlePaths"] = serialize_value(default_certificate_bundle_paths)
+        if default_certificate_directory_paths is not None:
+            args["defaultCertificateDirectoryPaths"] = serialize_value(default_certificate_directory_paths)
+        return self._client.invoke_capability("Aspire.Hosting/withContainerCertificatePaths", args)
 
     def with_endpoint_proxy_support(self, proxy_enabled: bool) -> ContainerResource:
         """Configures endpoint proxy support"""
@@ -8063,6 +8279,12 @@ class TestVaultResource(ResourceBuilderBase):
         if callback_id is not None:
             args["callback"] = callback_id
         return self._client.invoke_capability("Aspire.Hosting/withArgsCallbackAsync", args)
+
+    def with_reference_environment(self, options: ReferenceEnvironmentInjectionOptions) -> IResourceWithEnvironment:
+        """Configures which reference values are injected into environment variables"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["options"] = serialize_value(options)
+        return self._client.invoke_capability("Aspire.Hosting/withReferenceEnvironment", args)
 
     def with_reference(self, source: IResource, connection_name: str | None = None, optional: bool = False, name: str | None = None) -> IResourceWithEnvironment:
         """Adds a reference to another resource"""
@@ -8303,6 +8525,13 @@ class TestVaultResource(ResourceBuilderBase):
         """Removes HTTPS certificate configuration"""
         args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
         return self._client.invoke_capability("Aspire.Hosting/withoutHttpsCertificate", args)
+
+    def with_relationship(self, resource_builder: IResource, type: str) -> IResource:
+        """Adds a relationship to another resource"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["resourceBuilder"] = serialize_value(resource_builder)
+        args["type"] = serialize_value(type)
+        return self._client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)
 
     def with_parent_relationship(self, parent: IResource) -> IResource:
         """Sets the parent relationship"""

@@ -385,6 +385,24 @@ impl std::fmt::Display for TestResourceStatus {
 // DTOs
 // ============================================================================
 
+/// AddContainerOptions
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct AddContainerOptions {
+    #[serde(rename = "Image")]
+    pub image: String,
+    #[serde(rename = "Tag")]
+    pub tag: String,
+}
+
+impl AddContainerOptions {
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        let mut map = HashMap::new();
+        map.insert("Image".to_string(), serde_json::to_value(&self.image).unwrap_or(Value::Null));
+        map.insert("Tag".to_string(), serde_json::to_value(&self.tag).unwrap_or(Value::Null));
+        map
+    }
+}
+
 /// CreateBuilderOptions
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CreateBuilderOptions {
@@ -451,6 +469,30 @@ impl ResourceEventDto {
     }
 }
 
+/// ReferenceEnvironmentInjectionOptions
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ReferenceEnvironmentInjectionOptions {
+    #[serde(rename = "ConnectionString")]
+    pub connection_string: bool,
+    #[serde(rename = "ConnectionProperties")]
+    pub connection_properties: bool,
+    #[serde(rename = "ServiceDiscovery")]
+    pub service_discovery: bool,
+    #[serde(rename = "Endpoints")]
+    pub endpoints: bool,
+}
+
+impl ReferenceEnvironmentInjectionOptions {
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        let mut map = HashMap::new();
+        map.insert("ConnectionString".to_string(), serde_json::to_value(&self.connection_string).unwrap_or(Value::Null));
+        map.insert("ConnectionProperties".to_string(), serde_json::to_value(&self.connection_properties).unwrap_or(Value::Null));
+        map.insert("ServiceDiscovery".to_string(), serde_json::to_value(&self.service_discovery).unwrap_or(Value::Null));
+        map.insert("Endpoints".to_string(), serde_json::to_value(&self.endpoints).unwrap_or(Value::Null));
+        map
+    }
+}
+
 /// CommandOptions
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CommandOptions {
@@ -480,6 +522,45 @@ impl CommandOptions {
         map.insert("IconVariant".to_string(), serde_json::to_value(&self.icon_variant).unwrap_or(Value::Null));
         map.insert("IsHighlighted".to_string(), serde_json::to_value(&self.is_highlighted).unwrap_or(Value::Null));
         map.insert("UpdateState".to_string(), serde_json::to_value(&self.update_state).unwrap_or(Value::Null));
+        map
+    }
+}
+
+/// GenerateParameterDefault
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct GenerateParameterDefault {
+    #[serde(rename = "MinLength")]
+    pub min_length: f64,
+    #[serde(rename = "Lower")]
+    pub lower: bool,
+    #[serde(rename = "Upper")]
+    pub upper: bool,
+    #[serde(rename = "Numeric")]
+    pub numeric: bool,
+    #[serde(rename = "Special")]
+    pub special: bool,
+    #[serde(rename = "MinLower")]
+    pub min_lower: f64,
+    #[serde(rename = "MinUpper")]
+    pub min_upper: f64,
+    #[serde(rename = "MinNumeric")]
+    pub min_numeric: f64,
+    #[serde(rename = "MinSpecial")]
+    pub min_special: f64,
+}
+
+impl GenerateParameterDefault {
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        let mut map = HashMap::new();
+        map.insert("MinLength".to_string(), serde_json::to_value(&self.min_length).unwrap_or(Value::Null));
+        map.insert("Lower".to_string(), serde_json::to_value(&self.lower).unwrap_or(Value::Null));
+        map.insert("Upper".to_string(), serde_json::to_value(&self.upper).unwrap_or(Value::Null));
+        map.insert("Numeric".to_string(), serde_json::to_value(&self.numeric).unwrap_or(Value::Null));
+        map.insert("Special".to_string(), serde_json::to_value(&self.special).unwrap_or(Value::Null));
+        map.insert("MinLower".to_string(), serde_json::to_value(&self.min_lower).unwrap_or(Value::Null));
+        map.insert("MinUpper".to_string(), serde_json::to_value(&self.min_upper).unwrap_or(Value::Null));
+        map.insert("MinNumeric".to_string(), serde_json::to_value(&self.min_numeric).unwrap_or(Value::Null));
+        map.insert("MinSpecial".to_string(), serde_json::to_value(&self.min_special).unwrap_or(Value::Null));
         map
     }
 }
@@ -945,6 +1026,16 @@ impl CSharpAppResource {
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
 
+    /// Configures which reference values are injected into environment variables
+    pub fn with_reference_environment(&self, options: ReferenceEnvironmentInjectionOptions) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("options".to_string(), serde_json::to_value(&options).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withReferenceEnvironment", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
     /// Adds a reference to another resource
     pub fn with_reference(&self, source: &IResource, connection_name: Option<&str>, optional: Option<bool>, name: Option<&str>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -1343,6 +1434,17 @@ impl CSharpAppResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withoutHttpsCertificate", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
+    /// Adds a relationship to another resource
+    pub fn with_relationship(&self, resource_builder: &IResource, type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceBuilder".to_string(), resource_builder.handle().to_json());
+        args.insert("type".to_string(), serde_json::to_value(&type).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Sets the parent relationship
@@ -1901,24 +2003,13 @@ impl ConnectionStringResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Adds a connection property with a reference expression
-    pub fn with_connection_property(&self, name: &str, value: ReferenceExpression) -> Result<IResourceWithConnectionString, Box<dyn std::error::Error>> {
+    /// Adds a connection property with a string or reference expression value
+    pub fn with_connection_property(&self, name: &str, value: Value) -> Result<IResourceWithConnectionString, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
         args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withConnectionProperty", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResourceWithConnectionString::new(handle, self.client.clone()))
-    }
-
-    /// Adds a connection property with a string value
-    pub fn with_connection_property_value(&self, name: &str, value: &str) -> Result<IResourceWithConnectionString, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
-        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withConnectionPropertyValue", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithConnectionString::new(handle, self.client.clone()))
     }
@@ -2087,6 +2178,17 @@ impl ConnectionStringResource {
             args.insert("commandOptions".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withCommand", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds a relationship to another resource
+    pub fn with_relationship(&self, resource_builder: &IResource, type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceBuilder".to_string(), resource_builder.handle().to_json());
+        args.insert("type".to_string(), serde_json::to_value(&type).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -2568,6 +2670,17 @@ impl ContainerRegistryResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Adds a relationship to another resource
+    pub fn with_relationship(&self, resource_builder: &IResource, type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceBuilder".to_string(), resource_builder.handle().to_json());
+        args.insert("type".to_string(), serde_json::to_value(&type).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Sets the parent relationship
     pub fn with_parent_relationship(&self, parent: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -3014,13 +3127,13 @@ impl ContainerResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
-    /// Adds a build argument from a parameter resource
-    pub fn with_build_arg(&self, name: &str, value: &ParameterResource) -> Result<ContainerResource, Box<dyn std::error::Error>> {
+    /// Adds a build argument from a string value or parameter resource
+    pub fn with_build_arg(&self, name: &str, value: Value) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
-        args.insert("value".to_string(), value.handle().to_json());
-        let result = self.client.invoke_capability("Aspire.Hosting/withParameterBuildArg", args)?;
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withBuildArg", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
@@ -3032,6 +3145,24 @@ impl ContainerResource {
         args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
         args.insert("value".to_string(), value.handle().to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/withParameterBuildSecret", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerResource::new(handle, self.client.clone()))
+    }
+
+    /// Overrides container certificate bundle and directory paths used for trust configuration
+    pub fn with_container_certificate_paths(&self, custom_certificates_destination: Option<&str>, default_certificate_bundle_paths: Option<Vec<String>>, default_certificate_directory_paths: Option<Vec<String>>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        if let Some(ref v) = custom_certificates_destination {
+            args.insert("customCertificatesDestination".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = default_certificate_bundle_paths {
+            args.insert("defaultCertificateBundlePaths".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = default_certificate_directory_paths {
+            args.insert("defaultCertificateDirectoryPaths".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withContainerCertificatePaths", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
@@ -3212,6 +3343,16 @@ impl ContainerResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withArgsCallbackAsync", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
+    }
+
+    /// Configures which reference values are injected into environment variables
+    pub fn with_reference_environment(&self, options: ReferenceEnvironmentInjectionOptions) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("options".to_string(), serde_json::to_value(&options).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withReferenceEnvironment", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
 
     /// Adds a reference to another resource
@@ -3601,6 +3742,17 @@ impl ContainerResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withoutHttpsCertificate", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
+    /// Adds a relationship to another resource
+    pub fn with_relationship(&self, resource_builder: &IResource, type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceBuilder".to_string(), resource_builder.handle().to_json());
+        args.insert("type".to_string(), serde_json::to_value(&type).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Sets the parent relationship
@@ -4500,6 +4652,16 @@ impl DotnetToolResource {
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
 
+    /// Configures which reference values are injected into environment variables
+    pub fn with_reference_environment(&self, options: ReferenceEnvironmentInjectionOptions) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("options".to_string(), serde_json::to_value(&options).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withReferenceEnvironment", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
     /// Adds a reference to another resource
     pub fn with_reference(&self, source: &IResource, connection_name: Option<&str>, optional: Option<bool>, name: Option<&str>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -4887,6 +5049,17 @@ impl DotnetToolResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withoutHttpsCertificate", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
+    /// Adds a relationship to another resource
+    pub fn with_relationship(&self, resource_builder: &IResource, type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceBuilder".to_string(), resource_builder.handle().to_json());
+        args.insert("type".to_string(), serde_json::to_value(&type).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Sets the parent relationship
@@ -5766,6 +5939,16 @@ impl ExecutableResource {
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
 
+    /// Configures which reference values are injected into environment variables
+    pub fn with_reference_environment(&self, options: ReferenceEnvironmentInjectionOptions) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("options".to_string(), serde_json::to_value(&options).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withReferenceEnvironment", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
     /// Adds a reference to another resource
     pub fn with_reference(&self, source: &IResource, connection_name: Option<&str>, optional: Option<bool>, name: Option<&str>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -6153,6 +6336,17 @@ impl ExecutableResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withoutHttpsCertificate", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
+    /// Adds a relationship to another resource
+    pub fn with_relationship(&self, resource_builder: &IResource, type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceBuilder".to_string(), resource_builder.handle().to_json());
+        args.insert("type".to_string(), serde_json::to_value(&type).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Sets the parent relationship
@@ -6784,6 +6978,17 @@ impl ExternalServiceResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Adds a relationship to another resource
+    pub fn with_relationship(&self, resource_builder: &IResource, type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceBuilder".to_string(), resource_builder.handle().to_json());
+        args.insert("type".to_string(), serde_json::to_value(&type).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Sets the parent relationship
     pub fn with_parent_relationship(&self, parent: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -7290,7 +7495,7 @@ impl IDistributedApplicationBuilder {
     }
 
     /// Adds a container resource
-    pub fn add_container(&self, name: &str, image: &str) -> Result<ContainerResource, Box<dyn std::error::Error>> {
+    pub fn add_container(&self, name: &str, image: Value) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
@@ -7471,6 +7676,23 @@ impl IDistributedApplicationBuilder {
         Ok(ParameterResource::new(handle, self.client.clone()))
     }
 
+    /// Adds a parameter with a generated default value
+    pub fn add_parameter_with_generated_value(&self, name: &str, value: GenerateParameterDefault, secret: Option<bool>, persist: Option<bool>) -> Result<ParameterResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        if let Some(ref v) = secret {
+            args.insert("secret".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = persist {
+            args.insert("persist".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/addParameterWithGeneratedValue", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ParameterResource::new(handle, self.client.clone()))
+    }
+
     /// Adds a connection string resource
     pub fn add_connection_string(&self, name: &str, environment_variable_name: Option<&str>) -> Result<IResourceWithConnectionString, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -7482,6 +7704,17 @@ impl IDistributedApplicationBuilder {
         let result = self.client.invoke_capability("Aspire.Hosting/addConnectionString", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithConnectionString::new(handle, self.client.clone()))
+    }
+
+    /// Adds a .NET project resource without a launch profile
+    pub fn add_project_without_launch_profile(&self, name: &str, project_path: &str) -> Result<ProjectResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        args.insert("projectPath".to_string(), serde_json::to_value(&project_path).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/addProjectWithoutLaunchProfile", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ProjectResource::new(handle, self.client.clone()))
     }
 
     /// Adds a .NET project resource
@@ -8694,6 +8927,17 @@ impl ParameterResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Adds a relationship to another resource
+    pub fn with_relationship(&self, resource_builder: &IResource, type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceBuilder".to_string(), resource_builder.handle().to_json());
+        args.insert("type".to_string(), serde_json::to_value(&type).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Sets the parent relationship
     pub fn with_parent_relationship(&self, parent: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -9746,6 +9990,16 @@ impl ProjectResource {
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
 
+    /// Configures which reference values are injected into environment variables
+    pub fn with_reference_environment(&self, options: ReferenceEnvironmentInjectionOptions) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("options".to_string(), serde_json::to_value(&options).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withReferenceEnvironment", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
     /// Adds a reference to another resource
     pub fn with_reference(&self, source: &IResource, connection_name: Option<&str>, optional: Option<bool>, name: Option<&str>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -10144,6 +10398,17 @@ impl ProjectResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withoutHttpsCertificate", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
+    /// Adds a relationship to another resource
+    pub fn with_relationship(&self, resource_builder: &IResource, type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceBuilder".to_string(), resource_builder.handle().to_json());
+        args.insert("type".to_string(), serde_json::to_value(&type).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Sets the parent relationship
@@ -11293,13 +11558,13 @@ impl TestDatabaseResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
-    /// Adds a build argument from a parameter resource
-    pub fn with_build_arg(&self, name: &str, value: &ParameterResource) -> Result<ContainerResource, Box<dyn std::error::Error>> {
+    /// Adds a build argument from a string value or parameter resource
+    pub fn with_build_arg(&self, name: &str, value: Value) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
-        args.insert("value".to_string(), value.handle().to_json());
-        let result = self.client.invoke_capability("Aspire.Hosting/withParameterBuildArg", args)?;
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withBuildArg", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
@@ -11311,6 +11576,24 @@ impl TestDatabaseResource {
         args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
         args.insert("value".to_string(), value.handle().to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/withParameterBuildSecret", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerResource::new(handle, self.client.clone()))
+    }
+
+    /// Overrides container certificate bundle and directory paths used for trust configuration
+    pub fn with_container_certificate_paths(&self, custom_certificates_destination: Option<&str>, default_certificate_bundle_paths: Option<Vec<String>>, default_certificate_directory_paths: Option<Vec<String>>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        if let Some(ref v) = custom_certificates_destination {
+            args.insert("customCertificatesDestination".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = default_certificate_bundle_paths {
+            args.insert("defaultCertificateBundlePaths".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = default_certificate_directory_paths {
+            args.insert("defaultCertificateDirectoryPaths".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withContainerCertificatePaths", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
@@ -11491,6 +11774,16 @@ impl TestDatabaseResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withArgsCallbackAsync", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
+    }
+
+    /// Configures which reference values are injected into environment variables
+    pub fn with_reference_environment(&self, options: ReferenceEnvironmentInjectionOptions) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("options".to_string(), serde_json::to_value(&options).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withReferenceEnvironment", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
 
     /// Adds a reference to another resource
@@ -11880,6 +12173,17 @@ impl TestDatabaseResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withoutHttpsCertificate", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
+    /// Adds a relationship to another resource
+    pub fn with_relationship(&self, resource_builder: &IResource, type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceBuilder".to_string(), resource_builder.handle().to_json());
+        args.insert("type".to_string(), serde_json::to_value(&type).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Sets the parent relationship
@@ -12507,13 +12811,13 @@ impl TestRedisResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
-    /// Adds a build argument from a parameter resource
-    pub fn with_build_arg(&self, name: &str, value: &ParameterResource) -> Result<ContainerResource, Box<dyn std::error::Error>> {
+    /// Adds a build argument from a string value or parameter resource
+    pub fn with_build_arg(&self, name: &str, value: Value) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
-        args.insert("value".to_string(), value.handle().to_json());
-        let result = self.client.invoke_capability("Aspire.Hosting/withParameterBuildArg", args)?;
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withBuildArg", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
@@ -12525,6 +12829,24 @@ impl TestRedisResource {
         args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
         args.insert("value".to_string(), value.handle().to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/withParameterBuildSecret", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerResource::new(handle, self.client.clone()))
+    }
+
+    /// Overrides container certificate bundle and directory paths used for trust configuration
+    pub fn with_container_certificate_paths(&self, custom_certificates_destination: Option<&str>, default_certificate_bundle_paths: Option<Vec<String>>, default_certificate_directory_paths: Option<Vec<String>>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        if let Some(ref v) = custom_certificates_destination {
+            args.insert("customCertificatesDestination".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = default_certificate_bundle_paths {
+            args.insert("defaultCertificateBundlePaths".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = default_certificate_directory_paths {
+            args.insert("defaultCertificateDirectoryPaths".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withContainerCertificatePaths", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
@@ -12675,24 +12997,13 @@ impl TestRedisResource {
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
 
-    /// Adds a connection property with a reference expression
-    pub fn with_connection_property(&self, name: &str, value: ReferenceExpression) -> Result<IResourceWithConnectionString, Box<dyn std::error::Error>> {
+    /// Adds a connection property with a string or reference expression value
+    pub fn with_connection_property(&self, name: &str, value: Value) -> Result<IResourceWithConnectionString, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
         args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withConnectionProperty", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResourceWithConnectionString::new(handle, self.client.clone()))
-    }
-
-    /// Adds a connection property with a string value
-    pub fn with_connection_property_value(&self, name: &str, value: &str) -> Result<IResourceWithConnectionString, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
-        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withConnectionPropertyValue", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithConnectionString::new(handle, self.client.clone()))
     }
@@ -12727,6 +13038,16 @@ impl TestRedisResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withArgsCallbackAsync", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
+    }
+
+    /// Configures which reference values are injected into environment variables
+    pub fn with_reference_environment(&self, options: ReferenceEnvironmentInjectionOptions) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("options".to_string(), serde_json::to_value(&options).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withReferenceEnvironment", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
 
     /// Adds a reference to another resource
@@ -13125,6 +13446,17 @@ impl TestRedisResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withoutHttpsCertificate", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
+    /// Adds a relationship to another resource
+    pub fn with_relationship(&self, resource_builder: &IResource, type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceBuilder".to_string(), resource_builder.handle().to_json());
+        args.insert("type".to_string(), serde_json::to_value(&type).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Sets the parent relationship
@@ -13894,13 +14226,13 @@ impl TestVaultResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
-    /// Adds a build argument from a parameter resource
-    pub fn with_build_arg(&self, name: &str, value: &ParameterResource) -> Result<ContainerResource, Box<dyn std::error::Error>> {
+    /// Adds a build argument from a string value or parameter resource
+    pub fn with_build_arg(&self, name: &str, value: Value) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
-        args.insert("value".to_string(), value.handle().to_json());
-        let result = self.client.invoke_capability("Aspire.Hosting/withParameterBuildArg", args)?;
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withBuildArg", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
@@ -13912,6 +14244,24 @@ impl TestVaultResource {
         args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
         args.insert("value".to_string(), value.handle().to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/withParameterBuildSecret", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerResource::new(handle, self.client.clone()))
+    }
+
+    /// Overrides container certificate bundle and directory paths used for trust configuration
+    pub fn with_container_certificate_paths(&self, custom_certificates_destination: Option<&str>, default_certificate_bundle_paths: Option<Vec<String>>, default_certificate_directory_paths: Option<Vec<String>>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        if let Some(ref v) = custom_certificates_destination {
+            args.insert("customCertificatesDestination".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = default_certificate_bundle_paths {
+            args.insert("defaultCertificateBundlePaths".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = default_certificate_directory_paths {
+            args.insert("defaultCertificateDirectoryPaths".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withContainerCertificatePaths", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
@@ -14092,6 +14442,16 @@ impl TestVaultResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withArgsCallbackAsync", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
+    }
+
+    /// Configures which reference values are injected into environment variables
+    pub fn with_reference_environment(&self, options: ReferenceEnvironmentInjectionOptions) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("options".to_string(), serde_json::to_value(&options).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withReferenceEnvironment", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
 
     /// Adds a reference to another resource
@@ -14481,6 +14841,17 @@ impl TestVaultResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withoutHttpsCertificate", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
+    /// Adds a relationship to another resource
+    pub fn with_relationship(&self, resource_builder: &IResource, type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceBuilder".to_string(), resource_builder.handle().to_json());
+        args.insert("type".to_string(), serde_json::to_value(&type).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Sets the parent relationship
