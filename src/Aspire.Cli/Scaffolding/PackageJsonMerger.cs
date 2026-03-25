@@ -308,7 +308,7 @@ internal static class PackageJsonMerger
         }
     }
 
-    private static JsonObject EnsureObject(JsonObject parent, string propertyName, ILogger? logger = null)
+    private static JsonObject EnsureObject(JsonObject parent, string propertyName, ILogger logger)
     {
         if (parent[propertyName] is JsonObject obj)
         {
@@ -317,7 +317,7 @@ internal static class PackageJsonMerger
 
         if (parent[propertyName] is not null)
         {
-            logger?.LogWarning(
+            logger.LogWarning(
                 "Replacing non-object '{PropertyName}' value with an empty object. The original value will be lost.",
                 propertyName);
         }
