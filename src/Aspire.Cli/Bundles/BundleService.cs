@@ -156,8 +156,10 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
 
     /// <summary>
     /// Determines the default extraction directory for the current CLI binary.
-    /// If CLI is at ~/.aspire/bin/aspire, returns ~/.aspire/ so layout discovery
-    /// finds components via the bin/ layout pattern.
+    /// When the CLI is under the well-known <c>~/.aspire/bin/</c> layout, returns the parent
+    /// (<c>~/.aspire/</c>). For non-standard install locations (e.g., Homebrew, Winget),
+    /// falls back to the well-known <c>~/.aspire/</c> directory so that extraction artifacts
+    /// stay in a user-writable, predictable location.
     /// </summary>
     internal static string? GetDefaultExtractDir(string processPath)
     {
@@ -167,7 +169,39 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
             return null;
         }
 
-        return Path.GetDirectoryName(cliDir) ?? cliDir;
+        var parentDir = Path.GetDirectoryName(cliDir);
+        if (parentDir is null)
+        {
+            return GetWellKnownAspireDir();
+        }
+
+        // If the parent directory is the well-known .aspire directory (standard layout),
+        // use it directly so extraction lands alongside the CLI.
+        if (IsAspireDirectory(parentDir))
+        {
+            return parentDir;
+        }
+
+        // Non-standard install location — fall back to ~/.aspire/ to avoid writing into
+        // system directories like /usr/local/ or C:\Program Files\.
+        return GetWellKnownAspireDir();
+    }
+
+    /// <summary>
+    /// Gets the well-known <c>~/.aspire/</c> directory path.
+    /// </summary>
+    internal static string GetWellKnownAspireDir()
+    {
+        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".aspire");
+    }
+
+    /// <summary>
+    /// Checks whether the given directory path is a <c>.aspire</c> directory.
+    /// </summary>
+    private static bool IsAspireDirectory(string directoryPath)
+    {
+        var dirName = Path.GetFileName(directoryPath);
+        return string.Equals(dirName, ".aspire", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

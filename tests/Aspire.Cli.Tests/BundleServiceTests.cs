@@ -53,7 +53,7 @@ public class BundleServiceTests
     }
 
     [Fact]
-    public void GetDefaultExtractDir_ReturnsParentOfParent()
+    public void GetDefaultExtractDir_ReturnsAspireDir_ForStandardLayout()
     {
         if (OperatingSystem.IsWindows())
         {
@@ -65,6 +65,44 @@ public class BundleServiceTests
             var result = BundleService.GetDefaultExtractDir("/home/test/.aspire/bin/aspire");
             Assert.Equal("/home/test/.aspire", result);
         }
+    }
+
+    [Fact]
+    public void GetDefaultExtractDir_FallsBackToWellKnownDir_ForNonStandardLayout()
+    {
+        var expected = BundleService.GetWellKnownAspireDir();
+
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Equal(expected, BundleService.GetDefaultExtractDir(@"C:\Program Files\WinGet\Links\aspire.exe"));
+        }
+        else
+        {
+            Assert.Equal(expected, BundleService.GetDefaultExtractDir("/usr/local/bin/aspire"));
+            Assert.Equal(expected, BundleService.GetDefaultExtractDir("/opt/homebrew/bin/aspire"));
+        }
+    }
+
+    [Fact]
+    public void GetDefaultExtractDir_FallsBackToWellKnownDir_ForCustomInstallLocation()
+    {
+        var expected = BundleService.GetWellKnownAspireDir();
+
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Equal(expected, BundleService.GetDefaultExtractDir(@"D:\tools\aspire\bin\aspire.exe"));
+        }
+        else
+        {
+            Assert.Equal(expected, BundleService.GetDefaultExtractDir("/opt/aspire/bin/aspire"));
+        }
+    }
+
+    [Fact]
+    public void GetWellKnownAspireDir_ReturnsExpectedPath()
+    {
+        var expected = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".aspire");
+        Assert.Equal(expected, BundleService.GetWellKnownAspireDir());
     }
 
     [Fact]

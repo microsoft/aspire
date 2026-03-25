@@ -245,6 +245,22 @@ When a polyglot project runs `aspire run`, `AppHostServerProjectFactory.CreateAs
 
 `aspire update --self` downloads the new self-extracting binary, swaps it, then calls `BundleService.ExtractAsync(force: true)` to proactively extract the updated payload.
 
+### Extraction Directory Resolution
+
+The default extraction directory is determined by `BundleService.GetDefaultExtractDir()`:
+
+1. **Standard layout** (`~/.aspire/bin/aspire`): extracts to the parent directory (`~/.aspire/`), keeping
+   all components co-located in the user's Aspire directory.
+2. **Non-standard install locations** (e.g., `/usr/local/bin/aspire` via Homebrew, or
+   `C:\Program Files\WinGet\Links\aspire.exe` via Winget): falls back to the well-known `~/.aspire/`
+   directory to avoid writing into system directories that may not be user-writable.
+
+The `aspire setup --install-path <path>` flag overrides this logic entirely, allowing explicit control
+of the extraction target for advanced scenarios.
+
+Layout discovery (`LayoutDiscovery`) mirrors this hierarchy: it checks environment variables first,
+then relative paths from the CLI binary, and finally the well-known `~/.aspire/` directory.
+
 ### Version Tracking
 
 The file `.aspire-bundle-version` in the layout root contains the assembly informational version string (e.g., `13.2.0-pr.14398.gabc1234`). This enables:

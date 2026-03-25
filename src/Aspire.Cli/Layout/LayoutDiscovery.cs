@@ -64,6 +64,16 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
             return LogEnvironmentOverrides(relativeLayout);
         }
 
+        // 3. Try the well-known ~/.aspire/ directory.
+        // When the CLI is installed outside the standard layout (e.g., via Homebrew or Winget),
+        // the bundle is extracted to ~/.aspire/ instead of adjacent to the binary.
+        var wellKnownLayout = TryDiscoverWellKnownLayout();
+        if (wellKnownLayout is not null)
+        {
+            _logger.LogDebug("Discovered layout at well-known path: {Path}", wellKnownLayout.LayoutPath);
+            return LogEnvironmentOverrides(wellKnownLayout);
+        }
+
         _logger.LogDebug("No bundle layout discovered");
         return null;
     }
@@ -178,6 +188,15 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
         }
 
         return null;
+    }
+
+    private LayoutConfiguration? TryDiscoverWellKnownLayout()
+    {
+        var wellKnownPath = Bundles.BundleService.GetWellKnownAspireDir();
+
+        _logger.LogDebug("TryDiscoverWellKnownLayout: Checking well-known path {Path}...", wellKnownPath);
+
+        return TryInferLayout(wellKnownPath);
     }
 
     private LayoutConfiguration? TryInferLayout(string layoutPath)
