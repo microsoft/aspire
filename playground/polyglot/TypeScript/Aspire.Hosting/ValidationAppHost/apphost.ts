@@ -14,7 +14,10 @@ const builder = await createBuilder();
 
 // addContainer (pre-existing)
 const container = await builder.addContainer("mycontainer", "nginx");
-const taggedContainer = await builder.addContainerWithTag("mytaggedcontainer", "nginx", "stable-alpine");
+const taggedContainer = await builder.addContainer("mytaggedcontainer", {
+    image: "nginx",
+    tag: "stable-alpine",
+});
 
 // addDockerfile
 const dockerContainer = await builder.addDockerfile("dockerapp", "./app");

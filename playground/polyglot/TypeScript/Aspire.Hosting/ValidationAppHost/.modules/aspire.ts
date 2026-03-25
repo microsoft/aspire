@@ -424,6 +424,12 @@ export enum YarpSslProtocol {
 // DTO Interfaces
 // ============================================================================
 
+/** DTO interface for AddContainerOptions */
+export interface AddContainerOptions {
+    image?: string;
+    tag?: string;
+}
+
 /** DTO interface for CommandOptions */
 export interface CommandOptions {
     description?: string;
@@ -4186,7 +4192,7 @@ export class DistributedApplicationBuilder {
 
     /** Adds a container resource */
     /** @internal */
-    async _addContainerInternal(name: string, image: string): Promise<ContainerResource> {
+    async _addContainerInternal(name: string, image: string | AddContainerOptions): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, image };
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
             'Aspire.Hosting/addContainer',
@@ -4195,23 +4201,8 @@ export class DistributedApplicationBuilder {
         return new ContainerResource(result, this._client);
     }
 
-    addContainer(name: string, image: string): ContainerResourcePromise {
+    addContainer(name: string, image: string | AddContainerOptions): ContainerResourcePromise {
         return new ContainerResourcePromise(this._addContainerInternal(name, image));
-    }
-
-    /** Adds a container resource with an explicit image tag */
-    /** @internal */
-    async _addContainerWithTagInternal(name: string, image: string, tag: string): Promise<ContainerResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, image, tag };
-        const result = await this._client.invokeCapability<ContainerResourceHandle>(
-            'Aspire.Hosting/addContainerWithTag',
-            rpcArgs
-        );
-        return new ContainerResource(result, this._client);
-    }
-
-    addContainerWithTag(name: string, image: string, tag: string): ContainerResourcePromise {
-        return new ContainerResourcePromise(this._addContainerWithTagInternal(name, image, tag));
     }
 
     /** Adds a container resource built from a Dockerfile */
@@ -4617,13 +4608,8 @@ export class DistributedApplicationBuilderPromise implements PromiseLike<Distrib
     }
 
     /** Adds a container resource */
-    addContainer(name: string, image: string): ContainerResourcePromise {
+    addContainer(name: string, image: string | AddContainerOptions): ContainerResourcePromise {
         return new ContainerResourcePromise(this._promise.then(obj => obj.addContainer(name, image)));
-    }
-
-    /** Adds a container resource with an explicit image tag */
-    addContainerWithTag(name: string, image: string, tag: string): ContainerResourcePromise {
-        return new ContainerResourcePromise(this._promise.then(obj => obj.addContainerWithTag(name, image, tag)));
     }
 
     /** Adds a container resource built from a Dockerfile */

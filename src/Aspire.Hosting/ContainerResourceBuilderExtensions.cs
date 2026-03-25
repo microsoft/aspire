@@ -7,6 +7,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
+using Aspire.Hosting.Ats;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.ApplicationModel.Docker;
 using Aspire.Hosting.Pipelines;
@@ -90,7 +91,7 @@ public static class ContainerResourceBuilderExtensions
     /// <param name="name">The name of the resource.</param>
     /// <param name="image">The container image name. The tag is assumed to be "latest".</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport("addContainer", Description = "Adds a container resource")]
+    [AspireExportIgnore(Reason = "Use the polyglot addContainer overload that accepts a string or AddContainerOptions value.")]
     public static IResourceBuilder<ContainerResource> AddContainer(this IDistributedApplicationBuilder builder, [ResourceName] string name, string image)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -111,14 +112,56 @@ public static class ContainerResourceBuilderExtensions
     /// <param name="tag">The container image tag.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <remarks>
-    /// This overload is also exported to polyglot app hosts as <c>addContainerWithTag</c> for scenarios where the
-    /// image tag is already available as a separate value.
-    /// </remarks>
-    [AspireExport("addContainerWithTag", Description = "Adds a container resource with an explicit image tag")]
+     /// This overload is exported to polyglot app hosts through the <c>addContainer</c> overload that accepts an
+     /// options object for the image settings.
+     /// </remarks>
+    [AspireExportIgnore(Reason = "Use the polyglot addContainer overload that accepts a string or AddContainerOptions value.")]
     public static IResourceBuilder<ContainerResource> AddContainer(this IDistributedApplicationBuilder builder, [ResourceName] string name, string image, string tag)
     {
         return AddContainer(builder, name, image)
            .WithImageTag(tag);
+    }
+
+    /// <summary>
+    /// Adds a container resource to the application.
+    /// </summary>
+    /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
+    /// <param name="name">The name of the resource.</param>
+    /// <param name="image">The image name or image options for the container.</param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    [AspireExport("addContainer", Description = "Adds a container resource")]
+    internal static IResourceBuilder<ContainerResource> AddContainerForPolyglot(
+        this IDistributedApplicationBuilder builder,
+        [ResourceName] string name,
+        [AspireUnion(typeof(string), typeof(AddContainerOptions))] object image)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentNullException.ThrowIfNull(image);
+
+        return image switch
+        {
+            string imageName => AddContainer(builder, name, imageName),
+            AddContainerOptions options => AddContainer(builder, name, options),
+            _ => throw new ArgumentException("Image must be a string or AddContainerOptions.", nameof(image))
+        };
+    }
+
+    private static IResourceBuilder<ContainerResource> AddContainer(
+        IDistributedApplicationBuilder builder,
+        string name,
+        AddContainerOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentException.ThrowIfNullOrEmpty(options.Image);
+
+        if (options.Tag is { } tag)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(tag);
+            return AddContainer(builder, name, options.Image, tag);
+        }
+
+        return AddContainer(builder, name, options.Image);
     }
 
     /// <summary>
