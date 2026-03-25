@@ -52,11 +52,6 @@ The Aspire CLI collects usage data. It is collected by Microsoft and is used to 
 Read more about Aspire CLI telemetry: {0}</target>
         <note>{0} is a clickable URL</note>
       </trans-unit>
-      <trans-unit id="FirstTimeUseWelcome">
-        <source>Welcome to Aspire! Learn more about Aspire at https://aspire.dev</source>
-        <target state="translated">Aspire에 오신 것을 환영합니다! https://aspire.dev에서 Aspire에 대해 자세히 알아보기</target>
-        <note />
-      </trans-unit>
       <trans-unit id="NoLogoArgumentDescription">
         <source>Suppress the startup banner and telemetry notice</source>
         <target state="needs-review-translation">시작 배너 및 원격 분석 알림을 표시하지 않습니다.</target>

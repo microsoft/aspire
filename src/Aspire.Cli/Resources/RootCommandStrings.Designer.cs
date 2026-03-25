@@ -138,15 +138,6 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Welcome to Aspire! Learn more about Aspire at https://aspire.dev.
-        /// </summary>
-        public static string FirstTimeUseWelcome {
-            get {
-                return ResourceManager.GetString("FirstTimeUseWelcome", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Suppress the startup banner and telemetry notice..
         /// </summary>
         public static string NoLogoArgumentDescription {
