@@ -62,6 +62,12 @@ internal enum AspireTemplate
     /// Prompts: template, project name, output path, URLs. No language, Redis, or test project prompt.
     /// </summary>
     TypeScriptEmptyAppHost,
+
+    /// <summary>
+    /// Empty (Java AppHost) — visible only when experimental Java support is enabled.
+    /// Prompts: template, project name, output path, URLs. No Redis or test project prompt.
+    /// </summary>
+    JavaEmptyAppHost,
 }
 
 /// <summary>

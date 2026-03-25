@@ -1,0 +1,12 @@
+{
+  "appHost": {
+    "path": "apphost.ts",
+    "language": "typescript/nodejs"
+  },
+  "packages": {
+    "Aspire.Hosting.PostgreSQL": "",
+    "Aspire.Hosting.Redis": "",
+    "Aspire.Hosting.JavaScript": "",
+    "Aspire.Hosting.Docker": ""
+  }
+}

@@ -20,7 +20,7 @@ jobs:
       tests_matrix_requires_nugets_macos: ${{ steps.split_matrix.outputs.tests_matrix_requires_nugets_macos }}
       tests_matrix_requires_cli_archive: ${{ steps.split_matrix.outputs.tests_matrix_requires_cli_archive }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - uses: ./.github/actions/enumerate-tests
         id: generate_tests_matrix
@@ -281,9 +281,9 @@ jobs:
         working-directory: ./extension
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Setup Node.js environment
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: '20.x'
       - name: Install dependencies
@@ -293,7 +293,7 @@ jobs:
       - name: Package VSIX
         run: npm exec @vscode/vsce -- package --pre-release -o out/aspire-extension.vsix
       - name: Upload VSIX
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: aspire-extension
           path: extension/out/aspire-extension.vsix
@@ -301,6 +301,14 @@ jobs:
   typescript_sdk_tests:
     name: TypeScript SDK Unit Tests
     uses: ./.github/workflows/typescript-sdk-tests.yml
+
+  java_sdk_tests:
+    name: Java SDK Unit Tests
+    uses: ./.github/workflows/run-tests.yml
+    with:
+      testShortName: Java SDK
+      testProjectPath: tests/Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.Java.Tests.csproj
+      extraTestArgs: --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
 
   results:
     if: ${{ always() && github.repository_owner == 'microsoft' }}
@@ -315,6 +323,7 @@ jobs:
       extension_tests_win,
       cli_starter_validation_windows,
       typescript_sdk_tests,
+      java_sdk_tests,
       tests_no_nugets,
       tests_no_nugets_overflow,
       tests_requires_nugets_linux,
@@ -325,21 +334,21 @@ jobs:
     ]
     steps:
       - name: Checkout code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: logs-*-ubuntu-latest
           merge-multiple: true
           path: ${{ github.workspace }}/testresults/ubuntu-latest
 
-      - uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: logs-*-windows-latest
           merge-multiple: true
           path: ${{ github.workspace }}/testresults/windows-latest
 
-      - uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: logs-*-macos-latest
           merge-multiple: true
@@ -347,7 +356,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: All-TestResults
           path: ${{ github.workspace }}/testresults/**/*.trx
@@ -383,6 +392,7 @@ jobs:
                  (needs.extension_tests_win.result == 'skipped' ||
                     needs.cli_starter_validation_windows.result == 'skipped' ||
                     needs.typescript_sdk_tests.result == 'skipped' ||
+                    needs.java_sdk_tests.result == 'skipped' ||
                     needs.tests_no_nugets.result == 'skipped' ||
                     needs.tests_requires_nugets_linux.result == 'skipped' ||
                    needs.tests_requires_nugets_windows.result == 'skipped' ||
@@ -392,8 +402,9 @@ jobs:
                   needs.polyglot_validation.result == 'skipped')) ||
                 (github.event_name != 'pull_request' &&
                  (needs.extension_tests_win.result == 'skipped' ||
-                   needs.typescript_sdk_tests.result == 'skipped' ||
-                   needs.tests_no_nugets.result == 'skipped' ||
+                    needs.typescript_sdk_tests.result == 'skipped' ||
+                    needs.java_sdk_tests.result == 'skipped' ||
+                    needs.tests_no_nugets.result == 'skipped' ||
                    needs.tests_requires_nugets_linux.result == 'skipped' ||
                    needs.tests_requires_nugets_windows.result == 'skipped' ||
                    (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null &&

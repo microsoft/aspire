@@ -4,8 +4,9 @@
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <SkipTests Condition="'$(IsGitHubActionsRunner)' == 'true' and '$(RunOuterloopTests)' != 'true'">true</SkipTests>
     <GithubActionsRunnerLinux>8-core-ubuntu-latest</GithubActionsRunnerLinux>
-    <!-- Only run on Linux; no docker support on Windows yet -->
+    <!-- Only run on Linux; no docker support on Windows/Mac yet -->
     <RunOnGithubActionsWindows>false</RunOnGithubActionsWindows>
+    <RunOnGithubActionsMacOS>false</RunOnGithubActionsMacOS>
     <RunOnAzdoCIWindows>false</RunOnAzdoCIWindows>
     <RunOnAzdoHelixWindows>false</RunOnAzdoHelixWindows>
 

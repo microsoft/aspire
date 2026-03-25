@@ -240,6 +240,16 @@ internal static class Hex1bAutomatorTestHelpers
                 await auto.EnterAsync();
                 break;
 
+            case AspireTemplate.JavaEmptyAppHost:
+                await auto.DownAsync();
+                await auto.DownAsync();
+                await auto.WaitUntilAsync(
+                    s => new CellPatternSearcher().Find("> Empty (Java AppHost)").Search(s).Count > 0,
+                    timeout: TimeSpan.FromSeconds(5),
+                    description: "Java Empty AppHost template selected");
+                await auto.EnterAsync();
+                break;
+
             default:
                 throw new ArgumentOutOfRangeException(nameof(template), template, $"Unsupported template: {template}");
         }

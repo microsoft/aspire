@@ -1,0 +1,12 @@
+{
+  "appHost": {
+    "path": "ValidationAppHost/apphost.ts",
+    "language": "typescript/nodejs"
+  },
+  "packages": {
+    "Aspire.Hosting": "",
+    "Aspire.Hosting.Testing": "",
+    "Aspire.Hosting.Yarp": "",
+    "Aspire.Hosting.Redis": ""
+  }
+}

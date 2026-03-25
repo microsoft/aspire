@@ -37,6 +37,9 @@
     <trans-unit id="aspire-vscode.strings.aspireConfigExists">
       <source xml:lang="en">Aspire launch configuration already exists in launch.json.</source>
     </trans-unit>
+    <trans-unit id="command.codeLensResourceAction">
+      <source xml:lang="en">Aspire resource action</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.aspireTerminalName">
       <source xml:lang="en">Aspire terminal</source>
     </trans-unit>
@@ -88,6 +91,18 @@
     <trans-unit id="configuration.aspire.enableAspireDashboardAutoLaunch">
       <source xml:lang="en">Controls what happens with the Aspire Dashboard when debugging starts.</source>
     </trans-unit>
+    <trans-unit id="command.copyPid">
+      <source xml:lang="en">Copy ID</source>
+    </trans-unit>
+    <trans-unit id="command.copyEndpointUrl">
+      <source xml:lang="en">Copy URL</source>
+    </trans-unit>
+    <trans-unit id="command.copyAppHostPath">
+      <source xml:lang="en">Copy apphost path</source>
+    </trans-unit>
+    <trans-unit id="command.copyResourceName">
+      <source xml:lang="en">Copy resource name</source>
+    </trans-unit>
     <trans-unit id="walkthrough.getStarted.createProject.title">
       <source xml:lang="en">Create a new project</source>
     </trans-unit>
@@ -99,6 +114,9 @@
     </trans-unit>
     <trans-unit id="command.debugAppHost">
       <source xml:lang="en">Debug Aspire apphost</source>
+    </trans-unit>
+    <trans-unit id="command.codeLensDebugPipelineStep">
+      <source xml:lang="en">Debug Aspire pipeline step</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.debugProject">
       <source xml:lang="en">Debug {0}</source>
@@ -277,6 +295,9 @@
     <trans-unit id="views.runningAppHosts.welcome">
       <source xml:lang="en">No running Aspire apphost detected in this workspace.&#10;[Refresh](command:aspire-vscode.refreshRunningAppHosts)</source>
     </trans-unit>
+    <trans-unit id="views.runningAppHosts.globalWelcome">
+      <source xml:lang="en">No running Aspire apphosts detected on this machine.&#10;[Refresh](command:aspire-vscode.refreshRunningAppHosts)</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.noWatchTask">
       <source xml:lang="en">No watch task found. Please ensure a watch task is defined in your workspace.</source>
     </trans-unit>
@@ -289,17 +310,23 @@
     <trans-unit id="extension.description">
       <source xml:lang="en">Official Aspire extension for Visual Studio Code</source>
     </trans-unit>
+    <trans-unit id="command.openDashboard">
+      <source xml:lang="en">Open Aspire Dashboard</source>
+    </trans-unit>
     <trans-unit id="command.openTerminal">
       <source xml:lang="en">Open Aspire terminal</source>
-    </trans-unit>
-    <trans-unit id="command.openDashboard">
-      <source xml:lang="en">Open Dashboard</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.codespacesLink">
       <source xml:lang="en">Open codespaces URL</source>
     </trans-unit>
     <trans-unit id="command.openGlobalSettings">
       <source xml:lang="en">Open global Aspire settings</source>
+    </trans-unit>
+    <trans-unit id="command.openInSimpleBrowser">
+      <source xml:lang="en">Open in VS Code</source>
+    </trans-unit>
+    <trans-unit id="command.openInExternalBrowser">
+      <source xml:lang="en">Open in browser</source>
     </trans-unit>
     <trans-unit id="command.openLocalSettings">
       <source xml:lang="en">Open local Aspire settings</source>
@@ -334,6 +361,9 @@
     <trans-unit id="command.restartResource">
       <source xml:lang="en">Restart</source>
     </trans-unit>
+    <trans-unit id="command.codeLensRevealResource">
+      <source xml:lang="en">Reveal resource in Aspire panel</source>
+    </trans-unit>
     <trans-unit id="command.runAppHost">
       <source xml:lang="en">Run Aspire apphost</source>
     </trans-unit>
@@ -349,8 +379,14 @@
     <trans-unit id="walkthrough.getStarted.createProject.description">
       <source xml:lang="en">Scaffold a new Aspire project from a starter template. The template includes an apphost orchestrator, a sample API, and a web frontend.&#10;&#10;[Create new project](command:aspire-vscode.new)</source>
     </trans-unit>
+    <trans-unit id="views.runningAppHosts.loading">
+      <source xml:lang="en">Searching for running apphosts...</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.openCliInstallInstructions">
       <source xml:lang="en">See CLI installation instructions</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.selectDashboardPlaceholder">
+      <source xml:lang="en">Select a dashboard to open</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.selectDirectoryTitle">
       <source xml:lang="en">Select directory</source>
@@ -361,11 +397,17 @@
     <trans-unit id="aspire-vscode.strings.selectDefaultLaunchApphost">
       <source xml:lang="en">Select the default apphost to launch when starting an Aspire debug session</source>
     </trans-unit>
+    <trans-unit id="configuration.aspire.enableCodeLens">
+      <source xml:lang="en">Show CodeLens actions (state, restart, stop, logs) inline above resource declarations in apphost files.</source>
+    </trans-unit>
     <trans-unit id="configuration.aspire.enableAspireDashboardAutoLaunch.notification">
       <source xml:lang="en">Show a notification with a link to open the dashboard.</source>
     </trans-unit>
     <trans-unit id="command.switchToGlobalView">
-      <source xml:lang="en">Show global apphosts</source>
+      <source xml:lang="en">Show all running apphosts</source>
+    </trans-unit>
+    <trans-unit id="configuration.aspire.enableGutterDecorations">
+      <source xml:lang="en">Show colored status dots in the editor gutter next to resource declarations in apphost files.</source>
     </trans-unit>
     <trans-unit id="command.switchToWorkspaceView">
       <source xml:lang="en">Show workspace apphost</source>
@@ -423,6 +465,9 @@
     </trans-unit>
     <trans-unit id="command.verifyCliInstalled">
       <source xml:lang="en">Verify Aspire CLI installation</source>
+    </trans-unit>
+    <trans-unit id="command.codeLensViewLogs">
+      <source xml:lang="en">View Aspire resource logs</source>
     </trans-unit>
     <trans-unit id="command.viewResourceLogs">
       <source xml:lang="en">View logs</source>

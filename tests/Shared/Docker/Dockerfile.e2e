@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for Aspire E2E testing (.NET variant).
 #
 # Includes: .NET SDK 10.0, Docker CLI (via host socket mount), gh CLI,
-#           Node.js, Python, Aspire install scripts.
+#           Node.js, Python, Java, Aspire install scripts.
 #
 # Usage:
 #   Local dev (build from source):
@@ -70,6 +70,11 @@ RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends python3 python3-pip python3-venv && \
     rm -rf /var/lib/apt/lists/*
 
+# Install Java (needed for Java AppHost tests).
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends openjdk-21-jdk && \
+    rm -rf /var/lib/apt/lists/*
+
 # --- Aspire CLI setup ---
 
 # Copy the install scripts.
@@ -98,4 +103,3 @@ ENV DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
 ENV DOTNET_GENERATE_ASPNET_CERTIFICATE=false
 ENV ASPIRE_PLAYGROUND=true
 ENV TERM=xterm
-

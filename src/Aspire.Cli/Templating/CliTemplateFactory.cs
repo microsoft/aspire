@@ -81,12 +81,12 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
 
     public Task<IEnumerable<ITemplate>> GetInitTemplatesAsync(CancellationToken cancellationToken = default)
     {
-        return Task.FromResult<IEnumerable<ITemplate>>([]);
+        return Task.FromResult<IEnumerable<ITemplate>>(Array.Empty<ITemplate>());
     }
 
     private IEnumerable<ITemplate> GetTemplateDefinitions()
     {
-        return
+        ITemplate[] templates =
         [
             new CallbackTemplate(
                 KnownTemplateId.TypeScriptStarter,
@@ -115,8 +115,30 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
                 ApplyEmptyAppHostTemplateAsync,
                 runtime: TemplateRuntime.Cli,
                 languageId: KnownLanguageId.TypeScript,
+                isEmpty: true),
+
+            new CallbackTemplate(
+                KnownTemplateId.JavaEmptyAppHost,
+                "Empty (Java AppHost)",
+                projectName => $"./{projectName}",
+                cmd => AddOptionIfMissing(cmd, _localhostTldOption),
+                ApplyEmptyAppHostTemplateAsync,
+                runtime: TemplateRuntime.Cli,
+                languageId: KnownLanguageId.Java,
                 isEmpty: true)
         ];
+
+        return templates.Where(IsTemplateAvailable);
+    }
+
+    private bool IsTemplateAvailable(ITemplate template)
+    {
+        if (string.IsNullOrWhiteSpace(template.LanguageId))
+        {
+            return true;
+        }
+
+        return _languageDiscovery.GetLanguageById(new LanguageId(template.LanguageId)) is not null;
     }
 
     private static string ApplyTokens(string content, string projectName, string projectNameLower, string aspireVersion, TemplatePorts ports, string hostName = "localhost")

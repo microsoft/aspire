@@ -395,8 +395,14 @@ public sealed class AtsPythonCodeGenerator : ICodeGenerator
         WriteLine("            resolved_options.update(options.to_dict())");
         WriteLine("        elif isinstance(options, dict):");
         WriteLine("            resolved_options.update(options)");
-        WriteLine("    resolved_options.setdefault(\"Args\", sys.argv[1:])");
-        WriteLine("    resolved_options.setdefault(\"ProjectDirectory\", os.environ.get(\"ASPIRE_PROJECT_DIRECTORY\", os.getcwd()))");
+        WriteLine("    if resolved_options.get(\"Args\") is None:");
+        WriteLine("        resolved_options[\"Args\"] = sys.argv[1:]");
+        WriteLine("    if resolved_options.get(\"ProjectDirectory\") is None:");
+        WriteLine("        resolved_options[\"ProjectDirectory\"] = os.environ.get(\"ASPIRE_PROJECT_DIRECTORY\", os.getcwd())");
+        WriteLine("    apphost_file_path = os.environ.get(\"ASPIRE_APPHOST_FILEPATH\")");
+        WriteLine("    if apphost_file_path:");
+        WriteLine("        if resolved_options.get(\"AppHostFilePath\") is None:");
+        WriteLine("            resolved_options[\"AppHostFilePath\"] = apphost_file_path");
         WriteLine("    result = client.invoke_capability(\"Aspire.Hosting/createBuilderWithOptions\", {\"options\": resolved_options})");
         WriteLine("    return result");
         WriteLine();

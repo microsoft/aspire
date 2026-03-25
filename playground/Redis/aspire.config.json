@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "Redis.AppHost/Redis.AppHost.csproj"
+  }
+}

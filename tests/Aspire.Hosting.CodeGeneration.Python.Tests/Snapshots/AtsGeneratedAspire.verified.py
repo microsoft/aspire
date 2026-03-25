@@ -735,8 +735,14 @@ def create_builder(options: Any | None = None) -> IDistributedApplicationBuilder
             resolved_options.update(options.to_dict())
         elif isinstance(options, dict):
             resolved_options.update(options)
-    resolved_options.setdefault("Args", sys.argv[1:])
-    resolved_options.setdefault("ProjectDirectory", os.environ.get("ASPIRE_PROJECT_DIRECTORY", os.getcwd()))
+    if resolved_options.get("Args") is None:
+        resolved_options["Args"] = sys.argv[1:]
+    if resolved_options.get("ProjectDirectory") is None:
+        resolved_options["ProjectDirectory"] = os.environ.get("ASPIRE_PROJECT_DIRECTORY", os.getcwd())
+    apphost_file_path = os.environ.get("ASPIRE_APPHOST_FILEPATH")
+    if apphost_file_path:
+        if resolved_options.get("AppHostFilePath") is None:
+            resolved_options["AppHostFilePath"] = apphost_file_path
     result = client.invoke_capability("Aspire.Hosting/createBuilderWithOptions", {"options": resolved_options})
     return result
 
