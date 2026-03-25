@@ -1,0 +1,9 @@
+﻿parameters: {}
+secrets: {}
+config:
+  myapp:
+    BOOL_TRUE: "True"
+    BOOL_FALSE: "False"
+    INT_VALUE: "42"
+    DOUBLE_VALUE: "3.14"
+    STRING_VALUE: "hello"
