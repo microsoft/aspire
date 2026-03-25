@@ -540,6 +540,8 @@ public class PlaywrightCliInstallerTests
 
     private sealed class TestNpmRunner : INpmRunner
     {
+        public bool IsAvailable => true;
+
         public NpmPackageInfo? ResolveResult { get; set; }
         public string? PackResult { get; set; }
         public bool AuditResult { get; set; } = true;
