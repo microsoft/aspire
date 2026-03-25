@@ -32,6 +32,7 @@ internal class ConsoleInteractionService : IInteractionService
     /// </summary>
     private IAnsiConsole MessageConsole => Console == ConsoleOutput.Error ? _errorConsole : _outConsole;
 
+    // Limit logging to prompts and messages. Don't log raw text output since it may contain sensitive information.
     private ILogger MessageLogger => Console == ConsoleOutput.Error ? _stderrLogger : _stdoutLogger;
 
     public ConsoleOutput Console { get; set; }
