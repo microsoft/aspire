@@ -11,7 +11,7 @@ namespace Aspire.Cli.Tests.Utils;
 
 public class ConsoleActivityLoggerTests
 {
-    private static ConsoleActivityLogger CreateLogger(StringBuilder output, bool interactive = true, bool color = true)
+    private static ConsoleActivityLogger CreateLogger(StringBuilder output, bool interactive = true, bool color = true, int? width = null)
     {
         var console = AnsiConsole.Create(new AnsiConsoleSettings
         {
@@ -19,6 +19,7 @@ public class ConsoleActivityLoggerTests
             ColorSystem = color ? ColorSystemSupport.TrueColor : ColorSystemSupport.NoColors,
             Out = new AnsiConsoleOutput(new StringWriter(output))
         });
+        console.Profile.Width = width ?? int.MaxValue;
 
         var hostEnvironment = interactive
             ? TestHelpers.CreateInteractiveHostEnvironment()
@@ -254,7 +255,7 @@ public class ConsoleActivityLoggerTests
         Assert.Contains('│', publishLine);
         Assert.True(publishLine.IndexOf('│') > publishLine.IndexOf("Publish", StringComparison.Ordinal));
         Assert.True(scaleLine.LastIndexOf('│') > scaleLine.IndexOf('│'));
-        Assert.True(publishLine.Contains('╶') || publishLine.Contains('●'));
+        Assert.True(publishLine.Contains('╶') || publishLine.Contains('╴'));
     }
 
     [Fact]
@@ -300,6 +301,31 @@ public class ConsoleActivityLoggerTests
         var lines = output.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
         var packageLine = Assert.Single(lines, line => line.Contains("Package", StringComparison.Ordinal));
 
-        Assert.Contains('●', packageLine);
+        Assert.Contains('╴', packageLine);
+    }
+
+    [Fact]
+    public void WriteSummary_WithDeepNesting_SkipsTimelineToPreserveStepNames()
+    {
+        var output = new StringBuilder();
+        var logger = CreateLogger(output, interactive: false, color: false, width: 60);
+
+        var records = new[]
+        {
+            new ConsoleActivityLogger.StepDurationRecord("root", "Prepare", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromSeconds(8), null, null, 0, 1, TimeSpan.Zero, TimeSpan.FromSeconds(8)),
+            new ConsoleActivityLogger.StepDurationRecord("deep", "Publish", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromSeconds(2), null, "root", 12, 2, TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(6)),
+        };
+
+        logger.SetStepDurations(records);
+        logger.SetFinalResult(true);
+        logger.WriteSummary();
+
+        var lines = output.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+        var deepPublishLine = Assert.Single(lines, line => line.Contains("Publish", StringComparison.Ordinal));
+
+        Assert.DoesNotContain(lines, line => line.Contains(SharedCommandStrings.PipelineStepTimelineLabel, StringComparison.Ordinal));
+        Assert.DoesNotContain(lines, line => line.Contains('┬'));
+        Assert.DoesNotContain('│', deepPublishLine);
+        Assert.Contains(new string(' ', 24) + "Publish", deepPublishLine);
     }
 }

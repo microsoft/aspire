@@ -359,14 +359,18 @@ internal sealed class ConsoleActivityLogger
         var durationWidth = Math.Max(10, orderedRecords.Max(r => DurationFormatter.FormatDuration(r.Duration, CultureInfo.InvariantCulture, DecimalDurationDisplay.Fixed).Length));
         var nameWidth = Math.Max(timelineLabel.Length, orderedRecords.Max(r => GetIndentedDisplayName(r).Length));
         var totalTimeline = orderedRecords.Max(r => r.EndOffset > TimeSpan.Zero ? r.EndOffset : r.Duration);
+        var renderTimeline = ShouldRenderTimeline(durationWidth, nameWidth, totalTimeline);
         var timelinePrefix = $"  {new string(' ', durationWidth)}    {new string(' ', nameWidth)}  ";
         var timelineLabelPrefix = $"  {new string(' ', durationWidth)}    {timelineLabel.PadRight(nameWidth)}  ";
 
         _console.WriteLine();
         _console.MarkupLine(summaryTitle);
 
-        _console.MarkupLine($"{timelineLabelPrefix}[dim]{BuildTimelineLabels(totalTimeline, SummaryTimelineWidth).EscapeMarkup()}[/]");
-        _console.MarkupLine($"{timelinePrefix}[dim]{BuildTimelineScale(SummaryTimelineWidth).EscapeMarkup()}[/]");
+        if (renderTimeline)
+        {
+            _console.MarkupLine($"{timelineLabelPrefix}[dim]{BuildTimelineLabels(totalTimeline, SummaryTimelineWidth).EscapeMarkup()}[/]");
+            _console.MarkupLine($"{timelinePrefix}[dim]{BuildTimelineScale(SummaryTimelineWidth).EscapeMarkup()}[/]");
+        }
 
         foreach (var rec in orderedRecords)
         {
@@ -378,8 +382,8 @@ internal sealed class ConsoleActivityLogger
                 ActivityState.Failure => _enableColor ? "[red]" + FailureSymbol + "[/]" : FailureSymbol,
                 _ => _enableColor ? "[cyan]" + InProgressSymbol + "[/]" : InProgressSymbol
             };
-            var name = GetIndentedDisplayName(rec).PadRight(nameWidth).EscapeMarkup();
-            var timelineBar = ColorizeSummaryBar(BuildTimelineBar(rec, totalTimeline, SummaryTimelineWidth), rec.State);
+            var displayName = GetIndentedDisplayName(rec);
+            var name = (renderTimeline ? displayName.PadRight(nameWidth) : displayName).EscapeMarkup();
             var reason = rec.State == ActivityState.Failure && !string.IsNullOrEmpty(rec.FailureReason)
                 ? (_enableColor ? $" [red]— {HighlightMessage(rec.FailureReason!.EscapeMarkup())}[/]" : $" — {rec.FailureReason!.EscapeMarkup()}")
                 : string.Empty;
@@ -388,10 +392,15 @@ internal sealed class ConsoleActivityLogger
             lineSb.Append("  ")
                 .Append(durStr).Append("  ")
                 .Append(symbol).Append(' ')
-                .Append("[dim]").Append(name).Append("[/]")
-                .Append("  ")
-                .Append(timelineBar)
-                .Append(reason);
+                .Append("[dim]").Append(name).Append("[/]");
+
+            if (renderTimeline)
+            {
+                var timelineBar = ColorizeSummaryBar(BuildTimelineBar(rec, totalTimeline, SummaryTimelineWidth), rec.State);
+                lineSb.Append("  ").Append(timelineBar);
+            }
+
+            lineSb.Append(reason);
             _console.MarkupLine(lineSb.ToString());
         }
 
@@ -523,6 +532,23 @@ internal sealed class ConsoleActivityLogger
         return $"0{unit}";
     }
 
+    private bool ShouldRenderTimeline(int durationWidth, int nameWidth, TimeSpan totalTimeline)
+    {
+        var consoleWidth = _console.Profile.Width;
+        if (consoleWidth <= 0 || consoleWidth == int.MaxValue)
+        {
+            return true;
+        }
+
+        // If the shared padded name column plus the chart would overflow the console, prefer keeping
+        // the hierarchical step names readable and omit the chart for the whole summary.
+        var timelineWidth = Math.Max(
+            BuildTimelineLabels(totalTimeline, SummaryTimelineWidth).Length,
+            BuildTimelineScale(SummaryTimelineWidth).Length);
+
+        return 2 + durationWidth + 2 + 1 + 1 + nameWidth + 2 + timelineWidth <= consoleWidth;
+    }
+
     private static string BuildTimelineBar(StepDurationRecord record, TimeSpan totalTimeline, int width)
     {
         if (width <= 0)
@@ -552,7 +578,7 @@ internal sealed class ConsoleActivityLogger
         if (endPosition - startPosition < 1)
         {
             var pointIndex = Math.Clamp((int)Math.Round((startPosition + endPosition) / 2, MidpointRounding.AwayFromZero), 0, width - 1);
-            chars[pointIndex] = '●';
+            chars[pointIndex] = '╴';
         }
         else
         {
