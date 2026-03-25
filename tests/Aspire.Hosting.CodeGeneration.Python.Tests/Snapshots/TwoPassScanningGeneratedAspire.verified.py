@@ -3095,6 +3095,15 @@ class EndpointReference:
         return typing.cast(bool, result)
 
     @_cached_property
+    def exclude_reference_endpoint(self) -> bool:
+        """Gets the ExcludeReferenceEndpoint property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointReference.excludeReferenceEndpoint',
+            {'context': self._handle}
+        )
+        return typing.cast(bool, result)
+
+    @_cached_property
     def port(self) -> int:
         """Gets the Port property"""
         result = self._client.invoke_capability(
