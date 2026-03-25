@@ -221,6 +221,26 @@ public sealed class ResourceUrlHelpersTests
             });
     }
 
+    [Theory]
+    [InlineData("redis")]
+    [InlineData("rediss")]
+    public void GetUrls_RedisSchemes_AreNotDisplayedAsLinks(string scheme)
+    {
+        var endpoints = GetUrls(ModelTestHelpers.CreateResource(urls: [
+            new("Cache", new($"{scheme}://localhost:6379"), isInternal: false, isInactive: false, displayProperties: UrlDisplayPropertiesViewModel.Empty)])
+        );
+
+        Assert.Collection(endpoints,
+            e =>
+            {
+                Assert.Equal($"{scheme}://localhost:6379", e.Text);
+                Assert.Equal("Cache", e.Name);
+                Assert.Null(e.Url);
+                Assert.Equal("localhost", e.Address);
+                Assert.Equal(6379, e.Port);
+            });
+    }
+
     [Fact]
     public void GetUrls_OrderByName()
     {

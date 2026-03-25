@@ -19,7 +19,9 @@ internal static class ResourceUrlHelpers
         "news",
         "nntp",
         "telnet",
-        "tcp"
+        "tcp",
+        "redis",
+        "rediss"
     };
 
     public static List<DisplayedUrl> GetUrls(ResourceViewModel resource, bool includeInternalUrls = false, bool includeNonEndpointUrls = false)
