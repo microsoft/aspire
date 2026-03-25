@@ -160,21 +160,8 @@ public static class ParameterResourceBuilderExtensions
             });
     }
 
-    /// <summary>
-    /// Adds a parameter resource to the application with a generated default value if one is not present in configuration.
-    /// </summary>
-    /// <param name="builder">Distributed application builder.</param>
-    /// <param name="name">Name of parameter resource.</param>
-    /// <param name="value">A <see cref="GenerateParameterDefault"/> that describes how the default value should be generated.</param>
-    /// <param name="secret">Optional flag indicating whether the parameter should be regarded as secret.</param>
-    /// <param name="persist">Persist the generated value to the app host project's user secrets store when running locally.</param>
-    /// <returns>Resource builder for the parameter.</returns>
-    /// <remarks>
-    /// This ATS-safe overload exposes the generated-value subset of <see cref="ParameterDefault"/> without exporting the full
-    /// abstract hierarchy.
-    /// </remarks>
     [AspireExport("addParameterWithGeneratedValue", Description = "Adds a parameter with a generated default value")]
-    public static IResourceBuilder<ParameterResource> AddParameter(this IDistributedApplicationBuilder builder, [ResourceName] string name, GenerateParameterDefault value, bool secret = false, bool persist = false)
+    internal static IResourceBuilder<ParameterResource> AddParameterWithGeneratedValueForPolyglot(this IDistributedApplicationBuilder builder, [ResourceName] string name, GenerateParameterDefault value, bool secret = false, bool persist = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(name);
