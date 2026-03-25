@@ -14,8 +14,7 @@ namespace Aspire.Shared;
 /// </remarks>
 internal static class KnownUnsupportedUrlSchemes
 {
-    private static readonly FrozenSet<string> s_schemes = new[]
-    {
+    private static readonly HashSet<string> s_schemes = [
         "gopher",
         "ws",
         "wss",
@@ -25,7 +24,7 @@ internal static class KnownUnsupportedUrlSchemes
         "tcp",
         "redis",
         "rediss"
-    }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+    ];
 
     /// <summary>
     /// Returns <c>true</c> when the given scheme is in the unsupported set.
