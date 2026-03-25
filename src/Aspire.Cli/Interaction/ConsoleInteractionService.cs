@@ -327,7 +327,10 @@ internal class ConsoleInteractionService : IInteractionService
     {
         if (MessageLogger.IsEnabled(LogLevel.Information))
         {
-            MessageLogger.LogInformation("{Message}", ConsoleHelpers.FormatEmojiPrefix(emoji, MessageConsole, replaceEmoji: true) + message.RemoveMarkup());
+            // Only attempt to parse/remove markup when the message is expected to contain it.
+            // Plain text messages may contain characters like '[' that would be rejected by the markup parser.
+            var logMessage = allowMarkup ? message.RemoveMarkup() : message;
+            MessageLogger.LogInformation("{Message}", ConsoleHelpers.FormatEmojiPrefix(emoji, MessageConsole, replaceEmoji: true) + logMessage);
         }
 
         var displayMessage = allowMarkup ? message : message.EscapeMarkup();
