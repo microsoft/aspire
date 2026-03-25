@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Resources;
 using Aspire.Shared;
 using Spectre.Console;
 
@@ -353,14 +354,16 @@ internal sealed class ConsoleActivityLogger
     private void WriteStepDurationsSummary(IReadOnlyList<StepDurationRecord> records)
     {
         var orderedRecords = OrderStepDurationsHierarchically(records);
+        var summaryTitle = SharedCommandStrings.PipelineStepsSummaryTitle;
+        var timelineLabel = SharedCommandStrings.PipelineStepTimelineLabel;
         var durationWidth = Math.Max(10, orderedRecords.Max(r => DurationFormatter.FormatDuration(r.Duration, CultureInfo.InvariantCulture, DecimalDurationDisplay.Fixed).Length));
-        var nameWidth = Math.Max("Step timeline:".Length, orderedRecords.Max(r => GetIndentedDisplayName(r).Length));
+        var nameWidth = Math.Max(timelineLabel.Length, orderedRecords.Max(r => GetIndentedDisplayName(r).Length));
         var totalTimeline = orderedRecords.Max(r => r.EndOffset > TimeSpan.Zero ? r.EndOffset : r.Duration);
         var timelinePrefix = $"  {new string(' ', durationWidth)}    {new string(' ', nameWidth)}  ";
-        var timelineLabelPrefix = $"  {new string(' ', durationWidth)}    {"Step timeline:".PadRight(nameWidth)}  ";
+        var timelineLabelPrefix = $"  {new string(' ', durationWidth)}    {timelineLabel.PadRight(nameWidth)}  ";
 
         _console.WriteLine();
-        _console.MarkupLine("Steps Summary:");
+        _console.MarkupLine(summaryTitle);
 
         _console.MarkupLine($"{timelineLabelPrefix}[dim]{BuildTimelineLabels(totalTimeline, SummaryTimelineWidth).EscapeMarkup()}[/]");
         _console.MarkupLine($"{timelinePrefix}[dim]{BuildTimelineScale(SummaryTimelineWidth).EscapeMarkup()}[/]");
@@ -504,12 +507,20 @@ internal sealed class ConsoleActivityLogger
 
     private static string BuildTimelineLabels(TimeSpan totalTimeline, int width)
     {
-        var startText = "0s";
+        // Match the zero label to the unit family used by the end label so short timelines don't mix `0s`
+        // with millisecond- or microsecond-based durations.
+        var startText = BuildTimelineStartLabel(totalTimeline);
         var endText = DurationFormatter.FormatDuration(totalTimeline, CultureInfo.InvariantCulture, DecimalDurationDisplay.Fixed);
         var labelWidth = Math.Max(width + 2, startText.Length + 1 + endText.Length);
         var spacing = Math.Max(1, labelWidth - startText.Length - endText.Length);
 
         return $"{startText}{new string(' ', spacing)}{endText}";
+    }
+
+    private static string BuildTimelineStartLabel(TimeSpan totalTimeline)
+    {
+        var unit = totalTimeline > TimeSpan.Zero ? DurationFormatter.GetUnit(totalTimeline) : "ms";
+        return $"0{unit}";
     }
 
     private static string BuildTimelineBar(StepDurationRecord record, TimeSpan totalTimeline, int width)
@@ -522,30 +533,31 @@ internal sealed class ConsoleActivityLogger
         var chars = Enumerable.Repeat(' ', width).ToArray();
         var start = record.StartOffset;
         var end = record.EndOffset > start ? record.EndOffset : start + record.Duration;
-
-        int startIndex;
-        int endIndex;
+        double startPosition;
+        double endPosition;
 
         if (totalTimeline <= TimeSpan.Zero)
         {
-            startIndex = 0;
-            endIndex = 0;
+            startPosition = 0;
+            endPosition = 0;
         }
         else
         {
-            startIndex = (int)Math.Floor(start.TotalMilliseconds / totalTimeline.TotalMilliseconds * (width - 1));
-            endIndex = (int)Math.Ceiling(end.TotalMilliseconds / totalTimeline.TotalMilliseconds * (width - 1));
+            startPosition = start.TotalMilliseconds / totalTimeline.TotalMilliseconds * (width - 1);
+            endPosition = end.TotalMilliseconds / totalTimeline.TotalMilliseconds * (width - 1);
         }
 
-        startIndex = Math.Clamp(startIndex, 0, width - 1);
-        endIndex = Math.Clamp(endIndex, startIndex, width - 1);
-
-        if (startIndex == endIndex)
+        // When a span is smaller than a single character cell it would disappear if we only rendered bar caps.
+        // Show a point marker instead so very short durations remain visible in the summary.
+        if (endPosition - startPosition < 1)
         {
-            chars[startIndex] = '●';
+            var pointIndex = Math.Clamp((int)Math.Round((startPosition + endPosition) / 2, MidpointRounding.AwayFromZero), 0, width - 1);
+            chars[pointIndex] = '●';
         }
         else
         {
+            var startIndex = Math.Clamp((int)Math.Floor(startPosition), 0, width - 1);
+            var endIndex = Math.Clamp((int)Math.Ceiling(endPosition), startIndex, width - 1);
             chars[startIndex] = '╶';
             chars[endIndex] = '╴';
 

@@ -472,6 +472,7 @@ internal sealed class PublishingActivityData
 
     /// <summary>
     /// Gets the hierarchical level of the step used for display purposes.
+    /// Nullable for backwards compatibility with older app hosts that do not send hierarchy metadata.
     /// </summary>
     public int? HierarchyLevel { get; init; }
 

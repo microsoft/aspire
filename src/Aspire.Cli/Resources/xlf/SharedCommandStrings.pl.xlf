@@ -47,6 +47,16 @@
         <target state="new">Set the minimum log level for pipeline logging (trace, debug, information, warning, error, critical). The default is 'information'.</target>
         <note />
       </trans-unit>
+      <trans-unit id="PipelineStepTimelineLabel">
+        <source>Step timeline:</source>
+        <target state="new">Step timeline:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PipelineStepsSummaryTitle">
+        <source>Steps Summary:</source>
+        <target state="new">Steps Summary:</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ScanningForRunningAppHosts">
         <source>Scanning for running apphosts...</source>
         <target state="new">Scanning for running apphosts...</target>

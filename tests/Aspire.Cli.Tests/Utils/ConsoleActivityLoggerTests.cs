@@ -3,6 +3,7 @@
 
 using System.Text;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Spectre.Console;
 
@@ -254,5 +255,51 @@ public class ConsoleActivityLoggerTests
         Assert.True(publishLine.IndexOf('│') > publishLine.IndexOf("Publish", StringComparison.Ordinal));
         Assert.True(scaleLine.LastIndexOf('│') > scaleLine.IndexOf('│'));
         Assert.True(publishLine.Contains('╶') || publishLine.Contains('●'));
+    }
+
+    [Fact]
+    public void WriteSummary_WithMillisecondTimeline_UsesMillisecondStartLabel()
+    {
+        var output = new StringBuilder();
+        var logger = CreateLogger(output, interactive: false, color: false);
+
+        var records = new[]
+        {
+            new ConsoleActivityLogger.StepDurationRecord("root", "Prepare", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromMilliseconds(8), null, null, 0, 1, TimeSpan.Zero, TimeSpan.FromMilliseconds(8)),
+            new ConsoleActivityLogger.StepDurationRecord("child", "Publish", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromMilliseconds(2), null, "root", 1, 2, TimeSpan.FromMilliseconds(4), TimeSpan.FromMilliseconds(6)),
+        };
+
+        logger.SetStepDurations(records);
+        logger.SetFinalResult(true);
+        logger.WriteSummary();
+
+        var lines = output.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+        var timelineLabelLine = Assert.Single(lines, line => line.Contains(SharedCommandStrings.PipelineStepTimelineLabel, StringComparison.Ordinal));
+
+        Assert.Contains("0ms", timelineLabelLine);
+        Assert.DoesNotContain("0s", timelineLabelLine);
+        Assert.Contains("8.00ms", timelineLabelLine);
+    }
+
+    [Fact]
+    public void WriteSummary_WithSubColumnDuration_RendersPointMarker()
+    {
+        var output = new StringBuilder();
+        var logger = CreateLogger(output, interactive: false, color: false);
+
+        var records = new[]
+        {
+            new ConsoleActivityLogger.StepDurationRecord("root", "Prepare", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromMilliseconds(100), null, null, 0, 1, TimeSpan.Zero, TimeSpan.FromMilliseconds(100)),
+            new ConsoleActivityLogger.StepDurationRecord("tiny", "Package", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromMilliseconds(0.1), null, "root", 1, 2, TimeSpan.FromMilliseconds(10), TimeSpan.FromMilliseconds(10.1)),
+        };
+
+        logger.SetStepDurations(records);
+        logger.SetFinalResult(true);
+        logger.WriteSummary();
+
+        var lines = output.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+        var packageLine = Assert.Single(lines, line => line.Contains("Package", StringComparison.Ordinal));
+
+        Assert.Contains('●', packageLine);
     }
 }

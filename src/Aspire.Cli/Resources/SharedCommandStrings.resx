@@ -156,4 +156,10 @@
   <data name="PipelineEnvironmentOptionDescription" xml:space="preserve">
     <value>The environment to use for the operation. The default is 'Production'.</value>
   </data>
+  <data name="PipelineStepTimelineLabel" xml:space="preserve">
+    <value>Step timeline:</value>
+  </data>
+  <data name="PipelineStepsSummaryTitle" xml:space="preserve">
+    <value>Steps Summary:</value>
+  </data>
 </root>
