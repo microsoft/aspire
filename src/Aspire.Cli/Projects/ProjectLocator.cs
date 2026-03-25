@@ -78,10 +78,6 @@ internal sealed class ProjectLocator(
             logger.LogDebug("Searching for patterns: {Patterns}", string.Join(", ", allPatterns));
 
             var nugetCachePath = GetNuGetPackagesCachePath();
-            var pathComparison = OperatingSystem.IsWindows()
-                ? StringComparison.OrdinalIgnoreCase
-                : StringComparison.Ordinal;
-
             logger.LogDebug("NuGet cache path to exclude: {NuGetCachePath}", nugetCachePath ?? "(none)");
 
             // Collect all candidates with their handlers across all patterns
@@ -89,25 +85,7 @@ internal sealed class ProjectLocator(
 
             foreach (var pattern in allPatterns)
             {
-                var enumerable = new FileSystemEnumerable<FileInfo>(
-                    searchDirectory.FullName,
-                    (ref FileSystemEntry entry) => new FileInfo(entry.ToFullPath()),
-                    enumerationOptions)
-                {
-                    ShouldIncludePredicate = (ref FileSystemEntry entry) =>
-                        !entry.IsDirectory && FileSystemName.MatchesSimpleExpression(pattern, entry.FileName),
-                    ShouldRecursePredicate = (ref FileSystemEntry entry) =>
-                    {
-                        if (nugetCachePath is null)
-                        {
-                            return true;
-                        }
-                        var dirPath = entry.ToFullPath();
-                        return !dirPath.Equals(nugetCachePath, pathComparison)
-                            && !dirPath.StartsWith(nugetCachePath + Path.DirectorySeparatorChar, pathComparison);
-                    }
-                };
-                var candidateFiles = enumerable.ToArray();
+                var candidateFiles = FindMatchingFiles(searchDirectory, pattern, enumerationOptions, nugetCachePath);
                 logger.LogDebug("Found {CandidateCount} files matching pattern '{Pattern}'", candidateFiles.Length, pattern);
 
                 foreach (var candidateFile in candidateFiles)
@@ -510,6 +488,34 @@ internal sealed class ProjectLocator(
         }
 
         return settingsDirectory.Parent;
+    }
+
+    private static FileInfo[] FindMatchingFiles(DirectoryInfo searchDirectory, string pattern, EnumerationOptions options, string? excludePath)
+    {
+        var pathComparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+
+        var enumerable = new FileSystemEnumerable<FileInfo>(
+            searchDirectory.FullName,
+            (ref FileSystemEntry entry) => new FileInfo(entry.ToFullPath()),
+            options)
+        {
+            ShouldIncludePredicate = (ref FileSystemEntry entry) =>
+                !entry.IsDirectory && FileSystemName.MatchesSimpleExpression(pattern, entry.FileName),
+            ShouldRecursePredicate = (ref FileSystemEntry entry) =>
+            {
+                if (excludePath is null)
+                {
+                    return true;
+                }
+                var dirPath = entry.ToFullPath();
+                return !dirPath.Equals(excludePath, pathComparison)
+                    && !dirPath.StartsWith(excludePath + Path.DirectorySeparatorChar, pathComparison);
+            }
+        };
+
+        return enumerable.ToArray();
     }
 
     private string? GetNuGetPackagesCachePath()
