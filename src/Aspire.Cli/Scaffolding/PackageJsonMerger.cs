@@ -77,11 +77,6 @@ internal static class PackageJsonMerger
             MergeObjects(existingJson, scaffoldJson);
             return existingJson.ToJsonString(s_jsonOptions);
         }
-        catch (InvalidOperationException)
-        {
-            // Programming error (e.g., unsupported array property in scaffold) — let it propagate.
-            throw;
-        }
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Failed to merge package.json content, using scaffold output as-is.");
@@ -114,10 +109,8 @@ internal static class PackageJsonMerger
         MergeEngines(existing, scaffold);
 
         // Deep merge everything else (scalars, nested objects).
-        // The scaffold currently only generates scalar and object properties at the top level.
-        // If an array property is ever added to the scaffold template, explicit merge logic
-        // must be written for it — the generic DeepMerge cannot handle arrays correctly
-        // (it would silently drop the scaffold's array when an existing value is present).
+        // Array properties (e.g., "keywords") are preserved from existing — the scaffold
+        // echoes the original arrays unchanged, so the existing value is always correct.
         foreach (var (key, sourceValue) in scaffold)
         {
             if (key is ScriptsKey or DependenciesKey or DevDependenciesKey or EnginesKey || sourceValue is null)
@@ -125,24 +118,18 @@ internal static class PackageJsonMerger
                 continue;
             }
 
-            if (sourceValue is JsonArray)
-            {
-                throw new InvalidOperationException(
-                    $"The scaffold template contains an array property '{key}' in package.json. " +
-                    $"Explicit merge logic must be added to {nameof(PackageJsonMerger)} for this property.");
-            }
-
             var targetValue = existing[key];
 
             if (targetValue is null)
             {
+                // Property only in scaffold — add it (including arrays from scaffold-only)
                 existing[key] = sourceValue.DeepClone();
             }
             else if (targetValue is JsonObject targetObj && sourceValue is JsonObject sourceObj)
             {
                 DeepMerge(targetObj, sourceObj);
             }
-            // Scalar values in existing are preserved
+            // Arrays and scalar values in existing are preserved
         }
     }
 
