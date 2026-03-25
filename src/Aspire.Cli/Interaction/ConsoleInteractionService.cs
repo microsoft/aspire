@@ -53,8 +53,6 @@ internal class ConsoleInteractionService : IInteractionService
 
     public async Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false)
     {
-        MessageLogger.LogInformation("Status: {StatusText}", statusText);
-
         if (!allowMarkup)
         {
             statusText = statusText.EscapeMarkup();
@@ -79,6 +77,10 @@ internal class ConsoleInteractionService : IInteractionService
             {
                 // Text has already been escaped and emoji prepended, so pass as markup
                 DisplaySubtleMessage(statusText, allowMarkup: true);
+            }
+            else
+            {
+                MessageLogger.LogInformation("Status: {StatusText}", statusText);
             }
             return await action();
         }
@@ -323,7 +325,11 @@ internal class ConsoleInteractionService : IInteractionService
 
     public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false)
     {
-        MessageLogger.LogInformation("{EmojiName}: {Message}", emoji.Name, message);
+        if (MessageLogger.IsEnabled(LogLevel.Information))
+        {
+            MessageLogger.LogInformation("{Message}", ConsoleHelpers.FormatEmojiPrefix(emoji, MessageConsole, replaceEmoji: true) + message.RemoveMarkup());
+        }
+
         var displayMessage = allowMarkup ? message : message.EscapeMarkup();
         MessageConsole.MarkupLine(ConsoleHelpers.FormatEmojiPrefix(emoji, MessageConsole) + displayMessage);
     }
