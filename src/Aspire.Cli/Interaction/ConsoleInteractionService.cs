@@ -317,20 +317,18 @@ internal class ConsoleInteractionService : IInteractionService
 
     public void DisplayError(string errorMessage)
     {
-        MessageLogger.LogInformation("Error: {ErrorMessage}", errorMessage);
         DisplayMessage(KnownEmojis.CrossMark, $"[red bold]{errorMessage.EscapeMarkup()}[/]", allowMarkup: true);
     }
 
     public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false)
     {
-        MessageLogger.LogInformation("{Message}", message);
+        MessageLogger.LogInformation("{EmojiName}: {Message}", emoji.Name, message);
         var displayMessage = allowMarkup ? message : message.EscapeMarkup();
         MessageConsole.MarkupLine(ConsoleHelpers.FormatEmojiPrefix(emoji, MessageConsole) + displayMessage);
     }
 
     public void DisplayPlainText(string message)
     {
-        MessageLogger.LogInformation("{Message}", message);
         // Write directly to avoid Spectre.Console line wrapping
         MessageConsole.Profile.Out.Writer.WriteLine(message);
     }
@@ -338,8 +336,6 @@ internal class ConsoleInteractionService : IInteractionService
     public void DisplayRawText(string text, ConsoleOutput? consoleOverride = null)
     {
         var effectiveConsole = consoleOverride ?? Console;
-        var logger = effectiveConsole == ConsoleOutput.Error ? _stderrLogger : _stdoutLogger;
-        logger.LogInformation("{Text}", text);
         // Write raw text directly to avoid console wrapping.
         // When consoleOverride is null, respect the Console setting.
         var target = effectiveConsole == ConsoleOutput.Error ? _errorConsole : _outConsole;
@@ -359,8 +355,6 @@ internal class ConsoleInteractionService : IInteractionService
 
     public void WriteConsoleLog(string message, int? lineNumber = null, string? type = null, bool isErrorMessage = false)
     {
-        MessageLogger.LogInformation("{Message}", message);
-
         var style = isErrorMessage ? s_errorMessageStyle
             : type switch
             {
@@ -377,7 +371,6 @@ internal class ConsoleInteractionService : IInteractionService
 
     public void DisplaySuccess(string message, bool allowMarkup = false)
     {
-        MessageLogger.LogInformation("Success: {Message}", message);
         DisplayMessage(KnownEmojis.CheckMark, message, allowMarkup);
     }
 
@@ -387,12 +380,10 @@ internal class ConsoleInteractionService : IInteractionService
         {
             if (stream == OutputLineStream.StdOut)
             {
-                MessageLogger.LogInformation("{Line}", line);
                 MessageConsole.MarkupLineInterpolated($"{line.EscapeMarkup()}");
             }
             else
             {
-                MessageLogger.LogInformation("{Line}", line);
                 MessageConsole.MarkupLineInterpolated($"[red]{line.EscapeMarkup()}[/]");
             }
         }
@@ -426,9 +417,9 @@ internal class ConsoleInteractionService : IInteractionService
             throw new InvalidOperationException(InteractionServiceStrings.InteractiveInputNotSupported);
         }
 
-        _stdoutLogger.LogInformation("Confirm: {PromptText} (default: {DefaultValue})", promptText, defaultValue);
-        var result = await _outConsole.ConfirmAsync(promptText, defaultValue, cancellationToken);
-        _stdoutLogger.LogInformation("Confirm result: {Result}", result);
+        MessageLogger.LogInformation("Confirm: {PromptText} (default: {DefaultValue})", promptText, defaultValue);
+        var result = await MessageConsole.ConfirmAsync(promptText, defaultValue, cancellationToken);
+        MessageLogger.LogInformation("Confirm result: {Result}", result);
         return result;
     }
 
@@ -459,5 +450,4 @@ internal class ConsoleInteractionService : IInteractionService
 
         _errorConsole.MarkupLine(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.MoreInfoNewCliVersion, UpdateUrl));
     }
-
 }
