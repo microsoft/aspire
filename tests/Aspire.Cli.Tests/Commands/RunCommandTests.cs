@@ -483,7 +483,6 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/14321")]
     public async Task RunCommand_SkipsBuild_WhenExtensionDevKitCapabilityIsAvailable()
     {
         var buildCalled = false;
