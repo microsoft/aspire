@@ -411,6 +411,124 @@ public class GuestRuntimeTests
         }
     }
 
+    [Fact]
+    public async Task RunAsync_CreatesMissingMigrationFiles()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"migration-test-{Guid.NewGuid()}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var migrationFileName = "tsconfig.apphost.json";
+            var migrationContent = """{ "compilerOptions": { "target": "ES2022" } }""";
+
+            var spec = new RuntimeSpec
+            {
+                Language = "test/runtime",
+                DisplayName = "Test Runtime",
+                CodeGenLanguage = "Test",
+                DetectionPatterns = ["apphost.test"],
+                Execute = new CommandSpec
+                {
+                    Command = "test-cmd",
+                    Args = ["--tsconfig", migrationFileName, "{appHostFile}"]
+                },
+                MigrationFiles = new Dictionary<string, string>
+                {
+                    [migrationFileName] = migrationContent
+                }
+            };
+
+            var runtime = new GuestRuntime(spec, NullLogger.Instance);
+            var launcher = new RecordingLauncher();
+            var appHostFile = new FileInfo(Path.Combine(tempDir, "apphost.ts"));
+            var directory = new DirectoryInfo(tempDir);
+
+            // File should not exist before run
+            var migrationFilePath = Path.Combine(tempDir, migrationFileName);
+            Assert.False(File.Exists(migrationFilePath));
+
+            await runtime.RunAsync(appHostFile, directory, new Dictionary<string, string>(), watchMode: false, launcher, CancellationToken.None);
+
+            // File should be created after run
+            Assert.True(File.Exists(migrationFilePath));
+            var writtenContent = await File.ReadAllTextAsync(migrationFilePath);
+            Assert.Equal(migrationContent, writtenContent);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_DoesNotOverwriteExistingMigrationFiles()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"migration-test-{Guid.NewGuid()}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var migrationFileName = "tsconfig.apphost.json";
+            var migrationContent = """{ "compilerOptions": { "target": "ES2022" } }""";
+            var existingContent = """{ "compilerOptions": { "target": "ES2020" } }""";
+
+            // Pre-create the file with different content
+            var migrationFilePath = Path.Combine(tempDir, migrationFileName);
+            await File.WriteAllTextAsync(migrationFilePath, existingContent);
+
+            var spec = new RuntimeSpec
+            {
+                Language = "test/runtime",
+                DisplayName = "Test Runtime",
+                CodeGenLanguage = "Test",
+                DetectionPatterns = ["apphost.test"],
+                Execute = new CommandSpec
+                {
+                    Command = "test-cmd",
+                    Args = ["--tsconfig", migrationFileName, "{appHostFile}"]
+                },
+                MigrationFiles = new Dictionary<string, string>
+                {
+                    [migrationFileName] = migrationContent
+                }
+            };
+
+            var runtime = new GuestRuntime(spec, NullLogger.Instance);
+            var launcher = new RecordingLauncher();
+            var appHostFile = new FileInfo(Path.Combine(tempDir, "apphost.ts"));
+            var directory = new DirectoryInfo(tempDir);
+
+            await runtime.RunAsync(appHostFile, directory, new Dictionary<string, string>(), watchMode: false, launcher, CancellationToken.None);
+
+            // File should NOT be overwritten
+            var writtenContent = await File.ReadAllTextAsync(migrationFilePath);
+            Assert.Equal(existingContent, writtenContent);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_NoMigrationFiles_ExecutesNormally()
+    {
+        var spec = CreateTestSpec(execute: new CommandSpec
+        {
+            Command = "test-cmd",
+            Args = ["{appHostFile}"]
+        });
+        var runtime = new GuestRuntime(spec, NullLogger.Instance);
+        var launcher = new RecordingLauncher();
+        var appHostFile = new FileInfo("/tmp/apphost.ts");
+        var directory = new DirectoryInfo("/tmp");
+
+        await runtime.RunAsync(appHostFile, directory, new Dictionary<string, string>(), watchMode: false, launcher, CancellationToken.None);
+
+        Assert.Equal("test-cmd", launcher.LastCommand);
+    }
+
     private sealed class RecordingLauncher : IGuestProcessLauncher
     {
         public string LastCommand { get; private set; } = string.Empty;

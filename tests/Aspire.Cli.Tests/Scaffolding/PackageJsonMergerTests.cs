@@ -4,7 +4,9 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Scaffolding;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Cli.Tests.Scaffolding;
 
@@ -1178,7 +1180,7 @@ public class PackageJsonMergerTests
     public void BrownfieldNpmInit_MergesSuccessfully()
     {
         // Reproduces the real-world scenario where npm init creates a package.json
-        // with keywords/author/license that get echoed through the scaffold.
+        // and the scaffold produces only Aspire-desired entries (no echo of existing content).
         var existing = """
             {
               "name": "my-project",
@@ -1196,19 +1198,11 @@ public class PackageJsonMergerTests
 
         var scaffold = """
             {
-              "name": "my-project",
-              "version": "1.0.0",
-              "type": "module",
-              "main": "index.js",
               "scripts": {
                 "aspire:start": "aspire run",
                 "aspire:build": "tsc -p tsconfig.apphost.json",
                 "aspire:lint": "eslint apphost.ts"
               },
-              "keywords": [],
-              "author": "",
-              "license": "ISC",
-              "description": "",
               "dependencies": {
                 "vscode-jsonrpc": "^8.2.0"
               },
@@ -1242,6 +1236,202 @@ public class PackageJsonMergerTests
         // Dependencies merged
         Assert.NotNull(doc["dependencies"]?["vscode-jsonrpc"]);
         Assert.NotNull(doc["devDependencies"]?["typescript"]);
+
+        // Engines set
+        Assert.Contains(">=24", doc["engines"]?["node"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void EnsureObject_LogsWarning_WhenReplacingArrayWithObject()
+    {
+        var existing = """
+            {
+              "name": "my-app",
+              "dependencies": ["express", "react"]
+            }
+            """;
+
+        var scaffold = """
+            {
+              "dependencies": {
+                "vscode-jsonrpc": "^8.2.0"
+              }
+            }
+            """;
+
+        var sink = new TestSink();
+        var logger = new TestLogger("test", sink, enabled: true);
+
+        PackageJsonMerger.Merge(existing, scaffold, logger);
+
+        var warning = Assert.Single(sink.Writes, w => w.LogLevel == LogLevel.Warning);
+        Assert.Contains("dependencies", warning.Formatter!(warning.State, null)!);
+    }
+
+    [Fact]
+    public void EnsureObject_LogsWarning_WhenReplacingScalarWithObject()
+    {
+        var existing = """
+            {
+              "name": "my-app",
+              "engines": "node >= 16"
+            }
+            """;
+
+        var scaffold = """
+            {
+              "engines": {
+                "node": "^20.19.0 || ^22.13.0 || >=24"
+              }
+            }
+            """;
+
+        var sink = new TestSink();
+        var logger = new TestLogger("test", sink, enabled: true);
+
+        PackageJsonMerger.Merge(existing, scaffold, logger);
+
+        var warning = Assert.Single(sink.Writes, w => w.LogLevel == LogLevel.Warning);
+        Assert.Contains("engines", warning.Formatter!(warning.State, null)!);
+    }
+
+    [Fact]
+    public void EnsureObject_DoesNotLogWarning_WhenPropertyIsAlreadyObject()
+    {
+        var existing = """
+            {
+              "name": "my-app",
+              "dependencies": {
+                "express": "^4.18.0"
+              }
+            }
+            """;
+
+        var scaffold = """
+            {
+              "dependencies": {
+                "vscode-jsonrpc": "^8.2.0"
+              }
+            }
+            """;
+
+        var sink = new TestSink();
+        var logger = new TestLogger("test", sink, enabled: true);
+
+        PackageJsonMerger.Merge(existing, scaffold, logger);
+
+        Assert.DoesNotContain(sink.Writes, w => w.LogLevel == LogLevel.Warning);
+    }
+
+    [Fact]
+    public void EnsureObject_DoesNotLogWarning_WhenPropertyIsMissing()
+    {
+        var existing = """
+            {
+              "name": "my-app"
+            }
+            """;
+
+        var scaffold = """
+            {
+              "dependencies": {
+                "vscode-jsonrpc": "^8.2.0"
+              }
+            }
+            """;
+
+        var sink = new TestSink();
+        var logger = new TestLogger("test", sink, enabled: true);
+
+        PackageJsonMerger.Merge(existing, scaffold, logger);
+
+        Assert.DoesNotContain(sink.Writes, w => w.LogLevel == LogLevel.Warning);
+    }
+
+    [Fact]
+    public void BrownfieldViteProject_AspireOnlyScaffold_MergesCorrectly()
+    {
+        // Simulates the full brownfield flow where the scaffold only contains
+        // Aspire-desired content (no echo of existing). This verifies the
+        // double-merge ordering dependency (item 3) is resolved: the merger
+        // does not produce incorrect aspire:-prefixed scripts from existing content.
+        var existing = """
+            {
+              "name": "vite-brownfield",
+              "version": "2.0.0",
+              "type": "module",
+              "scripts": {
+                "dev": "vite",
+                "build": "vite build",
+                "preview": "vite preview"
+              },
+              "dependencies": {
+                "vue": "^3.5.0"
+              },
+              "devDependencies": {
+                "vite": "^7.0.0",
+                "typescript": "^5.0.0"
+              }
+            }
+            """;
+
+        // Scaffold only has Aspire entries — no echo of existing content
+        var scaffold = """
+            {
+              "scripts": {
+                "aspire:start": "aspire run",
+                "aspire:build": "tsc -p tsconfig.apphost.json",
+                "aspire:dev": "tsc --watch -p tsconfig.apphost.json",
+                "aspire:lint": "eslint apphost.ts"
+              },
+              "dependencies": {
+                "vscode-jsonrpc": "^8.2.0"
+              },
+              "devDependencies": {
+                "@types/node": "^22.0.0",
+                "eslint": "^10.0.3",
+                "nodemon": "^3.1.14",
+                "tsx": "^4.21.0",
+                "typescript": "^5.9.3",
+                "typescript-eslint": "^8.57.1"
+              },
+              "engines": {
+                "node": "^20.19.0 || ^22.13.0 || >=24"
+              }
+            }
+            """;
+
+        var result = MergeJson(existing, scaffold);
+        var doc = JsonNode.Parse(result)!.AsObject();
+
+        // Existing metadata preserved
+        Assert.Equal("vite-brownfield", doc["name"]!.GetValue<string>());
+        Assert.Equal("2.0.0", doc["version"]!.GetValue<string>());
+        Assert.Equal("module", doc["type"]!.GetValue<string>());
+
+        // Existing scripts preserved
+        var scripts = doc["scripts"]!.AsObject();
+        Assert.Equal("vite", scripts["dev"]?.GetValue<string>());
+        Assert.Equal("vite build", scripts["build"]?.GetValue<string>());
+        Assert.Equal("vite preview", scripts["preview"]?.GetValue<string>());
+
+        // Aspire scripts added (no incorrect aspire:dev duplicate from old "dev":"vite")
+        Assert.Equal("aspire run", scripts["aspire:start"]?.GetValue<string>());
+        Assert.Equal("tsc -p tsconfig.apphost.json", scripts["aspire:build"]?.GetValue<string>());
+        Assert.Equal("tsc --watch -p tsconfig.apphost.json", scripts["aspire:dev"]?.GetValue<string>());
+        Assert.Equal("eslint apphost.ts", scripts["aspire:lint"]?.GetValue<string>());
+
+        // No spurious aspire-prefixed duplicates of existing scripts
+        Assert.False(scripts.ContainsKey("aspire:preview"));
+
+        // Existing deps preserved, Aspire deps added
+        Assert.Equal("^3.5.0", GetDep(result, "dependencies", "vue"));
+        Assert.Equal("^8.2.0", GetDep(result, "dependencies", "vscode-jsonrpc"));
+
+        // Existing devDeps: vite preserved, typescript upgraded to Aspire's version (newer)
+        Assert.Equal("^7.0.0", GetDep(result, "devDependencies", "vite"));
+        Assert.Equal("^5.9.3", GetDep(result, "devDependencies", "typescript"));
+        Assert.Equal("^4.21.0", GetDep(result, "devDependencies", "tsx"));
 
         // Engines set
         Assert.Contains(">=24", doc["engines"]?["node"]?.GetValue<string>());

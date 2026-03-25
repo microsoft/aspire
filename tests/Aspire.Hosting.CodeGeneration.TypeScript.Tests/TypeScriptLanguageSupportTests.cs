@@ -59,7 +59,7 @@ public sealed class TypeScriptLanguageSupportTests
     }
 
     [Fact]
-    public void Scaffold_MergesExistingPackageJson_WithoutOverwritingExistingAppValues()
+    public void Scaffold_BrownfieldOutput_ContainsOnlyAspireEntries()
     {
         using var testDirectory = new TestDirectory();
 
@@ -94,32 +94,37 @@ public sealed class TypeScriptLanguageSupportTests
         var dependencies = packageJson["dependencies"]!.AsObject();
         var devDependencies = packageJson["devDependencies"]!.AsObject();
 
-        Assert.Equal("vite-brownfield", packageJson["name"]?.GetValue<string>());
-        Assert.Equal("2.0.0", packageJson["version"]?.GetValue<string>());
+        // Scaffold output should NOT echo existing content — the CLI-side
+        // PackageJsonMerger handles combining with the on-disk file.
+        Assert.Null(packageJson["name"]);
+        Assert.Null(packageJson["version"]);
         Assert.Null(packageJson["type"]);
-        Assert.Equal("vite", scripts["dev"]?.GetValue<string>());
-        Assert.Equal("vite build", scripts["build"]?.GetValue<string>());
-        Assert.Equal("vite preview", scripts["preview"]?.GetValue<string>());
+        Assert.Null(packageJson["private"]);
+
+        // Scaffold should only contain Aspire-desired scripts
         Assert.Equal("aspire run", scripts["aspire:start"]?.GetValue<string>());
         Assert.Equal("tsc -p tsconfig.apphost.json", scripts["aspire:build"]?.GetValue<string>());
         Assert.Equal("tsc --watch -p tsconfig.apphost.json", scripts["aspire:dev"]?.GetValue<string>());
-        Assert.Equal("^9.9.9", dependencies["vscode-jsonrpc"]?.GetValue<string>());
-        Assert.Equal("^9.9.9", devDependencies["tsx"]?.GetValue<string>());
-        Assert.Equal("^7.0.0", devDependencies["vite"]?.GetValue<string>());
+        Assert.Equal("eslint apphost.ts", scripts["aspire:lint"]?.GetValue<string>());
+        Assert.False(scripts.ContainsKey("dev"));
+        Assert.False(scripts.ContainsKey("build"));
+        Assert.False(scripts.ContainsKey("preview"));
+
+        // Scaffold should only contain Aspire-desired dependencies (at Aspire's versions)
+        Assert.Equal("^8.2.0", dependencies["vscode-jsonrpc"]?.GetValue<string>());
+        Assert.Equal("^4.21.0", devDependencies["tsx"]?.GetValue<string>());
         Assert.Equal("^22.0.0", devDependencies["@types/node"]?.GetValue<string>());
         Assert.Equal("^3.1.14", devDependencies["nodemon"]?.GetValue<string>());
         Assert.Equal("^5.9.3", devDependencies["typescript"]?.GetValue<string>());
+        Assert.False(devDependencies.ContainsKey("vite"));
 
-        // engines.node is always set — Aspire requires specific Node versions for ESLint 10
+        // engines.node is always set
         var engines = packageJson["engines"]!.AsObject();
         Assert.Equal("^20.19.0 || ^22.13.0 || >=24", engines["node"]?.GetValue<string>());
-
-        // private is NOT forced on brownfield projects — existing project may be intentionally publishable
-        Assert.Null(packageJson["private"]);
     }
 
     [Fact]
-    public void Scaffold_UpgradesExistingDependencies_WhenAspireRequiresNewerVersion()
+    public void Scaffold_AlwaysOutputsAspireVersions_RegardlessOfExistingDependencies()
     {
         using var testDirectory = new TestDirectory();
 
@@ -147,6 +152,8 @@ public sealed class TypeScriptLanguageSupportTests
         var dependencies = packageJson["dependencies"]!.AsObject();
         var devDependencies = packageJson["devDependencies"]!.AsObject();
 
+        // Scaffold always produces Aspire's desired versions — the CLI-side
+        // PackageJsonMerger handles semver comparison with existing on-disk versions.
         Assert.Equal("^8.2.0", dependencies["vscode-jsonrpc"]?.GetValue<string>());
         Assert.Equal("^22.0.0", devDependencies["@types/node"]?.GetValue<string>());
         Assert.Equal("^3.1.14", devDependencies["nodemon"]?.GetValue<string>());

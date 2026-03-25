@@ -29,6 +29,28 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
     private const string AppHostFileName = "apphost.ts";
     private const string PackageJsonFileName = "package.json";
     private const string AppHostTsConfigFileName = "tsconfig.apphost.json";
+
+    /// <summary>
+    /// The default content for tsconfig.apphost.json, shared between scaffolding and migration.
+    /// </summary>
+    private const string AppHostTsConfigContent = """
+        {
+          "compilerOptions": {
+            "target": "ES2022",
+            "module": "NodeNext",
+            "moduleResolution": "NodeNext",
+            "esModuleInterop": true,
+            "forceConsistentCasingInFileNames": true,
+            "strict": true,
+            "skipLibCheck": true,
+            "outDir": "./dist/apphost",
+            "rootDir": "."
+          },
+          "include": ["apphost.ts", ".modules/**/*.ts"],
+          "exclude": ["node_modules"]
+        }
+        """;
+
     private static readonly JsonSerializerOptions s_jsonSerializerOptions = new()
     {
         WriteIndented = true,
@@ -85,23 +107,7 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
             """;
 
         // Create an apphost-specific tsconfig so existing brownfield TypeScript settings are preserved.
-        files[AppHostTsConfigFileName] = """
-            {
-              "compilerOptions": {
-                "target": "ES2022",
-                "module": "NodeNext",
-                "moduleResolution": "NodeNext",
-                "esModuleInterop": true,
-                "forceConsistentCasingInFileNames": true,
-                "strict": true,
-                "skipLibCheck": true,
-                "outDir": "./dist/apphost",
-                "rootDir": "."
-              },
-              "include": ["apphost.ts", ".modules/**/*.ts"],
-              "exclude": ["node_modules"]
-            }
-            """;
+        files[AppHostTsConfigFileName] = AppHostTsConfigContent;
 
         // Create apphost.run.json with random ports
         // Use PortSeed if provided (for testing), otherwise use random
@@ -133,19 +139,21 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
 
     private static string CreatePackageJson(ScaffoldRequest request)
     {
+        // Build scaffold output with only Aspire-desired content. We intentionally do NOT
+        // read the existing package.json here — the CLI-side PackageJsonMerger handles all
+        // combining with on-disk content. Including existing entries in the scaffold output
+        // would cause a double-merge where correctness depends on JsonObject iteration order.
+        var packageJson = new JsonObject();
         var packageJsonPath = Path.Combine(request.TargetPath, PackageJsonFileName);
-        var packageJson = LoadExistingPackageJson(packageJsonPath);
 
-        if (packageJson is null)
+        if (!File.Exists(packageJsonPath))
         {
+            // Greenfield: include root metadata so the scaffold output is a complete package.json.
             var packageName = request.ProjectName?.ToLowerInvariant() ?? "aspire-apphost";
-            packageJson = new JsonObject
-            {
-                ["name"] = packageName,
-                ["version"] = "1.0.0",
-                ["private"] = true,
-                ["type"] = "module"
-            };
+            packageJson["name"] = packageName;
+            packageJson["version"] = "1.0.0";
+            packageJson["private"] = true;
+            packageJson["type"] = "module";
         }
 
         // NOTE: The engines.node constraint must match ESLint 10's own requirement
@@ -170,31 +178,6 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
         EnsureDependency(packageJson, "devDependencies", "typescript-eslint", "^8.57.1");
 
         return packageJson.ToJsonString(s_jsonSerializerOptions);
-    }
-
-    private static JsonObject? LoadExistingPackageJson(string packageJsonPath)
-    {
-        if (!File.Exists(packageJsonPath))
-        {
-            return null;
-        }
-
-        try
-        {
-            var content = File.ReadAllText(packageJsonPath);
-            if (string.IsNullOrWhiteSpace(content))
-            {
-                return new JsonObject();
-            }
-
-            return JsonNode.Parse(content) as JsonObject ?? new JsonObject();
-        }
-        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or InvalidOperationException)
-        {
-            // Malformed JSON or I/O errors — return empty object so scaffolding can proceed.
-            // The CLI-side PackageJsonMerger provides additional fallback safety.
-            return new JsonObject();
-        }
     }
 
     private static void EnsureDependency(JsonObject packageJson, string sectionName, string packageName, string version)
@@ -287,6 +270,10 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
                     "--ignore", ".modules/",
                     "--exec", $"npx --no-install tsx --tsconfig {AppHostTsConfigFileName} {{appHostFile}}"
                 ]
+            },
+            MigrationFiles = new Dictionary<string, string>
+            {
+                [AppHostTsConfigFileName] = AppHostTsConfigContent
             }
         };
     }

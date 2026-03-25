@@ -74,7 +74,7 @@ internal static class PackageJsonMerger
         // Phase 2: Merge. If merge fails, return scaffold as-is.
         try
         {
-            MergeObjects(existingJson, scaffoldJson);
+            MergeObjects(existingJson, scaffoldJson, logger);
             return existingJson.ToJsonString(s_jsonOptions);
         }
         catch (Exception ex)
@@ -89,24 +89,24 @@ internal static class PackageJsonMerger
     /// Scripts get special conflict-aware handling, dependency sections use semver-aware merging,
     /// and everything else uses deep merge.
     /// </summary>
-    private static void MergeObjects(JsonObject existing, JsonObject scaffold)
+    private static void MergeObjects(JsonObject existing, JsonObject scaffold, ILogger logger)
     {
         // Handle scripts separately with conflict-aware logic
         var scaffoldScripts = scaffold[ScriptsKey]?.AsObject();
         if (scaffoldScripts is not null)
         {
-            var existingScripts = EnsureObject(existing, ScriptsKey);
+            var existingScripts = EnsureObject(existing, ScriptsKey, logger);
             MergeScripts(existingScripts, scaffoldScripts);
         }
 
         // Handle dependency sections with semver-aware merging
-        MergeDependencySection(existing, scaffold, DependenciesKey);
-        MergeDependencySection(existing, scaffold, DevDependenciesKey);
+        MergeDependencySection(existing, scaffold, DependenciesKey, logger);
+        MergeDependencySection(existing, scaffold, DevDependenciesKey, logger);
 
         // Handle engines with overwrite semantics for "node" — since the user is running
         // "aspire init", we enforce our Node version constraint (required for ESLint 10
         // and TypeScript tooling compatibility). Other engines sub-keys are preserved.
-        MergeEngines(existing, scaffold);
+        MergeEngines(existing, scaffold, logger);
 
         // Deep merge everything else (scalars, nested objects).
         // Array properties (e.g., "keywords") are preserved from existing — the scaffold
@@ -211,7 +211,7 @@ internal static class PackageJsonMerger
     /// the scaffold specifies a newer version. Unparseable version ranges (union ranges, workspace
     /// references, etc.) are preserved as-is.
     /// </summary>
-    private static void MergeDependencySection(JsonObject existing, JsonObject scaffold, string sectionName)
+    private static void MergeDependencySection(JsonObject existing, JsonObject scaffold, string sectionName, ILogger logger)
     {
         var scaffoldDeps = scaffold[sectionName]?.AsObject();
         if (scaffoldDeps is null)
@@ -219,7 +219,7 @@ internal static class PackageJsonMerger
             return;
         }
 
-        var existingDeps = EnsureObject(existing, sectionName);
+        var existingDeps = EnsureObject(existing, sectionName, logger);
 
         foreach (var (packageName, versionNode) in scaffoldDeps)
         {
@@ -251,7 +251,7 @@ internal static class PackageJsonMerger
     /// specific Node.js versions for ESLint 10 and TypeScript tooling compatibility. Other
     /// <c>engines</c> sub-keys (e.g., <c>npm</c>) are preserved from the existing package.json.
     /// </summary>
-    private static void MergeEngines(JsonObject existing, JsonObject scaffold)
+    private static void MergeEngines(JsonObject existing, JsonObject scaffold, ILogger logger)
     {
         var scaffoldEngines = scaffold[EnginesKey]?.AsObject();
         if (scaffoldEngines is null)
@@ -259,7 +259,7 @@ internal static class PackageJsonMerger
             return;
         }
 
-        var existingEngines = EnsureObject(existing, EnginesKey);
+        var existingEngines = EnsureObject(existing, EnginesKey, logger);
 
         foreach (var (key, value) in scaffoldEngines)
         {
@@ -308,11 +308,18 @@ internal static class PackageJsonMerger
         }
     }
 
-    private static JsonObject EnsureObject(JsonObject parent, string propertyName)
+    private static JsonObject EnsureObject(JsonObject parent, string propertyName, ILogger? logger = null)
     {
         if (parent[propertyName] is JsonObject obj)
         {
             return obj;
+        }
+
+        if (parent[propertyName] is not null)
+        {
+            logger?.LogWarning(
+                "Replacing non-object '{PropertyName}' value with an empty object. The original value will be lost.",
+                propertyName);
         }
 
         obj = new JsonObject();
