@@ -3100,10 +3100,10 @@ class EndpointReference(HandleWrapperBase):
         args: Dict[str, Any] = { "context": serialize_value(self._handle) }
         return self._client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointReference.tlsEnabled", args)
 
-    def is_default_reference_endpoint(self) -> bool:
-        """Gets the IsDefaultReferenceEndpoint property"""
+    def exclude_reference_endpoint(self) -> bool:
+        """Gets the ExcludeReferenceEndpoint property"""
         args: Dict[str, Any] = { "context": serialize_value(self._handle) }
-        return self._client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointReference.isDefaultReferenceEndpoint", args)
+        return self._client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointReference.excludeReferenceEndpoint", args)
 
     def port(self) -> float:
         """Gets the Port property"""

@@ -1200,11 +1200,11 @@ export class EndpointReference {
         },
     };
 
-    /** Gets the IsDefaultReferenceEndpoint property */
-    isDefaultReferenceEndpoint = {
+    /** Gets the ExcludeReferenceEndpoint property */
+    excludeReferenceEndpoint = {
         get: async (): Promise<boolean> => {
             return await this._client.invokeCapability<boolean>(
-                'Aspire.Hosting.ApplicationModel/EndpointReference.isDefaultReferenceEndpoint',
+                'Aspire.Hosting.ApplicationModel/EndpointReference.excludeReferenceEndpoint',
                 { context: this._handle }
             );
         },

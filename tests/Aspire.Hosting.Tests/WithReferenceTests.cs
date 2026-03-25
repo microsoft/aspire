@@ -802,7 +802,7 @@ public class WithReferenceTests
     }
 
     [Fact]
-    public async Task NonDefaultReferenceEndpointExcludedFromUseAllEndpoints()
+    public async Task ExcludedReferenceEndpointExcludedFromUseAllEndpoints()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
@@ -812,7 +812,7 @@ public class WithReferenceTests
                               .WithHttpEndpoint(1000, 3000, "management")
                               .WithEndpoint("management", e =>
                               {
-                                  e.IsDefaultReferenceEndpoint = false;
+                                  e.ExcludeReferenceEndpoint = true;
                                   e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 3000);
                               });
 
@@ -821,17 +821,17 @@ public class WithReferenceTests
 
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectB.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
 
-        // The "api" endpoint should be included (it's a default reference endpoint)
+        // The "api" endpoint should be included (it's not excluded)
         Assert.Equal("http://localhost:2000", config["services__projecta__http__0"]);
         Assert.Equal("http://localhost:2000", config["PROJECTA_API"]);
 
-        // The "management" endpoint should NOT be included (IsDefaultReferenceEndpoint = false)
+        // The "management" endpoint should NOT be included (ExcludeReferenceEndpoint = true)
         Assert.False(config.ContainsKey("services__projecta__http__1"));
         Assert.False(config.ContainsKey("PROJECTA_MANAGEMENT"));
     }
 
     [Fact]
-    public async Task NonDefaultReferenceEndpointCanBeReferencedExplicitly()
+    public async Task ExcludedReferenceEndpointCanBeReferencedExplicitly()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
@@ -841,11 +841,11 @@ public class WithReferenceTests
                               .WithHttpEndpoint(1000, 3000, "management")
                               .WithEndpoint("management", e =>
                               {
-                                  e.IsDefaultReferenceEndpoint = false;
+                                  e.ExcludeReferenceEndpoint = true;
                                   e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 3000);
                               });
 
-        // Explicitly reference the non-default endpoint
+        // Explicitly reference the excluded endpoint
         var projectB = builder.AddProject<ProjectB>("projectb")
                               .WithReference(projectA.GetEndpoint("management"));
 
@@ -870,11 +870,11 @@ public class WithReferenceTests
                               .WithHttpEndpoint(1000, 3000, "management")
                               .WithEndpoint("management", e =>
                               {
-                                  e.IsDefaultReferenceEndpoint = false;
+                                  e.ExcludeReferenceEndpoint = true;
                                   e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 3000);
                               });
 
-        // Reference all default endpoints AND the non-default management endpoint explicitly
+        // Reference all default endpoints AND the excluded management endpoint explicitly
         var projectB = builder.AddProject<ProjectB>("projectb")
                               .WithReference(projectA)
                               .WithReference(projectA.GetEndpoint("management"));
@@ -889,7 +889,7 @@ public class WithReferenceTests
     }
 
     [Fact]
-    public void IsDefaultReferenceEndpointDefaultsToTrue()
+    public void ExcludeReferenceEndpointDefaultsToFalse()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
@@ -897,37 +897,37 @@ public class WithReferenceTests
                                .WithHttpEndpoint(targetPort: 8080);
 
         var endpoint = container.Resource.Annotations.OfType<EndpointAnnotation>().Single();
-        Assert.True(endpoint.IsDefaultReferenceEndpoint);
+        Assert.False(endpoint.ExcludeReferenceEndpoint);
     }
 
     [Fact]
-    public void WithEndpointCallbackCanSetIsDefaultReferenceEndpoint()
+    public void WithEndpointCallbackCanSetExcludeReferenceEndpoint()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
         var container = builder.AddContainer("mycontainer", "myimage")
                                .WithHttpEndpoint(targetPort: 8080, name: "api")
-                               .WithEndpoint("api", e => e.IsDefaultReferenceEndpoint = false);
+                               .WithEndpoint("api", e => e.ExcludeReferenceEndpoint = true);
 
         var endpoint = container.Resource.Annotations.OfType<EndpointAnnotation>().Single();
-        Assert.False(endpoint.IsDefaultReferenceEndpoint);
+        Assert.True(endpoint.ExcludeReferenceEndpoint);
     }
 
     [Fact]
-    public void EndpointReferenceReflectsIsDefaultReferenceEndpoint()
+    public void EndpointReferenceReflectsExcludeReferenceEndpoint()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
         var container = builder.AddContainer("mycontainer", "myimage")
                                .WithHttpEndpoint(targetPort: 8080, name: "primary")
                                .WithHttpEndpoint(targetPort: 9000, name: "management")
-                               .WithEndpoint("management", e => e.IsDefaultReferenceEndpoint = false);
+                               .WithEndpoint("management", e => e.ExcludeReferenceEndpoint = true);
 
         var primaryRef = container.GetEndpoint("primary");
         var managementRef = container.GetEndpoint("management");
 
-        Assert.True(primaryRef.IsDefaultReferenceEndpoint);
-        Assert.False(managementRef.IsDefaultReferenceEndpoint);
+        Assert.False(primaryRef.ExcludeReferenceEndpoint);
+        Assert.True(managementRef.ExcludeReferenceEndpoint);
     }
 
     private sealed class TestResourceWithConnectionStringAndServiceDiscovery(string name) : ContainerResource(name), IResourceWithConnectionString, IResourceWithServiceDiscovery

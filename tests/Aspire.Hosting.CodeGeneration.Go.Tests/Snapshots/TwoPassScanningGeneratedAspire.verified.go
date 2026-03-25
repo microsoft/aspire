@@ -6138,12 +6138,12 @@ func (s *EndpointReference) TlsEnabled() (*bool, error) {
 	return result.(*bool), nil
 }
 
-// IsDefaultReferenceEndpoint gets the IsDefaultReferenceEndpoint property
-func (s *EndpointReference) IsDefaultReferenceEndpoint() (*bool, error) {
+// ExcludeReferenceEndpoint gets the ExcludeReferenceEndpoint property
+func (s *EndpointReference) ExcludeReferenceEndpoint() (*bool, error) {
 	reqArgs := map[string]any{
 		"context": SerializeValue(s.Handle()),
 	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.isDefaultReferenceEndpoint", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.excludeReferenceEndpoint", reqArgs)
 	if err != nil {
 		return nil, err
 	}

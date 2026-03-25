@@ -4419,11 +4419,11 @@ class EndpointReference extends HandleWrapperBase {
         return (boolean) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.tlsEnabled", reqArgs);
     }
 
-    /** Gets the IsDefaultReferenceEndpoint property */
-    public boolean isDefaultReferenceEndpoint() {
+    /** Gets the ExcludeReferenceEndpoint property */
+    public boolean excludeReferenceEndpoint() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        return (boolean) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.isDefaultReferenceEndpoint", reqArgs);
+        return (boolean) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.excludeReferenceEndpoint", reqArgs);
     }
 
     /** Gets the Port property */

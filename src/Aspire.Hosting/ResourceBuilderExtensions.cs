@@ -493,7 +493,7 @@ public static class ResourceBuilderExtensions
 
                 var endpointName = endpoint.EndpointName;
                 var isExplicitlyNamed = annotation.EndpointNames.Contains(endpointName);
-                var isIncludedByDefault = annotation.UseAllEndpoints && endpoint.IsDefaultReferenceEndpoint;
+                var isIncludedByDefault = annotation.UseAllEndpoints && !endpoint.ExcludeReferenceEndpoint;
 
                 if (!isExplicitlyNamed && !isIncludedByDefault)
                 {
@@ -779,7 +779,7 @@ public static class ResourceBuilderExtensions
 
     /// <summary>
     /// Injects service discovery and endpoint information as environment variables from the source resource into the destination resource, using the source resource's name as the service name.
-    /// Each default endpoint (where <see cref="EndpointAnnotation.IsDefaultReferenceEndpoint"/> is <c>true</c>) defined on the source resource will be injected using the format defined by
+    /// Each non-excluded endpoint (where <see cref="EndpointAnnotation.ExcludeReferenceEndpoint"/> is <c>false</c>) defined on the source resource will be injected using the format defined by
     /// the <see cref="ReferenceEnvironmentInjectionAnnotation"/> on the destination resource, i.e.
     /// either "services__{sourceResourceName}__{endpointScheme}__{endpointIndex}={uriString}" for .NET service discovery, or "{RESOURCE_ENDPOINT}={uri}" for endpoint injection.
     /// </summary>
@@ -789,10 +789,10 @@ public static class ResourceBuilderExtensions
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// <para>
-    /// All endpoints are included in the default reference set by default (i.e. <see cref="EndpointAnnotation.IsDefaultReferenceEndpoint"/> is <c>true</c>).
-    /// Resource authors must explicitly opt out individual endpoints by setting <see cref="EndpointAnnotation.IsDefaultReferenceEndpoint"/> to <c>false</c>
-    /// (for example, using <c>.WithEndpoint("endpointName", e =&gt; e.IsDefaultReferenceEndpoint = false)</c>) to exclude them from this method's behavior.
-    /// Endpoints that have been opted out (such as management or health check endpoints) can still be referenced explicitly using
+    /// All endpoints are included in the default reference set unless explicitly excluded.
+    /// Resource authors can opt out individual endpoints by setting <see cref="EndpointAnnotation.ExcludeReferenceEndpoint"/> to <c>true</c>
+    /// (for example, using <c>.WithEndpoint("endpointName", e =&gt; e.ExcludeReferenceEndpoint = true)</c>) to exclude them from this method's behavior.
+    /// Endpoints that have been excluded (such as management or health check endpoints) can still be referenced explicitly using
     /// <see cref="WithReference{TDestination}(IResourceBuilder{TDestination}, EndpointReference)"/>
     /// with <see cref="ResourceBuilderExtensions.GetEndpoint{T}(IResourceBuilder{T}, string)"/>.
     /// </para>
@@ -810,7 +810,7 @@ public static class ResourceBuilderExtensions
 
     /// <summary>
     /// Injects service discovery and endpoint information as environment variables from the source resource into the destination resource, using the source resource's name as the service name.
-    /// Each default endpoint (where <see cref="EndpointAnnotation.IsDefaultReferenceEndpoint"/> is <c>true</c>) defined on the source resource will be injected using the format defined by
+    /// Each non-excluded endpoint (where <see cref="EndpointAnnotation.ExcludeReferenceEndpoint"/> is <c>false</c>) defined on the source resource will be injected using the format defined by
     /// the <see cref="ReferenceEnvironmentInjectionAnnotation"/> on the destination resource, i.e.
     /// either "services__{name}__{endpointScheme}__{endpointIndex}={uriString}" for .NET service discovery, or "{name}_{ENDPOINT}={uri}" for endpoint injection.
     /// </summary>
@@ -821,10 +821,10 @@ public static class ResourceBuilderExtensions
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// <para>
-    /// All endpoints are included in the default reference set by default (i.e. <see cref="EndpointAnnotation.IsDefaultReferenceEndpoint"/> is <c>true</c>).
-    /// Resource authors must explicitly opt out individual endpoints by setting <see cref="EndpointAnnotation.IsDefaultReferenceEndpoint"/> to <c>false</c>
-    /// (for example, using <c>.WithEndpoint("endpointName", e =&gt; e.IsDefaultReferenceEndpoint = false)</c>) to exclude them from this method's behavior.
-    /// Endpoints that have been opted out (such as management or health check endpoints) can still be referenced explicitly using
+    /// All endpoints are included in the default reference set unless explicitly excluded.
+    /// Resource authors can opt out individual endpoints by setting <see cref="EndpointAnnotation.ExcludeReferenceEndpoint"/> to <c>true</c>
+    /// (for example, using <c>.WithEndpoint("endpointName", e =&gt; e.ExcludeReferenceEndpoint = true)</c>) to exclude them from this method's behavior.
+    /// Endpoints that have been excluded (such as management or health check endpoints) can still be referenced explicitly using
     /// <see cref="WithReference{TDestination}(IResourceBuilder{TDestination}, EndpointReference)"/>
     /// with <see cref="ResourceBuilderExtensions.GetEndpoint{T}(IResourceBuilder{T}, string)"/>.
     /// </para>
