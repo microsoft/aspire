@@ -11,7 +11,7 @@ namespace Aspire.Hosting.Dcp;
 /// </summary>
 internal record class ContainerNetworkService
 {
-    public required ServiceAppResource ServiceResource { get; init; }
+    public required AppResource<Service> ServiceResource { get; init; }
     public TunnelConfiguration? TunnelConfig { get; init; }
 }
 
@@ -31,6 +31,18 @@ internal sealed class ContainerCreationContext : IDisposable
         ContainerServicesSpecReady = new CountdownEvent(containerCount);
         ContainerServicesChan = Channel.CreateUnbounded<ContainerNetworkService>();
         _createTunnelLazy = new Lazy<Task>(() => createTunnelFunc(this), LazyThreadSafetyMode.ExecutionAndPublication);
+    }
+
+    /// <summary>
+    /// Creates a new ContainerCreationContext for creating additional containers (beyond the initial set created during application startup).
+    /// </summary>
+    /// <remarks>
+    /// The new context will share the same tunnel creation task as the original context, ensuring that the tunnel is only created once
+    /// and that all containers will properly synchronize with the tunnel creation task.
+    /// </remarks>
+    public ContainerCreationContext ForAdditionalContainers(int additionalContainerCount)
+    {
+        return new ContainerCreationContext(additionalContainerCount, _ => CreateTunnel);
     }
 
     /// <summary>

@@ -3249,28 +3249,56 @@ public class DcpExecutorTests
         var developerCertificateService = new TestDeveloperCertificateService(new List<X509Certificate2>(), false, false, false);
 
 #pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-        return new DcpExecutor(
-            NullLogger<DcpExecutor>.Instance,
-            NullLogger<DistributedApplication>.Instance,
-            distributedAppModel,
-            hostEnvironment ?? new TestHostEnvironment(),
-            kubernetesService ?? new TestKubernetesService(),
-            configuration,
-            new Hosting.Eventing.DistributedApplicationEventing(),
-            new DistributedApplicationOptions(),
-            Options.Create(dcpOptions),
-            new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+        var nameGenerator = new DcpNameGenerator(configuration, Options.Create(dcpOptions));
+        var executionContext = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
             {
                 ServiceProvider = new TestServiceProvider(configuration)
                     .AddService<IDeveloperCertificateService>(developerCertificateService)
                     .AddService(Options.Create(dcpOptions))
                     .AddService(resourceLoggerService)
-            }),
+            });
+        var ks = kubernetesService ?? new TestKubernetesService();
+        var dcpEvts = events ?? new DcpExecutorEvents();
+        var locations = new Locations(new FileSystemService(configuration));
+        var hostEnv = hostEnvironment ?? new TestHostEnvironment();
+        var dcpDependencyCheckService = new TestDcpDependencyCheckService();
+
+        var executableCreator = new ExecutableCreator(
+            configuration,
+            nameGenerator,
+            distributedAppModel,
+            new DistributedApplicationOptions(),
+            executionContext,
+            locations,
+            NullLogger<ExecutableCreator>.Instance);
+
+        var containerCreator = new ContainerCreator(
+            configuration,
+            Options.Create(dcpOptions),
+            nameGenerator,
+            distributedAppModel,
+            executionContext,
             resourceLoggerService,
-            new TestDcpDependencyCheckService(),
-            new DcpNameGenerator(configuration, Options.Create(dcpOptions)),
-            events ?? new DcpExecutorEvents(),
-            new Locations(new FileSystemService(configuration ?? new ConfigurationBuilder().Build())));
+            dcpDependencyCheckService,
+            hostEnv,
+            NullLogger<ContainerCreator>.Instance);
+
+#pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+        return new DcpExecutor(
+            NullLogger<DcpExecutor>.Instance,
+            NullLogger<DistributedApplication>.Instance,
+            distributedAppModel,
+            ks,
+            configuration,
+            new Hosting.Eventing.DistributedApplicationEventing(),
+            Options.Create(dcpOptions),
+            executionContext,
+            resourceLoggerService,
+            dcpDependencyCheckService,
+            nameGenerator,
+            dcpEvts,
+            executableCreator,
+            containerCreator);
 #pragma warning restore ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
     }
 

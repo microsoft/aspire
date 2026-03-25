@@ -160,6 +160,12 @@ Note that tests for a project can be executed without first building from the ro
 dotnet test tests/Aspire.Hosting.Testing.Tests/Aspire.Hosting.Testing.Tests.csproj -- --filter-method "*.TestingBuilderHasAllPropertiesFromRealBuilder" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
 ```
 
+(5) To apply a timeout for a specific test run use `--hangdump` and `--hangdump-timeout` options after `--`, for example:
+```bash
+dotnet test tests/Aspire.Hosting.Testing.Tests/Aspire.Hosting.Testing.Tests.csproj -- --filter-method "*.TestingBuilderHasAllPropertiesFromRealBuilder" --hangdump --hangdump-timeout 2m
+```
+You need both options (`--hangdump-timeout` does not work without `--hangdump`). Timeout can be expressed in minutes (e.g. `3m` for 3-minute timeout), or seconds (e.g. `30s` for 30-seconds timeout).
+
 **Important**: Avoid passing `--no-build` unless you have just built in the same session and there have been no code changes since. In automation or while iterating on code, omit `--no-build` so changes are compiled and picked up by the test run.
 
 ### CRITICAL: Do NOT use VSTest-style `--filter` with `dotnet test`

@@ -318,6 +318,7 @@ internal sealed class AspireEventSource : EventSource
     }
 
     [Event(37, Level = EventLevel.Informational, Message = "Creating DCP resources for Aspire executable...")]
+    [Obsolete("Use DcpObjectCreationStart/Stop events with kind=Executable and resourceName=executableName instead.")]
     public void CreateAspireExecutableResourcesStart(string executableName)
     {
         if (IsEnabled())
@@ -327,6 +328,7 @@ internal sealed class AspireEventSource : EventSource
     }
 
     [Event(38, Level = EventLevel.Informational, Message = "Aspire executable resources created")]
+    [Obsolete("Use DcpObjectCreationStart/Stop events with kind=Executable and resourceName=executableName instead.")]
     public void CreateAspireExecutableResourcesStop(string executableName)
     {
         if (IsEnabled())
