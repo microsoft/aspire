@@ -78,9 +78,10 @@ public sealed class AtsTypeRef
     /// Gets or sets the interfaces this type implements.
     /// </summary>
     /// <remarks>
-    /// Pre-computed during type scanning to avoid additional reflection at code generation time.
-    /// Used to resolve capabilities targeting interface types to all their implementing concrete types.
-    /// Only meaningful for Handle category types where <see cref="IsInterface"/> is <see langword="false"/>.
+    /// Pre-computed during type scanning so generators can consume interface information from the shared ATS model
+    /// without performing additional reflection.
+    /// Currently used by Python code generation for interface inheritance and capability placement.
+    /// Only meaningful for Handle category types.
     /// </remarks>
     public IReadOnlyList<AtsTypeRef> ImplementedInterfaces { get; init; } = [];
 
@@ -88,8 +89,9 @@ public sealed class AtsTypeRef
     /// Gets or sets the immediate base type of this type.
     /// </summary>
     /// <remarks>
-    /// Pre-computed during type scanning to avoid additional reflection at code generation time.
-    /// Used to traverse the type hierarchy during inheritance-based code generation (e.g., TypeScript, Java).
+    /// Pre-computed during type scanning so generators can traverse the type hierarchy from the shared ATS model
+    /// without performing additional reflection.
+    /// Currently used by Python code generation when mapping inherited members.
     /// Returns <see langword="null"/> for interface types or for types with no relevant base class.
     /// </remarks>
     public AtsTypeRef? BaseType { get; init; }
