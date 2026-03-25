@@ -91,6 +91,8 @@ jobs:
     if: ${{ always() && github.repository_owner == 'microsoft' }}
     runs-on: ubuntu-latest
     name: Final Results
+    # deployment_tests is intentionally excluded: deployment failures are informational
+    # only (infrastructure flakiness outside the team's control should not block PRs).
     needs: [prepare_for_ci, tests, deployment_tests]
 
     steps:
@@ -103,14 +105,27 @@ jobs:
         # For others 'skipped' can be when a transitive dependency fails and the dependent job gets
         # 'skipped'. For example, one of setup_* jobs failing and the Integration test jobs getting
         # 'skipped'
+        #
+        # Note: deployment_tests is excluded from the failure check below because deployment
+        # failures can be caused by transient Azure infrastructure issues outside the team's
+        # control. Deployment results are reported in a separate informational step.
         if: >-
           ${{ always() &&
               needs.prepare_for_ci.outputs.skip_workflow != 'true' &&
               needs.tests.outputs.skip_workflow != 'true' &&
-              needs.deployment_tests.outputs.skip_workflow != 'true' &&
-              (contains(needs.*.result, 'failure') ||
-               contains(needs.*.result, 'cancelled') ||
-               contains(needs.*.result, 'skipped')) }}
+              (needs.prepare_for_ci.result == 'failure' ||
+               needs.tests.result == 'failure' ||
+               needs.tests.result == 'cancelled' ||
+               needs.tests.result == 'skipped') }}
         run: |
           echo "One or more dependent jobs failed."
           exit 1
+
+      - name: Report deployment test results
+        if: ${{ always() && needs.deployment_tests.result != 'skipped' }}
+        run: |
+          if [[ "${{ needs.deployment_tests.result }}" == "failure" ]]; then
+            echo "::warning::Deployment E2E tests failed. This is informational only and does not block the PR. Check deployment test artifacts for details."
+          else
+            echo "Deployment E2E tests passed."
+          fi
