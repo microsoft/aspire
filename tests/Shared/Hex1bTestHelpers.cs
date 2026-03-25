@@ -470,6 +470,14 @@ internal static class Hex1bTestHelpers
                     .WaitUntil(s => typeScriptEmptyAppHostSelected.Search(s).Count > 0, TimeSpan.FromSeconds(5))
                     .Enter();
                 break;
+
+            case AspireTemplate.JavaEmptyAppHost:
+                var javaEmptyAppHostSelected = new CellPatternSearcher()
+                    .Find("> Empty (Java AppHost)");
+                builder.Type("Empty (Java AppHost)")
+                    .WaitUntil(s => javaEmptyAppHostSelected.Search(s).Count > 0, TimeSpan.FromSeconds(5))
+                    .Enter();
+                break;
         }
 
         // Step 3: Enter project name

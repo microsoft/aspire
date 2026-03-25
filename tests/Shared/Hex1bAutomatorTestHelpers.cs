@@ -241,8 +241,7 @@ internal static class Hex1bAutomatorTestHelpers
                 break;
 
             case AspireTemplate.JavaEmptyAppHost:
-                await auto.DownAsync();
-                await auto.DownAsync();
+                await auto.TypeAsync("Empty (Java AppHost)");
                 await auto.WaitUntilAsync(
                     s => new CellPatternSearcher().Find("> Empty (Java AppHost)").Search(s).Count > 0,
                     timeout: TimeSpan.FromSeconds(5),
