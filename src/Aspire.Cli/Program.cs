@@ -668,7 +668,8 @@ public class Program
         logger.LogInformation("Version: {Version}", AspireCliTelemetry.GetCliVersion());
         logger.LogInformation("Build ID: {BuildId}", AspireCliTelemetry.GetCliBuildId());
         logger.LogInformation("Working directory: {WorkingDirectory}", Environment.CurrentDirectory);
-        // Logging the log file path is useful because this prints it to CLI stdout when a debug level is specified.
+        // Logging the log file path is useful so that when console logging is enabled (for example with --log-level debug),
+        // the path is written to the console logger (stderr) for easier discovery.
         logger.LogInformation("Log file: {LogFilePath}", loggingOptions.LogFilePath);
 
         IHost? app = null;
