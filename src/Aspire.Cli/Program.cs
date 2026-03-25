@@ -668,6 +668,8 @@ public class Program
         logger.LogInformation("Version: {Version}", AspireCliTelemetry.GetCliVersion());
         logger.LogInformation("Build ID: {BuildId}", AspireCliTelemetry.GetCliBuildId());
         logger.LogInformation("Working directory: {WorkingDirectory}", Environment.CurrentDirectory);
+        // Logging the log file path is useful because this prints it to CLI stdout when a debug level is specified.
+        logger.LogInformation("Log file: {LogFilePath}", loggingOptions.LogFilePath);
 
         IHost? app = null;
         try
