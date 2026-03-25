@@ -1200,6 +1200,16 @@ export class EndpointReference {
         },
     };
 
+    /** Gets the IsDefaultReferenceEndpoint property */
+    isDefaultReferenceEndpoint = {
+        get: async (): Promise<boolean> => {
+            return await this._client.invokeCapability<boolean>(
+                'Aspire.Hosting.ApplicationModel/EndpointReference.isDefaultReferenceEndpoint',
+                { context: this._handle }
+            );
+        },
+    };
+
     /** Gets the Port property */
     port = {
         get: async (): Promise<number> => {

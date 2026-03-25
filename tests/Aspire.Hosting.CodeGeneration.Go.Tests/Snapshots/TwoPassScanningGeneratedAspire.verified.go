@@ -6138,6 +6138,18 @@ func (s *EndpointReference) TlsEnabled() (*bool, error) {
 	return result.(*bool), nil
 }
 
+// IsDefaultReferenceEndpoint gets the IsDefaultReferenceEndpoint property
+func (s *EndpointReference) IsDefaultReferenceEndpoint() (*bool, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.isDefaultReferenceEndpoint", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*bool), nil
+}
+
 // Port gets the Port property
 func (s *EndpointReference) Port() (*float64, error) {
 	reqArgs := map[string]any{
