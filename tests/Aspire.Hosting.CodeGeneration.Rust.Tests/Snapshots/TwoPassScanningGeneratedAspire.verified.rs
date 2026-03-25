@@ -1437,11 +1437,11 @@ impl CSharpAppResource {
     }
 
     /// Adds a relationship to another resource
-    pub fn with_relationship(&self, resource_builder: &IResource, type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("resourceBuilder".to_string(), resource_builder.handle().to_json());
-        args.insert("type".to_string(), serde_json::to_value(&type).unwrap_or(Value::Null));
+        args.insert("type".to_string(), serde_json::to_value(&r#type).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
@@ -2183,11 +2183,11 @@ impl ConnectionStringResource {
     }
 
     /// Adds a relationship to another resource
-    pub fn with_relationship(&self, resource_builder: &IResource, type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("resourceBuilder".to_string(), resource_builder.handle().to_json());
-        args.insert("type".to_string(), serde_json::to_value(&type).unwrap_or(Value::Null));
+        args.insert("type".to_string(), serde_json::to_value(&r#type).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
@@ -2671,11 +2671,11 @@ impl ContainerRegistryResource {
     }
 
     /// Adds a relationship to another resource
-    pub fn with_relationship(&self, resource_builder: &IResource, type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("resourceBuilder".to_string(), resource_builder.handle().to_json());
-        args.insert("type".to_string(), serde_json::to_value(&type).unwrap_or(Value::Null));
+        args.insert("type".to_string(), serde_json::to_value(&r#type).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
@@ -3745,11 +3745,11 @@ impl ContainerResource {
     }
 
     /// Adds a relationship to another resource
-    pub fn with_relationship(&self, resource_builder: &IResource, type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("resourceBuilder".to_string(), resource_builder.handle().to_json());
-        args.insert("type".to_string(), serde_json::to_value(&type).unwrap_or(Value::Null));
+        args.insert("type".to_string(), serde_json::to_value(&r#type).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
@@ -5052,11 +5052,11 @@ impl DotnetToolResource {
     }
 
     /// Adds a relationship to another resource
-    pub fn with_relationship(&self, resource_builder: &IResource, type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("resourceBuilder".to_string(), resource_builder.handle().to_json());
-        args.insert("type".to_string(), serde_json::to_value(&type).unwrap_or(Value::Null));
+        args.insert("type".to_string(), serde_json::to_value(&r#type).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
@@ -6339,11 +6339,11 @@ impl ExecutableResource {
     }
 
     /// Adds a relationship to another resource
-    pub fn with_relationship(&self, resource_builder: &IResource, type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("resourceBuilder".to_string(), resource_builder.handle().to_json());
-        args.insert("type".to_string(), serde_json::to_value(&type).unwrap_or(Value::Null));
+        args.insert("type".to_string(), serde_json::to_value(&r#type).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
@@ -6979,11 +6979,11 @@ impl ExternalServiceResource {
     }
 
     /// Adds a relationship to another resource
-    pub fn with_relationship(&self, resource_builder: &IResource, type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("resourceBuilder".to_string(), resource_builder.handle().to_json());
-        args.insert("type".to_string(), serde_json::to_value(&type).unwrap_or(Value::Null));
+        args.insert("type".to_string(), serde_json::to_value(&r#type).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
@@ -8928,11 +8928,11 @@ impl ParameterResource {
     }
 
     /// Adds a relationship to another resource
-    pub fn with_relationship(&self, resource_builder: &IResource, type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("resourceBuilder".to_string(), resource_builder.handle().to_json());
-        args.insert("type".to_string(), serde_json::to_value(&type).unwrap_or(Value::Null));
+        args.insert("type".to_string(), serde_json::to_value(&r#type).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
@@ -10401,11 +10401,11 @@ impl ProjectResource {
     }
 
     /// Adds a relationship to another resource
-    pub fn with_relationship(&self, resource_builder: &IResource, type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("resourceBuilder".to_string(), resource_builder.handle().to_json());
-        args.insert("type".to_string(), serde_json::to_value(&type).unwrap_or(Value::Null));
+        args.insert("type".to_string(), serde_json::to_value(&r#type).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
@@ -12176,11 +12176,11 @@ impl TestDatabaseResource {
     }
 
     /// Adds a relationship to another resource
-    pub fn with_relationship(&self, resource_builder: &IResource, type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("resourceBuilder".to_string(), resource_builder.handle().to_json());
-        args.insert("type".to_string(), serde_json::to_value(&type).unwrap_or(Value::Null));
+        args.insert("type".to_string(), serde_json::to_value(&r#type).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
@@ -13449,11 +13449,11 @@ impl TestRedisResource {
     }
 
     /// Adds a relationship to another resource
-    pub fn with_relationship(&self, resource_builder: &IResource, type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("resourceBuilder".to_string(), resource_builder.handle().to_json());
-        args.insert("type".to_string(), serde_json::to_value(&type).unwrap_or(Value::Null));
+        args.insert("type".to_string(), serde_json::to_value(&r#type).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
@@ -14844,11 +14844,11 @@ impl TestVaultResource {
     }
 
     /// Adds a relationship to another resource
-    pub fn with_relationship(&self, resource_builder: &IResource, type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("resourceBuilder".to_string(), resource_builder.handle().to_json());
-        args.insert("type".to_string(), serde_json::to_value(&type).unwrap_or(Value::Null));
+        args.insert("type".to_string(), serde_json::to_value(&r#type).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withBuilderRelationship", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))

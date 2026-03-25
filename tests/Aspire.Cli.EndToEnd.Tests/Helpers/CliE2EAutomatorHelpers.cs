@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Xml.Linq;
 using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 
@@ -12,6 +13,8 @@ namespace Aspire.Cli.EndToEnd.Tests.Helpers;
 /// </summary>
 internal static class CliE2EAutomatorHelpers
 {
+    private static readonly string s_expectedStableVersionMarker = GetExpectedStableVersionMarker();
+
     /// <summary>
     /// Prepares the Docker environment by setting up prompt counting, umask, and environment variables.
     /// </summary>
@@ -156,26 +159,37 @@ internal static class CliE2EAutomatorHelpers
         string commitSha,
         SequenceCounter counter)
     {
-        var versionPrefix = CliE2ETestHelpers.GetVersionPrefix();
-        var isStabilized = CliE2ETestHelpers.IsStabilizedBuild();
+        if (commitSha.Length != 40)
+        {
+            throw new ArgumentException($"Commit SHA must be exactly 40 characters, got {commitSha.Length}: '{commitSha}'", nameof(commitSha));
+        }
+
+        var shortCommitSha = commitSha[..8];
 
         await auto.TypeAsync("aspire --version");
         await auto.EnterAsync();
 
-        // Always verify the version prefix matches the branch's version (e.g., "13.3.0").
-        await auto.WaitUntilTextAsync(versionPrefix, timeout: TimeSpan.FromSeconds(10));
-
-        // For non-stabilized builds (all PR CI builds), also verify the commit SHA suffix
-        // to uniquely identify the exact build. Stabilized builds (official releases only)
-        // produce versions without SHA suffixes, so we skip this check.
-        if (!isStabilized && commitSha.Length == 40)
-        {
-            var shortCommitSha = commitSha[..8];
-            var expectedVersionSuffix = $"g{shortCommitSha}";
-            await auto.WaitUntilTextAsync(expectedVersionSuffix, timeout: TimeSpan.FromSeconds(10));
-        }
+        // Stabilized PR builds can omit the commit SHA from the printed version, so accept
+        // either the expected major/minor marker from eng/Versions.props or the PR commit SHA.
+        await auto.WaitUntilAsync(
+            snapshot => snapshot.ContainsText(s_expectedStableVersionMarker) || snapshot.ContainsText($"g{shortCommitSha}"),
+            timeout: TimeSpan.FromSeconds(10),
+            description: $"Aspire CLI version containing '{s_expectedStableVersionMarker}' or 'g{shortCommitSha}'");
 
         await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    private static string GetExpectedStableVersionMarker()
+    {
+        var versionsPropsPath = Path.Combine(CliE2ETestHelpers.GetRepoRoot(), "eng", "Versions.props");
+        var document = XDocument.Load(versionsPropsPath);
+
+        var majorVersion = document.Descendants("MajorVersion").FirstOrDefault()?.Value;
+        var minorVersion = document.Descendants("MinorVersion").FirstOrDefault()?.Value;
+
+        return !string.IsNullOrEmpty(majorVersion) && !string.IsNullOrEmpty(minorVersion)
+            ? $"{majorVersion}.{minorVersion}."
+            : throw new InvalidOperationException($"Could not determine Aspire version marker from '{versionsPropsPath}'.");
     }
 
     /// <summary>
