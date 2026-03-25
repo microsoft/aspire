@@ -490,9 +490,12 @@ public static class ResourceBuilderExtensions
                 }
 
                 var endpointName = endpoint.EndpointName;
-                if (!annotation.UseAllEndpoints && !annotation.EndpointNames.Contains(endpointName))
+                var isExplicitlyNamed = annotation.EndpointNames.Contains(endpointName);
+                var isIncludedByDefault = annotation.UseAllEndpoints && !endpoint.ExcludeReferenceEndpoint;
+
+                if (!isExplicitlyNamed && !isIncludedByDefault)
                 {
-                    // Skip this endpoint since it's not in the list of endpoints we want to reference.
+                    // Skip this endpoint since it's not explicitly named and not a default reference endpoint.
                     continue;
                 }
 
@@ -773,14 +776,25 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Injects service discovery and endpoint information as environment variables from the project resource into the destination resource, using the source resource's name as the service name.
-    /// Each endpoint defined on the project resource will be injected using the format defined by the <see cref="ReferenceEnvironmentInjectionAnnotation"/> on the destination resource, i.e.
+    /// Injects service discovery and endpoint information as environment variables from the source resource into the destination resource, using the source resource's name as the service name.
+    /// Each non-excluded endpoint (where <see cref="EndpointAnnotation.ExcludeReferenceEndpoint"/> is <c>false</c>) defined on the source resource will be injected using the format defined by
+    /// the <see cref="ReferenceEnvironmentInjectionAnnotation"/> on the destination resource, i.e.
     /// either "services__{sourceResourceName}__{endpointScheme}__{endpointIndex}={uriString}" for .NET service discovery, or "{RESOURCE_ENDPOINT}={uri}" for endpoint injection.
     /// </summary>
     /// <typeparam name="TDestination">The destination resource.</typeparam>
     /// <param name="builder">The resource where the service discovery information will be injected.</param>
     /// <param name="source">The resource from which to extract service discovery information.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>
+    /// <para>
+    /// All endpoints are included in the default reference set unless explicitly excluded.
+    /// Resource authors can opt out individual endpoints by setting <see cref="EndpointAnnotation.ExcludeReferenceEndpoint"/> to <c>true</c>
+    /// (for example, using <c>.WithEndpoint("endpointName", e =&gt; e.ExcludeReferenceEndpoint = true)</c>) to exclude them from this method's behavior.
+    /// Endpoints that have been excluded (such as management or health check endpoints) can still be referenced explicitly using
+    /// <see cref="WithReference{TDestination}(IResourceBuilder{TDestination}, EndpointReference)"/>
+    /// with <see cref="ResourceBuilderExtensions.GetEndpoint{T}(IResourceBuilder{T}, string)"/>.
+    /// </para>
+    /// </remarks>
     [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference export.")]
     public static IResourceBuilder<TDestination> WithReference<TDestination>(this IResourceBuilder<TDestination> builder, IResourceBuilder<IResourceWithServiceDiscovery> source)
         where TDestination : IResourceWithEnvironment
@@ -793,8 +807,9 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Injects service discovery and endpoint information as environment variables from the project resource into the destination resource, using the source resource's name as the service name.
-    /// Each endpoint defined on the project resource will be injected using the format defined by the <see cref="ReferenceEnvironmentInjectionAnnotation"/> on the destination resource, i.e.
+    /// Injects service discovery and endpoint information as environment variables from the source resource into the destination resource, using the source resource's name as the service name.
+    /// Each non-excluded endpoint (where <see cref="EndpointAnnotation.ExcludeReferenceEndpoint"/> is <c>false</c>) defined on the source resource will be injected using the format defined by
+    /// the <see cref="ReferenceEnvironmentInjectionAnnotation"/> on the destination resource, i.e.
     /// either "services__{name}__{endpointScheme}__{endpointIndex}={uriString}" for .NET service discovery, or "{name}_{ENDPOINT}={uri}" for endpoint injection.
     /// </summary>
     /// <typeparam name="TDestination">The destination resource.</typeparam>
@@ -802,6 +817,16 @@ public static class ResourceBuilderExtensions
     /// <param name="source">The resource from which to extract service discovery information.</param>
     /// <param name="name">The name of the resource for the environment variable.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>
+    /// <para>
+    /// All endpoints are included in the default reference set unless explicitly excluded.
+    /// Resource authors can opt out individual endpoints by setting <see cref="EndpointAnnotation.ExcludeReferenceEndpoint"/> to <c>true</c>
+    /// (for example, using <c>.WithEndpoint("endpointName", e =&gt; e.ExcludeReferenceEndpoint = true)</c>) to exclude them from this method's behavior.
+    /// Endpoints that have been excluded (such as management or health check endpoints) can still be referenced explicitly using
+    /// <see cref="WithReference{TDestination}(IResourceBuilder{TDestination}, EndpointReference)"/>
+    /// with <see cref="ResourceBuilderExtensions.GetEndpoint{T}(IResourceBuilder{T}, string)"/>.
+    /// </para>
+    /// </remarks>
     [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference export.")]
     public static IResourceBuilder<TDestination> WithReference<TDestination>(this IResourceBuilder<TDestination> builder, IResourceBuilder<IResourceWithServiceDiscovery> source, string name)
         where TDestination : IResourceWithEnvironment

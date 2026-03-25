@@ -61,7 +61,7 @@ internal sealed class SecretGetCommand : BaseCommand
         }
 
         // Write value to stdout (machine-readable)
-        InteractionService.DisplayPlainText(value);
+        InteractionService.DisplayRawText(value, consoleOverride: ConsoleOutput.Standard);
         return ExitCodeConstants.Success;
     }
 }

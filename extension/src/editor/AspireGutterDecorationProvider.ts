@@ -36,8 +36,12 @@ function classifyState(state: string, stateStyle: string, healthStatus: string):
     switch (state) {
         case ResourceState.Running:
         case ResourceState.Active:
-            if (stateStyle === StateStyle.Error || healthStatus === HealthStatus.Unhealthy) return 'error';
-            if (stateStyle === StateStyle.Warning || healthStatus === HealthStatus.Degraded) return 'warning';
+            if (stateStyle === StateStyle.Error || healthStatus === HealthStatus.Unhealthy) {
+                return 'error';
+            }
+            if (stateStyle === StateStyle.Warning || healthStatus === HealthStatus.Degraded) {
+                return 'warning';
+            }
             return 'running';
         case ResourceState.FailedToStart:
         case ResourceState.RuntimeUnhealthy:

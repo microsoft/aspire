@@ -14,12 +14,13 @@ internal static class ConsoleHelpers
     /// <summary>
     /// Formats an emoji prefix with trailing space for aligned console output.
     /// </summary>
-    public static string FormatEmojiPrefix(KnownEmoji emoji, IAnsiConsole console)
+    public static string FormatEmojiPrefix(KnownEmoji emoji, IAnsiConsole console, bool replaceEmoji = false)
     {
         const int emojiTargetWidth = 3; // 2 for emoji and 1 trailing space
 
         var cellLength = EmojiWidth.GetCachedCellWidth(emoji.Name, console);
         var padding = Math.Max(1, emojiTargetWidth - cellLength);
-        return $":{emoji.Name}:" + new string(' ', padding);
+        var spectreEmojiText = $":{emoji.Name}:";
+        return (replaceEmoji ? Emoji.Replace(spectreEmojiText) : spectreEmojiText) + new string(' ', padding);
     }
 }

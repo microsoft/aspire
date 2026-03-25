@@ -1260,6 +1260,42 @@ public class AzureContainerAppsTests
     }
 
     [Fact]
+    public async Task ContainerWithTcpAndHttpEndpointsPublishesToAzureContainerApps()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/11841
+        // A container with both a TCP endpoint (e.g. AMQP on 5672) and an HTTP
+        // endpoint on a non-standard port (e.g. management UI on 15672) should
+        // publish successfully. The HTTP endpoint becomes the primary ingress and
+        // the TCP endpoint goes to additionalPortMappings.
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureContainerAppEnvironment("env");
+
+        builder.AddContainer("messaging", "rabbitmq:management")
+            .WithEndpoint(targetPort: 5672, name: "amqp")
+            .WithHttpEndpoint(port: 15672, targetPort: 15672, name: "management");
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var container = Assert.Single(model.GetContainerResources());
+
+        container.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var target);
+
+        var resource = target?.DeploymentTarget as AzureProvisioningResource;
+
+        Assert.NotNull(resource);
+
+        var (manifest, bicep) = await GetManifestWithBicep(resource);
+
+        await Verify(manifest.ToString(), "json")
+              .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
     public async Task CanPreserveHttpSchemeUsingWithHttpsUpgrade()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -1690,11 +1726,11 @@ public class AzureContainerAppsTests
     {
         var containerApp = new ContainerApp("app");
 
-        // In order to set autoConfigureDataProtection and kind=functionapp, we need to use a preview API ContainerApp version.
-        // This test fails on new default versions for ContainerApp so we check if autoConfigureDataProtection/kind exists on the new Azure.Provisioning version.
-        // Also, we need to ensure the new default version isn't newer than the preview version used to set autoConfigureDataProtection/kind because
+        // In order to set autoConfigureDataProtection, we need to use a preview API ContainerApp version.
+        // This test fails on new default versions for ContainerApp so we check if autoConfigureDataProtection exists on the new Azure.Provisioning version.
+        // Also, we need to ensure the new default version isn't newer than the preview version used to set autoConfigureDataProtection because
         // callers will get new APIs that may not work with the preview version we are using.
-        Assert.True(containerApp.ResourceVersion == "2025-01-01", "When we get a new ResourceVersion for ContainerApps, ensure the version used by ContainerAppContext.CreateContainerApp() still works correctly.");
+        Assert.True(containerApp.ResourceVersion == "2025-07-01", "When we get a new ResourceVersion for ContainerApps, ensure the version used by ContainerAppContext.CreateContainerApp() still works correctly.");
     }
 
     [Fact]

@@ -97,10 +97,10 @@ jobs:
           echo ${{ github.workspace }}\.dotnet >> $env:GITHUB_PATH
 
       - name: Checkout code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Set up .NET Core
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         # Used for running tests outside the repo
         if: ${{ inputs.requiresNugets }}
         with:
@@ -132,7 +132,7 @@ jobs:
 
       - name: Download built nugets
         if: ${{ inputs.requiresNugets }}
-        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: built-nugets
           path: ${{ github.workspace }}/artifacts/packages
@@ -140,8 +140,18 @@ jobs:
       - name: Copy nugets to the correct location
         if: ${{ inputs.requiresNugets }}
         shell: pwsh
-        run:
-          Move-Item -Path "${{ github.workspace }}/artifacts/packages/built-nugets/Debug" -Destination "${{ github.workspace }}/artifacts/packages"
+        run: |
+          $packageRoot = "${{ github.workspace }}/artifacts/packages"
+          $nestedDebugPath = Join-Path $packageRoot "built-nugets/Debug"
+          $directDebugPath = Join-Path $packageRoot "Debug"
+
+          if (Test-Path $nestedDebugPath) {
+            Move-Item -Path $nestedDebugPath -Destination $packageRoot
+          }
+          elseif (-not (Test-Path $directDebugPath)) {
+            Get-ChildItem -Path $packageRoot -Recurse | Select-Object -ExpandProperty FullName
+            Write-Error "Unable to find downloaded NuGet packages at '$nestedDebugPath' or '$directDebugPath'."
+          }
 
       - name: Compute RID for arch-specific packages
         if: ${{ inputs.requiresNugets }}
@@ -162,7 +172,7 @@ jobs:
       - name: Download arch-specific nugets
         if: ${{ inputs.requiresNugets }}
         continue-on-error: true
-        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: built-nugets-for-${{ steps.compute_rid.outputs.rid }}
           path: ${{ github.workspace }}/arch-specific
@@ -527,7 +537,7 @@ jobs:
       - name: Upload logs, and test results
         id: upload-logs
         if: always()
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: logs-${{ inputs.testShortName }}-${{ inputs.os }}
           path: |
@@ -549,7 +559,7 @@ jobs:
 
       - name: Upload CLI E2E recordings
         if: always()
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: cli-e2e-recordings-${{ inputs.testShortName }}
           path: cli-e2e-recordings/*.cast
