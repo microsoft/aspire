@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "AzureOpenAIEndToEnd.AppHost/AzureOpenAIEndToEnd.AppHost.csproj"
+  }
+}

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.IO.Enumeration;
 using System.Text.Json;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
@@ -76,12 +77,15 @@ internal sealed class ProjectLocator(
 
             logger.LogDebug("Searching for patterns: {Patterns}", string.Join(", ", allPatterns));
 
+            var nugetCachePath = GetNuGetPackagesCachePath();
+            logger.LogDebug("NuGet cache path to exclude: {NuGetCachePath}", nugetCachePath ?? "(none)");
+
             // Collect all candidates with their handlers across all patterns
             var candidatesWithHandlers = new List<(FileInfo File, IAppHostProject Handler)>();
 
             foreach (var pattern in allPatterns)
             {
-                var candidateFiles = searchDirectory.GetFiles(pattern, enumerationOptions);
+                var candidateFiles = FindMatchingFiles(searchDirectory, pattern, enumerationOptions, nugetCachePath);
                 logger.LogDebug("Found {CandidateCount} files matching pattern '{Pattern}'", candidateFiles.Length, pattern);
 
                 foreach (var candidateFile in candidateFiles)
@@ -347,6 +351,11 @@ internal sealed class ProjectLocator(
 
         if (projectFile is not null)
         {
+            if (createSettingsFile)
+            {
+                await CreateSettingsFileAsync(projectFile, cancellationToken);
+            }
+
             return new AppHostProjectSearchResult(projectFile, [projectFile]);
         }
 
@@ -484,6 +493,51 @@ internal sealed class ProjectLocator(
         }
 
         return settingsDirectory.Parent;
+    }
+
+    private static FileInfo[] FindMatchingFiles(DirectoryInfo searchDirectory, string pattern, EnumerationOptions options, string? excludePath)
+    {
+        var pathComparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+
+        var enumerable = new FileSystemEnumerable<FileInfo>(
+            searchDirectory.FullName,
+            (ref FileSystemEntry entry) => new FileInfo(entry.ToFullPath()),
+            options)
+        {
+            ShouldIncludePredicate = (ref FileSystemEntry entry) =>
+                !entry.IsDirectory && FileSystemName.MatchesSimpleExpression(pattern, entry.FileName),
+            ShouldRecursePredicate = (ref FileSystemEntry entry) =>
+            {
+                if (excludePath is null)
+                {
+                    return true;
+                }
+                var dirPath = entry.ToFullPath();
+                return !dirPath.Equals(excludePath, pathComparison)
+                    && !dirPath.StartsWith(excludePath + Path.DirectorySeparatorChar, pathComparison);
+            }
+        };
+
+        return enumerable.ToArray();
+    }
+
+    private string? GetNuGetPackagesCachePath()
+    {
+        var envPath = executionContext.GetEnvironmentVariable("NUGET_PACKAGES");
+        if (!string.IsNullOrEmpty(envPath))
+        {
+            return Path.GetFullPath(envPath);
+        }
+
+        var userProfile = executionContext.HomeDirectory.FullName;
+        if (!string.IsNullOrEmpty(userProfile))
+        {
+            return Path.GetFullPath(Path.Combine(userProfile, ".nuget", "packages"));
+        }
+
+        return null;
     }
 
 }

@@ -16,9 +16,7 @@ internal sealed class OpenCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
 {
     private const string OpenCodeConfigFileName = "opencode.jsonc";
     private const string AspireServerName = "aspire";
-    private static readonly string s_skillFilePath = Path.Combine(".opencode", "skill", CommonAgentApplicators.AspireSkillName, "SKILL.md");
     private static readonly string s_skillBaseDirectory = Path.Combine(".opencode", "skill");
-    private const string SkillFileDescription = "Create Aspire skill file (.opencode/skill/aspire/SKILL.md)";
 
     private readonly IOpenCodeCliRunner _openCodeCliRunner;
     private readonly PlaywrightCliInstaller _playwrightCliInstaller;
@@ -70,13 +68,6 @@ internal sealed class OpenCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
 
             // Register Playwright CLI installation applicator
             CommonAgentApplicators.AddPlaywrightCliApplicator(context, _playwrightCliInstaller, s_skillBaseDirectory);
-
-            // Try to add skill file applicator for OpenCode
-            CommonAgentApplicators.TryAddSkillFileApplicator(
-                context,
-                context.RepositoryRoot,
-                s_skillFilePath,
-                SkillFileDescription);
         }
         else
         {
@@ -93,13 +84,6 @@ internal sealed class OpenCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
                 
                 // Register Playwright CLI installation applicator
                 CommonAgentApplicators.AddPlaywrightCliApplicator(context, _playwrightCliInstaller, s_skillBaseDirectory);
-                
-                // Try to add skill file applicator for OpenCode
-                CommonAgentApplicators.TryAddSkillFileApplicator(
-                    context,
-                    context.RepositoryRoot,
-                    s_skillFilePath,
-                    SkillFileDescription);
             }
             else
             {

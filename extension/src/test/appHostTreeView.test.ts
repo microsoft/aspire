@@ -2,6 +2,7 @@ import * as assert from 'assert';
 import { shortenPath } from '../views/AppHostDataRepository';
 import { getResourceContextValue, getResourceIcon } from '../views/AspireAppHostTreeProvider';
 import type { ResourceJson } from '../views/AppHostDataRepository';
+import { ResourceState, HealthStatus, StateStyle } from '../editor/resourceConstants';
 
 function makeResource(overrides: Partial<ResourceJson> = {}): ResourceJson {
     const base: ResourceJson = {
@@ -103,62 +104,62 @@ suite('getResourceContextValue', () => {
 
 suite('getResourceIcon', () => {
     test('Running + Healthy shows pass icon', () => {
-        const icon = getResourceIcon(makeResource({ state: 'Running', healthStatus: 'Healthy' }));
+        const icon = getResourceIcon(makeResource({ state: ResourceState.Running, healthStatus: HealthStatus.Healthy }));
         assert.strictEqual(icon.id, 'pass');
     });
 
     test('Running + Unhealthy shows error icon', () => {
-        const icon = getResourceIcon(makeResource({ state: 'Running', healthStatus: 'Unhealthy' }));
+        const icon = getResourceIcon(makeResource({ state: ResourceState.Running, healthStatus: HealthStatus.Unhealthy }));
         assert.strictEqual(icon.id, 'error');
     });
 
     test('Running + Degraded shows warning icon', () => {
-        const icon = getResourceIcon(makeResource({ state: 'Running', healthStatus: 'Degraded' }));
+        const icon = getResourceIcon(makeResource({ state: ResourceState.Running, healthStatus: HealthStatus.Degraded }));
         assert.strictEqual(icon.id, 'warning');
     });
 
     test('Running + error stateStyle shows error icon', () => {
-        const icon = getResourceIcon(makeResource({ state: 'Running', stateStyle: 'error' }));
+        const icon = getResourceIcon(makeResource({ state: ResourceState.Running, stateStyle: StateStyle.Error }));
         assert.strictEqual(icon.id, 'error');
     });
 
     test('Running + warning stateStyle shows warning icon', () => {
-        const icon = getResourceIcon(makeResource({ state: 'Running', stateStyle: 'warning' }));
+        const icon = getResourceIcon(makeResource({ state: ResourceState.Running, stateStyle: StateStyle.Warning }));
         assert.strictEqual(icon.id, 'warning');
     });
 
     test('Active state treated same as Running', () => {
-        const icon = getResourceIcon(makeResource({ state: 'Active' }));
+        const icon = getResourceIcon(makeResource({ state: ResourceState.Active }));
         assert.strictEqual(icon.id, 'pass');
     });
 
     test('Finished shows circle-outline', () => {
-        const icon = getResourceIcon(makeResource({ state: 'Finished' }));
+        const icon = getResourceIcon(makeResource({ state: ResourceState.Finished }));
         assert.strictEqual(icon.id, 'circle-outline');
     });
 
     test('Exited with error stateStyle shows error', () => {
-        const icon = getResourceIcon(makeResource({ state: 'Exited', stateStyle: 'error' }));
+        const icon = getResourceIcon(makeResource({ state: ResourceState.Exited, stateStyle: StateStyle.Error }));
         assert.strictEqual(icon.id, 'error');
     });
 
     test('FailedToStart shows error icon', () => {
-        const icon = getResourceIcon(makeResource({ state: 'FailedToStart' }));
+        const icon = getResourceIcon(makeResource({ state: ResourceState.FailedToStart }));
         assert.strictEqual(icon.id, 'error');
     });
 
     test('RuntimeUnhealthy shows error icon', () => {
-        const icon = getResourceIcon(makeResource({ state: 'RuntimeUnhealthy' }));
+        const icon = getResourceIcon(makeResource({ state: ResourceState.RuntimeUnhealthy }));
         assert.strictEqual(icon.id, 'error');
     });
 
     test('Starting shows loading spinner', () => {
-        const icon = getResourceIcon(makeResource({ state: 'Starting' }));
+        const icon = getResourceIcon(makeResource({ state: ResourceState.Starting }));
         assert.strictEqual(icon.id, 'loading~spin');
     });
 
     test('Building shows loading spinner', () => {
-        const icon = getResourceIcon(makeResource({ state: 'Building' }));
+        const icon = getResourceIcon(makeResource({ state: ResourceState.Building }));
         assert.strictEqual(icon.id, 'loading~spin');
     });
 

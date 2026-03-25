@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "MilvusPlayground.AppHost/MilvusPlayground.AppHost.csproj"
+  }
+}

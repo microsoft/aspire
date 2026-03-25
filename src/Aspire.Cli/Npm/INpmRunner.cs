@@ -19,6 +19,16 @@ internal sealed class NpmPackageInfo
     /// Gets the SRI integrity hash (e.g., "sha512-...") for the package tarball.
     /// </summary>
     public required string Integrity { get; init; }
+
+    /// <summary>
+    /// Formats a full npm package specifier (e.g., "@playwright/cli@0.1.1").
+    /// </summary>
+    public static string FormatPackageSpecifier(string packageName, string version) => $"{packageName}@{version}";
+
+    /// <summary>
+    /// Formats a full npm package specifier (e.g., "@playwright/cli@0.1.1").
+    /// </summary>
+    public static string FormatPackageSpecifier(string packageName, SemVersion version) => FormatPackageSpecifier(packageName, version.ToString());
 }
 
 /// <summary>
@@ -26,6 +36,11 @@ internal sealed class NpmPackageInfo
 /// </summary>
 internal interface INpmRunner
 {
+    /// <summary>
+    /// Gets a value indicating whether npm is available on the system PATH.
+    /// </summary>
+    bool IsAvailable { get; }
+
     /// <summary>
     /// Resolves a package version and integrity hash from the npm registry.
     /// </summary>

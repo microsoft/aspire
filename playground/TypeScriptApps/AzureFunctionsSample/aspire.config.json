@@ -1,0 +1,12 @@
+{
+  "sdk": {
+    "version": "13.3.0-preview.1.26163.4"
+  },
+  "channel": "daily",
+  "packages": {
+    "Aspire.Hosting.Azure.Storage": "13.3.0-preview.1.26167.8",
+    "Aspire.Hosting.JavaScript": "13.3.0-preview.1.26167.8",
+    "Aspire.Hosting.Azure": "13.3.0-preview.1.26167.8",
+    "Aspire.Hosting.Azure.EventHubs": "13.3.0-preview.1.26167.8"
+  }
+}

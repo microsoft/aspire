@@ -43,7 +43,7 @@ internal sealed class SecretPathCommand : BaseCommand
             return ExitCodeConstants.FailedToFindProject;
         }
 
-        InteractionService.DisplayPlainText(result.Store.FilePath);
+        InteractionService.DisplayRawText(result.Store.FilePath, consoleOverride: ConsoleOutput.Standard);
         return ExitCodeConstants.Success;
     }
 }

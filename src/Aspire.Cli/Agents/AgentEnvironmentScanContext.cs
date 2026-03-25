@@ -9,7 +9,6 @@ namespace Aspire.Cli.Agents;
 internal sealed class AgentEnvironmentScanContext
 {
     private readonly List<AgentEnvironmentApplicator> _applicators = [];
-    private readonly HashSet<string> _skillFileApplicatorPaths = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _skillBaseDirectories = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
@@ -29,25 +28,6 @@ internal sealed class AgentEnvironmentScanContext
     /// This is used to ensure only one applicator for Playwright is added across all scanners.
     /// </summary>
     public bool PlaywrightApplicatorAdded { get; set; }
-
-    /// <summary>
-    /// Checks if a skill file applicator has already been added for the specified path.
-    /// </summary>
-    /// <param name="skillRelativePath">The relative path to the skill file.</param>
-    /// <returns>True if an applicator has already been added for this path.</returns>
-    public bool HasSkillFileApplicator(string skillRelativePath)
-    {
-        return _skillFileApplicatorPaths.Contains(skillRelativePath);
-    }
-
-    /// <summary>
-    /// Marks a skill file path as having an applicator added.
-    /// </summary>
-    /// <param name="skillRelativePath">The relative path to the skill file.</param>
-    public void MarkSkillFileApplicatorAdded(string skillRelativePath)
-    {
-        _skillFileApplicatorPaths.Add(skillRelativePath);
-    }
 
     /// <summary>
     /// Adds an applicator to the collection of detected agent environments.

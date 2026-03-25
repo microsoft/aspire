@@ -34,10 +34,8 @@ public sealed class StagingChannelTests(ITestOutputHelper output)
         await auto.InstallAspireCliInDockerAsync(installMode, counter);
 
         // Step 1: Configure staging channel settings via aspire config set
-        // Enable the staging channel feature flag
-        await auto.TypeAsync("aspire config set features.stagingChannelEnabled true -g");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        // Note: we do NOT need to enable features.stagingChannelEnabled — setting channel
+        // to staging is sufficient to enable the staging channel behavior.
 
         // Set quality to Prerelease (triggers shared feed mode)
         await auto.TypeAsync("aspire config set overrideStagingQuality Prerelease -g");
@@ -49,7 +47,7 @@ public sealed class StagingChannelTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Set channel to staging
+        // Set channel to staging — this alone enables staging channel behavior
         await auto.TypeAsync("aspire config set channel staging -g");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
@@ -106,9 +104,6 @@ public sealed class StagingChannelTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Clean up: remove staging settings to avoid polluting other tests
-        await auto.TypeAsync("aspire config delete features.stagingChannelEnabled -g");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
         await auto.TypeAsync("aspire config delete overrideStagingQuality -g");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);

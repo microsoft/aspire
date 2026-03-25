@@ -40,7 +40,7 @@ resource my_ace_law 'Microsoft.OperationalInsights/workspaces@2025-02-01' = {
   tags: tags
 }
 
-resource my_ace 'Microsoft.App/managedEnvironments@2025-01-01' = {
+resource my_ace 'Microsoft.App/managedEnvironments@2025-07-01' = {
   name: take('myace${uniqueString(resourceGroup().id)}', 24)
   location: location
   properties: {
@@ -61,7 +61,7 @@ resource my_ace 'Microsoft.App/managedEnvironments@2025-01-01' = {
   tags: tags
 }
 
-resource aspireDashboard 'Microsoft.App/managedEnvironments/dotNetComponents@2024-10-02-preview' = {
+resource aspireDashboard 'Microsoft.App/managedEnvironments/dotNetComponents@2025-10-02-preview' = {
   name: 'aspire-dashboard'
   properties: {
     componentType: 'AspireDashboard'
@@ -97,7 +97,7 @@ resource shares_volumes_druid_0 'Microsoft.Storage/storageAccounts/fileServices/
   parent: storageVolumeFileService
 }
 
-resource managedStorage_volumes_druid_0 'Microsoft.App/managedEnvironments/storages@2025-01-01' = {
+resource managedStorage_volumes_druid_0 'Microsoft.App/managedEnvironments/storages@2025-07-01' = {
   name: take('${toLower('druid')}-${toLower('druid_shared')}-${resourceToken}', 32)
   properties: {
     azureFile: {
@@ -119,7 +119,7 @@ resource shares_volumes_druid_1 'Microsoft.Storage/storageAccounts/fileServices/
   parent: storageVolumeFileService
 }
 
-resource managedStorage_volumes_druid_1 'Microsoft.App/managedEnvironments/storages@2025-01-01' = {
+resource managedStorage_volumes_druid_1 'Microsoft.App/managedEnvironments/storages@2025-07-01' = {
   name: take('${toLower('druid')}-${toLower('coordinator_var')}-${resourceToken}', 32)
   properties: {
     azureFile: {
@@ -141,7 +141,7 @@ resource shares_bindmounts_druid_0 'Microsoft.Storage/storageAccounts/fileServic
   parent: storageVolumeFileService
 }
 
-resource managedStorage_bindmounts_druid_0 'Microsoft.App/managedEnvironments/storages@2025-01-01' = {
+resource managedStorage_bindmounts_druid_0 'Microsoft.App/managedEnvironments/storages@2025-07-01' = {
   name: take('${toLower('druid')}-${toLower('bm0')}-${resourceToken}', 32)
   properties: {
     azureFile: {

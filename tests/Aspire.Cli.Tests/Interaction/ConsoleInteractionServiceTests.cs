@@ -6,6 +6,7 @@ using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
+using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console;
 
 using System.Text;
@@ -17,7 +18,7 @@ public class ConsoleInteractionServiceTests
     private static ConsoleInteractionService CreateInteractionService(IAnsiConsole console, CliExecutionContext executionContext, ICliHostEnvironment? hostEnvironment = null)
     {
         var consoleEnvironment = new ConsoleEnvironment(console, console);
-        return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment ?? TestHelpers.CreateInteractiveHostEnvironment());
+        return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment ?? TestHelpers.CreateInteractiveHostEnvironment(), NullLoggerFactory.Instance);
     }
 
     [Fact]
