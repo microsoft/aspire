@@ -2,9 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Agents;
+using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
@@ -24,6 +26,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
 {
     private readonly IInteractionService _interactionService;
     private readonly IAgentEnvironmentDetector _agentEnvironmentDetector;
+    private readonly PlaywrightCliInstaller _playwrightCliInstaller;
     private readonly IGitRepository _gitRepository;
 
     /// <summary>
@@ -42,12 +45,14 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         ICliUpdateNotifier updateNotifier,
         CliExecutionContext executionContext,
         IAgentEnvironmentDetector agentEnvironmentDetector,
+        PlaywrightCliInstaller playwrightCliInstaller,
         IGitRepository gitRepository,
         AspireCliTelemetry telemetry)
         : base("init", AgentCommandStrings.InitCommand_Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _interactionService = interactionService;
         _agentEnvironmentDetector = agentEnvironmentDetector;
+        _playwrightCliInstaller = playwrightCliInstaller;
         _gitRepository = gitRepository;
     }
 
@@ -144,12 +149,6 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             McpCommandStrings.InitCommand_DetectingAgentEnvironments,
             async () => await _agentEnvironmentDetector.DetectAsync(context, cancellationToken));
 
-        if (applicators.Length == 0)
-        {
-            _interactionService.DisplaySubtleMessage(McpCommandStrings.InitCommand_NoAgentEnvironmentsDetected);
-            return ExitCodeConstants.Success;
-        }
-
         // Apply deprecated config migrations silently (these are fixes, not choices)
         var configUpdates = applicators.Where(a => a.PromptGroup == McpInitPromptGroup.ConfigUpdates).ToList();
         var userChoices = applicators.Where(a => a.PromptGroup != McpInitPromptGroup.ConfigUpdates).ToList();
@@ -167,102 +166,155 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             }
         }
 
-        if (userChoices.Count == 0)
-        {
-            _interactionService.DisplaySuccess(McpCommandStrings.InitCommand_ConfigurationComplete);
-            return ExitCodeConstants.Success;
-        }
-
-        // Categorize by prompt group (not string matching)
-        var skillApplicators = userChoices
-            .Where(a => a.PromptGroup == McpInitPromptGroup.SkillFiles)
-            .ToList();
-        var mcpApplicators = userChoices
-            .Where(a => a.PromptGroup == McpInitPromptGroup.AgentEnvironments)
-            .ToList();
-        var toolApplicators = userChoices
-            .Where(a => a.PromptGroup == McpInitPromptGroup.Tools)
-            .ToList();
-        var otherApplicators = userChoices
-            .Except(skillApplicators)
-            .Except(mcpApplicators)
-            .Except(toolApplicators)
-            .ToList();
-
-        // Build a flat list: collapsed skill (pre-selected), then others (Playwright CLI, etc.)
-        var promptChoices = new List<AgentEnvironmentApplicator>();
-
-        // Collapse all skill applicators into a single line (pre-selected)
-        AgentEnvironmentApplicator? combinedSkillApplicator = null;
-        if (skillApplicators.Count > 0)
-        {
-            combinedSkillApplicator = new AgentEnvironmentApplicator(
-                AgentCommandStrings.InitCommand_InstallSkillFile,
-                async ct =>
-                {
-                    foreach (var skill in skillApplicators)
-                    {
-                        await skill.ApplyAsync(ct);
-                        _interactionService.DisplayMessage(KnownEmojis.CheckMark, skill.Description);
-                    }
-                },
-                promptGroup: McpInitPromptGroup.AdditionalOptions);
-            promptChoices.Add(combinedSkillApplicator);
-        }
-
-        promptChoices.AddRange(toolApplicators);
-        promptChoices.AddRange(otherApplicators);
-
-        // Add collapsed MCP as last option for compatibility
-        if (mcpApplicators.Count > 0)
-        {
-            var combinedMcpApplicator = new AgentEnvironmentApplicator(
-                AgentCommandStrings.InitCommand_ConfigureMcpServer,
-                async ct =>
-                {
-                    foreach (var mcp in mcpApplicators)
-                    {
-                        await mcp.ApplyAsync(ct);
-                        _interactionService.DisplayMessage(KnownEmojis.CheckMark, mcp.Description);
-                    }
-                },
-                promptGroup: McpInitPromptGroup.AdditionalOptions);
-            promptChoices.Add(combinedMcpApplicator);
-        }
-
-        // Pre-select the skill applicator
-        var preSelected = combinedSkillApplicator is not null ? [combinedSkillApplicator] : Array.Empty<AgentEnvironmentApplicator>();
-
-        // Present a single flat prompt with skill pre-selected
-        var selected = await _interactionService.PromptForSelectionsAsync(
-            AgentCommandStrings.InitCommand_WhatToConfigure,
-            promptChoices,
-            applicator => applicator.Description,
-            preSelected: preSelected,
+        // --- Phase 1: Skill location selection ---
+        var selectedLocations = await _interactionService.PromptForSelectionsAsync(
+            AgentCommandStrings.InitCommand_SelectSkillLocations,
+            SkillLocation.All,
+            loc => $"{loc.Name} — {loc.Description}",
+            preSelected: SkillLocation.All.Where(l => l.IsDefault),
             optional: true,
             cancellationToken);
 
-        if (selected.Count == 0)
+        // --- Phase 2: Skill and MCP server selection (only if locations were selected) ---
+        IReadOnlyList<SkillDefinition> selectedSkills = [];
+        AgentEnvironmentApplicator? combinedMcpApplicator = null;
+        var mcpApplicators = userChoices.Where(a => a.PromptGroup == McpInitPromptGroup.AgentEnvironments).ToList();
+
+        if (selectedLocations.Count > 0)
         {
-            _interactionService.DisplaySubtleMessage(AgentCommandStrings.InitCommand_NothingSelected);
-            return ExitCodeConstants.Success;
+            // Build prompt items: skills first, then MCP as a separate non-default item
+            var skillChoices = new List<object>();
+            skillChoices.AddRange(SkillDefinition.All);
+
+            if (mcpApplicators.Count > 0)
+            {
+                combinedMcpApplicator = new AgentEnvironmentApplicator(
+                    AgentCommandStrings.InitCommand_ConfigureMcpServer,
+                    async ct =>
+                    {
+                        foreach (var mcp in mcpApplicators)
+                        {
+                            await mcp.ApplyAsync(ct);
+                            _interactionService.DisplayMessage(KnownEmojis.CheckMark, mcp.Description);
+                        }
+                    },
+                    promptGroup: McpInitPromptGroup.AdditionalOptions);
+                skillChoices.Add(combinedMcpApplicator);
+            }
+
+            var preSelectedItems = new List<object>();
+            preSelectedItems.AddRange(SkillDefinition.All.Where(s => s.IsDefault));
+            // MCP is intentionally NOT pre-selected
+
+            var selectedItems = await _interactionService.PromptForSelectionsAsync(
+                AgentCommandStrings.InitCommand_SelectSkills,
+                skillChoices,
+                item => item switch
+                {
+                    SkillDefinition skill => $"{skill.Name} — {skill.Description}",
+                    AgentEnvironmentApplicator app => $"[bold]{app.Description}[/] [dim]{AgentCommandStrings.InitCommand_ConfiguresDetectedAgentEnvironments}[/]",
+                    _ => item.ToString()!
+                },
+                preSelected: preSelectedItems,
+                optional: true,
+                cancellationToken);
+
+            selectedSkills = selectedItems.OfType<SkillDefinition>().ToList();
+
+            // Clear MCP applicator if it was not selected by the user.
+            if (combinedMcpApplicator is not null && !selectedItems.Contains(combinedMcpApplicator))
+            {
+                combinedMcpApplicator = null;
+            }
         }
 
-        // Apply selected applicators
+        // --- Phase 3: Apply skill files for selected locations × skills ---
+        // Each skill file write is fast (small markdown files), so sequential execution
+        // is fine — parallelizing would complicate error handling for no meaningful gain.
         var hasErrors = false;
-        foreach (var applicator in selected)
+        foreach (var location in selectedLocations)
+        {
+            context.AddSkillBaseDirectory(location.RelativeSkillDirectory);
+
+            foreach (var skill in selectedSkills)
+            {
+                // Playwright CLI is installed via PlaywrightCliInstaller, not as a static skill file
+                if (skill.SkillContent is null)
+                {
+                    continue;
+                }
+
+                hasErrors |= !await InstallSkillFileAsync(
+                    workspaceRoot,
+                    location.RelativeSkillDirectory,
+                    skill,
+                    isUserLevel: false,
+                    cancellationToken);
+
+                if (location.IncludeUserLevel)
+                {
+                    hasErrors |= !await InstallSkillFileAsync(
+                        ExecutionContext.HomeDirectory,
+                        location.RelativeSkillDirectory,
+                        skill,
+                        isUserLevel: true,
+                        cancellationToken);
+                }
+            }
+        }
+
+        // --- Phase 4: Handle Playwright CLI (installs binary + mirrors skill files to registered directories) ---
+        var selectedSkillDirs = selectedLocations.Select(l => l.RelativeSkillDirectory).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (selectedSkills.Contains(SkillDefinition.PlaywrightCli) && selectedLocations.Count > 0)
         {
             try
             {
-                await applicator.ApplyAsync(cancellationToken);
+                var (status, message) = await _playwrightCliInstaller.InstallAsync(workspaceRoot.FullName, selectedSkillDirs, cancellationToken);
+                switch (status)
+                {
+                    case PlaywrightInstallStatus.Installed:
+                        _interactionService.DisplayMessage(KnownEmojis.CheckMark, AgentCommandStrings.InitCommand_InstalledPlaywrightCli);
+                        break;
+                    case PlaywrightInstallStatus.InstalledWithWarnings:
+                        _interactionService.DisplayMessage(KnownEmojis.Warning, message!);
+                        break;
+                    case PlaywrightInstallStatus.Failed:
+                        _interactionService.DisplayError(message!);
+                        hasErrors = true;
+                        break;
+                    case PlaywrightInstallStatus.Skipped:
+                        // npm is not available — not an error, just informational.
+                        _interactionService.DisplaySubtleMessage(AgentCommandStrings.InitCommand_PlaywrightCliSkipped);
+                        break;
+                    default:
+                        throw new UnreachableException($"Unexpected PlaywrightInstallStatus: {status}");
+                }
             }
+            catch (InvalidOperationException ex)
+            {
+                _interactionService.DisplayError(ex.Message);
+                hasErrors = true;
+            }
+        }
+
+        // --- Phase 5: Apply MCP server configuration if selected ---
+        if (combinedMcpApplicator is not null)
+        {
+            try
+            {
+                await combinedMcpApplicator.ApplyAsync(cancellationToken);
+            }
+            // InvalidOperationException is thrown by scanner-generated applicators
+            // (e.g., MCP config writers) when the underlying operation fails.
+            // JsonException as InnerException indicates a malformed config file
+            // (e.g., invalid JSON in .copilot/mcp-config.json or .vscode/mcp.json).
             catch (InvalidOperationException ex)
             {
                 _interactionService.DisplayError(ex.Message);
                 if (ex.InnerException is JsonException)
                 {
                     _interactionService.DisplaySubtleMessage(
-                        string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.SkippedMalformedConfigFile, applicator.Description));
+                        string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.SkippedMalformedConfigFile, combinedMcpApplicator.Description));
                 }
                 hasErrors = true;
             }
@@ -271,6 +323,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         if (hasErrors)
         {
             _interactionService.DisplayMessage(KnownEmojis.Warning, AgentCommandStrings.ConfigurationCompletedWithErrors);
+            _interactionService.DisplayMessage(KnownEmojis.PageFacingUp, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, ExecutionContext.LogFilePath));
         }
         else
         {
@@ -278,5 +331,51 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         }
 
         return hasErrors ? ExitCodeConstants.InvalidCommand : ExitCodeConstants.Success;
+    }
+
+    /// <summary>
+    /// Installs a single skill file at the specified location, creating or updating as needed.
+    /// </summary>
+    /// <returns><c>true</c> if successful, <c>false</c> if an error occurred.</returns>
+    private async Task<bool> InstallSkillFileAsync(
+        DirectoryInfo rootDirectory,
+        string relativeSkillDirectory,
+        SkillDefinition skill,
+        bool isUserLevel,
+        CancellationToken cancellationToken)
+    {
+        var relativePath = Path.Combine(relativeSkillDirectory, skill.Name, "SKILL.md");
+        var fullPath = Path.Combine(rootDirectory.FullName, relativePath);
+        var content = skill.SkillContent!;
+
+        try
+        {
+            var directory = Path.GetDirectoryName(fullPath);
+            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            if (File.Exists(fullPath))
+            {
+                var existingContent = await File.ReadAllTextAsync(fullPath, cancellationToken);
+                if (string.Equals(existingContent.ReplaceLineEndings("\n"), content.ReplaceLineEndings("\n"), StringComparison.Ordinal))
+                {
+                    return true; // Already up to date
+                }
+            }
+
+            await File.WriteAllTextAsync(fullPath, content, cancellationToken);
+            var displayPath = isUserLevel ? $"~/{relativePath}" : relativePath;
+            _interactionService.DisplayMessage(KnownEmojis.CheckMark,
+                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkill, skill.Name, displayPath));
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _interactionService.DisplayError(
+                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_FailedToInstallSkill, skill.Name, fullPath, ex.Message));
+            return false;
+        }
     }
 }

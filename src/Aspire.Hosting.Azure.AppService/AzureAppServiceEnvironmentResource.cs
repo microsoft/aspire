@@ -147,11 +147,11 @@ public class AzureAppServiceEnvironmentResource :
 
         if (!string.IsNullOrEmpty(dashboardUri))
         {
-            context.Summary.Add("📊 Dashboard", dashboardUri);
+            context.Summary.Add("📊 Dashboard", new MarkdownString($"[{dashboardUri}]({dashboardUri})"));
         }
 
         await context.ReportingStep.CompleteAsync(
-            $"Dashboard available at [{dashboardUri}]({dashboardUri})",
+            new MarkdownString($"Dashboard available at [{dashboardUri}]({dashboardUri})"),
             CompletionState.Completed,
             context.CancellationToken).ConfigureAwait(false);
     }

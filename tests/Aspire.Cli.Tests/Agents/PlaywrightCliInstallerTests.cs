@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Security.Cryptography;
-using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Npm;
 using Aspire.Cli.Tests.TestServices;
@@ -14,53 +13,76 @@ namespace Aspire.Cli.Tests.Agents;
 
 public class PlaywrightCliInstallerTests
 {
-    private static AgentEnvironmentScanContext CreateTestContext()
+    private static readonly IReadOnlySet<string> s_emptySkillDirs = new HashSet<string>();
+
+    private static string CreateTestRepoRoot()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), $"aspire-test-{Guid.NewGuid():N}");
         Directory.CreateDirectory(tempDir);
-        return new AgentEnvironmentScanContext
-        {
-            WorkingDirectory = new DirectoryInfo(tempDir),
-            RepositoryRoot = new DirectoryInfo(tempDir)
-        };
+        return tempDir;
     }
 
     [Fact]
-    public async Task InstallAsync_WhenNpmResolveReturnsNull_ReturnsFalse()
+    public async Task InstallAsync_WhenNpmResolveReturnsNull_ReturnsErrorMessage()
     {
-        var npmRunner = new TestNpmRunner
+        var tempDir = CreateTestRepoRoot();
+
+        try
         {
-            ResolveResult = null
-        };
-        var playwrightRunner = new TestPlaywrightCliRunner();
-        var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+            var npmRunner = new TestNpmRunner
+            {
+                ResolveResult = null
+            };
+            var playwrightRunner = new TestPlaywrightCliRunner();
+            var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
 
-        var result = await installer.InstallAsync(CreateTestContext(), CancellationToken.None);
+            var (status, message) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
 
-        Assert.False(result);
+            Assert.Equal(PlaywrightInstallStatus.Failed, status);
+            Assert.NotNull(message);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
     }
 
     [Fact]
     public async Task InstallAsync_WhenAlreadyInstalledAtSameVersion_SkipsInstallAndInstallsSkills()
     {
-        var version = SemVersion.Parse("0.1.1", SemVersionStyles.Strict);
-        var npmRunner = new TestNpmRunner
-        {
-            ResolveResult = new NpmPackageInfo { Version = version, Integrity = "sha512-abc123" }
-        };
-        var playwrightRunner = new TestPlaywrightCliRunner
-        {
-            InstalledVersion = version,
-            InstallSkillsResult = true
-        };
-        var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+        var tempDir = CreateTestRepoRoot();
 
-        var result = await installer.InstallAsync(CreateTestContext(), CancellationToken.None);
+        try
+        {
+            var version = SemVersion.Parse("0.1.1", SemVersionStyles.Strict);
+            var npmRunner = new TestNpmRunner
+            {
+                ResolveResult = new NpmPackageInfo { Version = version, Integrity = "sha512-abc123" }
+            };
+            var playwrightRunner = new TestPlaywrightCliRunner
+            {
+                InstalledVersion = version,
+                InstallSkillsResult = true
+            };
+            var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
 
-        Assert.True(result);
-        Assert.True(playwrightRunner.InstallSkillsCalled);
-        Assert.False(npmRunner.PackCalled);
-        Assert.False(npmRunner.InstallGlobalCalled);
+            var (status, _) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
+
+            Assert.Equal(PlaywrightInstallStatus.Installed, status);
+            Assert.True(playwrightRunner.InstallSkillsCalled);
+            Assert.False(npmRunner.PackCalled);
+            Assert.False(npmRunner.InstallGlobalCalled);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
     }
 
     [Fact]
@@ -83,13 +105,7 @@ public class PlaywrightCliInstallerTests
             };
             var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
 
-            var context = new AgentEnvironmentScanContext
-            {
-                WorkingDirectory = new DirectoryInfo(Path.GetTempPath()),
-                RepositoryRoot = new DirectoryInfo(tempDir)
-            };
-
-            await installer.InstallAsync(context, CancellationToken.None);
+            await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
 
             Assert.True(playwrightRunner.InstallSkillsCalled);
             Assert.Equal(tempDir, playwrightRunner.InstallSkillsWorkingDirectory);
@@ -106,46 +122,71 @@ public class PlaywrightCliInstallerTests
     [Fact]
     public async Task InstallAsync_WhenNewerVersionInstalled_SkipsInstallAndInstallsSkills()
     {
-        var targetVersion = SemVersion.Parse("0.1.1", SemVersionStyles.Strict);
-        var installedVersion = SemVersion.Parse("0.2.0", SemVersionStyles.Strict);
-        var npmRunner = new TestNpmRunner
-        {
-            ResolveResult = new NpmPackageInfo { Version = targetVersion, Integrity = "sha512-abc123" }
-        };
-        var playwrightRunner = new TestPlaywrightCliRunner
-        {
-            InstalledVersion = installedVersion,
-            InstallSkillsResult = true
-        };
-        var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+        var tempDir = CreateTestRepoRoot();
 
-        var result = await installer.InstallAsync(CreateTestContext(), CancellationToken.None);
+        try
+        {
+            var targetVersion = SemVersion.Parse("0.1.1", SemVersionStyles.Strict);
+            var installedVersion = SemVersion.Parse("0.2.0", SemVersionStyles.Strict);
+            var npmRunner = new TestNpmRunner
+            {
+                ResolveResult = new NpmPackageInfo { Version = targetVersion, Integrity = "sha512-abc123" }
+            };
+            var playwrightRunner = new TestPlaywrightCliRunner
+            {
+                InstalledVersion = installedVersion,
+                InstallSkillsResult = true
+            };
+            var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
 
-        Assert.True(result);
-        Assert.True(playwrightRunner.InstallSkillsCalled);
-        Assert.False(npmRunner.PackCalled);
+            var (status, _) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
+
+            Assert.Equal(PlaywrightInstallStatus.Installed, status);
+            Assert.True(playwrightRunner.InstallSkillsCalled);
+            Assert.False(npmRunner.PackCalled);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
     }
 
     [Fact]
-    public async Task InstallAsync_WhenPackFails_ReturnsFalse()
+    public async Task InstallAsync_WhenPackFails_ReturnsErrorMessage()
     {
-        var version = SemVersion.Parse("0.1.1", SemVersionStyles.Strict);
-        var npmRunner = new TestNpmRunner
+        var tempDir = CreateTestRepoRoot();
+
+        try
         {
-            ResolveResult = new NpmPackageInfo { Version = version, Integrity = "sha512-abc123" },
-            PackResult = null
-        };
-        var playwrightRunner = new TestPlaywrightCliRunner();
-        var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+            var version = SemVersion.Parse("0.1.1", SemVersionStyles.Strict);
+            var npmRunner = new TestNpmRunner
+            {
+                ResolveResult = new NpmPackageInfo { Version = version, Integrity = "sha512-abc123" },
+                PackResult = null
+            };
+            var playwrightRunner = new TestPlaywrightCliRunner();
+            var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
 
-        var result = await installer.InstallAsync(CreateTestContext(), CancellationToken.None);
+            var (status, message) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
 
-        Assert.False(result);
-        Assert.True(npmRunner.PackCalled);
+            Assert.Equal(PlaywrightInstallStatus.Failed, status);
+            Assert.NotNull(message);
+            Assert.True(npmRunner.PackCalled);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
     }
 
     [Fact]
-    public async Task InstallAsync_WhenIntegrityCheckFails_ReturnsFalse()
+    public async Task InstallAsync_WhenIntegrityCheckFails_ReturnsErrorMessage()
     {
         var version = SemVersion.Parse("0.1.1", SemVersionStyles.Strict);
         // Create a temp file with known content and a non-matching hash
@@ -164,10 +205,22 @@ public class PlaywrightCliInstallerTests
             var playwrightRunner = new TestPlaywrightCliRunner();
             var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
 
-            var result = await installer.InstallAsync(CreateTestContext(), CancellationToken.None);
+            var repoRoot = CreateTestRepoRoot();
+            try
+            {
+                var (status, message) = await installer.InstallAsync(repoRoot, s_emptySkillDirs, CancellationToken.None);
 
-            Assert.False(result);
-            Assert.False(npmRunner.InstallGlobalCalled);
+                Assert.Equal(PlaywrightInstallStatus.Failed, status);
+                Assert.NotNull(message);
+                Assert.False(npmRunner.InstallGlobalCalled);
+            }
+            finally
+            {
+                if (Directory.Exists(repoRoot))
+                {
+                    Directory.Delete(repoRoot, recursive: true);
+                }
+            }
         }
         finally
         {
@@ -203,11 +256,22 @@ public class PlaywrightCliInstallerTests
             };
             var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
 
-            var result = await installer.InstallAsync(CreateTestContext(), CancellationToken.None);
+            var repoRoot = CreateTestRepoRoot();
+            try
+            {
+                var (status, _) = await installer.InstallAsync(repoRoot, s_emptySkillDirs, CancellationToken.None);
 
-            Assert.True(result);
-            Assert.True(npmRunner.InstallGlobalCalled);
-            Assert.True(playwrightRunner.InstallSkillsCalled);
+                Assert.Equal(PlaywrightInstallStatus.Installed, status);
+                Assert.True(npmRunner.InstallGlobalCalled);
+                Assert.True(playwrightRunner.InstallSkillsCalled);
+            }
+            finally
+            {
+                if (Directory.Exists(repoRoot))
+                {
+                    Directory.Delete(repoRoot, recursive: true);
+                }
+            }
         }
         finally
         {
@@ -216,7 +280,7 @@ public class PlaywrightCliInstallerTests
     }
 
     [Fact]
-    public async Task InstallAsync_WhenGlobalInstallFails_ReturnsFalse()
+    public async Task InstallAsync_WhenGlobalInstallFails_ReturnsErrorMessage()
     {
         var version = SemVersion.Parse("0.1.1", SemVersionStyles.Strict);
         var tempDir = Path.Combine(Path.GetTempPath(), $"test-playwright-{Guid.NewGuid():N}");
@@ -239,9 +303,21 @@ public class PlaywrightCliInstallerTests
             var playwrightRunner = new TestPlaywrightCliRunner();
             var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
 
-            var result = await installer.InstallAsync(CreateTestContext(), CancellationToken.None);
+            var repoRoot = CreateTestRepoRoot();
+            try
+            {
+                var (status, message) = await installer.InstallAsync(repoRoot, s_emptySkillDirs, CancellationToken.None);
 
-            Assert.False(result);
+                Assert.Equal(PlaywrightInstallStatus.Failed, status);
+                Assert.NotNull(message);
+            }
+            finally
+            {
+                if (Directory.Exists(repoRoot))
+                {
+                    Directory.Delete(repoRoot, recursive: true);
+                }
+            }
         }
         finally
         {
@@ -278,12 +354,23 @@ public class PlaywrightCliInstallerTests
             };
             var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
 
-            var result = await installer.InstallAsync(CreateTestContext(), CancellationToken.None);
+            var repoRoot = CreateTestRepoRoot();
+            try
+            {
+                var (status, _) = await installer.InstallAsync(repoRoot, s_emptySkillDirs, CancellationToken.None);
 
-            Assert.True(result);
-            Assert.True(npmRunner.PackCalled);
-            Assert.True(npmRunner.InstallGlobalCalled);
-            Assert.True(playwrightRunner.InstallSkillsCalled);
+                Assert.Equal(PlaywrightInstallStatus.Installed, status);
+                Assert.True(npmRunner.PackCalled);
+                Assert.True(npmRunner.InstallGlobalCalled);
+                Assert.True(playwrightRunner.InstallSkillsCalled);
+            }
+            finally
+            {
+                if (Directory.Exists(repoRoot))
+                {
+                    Directory.Delete(repoRoot, recursive: true);
+                }
+            }
         }
         finally
         {
@@ -344,22 +431,35 @@ public class PlaywrightCliInstallerTests
     }
 
     [Fact]
-    public async Task InstallAsync_WhenProvenanceCheckFails_ReturnsFalse()
+    public async Task InstallAsync_WhenProvenanceCheckFails_ReturnsErrorMessage()
     {
-        var version = SemVersion.Parse("0.1.1", SemVersionStyles.Strict);
-        var npmRunner = new TestNpmRunner
+        var tempDir = CreateTestRepoRoot();
+
+        try
         {
-            ResolveResult = new NpmPackageInfo { Version = version, Integrity = "sha512-abc123" }
-        };
-        var provenanceChecker = new TestNpmProvenanceChecker { ProvenanceOutcome = ProvenanceVerificationOutcome.SourceRepositoryMismatch };
-        var playwrightRunner = new TestPlaywrightCliRunner();
-        var installer = new PlaywrightCliInstaller(npmRunner, provenanceChecker, playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+            var version = SemVersion.Parse("0.1.1", SemVersionStyles.Strict);
+            var npmRunner = new TestNpmRunner
+            {
+                ResolveResult = new NpmPackageInfo { Version = version, Integrity = "sha512-abc123" }
+            };
+            var provenanceChecker = new TestNpmProvenanceChecker { ProvenanceOutcome = ProvenanceVerificationOutcome.SourceRepositoryMismatch };
+            var playwrightRunner = new TestPlaywrightCliRunner();
+            var installer = new PlaywrightCliInstaller(npmRunner, provenanceChecker, playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
 
-        var result = await installer.InstallAsync(CreateTestContext(), CancellationToken.None);
+            var (status, message) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
 
-        Assert.False(result);
-        Assert.True(provenanceChecker.ProvenanceCalled);
-        Assert.False(npmRunner.PackCalled);
+            Assert.Equal(PlaywrightInstallStatus.Failed, status);
+            Assert.NotNull(message);
+            Assert.True(provenanceChecker.ProvenanceCalled);
+            Assert.False(npmRunner.PackCalled);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
     }
 
     [Fact]
@@ -389,12 +489,23 @@ public class PlaywrightCliInstallerTests
                 .Build();
             var installer = new PlaywrightCliInstaller(npmRunner, provenanceChecker, playwrightRunner, new TestInteractionService(), configuration, NullLogger<PlaywrightCliInstaller>.Instance);
 
-            var result = await installer.InstallAsync(CreateTestContext(), CancellationToken.None);
+            var repoRoot = CreateTestRepoRoot();
+            try
+            {
+                var (status, _) = await installer.InstallAsync(repoRoot, s_emptySkillDirs, CancellationToken.None);
 
-            Assert.True(result);
-            Assert.False(provenanceChecker.ProvenanceCalled);
-            Assert.True(npmRunner.PackCalled);
-            Assert.True(npmRunner.InstallGlobalCalled);
+                Assert.Equal(PlaywrightInstallStatus.Installed, status);
+                Assert.False(provenanceChecker.ProvenanceCalled);
+                Assert.True(npmRunner.PackCalled);
+                Assert.True(npmRunner.InstallGlobalCalled);
+            }
+            finally
+            {
+                if (Directory.Exists(repoRoot))
+                {
+                    Directory.Delete(repoRoot, recursive: true);
+                }
+            }
         }
         finally
         {
@@ -405,39 +516,65 @@ public class PlaywrightCliInstallerTests
     [Fact]
     public async Task InstallAsync_WhenVersionOverrideConfigured_UsesOverrideVersion()
     {
-        var version = SemVersion.Parse("0.2.0", SemVersionStyles.Strict);
-        var npmRunner = new TestNpmRunner
+        var tempDir = CreateTestRepoRoot();
+
+        try
         {
-            ResolveResult = new NpmPackageInfo { Version = version, Integrity = "sha512-abc123" }
-        };
-        var playwrightRunner = new TestPlaywrightCliRunner();
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
+            var version = SemVersion.Parse("0.2.0", SemVersionStyles.Strict);
+            var npmRunner = new TestNpmRunner
             {
-                [PlaywrightCliInstaller.VersionOverrideKey] = "0.2.0"
-            })
-            .Build();
-        var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), configuration, NullLogger<PlaywrightCliInstaller>.Instance);
+                ResolveResult = new NpmPackageInfo { Version = version, Integrity = "sha512-abc123" }
+            };
+            var playwrightRunner = new TestPlaywrightCliRunner();
+            var configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    [PlaywrightCliInstaller.VersionOverrideKey] = "0.2.0"
+                })
+                .Build();
+            var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), configuration, NullLogger<PlaywrightCliInstaller>.Instance);
 
-        await installer.InstallAsync(CreateTestContext(), CancellationToken.None);
+            // PackAsync returns null by default — we only care about the resolved range
+            await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
 
-        Assert.Equal("0.2.0", npmRunner.ResolvedVersionRange);
+            Assert.Equal("0.2.0", npmRunner.ResolvedVersionRange);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
     }
 
     [Fact]
     public async Task InstallAsync_WhenNoVersionOverride_UsesDefaultRange()
     {
-        var version = SemVersion.Parse("0.1.1", SemVersionStyles.Strict);
-        var npmRunner = new TestNpmRunner
+        var tempDir = CreateTestRepoRoot();
+
+        try
         {
-            ResolveResult = new NpmPackageInfo { Version = version, Integrity = "sha512-abc123" }
-        };
-        var playwrightRunner = new TestPlaywrightCliRunner();
-        var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+            var version = SemVersion.Parse("0.1.1", SemVersionStyles.Strict);
+            var npmRunner = new TestNpmRunner
+            {
+                ResolveResult = new NpmPackageInfo { Version = version, Integrity = "sha512-abc123" }
+            };
+            var playwrightRunner = new TestPlaywrightCliRunner();
+            var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
 
-        await installer.InstallAsync(CreateTestContext(), CancellationToken.None);
+            // PackAsync returns null by default — we only care about the resolved range
+            await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
 
-        Assert.Equal(PlaywrightCliInstaller.VersionRange, npmRunner.ResolvedVersionRange);
+            Assert.Equal(PlaywrightCliInstaller.VersionRange, npmRunner.ResolvedVersionRange);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
     }
 
     [Fact]
@@ -448,18 +585,20 @@ public class PlaywrightCliInstallerTests
 
         try
         {
-            // Set up the primary skill directory with a skill file (simulating playwright-cli output)
-            var primarySkillDir = Path.Combine(tempDir, ".claude", "skills", "playwright-cli");
-            Directory.CreateDirectory(primarySkillDir);
-            await File.WriteAllTextAsync(Path.Combine(primarySkillDir, "SKILL.md"), "# Playwright CLI Skill");
-            Directory.CreateDirectory(Path.Combine(primarySkillDir, "subdir"));
-            await File.WriteAllTextAsync(Path.Combine(primarySkillDir, "subdir", "extra.md"), "Extra content");
-
             var version = SemVersion.Parse("0.1.1", SemVersionStyles.Strict);
             var playwrightRunner = new TestPlaywrightCliRunner
             {
                 InstalledVersion = version,
-                InstallSkillsResult = true
+                InstallSkillsResult = true,
+                // Simulate playwright-cli writing to .claude/skills/ during install
+                OnInstallSkills = repoRoot =>
+                {
+                    var skillDir = Path.Combine(repoRoot, ".claude", "skills", "playwright-cli");
+                    Directory.CreateDirectory(skillDir);
+                    File.WriteAllText(Path.Combine(skillDir, "SKILL.md"), "# Playwright CLI Skill");
+                    Directory.CreateDirectory(Path.Combine(skillDir, "subdir"));
+                    File.WriteAllText(Path.Combine(skillDir, "subdir", "extra.md"), "Extra content");
+                }
             };
             var npmRunner = new TestNpmRunner
             {
@@ -471,25 +610,22 @@ public class PlaywrightCliInstallerTests
                 new TestInteractionService(), new ConfigurationBuilder().Build(),
                 NullLogger<PlaywrightCliInstaller>.Instance);
 
-            var context = new AgentEnvironmentScanContext
+            var selectedDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
-                WorkingDirectory = new DirectoryInfo(tempDir),
-                RepositoryRoot = new DirectoryInfo(tempDir)
+                Path.Combine(".claude", "skills"),
+                Path.Combine(".agents", "skills"),
+                Path.Combine(".github", "skills")
             };
-            context.AddSkillBaseDirectory(Path.Combine(".claude", "skills"));
-            context.AddSkillBaseDirectory(Path.Combine(".github", "skills"));
-            context.AddSkillBaseDirectory(Path.Combine(".opencode", "skill"));
+            await installer.InstallAsync(tempDir, selectedDirs, CancellationToken.None);
 
-            await installer.InstallAsync(context, CancellationToken.None);
+            // Verify files were mirrored to .agents/skills/playwright-cli/
+            Assert.True(File.Exists(Path.Combine(tempDir, ".agents", "skills", "playwright-cli", "SKILL.md")));
+            Assert.True(File.Exists(Path.Combine(tempDir, ".agents", "skills", "playwright-cli", "subdir", "extra.md")));
+            Assert.Equal("# Playwright CLI Skill", await File.ReadAllTextAsync(Path.Combine(tempDir, ".agents", "skills", "playwright-cli", "SKILL.md")));
 
             // Verify files were mirrored to .github/skills/playwright-cli/
             Assert.True(File.Exists(Path.Combine(tempDir, ".github", "skills", "playwright-cli", "SKILL.md")));
             Assert.True(File.Exists(Path.Combine(tempDir, ".github", "skills", "playwright-cli", "subdir", "extra.md")));
-            Assert.Equal("# Playwright CLI Skill", await File.ReadAllTextAsync(Path.Combine(tempDir, ".github", "skills", "playwright-cli", "SKILL.md")));
-
-            // Verify files were mirrored to .opencode/skill/playwright-cli/
-            Assert.True(File.Exists(Path.Combine(tempDir, ".opencode", "skill", "playwright-cli", "SKILL.md")));
-            Assert.True(File.Exists(Path.Combine(tempDir, ".opencode", "skill", "playwright-cli", "subdir", "extra.md")));
         }
         finally
         {
@@ -538,8 +674,294 @@ public class PlaywrightCliInstallerTests
         }
     }
 
+    [Fact]
+    public async Task InstallAsync_WhenOnlyStandardSelected_CleansUpUnselectedLocations()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"aspire-cleanup-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var version = SemVersion.Parse("0.1.1", SemVersionStyles.Strict);
+            var playwrightRunner = new TestPlaywrightCliRunner
+            {
+                InstalledVersion = version,
+                InstallSkillsResult = true,
+                // Simulate playwright-cli writing to .claude/skills/ during install
+                OnInstallSkills = repoRoot =>
+                {
+                    var skillDir = Path.Combine(repoRoot, ".claude", "skills", "playwright-cli");
+                    Directory.CreateDirectory(skillDir);
+                    File.WriteAllText(Path.Combine(skillDir, "SKILL.md"), "# Playwright CLI Skill");
+                }
+            };
+            var npmRunner = new TestNpmRunner
+            {
+                ResolveResult = new NpmPackageInfo { Version = version, Integrity = "sha512-abc123" }
+            };
+
+            var installer = new PlaywrightCliInstaller(
+                npmRunner, new TestNpmProvenanceChecker(), playwrightRunner,
+                new TestInteractionService(), new ConfigurationBuilder().Build(),
+                NullLogger<PlaywrightCliInstaller>.Instance);
+
+            // Only select Standard (.agents/skills)
+            var selectedDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                Path.Combine(".agents", "skills")
+            };
+            await installer.InstallAsync(tempDir, selectedDirs, CancellationToken.None);
+
+            // Skill should be mirrored to the selected location
+            Assert.True(File.Exists(Path.Combine(tempDir, ".agents", "skills", "playwright-cli", "SKILL.md")));
+
+            // .claude/skills/playwright-cli should be cleaned up (created by playwright-cli, not selected)
+            Assert.False(Directory.Exists(Path.Combine(tempDir, ".claude", "skills", "playwright-cli")));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task InstallAsync_WhenCleaningUp_DoesNotDeletePreExistingDirectories()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"aspire-preexist-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            // Pre-existing .claude/skills/playwright-cli (user already had this)
+            var preExistingDir = Path.Combine(tempDir, ".claude", "skills", "playwright-cli");
+            Directory.CreateDirectory(preExistingDir);
+            await File.WriteAllTextAsync(Path.Combine(preExistingDir, "SKILL.md"), "# User's existing skill");
+
+            var version = SemVersion.Parse("0.1.1", SemVersionStyles.Strict);
+            var playwrightRunner = new TestPlaywrightCliRunner
+            {
+                InstalledVersion = version,
+                InstallSkillsResult = true
+            };
+            var npmRunner = new TestNpmRunner
+            {
+                ResolveResult = new NpmPackageInfo { Version = version, Integrity = "sha512-abc123" }
+            };
+
+            var installer = new PlaywrightCliInstaller(
+                npmRunner, new TestNpmProvenanceChecker(), playwrightRunner,
+                new TestInteractionService(), new ConfigurationBuilder().Build(),
+                NullLogger<PlaywrightCliInstaller>.Instance);
+
+            // Only select Standard — .claude/skills is NOT selected
+            var selectedDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                Path.Combine(".agents", "skills")
+            };
+            await installer.InstallAsync(tempDir, selectedDirs, CancellationToken.None);
+
+            // .claude/skills/playwright-cli should NOT be deleted because it pre-existed
+            Assert.True(Directory.Exists(preExistingDir));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task InstallAsync_WhenCleaningUp_RemovesEmptyParentDirectories()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"aspire-emptydir-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var version = SemVersion.Parse("0.1.1", SemVersionStyles.Strict);
+            var playwrightRunner = new TestPlaywrightCliRunner
+            {
+                InstalledVersion = version,
+                InstallSkillsResult = true,
+                // Simulate playwright-cli writing to .claude/skills/ during install
+                OnInstallSkills = repoRoot =>
+                {
+                    var skillDir = Path.Combine(repoRoot, ".claude", "skills", "playwright-cli");
+                    Directory.CreateDirectory(skillDir);
+                    File.WriteAllText(Path.Combine(skillDir, "SKILL.md"), "# Playwright CLI Skill");
+                }
+            };
+            var npmRunner = new TestNpmRunner
+            {
+                ResolveResult = new NpmPackageInfo { Version = version, Integrity = "sha512-abc123" }
+            };
+
+            var installer = new PlaywrightCliInstaller(
+                npmRunner, new TestNpmProvenanceChecker(), playwrightRunner,
+                new TestInteractionService(), new ConfigurationBuilder().Build(),
+                NullLogger<PlaywrightCliInstaller>.Instance);
+
+            var selectedDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                Path.Combine(".agents", "skills")
+            };
+            await installer.InstallAsync(tempDir, selectedDirs, CancellationToken.None);
+
+            // The entire .claude/skills/ tree should be gone (empty after playwright-cli removal)
+            Assert.False(Directory.Exists(Path.Combine(tempDir, ".claude", "skills")));
+            // .claude itself should also be gone if it's empty
+            Assert.False(Directory.Exists(Path.Combine(tempDir, ".claude")));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void RemoveEmptyParentDirectories_RemovesEmptyParentsUpToStopDir()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"aspire-rmparent-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            // Create .claude/skills/playwright-cli (3 levels), then remove playwright-cli
+            var skillDir = Path.Combine(tempDir, ".claude", "skills", "playwright-cli");
+            Directory.CreateDirectory(skillDir);
+            Directory.Delete(skillDir);
+
+            // Now .claude/skills is empty — RemoveEmptyParentDirectories should clean up
+            PlaywrightCliInstaller.RemoveEmptyParentDirectories(
+                skillDir,
+                tempDir,
+                Path.Combine(".claude", "skills"));
+
+            Assert.False(Directory.Exists(Path.Combine(tempDir, ".claude", "skills")));
+            Assert.False(Directory.Exists(Path.Combine(tempDir, ".claude")));
+            Assert.True(Directory.Exists(tempDir)); // stop dir should NOT be deleted
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void RemoveEmptyParentDirectories_StopsAtNonEmptyParent()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"aspire-rmparent-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            // Create .claude/skills/playwright-cli and .claude/skills/other-skill
+            var skillDir = Path.Combine(tempDir, ".claude", "skills", "playwright-cli");
+            Directory.CreateDirectory(skillDir);
+            Directory.CreateDirectory(Path.Combine(tempDir, ".claude", "skills", "other-skill"));
+            Directory.Delete(skillDir);
+
+            PlaywrightCliInstaller.RemoveEmptyParentDirectories(
+                skillDir,
+                tempDir,
+                Path.Combine(".claude", "skills"));
+
+            // .claude/skills should still exist because it has other-skill
+            Assert.True(Directory.Exists(Path.Combine(tempDir, ".claude", "skills")));
+            Assert.True(Directory.Exists(Path.Combine(tempDir, ".claude", "skills", "other-skill")));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void RemoveEmptyParentDirectories_NeverDeletesStopDir()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"aspire-rmparent-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            // Create a single level: .agents/playwright-cli
+            var skillDir = Path.Combine(tempDir, ".agents", "playwright-cli");
+            Directory.CreateDirectory(skillDir);
+            Directory.Delete(skillDir);
+
+            PlaywrightCliInstaller.RemoveEmptyParentDirectories(
+                skillDir,
+                tempDir,
+                ".agents");
+
+            // .agents should be removed (it's empty and not the stop dir)
+            Assert.False(Directory.Exists(Path.Combine(tempDir, ".agents")));
+            // tempDir (stop dir) must never be removed
+            Assert.True(Directory.Exists(tempDir));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void RemoveEmptyParentDirectories_RespectsMaxDepthLimit()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"aspire-rmparent-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            // Create a deep path: a/b/c/d/e
+            var deepDir = Path.Combine(tempDir, "a", "b", "c", "d", "e");
+            Directory.CreateDirectory(deepDir);
+            Directory.Delete(deepDir);
+            // d, c, b, a are all empty
+
+            // Relative path "a/b" means maxDepth = 3 (2 segments + 1)
+            // Starting from e's path, it should walk up: d (1), c (2), b (3) — stops there
+            PlaywrightCliInstaller.RemoveEmptyParentDirectories(
+                deepDir,
+                tempDir,
+                Path.Combine("a", "b"));
+
+            // d, c, b should be removed (within maxDepth)
+            Assert.False(Directory.Exists(Path.Combine(tempDir, "a", "b", "c", "d")));
+            Assert.False(Directory.Exists(Path.Combine(tempDir, "a", "b", "c")));
+            Assert.False(Directory.Exists(Path.Combine(tempDir, "a", "b")));
+            // a should still exist (maxDepth exceeded)
+            Assert.True(Directory.Exists(Path.Combine(tempDir, "a")));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
     private sealed class TestNpmRunner : INpmRunner
     {
+        public bool IsAvailable => true;
         public NpmPackageInfo? ResolveResult { get; set; }
         public string? PackResult { get; set; }
         public bool AuditResult { get; set; } = true;
@@ -595,6 +1017,7 @@ public class PlaywrightCliInstallerTests
         public bool InstallSkillsResult { get; set; }
         public bool InstallSkillsCalled { get; private set; }
         public string? InstallSkillsWorkingDirectory { get; private set; }
+        public Action<string>? OnInstallSkills { get; set; }
 
         public Task<SemVersion?> GetVersionAsync(CancellationToken cancellationToken)
             => Task.FromResult(InstalledVersion);
@@ -603,6 +1026,7 @@ public class PlaywrightCliInstallerTests
         {
             InstallSkillsCalled = true;
             InstallSkillsWorkingDirectory = workingDirectory;
+            OnInstallSkills?.Invoke(workingDirectory);
             return Task.FromResult(InstallSkillsResult);
         }
     }
