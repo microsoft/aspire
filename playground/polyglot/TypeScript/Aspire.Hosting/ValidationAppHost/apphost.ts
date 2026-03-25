@@ -28,11 +28,12 @@ const exe = await builder.addExecutable("myexe", "echo", ".", ["hello"]);
 // addProject (pre-existing)
 const project = await builder.addProject("myproject", "./src/MyProject", "https");
 const projectWithoutLaunchProfile = await builder.addProjectWithoutLaunchProfile("myproject-noprofile", "./src/MyProject");
-// ATS-safe DTO equivalent of ReferenceEnvironmentInjectionFlags.ConnectionString | ReferenceEnvironmentInjectionFlags.ServiceDiscovery
-await project.withReferenceEnvironment({
+// ATS exports ReferenceEnvironmentInjectionFlags as a DTO-shaped object in TypeScript.
+const referenceEnvironmentOptions = {
     connectionString: true,
     serviceDiscovery: true,
-});
+};
+await project.withReferenceEnvironment(referenceEnvironmentOptions);
 
 // addCSharpApp
 const csharpApp = await builder.addCSharpApp("csharpapp", "./src/CSharpApp");
