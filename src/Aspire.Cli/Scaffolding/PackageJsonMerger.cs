@@ -23,10 +23,19 @@ internal static class PackageJsonMerger
     private const string EnginesNodeKey = "node";
     private const string AspirePrefix = "aspire:";
 
+    // package.json standard uses 2-space indentation. These options produce output
+    // consistent with npm init / npm install formatting conventions.
     private static readonly JsonSerializerOptions s_jsonOptions = new()
     {
         WriteIndented = true,
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        IndentSize = 2
+    };
+
+    private static readonly JsonDocumentOptions s_jsonDocumentOptions = new()
+    {
+        CommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true
     };
 
     /// <summary>
@@ -36,34 +45,46 @@ internal static class PackageJsonMerger
     /// <c>aspire:X</c> scripts get a convenience alias <c>X</c> pointing to <c>npm run aspire:X</c>.
     /// </summary>
     /// <returns>The merged package.json content as a JSON string.</returns>
-    internal static string Merge(string existingContent, string scaffoldContent, ILogger? logger = null)
+    internal static string Merge(string existingContent, string scaffoldContent, ILogger logger)
     {
+        if (string.IsNullOrWhiteSpace(existingContent))
+        {
+            return scaffoldContent;
+        }
+
+        // Phase 1: Parse inputs. If either fails, return scaffold as-is.
+        JsonObject? existingJson;
+        JsonObject? scaffoldJson;
         try
         {
-            if (string.IsNullOrWhiteSpace(existingContent))
-            {
-                return scaffoldContent;
-            }
+            existingJson = JsonNode.Parse(existingContent, documentOptions: s_jsonDocumentOptions) as JsonObject;
+            scaffoldJson = JsonNode.Parse(scaffoldContent, documentOptions: s_jsonDocumentOptions) as JsonObject;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to parse package.json content, using scaffold output as-is.");
+            return scaffoldContent;
+        }
 
-            var existingJson = JsonNode.Parse(existingContent) as JsonObject;
-            var scaffoldJson = JsonNode.Parse(scaffoldContent) as JsonObject;
+        if (existingJson is null || scaffoldJson is null)
+        {
+            return scaffoldContent;
+        }
 
-            if (existingJson is null || scaffoldJson is null)
-            {
-                return scaffoldContent;
-            }
-
+        // Phase 2: Merge. If merge fails, return scaffold as-is.
+        try
+        {
             MergeObjects(existingJson, scaffoldJson);
             return existingJson.ToJsonString(s_jsonOptions);
         }
         catch (InvalidOperationException)
         {
-            // Programming error (e.g., unsupported array property in scaffold) — let it propagate
+            // Programming error (e.g., unsupported array property in scaffold) — let it propagate.
             throw;
         }
         catch (Exception ex)
         {
-            logger?.LogWarning(ex, "Failed to merge existing package.json, using scaffold output as-is");
+            logger.LogWarning(ex, "Failed to merge package.json content, using scaffold output as-is.");
             return scaffoldContent;
         }
     }

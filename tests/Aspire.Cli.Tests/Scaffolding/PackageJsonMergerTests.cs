@@ -4,11 +4,15 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Scaffolding;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Scaffolding;
 
 public class PackageJsonMergerTests
 {
+    private static string MergeJson(string existing, string scaffold) =>
+        PackageJsonMerger.Merge(existing, scaffold, NullLogger.Instance);
+
     private static JsonObject ParseJson(string json) =>
         JsonNode.Parse(json)!.AsObject();
 
@@ -44,7 +48,7 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge(existing, scaffold);
+        var result = MergeJson(existing, scaffold);
         var scripts = GetScripts(result);
 
         // Existing scripts preserved
@@ -81,7 +85,7 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge(existing, scaffold);
+        var result = MergeJson(existing, scaffold);
         var scripts = GetScripts(result);
 
         // Existing preserved
@@ -117,7 +121,7 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge(existing, scaffold);
+        var result = MergeJson(existing, scaffold);
         var scripts = GetScripts(result);
 
         // Existing preserved
@@ -155,7 +159,7 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge(existing, scaffold);
+        var result = MergeJson(existing, scaffold);
         var scripts = GetScripts(result);
 
         // "start" and "lint" are not taken — convenience aliases added
@@ -192,7 +196,7 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge(existing, scaffold);
+        var result = MergeJson(existing, scaffold);
         var scripts = GetScripts(result);
 
         // All existing scripts preserved
@@ -235,7 +239,7 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge(existing, scaffold);
+        var result = MergeJson(existing, scaffold);
         var scripts = GetScripts(result);
 
         // Existing preserved
@@ -283,7 +287,7 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge(existing, scaffold);
+        var result = MergeJson(existing, scaffold);
 
         // Scaffold is newer — upgraded
         Assert.Equal("^5.0.0", GetDep(result, "dependencies", "express"));
@@ -328,7 +332,7 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge(existing, scaffold);
+        var result = MergeJson(existing, scaffold);
         var json = ParseJson(result);
 
         // Existing scalars preserved
@@ -355,10 +359,10 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge("", scaffold);
+        var result = MergeJson("", scaffold);
         Assert.Equal(scaffold, result);
 
-        result = PackageJsonMerger.Merge("   ", scaffold);
+        result = MergeJson("   ", scaffold);
         Assert.Equal(scaffold, result);
     }
 
@@ -372,8 +376,48 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge("not valid json {{{", scaffold);
+        var result = MergeJson("not valid json {{{", scaffold);
         Assert.Equal(scaffold, result);
+    }
+
+    [Fact]
+    public void ExistingJsonWithCommentsAndTrailingCommas_MergesSuccessfully()
+    {
+        // Real-world package.json files may contain comments and trailing commas
+        // even though they're not valid per the JSON spec. We should tolerate them.
+        var existing = """
+            {
+              // This is a comment
+              "name": "my-app",
+              "version": "1.0.0",
+              "scripts": {
+                "dev": "vite",
+                "build": "vite build", // trailing comma
+              },
+              "dependencies": {
+                "express": "^4.18.0",
+              }
+            }
+            """;
+
+        var scaffold = """
+            {
+              "scripts": { "aspire:start": "aspire run" },
+              "dependencies": { "vscode-jsonrpc": "^8.2.0" }
+            }
+            """;
+
+        var result = MergeJson(existing, scaffold);
+        var json = ParseJson(result);
+
+        // Existing properties preserved (comments and trailing commas are stripped in output)
+        Assert.Equal("my-app", json["name"]?.GetValue<string>());
+        Assert.Equal("vite", GetScript(result, "dev"));
+        Assert.Equal("^4.18.0", GetDep(result, "dependencies", "express"));
+
+        // Scaffold content merged in
+        Assert.Equal("aspire run", GetScript(result, "aspire:start"));
+        Assert.Equal("^8.2.0", GetDep(result, "dependencies", "vscode-jsonrpc"));
     }
 
     [Fact]
@@ -405,8 +449,8 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var firstMerge = PackageJsonMerger.Merge(existing, scaffold);
-        var secondMerge = PackageJsonMerger.Merge(firstMerge, scaffold);
+        var firstMerge = MergeJson(existing, scaffold);
+        var secondMerge = MergeJson(firstMerge, scaffold);
 
         // Parsing both to compare structurally (avoid whitespace differences)
         var first = ParseJson(firstMerge);
@@ -437,7 +481,7 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge(existing, scaffold);
+        var result = MergeJson(existing, scaffold);
         var scripts = GetScripts(result);
 
         // All scripts added directly (no existing scripts to conflict)
@@ -494,7 +538,7 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge(existing, staleScaffold);
+        var result = MergeJson(existing, staleScaffold);
         var json = ParseJson(result);
         var scripts = json["scripts"]!.AsObject();
 
@@ -553,7 +597,7 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge(existing, updatedScaffold);
+        var result = MergeJson(existing, updatedScaffold);
         var scripts = GetScripts(result);
 
         // Existing preserved
@@ -603,7 +647,7 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge(existing, scaffold);
+        var result = MergeJson(existing, scaffold);
 
         // Verify the raw JSON string contains literal &&, ', and | — not unicode escapes
         Assert.Contains("tsc && vite build", result);
@@ -651,7 +695,7 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge(existing, scaffold);
+        var result = MergeJson(existing, scaffold);
 
         Assert.Contains("eslint apphost.ts && echo 'lint complete'", result);
         Assert.Contains("tsc -p tsconfig.apphost.json && echo 'build done'", result);
@@ -679,7 +723,7 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge(existing, scaffold);
+        var result = MergeJson(existing, scaffold);
         Assert.Equal("^5.9.3", GetDep(result, "devDependencies", "typescript"));
     }
 
@@ -703,7 +747,7 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge(existing, scaffold);
+        var result = MergeJson(existing, scaffold);
         Assert.Equal("^6.0.0", GetDep(result, "devDependencies", "typescript"));
     }
 
@@ -727,7 +771,7 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge(existing, scaffold);
+        var result = MergeJson(existing, scaffold);
 
         // Scaffold is newer (5.9.3 > 5.0.0), upgrades — entire value replaced including range operator
         Assert.Equal("^5.9.3", GetDep(result, "devDependencies", "typescript"));
@@ -753,7 +797,7 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge(existing, scaffold);
+        var result = MergeJson(existing, scaffold);
 
         // Union ranges are unparseable — existing preserved
         Assert.Equal("^1.0.0 || ^2.0.0", GetDep(result, "dependencies", "some-pkg"));
@@ -779,7 +823,7 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge(existing, scaffold);
+        var result = MergeJson(existing, scaffold);
 
         // Workspace refs are not parseable as semver — existing preserved
         Assert.Equal("workspace:*", GetDep(result, "dependencies", "shared-lib"));
@@ -805,7 +849,7 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge(existing, scaffold);
+        var result = MergeJson(existing, scaffold);
 
         Assert.Equal("^4.18.0", GetDep(result, "dependencies", "express"));
         Assert.Equal("^8.2.0", GetDep(result, "dependencies", "vscode-jsonrpc"));
@@ -833,7 +877,7 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge(existing, scaffold);
+        var result = MergeJson(existing, scaffold);
 
         // Valid scripts still merged, invalid ones skipped
         Assert.Equal("vite", GetScript(result, "dev"));
@@ -862,7 +906,7 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge(existing, scaffold);
+        var result = MergeJson(existing, scaffold);
 
         // Valid deps merged, non-string ones skipped
         Assert.Equal("^4.18.0", GetDep(result, "dependencies", "express"));
@@ -891,7 +935,7 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge(existing, scaffold);
+        var result = MergeJson(existing, scaffold);
 
         // Non-string existing dep preserved (upgrade skipped due to type mismatch)
         var weirdPkg = ParseJson(result)["dependencies"]!["weird-pkg"];
@@ -920,7 +964,7 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge(existing, scaffold);
+        var result = MergeJson(existing, scaffold);
 
         // EnsureObject replaces the array with a proper object containing scaffold deps
         Assert.Equal("^8.2.0", GetDep(result, "dependencies", "vscode-jsonrpc"));
@@ -938,7 +982,7 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge(existing, scaffold);
+        var result = MergeJson(existing, scaffold);
 
         // Can't merge into an array — returns scaffold as-is
         Assert.Equal("scaffold", ParseJson(result)["name"]?.GetValue<string>());
@@ -963,7 +1007,7 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge(existing, scaffold);
+        var result = MergeJson(existing, scaffold);
 
         // "*" is unparseable — existing preserved
         Assert.Equal("*", GetDep(result, "dependencies", "some-pkg"));
@@ -988,7 +1032,7 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge(existing, scaffold);
+        var result = MergeJson(existing, scaffold);
 
         // "latest" is unparseable — existing preserved
         Assert.Equal("latest", GetDep(result, "dependencies", "some-pkg"));
@@ -1013,7 +1057,7 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge(existing, scaffold);
+        var result = MergeJson(existing, scaffold);
 
         // 5.9.3 release is newer than 5.9.3-beta.1 pre-release
         Assert.Equal("^5.9.3", GetDep(result, "devDependencies", "typescript"));
@@ -1039,7 +1083,7 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge(existing, scaffold);
+        var result = MergeJson(existing, scaffold);
 
         // engines.node is always overwritten — aspire init enforces Node version for ESLint 10
         var engines = ParseJson(result)["engines"]!.AsObject();
@@ -1067,7 +1111,7 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge(existing, scaffold);
+        var result = MergeJson(existing, scaffold);
 
         var engines = ParseJson(result)["engines"]!.AsObject();
         // node overwritten by scaffold
@@ -1093,7 +1137,7 @@ public class PackageJsonMergerTests
             }
             """;
 
-        var result = PackageJsonMerger.Merge(existing, scaffold);
+        var result = MergeJson(existing, scaffold);
 
         var engines = ParseJson(result)["engines"]!.AsObject();
         Assert.Equal("^20.19.0 || ^22.13.0 || >=24", engines["node"]?.GetValue<string>());
@@ -1116,7 +1160,7 @@ public class PackageJsonMergerTests
 
         // Array properties in scaffold require explicit merge logic — the generic fallthrough
         // cannot handle them correctly, so we throw to catch this at dev/test time.
-        var ex = Assert.Throws<InvalidOperationException>(() => PackageJsonMerger.Merge(existing, scaffold));
+        var ex = Assert.Throws<InvalidOperationException>(() => MergeJson(existing, scaffold));
         Assert.Contains("files", ex.Message);
         Assert.Contains("PackageJsonMerger", ex.Message);
     }
