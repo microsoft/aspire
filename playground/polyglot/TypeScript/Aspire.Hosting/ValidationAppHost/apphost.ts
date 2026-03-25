@@ -28,6 +28,7 @@ const exe = await builder.addExecutable("myexe", "echo", ".", ["hello"]);
 // addProject (pre-existing)
 const project = await builder.addProject("myproject", "./src/MyProject", "https");
 const projectWithoutLaunchProfile = await builder.addProjectWithoutLaunchProfile("myproject-noprofile", "./src/MyProject");
+// ATS-safe DTO equivalent of ReferenceEnvironmentInjectionFlags.ConnectionString | ReferenceEnvironmentInjectionFlags.ServiceDiscovery
 await project.withReferenceEnvironment({
     connectionString: true,
     serviceDiscovery: true,

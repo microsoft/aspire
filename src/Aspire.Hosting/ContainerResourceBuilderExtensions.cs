@@ -1175,7 +1175,7 @@ public static class ContainerResourceBuilderExtensions
             string stringValue => builder.WithBuildArg(name, (object?)stringValue),
             IResourceBuilder<ParameterResource> parameter => builder.WithBuildArg(name, parameter),
             _ => throw new ArgumentException(
-                $"Unsupported build argument type '{value.GetType().Name}'. Expected string or ParameterResource.",
+                $"Unsupported build argument type '{value.GetType().Name}'. Expected string or IResourceBuilder<ParameterResource>.",
                 nameof(value))
         };
     }
