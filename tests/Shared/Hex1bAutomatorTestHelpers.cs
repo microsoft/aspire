@@ -135,26 +135,24 @@ internal static class Hex1bAutomatorTestHelpers
 
         await auto.WaitAsync(500);
 
-        // Type 'n' + Enter unconditionally:
-        // - Agent init: declines the prompt, CLI exits, success prompt appears
-        // - No agent init: 'n' runs at bash (command not found), produces error prompt
-        await auto.TypeAsync("n");
-        await auto.EnterAsync();
-
-        // Wait for the aspire command's success prompt
-        await auto.WaitUntilAsync(s =>
+        if (agentInitFound)
         {
-            var successSearcher = new CellPatternSearcher()
-                .FindPattern(counter.Value.ToString())
-                .RightText(" OK] $ ");
-            return successSearcher.Search(s).Count > 0;
-        }, timeout: effectiveTimeout, description: $"success prompt [{counter.Value} OK] $ after agent init");
+            // Decline the agent init prompt, CLI exits, success prompt appears
+            await auto.TypeAsync("n");
+            await auto.EnterAsync();
 
-        // Increment counter correctly for both cases
-        if (!agentInitFound)
-        {
-            counter.Increment();
+            // Wait for the aspire command's success prompt after agent init completes
+            await auto.WaitUntilAsync(s =>
+            {
+                var successSearcher = new CellPatternSearcher()
+                    .FindPattern(counter.Value.ToString())
+                    .RightText(" OK] $ ");
+                return successSearcher.Search(s).Count > 0;
+            }, timeout: effectiveTimeout, description: $"success prompt [{counter.Value} OK] $ after agent init");
         }
+
+        // The success prompt from the aspire command (init/new) has been detected.
+        // Increment once for that command.
         counter.Increment();
     }
 
