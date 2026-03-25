@@ -1,0 +1,44 @@
+@page "/errormode"
+@using Aspire.Dashboard.Utils
+@layout EmptyLayout
+@attribute [AllowAnonymous]
+@inject IStringLocalizer<Dashboard.Resources.Routes> Loc
+
+<PageTitle>@Loc[nameof(Dashboard.Resources.Routes.ErrorHandlerPageTitle)]</PageTitle>
+
+<div class="error-backdrop">
+    <div class="error-container error-mode-container">
+        <div class="error-logo">
+            <AspireLogo Height="128" Width="128" />
+        </div>
+        <div class="error-entry-container">
+            <h1>@Loc[nameof(Dashboard.Resources.Routes.ErrorModePageTitle)]</h1>
+            <h5>@Loc[nameof(Dashboard.Resources.Routes.ErrorModePageSubtitle)]</h5>
+
+            <div class="error-list">
+                @foreach (var error in DashboardErrorModeService.ValidationFailures)
+                {
+                    <div class="error-item">
+                        <FluentIcon Value="@(new Icons.Filled.Size24.ErrorCircle())" Color="Color.Error" />
+                        <div class="error-text">@error</div>
+                    </div>
+                }
+            </div>
+
+            @if (DashboardErrorModeService.ValidationFailures.Count > 0)
+            {
+                <div class="error-actions">
+                    <FluentButton Appearance="Appearance.Accent" OnClick="@DismissAndContinue">
+                        @Loc[nameof(Dashboard.Resources.Routes.ErrorModeDismissButton)]
+                    </FluentButton>
+                    <p class="error-warning">
+                        @Loc[nameof(Dashboard.Resources.Routes.ErrorModeWarning)]
+                    </p>
+                </div>
+            }
+        </div>
+    </div>
+    <div class="version-info">
+        @VersionHelpers.DashboardDisplayVersion
+    </div>
+</div>

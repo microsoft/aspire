@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Security.Claims;
@@ -170,33 +169,63 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         }
 
         var dashboardConfigSection = builder.Configuration.GetSection("Dashboard");
-        builder.Services.AddOptions<DashboardOptions>()
-            .Bind(dashboardConfigSection)
-            .ValidateOnStart();
-        builder.Services.AddSingleton<IPostConfigureOptions<DashboardOptions>, PostConfigureDashboardOptions>();
-        builder.Services.AddSingleton<IValidateOptions<DashboardOptions>, ValidateDashboardOptions>();
-
-        if (!TryGetDashboardOptions(builder, dashboardConfigSection, out var dashboardOptions, out var failureMessages))
+        
+        // Try to get dashboard options. If there are validation failures, we'll continue building the app
+        // but enter error mode where the dashboard shows the errors and blocks functionality.
+        bool hasValidationFailures = !TryGetDashboardOptions(builder, dashboardConfigSection, out var dashboardOptions, out var failureMessages);
+        if (hasValidationFailures)
         {
-            // The options have validation failures. Write them out to the user and return a non-zero exit code.
-            // We don't want to start the app, but we need to build the app to access the logger to log the errors.
-            _app = builder.Build();
-            _dashboardOptionsMonitor = _app.Services.GetRequiredService<IOptionsMonitor<DashboardOptions>>();
-            _validationFailures = failureMessages.ToList();
-            _logger = GetLogger();
-            Services = _app.Services;
-            WriteVersion(_logger);
-            WriteValidationFailures(_logger, _validationFailures);
-            return;
+            _validationFailures = failureMessages?.ToList() ?? new List<string> { "Failed to validate dashboard options. Check configuration and try again." };
+            // Use default options to allow the app to build
+            dashboardOptions = new DashboardOptions();
+            // Set minimal required configuration
+            dashboardOptions.Frontend.AuthMode = FrontendAuthMode.Unsecured;
+            dashboardOptions.Frontend.EndpointUrls = "http://localhost:18888";
+            dashboardOptions.Otlp.AuthMode = OtlpAuthMode.Unsecured;
+            dashboardOptions.Otlp.GrpcEndpointUrl = "http://localhost:18889";
+            dashboardOptions.Mcp.AuthMode = McpAuthMode.Unsecured;
+            dashboardOptions.Mcp.EndpointUrl = "http://localhost:18890";
+            
+            // Parse the default options to initialize internal state
+            // PostConfigure will call TryParseOptions internally
+            new PostConfigureDashboardOptions(builder.Configuration).PostConfigure(string.Empty, dashboardOptions);
+            
+            // Ensure all options are parsed - PostConfigure should have done this, but verify
+            if (!dashboardOptions.Frontend.TryParseOptions(out _))
+            {
+                throw new InvalidOperationException("Failed to parse default frontend options in error mode");
+            }
+            if (!dashboardOptions.Otlp.TryParseOptions(out _))
+            {
+                throw new InvalidOperationException("Failed to parse default OTLP options in error mode");
+            }
+            if (!dashboardOptions.Mcp.TryParseOptions(out _))
+            {
+                throw new InvalidOperationException("Failed to parse default MCP options in error mode");
+            }
+            
+            // Register the valid default options directly instead of using configuration binding
+            // This prevents validation errors from being thrown when options are accessed
+            var optionsMonitor = new OptionsMonitorWrapper<DashboardOptions>(dashboardOptions);
+            builder.Services.AddSingleton<IOptions<DashboardOptions>>(optionsMonitor);
+            builder.Services.AddScoped<IOptionsSnapshot<DashboardOptions>>(sp => optionsMonitor);
+            builder.Services.AddSingleton<IOptionsMonitor<DashboardOptions>>(optionsMonitor);
         }
         else
         {
             _validationFailures = Array.Empty<string>();
+            
+            // Normal path: configure options with binding and validation
+            builder.Services.AddOptions<DashboardOptions>()
+                .Bind(dashboardConfigSection)
+                .ValidateOnStart();
+            builder.Services.AddSingleton<IPostConfigureOptions<DashboardOptions>, PostConfigureDashboardOptions>();
+            builder.Services.AddSingleton<IValidateOptions<DashboardOptions>, ValidateDashboardOptions>();
         }
 
-        ConfigureKestrelEndpoints(builder, dashboardOptions);
+        ConfigureKestrelEndpoints(builder, dashboardOptions!);
 
-        var browserHttpsPort = dashboardOptions.Frontend.GetEndpointAddresses().FirstOrDefault(IsHttpsOrNull)?.Port;
+        var browserHttpsPort = dashboardOptions!.Frontend.GetEndpointAddresses().FirstOrDefault(IsHttpsOrNull)?.Port;
         var isAllHttps = browserHttpsPort is not null && IsHttpsOrNull(dashboardOptions.Otlp.GetGrpcEndpointAddress()) && IsHttpsOrNull(dashboardOptions.Otlp.GetHttpEndpointAddress()) && IsHttpsOrNull(dashboardOptions.Mcp.GetEndpointAddress());
         if (isAllHttps)
         {
@@ -338,6 +367,9 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             options.Cookie.Name = DashboardAntiForgeryCookieName;
         });
 
+        // Register the error mode service
+        builder.Services.AddSingleton(new DashboardErrorMode(_validationFailures));
+
         _app = builder.Build();
 
         _dashboardOptionsMonitor = _app.Services.GetRequiredService<IOptionsMonitor<DashboardOptions>>();
@@ -355,6 +387,12 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             .AddSupportedUICultures(supportedCultureNames));
 
         WriteVersion(_logger);
+
+        // Log validation failures if in error mode
+        if (hasValidationFailures)
+        {
+            WriteValidationFailures(_logger, _validationFailures);
+        }
 
         _app.Lifetime.ApplicationStarted.Register(() =>
         {
@@ -458,6 +496,47 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                 if (!client.IsEnabled)
                 {
                     context.Response.Redirect(TargetLocationInterceptor.StructuredLogsPath);
+                    return;
+                }
+            }
+
+            await next(context).ConfigureAwait(false);
+        });
+
+        // Error mode middleware: redirect to error mode page if the dashboard has validation failures
+        // and the user hasn't dismissed the errors yet.
+        _app.Use(async (context, next) =>
+        {
+            var errorMode = context.RequestServices.GetRequiredService<DashboardErrorMode>();
+            
+            // Allow access to static files, error mode page, and Blazor framework files even in error mode
+            if (!context.Request.Path.StartsWithSegments("/errormode", StringComparison.OrdinalIgnoreCase) &&
+                !context.Request.Path.StartsWithSegments("/_framework", StringComparison.OrdinalIgnoreCase) &&
+                !context.Request.Path.StartsWithSegments("/_content", StringComparison.OrdinalIgnoreCase) &&
+                !context.Request.Path.StartsWithSegments("/css", StringComparison.OrdinalIgnoreCase) &&
+                !context.Request.Path.StartsWithSegments("/js", StringComparison.OrdinalIgnoreCase) &&
+                (context.Request.Path.Value?.EndsWith(".css", StringComparison.OrdinalIgnoreCase) != true) &&
+                (context.Request.Path.Value?.EndsWith(".js", StringComparison.OrdinalIgnoreCase) != true) &&
+                (context.Request.Path.Value?.EndsWith(".ico", StringComparison.OrdinalIgnoreCase) != true))
+            {
+                // Block OTLP and MCP endpoints when in error mode
+                if (errorMode.ShouldBlock &&
+                    (context.Request.Path.StartsWithSegments("/v1/logs", StringComparison.OrdinalIgnoreCase) ||
+                     context.Request.Path.StartsWithSegments("/v1/traces", StringComparison.OrdinalIgnoreCase) ||
+                     context.Request.Path.StartsWithSegments("/v1/metrics", StringComparison.OrdinalIgnoreCase) ||
+                     context.Request.Path.StartsWithSegments("/mcp", StringComparison.OrdinalIgnoreCase)))
+                {
+                    context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+                    await context.Response.WriteAsync("Dashboard is in error mode due to configuration errors.").ConfigureAwait(false);
+                    return;
+                }
+
+                // Redirect browser requests to error mode page
+                if (errorMode.ShouldBlock && 
+                    context.Request.Method == HttpMethods.Get &&
+                    context.Request.Headers.Accept.ToString().Contains("text/html", StringComparison.OrdinalIgnoreCase))
+                {
+                    context.Response.Redirect("/errormode");
                     return;
                 }
             }
@@ -936,24 +1015,23 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
     public int Run()
     {
-        if (_validationFailures.Count > 0)
-        {
-            return -1;
-        }
-
+        // Start the app even if there are validation failures
+        // Error mode middleware will redirect to the error page
         _app.Run();
-        return 0;
+        
+        // Return non-zero exit code if there were validation failures
+        // Even if the user dismissed them, the configuration is still invalid
+        return _validationFailures.Count > 0 ? -1 : 0;
     }
 
     public Task StartAsync(CancellationToken cancellationToken = default)
     {
-        Debug.Assert(_validationFailures.Count == 0, "Validation failures: " + Environment.NewLine + string.Join(Environment.NewLine, _validationFailures));
+        // Allow starting even with validation failures - error mode will handle it
         return _app.StartAsync(cancellationToken);
     }
 
     public Task StopAsync(CancellationToken cancellationToken = default)
     {
-        Debug.Assert(_validationFailures.Count == 0, "Validation failures: " + Environment.NewLine + string.Join(Environment.NewLine, _validationFailures));
         return _app.StopAsync(cancellationToken);
     }
 

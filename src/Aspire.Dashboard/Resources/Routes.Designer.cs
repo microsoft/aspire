@@ -88,6 +88,42 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Continue Anyway.
+        /// </summary>
+        public static string ErrorModeDismissButton {
+            get {
+                return ResourceManager.GetString("ErrorModeDismissButton", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The dashboard has configuration errors that need to be resolved.
+        /// </summary>
+        public static string ErrorModePageSubtitle {
+            get {
+                return ResourceManager.GetString("ErrorModePageSubtitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Configuration Error.
+        /// </summary>
+        public static string ErrorModePageTitle {
+            get {
+                return ResourceManager.GetString("ErrorModePageTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Warning: Continuing with configuration errors may result in security vulnerabilities or limited functionality.
+        /// </summary>
+        public static string ErrorModeWarning {
+            get {
+                return ResourceManager.GetString("ErrorModeWarning", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Not found.
         /// </summary>
         public static string NotFoundDescription {
