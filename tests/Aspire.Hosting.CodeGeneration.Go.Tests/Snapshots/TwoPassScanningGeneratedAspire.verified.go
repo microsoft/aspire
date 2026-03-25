@@ -1254,12 +1254,12 @@ func (s *CSharpAppResource) WithoutHttpsCertificate() (*IResourceWithEnvironment
 }
 
 // WithRelationship adds a relationship to another resource
-func (s *CSharpAppResource) WithRelationship(resourceBuilder *IResource, type string) (*IResource, error) {
+func (s *CSharpAppResource) WithRelationship(resourceBuilder *IResource, type_ string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["resourceBuilder"] = SerializeValue(resourceBuilder)
-	reqArgs["type"] = SerializeValue(type)
+	reqArgs["type"] = SerializeValue(type_)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderRelationship", reqArgs)
 	if err != nil {
 		return nil, err
@@ -2157,12 +2157,12 @@ func (s *ConnectionStringResource) WithCommand(name string, displayName string, 
 }
 
 // WithRelationship adds a relationship to another resource
-func (s *ConnectionStringResource) WithRelationship(resourceBuilder *IResource, type string) (*IResource, error) {
+func (s *ConnectionStringResource) WithRelationship(resourceBuilder *IResource, type_ string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["resourceBuilder"] = SerializeValue(resourceBuilder)
-	reqArgs["type"] = SerializeValue(type)
+	reqArgs["type"] = SerializeValue(type_)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderRelationship", reqArgs)
 	if err != nil {
 		return nil, err
@@ -2770,12 +2770,12 @@ func (s *ContainerRegistryResource) WithCommand(name string, displayName string,
 }
 
 // WithRelationship adds a relationship to another resource
-func (s *ContainerRegistryResource) WithRelationship(resourceBuilder *IResource, type string) (*IResource, error) {
+func (s *ContainerRegistryResource) WithRelationship(resourceBuilder *IResource, type_ string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["resourceBuilder"] = SerializeValue(resourceBuilder)
-	reqArgs["type"] = SerializeValue(type)
+	reqArgs["type"] = SerializeValue(type_)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderRelationship", reqArgs)
 	if err != nil {
 		return nil, err
@@ -4116,12 +4116,12 @@ func (s *ContainerResource) WithoutHttpsCertificate() (*IResourceWithEnvironment
 }
 
 // WithRelationship adds a relationship to another resource
-func (s *ContainerResource) WithRelationship(resourceBuilder *IResource, type string) (*IResource, error) {
+func (s *ContainerResource) WithRelationship(resourceBuilder *IResource, type_ string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["resourceBuilder"] = SerializeValue(resourceBuilder)
-	reqArgs["type"] = SerializeValue(type)
+	reqArgs["type"] = SerializeValue(type_)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderRelationship", reqArgs)
 	if err != nil {
 		return nil, err
@@ -5639,12 +5639,12 @@ func (s *DotnetToolResource) WithoutHttpsCertificate() (*IResourceWithEnvironmen
 }
 
 // WithRelationship adds a relationship to another resource
-func (s *DotnetToolResource) WithRelationship(resourceBuilder *IResource, type string) (*IResource, error) {
+func (s *DotnetToolResource) WithRelationship(resourceBuilder *IResource, type_ string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["resourceBuilder"] = SerializeValue(resourceBuilder)
-	reqArgs["type"] = SerializeValue(type)
+	reqArgs["type"] = SerializeValue(type_)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderRelationship", reqArgs)
 	if err != nil {
 		return nil, err
@@ -7226,12 +7226,12 @@ func (s *ExecutableResource) WithoutHttpsCertificate() (*IResourceWithEnvironmen
 }
 
 // WithRelationship adds a relationship to another resource
-func (s *ExecutableResource) WithRelationship(resourceBuilder *IResource, type string) (*IResource, error) {
+func (s *ExecutableResource) WithRelationship(resourceBuilder *IResource, type_ string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["resourceBuilder"] = SerializeValue(resourceBuilder)
-	reqArgs["type"] = SerializeValue(type)
+	reqArgs["type"] = SerializeValue(type_)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderRelationship", reqArgs)
 	if err != nil {
 		return nil, err
@@ -8008,12 +8008,12 @@ func (s *ExternalServiceResource) WithCommand(name string, displayName string, e
 }
 
 // WithRelationship adds a relationship to another resource
-func (s *ExternalServiceResource) WithRelationship(resourceBuilder *IResource, type string) (*IResource, error) {
+func (s *ExternalServiceResource) WithRelationship(resourceBuilder *IResource, type_ string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["resourceBuilder"] = SerializeValue(resourceBuilder)
-	reqArgs["type"] = SerializeValue(type)
+	reqArgs["type"] = SerializeValue(type_)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderRelationship", reqArgs)
 	if err != nil {
 		return nil, err
@@ -9928,12 +9928,12 @@ func (s *ParameterResource) WithCommand(name string, displayName string, execute
 }
 
 // WithRelationship adds a relationship to another resource
-func (s *ParameterResource) WithRelationship(resourceBuilder *IResource, type string) (*IResource, error) {
+func (s *ParameterResource) WithRelationship(resourceBuilder *IResource, type_ string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["resourceBuilder"] = SerializeValue(resourceBuilder)
-	reqArgs["type"] = SerializeValue(type)
+	reqArgs["type"] = SerializeValue(type_)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderRelationship", reqArgs)
 	if err != nil {
 		return nil, err
@@ -11675,12 +11675,12 @@ func (s *ProjectResource) WithoutHttpsCertificate() (*IResourceWithEnvironment, 
 }
 
 // WithRelationship adds a relationship to another resource
-func (s *ProjectResource) WithRelationship(resourceBuilder *IResource, type string) (*IResource, error) {
+func (s *ProjectResource) WithRelationship(resourceBuilder *IResource, type_ string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["resourceBuilder"] = SerializeValue(resourceBuilder)
-	reqArgs["type"] = SerializeValue(type)
+	reqArgs["type"] = SerializeValue(type_)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderRelationship", reqArgs)
 	if err != nil {
 		return nil, err
@@ -13715,12 +13715,12 @@ func (s *TestDatabaseResource) WithoutHttpsCertificate() (*IResourceWithEnvironm
 }
 
 // WithRelationship adds a relationship to another resource
-func (s *TestDatabaseResource) WithRelationship(resourceBuilder *IResource, type string) (*IResource, error) {
+func (s *TestDatabaseResource) WithRelationship(resourceBuilder *IResource, type_ string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["resourceBuilder"] = SerializeValue(resourceBuilder)
-	reqArgs["type"] = SerializeValue(type)
+	reqArgs["type"] = SerializeValue(type_)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderRelationship", reqArgs)
 	if err != nil {
 		return nil, err
@@ -15299,12 +15299,12 @@ func (s *TestRedisResource) WithoutHttpsCertificate() (*IResourceWithEnvironment
 }
 
 // WithRelationship adds a relationship to another resource
-func (s *TestRedisResource) WithRelationship(resourceBuilder *IResource, type string) (*IResource, error) {
+func (s *TestRedisResource) WithRelationship(resourceBuilder *IResource, type_ string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["resourceBuilder"] = SerializeValue(resourceBuilder)
-	reqArgs["type"] = SerializeValue(type)
+	reqArgs["type"] = SerializeValue(type_)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderRelationship", reqArgs)
 	if err != nil {
 		return nil, err
@@ -17040,12 +17040,12 @@ func (s *TestVaultResource) WithoutHttpsCertificate() (*IResourceWithEnvironment
 }
 
 // WithRelationship adds a relationship to another resource
-func (s *TestVaultResource) WithRelationship(resourceBuilder *IResource, type string) (*IResource, error) {
+func (s *TestVaultResource) WithRelationship(resourceBuilder *IResource, type_ string) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["resourceBuilder"] = SerializeValue(resourceBuilder)
-	reqArgs["type"] = SerializeValue(type)
+	reqArgs["type"] = SerializeValue(type_)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderRelationship", reqArgs)
 	if err != nil {
 		return nil, err
