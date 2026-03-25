@@ -483,7 +483,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task RunCommand_SkipsBuild_WhenExtensionDevKitCapabilityIsAvailable()
+    public async Task RunCommand_SkipsBuild_WhenBuildDotNetUsingCliCapabilityIsAvailable()
     {
         var buildCalled = false;
 
