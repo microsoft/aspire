@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Aspire.Cli.Tests.Utils;
 using Hex1b;
@@ -116,10 +117,19 @@ internal static class CliE2ETestHelpers
         DotNet,
 
         /// <summary>
-        /// Docker + Python + Node.js (no .NET SDK). For TypeScript-only AppHost tests.
+        /// Docker + Node.js (no .NET SDK). For Node-based polyglot AppHost tests.
         /// </summary>
         Polyglot,
+
+        /// <summary>
+        /// Docker + Node.js + Java (no .NET SDK). For Java polyglot AppHost tests.
+        /// </summary>
+        PolyglotJava,
     }
+
+    private const string PolyglotBaseImageName = "aspire-e2e-polyglot-base";
+    private static readonly object s_polyglotBaseImageLock = new();
+    private static bool s_polyglotBaseImageBuilt;
 
     /// <summary>
     /// Detects the install mode for Docker-based tests based on the current environment.
@@ -194,10 +204,16 @@ internal static class CliE2ETestHelpers
         var dockerfileName = variant switch
         {
             DockerfileVariant.DotNet => "Dockerfile.e2e",
-            DockerfileVariant.Polyglot => "Dockerfile.e2e-polyglot",
+            DockerfileVariant.Polyglot => "Dockerfile.e2e-polyglot-base",
+            DockerfileVariant.PolyglotJava => "Dockerfile.e2e-polyglot-java",
             _ => throw new ArgumentOutOfRangeException(nameof(variant)),
         };
         var dockerfilePath = Path.Combine(repoRoot, "tests", "Shared", "Docker", dockerfileName);
+
+        if (variant is DockerfileVariant.PolyglotJava)
+        {
+            EnsurePolyglotBaseImage(repoRoot, output);
+        }
 
         output.WriteLine($"Creating Docker test terminal:");
         output.WriteLine($"  Test name:      {testName}");
@@ -271,6 +287,57 @@ internal static class CliE2ETestHelpers
             });
 
         return builder.Build();
+    }
+
+    private static void EnsurePolyglotBaseImage(string repoRoot, ITestOutputHelper output)
+    {
+        lock (s_polyglotBaseImageLock)
+        {
+            if (s_polyglotBaseImageBuilt)
+            {
+                return;
+            }
+
+            var dockerfilePath = Path.Combine(repoRoot, "tests", "Shared", "Docker", "Dockerfile.e2e-polyglot-base");
+
+            output.WriteLine($"Building shared polyglot Docker base image from {dockerfilePath}");
+
+            var startInfo = new ProcessStartInfo("docker")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            };
+
+            startInfo.ArgumentList.Add("build");
+            startInfo.ArgumentList.Add("--quiet");
+            startInfo.ArgumentList.Add("--build-arg");
+            startInfo.ArgumentList.Add("SKIP_SOURCE_BUILD=true");
+            startInfo.ArgumentList.Add("-f");
+            startInfo.ArgumentList.Add(dockerfilePath);
+            startInfo.ArgumentList.Add("-t");
+            startInfo.ArgumentList.Add(PolyglotBaseImageName);
+            startInfo.ArgumentList.Add(repoRoot);
+
+            using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start docker build process.");
+            var standardOutput = process.StandardOutput.ReadToEnd();
+            var standardError = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+
+            if (process.ExitCode != 0)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to build shared polyglot Docker base image.{Environment.NewLine}" +
+                    $"{standardOutput}{Environment.NewLine}{standardError}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(standardOutput))
+            {
+                output.WriteLine(standardOutput.Trim());
+            }
+
+            s_polyglotBaseImageBuilt = true;
+        }
     }
 
     /// <summary>
