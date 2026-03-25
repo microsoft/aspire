@@ -1144,24 +1144,106 @@ public class PackageJsonMergerTests
     }
 
     [Fact]
-    public void ScaffoldWithArrayProperty_ThrowsInvalidOperation()
+    public void ScaffoldWithArrayProperty_PreservesExistingArray()
     {
         var existing = """
             {
-              "name": "my-app"
+              "name": "my-app",
+              "keywords": ["web", "api"]
             }
             """;
 
         var scaffold = """
             {
+              "keywords": ["web", "api"],
               "files": ["dist/**", "README.md"]
             }
             """;
 
-        // Array properties in scaffold require explicit merge logic — the generic fallthrough
-        // cannot handle them correctly, so we throw to catch this at dev/test time.
-        var ex = Assert.Throws<InvalidOperationException>(() => MergeJson(existing, scaffold));
-        Assert.Contains("files", ex.Message);
-        Assert.Contains("PackageJsonMerger", ex.Message);
+        // When both have an array, existing wins (preserved). Scaffold-only arrays are added.
+        var result = MergeJson(existing, scaffold);
+        var doc = JsonNode.Parse(result)!.AsObject();
+
+        var keywords = doc["keywords"]!.AsArray();
+        Assert.Equal(2, keywords.Count);
+        Assert.Equal("web", keywords[0]!.GetValue<string>());
+        Assert.Equal("api", keywords[1]!.GetValue<string>());
+
+        var files = doc["files"]!.AsArray();
+        Assert.Equal(2, files.Count);
+        Assert.Equal("dist/**", files[0]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void BrownfieldNpmInit_MergesSuccessfully()
+    {
+        // Reproduces the real-world scenario where npm init creates a package.json
+        // with keywords/author/license that get echoed through the scaffold.
+        var existing = """
+            {
+              "name": "my-project",
+              "version": "1.0.0",
+              "main": "index.js",
+              "scripts": {
+                "test": "echo \"Error: no test specified\" && exit 1"
+              },
+              "keywords": [],
+              "author": "",
+              "license": "ISC",
+              "description": ""
+            }
+            """;
+
+        var scaffold = """
+            {
+              "name": "my-project",
+              "version": "1.0.0",
+              "type": "module",
+              "main": "index.js",
+              "scripts": {
+                "aspire:start": "aspire run",
+                "aspire:build": "tsc -p tsconfig.apphost.json",
+                "aspire:lint": "eslint apphost.ts"
+              },
+              "keywords": [],
+              "author": "",
+              "license": "ISC",
+              "description": "",
+              "dependencies": {
+                "vscode-jsonrpc": "^8.2.0"
+              },
+              "devDependencies": {
+                "typescript": "^5.9.3",
+                "tsx": "^4.21.0"
+              },
+              "engines": {
+                "node": "^20.19.0 || ^22.13.0 || >=24"
+              }
+            }
+            """;
+
+        var result = MergeJson(existing, scaffold);
+        var doc = JsonNode.Parse(result)!.AsObject();
+
+        // Original fields preserved
+        Assert.Equal("my-project", doc["name"]!.GetValue<string>());
+        Assert.Equal("ISC", doc["license"]!.GetValue<string>());
+
+        // Array preserved (empty keywords from npm init)
+        Assert.NotNull(doc["keywords"]);
+        Assert.IsAssignableFrom<JsonArray>(doc["keywords"]);
+
+        // Aspire scripts added, existing test script preserved
+        var scripts = doc["scripts"]!.AsObject();
+        Assert.Contains("test", scripts.Select(p => p.Key));
+        Assert.Contains("aspire:start", scripts.Select(p => p.Key));
+        Assert.Contains("aspire:build", scripts.Select(p => p.Key));
+
+        // Dependencies merged
+        Assert.NotNull(doc["dependencies"]?["vscode-jsonrpc"]);
+        Assert.NotNull(doc["devDependencies"]?["typescript"]);
+
+        // Engines set
+        Assert.Contains(">=24", doc["engines"]?["node"]?.GetValue<string>());
     }
 }
