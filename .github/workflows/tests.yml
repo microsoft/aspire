@@ -218,6 +218,14 @@ jobs:
     name: TypeScript SDK Unit Tests
     uses: ./.github/workflows/typescript-sdk-tests.yml
 
+  java_sdk_tests:
+    name: Java SDK Unit Tests
+    uses: ./.github/workflows/run-tests.yml
+    with:
+      testShortName: Java SDK
+      testProjectPath: tests/Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.Java.Tests.csproj
+      extraTestArgs: --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
+
   results:
     if: ${{ always() && github.repository_owner == 'microsoft' }}
     runs-on: ubuntu-latest
@@ -230,6 +238,7 @@ jobs:
       build_cli_archive_macos,
       extension_tests_win,
       typescript_sdk_tests,
+      java_sdk_tests,
       tests_no_nugets,
       tests_no_nugets_overflow,
       tests_requires_nugets_linux,
@@ -294,8 +303,9 @@ jobs:
                 contains(needs.*.result, 'cancelled') ||
                 (github.event_name == 'pull_request' &&
                  (needs.extension_tests_win.result == 'skipped' ||
-                   needs.typescript_sdk_tests.result == 'skipped' ||
-                   needs.tests_no_nugets.result == 'skipped' ||
+                    needs.typescript_sdk_tests.result == 'skipped' ||
+                    needs.java_sdk_tests.result == 'skipped' ||
+                    needs.tests_no_nugets.result == 'skipped' ||
                    needs.tests_requires_nugets_linux.result == 'skipped' ||
                    needs.tests_requires_nugets_windows.result == 'skipped' ||
                    (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null &&
@@ -304,8 +314,9 @@ jobs:
                   needs.polyglot_validation.result == 'skipped')) ||
                 (github.event_name != 'pull_request' &&
                  (needs.extension_tests_win.result == 'skipped' ||
-                   needs.typescript_sdk_tests.result == 'skipped' ||
-                   needs.tests_no_nugets.result == 'skipped' ||
+                    needs.typescript_sdk_tests.result == 'skipped' ||
+                    needs.java_sdk_tests.result == 'skipped' ||
+                    needs.tests_no_nugets.result == 'skipped' ||
                    needs.tests_requires_nugets_linux.result == 'skipped' ||
                    needs.tests_requires_nugets_windows.result == 'skipped' ||
                    (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null &&

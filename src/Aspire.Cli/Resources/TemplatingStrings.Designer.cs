@@ -151,6 +151,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Java AppHost, Express, and React starter.
+        /// </summary>
+        public static string AspireJavaStarter_Description {
+            get {
+                return ResourceManager.GetString("AspireJavaStarter_Description", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to xUnit.
         /// </summary>
         public static string AspireXUnit_Description {

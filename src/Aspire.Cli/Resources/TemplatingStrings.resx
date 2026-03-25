@@ -126,6 +126,9 @@
   <data name="AspireJsFrontendStarter_Description" xml:space="preserve">
     <value>Starter App (ASP.NET Core/React)</value>
   </data>
+  <data name="AspireJavaStarter_Description" xml:space="preserve">
+    <value>Starter App (Java AppHost/Express/React)</value>
+  </data>
   <data name="AspireEmpty_Description" xml:space="preserve">
     <value>AppHost and service defaults</value>
   </data>

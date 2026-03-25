@@ -1,8 +1,8 @@
-# Multi-stage Dockerfile for Aspire E2E testing (polyglot variant).
+# Multi-stage Dockerfile for Aspire E2E testing (polyglot base variant).
 #
 # Includes: Docker CLI (via host socket mount), gh CLI,
-#           Node.js, Python, Aspire install scripts.
-# Does NOT include .NET SDK — for TypeScript-only AppHost tests.
+#           Node.js, Aspire install scripts.
+# Does NOT include .NET SDK or Java.
 #
 # Usage:
 #   Local dev (build from source):
@@ -66,11 +66,6 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
 # Install Node.js (needed for TypeScript AppHosts and JS templates).
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
-    rm -rf /var/lib/apt/lists/*
-
-# Install Python (needed for Python templates).
-RUN apt-get update -qq && \
-    apt-get install -y --no-install-recommends python3 python3-pip python3-venv && \
     rm -rf /var/lib/apt/lists/*
 
 # --- Aspire CLI setup ---

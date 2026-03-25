@@ -27,4 +27,9 @@ internal static class KnownTemplateId
     /// The template ID for the TypeScript starter template.
     /// </summary>
     public const string TypeScriptStarter = "aspire-ts-starter";
+
+    /// <summary>
+    /// The template ID for the CLI Java empty AppHost template.
+    /// </summary>
+    public const string JavaEmptyAppHost = "aspire-java-empty";
 }
