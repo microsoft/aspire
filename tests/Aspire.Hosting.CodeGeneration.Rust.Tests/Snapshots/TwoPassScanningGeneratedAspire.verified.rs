@@ -5408,6 +5408,14 @@ impl EndpointReference {
         Ok(serde_json::from_value(result)?)
     }
 
+    /// Gets the ExcludeReferenceEndpoint property
+    pub fn exclude_reference_endpoint(&self) -> Result<bool, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointReference.excludeReferenceEndpoint", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
     /// Gets the Port property
     pub fn port(&self) -> Result<f64, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();

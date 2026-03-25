@@ -9,7 +9,7 @@ param value string
 
 param minReplicas string
 
-resource api 'Microsoft.App/containerApps@2025-01-01' = {
+resource api 'Microsoft.App/containerApps@2025-07-01' = {
   name: 'api'
   location: location
   properties: {

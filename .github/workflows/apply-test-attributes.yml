@@ -366,7 +366,7 @@ jobs:
     # Credentials must persist for git push operations later in workflow
     - name: Checkout repo
       if: success()
-      uses: actions/checkout@v4 # zizmor: ignore[artipacked]
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2 # zizmor: ignore[artipacked]
       with:
         ref: ${{ steps.determine-target.outputs.checkout_ref }}
         fetch-depth: 0
@@ -374,7 +374,7 @@ jobs:
 
     - name: Setup .NET
       if: success()
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
       with:
         global-json-file: global.json
 
