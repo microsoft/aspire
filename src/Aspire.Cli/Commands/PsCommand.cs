@@ -215,10 +215,17 @@ internal sealed class PsCommand : BaseCommand
             var shortPath = ShortenPath(appHost.AppHostPath);
             var cliPid = appHost.CliPid?.ToString(CultureInfo.InvariantCulture) ?? "-";
             var dashboard = "-";
-            if (!string.IsNullOrEmpty(appHost.DashboardUrl) && Uri.TryCreate(appHost.DashboardUrl, UriKind.Absolute, out var dashboardUri))
+            if (!string.IsNullOrEmpty(appHost.DashboardUrl))
             {
-                var displayText = $"{dashboardUri.Scheme}://{dashboardUri.Authority}";
-                dashboard = $"[link={Markup.Escape(appHost.DashboardUrl)}]{Markup.Escape(displayText)}[/]";
+                if (Uri.TryCreate(appHost.DashboardUrl, UriKind.Absolute, out var dashboardUri))
+                {
+                    var displayText = $"{dashboardUri.Scheme}://{dashboardUri.Authority}";
+                    dashboard = $"[link={Markup.Escape(appHost.DashboardUrl)}]{Markup.Escape(displayText)}[/]";
+                }
+                else
+                {
+                    dashboard = Markup.Escape(appHost.DashboardUrl);
+                }
             }
 
             table.AddRow(

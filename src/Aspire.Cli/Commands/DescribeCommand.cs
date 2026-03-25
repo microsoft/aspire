@@ -364,5 +364,16 @@ internal sealed class DescribeCommand : BaseCommand
     /// <summary>
     /// Represents the display state of a resource for deduplication during watch mode.
     /// </summary>
-    private sealed record ResourceDisplayState(string DisplayName, string? State, string? HealthStatus, (string Url, string DisplayName)[] Endpoints);
+    private sealed record ResourceDisplayState(string DisplayName, string? State, string? HealthStatus, (string Url, string DisplayName)[] Endpoints)
+    {
+        public bool Equals(ResourceDisplayState? other) =>
+            other is not null &&
+            DisplayName == other.DisplayName &&
+            State == other.State &&
+            HealthStatus == other.HealthStatus &&
+            Endpoints.AsSpan().SequenceEqual(other.Endpoints);
+
+        public override int GetHashCode() =>
+            HashCode.Combine(DisplayName, State, HealthStatus, Endpoints.Length);
+    }
 }

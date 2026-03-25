@@ -35,7 +35,7 @@ internal static class ResourceUrlHelpers
                     Name = url.EndpointName ?? "-",
                     Address = url.Url.Host,
                     Port = url.Url.Port,
-                    Url = !KnownUnsupportedUrlSchemes.Schemes.Contains(url.Url.Scheme) ? url.Url.OriginalString : null,
+                    Url = !KnownUnsupportedUrlSchemes.IsUnsupportedScheme(url.Url.Scheme) ? url.Url.OriginalString : null,
                     SortOrder = url.DisplayProperties.SortOrder,
                     DisplayName = string.IsNullOrEmpty(url.DisplayProperties.DisplayName) ? null : url.DisplayProperties.DisplayName,
                     OriginalUrlString = url.Url.OriginalString,
