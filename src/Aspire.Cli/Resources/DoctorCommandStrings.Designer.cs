@@ -123,7 +123,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to For detailed prerequisites: https://aka.ms/aspire-prerequisites.
+        ///   Looks up a localized string similar to For detailed prerequisites: {0}.
         /// </summary>
         public static string DetailedPrerequisitesLink {
             get {

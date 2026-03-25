@@ -18,9 +18,9 @@
         <note />
       </trans-unit>
       <trans-unit id="DetailedPrerequisitesLink">
-        <source>For detailed prerequisites: https://aka.ms/aspire-prerequisites</source>
-        <target state="translated">Pour les prérequis détaillés : https://aka.ms/aspire-prerequisites</target>
-        <note />
+        <source>For detailed prerequisites: {0}</source>
+        <target state="new">For detailed prerequisites: {0}</target>
+        <note>{0} is a clickable URL</note>
       </trans-unit>
       <trans-unit id="DevCertsCleanAndTrustFixFormat">
         <source>Run '{0}' to remove all certificates, then run '{1}' to create and trust a new one.</source>
