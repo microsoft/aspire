@@ -47,7 +47,7 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
     public LayoutConfiguration? DiscoverLayout(string? projectDirectory = null)
     {
         // 1. Try environment variable for layout path
-        var envLayoutPath = Environment.GetEnvironmentVariable(BundleDiscovery.LayoutPathEnvVar);
+        var envLayoutPath = _executionContext.GetEnvironmentVariable(BundleDiscovery.LayoutPathEnvVar);
         if (!string.IsNullOrEmpty(envLayoutPath))
         {
             _logger.LogDebug("Found ASPIRE_LAYOUT_PATH: {Path}", envLayoutPath);
@@ -85,8 +85,8 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
         // Check environment variable overrides first
         var envPath = component switch
         {
-            LayoutComponent.Dcp => Environment.GetEnvironmentVariable(BundleDiscovery.DcpPathEnvVar),
-            LayoutComponent.Managed => Environment.GetEnvironmentVariable(BundleDiscovery.ManagedPathEnvVar),
+            LayoutComponent.Dcp => _executionContext.GetEnvironmentVariable(BundleDiscovery.DcpPathEnvVar),
+            LayoutComponent.Managed => _executionContext.GetEnvironmentVariable(BundleDiscovery.ManagedPathEnvVar),
             _ => null
         };
 
@@ -103,7 +103,7 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
     public bool IsBundleModeAvailable(string? projectDirectory = null)
     {
         // Check if user explicitly wants SDK mode
-        var useSdk = Environment.GetEnvironmentVariable(BundleDiscovery.UseGlobalDotNetEnvVar);
+        var useSdk = _executionContext.GetEnvironmentVariable(BundleDiscovery.UseGlobalDotNetEnvVar);
         if (string.Equals(useSdk, "true", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(useSdk, "1", StringComparison.OrdinalIgnoreCase))
         {
@@ -243,11 +243,11 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
         // Environment variables for specific components take precedence
         // These will be checked at GetComponentPath time, but we note them here for logging
 
-        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable(BundleDiscovery.DcpPathEnvVar)))
+        if (!string.IsNullOrEmpty(_executionContext.GetEnvironmentVariable(BundleDiscovery.DcpPathEnvVar)))
         {
             _logger.LogDebug("DCP path override from {EnvVar}", BundleDiscovery.DcpPathEnvVar);
         }
-        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable(BundleDiscovery.ManagedPathEnvVar)))
+        if (!string.IsNullOrEmpty(_executionContext.GetEnvironmentVariable(BundleDiscovery.ManagedPathEnvVar)))
         {
             _logger.LogDebug("Managed path override from {EnvVar}", BundleDiscovery.ManagedPathEnvVar);
         }

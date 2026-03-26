@@ -168,7 +168,7 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, CliExecuti
         if (parentDir is not null &&
             string.Equals(Path.GetFullPath(parentDir), Path.GetFullPath(aspireDir), StringComparison.OrdinalIgnoreCase))
         {
-            return parentDir;
+            return Path.GetFullPath(parentDir);
         }
 
         // Non-standard install location — fall back to ~/.aspire/ to avoid writing into

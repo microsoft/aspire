@@ -62,12 +62,6 @@ internal sealed class SetupCommand : BaseCommand
             installPath = _bundleService.GetDefaultExtractDir(processPath);
         }
 
-        if (string.IsNullOrEmpty(installPath))
-        {
-            InteractionService.DisplayError("Could not determine the installation path.");
-            return ExitCodeConstants.FailedToBuildArtifacts;
-        }
-
         // Extract with spinner
         BundleExtractResult result = BundleExtractResult.NoPayload;
         var exitCode = await InteractionService.ShowStatusAsync(

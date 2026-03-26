@@ -76,7 +76,7 @@ public class LayoutDiscoveryTests : IDisposable
         return dir;
     }
 
-    private static CliExecutionContext CreateContext(string homeDir)
+    private static CliExecutionContext CreateContext(string homeDir, IReadOnlyDictionary<string, string?>? environmentVariables = null)
     {
         var aspireDir = Path.Combine(homeDir, ".aspire");
         return new CliExecutionContext(
@@ -86,6 +86,7 @@ public class LayoutDiscoveryTests : IDisposable
             new DirectoryInfo(Path.Combine(aspireDir, "sdks")),
             new DirectoryInfo(Path.Combine(aspireDir, "logs")),
             "test.log",
+            environmentVariables: environmentVariables ?? new Dictionary<string, string?>(),
             homeDirectory: new DirectoryInfo(homeDir));
     }
 
