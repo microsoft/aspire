@@ -124,6 +124,9 @@ config.ps1
 # Node.js modules
 node_modules/
 
+# Generated Aspire TypeScript modules
+.modules/
+
 # Maven build outputs
 target/
 dependency-reduced-pom.xml

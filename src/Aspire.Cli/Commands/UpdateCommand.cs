@@ -13,6 +13,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -30,6 +31,7 @@ internal sealed class UpdateCommand : BaseCommand
     private readonly ICliUpdateNotifier _updateNotifier;
     private readonly IFeatures _features;
     private readonly IConfigurationService _configurationService;
+    private readonly IConfiguration _configuration;
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", UpdateCommandStrings.ProjectArgumentDescription);
     private static readonly Option<bool> s_selfOption = new("--self")
@@ -50,7 +52,8 @@ internal sealed class UpdateCommand : BaseCommand
         ICliUpdateNotifier updateNotifier,
         CliExecutionContext executionContext,
         IConfigurationService configurationService,
-        AspireCliTelemetry telemetry)
+        AspireCliTelemetry telemetry,
+        IConfiguration configuration)
         : base("update", UpdateCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _projectLocator = projectLocator;
@@ -61,12 +64,13 @@ internal sealed class UpdateCommand : BaseCommand
         _updateNotifier = updateNotifier;
         _features = features;
         _configurationService = configurationService;
+        _configuration = configuration;
 
         Options.Add(s_appHostOption);
         Options.Add(s_selfOption);
 
         // Customize description based on whether staging channel is enabled
-        var isStagingEnabled = _features.IsFeatureEnabled(KnownFeatures.StagingChannelEnabled, false);
+        var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(_features, _configuration);
 
         _channelOption = new Option<string?>("--channel")
         {
@@ -270,7 +274,7 @@ internal sealed class UpdateCommand : BaseCommand
         // for future 'aspire new' and 'aspire init' commands.
         if (string.IsNullOrEmpty(channel))
         {
-            var isStagingEnabled = _features.IsFeatureEnabled(KnownFeatures.StagingChannelEnabled, false);
+            var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(_features, _configuration);
             var channels = isStagingEnabled
                 ? new[] { PackageChannelNames.Stable, PackageChannelNames.Staging, PackageChannelNames.Daily }
                 : new[] { PackageChannelNames.Stable, PackageChannelNames.Daily };

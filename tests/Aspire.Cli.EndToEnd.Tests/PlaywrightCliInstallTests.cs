@@ -64,18 +64,19 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
         await auto.WaitAsync(500);
         await auto.EnterAsync(); // Accept default workspace path
 
-        // Second prompt: agent environments (select Claude Code)
-        await auto.WaitUntilTextAsync("agent environments", timeout: TimeSpan.FromSeconds(60));
-        await auto.TypeAsync(" "); // Toggle first option (Claude Code)
+        // Second prompt: skill locations. Select Claude Code only.
+        await auto.WaitUntilAsync(
+            s => s.ContainsText("skill files be installed"),
+            timeout: TimeSpan.FromSeconds(60), description: "skill location prompt");
+        await auto.TypeAsync(" "); // Toggle off default Standard location
+        await auto.DownAsync();
+        await auto.TypeAsync(" "); // Toggle on Claude Code location
         await auto.EnterAsync();
 
-        // Third prompt: additional options (select Playwright CLI installation)
-        // Aspire skill file (priority 0) appears first, Playwright CLI (priority 1) second.
-        await auto.WaitUntilTextAsync("additional options", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitUntilTextAsync("Install Playwright CLI", timeout: TimeSpan.FromSeconds(10));
-        await auto.TypeAsync(" "); // Toggle first option (Aspire skill file)
-        await auto.DownAsync(); // Move to Playwright CLI option
-        await auto.TypeAsync(" "); // Toggle Playwright CLI option
+        // Third prompt: skills. Accept defaults (Aspire, Playwright CLI, dotnet-inspect).
+        await auto.WaitUntilAsync(
+            s => s.ContainsText("skills should be installed"),
+            timeout: TimeSpan.FromSeconds(30), description: "skill selection prompt");
         await auto.EnterAsync();
 
         // Wait for installation to complete (this downloads from npm, can take a while)
@@ -148,17 +149,19 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
         await auto.TypeAsync("TestProject");
         await auto.EnterAsync();
 
-        // Select Claude Code environment.
-        await auto.WaitUntilTextAsync("agent environments", timeout: TimeSpan.FromSeconds(60));
-        await auto.TypeAsync(" ");
+        // Select Claude Code as the only skill location.
+        await auto.WaitUntilAsync(
+            s => s.ContainsText("skill files be installed"),
+            timeout: TimeSpan.FromSeconds(60), description: "skill location prompt");
+        await auto.TypeAsync(" "); // Toggle off default Standard location
+        await auto.DownAsync();
+        await auto.TypeAsync(" "); // Toggle on Claude Code location
         await auto.EnterAsync();
 
-        // Select Playwright CLI installation.
-        await auto.WaitUntilTextAsync("additional options", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitUntilTextAsync("Install Playwright CLI", timeout: TimeSpan.FromSeconds(10));
-        await auto.TypeAsync(" "); // Toggle first option (Aspire skill file)
-        await auto.DownAsync();
-        await auto.TypeAsync(" "); // Toggle Playwright CLI
+        // Accept default skills, which include Playwright CLI.
+        await auto.WaitUntilAsync(
+            s => s.ContainsText("skills should be installed"),
+            timeout: TimeSpan.FromSeconds(30), description: "skill selection prompt");
         await auto.EnterAsync();
 
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromMinutes(3));

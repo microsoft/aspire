@@ -19,14 +19,14 @@ namespace Aspire.Cli.Tests.Projects;
 
 public class ProjectLocatorTests(ITestOutputHelper outputHelper)
 {
-    private static Aspire.Cli.CliExecutionContext CreateExecutionContext(DirectoryInfo workingDirectory)
+    private static Aspire.Cli.CliExecutionContext CreateExecutionContext(DirectoryInfo workingDirectory, IReadOnlyDictionary<string, string?>? environmentVariables = null)
     {
         // NOTE: This would normally be in the users home directory, but for tests we create
         //       it in the temporary workspace directory.
         var settingsDirectory = workingDirectory.CreateSubdirectory(".aspire");
         var hivesDirectory = settingsDirectory.CreateSubdirectory("hives");
         var cacheDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "cache"));
-        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", environmentVariables: environmentVariables);
     }
 
     [Fact]
@@ -314,6 +314,56 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
         Assert.NotNull(settings!.AppHost?.Path);
         Assert.DoesNotContain('\\', settings.AppHost.Path); // Ensure no backslashes
         Assert.Contains('/', settings.AppHost.Path); // Ensure forward slashes
+    }
+
+    [Fact]
+    public async Task UseOrFindAppHostProjectFile_MigratesLegacySettingsToAspireConfigJson()
+    {
+        // Arrange: create a workspace with a legacy .aspire/settings.json
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("MyAppHost");
+        var appHostProjectFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "MyAppHost.csproj"));
+        await File.WriteAllTextAsync(appHostProjectFile.FullName, "Not a real apphost");
+
+        // Add a decoy project so that a directory scan fallback would have another candidate
+        var decoyAppHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("DecoyAppHost");
+        var decoyAppHostProjectFile = new FileInfo(Path.Combine(decoyAppHostDirectory.FullName, "DecoyAppHost.csproj"));
+        await File.WriteAllTextAsync(decoyAppHostProjectFile.FullName, "Not a real apphost");
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+
+        // Write legacy .aspire/settings.json with a valid appHostPath
+        // (CreateExecutionContext already created the .aspire directory)
+        var aspireSettingsDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire"));
+        var aspireSettingsFile = new FileInfo(Path.Combine(aspireSettingsDir.FullName, "settings.json"));
+        var relativeAppHostPath = Path
+            .GetRelativePath(aspireSettingsDir.FullName, appHostProjectFile.FullName)
+            .Replace(Path.DirectorySeparatorChar, '/');
+        await File.WriteAllTextAsync(aspireSettingsFile.FullName, JsonSerializer.Serialize(new { appHostPath = relativeAppHostPath }));
+
+        // Use real ConfigurationService so migration actually writes to disk
+        var globalSettingsFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "settings.global.json");
+        var globalSettingsFile = new FileInfo(globalSettingsFilePath);
+        var config = new ConfigurationBuilder().Build();
+        var configurationService = new ConfigurationService(config, executionContext, globalSettingsFile, NullLogger<ConfigurationService>.Instance);
+
+        var locator = CreateProjectLocator(executionContext, configurationService: configurationService);
+
+        // Act
+        var foundAppHost = await locator.UseOrFindAppHostProjectFileAsync(null, createSettingsFile: true, CancellationToken.None).DefaultTimeout();
+
+        // Assert: correct AppHost was found (not the decoy, proving legacy settings were used)
+        Assert.NotNull(foundAppHost);
+        Assert.Equal(appHostProjectFile.FullName, foundAppHost.FullName);
+
+        // Assert: aspire.config.json was created by migration
+        var aspireConfigFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        Assert.True(File.Exists(aspireConfigFilePath), "aspire.config.json should have been created by migration from .aspire/settings.json");
+
+        var configJson = await File.ReadAllTextAsync(aspireConfigFilePath);
+        var migratedConfig = JsonSerializer.Deserialize<AspireConfigFile>(configJson);
+        Assert.NotNull(migratedConfig?.AppHost?.Path);
     }
 
     [Fact]
@@ -1017,6 +1067,151 @@ builder.Build().Run();");
 
         Assert.Empty(foundFiles);
         Assert.False(sdkCheckCalled);
+    }
+
+    [Fact]
+    public async Task FindAppHostProjectFilesAsync_ExcludesProjectsInsideNuGetCache()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Create a valid AppHost project in a normal location
+        var normalProject = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "MyApp", "AppHost.csproj"));
+        Directory.CreateDirectory(normalProject.DirectoryName!);
+        await File.WriteAllTextAsync(normalProject.FullName, "Not a real project file.");
+
+        // Create a project inside a simulated NuGet cache path
+        var nugetCacheDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".nuget", "packages",
+            "aspire.projecttemplates", "9.1.0", "content", "templates", "aspire-apphost");
+        Directory.CreateDirectory(nugetCacheDir);
+        var cachedProject = new FileInfo(Path.Combine(nugetCacheDir, "Aspire.AppHost1.csproj"));
+        await File.WriteAllTextAsync(cachedProject.FullName, "Not a real project file.");
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostCallback = _ => new AppHostValidationResult(IsValid: true)
+        };
+
+        var envVars = new Dictionary<string, string?>
+        {
+            ["NUGET_PACKAGES"] = Path.Combine(workspace.WorkspaceRoot.FullName, ".nuget", "packages")
+        };
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot, environmentVariables: envVars);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
+
+        var foundFiles = await projectLocator.FindAppHostProjectFilesAsync(
+            workspace.WorkspaceRoot.FullName, CancellationToken.None).DefaultTimeout();
+
+        // Should only find the normal project, not the one inside the NuGet cache
+        Assert.Single(foundFiles);
+        Assert.Equal(normalProject.FullName, foundFiles[0].FullName);
+    }
+
+    [Fact]
+    public async Task FindAppHostProjectFilesAsync_FindsProjectsOutsideNuGetCache()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Create projects in various subdirectories (none are NuGet cache)
+        var project1 = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "src", "App1", "AppHost.csproj"));
+        Directory.CreateDirectory(project1.DirectoryName!);
+        await File.WriteAllTextAsync(project1.FullName, "Not a real project file.");
+
+        var project2 = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "samples", "App2", "AppHost.csproj"));
+        Directory.CreateDirectory(project2.DirectoryName!);
+        await File.WriteAllTextAsync(project2.FullName, "Not a real project file.");
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostCallback = _ => new AppHostValidationResult(IsValid: true)
+        };
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
+
+        var foundFiles = await projectLocator.FindAppHostProjectFilesAsync(
+            workspace.WorkspaceRoot.FullName, CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(2, foundFiles.Count);
+        var foundPaths = foundFiles.Select(f => f.FullName).ToHashSet();
+        Assert.Contains(project1.FullName, foundPaths);
+        Assert.Contains(project2.FullName, foundPaths);
+    }
+
+    [Fact]
+    public async Task FindAppHostProjectFilesAsync_RespectsCustomNuGetPackagesEnvVar()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Create a valid AppHost project in a normal location
+        var normalProject = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "MyApp", "AppHost.csproj"));
+        Directory.CreateDirectory(normalProject.DirectoryName!);
+        await File.WriteAllTextAsync(normalProject.FullName, "Not a real project file.");
+
+        // Create a project inside a custom NuGet cache location (not the default .nuget/packages)
+        var customCacheDir = Path.Combine(workspace.WorkspaceRoot.FullName, "custom-nuget-cache");
+        var cachedProjectDir = Path.Combine(customCacheDir, "aspire.projecttemplates", "9.1.0", "content");
+        Directory.CreateDirectory(cachedProjectDir);
+        var cachedProject = new FileInfo(Path.Combine(cachedProjectDir, "Aspire.AppHost1.csproj"));
+        await File.WriteAllTextAsync(cachedProject.FullName, "Not a real project file.");
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostCallback = _ => new AppHostValidationResult(IsValid: true)
+        };
+
+        var envVars = new Dictionary<string, string?>
+        {
+            ["NUGET_PACKAGES"] = customCacheDir
+        };
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot, environmentVariables: envVars);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
+
+        var foundFiles = await projectLocator.FindAppHostProjectFilesAsync(
+            workspace.WorkspaceRoot.FullName, CancellationToken.None).DefaultTimeout();
+
+        // Should only find the normal project, not the one inside the custom cache
+        Assert.Single(foundFiles);
+        Assert.Equal(normalProject.FullName, foundFiles[0].FullName);
+    }
+
+    [Fact]
+    public async Task FindAppHostProjectFilesAsync_DoesNotExcludeSiblingDirectoriesOfNuGetCache()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Use a custom non-hidden cache path so the test isn't affected by hidden-directory skipping
+        var customCacheDir = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget-cache");
+
+        // Create a project inside a sibling directory whose name shares a prefix with the cache
+        var siblingDir = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget-cache-extra", "MyApp");
+        Directory.CreateDirectory(siblingDir);
+        var siblingProject = new FileInfo(Path.Combine(siblingDir, "AppHost.csproj"));
+        await File.WriteAllTextAsync(siblingProject.FullName, "Not a real project file.");
+
+        // Create a project inside the actual cache that should be excluded
+        var cachedProjectDir = Path.Combine(customCacheDir, "aspire.projecttemplates", "9.1.0", "content");
+        Directory.CreateDirectory(cachedProjectDir);
+        var cachedProject = new FileInfo(Path.Combine(cachedProjectDir, "Aspire.AppHost1.csproj"));
+        await File.WriteAllTextAsync(cachedProject.FullName, "Not a real project file.");
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostCallback = _ => new AppHostValidationResult(IsValid: true)
+        };
+
+        var envVars = new Dictionary<string, string?>
+        {
+            ["NUGET_PACKAGES"] = customCacheDir
+        };
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot, environmentVariables: envVars);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
+
+        var foundFiles = await projectLocator.FindAppHostProjectFilesAsync(
+            workspace.WorkspaceRoot.FullName, CancellationToken.None).DefaultTimeout();
+
+        // Should find the sibling project but not the one inside the cache
+        Assert.Single(foundFiles);
+        Assert.Equal(siblingProject.FullName, foundFiles[0].FullName);
     }
 
     private static ProjectLocator CreateProjectLocator(

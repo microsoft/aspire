@@ -12,6 +12,18 @@ namespace Aspire.Cli.Npm;
 /// </summary>
 internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
 {
+    /// <summary>
+    /// The public npm registry URL. Commands that resolve packages from the registry
+    /// pass this explicitly via <c>--registry</c> to avoid inheriting a project-level
+    /// <c>.npmrc</c> that may redirect to a private feed (e.g. Azure DevOps).
+    /// </summary>
+    private const string PublicRegistry = "https://registry.npmjs.org/";
+
+    private readonly Lazy<string?> _npmPath = new(() => PathLookupHelper.FindFullPathFromPath("npm"));
+
+    /// <inheritdoc />
+    public bool IsAvailable => _npmPath.Value is not null;
+
     /// <inheritdoc />
     public async Task<NpmPackageInfo?> ResolvePackageAsync(string packageName, string versionRange, CancellationToken cancellationToken)
     {
@@ -20,6 +32,8 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
         {
             return null;
         }
+
+        logger.LogDebug("Resolving npm package {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, versionRange));
 
         // Use an isolated temp subdirectory so npm doesn't pick up .npmrc or
         // other config files from the shared temp root or the user's CWD.
@@ -30,12 +44,13 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
             // Resolve version: npm view <package>@<range> version
             var versionOutput = await RunNpmCommandInDirectoryAsync(
                 npmPath,
-                ["view", $"{packageName}@{versionRange}", "version"],
+                ["view", NpmPackageInfo.FormatPackageSpecifier(packageName, versionRange), "version", "--registry", PublicRegistry],
                 tempDir,
                 cancellationToken);
 
             if (versionOutput is null)
             {
+                logger.LogDebug("Failed to resolve version for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, versionRange));
                 return null;
             }
 
@@ -49,15 +64,17 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
             // Resolve integrity hash: npm view <package>@<version> dist.integrity
             var integrityOutput = await RunNpmCommandInDirectoryAsync(
                 npmPath,
-                ["view", $"{packageName}@{version}", "dist.integrity"],
+                ["view", NpmPackageInfo.FormatPackageSpecifier(packageName, version), "dist.integrity", "--registry", PublicRegistry],
                 tempDir,
                 cancellationToken);
 
             if (string.IsNullOrWhiteSpace(integrityOutput))
             {
-                logger.LogDebug("Could not resolve integrity hash for {Package}@{Version}", packageName, version);
+                logger.LogDebug("Could not resolve integrity hash for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
                 return null;
             }
+
+            logger.LogDebug("Resolved {PackageSpecifier} with integrity {Integrity}", NpmPackageInfo.FormatPackageSpecifier(packageName, version), integrityOutput.Trim());
 
             return new NpmPackageInfo
             {
@@ -80,14 +97,17 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
             return null;
         }
 
+        logger.LogDebug("Packing npm package {PackageSpecifier} to {OutputDirectory}", NpmPackageInfo.FormatPackageSpecifier(packageName, version), outputDirectory);
+
         var output = await RunNpmCommandInDirectoryAsync(
             npmPath,
-            ["pack", $"{packageName}@{version}", "--pack-destination", outputDirectory],
+            ["pack", NpmPackageInfo.FormatPackageSpecifier(packageName, version), "--pack-destination", outputDirectory, "--registry", PublicRegistry],
             outputDirectory,
             cancellationToken);
 
         if (output is null)
         {
+            logger.LogDebug("Failed to pack {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
             return null;
         }
 
@@ -106,6 +126,8 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
             return null;
         }
 
+        logger.LogDebug("Packed {PackageSpecifier} to {TarballPath}", NpmPackageInfo.FormatPackageSpecifier(packageName, version), tarballPath);
+
         return tarballPath;
     }
 
@@ -117,6 +139,8 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
         {
             return false;
         }
+
+        logger.LogDebug("Auditing npm signatures for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
 
         // npm audit signatures requires a project context (node_modules + package-lock.json).
         // For global tool installs there is no project, so we create a temporary one.
@@ -136,13 +160,13 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
             // Install the package from the registry to get proper attestation metadata
             var installOutput = await RunNpmCommandInDirectoryAsync(
                 npmPath,
-                ["install", $"{packageName}@{version}", "--ignore-scripts"],
+                ["install", NpmPackageInfo.FormatPackageSpecifier(packageName, version), "--ignore-scripts", "--registry", PublicRegistry],
                 tempDir,
                 cancellationToken);
 
             if (installOutput is null)
             {
-                logger.LogDebug("Failed to install {Package}@{Version} into temporary project for audit", packageName, version);
+                logger.LogDebug("Failed to install {PackageSpecifier} into temporary project for audit", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
                 return false;
             }
 
@@ -153,7 +177,14 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
                 tempDir,
                 cancellationToken);
 
-            return auditOutput is not null;
+            if (auditOutput is null)
+            {
+                logger.LogDebug("Signature audit failed for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
+                return false;
+            }
+
+            logger.LogDebug("Signature audit passed for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
+            return true;
         }
         finally
         {
@@ -170,6 +201,8 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
             return false;
         }
 
+        logger.LogDebug("Installing npm package globally from {TarballPath}", tarballPath);
+
         // Use an isolated temp subdirectory so npm doesn't pick up .npmrc or
         // other config files from the shared temp root or the user's CWD.
         var tempDir = CreateIsolatedTempDirectory();
@@ -182,7 +215,14 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
                 tempDir,
                 cancellationToken);
 
-            return output is not null;
+            if (output is null)
+            {
+                logger.LogDebug("Failed to install npm package globally from {TarballPath}", tarballPath);
+                return false;
+            }
+
+            logger.LogDebug("Successfully installed npm package globally from {TarballPath}", tarballPath);
+            return true;
         }
         finally
         {
@@ -192,7 +232,7 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
 
     private string? FindNpmPath()
     {
-        var npmPath = PathLookupHelper.FindFullPathFromPath("npm");
+        var npmPath = _npmPath.Value;
         if (npmPath is null)
         {
             logger.LogDebug("npm is not installed or not found in PATH");
@@ -223,6 +263,45 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
         }
     }
 
+    /// <summary>
+    /// Creates a <see cref="ProcessStartInfo"/> configured to run an npm command.
+    /// On Windows, .cmd files are invoked via cmd.exe /c for reliable stdout redirection.
+    /// </summary>
+    internal static ProcessStartInfo CreateNpmProcessStartInfo(string npmPath, string[] args, string workingDirectory)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WorkingDirectory = workingDirectory
+        };
+
+        // On Windows, npm resolves to npm.cmd (a batch wrapper). Launching
+        // .cmd files via Process.Start with redirected stdout can produce empty
+        // output. Use cmd.exe /c to invoke the batch file reliably.
+        // Note: cmd.exe /c has special quote-stripping rules that are incompatible
+        // with ArgumentList (which individually quotes each argument). We must use
+        // the Arguments string property and wrap the entire command in an outer set
+        // of quotes so cmd.exe preserves interior quoting correctly.
+        if (OperatingSystem.IsWindows() && npmPath.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase))
+        {
+            startInfo.FileName = "cmd.exe";
+            startInfo.Arguments = @$"/c """"{npmPath}"" {string.Join(" ", args.Select(a => @$"""{a}"""))}""";
+        }
+        else
+        {
+            startInfo.FileName = npmPath;
+            foreach (var arg in args)
+            {
+                startInfo.ArgumentList.Add(arg);
+            }
+        }
+
+        return startInfo;
+    }
+
     private async Task<string?> RunNpmCommandInDirectoryAsync(string npmPath, string[] args, string workingDirectory, CancellationToken cancellationToken)
     {
         var argsString = string.Join(" ", args);
@@ -230,19 +309,7 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
 
         try
         {
-            var startInfo = new ProcessStartInfo(npmPath)
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                WorkingDirectory = workingDirectory
-            };
-
-            foreach (var arg in args)
-            {
-                startInfo.ArgumentList.Add(arg);
-            }
+            var startInfo = CreateNpmProcessStartInfo(npmPath, args, workingDirectory);
 
             using var process = new Process { StartInfo = startInfo };
             process.Start();

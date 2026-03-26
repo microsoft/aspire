@@ -27,7 +27,7 @@ internal class OtlpEndpointReferenceGatherer : IExecutionConfigurationGatherer
             return;
         }
 
-        if (!context.EnvironmentVariables.TryGetValue(OtlpConfigurationExtensions.OtlpEndpointEnvironmentVariableName, out _))
+        if (!context.EnvironmentVariables.TryGetValue(KnownOtelConfigNames.ExporterOtlpEndpoint, out _))
         {
             // If the OTLP endpoint is not set, do not try to set it.
             return;
@@ -74,7 +74,7 @@ internal class OtlpEndpointReferenceGatherer : IExecutionConfigurationGatherer
             Debug.Assert(url is not null, $"We should be able to get a URL value from the reference dashboard endpoint '{endpointReference.EndpointName}'");
             if (url is not null)
             {
-                context.EnvironmentVariables[OtlpConfigurationExtensions.OtlpEndpointEnvironmentVariableName] = url;
+                context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpEndpoint] = url;
             }
         }
     }
