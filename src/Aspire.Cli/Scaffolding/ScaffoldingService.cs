@@ -15,6 +15,9 @@ namespace Aspire.Cli.Scaffolding;
 /// </summary>
 internal sealed class ScaffoldingService : IScaffoldingService
 {
+    private const string PackageJsonFileName = "package.json";
+    private const string JavaScriptHostingPackageName = "Aspire.Hosting.JavaScript";
+
     private readonly IAppHostServerProjectFactory _appHostServerProjectFactory;
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly IInteractionService _interactionService;
@@ -51,6 +54,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
         // Step 1: Resolve SDK and package strategy
         var sdkVersion = VersionHelper.GetDefaultSdkVersion();
         var config = AspireConfigFile.LoadOrCreate(directory.FullName, sdkVersion);
+        PreAddJavaScriptHostingForBrownfieldTypeScript(config, directory, language, sdkVersion);
 
         // Include the code generation package for scaffolding and code gen
         var codeGenPackage = await _languageDiscovery.GetPackageForLanguageAsync(language.LanguageId, cancellationToken);
@@ -94,7 +98,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
             context.ProjectName,
             cancellationToken);
 
-        // Step 4: Write scaffold files to disk
+        // Step 4: Write scaffold files to disk, merging package.json with existing content
         foreach (var (fileName, content) in scaffoldFiles)
         {
             var filePath = Path.Combine(directory.FullName, fileName);
@@ -103,7 +107,15 @@ internal sealed class ScaffoldingService : IScaffoldingService
             {
                 Directory.CreateDirectory(fileDirectory);
             }
-            await File.WriteAllTextAsync(filePath, content, cancellationToken);
+
+            var contentToWrite = content;
+            if (fileName.Equals(PackageJsonFileName, StringComparison.OrdinalIgnoreCase) && File.Exists(filePath))
+            {
+                var existingContent = await File.ReadAllTextAsync(filePath, cancellationToken);
+                contentToWrite = PackageJsonMerger.Merge(existingContent, content, _logger);
+            }
+
+            await File.WriteAllTextAsync(filePath, contentToWrite, cancellationToken);
         }
 
         _logger.LogDebug("Wrote {Count} scaffold files", scaffoldFiles.Count);
@@ -208,4 +220,27 @@ internal sealed class ScaffoldingService : IScaffoldingService
 
         _logger.LogDebug("Generated {Count} code files in {Path}", generatedFiles.Count, outputPath);
     }
+
+    private static void PreAddJavaScriptHostingForBrownfieldTypeScript(
+        AspireConfigFile config,
+        DirectoryInfo directory,
+        LanguageInfo language,
+        string defaultSdkVersion)
+    {
+        if (!IsTypeScriptLanguage(language) ||
+            !File.Exists(Path.Combine(directory.FullName, PackageJsonFileName)) ||
+            config.Packages?.ContainsKey(JavaScriptHostingPackageName) == true)
+        {
+            return;
+        }
+
+        config.AddOrUpdatePackage(JavaScriptHostingPackageName, config.GetEffectiveSdkVersion(defaultSdkVersion));
+    }
+
+    private static bool IsTypeScriptLanguage(LanguageInfo language)
+    {
+        return language.LanguageId.Value.Equals(KnownLanguageId.TypeScript, StringComparison.OrdinalIgnoreCase) ||
+            language.LanguageId.Value.Equals(KnownLanguageId.TypeScriptAlias, StringComparison.OrdinalIgnoreCase);
+    }
+
 }
