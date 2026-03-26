@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "WebPubSub.AppHost/WebPubSub.AppHost.csproj"
+  }
+}

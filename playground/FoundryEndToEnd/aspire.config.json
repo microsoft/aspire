@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "FoundryEndToEnd.AppHost/FoundryEndToEnd.AppHost.csproj"
+  }
+}

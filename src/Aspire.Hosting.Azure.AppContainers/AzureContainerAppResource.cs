@@ -54,7 +54,7 @@ public class AzureContainerAppResource : AzureProvisioningResource
                         var endpoint = $"https://{targetResource.Name.ToLowerInvariant()}.{domainValue}";
 
                         ctx.ReportingStep.Log(LogLevel.Information, new MarkdownString($"Successfully deployed **{targetResource.Name}** to [{endpoint}]({endpoint})"));
-                        ctx.Summary.Add(targetResource.Name, endpoint);
+                        ctx.Summary.Add(targetResource.Name, new MarkdownString($"[{endpoint}]({endpoint})"));
                     }
                     else
                     {

@@ -1,0 +1,14 @@
+{
+  "appHost": {
+    "path": "apphost.ts"
+  },
+  "sdk": {
+    "version": "13.3.0-preview.1.26163.4"
+  },
+  "channel": "daily",
+  "packages": {
+    "Aspire.Hosting.Python": "13.3.0-preview.1.26167.8",
+    "Aspire.Hosting.PostgreSQL": "13.3.0-preview.1.26167.8",
+    "Aspire.Hosting.JavaScript": "13.3.0-preview.1.26167.8"
+  }
+}

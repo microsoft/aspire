@@ -20,7 +20,7 @@ internal interface IPlaywrightCliRunner
     /// <summary>
     /// Installs Playwright CLI skill files into the workspace.
     /// </summary>
-    /// <param name="workingDirectory">The directory in which to run the skill installation command.</param>
+    /// <param name="workingDirectory">The directory to run the command from (skill files are written relative to this).</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>True if skill installation succeeded, false otherwise.</returns>
     Task<bool> InstallSkillsAsync(string workingDirectory, CancellationToken cancellationToken);

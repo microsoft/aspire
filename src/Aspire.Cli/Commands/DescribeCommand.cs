@@ -262,7 +262,7 @@ internal sealed class DescribeCommand : BaseCommand
     {
         if (snapshots.Count == 0)
         {
-            _interactionService.DisplayPlainText("No resources found.");
+            _interactionService.DisplayMessage(KnownEmojis.Information, "No resources found.");
             return;
         }
 

@@ -40,7 +40,7 @@ jobs:
       requiresNugets: ${{ steps.check_nugets.outputs.requiresNugets }}
       requiresCliArchive: ${{ steps.check_cli_archive.outputs.requiresCliArchive }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Identify relevant test projects
         run: ./eng/scripts/generate-specialized-test-projects-list.sh ${{ inputs.attributeName }} ${{ github.workspace }}/artifacts/BeforeBuildProps.props
@@ -96,7 +96,7 @@ jobs:
 
       - name: Upload logs, and test results
         if: ${{ always() }}
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: logs-runsheet
           path: |
@@ -143,7 +143,7 @@ jobs:
     name: Final Results
     needs: [generate_tests_matrix, build_packages, build_cli_archives, run_tests]
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       # Check if there were no tests to run
       - name: Check if tests were run
@@ -157,7 +157,7 @@ jobs:
           fi
 
       # get all the test logs artifacts into a single directory
-      - uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         if: steps.check_tests.outputs.tests_run == 'true'
         with:
           pattern: 'logs-*'

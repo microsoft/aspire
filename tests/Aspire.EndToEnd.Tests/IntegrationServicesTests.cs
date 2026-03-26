@@ -21,6 +21,7 @@ public class IntegrationServicesTests : IClassFixture<IntegrationServicesFixture
 
     [Theory]
     [OuterloopTest("EndToEnd tests require Docker and are slow")]
+    [RequiresFeature(TestFeature.Docker)]
     [Trait("scenario", "basicservices")]
     [InlineData(TestResourceNames.postgres)]
     [InlineData(TestResourceNames.efnpgsql)]
@@ -45,6 +46,7 @@ public class IntegrationServicesTests : IClassFixture<IntegrationServicesFixture
 
     [Fact]
     [OuterloopTest("EndToEnd tests require Docker and are slow")]
+    [RequiresFeature(TestFeature.Docker)]
     [Trait("scenario", "basicservices")]
     public Task VerifyHealthyOnIntegrationServiceA()
         => RunTestAsync(async (cancellationToken) =>
