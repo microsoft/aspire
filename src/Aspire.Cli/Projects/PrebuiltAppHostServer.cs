@@ -330,13 +330,13 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
     }
 
     /// <summary>
-    /// Resolves the configured channel name from local settings.json or global config.
+    /// Resolves the configured channel name from local project config or global config.
     /// </summary>
     private async Task<string?> ResolveChannelNameAsync(CancellationToken cancellationToken)
     {
-        // Check local settings.json first
-        var localConfig = AspireJsonConfiguration.Load(_appDirectoryPath);
-        var channelName = localConfig?.Channel;
+        // Check aspire.config.json first, then fall back to legacy .aspire/settings.json.
+        var channelName = AspireConfigFile.Load(_appDirectoryPath)?.Channel
+            ?? AspireJsonConfiguration.Load(_appDirectoryPath)?.Channel;
 
         // Fall back to global config
         if (string.IsNullOrEmpty(channelName))
