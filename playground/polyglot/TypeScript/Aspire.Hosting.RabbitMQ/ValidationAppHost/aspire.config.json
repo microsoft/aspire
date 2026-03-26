@@ -1,0 +1,18 @@
+{
+  "appHost": {
+    "path": "apphost.ts",
+    "language": "typescript/nodejs"
+  },
+  "profiles": {
+    "https": {
+      "applicationUrl": "https://localhost:18076;http://localhost:48822",
+      "environmentVariables": {
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:56384",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:64883"
+      }
+    }
+  },
+  "packages": {
+    "Aspire.Hosting.RabbitMQ": ""
+  }
+}

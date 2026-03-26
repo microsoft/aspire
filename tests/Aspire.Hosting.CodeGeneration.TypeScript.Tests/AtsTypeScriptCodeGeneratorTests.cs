@@ -582,23 +582,17 @@ public class AtsTypeScriptCodeGeneratorTests
     [Fact]
     public void Pattern4_InterfaceParameterType_GeneratesUnionType()
     {
-        // Pattern 4/5: Verify that parameters with interface handle types generate union types
-        // in the generated TypeScript.
+        // Interface-constrained resource parameters should accept a structural
+        // handle-bearing type instead of the nominal ResourceBuilderBase type.
         var atsContext = CreateContextFromTestAssembly();
 
         // Generate the TypeScript output
         var files = _generator.GenerateDistributedApplication(atsContext);
         var aspireTs = files["aspire.ts"];
 
-        // The withDependency method should have its dependency parameter as a union type:
-        // dependency: IResourceWithConnectionStringHandle | ResourceBuilderBase
-        // Note: The exact generated name depends on the type mapping, but it should contain
-        // both the handle type and ResourceBuilderBase.
-        Assert.Contains("ResourceBuilderBase", aspireTs);
-
-        // Also verify the union type pattern appears somewhere
-        // (the exact format depends on the type name mapping)
-        Assert.Contains("|", aspireTs); // Union types use pipe
+        Assert.Contains("export type { ICancellationToken, IHandleReference, IReferenceExpression } from './base.js';", aspireTs);
+        Assert.Contains("withDependency(dependency: IHandleReference)", aspireTs);
+        Assert.DoesNotContain("withDependency(dependency: ResourceBuilderBase)", aspireTs);
     }
 
     [Fact]
@@ -1139,12 +1133,12 @@ public class AtsTypeScriptCodeGeneratorTests
     public void Generate_MethodWithCancellationToken_GeneratesCancellationTokenParameter()
     {
         // Generated input parameters should accept AbortSignal for user-authored cancellation,
-        // while callbacks and returned values continue to use the SDK CancellationToken wrapper.
+        // while callbacks and returned values use the structural SDK cancellation token interface.
         var code = GenerateTwoPassCode();
 
-        Assert.Contains("cancellationToken?: AbortSignal | CancellationToken;", code);
-        Assert.Contains("set: async (value: AbortSignal | CancellationToken): Promise<void> => {", code);
-        Assert.Contains("withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>)", code);
+        Assert.Contains("cancellationToken?: AbortSignal | ICancellationToken;", code);
+        Assert.Contains("set: async (value: AbortSignal | ICancellationToken): Promise<void> => {", code);
+        Assert.Contains("withCancellableOperation(operation: (arg: ICancellationToken) => Promise<void>)", code);
     }
 
     [Fact]

@@ -1,0 +1,18 @@
+{
+  "appHost": {
+    "path": "apphost.ts",
+    "language": "typescript/nodejs"
+  },
+  "profiles": {
+    "https": {
+      "applicationUrl": "https://localhost:44486;http://localhost:17648",
+      "environmentVariables": {
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:12771",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:44457"
+      }
+    }
+  },
+  "packages": {
+    "Aspire.Hosting.Keycloak": ""
+  }
+}

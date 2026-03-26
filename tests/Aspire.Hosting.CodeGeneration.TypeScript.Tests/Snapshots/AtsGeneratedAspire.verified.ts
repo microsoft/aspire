@@ -16,6 +16,12 @@ import {
     registerHandleWrapper
 } from './transport.js';
 
+import type {
+    ICancellationToken,
+    IHandleReference,
+    IReferenceExpression
+} from './base.js';
+
 import {
     ResourceBuilderBase,
     ReferenceExpression,
@@ -125,11 +131,11 @@ export interface AddTestRedisOptions {
 }
 
 export interface GetStatusAsyncOptions {
-    cancellationToken?: AbortSignal | CancellationToken;
+    cancellationToken?: AbortSignal | ICancellationToken;
 }
 
 export interface WaitForReadyAsyncOptions {
-    cancellationToken?: AbortSignal | CancellationToken;
+    cancellationToken?: AbortSignal | ICancellationToken;
 }
 
 export interface WithDataVolumeOptions {
@@ -148,7 +154,7 @@ export interface WithMergeLoggingPathOptions {
 }
 
 export interface WithOptionalCallbackOptions {
-    callback?: (arg: TestCallbackContext) => Promise<void>;
+    callback?: (arg: ITestCallbackContext) => Promise<void>;
 }
 
 export interface WithOptionalStringOptions {
@@ -158,6 +164,26 @@ export interface WithOptionalStringOptions {
 
 export interface WithPersistenceOptions {
     mode?: TestPersistenceMode;
+}
+
+// ============================================================================
+// ITestCallbackContext
+// ============================================================================
+
+export interface ITestCallbackContext {
+    toJSON(): MarshalledHandle;
+    name: {
+        get: () => Promise<string>;
+        set: (value: string) => Promise<void>;
+    };
+    value: {
+        get: () => Promise<number>;
+        set: (value: number) => Promise<void>;
+    };
+    cancellationToken: {
+        get: () => Promise<ICancellationToken>;
+        set: (value: AbortSignal | ICancellationToken) => Promise<void>;
+    };
 }
 
 // ============================================================================
@@ -207,14 +233,14 @@ export class TestCallbackContext {
 
     /** Gets the CancellationToken property */
     cancellationToken = {
-        get: async (): Promise<CancellationToken> => {
+        get: async (): Promise<ICancellationToken> => {
             const result = await this._client.invokeCapability<string | null>(
                 'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.cancellationToken',
                 { context: this._handle }
             );
             return CancellationToken.fromValue(result);
         },
-        set: async (value: AbortSignal | CancellationToken): Promise<void> => {
+        set: async (value: AbortSignal | ICancellationToken): Promise<void> => {
             await this._client.invokeCapability<void>(
                 'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.setCancellationToken',
                 { context: this._handle, value: CancellationToken.fromValue(value) }
@@ -222,6 +248,16 @@ export class TestCallbackContext {
         }
     };
 
+}
+
+// ============================================================================
+// ITestCollectionContext
+// ============================================================================
+
+export interface ITestCollectionContext {
+    toJSON(): MarshalledHandle;
+    readonly items: AspireList<string>;
+    readonly metadata: AspireDict<string, string>;
 }
 
 // ============================================================================
@@ -265,6 +301,26 @@ export class TestCollectionContext {
         return this._metadata;
     }
 
+}
+
+// ============================================================================
+// ITestEnvironmentContext
+// ============================================================================
+
+export interface ITestEnvironmentContext {
+    toJSON(): MarshalledHandle;
+    name: {
+        get: () => Promise<string>;
+        set: (value: string) => Promise<void>;
+    };
+    description: {
+        get: () => Promise<string>;
+        set: (value: string) => Promise<void>;
+    };
+    priority: {
+        get: () => Promise<number>;
+        set: (value: number) => Promise<void>;
+    };
 }
 
 // ============================================================================
@@ -328,6 +384,31 @@ export class TestEnvironmentContext {
         }
     };
 
+}
+
+// ============================================================================
+// ITestResourceContext
+// ============================================================================
+
+export interface ITestResourceContext {
+    toJSON(): MarshalledHandle;
+    name: {
+        get: () => Promise<string>;
+        set: (value: string) => Promise<void>;
+    };
+    value: {
+        get: () => Promise<number>;
+        set: (value: number) => Promise<void>;
+    };
+    getValueAsync(): Promise<string>;
+    setValueAsync(value: string): ITestResourceContextPromise;
+    validateAsync(): Promise<boolean>;
+}
+
+export interface ITestResourceContextPromise extends PromiseLike<ITestResourceContext> {
+    getValueAsync(): Promise<string>;
+    setValueAsync(value: string): ITestResourceContextPromise;
+    validateAsync(): Promise<boolean>;
 }
 
 // ============================================================================
@@ -441,6 +522,21 @@ export class TestResourceContextPromise implements PromiseLike<TestResourceConte
 }
 
 // ============================================================================
+// IDistributedApplicationBuilder
+// ============================================================================
+
+export interface IDistributedApplicationBuilder {
+    toJSON(): MarshalledHandle;
+    addTestRedis(name: string, options?: AddTestRedisOptions): ITestRedisResourcePromise;
+    addTestVault(name: string): ITestVaultResourcePromise;
+}
+
+export interface IDistributedApplicationBuilderPromise extends PromiseLike<IDistributedApplicationBuilder> {
+    addTestRedis(name: string, options?: AddTestRedisOptions): ITestRedisResourcePromise;
+    addTestVault(name: string): ITestVaultResourcePromise;
+}
+
+// ============================================================================
 // DistributedApplicationBuilder
 // ============================================================================
 
@@ -513,6 +609,49 @@ export class DistributedApplicationBuilderPromise implements PromiseLike<Distrib
 }
 
 // ============================================================================
+// ITestDatabaseResource
+// ============================================================================
+
+export interface ITestDatabaseResource {
+    toJSON(): MarshalledHandle;
+    withOptionalString(options?: WithOptionalStringOptions): ITestDatabaseResourcePromise;
+    withConfig(config: TestConfigDto): ITestDatabaseResourcePromise;
+    testWithEnvironmentCallback(callback: (arg: ITestEnvironmentContext) => Promise<void>): ITestDatabaseResourcePromise;
+    withCreatedAt(createdAt: string): ITestDatabaseResourcePromise;
+    withModifiedAt(modifiedAt: string): ITestDatabaseResourcePromise;
+    withCorrelationId(correlationId: string): ITestDatabaseResourcePromise;
+    withOptionalCallback(options?: WithOptionalCallbackOptions): ITestDatabaseResourcePromise;
+    withStatus(status: TestResourceStatus): ITestDatabaseResourcePromise;
+    withNestedConfig(config: TestNestedDto): ITestDatabaseResourcePromise;
+    withValidator(validator: (arg: ITestResourceContext) => Promise<boolean>): ITestDatabaseResourcePromise;
+    testWaitFor(dependency: IHandleReference): ITestDatabaseResourcePromise;
+    withDependency(dependency: IHandleReference): ITestDatabaseResourcePromise;
+    withEndpoints(endpoints: string[]): ITestDatabaseResourcePromise;
+    withEnvironmentVariables(variables: Record<string, string>): ITestDatabaseResourcePromise;
+    withCancellableOperation(operation: (arg: ICancellationToken) => Promise<void>): ITestDatabaseResourcePromise;
+    withDataVolume(options?: WithDataVolumeOptions): ITestDatabaseResourcePromise;
+}
+
+export interface ITestDatabaseResourcePromise extends PromiseLike<ITestDatabaseResource> {
+    withOptionalString(options?: WithOptionalStringOptions): ITestDatabaseResourcePromise;
+    withConfig(config: TestConfigDto): ITestDatabaseResourcePromise;
+    testWithEnvironmentCallback(callback: (arg: ITestEnvironmentContext) => Promise<void>): ITestDatabaseResourcePromise;
+    withCreatedAt(createdAt: string): ITestDatabaseResourcePromise;
+    withModifiedAt(modifiedAt: string): ITestDatabaseResourcePromise;
+    withCorrelationId(correlationId: string): ITestDatabaseResourcePromise;
+    withOptionalCallback(options?: WithOptionalCallbackOptions): ITestDatabaseResourcePromise;
+    withStatus(status: TestResourceStatus): ITestDatabaseResourcePromise;
+    withNestedConfig(config: TestNestedDto): ITestDatabaseResourcePromise;
+    withValidator(validator: (arg: ITestResourceContext) => Promise<boolean>): ITestDatabaseResourcePromise;
+    testWaitFor(dependency: IHandleReference): ITestDatabaseResourcePromise;
+    withDependency(dependency: IHandleReference): ITestDatabaseResourcePromise;
+    withEndpoints(endpoints: string[]): ITestDatabaseResourcePromise;
+    withEnvironmentVariables(variables: Record<string, string>): ITestDatabaseResourcePromise;
+    withCancellableOperation(operation: (arg: ICancellationToken) => Promise<void>): ITestDatabaseResourcePromise;
+    withDataVolume(options?: WithDataVolumeOptions): ITestDatabaseResourcePromise;
+}
+
+// ============================================================================
 // TestDatabaseResource
 // ============================================================================
 
@@ -556,7 +695,7 @@ export class TestDatabaseResource extends ResourceBuilderBase<TestDatabaseResour
     }
 
     /** @internal */
-    private async _testWithEnvironmentCallbackInternal(callback: (arg: TestEnvironmentContext) => Promise<void>): Promise<TestDatabaseResource> {
+    private async _testWithEnvironmentCallbackInternal(callback: (arg: ITestEnvironmentContext) => Promise<void>): Promise<TestDatabaseResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as TestEnvironmentContextHandle;
             const arg = new TestEnvironmentContext(argHandle, this._client);
@@ -571,7 +710,7 @@ export class TestDatabaseResource extends ResourceBuilderBase<TestDatabaseResour
     }
 
     /** Configures environment with callback (test version) */
-    testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestDatabaseResourcePromise {
+    testWithEnvironmentCallback(callback: (arg: ITestEnvironmentContext) => Promise<void>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromise(this._testWithEnvironmentCallbackInternal(callback));
     }
 
@@ -621,7 +760,7 @@ export class TestDatabaseResource extends ResourceBuilderBase<TestDatabaseResour
     }
 
     /** @internal */
-    private async _withOptionalCallbackInternal(callback?: (arg: TestCallbackContext) => Promise<void>): Promise<TestDatabaseResource> {
+    private async _withOptionalCallbackInternal(callback?: (arg: ITestCallbackContext) => Promise<void>): Promise<TestDatabaseResource> {
         const callbackId = callback ? registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as TestCallbackContextHandle;
             const arg = new TestCallbackContext(argHandle, this._client);
@@ -673,7 +812,7 @@ export class TestDatabaseResource extends ResourceBuilderBase<TestDatabaseResour
     }
 
     /** @internal */
-    private async _withValidatorInternal(validator: (arg: TestResourceContext) => Promise<boolean>): Promise<TestDatabaseResource> {
+    private async _withValidatorInternal(validator: (arg: ITestResourceContext) => Promise<boolean>): Promise<TestDatabaseResource> {
         const validatorId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as TestResourceContextHandle;
             const arg = new TestResourceContext(argHandle, this._client);
@@ -688,12 +827,12 @@ export class TestDatabaseResource extends ResourceBuilderBase<TestDatabaseResour
     }
 
     /** Adds validation callback */
-    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestDatabaseResourcePromise {
+    withValidator(validator: (arg: ITestResourceContext) => Promise<boolean>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromise(this._withValidatorInternal(validator));
     }
 
     /** @internal */
-    private async _testWaitForInternal(dependency: ResourceBuilderBase): Promise<TestDatabaseResource> {
+    private async _testWaitForInternal(dependency: IHandleReference): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests/testWaitFor',
@@ -703,12 +842,12 @@ export class TestDatabaseResource extends ResourceBuilderBase<TestDatabaseResour
     }
 
     /** Waits for another resource (test version) */
-    testWaitFor(dependency: ResourceBuilderBase): TestDatabaseResourcePromise {
+    testWaitFor(dependency: IHandleReference): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromise(this._testWaitForInternal(dependency));
     }
 
     /** @internal */
-    private async _withDependencyInternal(dependency: ResourceBuilderBase): Promise<TestDatabaseResource> {
+    private async _withDependencyInternal(dependency: IHandleReference): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withDependency',
@@ -718,7 +857,7 @@ export class TestDatabaseResource extends ResourceBuilderBase<TestDatabaseResour
     }
 
     /** Adds a dependency on another resource */
-    withDependency(dependency: ResourceBuilderBase): TestDatabaseResourcePromise {
+    withDependency(dependency: IHandleReference): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromise(this._withDependencyInternal(dependency));
     }
 
@@ -753,7 +892,7 @@ export class TestDatabaseResource extends ResourceBuilderBase<TestDatabaseResour
     }
 
     /** @internal */
-    private async _withCancellableOperationInternal(operation: (arg: CancellationToken) => Promise<void>): Promise<TestDatabaseResource> {
+    private async _withCancellableOperationInternal(operation: (arg: ICancellationToken) => Promise<void>): Promise<TestDatabaseResource> {
         const operationId = registerCallback(async (argData: unknown) => {
             const arg = CancellationToken.fromValue(argData);
             await operation(arg);
@@ -767,7 +906,7 @@ export class TestDatabaseResource extends ResourceBuilderBase<TestDatabaseResour
     }
 
     /** Performs a cancellable operation */
-    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestDatabaseResourcePromise {
+    withCancellableOperation(operation: (arg: ICancellationToken) => Promise<void>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromise(this._withCancellableOperationInternal(operation));
     }
 
@@ -944,7 +1083,7 @@ export class TestDatabaseResourcePromise implements PromiseLike<TestDatabaseReso
     }
 
     /** Configures environment with callback (test version) */
-    testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestDatabaseResourcePromise {
+    testWithEnvironmentCallback(callback: (arg: ITestEnvironmentContext) => Promise<void>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromise(this._promise.then(obj => obj.testWithEnvironmentCallback(callback)));
     }
 
@@ -979,17 +1118,17 @@ export class TestDatabaseResourcePromise implements PromiseLike<TestDatabaseReso
     }
 
     /** Adds validation callback */
-    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestDatabaseResourcePromise {
+    withValidator(validator: (arg: ITestResourceContext) => Promise<boolean>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withValidator(validator)));
     }
 
     /** Waits for another resource (test version) */
-    testWaitFor(dependency: ResourceBuilderBase): TestDatabaseResourcePromise {
+    testWaitFor(dependency: IHandleReference): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromise(this._promise.then(obj => obj.testWaitFor(dependency)));
     }
 
     /** Adds a dependency on another resource */
-    withDependency(dependency: ResourceBuilderBase): TestDatabaseResourcePromise {
+    withDependency(dependency: IHandleReference): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withDependency(dependency)));
     }
 
@@ -1004,7 +1143,7 @@ export class TestDatabaseResourcePromise implements PromiseLike<TestDatabaseReso
     }
 
     /** Performs a cancellable operation */
-    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestDatabaseResourcePromise {
+    withCancellableOperation(operation: (arg: ICancellationToken) => Promise<void>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withCancellableOperation(operation)));
     }
 
@@ -1053,6 +1192,71 @@ export class TestDatabaseResourcePromise implements PromiseLike<TestDatabaseReso
         return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withMergeRouteMiddleware(path, method, handler, priority, middleware)));
     }
 
+}
+
+// ============================================================================
+// ITestRedisResource
+// ============================================================================
+
+export interface ITestRedisResource {
+    toJSON(): MarshalledHandle;
+    addTestChildDatabase(name: string, options?: AddTestChildDatabaseOptions): ITestDatabaseResourcePromise;
+    withPersistence(options?: WithPersistenceOptions): ITestRedisResourcePromise;
+    withOptionalString(options?: WithOptionalStringOptions): ITestRedisResourcePromise;
+    withConfig(config: TestConfigDto): ITestRedisResourcePromise;
+    getTags(): Promise<AspireList<string>>;
+    getMetadata(): Promise<AspireDict<string, string>>;
+    withConnectionString(connectionString: IReferenceExpression): ITestRedisResourcePromise;
+    testWithEnvironmentCallback(callback: (arg: ITestEnvironmentContext) => Promise<void>): ITestRedisResourcePromise;
+    withCreatedAt(createdAt: string): ITestRedisResourcePromise;
+    withModifiedAt(modifiedAt: string): ITestRedisResourcePromise;
+    withCorrelationId(correlationId: string): ITestRedisResourcePromise;
+    withOptionalCallback(options?: WithOptionalCallbackOptions): ITestRedisResourcePromise;
+    withStatus(status: TestResourceStatus): ITestRedisResourcePromise;
+    withNestedConfig(config: TestNestedDto): ITestRedisResourcePromise;
+    withValidator(validator: (arg: ITestResourceContext) => Promise<boolean>): ITestRedisResourcePromise;
+    testWaitFor(dependency: IHandleReference): ITestRedisResourcePromise;
+    getEndpoints(): Promise<string[]>;
+    withConnectionStringDirect(connectionString: string): ITestRedisResourcePromise;
+    withRedisSpecific(option: string): ITestRedisResourcePromise;
+    withDependency(dependency: IHandleReference): ITestRedisResourcePromise;
+    withEndpoints(endpoints: string[]): ITestRedisResourcePromise;
+    withEnvironmentVariables(variables: Record<string, string>): ITestRedisResourcePromise;
+    getStatusAsync(options?: GetStatusAsyncOptions): Promise<string>;
+    withCancellableOperation(operation: (arg: ICancellationToken) => Promise<void>): ITestRedisResourcePromise;
+    waitForReadyAsync(timeout: number, options?: WaitForReadyAsyncOptions): Promise<boolean>;
+    withMultiParamHandleCallback(callback: (arg1: ITestCallbackContext, arg2: ITestEnvironmentContext) => Promise<void>): ITestRedisResourcePromise;
+    withDataVolume(options?: WithDataVolumeOptions): ITestRedisResourcePromise;
+}
+
+export interface ITestRedisResourcePromise extends PromiseLike<ITestRedisResource> {
+    addTestChildDatabase(name: string, options?: AddTestChildDatabaseOptions): ITestDatabaseResourcePromise;
+    withPersistence(options?: WithPersistenceOptions): ITestRedisResourcePromise;
+    withOptionalString(options?: WithOptionalStringOptions): ITestRedisResourcePromise;
+    withConfig(config: TestConfigDto): ITestRedisResourcePromise;
+    getTags(): Promise<AspireList<string>>;
+    getMetadata(): Promise<AspireDict<string, string>>;
+    withConnectionString(connectionString: IReferenceExpression): ITestRedisResourcePromise;
+    testWithEnvironmentCallback(callback: (arg: ITestEnvironmentContext) => Promise<void>): ITestRedisResourcePromise;
+    withCreatedAt(createdAt: string): ITestRedisResourcePromise;
+    withModifiedAt(modifiedAt: string): ITestRedisResourcePromise;
+    withCorrelationId(correlationId: string): ITestRedisResourcePromise;
+    withOptionalCallback(options?: WithOptionalCallbackOptions): ITestRedisResourcePromise;
+    withStatus(status: TestResourceStatus): ITestRedisResourcePromise;
+    withNestedConfig(config: TestNestedDto): ITestRedisResourcePromise;
+    withValidator(validator: (arg: ITestResourceContext) => Promise<boolean>): ITestRedisResourcePromise;
+    testWaitFor(dependency: IHandleReference): ITestRedisResourcePromise;
+    getEndpoints(): Promise<string[]>;
+    withConnectionStringDirect(connectionString: string): ITestRedisResourcePromise;
+    withRedisSpecific(option: string): ITestRedisResourcePromise;
+    withDependency(dependency: IHandleReference): ITestRedisResourcePromise;
+    withEndpoints(endpoints: string[]): ITestRedisResourcePromise;
+    withEnvironmentVariables(variables: Record<string, string>): ITestRedisResourcePromise;
+    getStatusAsync(options?: GetStatusAsyncOptions): Promise<string>;
+    withCancellableOperation(operation: (arg: ICancellationToken) => Promise<void>): ITestRedisResourcePromise;
+    waitForReadyAsync(timeout: number, options?: WaitForReadyAsyncOptions): Promise<boolean>;
+    withMultiParamHandleCallback(callback: (arg1: ITestCallbackContext, arg2: ITestEnvironmentContext) => Promise<void>): ITestRedisResourcePromise;
+    withDataVolume(options?: WithDataVolumeOptions): ITestRedisResourcePromise;
 }
 
 // ============================================================================
@@ -1151,7 +1355,7 @@ export class TestRedisResource extends ResourceBuilderBase<TestRedisResourceHand
     }
 
     /** @internal */
-    private async _withConnectionStringInternal(connectionString: ReferenceExpression): Promise<TestRedisResource> {
+    private async _withConnectionStringInternal(connectionString: IReferenceExpression): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, connectionString };
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withConnectionString',
@@ -1161,12 +1365,12 @@ export class TestRedisResource extends ResourceBuilderBase<TestRedisResourceHand
     }
 
     /** Sets the connection string using a reference expression */
-    withConnectionString(connectionString: ReferenceExpression): TestRedisResourcePromise {
+    withConnectionString(connectionString: IReferenceExpression): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._withConnectionStringInternal(connectionString));
     }
 
     /** @internal */
-    private async _testWithEnvironmentCallbackInternal(callback: (arg: TestEnvironmentContext) => Promise<void>): Promise<TestRedisResource> {
+    private async _testWithEnvironmentCallbackInternal(callback: (arg: ITestEnvironmentContext) => Promise<void>): Promise<TestRedisResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as TestEnvironmentContextHandle;
             const arg = new TestEnvironmentContext(argHandle, this._client);
@@ -1181,7 +1385,7 @@ export class TestRedisResource extends ResourceBuilderBase<TestRedisResourceHand
     }
 
     /** Configures environment with callback (test version) */
-    testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestRedisResourcePromise {
+    testWithEnvironmentCallback(callback: (arg: ITestEnvironmentContext) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._testWithEnvironmentCallbackInternal(callback));
     }
 
@@ -1231,7 +1435,7 @@ export class TestRedisResource extends ResourceBuilderBase<TestRedisResourceHand
     }
 
     /** @internal */
-    private async _withOptionalCallbackInternal(callback?: (arg: TestCallbackContext) => Promise<void>): Promise<TestRedisResource> {
+    private async _withOptionalCallbackInternal(callback?: (arg: ITestCallbackContext) => Promise<void>): Promise<TestRedisResource> {
         const callbackId = callback ? registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as TestCallbackContextHandle;
             const arg = new TestCallbackContext(argHandle, this._client);
@@ -1283,7 +1487,7 @@ export class TestRedisResource extends ResourceBuilderBase<TestRedisResourceHand
     }
 
     /** @internal */
-    private async _withValidatorInternal(validator: (arg: TestResourceContext) => Promise<boolean>): Promise<TestRedisResource> {
+    private async _withValidatorInternal(validator: (arg: ITestResourceContext) => Promise<boolean>): Promise<TestRedisResource> {
         const validatorId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as TestResourceContextHandle;
             const arg = new TestResourceContext(argHandle, this._client);
@@ -1298,12 +1502,12 @@ export class TestRedisResource extends ResourceBuilderBase<TestRedisResourceHand
     }
 
     /** Adds validation callback */
-    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestRedisResourcePromise {
+    withValidator(validator: (arg: ITestResourceContext) => Promise<boolean>): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._withValidatorInternal(validator));
     }
 
     /** @internal */
-    private async _testWaitForInternal(dependency: ResourceBuilderBase): Promise<TestRedisResource> {
+    private async _testWaitForInternal(dependency: IHandleReference): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests/testWaitFor',
@@ -1313,7 +1517,7 @@ export class TestRedisResource extends ResourceBuilderBase<TestRedisResourceHand
     }
 
     /** Waits for another resource (test version) */
-    testWaitFor(dependency: ResourceBuilderBase): TestRedisResourcePromise {
+    testWaitFor(dependency: IHandleReference): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._testWaitForInternal(dependency));
     }
 
@@ -1357,7 +1561,7 @@ export class TestRedisResource extends ResourceBuilderBase<TestRedisResourceHand
     }
 
     /** @internal */
-    private async _withDependencyInternal(dependency: ResourceBuilderBase): Promise<TestRedisResource> {
+    private async _withDependencyInternal(dependency: IHandleReference): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withDependency',
@@ -1367,7 +1571,7 @@ export class TestRedisResource extends ResourceBuilderBase<TestRedisResourceHand
     }
 
     /** Adds a dependency on another resource */
-    withDependency(dependency: ResourceBuilderBase): TestRedisResourcePromise {
+    withDependency(dependency: IHandleReference): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._withDependencyInternal(dependency));
     }
 
@@ -1413,7 +1617,7 @@ export class TestRedisResource extends ResourceBuilderBase<TestRedisResourceHand
     }
 
     /** @internal */
-    private async _withCancellableOperationInternal(operation: (arg: CancellationToken) => Promise<void>): Promise<TestRedisResource> {
+    private async _withCancellableOperationInternal(operation: (arg: ICancellationToken) => Promise<void>): Promise<TestRedisResource> {
         const operationId = registerCallback(async (argData: unknown) => {
             const arg = CancellationToken.fromValue(argData);
             await operation(arg);
@@ -1427,7 +1631,7 @@ export class TestRedisResource extends ResourceBuilderBase<TestRedisResourceHand
     }
 
     /** Performs a cancellable operation */
-    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestRedisResourcePromise {
+    withCancellableOperation(operation: (arg: ICancellationToken) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._withCancellableOperationInternal(operation));
     }
 
@@ -1443,7 +1647,7 @@ export class TestRedisResource extends ResourceBuilderBase<TestRedisResourceHand
     }
 
     /** @internal */
-    private async _withMultiParamHandleCallbackInternal(callback: (arg1: TestCallbackContext, arg2: TestEnvironmentContext) => Promise<void>): Promise<TestRedisResource> {
+    private async _withMultiParamHandleCallbackInternal(callback: (arg1: ITestCallbackContext, arg2: ITestEnvironmentContext) => Promise<void>): Promise<TestRedisResource> {
         const callbackId = registerCallback(async (arg1Data: unknown, arg2Data: unknown) => {
             const arg1Handle = wrapIfHandle(arg1Data) as TestCallbackContextHandle;
             const arg1 = new TestCallbackContext(arg1Handle, this._client);
@@ -1460,7 +1664,7 @@ export class TestRedisResource extends ResourceBuilderBase<TestRedisResourceHand
     }
 
     /** Tests multi-param callback destructuring */
-    withMultiParamHandleCallback(callback: (arg1: TestCallbackContext, arg2: TestEnvironmentContext) => Promise<void>): TestRedisResourcePromise {
+    withMultiParamHandleCallback(callback: (arg1: ITestCallbackContext, arg2: ITestEnvironmentContext) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._withMultiParamHandleCallbackInternal(callback));
     }
 
@@ -1659,12 +1863,12 @@ export class TestRedisResourcePromise implements PromiseLike<TestRedisResource> 
     }
 
     /** Sets the connection string using a reference expression */
-    withConnectionString(connectionString: ReferenceExpression): TestRedisResourcePromise {
+    withConnectionString(connectionString: IReferenceExpression): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._promise.then(obj => obj.withConnectionString(connectionString)));
     }
 
     /** Configures environment with callback (test version) */
-    testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestRedisResourcePromise {
+    testWithEnvironmentCallback(callback: (arg: ITestEnvironmentContext) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._promise.then(obj => obj.testWithEnvironmentCallback(callback)));
     }
 
@@ -1699,12 +1903,12 @@ export class TestRedisResourcePromise implements PromiseLike<TestRedisResource> 
     }
 
     /** Adds validation callback */
-    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestRedisResourcePromise {
+    withValidator(validator: (arg: ITestResourceContext) => Promise<boolean>): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._promise.then(obj => obj.withValidator(validator)));
     }
 
     /** Waits for another resource (test version) */
-    testWaitFor(dependency: ResourceBuilderBase): TestRedisResourcePromise {
+    testWaitFor(dependency: IHandleReference): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._promise.then(obj => obj.testWaitFor(dependency)));
     }
 
@@ -1724,7 +1928,7 @@ export class TestRedisResourcePromise implements PromiseLike<TestRedisResource> 
     }
 
     /** Adds a dependency on another resource */
-    withDependency(dependency: ResourceBuilderBase): TestRedisResourcePromise {
+    withDependency(dependency: IHandleReference): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._promise.then(obj => obj.withDependency(dependency)));
     }
 
@@ -1744,7 +1948,7 @@ export class TestRedisResourcePromise implements PromiseLike<TestRedisResource> 
     }
 
     /** Performs a cancellable operation */
-    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestRedisResourcePromise {
+    withCancellableOperation(operation: (arg: ICancellationToken) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._promise.then(obj => obj.withCancellableOperation(operation)));
     }
 
@@ -1754,7 +1958,7 @@ export class TestRedisResourcePromise implements PromiseLike<TestRedisResource> 
     }
 
     /** Tests multi-param callback destructuring */
-    withMultiParamHandleCallback(callback: (arg1: TestCallbackContext, arg2: TestEnvironmentContext) => Promise<void>): TestRedisResourcePromise {
+    withMultiParamHandleCallback(callback: (arg1: ITestCallbackContext, arg2: ITestEnvironmentContext) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._promise.then(obj => obj.withMultiParamHandleCallback(callback)));
     }
 
@@ -1806,6 +2010,49 @@ export class TestRedisResourcePromise implements PromiseLike<TestRedisResource> 
 }
 
 // ============================================================================
+// ITestVaultResource
+// ============================================================================
+
+export interface ITestVaultResource {
+    toJSON(): MarshalledHandle;
+    withOptionalString(options?: WithOptionalStringOptions): ITestVaultResourcePromise;
+    withConfig(config: TestConfigDto): ITestVaultResourcePromise;
+    testWithEnvironmentCallback(callback: (arg: ITestEnvironmentContext) => Promise<void>): ITestVaultResourcePromise;
+    withCreatedAt(createdAt: string): ITestVaultResourcePromise;
+    withModifiedAt(modifiedAt: string): ITestVaultResourcePromise;
+    withCorrelationId(correlationId: string): ITestVaultResourcePromise;
+    withOptionalCallback(options?: WithOptionalCallbackOptions): ITestVaultResourcePromise;
+    withStatus(status: TestResourceStatus): ITestVaultResourcePromise;
+    withNestedConfig(config: TestNestedDto): ITestVaultResourcePromise;
+    withValidator(validator: (arg: ITestResourceContext) => Promise<boolean>): ITestVaultResourcePromise;
+    testWaitFor(dependency: IHandleReference): ITestVaultResourcePromise;
+    withDependency(dependency: IHandleReference): ITestVaultResourcePromise;
+    withEndpoints(endpoints: string[]): ITestVaultResourcePromise;
+    withEnvironmentVariables(variables: Record<string, string>): ITestVaultResourcePromise;
+    withCancellableOperation(operation: (arg: ICancellationToken) => Promise<void>): ITestVaultResourcePromise;
+    withVaultDirect(option: string): ITestVaultResourcePromise;
+}
+
+export interface ITestVaultResourcePromise extends PromiseLike<ITestVaultResource> {
+    withOptionalString(options?: WithOptionalStringOptions): ITestVaultResourcePromise;
+    withConfig(config: TestConfigDto): ITestVaultResourcePromise;
+    testWithEnvironmentCallback(callback: (arg: ITestEnvironmentContext) => Promise<void>): ITestVaultResourcePromise;
+    withCreatedAt(createdAt: string): ITestVaultResourcePromise;
+    withModifiedAt(modifiedAt: string): ITestVaultResourcePromise;
+    withCorrelationId(correlationId: string): ITestVaultResourcePromise;
+    withOptionalCallback(options?: WithOptionalCallbackOptions): ITestVaultResourcePromise;
+    withStatus(status: TestResourceStatus): ITestVaultResourcePromise;
+    withNestedConfig(config: TestNestedDto): ITestVaultResourcePromise;
+    withValidator(validator: (arg: ITestResourceContext) => Promise<boolean>): ITestVaultResourcePromise;
+    testWaitFor(dependency: IHandleReference): ITestVaultResourcePromise;
+    withDependency(dependency: IHandleReference): ITestVaultResourcePromise;
+    withEndpoints(endpoints: string[]): ITestVaultResourcePromise;
+    withEnvironmentVariables(variables: Record<string, string>): ITestVaultResourcePromise;
+    withCancellableOperation(operation: (arg: ICancellationToken) => Promise<void>): ITestVaultResourcePromise;
+    withVaultDirect(option: string): ITestVaultResourcePromise;
+}
+
+// ============================================================================
 // TestVaultResource
 // ============================================================================
 
@@ -1849,7 +2096,7 @@ export class TestVaultResource extends ResourceBuilderBase<TestVaultResourceHand
     }
 
     /** @internal */
-    private async _testWithEnvironmentCallbackInternal(callback: (arg: TestEnvironmentContext) => Promise<void>): Promise<TestVaultResource> {
+    private async _testWithEnvironmentCallbackInternal(callback: (arg: ITestEnvironmentContext) => Promise<void>): Promise<TestVaultResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as TestEnvironmentContextHandle;
             const arg = new TestEnvironmentContext(argHandle, this._client);
@@ -1864,7 +2111,7 @@ export class TestVaultResource extends ResourceBuilderBase<TestVaultResourceHand
     }
 
     /** Configures environment with callback (test version) */
-    testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestVaultResourcePromise {
+    testWithEnvironmentCallback(callback: (arg: ITestEnvironmentContext) => Promise<void>): TestVaultResourcePromise {
         return new TestVaultResourcePromise(this._testWithEnvironmentCallbackInternal(callback));
     }
 
@@ -1914,7 +2161,7 @@ export class TestVaultResource extends ResourceBuilderBase<TestVaultResourceHand
     }
 
     /** @internal */
-    private async _withOptionalCallbackInternal(callback?: (arg: TestCallbackContext) => Promise<void>): Promise<TestVaultResource> {
+    private async _withOptionalCallbackInternal(callback?: (arg: ITestCallbackContext) => Promise<void>): Promise<TestVaultResource> {
         const callbackId = callback ? registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as TestCallbackContextHandle;
             const arg = new TestCallbackContext(argHandle, this._client);
@@ -1966,7 +2213,7 @@ export class TestVaultResource extends ResourceBuilderBase<TestVaultResourceHand
     }
 
     /** @internal */
-    private async _withValidatorInternal(validator: (arg: TestResourceContext) => Promise<boolean>): Promise<TestVaultResource> {
+    private async _withValidatorInternal(validator: (arg: ITestResourceContext) => Promise<boolean>): Promise<TestVaultResource> {
         const validatorId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as TestResourceContextHandle;
             const arg = new TestResourceContext(argHandle, this._client);
@@ -1981,12 +2228,12 @@ export class TestVaultResource extends ResourceBuilderBase<TestVaultResourceHand
     }
 
     /** Adds validation callback */
-    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestVaultResourcePromise {
+    withValidator(validator: (arg: ITestResourceContext) => Promise<boolean>): TestVaultResourcePromise {
         return new TestVaultResourcePromise(this._withValidatorInternal(validator));
     }
 
     /** @internal */
-    private async _testWaitForInternal(dependency: ResourceBuilderBase): Promise<TestVaultResource> {
+    private async _testWaitForInternal(dependency: IHandleReference): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests/testWaitFor',
@@ -1996,12 +2243,12 @@ export class TestVaultResource extends ResourceBuilderBase<TestVaultResourceHand
     }
 
     /** Waits for another resource (test version) */
-    testWaitFor(dependency: ResourceBuilderBase): TestVaultResourcePromise {
+    testWaitFor(dependency: IHandleReference): TestVaultResourcePromise {
         return new TestVaultResourcePromise(this._testWaitForInternal(dependency));
     }
 
     /** @internal */
-    private async _withDependencyInternal(dependency: ResourceBuilderBase): Promise<TestVaultResource> {
+    private async _withDependencyInternal(dependency: IHandleReference): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withDependency',
@@ -2011,7 +2258,7 @@ export class TestVaultResource extends ResourceBuilderBase<TestVaultResourceHand
     }
 
     /** Adds a dependency on another resource */
-    withDependency(dependency: ResourceBuilderBase): TestVaultResourcePromise {
+    withDependency(dependency: IHandleReference): TestVaultResourcePromise {
         return new TestVaultResourcePromise(this._withDependencyInternal(dependency));
     }
 
@@ -2046,7 +2293,7 @@ export class TestVaultResource extends ResourceBuilderBase<TestVaultResourceHand
     }
 
     /** @internal */
-    private async _withCancellableOperationInternal(operation: (arg: CancellationToken) => Promise<void>): Promise<TestVaultResource> {
+    private async _withCancellableOperationInternal(operation: (arg: ICancellationToken) => Promise<void>): Promise<TestVaultResource> {
         const operationId = registerCallback(async (argData: unknown) => {
             const arg = CancellationToken.fromValue(argData);
             await operation(arg);
@@ -2060,7 +2307,7 @@ export class TestVaultResource extends ResourceBuilderBase<TestVaultResourceHand
     }
 
     /** Performs a cancellable operation */
-    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestVaultResourcePromise {
+    withCancellableOperation(operation: (arg: ICancellationToken) => Promise<void>): TestVaultResourcePromise {
         return new TestVaultResourcePromise(this._withCancellableOperationInternal(operation));
     }
 
@@ -2235,7 +2482,7 @@ export class TestVaultResourcePromise implements PromiseLike<TestVaultResource> 
     }
 
     /** Configures environment with callback (test version) */
-    testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestVaultResourcePromise {
+    testWithEnvironmentCallback(callback: (arg: ITestEnvironmentContext) => Promise<void>): TestVaultResourcePromise {
         return new TestVaultResourcePromise(this._promise.then(obj => obj.testWithEnvironmentCallback(callback)));
     }
 
@@ -2270,17 +2517,17 @@ export class TestVaultResourcePromise implements PromiseLike<TestVaultResource> 
     }
 
     /** Adds validation callback */
-    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestVaultResourcePromise {
+    withValidator(validator: (arg: ITestResourceContext) => Promise<boolean>): TestVaultResourcePromise {
         return new TestVaultResourcePromise(this._promise.then(obj => obj.withValidator(validator)));
     }
 
     /** Waits for another resource (test version) */
-    testWaitFor(dependency: ResourceBuilderBase): TestVaultResourcePromise {
+    testWaitFor(dependency: IHandleReference): TestVaultResourcePromise {
         return new TestVaultResourcePromise(this._promise.then(obj => obj.testWaitFor(dependency)));
     }
 
     /** Adds a dependency on another resource */
-    withDependency(dependency: ResourceBuilderBase): TestVaultResourcePromise {
+    withDependency(dependency: IHandleReference): TestVaultResourcePromise {
         return new TestVaultResourcePromise(this._promise.then(obj => obj.withDependency(dependency)));
     }
 
@@ -2295,7 +2542,7 @@ export class TestVaultResourcePromise implements PromiseLike<TestVaultResource> 
     }
 
     /** Performs a cancellable operation */
-    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestVaultResourcePromise {
+    withCancellableOperation(operation: (arg: ICancellationToken) => Promise<void>): TestVaultResourcePromise {
         return new TestVaultResourcePromise(this._promise.then(obj => obj.withCancellableOperation(operation)));
     }
 
@@ -2344,6 +2591,43 @@ export class TestVaultResourcePromise implements PromiseLike<TestVaultResource> 
         return new TestVaultResourcePromise(this._promise.then(obj => obj.withMergeRouteMiddleware(path, method, handler, priority, middleware)));
     }
 
+}
+
+// ============================================================================
+// IResource
+// ============================================================================
+
+export interface IResource {
+    toJSON(): MarshalledHandle;
+    withOptionalString(options?: WithOptionalStringOptions): IResourcePromise;
+    withConfig(config: TestConfigDto): IResourcePromise;
+    withCreatedAt(createdAt: string): IResourcePromise;
+    withModifiedAt(modifiedAt: string): IResourcePromise;
+    withCorrelationId(correlationId: string): IResourcePromise;
+    withOptionalCallback(options?: WithOptionalCallbackOptions): IResourcePromise;
+    withStatus(status: TestResourceStatus): IResourcePromise;
+    withNestedConfig(config: TestNestedDto): IResourcePromise;
+    withValidator(validator: (arg: ITestResourceContext) => Promise<boolean>): IResourcePromise;
+    testWaitFor(dependency: IHandleReference): IResourcePromise;
+    withDependency(dependency: IHandleReference): IResourcePromise;
+    withEndpoints(endpoints: string[]): IResourcePromise;
+    withCancellableOperation(operation: (arg: ICancellationToken) => Promise<void>): IResourcePromise;
+}
+
+export interface IResourcePromise extends PromiseLike<IResource> {
+    withOptionalString(options?: WithOptionalStringOptions): IResourcePromise;
+    withConfig(config: TestConfigDto): IResourcePromise;
+    withCreatedAt(createdAt: string): IResourcePromise;
+    withModifiedAt(modifiedAt: string): IResourcePromise;
+    withCorrelationId(correlationId: string): IResourcePromise;
+    withOptionalCallback(options?: WithOptionalCallbackOptions): IResourcePromise;
+    withStatus(status: TestResourceStatus): IResourcePromise;
+    withNestedConfig(config: TestNestedDto): IResourcePromise;
+    withValidator(validator: (arg: ITestResourceContext) => Promise<boolean>): IResourcePromise;
+    testWaitFor(dependency: IHandleReference): IResourcePromise;
+    withDependency(dependency: IHandleReference): IResourcePromise;
+    withEndpoints(endpoints: string[]): IResourcePromise;
+    withCancellableOperation(operation: (arg: ICancellationToken) => Promise<void>): IResourcePromise;
 }
 
 // ============================================================================
@@ -2435,7 +2719,7 @@ export class Resource extends ResourceBuilderBase<IResourceHandle> {
     }
 
     /** @internal */
-    private async _withOptionalCallbackInternal(callback?: (arg: TestCallbackContext) => Promise<void>): Promise<Resource> {
+    private async _withOptionalCallbackInternal(callback?: (arg: ITestCallbackContext) => Promise<void>): Promise<Resource> {
         const callbackId = callback ? registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as TestCallbackContextHandle;
             const arg = new TestCallbackContext(argHandle, this._client);
@@ -2487,7 +2771,7 @@ export class Resource extends ResourceBuilderBase<IResourceHandle> {
     }
 
     /** @internal */
-    private async _withValidatorInternal(validator: (arg: TestResourceContext) => Promise<boolean>): Promise<Resource> {
+    private async _withValidatorInternal(validator: (arg: ITestResourceContext) => Promise<boolean>): Promise<Resource> {
         const validatorId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as TestResourceContextHandle;
             const arg = new TestResourceContext(argHandle, this._client);
@@ -2502,12 +2786,12 @@ export class Resource extends ResourceBuilderBase<IResourceHandle> {
     }
 
     /** Adds validation callback */
-    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ResourcePromise {
+    withValidator(validator: (arg: ITestResourceContext) => Promise<boolean>): ResourcePromise {
         return new ResourcePromise(this._withValidatorInternal(validator));
     }
 
     /** @internal */
-    private async _testWaitForInternal(dependency: ResourceBuilderBase): Promise<Resource> {
+    private async _testWaitForInternal(dependency: IHandleReference): Promise<Resource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         const result = await this._client.invokeCapability<IResourceHandle>(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests/testWaitFor',
@@ -2517,12 +2801,12 @@ export class Resource extends ResourceBuilderBase<IResourceHandle> {
     }
 
     /** Waits for another resource (test version) */
-    testWaitFor(dependency: ResourceBuilderBase): ResourcePromise {
+    testWaitFor(dependency: IHandleReference): ResourcePromise {
         return new ResourcePromise(this._testWaitForInternal(dependency));
     }
 
     /** @internal */
-    private async _withDependencyInternal(dependency: ResourceBuilderBase): Promise<Resource> {
+    private async _withDependencyInternal(dependency: IHandleReference): Promise<Resource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         const result = await this._client.invokeCapability<IResourceHandle>(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withDependency',
@@ -2532,7 +2816,7 @@ export class Resource extends ResourceBuilderBase<IResourceHandle> {
     }
 
     /** Adds a dependency on another resource */
-    withDependency(dependency: ResourceBuilderBase): ResourcePromise {
+    withDependency(dependency: IHandleReference): ResourcePromise {
         return new ResourcePromise(this._withDependencyInternal(dependency));
     }
 
@@ -2552,7 +2836,7 @@ export class Resource extends ResourceBuilderBase<IResourceHandle> {
     }
 
     /** @internal */
-    private async _withCancellableOperationInternal(operation: (arg: CancellationToken) => Promise<void>): Promise<Resource> {
+    private async _withCancellableOperationInternal(operation: (arg: ICancellationToken) => Promise<void>): Promise<Resource> {
         const operationId = registerCallback(async (argData: unknown) => {
             const arg = CancellationToken.fromValue(argData);
             await operation(arg);
@@ -2566,7 +2850,7 @@ export class Resource extends ResourceBuilderBase<IResourceHandle> {
     }
 
     /** Performs a cancellable operation */
-    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ResourcePromise {
+    withCancellableOperation(operation: (arg: ICancellationToken) => Promise<void>): ResourcePromise {
         return new ResourcePromise(this._withCancellableOperationInternal(operation));
     }
 
@@ -2756,17 +3040,17 @@ export class ResourcePromise implements PromiseLike<Resource> {
     }
 
     /** Adds validation callback */
-    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ResourcePromise {
+    withValidator(validator: (arg: ITestResourceContext) => Promise<boolean>): ResourcePromise {
         return new ResourcePromise(this._promise.then(obj => obj.withValidator(validator)));
     }
 
     /** Waits for another resource (test version) */
-    testWaitFor(dependency: ResourceBuilderBase): ResourcePromise {
+    testWaitFor(dependency: IHandleReference): ResourcePromise {
         return new ResourcePromise(this._promise.then(obj => obj.testWaitFor(dependency)));
     }
 
     /** Adds a dependency on another resource */
-    withDependency(dependency: ResourceBuilderBase): ResourcePromise {
+    withDependency(dependency: IHandleReference): ResourcePromise {
         return new ResourcePromise(this._promise.then(obj => obj.withDependency(dependency)));
     }
 
@@ -2776,7 +3060,7 @@ export class ResourcePromise implements PromiseLike<Resource> {
     }
 
     /** Performs a cancellable operation */
-    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ResourcePromise {
+    withCancellableOperation(operation: (arg: ICancellationToken) => Promise<void>): ResourcePromise {
         return new ResourcePromise(this._promise.then(obj => obj.withCancellableOperation(operation)));
     }
 
@@ -2823,6 +3107,21 @@ export class ResourcePromise implements PromiseLike<Resource> {
 }
 
 // ============================================================================
+// IResourceWithConnectionString
+// ============================================================================
+
+export interface IResourceWithConnectionString {
+    toJSON(): MarshalledHandle;
+    withConnectionString(connectionString: IReferenceExpression): IResourceWithConnectionStringPromise;
+    withConnectionStringDirect(connectionString: string): IResourceWithConnectionStringPromise;
+}
+
+export interface IResourceWithConnectionStringPromise extends PromiseLike<IResourceWithConnectionString> {
+    withConnectionString(connectionString: IReferenceExpression): IResourceWithConnectionStringPromise;
+    withConnectionStringDirect(connectionString: string): IResourceWithConnectionStringPromise;
+}
+
+// ============================================================================
 // ResourceWithConnectionString
 // ============================================================================
 
@@ -2832,7 +3131,7 @@ export class ResourceWithConnectionString extends ResourceBuilderBase<IResourceW
     }
 
     /** @internal */
-    private async _withConnectionStringInternal(connectionString: ReferenceExpression): Promise<ResourceWithConnectionString> {
+    private async _withConnectionStringInternal(connectionString: IReferenceExpression): Promise<ResourceWithConnectionString> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, connectionString };
         const result = await this._client.invokeCapability<IResourceWithConnectionStringHandle>(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withConnectionString',
@@ -2842,7 +3141,7 @@ export class ResourceWithConnectionString extends ResourceBuilderBase<IResourceW
     }
 
     /** Sets the connection string using a reference expression */
-    withConnectionString(connectionString: ReferenceExpression): ResourceWithConnectionStringPromise {
+    withConnectionString(connectionString: IReferenceExpression): ResourceWithConnectionStringPromise {
         return new ResourceWithConnectionStringPromise(this._withConnectionStringInternal(connectionString));
     }
 
@@ -2879,7 +3178,7 @@ export class ResourceWithConnectionStringPromise implements PromiseLike<Resource
     }
 
     /** Sets the connection string using a reference expression */
-    withConnectionString(connectionString: ReferenceExpression): ResourceWithConnectionStringPromise {
+    withConnectionString(connectionString: IReferenceExpression): ResourceWithConnectionStringPromise {
         return new ResourceWithConnectionStringPromise(this._promise.then(obj => obj.withConnectionString(connectionString)));
     }
 
@@ -2888,6 +3187,21 @@ export class ResourceWithConnectionStringPromise implements PromiseLike<Resource
         return new ResourceWithConnectionStringPromise(this._promise.then(obj => obj.withConnectionStringDirect(connectionString)));
     }
 
+}
+
+// ============================================================================
+// IResourceWithEnvironment
+// ============================================================================
+
+export interface IResourceWithEnvironment {
+    toJSON(): MarshalledHandle;
+    testWithEnvironmentCallback(callback: (arg: ITestEnvironmentContext) => Promise<void>): IResourceWithEnvironmentPromise;
+    withEnvironmentVariables(variables: Record<string, string>): IResourceWithEnvironmentPromise;
+}
+
+export interface IResourceWithEnvironmentPromise extends PromiseLike<IResourceWithEnvironment> {
+    testWithEnvironmentCallback(callback: (arg: ITestEnvironmentContext) => Promise<void>): IResourceWithEnvironmentPromise;
+    withEnvironmentVariables(variables: Record<string, string>): IResourceWithEnvironmentPromise;
 }
 
 // ============================================================================
@@ -2900,7 +3214,7 @@ export class ResourceWithEnvironment extends ResourceBuilderBase<IResourceWithEn
     }
 
     /** @internal */
-    private async _testWithEnvironmentCallbackInternal(callback: (arg: TestEnvironmentContext) => Promise<void>): Promise<ResourceWithEnvironment> {
+    private async _testWithEnvironmentCallbackInternal(callback: (arg: ITestEnvironmentContext) => Promise<void>): Promise<ResourceWithEnvironment> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as TestEnvironmentContextHandle;
             const arg = new TestEnvironmentContext(argHandle, this._client);
@@ -2915,7 +3229,7 @@ export class ResourceWithEnvironment extends ResourceBuilderBase<IResourceWithEn
     }
 
     /** Configures environment with callback (test version) */
-    testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): ResourceWithEnvironmentPromise {
+    testWithEnvironmentCallback(callback: (arg: ITestEnvironmentContext) => Promise<void>): ResourceWithEnvironmentPromise {
         return new ResourceWithEnvironmentPromise(this._testWithEnvironmentCallbackInternal(callback));
     }
 
@@ -2952,7 +3266,7 @@ export class ResourceWithEnvironmentPromise implements PromiseLike<ResourceWithE
     }
 
     /** Configures environment with callback (test version) */
-    testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): ResourceWithEnvironmentPromise {
+    testWithEnvironmentCallback(callback: (arg: ITestEnvironmentContext) => Promise<void>): ResourceWithEnvironmentPromise {
         return new ResourceWithEnvironmentPromise(this._promise.then(obj => obj.testWithEnvironmentCallback(callback)));
     }
 
@@ -3028,6 +3342,7 @@ export async function createBuilder(options?: CreateBuilderOptions): Promise<Dis
 // Re-export commonly used types
 export { Handle, AppHostUsageError, CancellationToken, CapabilityError, registerCallback } from './transport.js';
 export { refExpr, ReferenceExpression } from './base.js';
+export type { ICancellationToken, IHandleReference, IReferenceExpression } from './base.js';
 
 // ============================================================================
 // Global Error Handling

@@ -1,0 +1,18 @@
+{
+  "appHost": {
+    "path": "apphost.ts",
+    "language": "typescript/nodejs"
+  },
+  "profiles": {
+    "https": {
+      "applicationUrl": "https://localhost:29550;http://localhost:28731",
+      "environmentVariables": {
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:10775",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:13119"
+      }
+    }
+  },
+  "packages": {
+    "Aspire.Hosting.Milvus": ""
+  }
+}

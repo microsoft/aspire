@@ -274,15 +274,11 @@ export function refExpr(strings: TemplateStringsArray, ...values: unknown[]): IR
 // ResourceBuilderBase
 // ============================================================================
 
-export interface IHandleReference {
-    toJSON(): MarshalledHandle;
-}
-
 /**
  * Base class for resource builders (e.g., RedisBuilder, ContainerBuilder).
  * Provides handle management and JSON serialization.
  */
-export class ResourceBuilderBase<THandle extends Handle = Handle> implements IHandleReference {
+export class ResourceBuilderBase<THandle extends Handle = Handle> {
     constructor(protected _handle: THandle, protected _client: AspireClient) {}
 
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }

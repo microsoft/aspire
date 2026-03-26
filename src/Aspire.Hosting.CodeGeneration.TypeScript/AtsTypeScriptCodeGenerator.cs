@@ -122,6 +122,21 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     // Mapping of enum type IDs to TypeScript enum names
     private readonly Dictionary<string, string> _enumTypeNames = new(StringComparer.Ordinal);
 
+    private static string GetInterfaceName(string className) => $"I{className}";
+
+    private static string GetPromiseInterfaceName(string className) => $"I{className}Promise";
+
+    private static string GetReferenceExpressionInterfaceName() => "IReferenceExpression";
+
+    private static string GetCancellationTokenInterfaceName() => "ICancellationToken";
+
+    private static string GetHandleReferenceInterfaceName() => "IHandleReference";
+
+    private string GetConcreteClassName(string typeId) => _wrapperClassNames.GetValueOrDefault(typeId)
+        ?? DeriveClassName(typeId);
+
+    private string GetPublicPromiseInterfaceName(string typeId) => GetPromiseInterfaceName(GetConcreteClassName(typeId));
+
     /// <summary>
     /// Checks if an AtsTypeRef represents a handle type.
     /// </summary>
@@ -142,13 +157,13 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         // Check for wrapper class first (handles custom types like resource builders)
         if (_wrapperClassNames.TryGetValue(typeRef.TypeId, out var wrapperClassName))
         {
-            return wrapperClassName;
+            return GetInterfaceName(wrapperClassName);
         }
 
         // ReferenceExpression is a value type defined in base.ts, not a handle-based wrapper
         if (typeRef.TypeId == AtsConstants.ReferenceExpressionTypeId)
         {
-            return "ReferenceExpression";
+            return GetReferenceExpressionInterfaceName();
         }
 
         return typeRef.Category switch
@@ -183,7 +198,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         AtsConstants.DateOnly or AtsConstants.TimeOnly => "string",
         AtsConstants.TimeSpan => "number",
         AtsConstants.Guid or AtsConstants.Uri => "string",
-        AtsConstants.CancellationToken => "CancellationToken",
+        AtsConstants.CancellationToken => GetCancellationTokenInterfaceName(),
         _ => typeId
     };
 
@@ -244,19 +259,19 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
     /// <summary>
     /// Maps a user-supplied input type to TypeScript.
-    /// For interface handle types, generated APIs accept wrapper instances.
+    /// For interface handle types, generated APIs accept any handle-bearing wrapper instance.
     /// For cancellation tokens, generated APIs accept either an AbortSignal or a transport-safe CancellationToken.
     /// </summary>
     private string MapInputTypeToTypeScript(AtsTypeRef? typeRef)
     {
         if (IsInterfaceHandleType(typeRef))
         {
-            return "ResourceBuilderBase";
+            return GetHandleReferenceInterfaceName();
         }
 
         if (IsCancellationTokenType(typeRef))
         {
-            return "AbortSignal | CancellationToken";
+            return $"AbortSignal | {GetCancellationTokenInterfaceName()}";
         }
 
         return MapTypeRefToTypeScript(typeRef);
@@ -394,6 +409,12 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 wrapIfHandle,
                 registerHandleWrapper
             } from './transport.js';
+
+            import type {
+                ICancellationToken,
+                IHandleReference,
+                IReferenceExpression
+            } from './base.js';
 
             import {
                 ResourceBuilderBase,
@@ -919,8 +940,234 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         return $"Handle to {typeName}";
     }
 
+    private string BuildPublicParameterList(List<AtsParameterInfo> requiredParams, bool hasOptionals, string optionsInterfaceName)
+    {
+        var publicParamDefs = new List<string>();
+        foreach (var param in requiredParams)
+        {
+            var tsType = MapParameterToTypeScript(param);
+            publicParamDefs.Add($"{param.Name}: {tsType}");
+        }
+        if (hasOptionals)
+        {
+            publicParamDefs.Add($"options?: {optionsInterfaceName}");
+        }
+
+        return string.Join(", ", publicParamDefs);
+    }
+
+    private void GenerateInterfaceProperty(string propertyName, AtsCapabilityInfo? getter, AtsCapabilityInfo? setter)
+    {
+        if (getter?.ReturnType is { } returnType)
+        {
+            if (IsDictionaryType(returnType))
+            {
+                var keyType = returnType.KeyType != null ? MapTypeRefToTypeScript(returnType.KeyType) : "string";
+                var valueType = returnType.ValueType != null ? MapTypeRefToTypeScript(returnType.ValueType) : "unknown";
+                WriteLine($"    readonly {propertyName}: AspireDict<{keyType}, {valueType}>;");
+                return;
+            }
+
+            if (IsListType(returnType))
+            {
+                var elementType = returnType.ElementType != null ? MapTypeRefToTypeScript(returnType.ElementType) : "unknown";
+                WriteLine($"    readonly {propertyName}: AspireList<{elementType}>;");
+                return;
+            }
+        }
+
+        WriteLine($"    {propertyName}: {{");
+
+        if (getter != null)
+        {
+            var returnTypeName = MapTypeRefToTypeScript(getter.ReturnType);
+            WriteLine($"        get: () => Promise<{returnTypeName}>;");
+        }
+
+        if (setter != null)
+        {
+            var valueParam = setter.Parameters.FirstOrDefault(p => p.Name == "value");
+            if (valueParam != null)
+            {
+                var valueType = MapInputTypeToTypeScript(valueParam.Type);
+                WriteLine($"        set: (value: {valueType}) => Promise<void>;");
+            }
+        }
+
+        WriteLine("    };");
+    }
+
+    private string GetBuilderPromiseInterfaceForMethod(BuilderModel builder, AtsCapabilityInfo capability)
+    {
+        if (capability.ReturnsBuilder && capability.ReturnType?.TypeId != null &&
+            !string.Equals(capability.ReturnType.TypeId, builder.TypeId, StringComparison.Ordinal) &&
+            !string.Equals(capability.ReturnType.TypeId, capability.TargetTypeId, StringComparison.Ordinal))
+        {
+            return GetPublicPromiseInterfaceName(capability.ReturnType.TypeId);
+        }
+
+        return GetPromiseInterfaceName(builder.BuilderClassName);
+    }
+
+    private void GenerateBuilderInterface(BuilderModel builder)
+    {
+        var interfaceName = GetInterfaceName(builder.BuilderClassName);
+
+        WriteLine("// ============================================================================");
+        WriteLine($"// {interfaceName}");
+        WriteLine("// ============================================================================");
+        WriteLine();
+        WriteLine($"export interface {interfaceName} {{");
+        WriteLine("    toJSON(): MarshalledHandle;");
+
+        var getters = builder.Capabilities.Where(c => c.CapabilityKind == AtsCapabilityKind.PropertyGetter).ToList();
+        var setters = builder.Capabilities.Where(c => c.CapabilityKind == AtsCapabilityKind.PropertySetter).ToList();
+        if (getters.Count > 0 || setters.Count > 0)
+        {
+            var properties = GroupPropertiesByName(getters, setters);
+            foreach (var prop in properties)
+            {
+                GenerateInterfaceProperty(prop.PropertyName, prop.Getter, prop.Setter);
+            }
+        }
+
+        foreach (var capability in builder.Capabilities.Where(c =>
+            c.CapabilityKind != AtsCapabilityKind.PropertyGetter &&
+            c.CapabilityKind != AtsCapabilityKind.PropertySetter))
+        {
+            var (requiredParams, optionalParams) = SeparateParameters(capability.Parameters);
+            var hasOptionals = optionalParams.Count > 0;
+            var optionsInterfaceName = ResolveOptionsInterfaceName(capability);
+            var publicParamsString = BuildPublicParameterList(requiredParams, hasOptionals, optionsInterfaceName);
+            var hasNonBuilderReturn = !capability.ReturnsBuilder && capability.ReturnType != null;
+
+            if (hasNonBuilderReturn)
+            {
+                var returnType = MapTypeRefToTypeScript(capability.ReturnType);
+                WriteLine($"    {capability.MethodName}({publicParamsString}): Promise<{returnType}>;");
+            }
+            else
+            {
+                WriteLine($"    {capability.MethodName}({publicParamsString}): {GetBuilderPromiseInterfaceForMethod(builder, capability)};");
+            }
+        }
+
+        WriteLine("}");
+        WriteLine();
+    }
+
+    private void GenerateBuilderPromiseInterface(BuilderModel builder)
+    {
+        var interfaceName = GetInterfaceName(builder.BuilderClassName);
+        var promiseInterfaceName = GetPromiseInterfaceName(builder.BuilderClassName);
+
+        WriteLine($"export interface {promiseInterfaceName} extends PromiseLike<{interfaceName}> {{");
+
+        foreach (var capability in builder.Capabilities.Where(c =>
+            c.CapabilityKind != AtsCapabilityKind.PropertyGetter &&
+            c.CapabilityKind != AtsCapabilityKind.PropertySetter))
+        {
+            var (requiredParams, optionalParams) = SeparateParameters(capability.Parameters);
+            var hasOptionals = optionalParams.Count > 0;
+            var optionsInterfaceName = ResolveOptionsInterfaceName(capability);
+            var paramsString = BuildPublicParameterList(requiredParams, hasOptionals, optionsInterfaceName);
+            var hasNonBuilderReturn = !capability.ReturnsBuilder && capability.ReturnType != null;
+
+            if (hasNonBuilderReturn)
+            {
+                var returnType = MapTypeRefToTypeScript(capability.ReturnType);
+                WriteLine($"    {capability.MethodName}({paramsString}): Promise<{returnType}>;");
+            }
+            else
+            {
+                WriteLine($"    {capability.MethodName}({paramsString}): {GetBuilderPromiseInterfaceForMethod(builder, capability)};");
+            }
+        }
+
+        WriteLine("}");
+        WriteLine();
+    }
+
+    private void GenerateTypeClassInterfaceMethod(string className, AtsCapabilityInfo capability)
+    {
+        var methodName = !string.IsNullOrEmpty(capability.OwningTypeName) && capability.MethodName.Contains('.')
+            ? capability.MethodName[(capability.MethodName.LastIndexOf('.') + 1)..]
+            : GetTypeScriptMethodName(capability.MethodName);
+        var targetParamName = capability.TargetParameterName ?? "context";
+        var userParams = capability.Parameters.Where(p => p.Name != targetParamName).ToList();
+        var (requiredParams, optionalParams) = SeparateParameters(userParams);
+        var hasOptionals = optionalParams.Count > 0;
+        var optionsInterfaceName = ResolveOptionsInterfaceName(capability);
+        var paramsString = BuildPublicParameterList(requiredParams, hasOptionals, optionsInterfaceName);
+        var isVoid = capability.ReturnType == null || capability.ReturnType.TypeId == AtsConstants.Void;
+
+        if (capability.ReturnType != null && _typesWithPromiseWrappers.Contains(capability.ReturnType.TypeId))
+        {
+            WriteLine($"    {methodName}({paramsString}): {GetPublicPromiseInterfaceName(capability.ReturnType.TypeId)};");
+        }
+        else if (isVoid)
+        {
+            WriteLine($"    {methodName}({paramsString}): {GetPromiseInterfaceName(className)};");
+        }
+        else
+        {
+            var returnType = MapTypeRefToTypeScript(capability.ReturnType);
+            WriteLine($"    {methodName}({paramsString}): Promise<{returnType}>;");
+        }
+    }
+
+    private void GenerateTypeClassInterface(BuilderModel model)
+    {
+        var className = DeriveClassName(model.TypeId);
+        var interfaceName = GetInterfaceName(className);
+        var hasMethods = HasChainableMethods(model);
+
+        WriteLine("// ============================================================================");
+        WriteLine($"// {interfaceName}");
+        WriteLine("// ============================================================================");
+        WriteLine();
+        WriteLine($"export interface {interfaceName} {{");
+        WriteLine("    toJSON(): MarshalledHandle;");
+
+        var getters = model.Capabilities.Where(c => c.CapabilityKind == AtsCapabilityKind.PropertyGetter).ToList();
+        var setters = model.Capabilities.Where(c => c.CapabilityKind == AtsCapabilityKind.PropertySetter).ToList();
+        var contextMethods = model.Capabilities.Where(c => c.CapabilityKind == AtsCapabilityKind.InstanceMethod).ToList();
+        var otherMethods = model.Capabilities.Where(c => c.CapabilityKind == AtsCapabilityKind.Method).ToList();
+
+        var properties = GroupPropertiesByName(getters, setters);
+        foreach (var prop in properties)
+        {
+            GenerateInterfaceProperty(prop.PropertyName, prop.Getter, prop.Setter);
+        }
+
+        foreach (var method in contextMethods.Concat(otherMethods))
+        {
+            GenerateTypeClassInterfaceMethod(className, method);
+        }
+
+        WriteLine("}");
+        WriteLine();
+
+        if (!hasMethods)
+        {
+            return;
+        }
+
+        var promiseInterfaceName = GetPromiseInterfaceName(className);
+        WriteLine($"export interface {promiseInterfaceName} extends PromiseLike<{interfaceName}> {{");
+        foreach (var method in contextMethods.Concat(otherMethods))
+        {
+            GenerateTypeClassInterfaceMethod(className, method);
+        }
+        WriteLine("}");
+        WriteLine();
+    }
+
     private void GenerateBuilderClass(BuilderModel builder)
     {
+        GenerateBuilderInterface(builder);
+        GenerateBuilderPromiseInterface(builder);
+
         WriteLine("// ============================================================================");
         WriteLine($"// {builder.BuilderClassName}");
         WriteLine("// ============================================================================");
@@ -1606,6 +1853,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             // Re-export commonly used types
             export { Handle, AppHostUsageError, CancellationToken, CapabilityError, registerCallback } from './transport.js';
             export { refExpr, ReferenceExpression } from './base.js';
+            export type { ICancellationToken, IHandleReference, IReferenceExpression } from './base.js';
             """);
         WriteLine();
     }
@@ -1698,6 +1946,8 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var handleType = GetHandleTypeName(model.TypeId);
         var className = DeriveClassName(model.TypeId);
         var hasMethods = HasChainableMethods(model);
+
+        GenerateTypeClassInterface(model);
 
         WriteLine("// ============================================================================");
         WriteLine($"// {className}");
@@ -1853,7 +2103,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             // Check if return type is a wrapper class - use property-like object returning wrapper
             if (getter.ReturnType?.TypeId != null && _wrapperClassNames.TryGetValue(getter.ReturnType.TypeId, out var wrapperClassName))
             {
-                GenerateWrapperPropertyObject(propertyName, getter, wrapperClassName);
+                GenerateWrapperPropertyObject(propertyName, getter, setter, wrapperClassName);
                 return;
             }
         }
@@ -1911,7 +2161,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     /// <summary>
     /// Generates a property-like object that returns a wrapper class.
     /// </summary>
-    private void GenerateWrapperPropertyObject(string propertyName, AtsCapabilityInfo getter, string wrapperClassName)
+    private void GenerateWrapperPropertyObject(string propertyName, AtsCapabilityInfo getter, AtsCapabilityInfo? setter, string wrapperClassName)
     {
         var handleType = GetHandleTypeName(getter.ReturnType!.TypeId);
 
@@ -1928,6 +2178,22 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         WriteLine("            );");
         WriteLine($"            return new {wrapperClassName}(handle, this._client);");
         WriteLine("        },");
+
+        if (setter != null)
+        {
+            var valueParam = setter.Parameters.FirstOrDefault(p => p.Name == "value");
+            if (valueParam != null)
+            {
+                var valueType = MapInputTypeToTypeScript(valueParam.Type);
+                WriteLine($"        set: async (value: {valueType}): Promise<void> => {{");
+                WriteLine($"            await this._client.invokeCapability<void>(");
+                WriteLine($"                '{setter.CapabilityId}',");
+                WriteLine($"                {{ context: this._handle, {GetRpcArgumentEntry("value", valueParam.Type)} }}");
+                WriteLine("            );");
+                WriteLine("        }");
+            }
+        }
+
         WriteLine("    };");
         WriteLine();
     }

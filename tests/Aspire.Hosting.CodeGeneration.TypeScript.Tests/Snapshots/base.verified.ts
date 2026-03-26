@@ -1,9 +1,10 @@
 // base.ts - Core Aspire types: base classes, ReferenceExpression
+import type { ICancellationToken } from './transport.js';
 import { Handle, AspireClient, MarshalledHandle, CancellationToken, registerCancellation, registerHandleWrapper, unregisterCancellation } from './transport.js';
 
 // Re-export transport types for convenience
 export { Handle, AspireClient, CapabilityError, CancellationToken, registerCallback, unregisterCallback, registerCancellation, unregisterCancellation } from './transport.js';
-export type { MarshalledHandle, AtsError, AtsErrorDetails, CallbackFunction } from './transport.js';
+export type { ICancellationToken, MarshalledHandle, AtsError, AtsErrorDetails, CallbackFunction } from './transport.js';
 export { AtsErrorCodes, isMarshalledHandle, isAtsError, wrapIfHandle } from './transport.js';
 
 // ============================================================================
@@ -38,15 +39,22 @@ export { AtsErrorCodes, isMarshalledHandle, isAtsError, wrapIfHandle } from './t
  * await api.withEnvironment("REDIS_URL", expr);
  * ```
  */
-export class ReferenceExpression {
+export interface IReferenceExpression {
+    readonly isConditional: boolean;
+    toJSON(): { $expr: { format: string; valueProviders?: unknown[] } | { condition: unknown; whenTrue: unknown; whenFalse: unknown; matchValue: string } } | MarshalledHandle;
+    getValue(cancellationToken?: AbortSignal | ICancellationToken): Promise<string | null>;
+    toString(): string;
+}
+
+export class ReferenceExpression implements IReferenceExpression {
     // Expression mode fields
     private readonly _format?: string;
     private readonly _valueProviders?: unknown[];
 
     // Conditional mode fields
     private readonly _condition?: unknown;
-    private readonly _whenTrue?: ReferenceExpression;
-    private readonly _whenFalse?: ReferenceExpression;
+    private readonly _whenTrue?: IReferenceExpression;
+    private readonly _whenFalse?: IReferenceExpression;
     private readonly _matchValue?: string;
 
     // Handle mode fields (when wrapping a server-returned handle)
@@ -55,12 +63,12 @@ export class ReferenceExpression {
 
     constructor(format: string, valueProviders: unknown[]);
     constructor(handle: Handle, client: AspireClient);
-    constructor(condition: unknown, matchValue: string, whenTrue: ReferenceExpression, whenFalse: ReferenceExpression);
+    constructor(condition: unknown, matchValue: string, whenTrue: IReferenceExpression, whenFalse: IReferenceExpression);
     constructor(
         handleOrFormatOrCondition: Handle | string | unknown,
         clientOrValueProvidersOrMatchValue: AspireClient | unknown[] | string,
-        whenTrueOrWhenFalse?: ReferenceExpression,
-        whenFalse?: ReferenceExpression
+        whenTrueOrWhenFalse?: IReferenceExpression,
+        whenFalse?: IReferenceExpression
     ) {
         if (typeof handleOrFormatOrCondition === 'string') {
             this._format = handleOrFormatOrCondition;
@@ -90,7 +98,7 @@ export class ReferenceExpression {
      * @param values - The interpolated values (handles to value providers)
      * @returns A ReferenceExpression instance
      */
-    static create(strings: TemplateStringsArray, ...values: unknown[]): ReferenceExpression {
+    static create(strings: TemplateStringsArray, ...values: unknown[]): IReferenceExpression {
         // Build the format string with {0}, {1}, etc. placeholders
         let format = '';
         for (let i = 0; i < strings.length; i++) {
@@ -118,9 +126,9 @@ export class ReferenceExpression {
     static createConditional(
         condition: unknown,
         matchValue: string,
-        whenTrue: ReferenceExpression,
-        whenFalse: ReferenceExpression
-    ): ReferenceExpression {
+        whenTrue: IReferenceExpression,
+        whenFalse: IReferenceExpression
+    ): IReferenceExpression {
         return new ReferenceExpression(condition, matchValue, whenTrue, whenFalse);
     }
 
@@ -161,7 +169,7 @@ export class ReferenceExpression {
      * @param cancellationToken - Optional AbortSignal or CancellationToken for cancellation support
      * @returns The resolved string value, or null if the expression resolves to null
      */
-    async getValue(cancellationToken?: AbortSignal | CancellationToken): Promise<string | null> {
+    async getValue(cancellationToken?: AbortSignal | ICancellationToken): Promise<string | null> {
         if (!this._handle || !this._client) {
             throw new Error('getValue is only available on server-returned ReferenceExpression instances');
         }
@@ -258,7 +266,7 @@ function extractHandleForExpr(value: unknown): unknown {
  * await api.withEnvironment("REDIS_URL", expr);
  * ```
  */
-export function refExpr(strings: TemplateStringsArray, ...values: unknown[]): ReferenceExpression {
+export function refExpr(strings: TemplateStringsArray, ...values: unknown[]): IReferenceExpression {
     return ReferenceExpression.create(strings, ...values);
 }
 
@@ -266,11 +274,15 @@ export function refExpr(strings: TemplateStringsArray, ...values: unknown[]): Re
 // ResourceBuilderBase
 // ============================================================================
 
+export interface IHandleReference {
+    toJSON(): MarshalledHandle;
+}
+
 /**
  * Base class for resource builders (e.g., RedisBuilder, ContainerBuilder).
  * Provides handle management and JSON serialization.
  */
-export class ResourceBuilderBase<THandle extends Handle = Handle> {
+export class ResourceBuilderBase<THandle extends Handle = Handle> implements IHandleReference {
     constructor(protected _handle: THandle, protected _client: AspireClient) {}
 
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
