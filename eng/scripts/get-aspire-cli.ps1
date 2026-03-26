@@ -438,6 +438,7 @@ function Invoke-SecureWebRequest {
         MaximumRedirection = 10
         TimeoutSec = $TimeoutSec
         UserAgent = $Script:UserAgent
+        UseBasicParsing = $true
     }
 
     if ($Method -eq "Get" -and $OutFile) {
