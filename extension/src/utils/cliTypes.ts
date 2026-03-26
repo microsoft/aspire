@@ -25,7 +25,7 @@ export interface AspireConfigFile {
     channel?: string;
     features?: { [key: string]: boolean };
     profiles?: { [key: string]: AspireConfigProfile };
-    packages?: { [key: string]: string };
+    integrations?: { [key: string]: string };
 }
 
 export interface AspireConfigProfile {

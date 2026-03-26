@@ -3,7 +3,7 @@
     "path": "ValidationAppHost/apphost.py",
     "language": "python"
   },
-  "packages": {
+  "integrations": {
     "Aspire.Hosting.Milvus": ""
   }
 }

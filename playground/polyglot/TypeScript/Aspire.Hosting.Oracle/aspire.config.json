@@ -3,7 +3,7 @@
     "path": "ValidationAppHost/apphost.ts",
     "language": "typescript/nodejs"
   },
-  "packages": {
+  "integrations": {
     "Aspire.Hosting.Oracle": ""
   }
 }

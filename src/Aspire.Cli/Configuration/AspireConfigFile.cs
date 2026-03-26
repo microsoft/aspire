@@ -31,7 +31,7 @@ namespace Aspire.Cli.Configuration;
 ///       "environmentVariables": { "ASPNETCORE_ENVIRONMENT": "Development" }
 ///     }
 ///   },
-///   "packages": { "Aspire.Hosting.Redis": "9.2.0" }
+///   "integrations": { "Aspire.Hosting.Redis": "9.2.0" }
 /// }
 /// </code>
 /// <para>Legacy <c>.aspire/settings.json</c> (flat keys):</para>
@@ -102,10 +102,10 @@ internal sealed class AspireConfigFile
     public Dictionary<string, AspireConfigProfile>? Profiles { get; set; }
 
     /// <summary>
-    /// Package references for non-first-class languages.
+    /// Integration references for non-first-class languages.
     /// </summary>
-    [JsonPropertyName("packages")]
-    [Description("Package references for non-first-class languages. Key is package name, value is version. A value ending in \".csproj\" is treated as a project reference.")]
+    [JsonPropertyName("integrations")]
+    [Description("Integration references for non-first-class languages. Key is package name, value is version. A value ending in \".csproj\" is treated as a project reference.")]
     public Dictionary<string, string>? Packages { get; set; }
 
     /// <summary>

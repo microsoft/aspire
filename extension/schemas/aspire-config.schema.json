@@ -191,8 +191,8 @@
       },
       "additionalProperties": false
     },
-    "packages": {
-      "description": "Package references for non-first-class languages. Key is package name, value is version. A value ending in \".csproj\" is treated as a project reference.",
+    "integrations": {
+      "description": "Integration references for non-first-class languages. Key is package name, value is version. A value ending in \".csproj\" is treated as a project reference.",
       "type": "object",
       "additionalProperties": {
         "type": "string"

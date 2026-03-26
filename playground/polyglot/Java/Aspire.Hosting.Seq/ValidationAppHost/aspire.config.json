@@ -6,7 +6,7 @@
   "features": {
     "experimentalPolyglot:java": true
   },
-  "packages": {
+  "integrations": {
     "Aspire.Hosting.Seq": ""
   },
   "profiles": {
