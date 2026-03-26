@@ -4984,6 +4984,21 @@ export class AzureApplicationInsightsResource extends ResourceBuilderBase<AzureA
         return new AzureApplicationInsightsResourcePromise(this._withConnectionPropertyInternal(name, value));
     }
 
+    /** @internal */
+    private async _withConnectionPropertyValueInternal(name: string, value: string): Promise<AzureApplicationInsightsResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<AzureApplicationInsightsResourceHandle>(
+            'Aspire.Hosting/withConnectionPropertyValue',
+            rpcArgs
+        );
+        return new AzureApplicationInsightsResource(result, this._client);
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): AzureApplicationInsightsResourcePromise {
+        return new AzureApplicationInsightsResourcePromise(this._withConnectionPropertyValueInternal(name, value));
+    }
+
     /** Gets a connection property by key */
     async getConnectionProperty(key: string): Promise<ReferenceExpression> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle, key };
@@ -5805,6 +5820,11 @@ export class AzureApplicationInsightsResourcePromise implements PromiseLike<Azur
     /** Adds a connection property with a string or reference expression value */
     withConnectionProperty(name: string, value: string | ReferenceExpression): AzureApplicationInsightsResourcePromise {
         return new AzureApplicationInsightsResourcePromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): AzureApplicationInsightsResourcePromise {
+        return new AzureApplicationInsightsResourcePromise(this._promise.then(obj => obj.withConnectionPropertyValue(name, value)));
     }
 
     /** Gets a connection property by key */
@@ -7140,6 +7160,21 @@ export class AzureBlobStorageContainerResource extends ResourceBuilderBase<Azure
         return new AzureBlobStorageContainerResourcePromise(this._withConnectionPropertyInternal(name, value));
     }
 
+    /** @internal */
+    private async _withConnectionPropertyValueInternal(name: string, value: string): Promise<AzureBlobStorageContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<AzureBlobStorageContainerResourceHandle>(
+            'Aspire.Hosting/withConnectionPropertyValue',
+            rpcArgs
+        );
+        return new AzureBlobStorageContainerResource(result, this._client);
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): AzureBlobStorageContainerResourcePromise {
+        return new AzureBlobStorageContainerResourcePromise(this._withConnectionPropertyValueInternal(name, value));
+    }
+
     /** Gets a connection property by key */
     async getConnectionProperty(key: string): Promise<ReferenceExpression> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle, key };
@@ -7700,6 +7735,11 @@ export class AzureBlobStorageContainerResourcePromise implements PromiseLike<Azu
         return new AzureBlobStorageContainerResourcePromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
     }
 
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): AzureBlobStorageContainerResourcePromise {
+        return new AzureBlobStorageContainerResourcePromise(this._promise.then(obj => obj.withConnectionPropertyValue(name, value)));
+    }
+
     /** Gets a connection property by key */
     getConnectionProperty(key: string): Promise<ReferenceExpression> {
         return this._promise.then(obj => obj.getConnectionProperty(key));
@@ -7915,6 +7955,21 @@ export class AzureBlobStorageResource extends ResourceBuilderBase<AzureBlobStora
     /** Adds a connection property with a string or reference expression value */
     withConnectionProperty(name: string, value: string | ReferenceExpression): AzureBlobStorageResourcePromise {
         return new AzureBlobStorageResourcePromise(this._withConnectionPropertyInternal(name, value));
+    }
+
+    /** @internal */
+    private async _withConnectionPropertyValueInternal(name: string, value: string): Promise<AzureBlobStorageResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<AzureBlobStorageResourceHandle>(
+            'Aspire.Hosting/withConnectionPropertyValue',
+            rpcArgs
+        );
+        return new AzureBlobStorageResource(result, this._client);
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): AzureBlobStorageResourcePromise {
+        return new AzureBlobStorageResourcePromise(this._withConnectionPropertyValueInternal(name, value));
     }
 
     /** Gets a connection property by key */
@@ -8475,6 +8530,11 @@ export class AzureBlobStorageResourcePromise implements PromiseLike<AzureBlobSto
     /** Adds a connection property with a string or reference expression value */
     withConnectionProperty(name: string, value: string | ReferenceExpression): AzureBlobStorageResourcePromise {
         return new AzureBlobStorageResourcePromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): AzureBlobStorageResourcePromise {
+        return new AzureBlobStorageResourcePromise(this._promise.then(obj => obj.withConnectionPropertyValue(name, value)));
     }
 
     /** Gets a connection property by key */
@@ -9745,6 +9805,21 @@ export class AzureCognitiveServicesProjectResource extends ResourceBuilderBase<A
         return new AzureCognitiveServicesProjectResourcePromise(this._withConnectionPropertyInternal(name, value));
     }
 
+    /** @internal */
+    private async _withConnectionPropertyValueInternal(name: string, value: string): Promise<AzureCognitiveServicesProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<AzureCognitiveServicesProjectResourceHandle>(
+            'Aspire.Hosting/withConnectionPropertyValue',
+            rpcArgs
+        );
+        return new AzureCognitiveServicesProjectResource(result, this._client);
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): AzureCognitiveServicesProjectResourcePromise {
+        return new AzureCognitiveServicesProjectResourcePromise(this._withConnectionPropertyValueInternal(name, value));
+    }
+
     /** Gets a connection property by key */
     async getConnectionProperty(key: string): Promise<ReferenceExpression> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle, key };
@@ -10731,6 +10806,11 @@ export class AzureCognitiveServicesProjectResourcePromise implements PromiseLike
     /** Adds a connection property with a string or reference expression value */
     withConnectionProperty(name: string, value: string | ReferenceExpression): AzureCognitiveServicesProjectResourcePromise {
         return new AzureCognitiveServicesProjectResourcePromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): AzureCognitiveServicesProjectResourcePromise {
+        return new AzureCognitiveServicesProjectResourcePromise(this._promise.then(obj => obj.withConnectionPropertyValue(name, value)));
     }
 
     /** Gets a connection property by key */
@@ -12174,6 +12254,21 @@ export class AzureCosmosDBContainerResource extends ResourceBuilderBase<AzureCos
         return new AzureCosmosDBContainerResourcePromise(this._withConnectionPropertyInternal(name, value));
     }
 
+    /** @internal */
+    private async _withConnectionPropertyValueInternal(name: string, value: string): Promise<AzureCosmosDBContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<AzureCosmosDBContainerResourceHandle>(
+            'Aspire.Hosting/withConnectionPropertyValue',
+            rpcArgs
+        );
+        return new AzureCosmosDBContainerResource(result, this._client);
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): AzureCosmosDBContainerResourcePromise {
+        return new AzureCosmosDBContainerResourcePromise(this._withConnectionPropertyValueInternal(name, value));
+    }
+
     /** Gets a connection property by key */
     async getConnectionProperty(key: string): Promise<ReferenceExpression> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle, key };
@@ -12734,6 +12829,11 @@ export class AzureCosmosDBContainerResourcePromise implements PromiseLike<AzureC
         return new AzureCosmosDBContainerResourcePromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
     }
 
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): AzureCosmosDBContainerResourcePromise {
+        return new AzureCosmosDBContainerResourcePromise(this._promise.then(obj => obj.withConnectionPropertyValue(name, value)));
+    }
+
     /** Gets a connection property by key */
     getConnectionProperty(key: string): Promise<ReferenceExpression> {
         return this._promise.then(obj => obj.getConnectionProperty(key));
@@ -12949,6 +13049,21 @@ export class AzureCosmosDBDatabaseResource extends ResourceBuilderBase<AzureCosm
     /** Adds a connection property with a string or reference expression value */
     withConnectionProperty(name: string, value: string | ReferenceExpression): AzureCosmosDBDatabaseResourcePromise {
         return new AzureCosmosDBDatabaseResourcePromise(this._withConnectionPropertyInternal(name, value));
+    }
+
+    /** @internal */
+    private async _withConnectionPropertyValueInternal(name: string, value: string): Promise<AzureCosmosDBDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<AzureCosmosDBDatabaseResourceHandle>(
+            'Aspire.Hosting/withConnectionPropertyValue',
+            rpcArgs
+        );
+        return new AzureCosmosDBDatabaseResource(result, this._client);
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): AzureCosmosDBDatabaseResourcePromise {
+        return new AzureCosmosDBDatabaseResourcePromise(this._withConnectionPropertyValueInternal(name, value));
     }
 
     /** Gets a connection property by key */
@@ -13543,6 +13658,11 @@ export class AzureCosmosDBDatabaseResourcePromise implements PromiseLike<AzureCo
     /** Adds a connection property with a string or reference expression value */
     withConnectionProperty(name: string, value: string | ReferenceExpression): AzureCosmosDBDatabaseResourcePromise {
         return new AzureCosmosDBDatabaseResourcePromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): AzureCosmosDBDatabaseResourcePromise {
+        return new AzureCosmosDBDatabaseResourcePromise(this._promise.then(obj => obj.withConnectionPropertyValue(name, value)));
     }
 
     /** Gets a connection property by key */
@@ -15882,6 +16002,21 @@ export class AzureCosmosDBResource extends ResourceBuilderBase<AzureCosmosDBReso
         return new AzureCosmosDBResourcePromise(this._withConnectionPropertyInternal(name, value));
     }
 
+    /** @internal */
+    private async _withConnectionPropertyValueInternal(name: string, value: string): Promise<AzureCosmosDBResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<AzureCosmosDBResourceHandle>(
+            'Aspire.Hosting/withConnectionPropertyValue',
+            rpcArgs
+        );
+        return new AzureCosmosDBResource(result, this._client);
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): AzureCosmosDBResourcePromise {
+        return new AzureCosmosDBResourcePromise(this._withConnectionPropertyValueInternal(name, value));
+    }
+
     /** Gets a connection property by key */
     async getConnectionProperty(key: string): Promise<ReferenceExpression> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle, key };
@@ -17011,6 +17146,11 @@ export class AzureCosmosDBResourcePromise implements PromiseLike<AzureCosmosDBRe
         return new AzureCosmosDBResourcePromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
     }
 
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): AzureCosmosDBResourcePromise {
+        return new AzureCosmosDBResourcePromise(this._promise.then(obj => obj.withConnectionPropertyValue(name, value)));
+    }
+
     /** Gets a connection property by key */
     getConnectionProperty(key: string): Promise<ReferenceExpression> {
         return this._promise.then(obj => obj.getConnectionProperty(key));
@@ -17391,6 +17531,21 @@ export class AzureDataLakeStorageFileSystemResource extends ResourceBuilderBase<
     /** Adds a connection property with a string or reference expression value */
     withConnectionProperty(name: string, value: string | ReferenceExpression): AzureDataLakeStorageFileSystemResourcePromise {
         return new AzureDataLakeStorageFileSystemResourcePromise(this._withConnectionPropertyInternal(name, value));
+    }
+
+    /** @internal */
+    private async _withConnectionPropertyValueInternal(name: string, value: string): Promise<AzureDataLakeStorageFileSystemResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<AzureDataLakeStorageFileSystemResourceHandle>(
+            'Aspire.Hosting/withConnectionPropertyValue',
+            rpcArgs
+        );
+        return new AzureDataLakeStorageFileSystemResource(result, this._client);
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): AzureDataLakeStorageFileSystemResourcePromise {
+        return new AzureDataLakeStorageFileSystemResourcePromise(this._withConnectionPropertyValueInternal(name, value));
     }
 
     /** Gets a connection property by key */
@@ -17953,6 +18108,11 @@ export class AzureDataLakeStorageFileSystemResourcePromise implements PromiseLik
         return new AzureDataLakeStorageFileSystemResourcePromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
     }
 
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): AzureDataLakeStorageFileSystemResourcePromise {
+        return new AzureDataLakeStorageFileSystemResourcePromise(this._promise.then(obj => obj.withConnectionPropertyValue(name, value)));
+    }
+
     /** Gets a connection property by key */
     getConnectionProperty(key: string): Promise<ReferenceExpression> {
         return this._promise.then(obj => obj.getConnectionProperty(key));
@@ -18168,6 +18328,21 @@ export class AzureDataLakeStorageResource extends ResourceBuilderBase<AzureDataL
     /** Adds a connection property with a string or reference expression value */
     withConnectionProperty(name: string, value: string | ReferenceExpression): AzureDataLakeStorageResourcePromise {
         return new AzureDataLakeStorageResourcePromise(this._withConnectionPropertyInternal(name, value));
+    }
+
+    /** @internal */
+    private async _withConnectionPropertyValueInternal(name: string, value: string): Promise<AzureDataLakeStorageResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<AzureDataLakeStorageResourceHandle>(
+            'Aspire.Hosting/withConnectionPropertyValue',
+            rpcArgs
+        );
+        return new AzureDataLakeStorageResource(result, this._client);
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): AzureDataLakeStorageResourcePromise {
+        return new AzureDataLakeStorageResourcePromise(this._withConnectionPropertyValueInternal(name, value));
     }
 
     /** Gets a connection property by key */
@@ -18728,6 +18903,11 @@ export class AzureDataLakeStorageResourcePromise implements PromiseLike<AzureDat
     /** Adds a connection property with a string or reference expression value */
     withConnectionProperty(name: string, value: string | ReferenceExpression): AzureDataLakeStorageResourcePromise {
         return new AzureDataLakeStorageResourcePromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): AzureDataLakeStorageResourcePromise {
+        return new AzureDataLakeStorageResourcePromise(this._promise.then(obj => obj.withConnectionPropertyValue(name, value)));
     }
 
     /** Gets a connection property by key */
@@ -19722,6 +19902,21 @@ export class AzureKeyVaultResource extends ResourceBuilderBase<AzureKeyVaultReso
     /** Adds a connection property with a string or reference expression value */
     withConnectionProperty(name: string, value: string | ReferenceExpression): AzureKeyVaultResourcePromise {
         return new AzureKeyVaultResourcePromise(this._withConnectionPropertyInternal(name, value));
+    }
+
+    /** @internal */
+    private async _withConnectionPropertyValueInternal(name: string, value: string): Promise<AzureKeyVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<AzureKeyVaultResourceHandle>(
+            'Aspire.Hosting/withConnectionPropertyValue',
+            rpcArgs
+        );
+        return new AzureKeyVaultResource(result, this._client);
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): AzureKeyVaultResourcePromise {
+        return new AzureKeyVaultResourcePromise(this._withConnectionPropertyValueInternal(name, value));
     }
 
     /** Gets a connection property by key */
@@ -20814,6 +21009,11 @@ export class AzureKeyVaultResourcePromise implements PromiseLike<AzureKeyVaultRe
     /** Adds a connection property with a string or reference expression value */
     withConnectionProperty(name: string, value: string | ReferenceExpression): AzureKeyVaultResourcePromise {
         return new AzureKeyVaultResourcePromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): AzureKeyVaultResourcePromise {
+        return new AzureKeyVaultResourcePromise(this._promise.then(obj => obj.withConnectionPropertyValue(name, value)));
     }
 
     /** Gets a connection property by key */
@@ -25734,6 +25934,21 @@ export class AzureQueueStorageQueueResource extends ResourceBuilderBase<AzureQue
         return new AzureQueueStorageQueueResourcePromise(this._withConnectionPropertyInternal(name, value));
     }
 
+    /** @internal */
+    private async _withConnectionPropertyValueInternal(name: string, value: string): Promise<AzureQueueStorageQueueResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<AzureQueueStorageQueueResourceHandle>(
+            'Aspire.Hosting/withConnectionPropertyValue',
+            rpcArgs
+        );
+        return new AzureQueueStorageQueueResource(result, this._client);
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): AzureQueueStorageQueueResourcePromise {
+        return new AzureQueueStorageQueueResourcePromise(this._withConnectionPropertyValueInternal(name, value));
+    }
+
     /** Gets a connection property by key */
     async getConnectionProperty(key: string): Promise<ReferenceExpression> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle, key };
@@ -26294,6 +26509,11 @@ export class AzureQueueStorageQueueResourcePromise implements PromiseLike<AzureQ
         return new AzureQueueStorageQueueResourcePromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
     }
 
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): AzureQueueStorageQueueResourcePromise {
+        return new AzureQueueStorageQueueResourcePromise(this._promise.then(obj => obj.withConnectionPropertyValue(name, value)));
+    }
+
     /** Gets a connection property by key */
     getConnectionProperty(key: string): Promise<ReferenceExpression> {
         return this._promise.then(obj => obj.getConnectionProperty(key));
@@ -26509,6 +26729,21 @@ export class AzureQueueStorageResource extends ResourceBuilderBase<AzureQueueSto
     /** Adds a connection property with a string or reference expression value */
     withConnectionProperty(name: string, value: string | ReferenceExpression): AzureQueueStorageResourcePromise {
         return new AzureQueueStorageResourcePromise(this._withConnectionPropertyInternal(name, value));
+    }
+
+    /** @internal */
+    private async _withConnectionPropertyValueInternal(name: string, value: string): Promise<AzureQueueStorageResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<AzureQueueStorageResourceHandle>(
+            'Aspire.Hosting/withConnectionPropertyValue',
+            rpcArgs
+        );
+        return new AzureQueueStorageResource(result, this._client);
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): AzureQueueStorageResourcePromise {
+        return new AzureQueueStorageResourcePromise(this._withConnectionPropertyValueInternal(name, value));
     }
 
     /** Gets a connection property by key */
@@ -27071,6 +27306,11 @@ export class AzureQueueStorageResourcePromise implements PromiseLike<AzureQueueS
         return new AzureQueueStorageResourcePromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
     }
 
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): AzureQueueStorageResourcePromise {
+        return new AzureQueueStorageResourcePromise(this._promise.then(obj => obj.withConnectionPropertyValue(name, value)));
+    }
+
     /** Gets a connection property by key */
     getConnectionProperty(key: string): Promise<ReferenceExpression> {
         return this._promise.then(obj => obj.getConnectionProperty(key));
@@ -27286,6 +27526,21 @@ export class AzureSearchResource extends ResourceBuilderBase<AzureSearchResource
     /** Adds a connection property with a string or reference expression value */
     withConnectionProperty(name: string, value: string | ReferenceExpression): AzureSearchResourcePromise {
         return new AzureSearchResourcePromise(this._withConnectionPropertyInternal(name, value));
+    }
+
+    /** @internal */
+    private async _withConnectionPropertyValueInternal(name: string, value: string): Promise<AzureSearchResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<AzureSearchResourceHandle>(
+            'Aspire.Hosting/withConnectionPropertyValue',
+            rpcArgs
+        );
+        return new AzureSearchResource(result, this._client);
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): AzureSearchResourcePromise {
+        return new AzureSearchResourcePromise(this._withConnectionPropertyValueInternal(name, value));
     }
 
     /** Gets a connection property by key */
@@ -28094,6 +28349,11 @@ export class AzureSearchResourcePromise implements PromiseLike<AzureSearchResour
     /** Adds a connection property with a string or reference expression value */
     withConnectionProperty(name: string, value: string | ReferenceExpression): AzureSearchResourcePromise {
         return new AzureSearchResourcePromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): AzureSearchResourcePromise {
+        return new AzureSearchResourcePromise(this._promise.then(obj => obj.withConnectionPropertyValue(name, value)));
     }
 
     /** Gets a connection property by key */
@@ -32041,6 +32301,21 @@ export class AzureTableStorageResource extends ResourceBuilderBase<AzureTableSto
         return new AzureTableStorageResourcePromise(this._withConnectionPropertyInternal(name, value));
     }
 
+    /** @internal */
+    private async _withConnectionPropertyValueInternal(name: string, value: string): Promise<AzureTableStorageResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<AzureTableStorageResourceHandle>(
+            'Aspire.Hosting/withConnectionPropertyValue',
+            rpcArgs
+        );
+        return new AzureTableStorageResource(result, this._client);
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): AzureTableStorageResourcePromise {
+        return new AzureTableStorageResourcePromise(this._withConnectionPropertyValueInternal(name, value));
+    }
+
     /** Gets a connection property by key */
     async getConnectionProperty(key: string): Promise<ReferenceExpression> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle, key };
@@ -32599,6 +32874,11 @@ export class AzureTableStorageResourcePromise implements PromiseLike<AzureTableS
     /** Adds a connection property with a string or reference expression value */
     withConnectionProperty(name: string, value: string | ReferenceExpression): AzureTableStorageResourcePromise {
         return new AzureTableStorageResourcePromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): AzureTableStorageResourcePromise {
+        return new AzureTableStorageResourcePromise(this._promise.then(obj => obj.withConnectionPropertyValue(name, value)));
     }
 
     /** Gets a connection property by key */
@@ -33869,6 +34149,21 @@ export class ConnectionStringResource extends ResourceBuilderBase<ConnectionStri
         return new ConnectionStringResourcePromise(this._withConnectionPropertyInternal(name, value));
     }
 
+    /** @internal */
+    private async _withConnectionPropertyValueInternal(name: string, value: string): Promise<ConnectionStringResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<ConnectionStringResourceHandle>(
+            'Aspire.Hosting/withConnectionPropertyValue',
+            rpcArgs
+        );
+        return new ConnectionStringResource(result, this._client);
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): ConnectionStringResourcePromise {
+        return new ConnectionStringResourcePromise(this._withConnectionPropertyValueInternal(name, value));
+    }
+
     /** Gets a connection property by key */
     async getConnectionProperty(key: string): Promise<ReferenceExpression> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle, key };
@@ -34504,6 +34799,11 @@ export class ConnectionStringResourcePromise implements PromiseLike<ConnectionSt
     /** Adds a connection property with a string or reference expression value */
     withConnectionProperty(name: string, value: string | ReferenceExpression): ConnectionStringResourcePromise {
         return new ConnectionStringResourcePromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): ConnectionStringResourcePromise {
+        return new ConnectionStringResourcePromise(this._promise.then(obj => obj.withConnectionPropertyValue(name, value)));
     }
 
     /** Gets a connection property by key */
@@ -43596,6 +43896,21 @@ export class FoundryDeploymentResource extends ResourceBuilderBase<FoundryDeploy
         return new FoundryDeploymentResourcePromise(this._withConnectionPropertyInternal(name, value));
     }
 
+    /** @internal */
+    private async _withConnectionPropertyValueInternal(name: string, value: string): Promise<FoundryDeploymentResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<FoundryDeploymentResourceHandle>(
+            'Aspire.Hosting/withConnectionPropertyValue',
+            rpcArgs
+        );
+        return new FoundryDeploymentResource(result, this._client);
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): FoundryDeploymentResourcePromise {
+        return new FoundryDeploymentResourcePromise(this._withConnectionPropertyValueInternal(name, value));
+    }
+
     /** Gets a connection property by key */
     async getConnectionProperty(key: string): Promise<ReferenceExpression> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle, key };
@@ -44176,6 +44491,11 @@ export class FoundryDeploymentResourcePromise implements PromiseLike<FoundryDepl
         return new FoundryDeploymentResourcePromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
     }
 
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): FoundryDeploymentResourcePromise {
+        return new FoundryDeploymentResourcePromise(this._promise.then(obj => obj.withConnectionPropertyValue(name, value)));
+    }
+
     /** Gets a connection property by key */
     getConnectionProperty(key: string): Promise<ReferenceExpression> {
         return this._promise.then(obj => obj.getConnectionProperty(key));
@@ -44415,6 +44735,21 @@ export class FoundryResource extends ResourceBuilderBase<FoundryResourceHandle> 
     /** Adds a connection property with a string or reference expression value */
     withConnectionProperty(name: string, value: string | ReferenceExpression): FoundryResourcePromise {
         return new FoundryResourcePromise(this._withConnectionPropertyInternal(name, value));
+    }
+
+    /** @internal */
+    private async _withConnectionPropertyValueInternal(name: string, value: string): Promise<FoundryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<FoundryResourceHandle>(
+            'Aspire.Hosting/withConnectionPropertyValue',
+            rpcArgs
+        );
+        return new FoundryResource(result, this._client);
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): FoundryResourcePromise {
+        return new FoundryResourcePromise(this._withConnectionPropertyValueInternal(name, value));
     }
 
     /** Gets a connection property by key */
@@ -45498,6 +45833,11 @@ export class FoundryResourcePromise implements PromiseLike<FoundryResource> {
     /** Adds a connection property with a string or reference expression value */
     withConnectionProperty(name: string, value: string | ReferenceExpression): FoundryResourcePromise {
         return new FoundryResourcePromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): FoundryResourcePromise {
+        return new FoundryResourcePromise(this._promise.then(obj => obj.withConnectionPropertyValue(name, value)));
     }
 
     /** Gets a connection property by key */
@@ -49384,6 +49724,21 @@ export class ResourceWithConnectionString extends ResourceBuilderBase<IResourceW
         return new ResourceWithConnectionStringPromise(this._withConnectionPropertyInternal(name, value));
     }
 
+    /** @internal */
+    private async _withConnectionPropertyValueInternal(name: string, value: string): Promise<ResourceWithConnectionString> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<IResourceWithConnectionStringHandle>(
+            'Aspire.Hosting/withConnectionPropertyValue',
+            rpcArgs
+        );
+        return new ResourceWithConnectionString(result, this._client);
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): ResourceWithConnectionStringPromise {
+        return new ResourceWithConnectionStringPromise(this._withConnectionPropertyValueInternal(name, value));
+    }
+
     /** Gets a connection property by key */
     async getConnectionProperty(key: string): Promise<ReferenceExpression> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle, key };
@@ -49433,6 +49788,11 @@ export class ResourceWithConnectionStringPromise implements PromiseLike<Resource
     /** Adds a connection property with a string or reference expression value */
     withConnectionProperty(name: string, value: string | ReferenceExpression): ResourceWithConnectionStringPromise {
         return new ResourceWithConnectionStringPromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): ResourceWithConnectionStringPromise {
+        return new ResourceWithConnectionStringPromise(this._promise.then(obj => obj.withConnectionPropertyValue(name, value)));
     }
 
     /** Gets a connection property by key */

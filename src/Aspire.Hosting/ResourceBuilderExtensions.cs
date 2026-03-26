@@ -408,6 +408,27 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
+    /// Adds a connection property annotation to the resource being built.
+    /// </summary>
+    /// <typeparam name="T">The type of resource that implements <see cref="IResourceWithConnectionString"/>.</typeparam>
+    /// <param name="builder">The resource builder to which the connection property will be added.</param>
+    /// <param name="name">The name of the connection property to add.</param>
+    /// <param name="value">The string value to assign to the connection property.</param>
+    /// <returns>The same resource builder instance with the specified connection property annotation applied.</returns>
+    [AspireExport("withConnectionPropertyValue", Description = "Adds a connection property with a string value")]
+    internal static IResourceBuilder<T> WithConnectionPropertyValueExport<T>(
+        this IResourceBuilder<T> builder,
+        string name,
+        string value) where T : IResourceWithConnectionString
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(value);
+
+        return builder.WithConnectionProperty(name, value);
+    }
+
+    /// <summary>
     /// Adds arguments to be passed to a resource that supports arguments when it is launched.
     /// </summary>
     /// <typeparam name="T">The resource type.</typeparam>

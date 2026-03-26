@@ -464,6 +464,12 @@ export enum WaitBehavior {
 // DTO Interfaces
 // ============================================================================
 
+/** DTO interface for AddContainerOptions */
+export interface AddContainerOptions {
+    image?: string;
+    tag?: string;
+}
+
 /** DTO interface for AzureSecurityRule */
 export interface AzureSecurityRule {
     name?: string;
@@ -508,6 +514,27 @@ export interface ExecuteCommandResult {
     success?: boolean;
     canceled?: boolean;
     errorMessage?: string;
+}
+
+/** DTO interface for GenerateParameterDefault */
+export interface GenerateParameterDefault {
+    minLength?: number;
+    lower?: boolean;
+    upper?: boolean;
+    numeric?: boolean;
+    special?: boolean;
+    minLower?: number;
+    minUpper?: number;
+    minNumeric?: number;
+    minSpecial?: number;
+}
+
+/** DTO interface for ReferenceEnvironmentInjectionOptions */
+export interface ReferenceEnvironmentInjectionOptions {
+    connectionString?: boolean;
+    connectionProperties?: boolean;
+    serviceDiscovery?: boolean;
+    endpoints?: boolean;
 }
 
 /** DTO interface for ResourceEventDto */
@@ -573,6 +600,11 @@ export interface AddParameterOptions {
     secret?: boolean;
 }
 
+export interface AddParameterWithGeneratedValueOptions {
+    secret?: boolean;
+    persist?: boolean;
+}
+
 export interface AddParameterWithValueOptions {
     publishValueAsDefault?: boolean;
     secret?: boolean;
@@ -615,6 +647,10 @@ export interface AppendFormattedOptions {
 
 export interface AppendValueProviderOptions {
     format?: string;
+}
+
+export interface AsExistingOptions {
+    resourceGroup?: string | ParameterResource;
 }
 
 export interface CompleteStepMarkdownOptions {
@@ -672,6 +708,10 @@ export interface PublishAsDockerFileOptions {
     configure?: (obj: ContainerResource) => Promise<void>;
 }
 
+export interface PublishAsExistingOptions {
+    resourceGroup?: string | ParameterResource;
+}
+
 export interface PublishResourceUpdateOptions {
     state?: string;
     stateStyle?: string;
@@ -683,6 +723,10 @@ export interface RunAsContainerOptions {
 
 export interface RunAsEmulatorOptions {
     configureContainer?: (obj: AzureStorageEmulatorResource) => Promise<void>;
+}
+
+export interface RunAsExistingOptions {
+    resourceGroup?: string | ParameterResource;
 }
 
 export interface RunOptions {
@@ -719,6 +763,12 @@ export interface WithBindMountOptions {
 
 export interface WithCommandOptions {
     commandOptions?: CommandOptions;
+}
+
+export interface WithContainerCertificatePathsOptions {
+    customCertificatesDestination?: string;
+    defaultCertificateBundlePaths?: string[];
+    defaultCertificateDirectoryPaths?: string[];
 }
 
 export interface WithDataBindMountOptions {
@@ -3170,7 +3220,7 @@ export class DistributedApplicationBuilder {
 
     /** Adds a container resource */
     /** @internal */
-    async _addContainerInternal(name: string, image: string): Promise<ContainerResource> {
+    async _addContainerInternal(name: string, image: string | AddContainerOptions): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, image };
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
             'Aspire.Hosting/addContainer',
@@ -3179,7 +3229,7 @@ export class DistributedApplicationBuilder {
         return new ContainerResource(result, this._client);
     }
 
-    addContainer(name: string, image: string): ContainerResourcePromise {
+    addContainer(name: string, image: string | AddContainerOptions): ContainerResourcePromise {
         return new ContainerResourcePromise(this._addContainerInternal(name, image));
     }
 
@@ -3330,6 +3380,25 @@ export class DistributedApplicationBuilder {
         return new ParameterResourcePromise(this._addParameterFromConfigurationInternal(name, configurationKey, secret));
     }
 
+    /** Adds a parameter with a generated default value */
+    /** @internal */
+    async _addParameterWithGeneratedValueInternal(name: string, value: GenerateParameterDefault, secret?: boolean, persist?: boolean): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        if (secret !== undefined) rpcArgs.secret = secret;
+        if (persist !== undefined) rpcArgs.persist = persist;
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/addParameterWithGeneratedValue',
+            rpcArgs
+        );
+        return new ParameterResource(result, this._client);
+    }
+
+    addParameterWithGeneratedValue(name: string, value: GenerateParameterDefault, options?: AddParameterWithGeneratedValueOptions): ParameterResourcePromise {
+        const secret = options?.secret;
+        const persist = options?.persist;
+        return new ParameterResourcePromise(this._addParameterWithGeneratedValueInternal(name, value, secret, persist));
+    }
+
     /** Adds a connection string resource */
     /** @internal */
     async _addConnectionStringInternal(name: string, environmentVariableName?: string): Promise<ResourceWithConnectionString> {
@@ -3345,6 +3414,21 @@ export class DistributedApplicationBuilder {
     addConnectionString(name: string, options?: AddConnectionStringOptions): ResourceWithConnectionStringPromise {
         const environmentVariableName = options?.environmentVariableName;
         return new ResourceWithConnectionStringPromise(this._addConnectionStringInternal(name, environmentVariableName));
+    }
+
+    /** Adds a .NET project resource without a launch profile */
+    /** @internal */
+    async _addProjectWithoutLaunchProfileInternal(name: string, projectPath: string): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, projectPath };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/addProjectWithoutLaunchProfile',
+            rpcArgs
+        );
+        return new ProjectResource(result, this._client);
+    }
+
+    addProjectWithoutLaunchProfile(name: string, projectPath: string): ProjectResourcePromise {
+        return new ProjectResourcePromise(this._addProjectWithoutLaunchProfileInternal(name, projectPath));
     }
 
     /** Adds a .NET project resource */
@@ -3707,7 +3791,7 @@ export class DistributedApplicationBuilderPromise implements PromiseLike<Distrib
     }
 
     /** Adds a container resource */
-    addContainer(name: string, image: string): ContainerResourcePromise {
+    addContainer(name: string, image: string | AddContainerOptions): ContainerResourcePromise {
         return new ContainerResourcePromise(this._promise.then(obj => obj.addContainer(name, image)));
     }
 
@@ -3756,9 +3840,19 @@ export class DistributedApplicationBuilderPromise implements PromiseLike<Distrib
         return new ParameterResourcePromise(this._promise.then(obj => obj.addParameterFromConfiguration(name, configurationKey, options)));
     }
 
+    /** Adds a parameter with a generated default value */
+    addParameterWithGeneratedValue(name: string, value: GenerateParameterDefault, options?: AddParameterWithGeneratedValueOptions): ParameterResourcePromise {
+        return new ParameterResourcePromise(this._promise.then(obj => obj.addParameterWithGeneratedValue(name, value, options)));
+    }
+
     /** Adds a connection string resource */
     addConnectionString(name: string, options?: AddConnectionStringOptions): ResourceWithConnectionStringPromise {
         return new ResourceWithConnectionStringPromise(this._promise.then(obj => obj.addConnectionString(name, options)));
+    }
+
+    /** Adds a .NET project resource without a launch profile */
+    addProjectWithoutLaunchProfile(name: string, projectPath: string): ProjectResourcePromise {
+        return new ProjectResourcePromise(this._promise.then(obj => obj.addProjectWithoutLaunchProfile(name, projectPath)));
     }
 
     /** Adds a .NET project resource */
@@ -4942,6 +5036,21 @@ export class AzureBicepResource extends ResourceBuilderBase<AzureBicepResourceHa
     }
 
     /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<AzureBicepResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<AzureBicepResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new AzureBicepResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureBicepResourcePromise {
+        return new AzureBicepResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
+    }
+
+    /** @internal */
     private async _withParentRelationshipInternal(parent: ResourceBuilderBase): Promise<AzureBicepResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, parent };
         const result = await this._client.invokeCapability<AzureBicepResourceHandle>(
@@ -5353,23 +5462,9 @@ export class AzureBicepResource extends ResourceBuilderBase<AzureBicepResourceHa
     }
 
     /** @internal */
-    private async _runAsExistingFromParametersInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzureBicepResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
-        const result = await this._client.invokeCapability<AzureBicepResourceHandle>(
-            'Aspire.Hosting.Azure/runAsExistingFromParameters',
-            rpcArgs
-        );
-        return new AzureBicepResource(result, this._client);
-    }
-
-    /** Marks an Azure resource as existing in run mode by using parameter resources */
-    runAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureBicepResourcePromise {
-        return new AzureBicepResourcePromise(this._runAsExistingFromParametersInternal(nameParameter, resourceGroupParameter));
-    }
-
-    /** @internal */
-    private async _runAsExistingInternal(name: string, resourceGroup: string): Promise<AzureBicepResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, resourceGroup };
+    private async _runAsExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzureBicepResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<AzureBicepResourceHandle>(
             'Aspire.Hosting.Azure/runAsExisting',
             rpcArgs
@@ -5378,28 +5473,15 @@ export class AzureBicepResource extends ResourceBuilderBase<AzureBicepResourceHa
     }
 
     /** Marks an Azure resource as existing in run mode */
-    runAsExisting(name: string, resourceGroup: string): AzureBicepResourcePromise {
+    runAsExisting(name: string | ParameterResource, options?: RunAsExistingOptions): AzureBicepResourcePromise {
+        const resourceGroup = options?.resourceGroup;
         return new AzureBicepResourcePromise(this._runAsExistingInternal(name, resourceGroup));
     }
 
     /** @internal */
-    private async _publishAsExistingFromParametersInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzureBicepResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
-        const result = await this._client.invokeCapability<AzureBicepResourceHandle>(
-            'Aspire.Hosting.Azure/publishAsExistingFromParameters',
-            rpcArgs
-        );
-        return new AzureBicepResource(result, this._client);
-    }
-
-    /** Marks an Azure resource as existing in publish mode by using parameter resources */
-    publishAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureBicepResourcePromise {
-        return new AzureBicepResourcePromise(this._publishAsExistingFromParametersInternal(nameParameter, resourceGroupParameter));
-    }
-
-    /** @internal */
-    private async _publishAsExistingInternal(name: string, resourceGroup: string): Promise<AzureBicepResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, resourceGroup };
+    private async _publishAsExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzureBicepResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<AzureBicepResourceHandle>(
             'Aspire.Hosting.Azure/publishAsExisting',
             rpcArgs
@@ -5408,23 +5490,26 @@ export class AzureBicepResource extends ResourceBuilderBase<AzureBicepResourceHa
     }
 
     /** Marks an Azure resource as existing in publish mode */
-    publishAsExisting(name: string, resourceGroup: string): AzureBicepResourcePromise {
+    publishAsExisting(name: string | ParameterResource, options?: PublishAsExistingOptions): AzureBicepResourcePromise {
+        const resourceGroup = options?.resourceGroup;
         return new AzureBicepResourcePromise(this._publishAsExistingInternal(name, resourceGroup));
     }
 
     /** @internal */
-    private async _asExistingInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzureBicepResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
+    private async _asExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzureBicepResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<AzureBicepResourceHandle>(
-            'Aspire.Hosting.Azure/asExistingFromParameters',
+            'Aspire.Hosting.Azure/asExisting',
             rpcArgs
         );
         return new AzureBicepResource(result, this._client);
     }
 
-    /** Marks an Azure resource as existing in both run and publish modes by using parameter resources */
-    asExisting(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureBicepResourcePromise {
-        return new AzureBicepResourcePromise(this._asExistingInternal(nameParameter, resourceGroupParameter));
+    /** Marks an Azure resource as existing in both run and publish modes */
+    asExisting(name: string | ParameterResource, options?: AsExistingOptions): AzureBicepResourcePromise {
+        const resourceGroup = options?.resourceGroup;
+        return new AzureBicepResourcePromise(this._asExistingInternal(name, resourceGroup));
     }
 
 }
@@ -5502,6 +5587,11 @@ export class AzureBicepResourcePromise implements PromiseLike<AzureBicepResource
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureBicepResourcePromise {
         return new AzureBicepResourcePromise(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)));
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureBicepResourcePromise {
+        return new AzureBicepResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
     }
 
     /** Sets the parent relationship */
@@ -5634,29 +5724,19 @@ export class AzureBicepResourcePromise implements PromiseLike<AzureBicepResource
         return this._promise.then(obj => obj.isExisting());
     }
 
-    /** Marks an Azure resource as existing in run mode by using parameter resources */
-    runAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureBicepResourcePromise {
-        return new AzureBicepResourcePromise(this._promise.then(obj => obj.runAsExistingFromParameters(nameParameter, resourceGroupParameter)));
-    }
-
     /** Marks an Azure resource as existing in run mode */
-    runAsExisting(name: string, resourceGroup: string): AzureBicepResourcePromise {
-        return new AzureBicepResourcePromise(this._promise.then(obj => obj.runAsExisting(name, resourceGroup)));
-    }
-
-    /** Marks an Azure resource as existing in publish mode by using parameter resources */
-    publishAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureBicepResourcePromise {
-        return new AzureBicepResourcePromise(this._promise.then(obj => obj.publishAsExistingFromParameters(nameParameter, resourceGroupParameter)));
+    runAsExisting(name: string | ParameterResource, options?: RunAsExistingOptions): AzureBicepResourcePromise {
+        return new AzureBicepResourcePromise(this._promise.then(obj => obj.runAsExisting(name, options)));
     }
 
     /** Marks an Azure resource as existing in publish mode */
-    publishAsExisting(name: string, resourceGroup: string): AzureBicepResourcePromise {
-        return new AzureBicepResourcePromise(this._promise.then(obj => obj.publishAsExisting(name, resourceGroup)));
+    publishAsExisting(name: string | ParameterResource, options?: PublishAsExistingOptions): AzureBicepResourcePromise {
+        return new AzureBicepResourcePromise(this._promise.then(obj => obj.publishAsExisting(name, options)));
     }
 
-    /** Marks an Azure resource as existing in both run and publish modes by using parameter resources */
-    asExisting(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureBicepResourcePromise {
-        return new AzureBicepResourcePromise(this._promise.then(obj => obj.asExisting(nameParameter, resourceGroupParameter)));
+    /** Marks an Azure resource as existing in both run and publish modes */
+    asExisting(name: string | ParameterResource, options?: AsExistingOptions): AzureBicepResourcePromise {
+        return new AzureBicepResourcePromise(this._promise.then(obj => obj.asExisting(name, options)));
     }
 
 }
@@ -5722,7 +5802,7 @@ export class AzureBlobStorageContainerResource extends ResourceBuilderBase<Azure
     }
 
     /** @internal */
-    private async _withConnectionPropertyInternal(name: string, value: ReferenceExpression): Promise<AzureBlobStorageContainerResource> {
+    private async _withConnectionPropertyInternal(name: string, value: string | ReferenceExpression): Promise<AzureBlobStorageContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<AzureBlobStorageContainerResourceHandle>(
             'Aspire.Hosting/withConnectionProperty',
@@ -5731,8 +5811,8 @@ export class AzureBlobStorageContainerResource extends ResourceBuilderBase<Azure
         return new AzureBlobStorageContainerResource(result, this._client);
     }
 
-    /** Adds a connection property with a reference expression */
-    withConnectionProperty(name: string, value: ReferenceExpression): AzureBlobStorageContainerResourcePromise {
+    /** Adds a connection property with a string or reference expression value */
+    withConnectionProperty(name: string, value: string | ReferenceExpression): AzureBlobStorageContainerResourcePromise {
         return new AzureBlobStorageContainerResourcePromise(this._withConnectionPropertyInternal(name, value));
     }
 
@@ -5918,6 +5998,21 @@ export class AzureBlobStorageContainerResource extends ResourceBuilderBase<Azure
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureBlobStorageContainerResourcePromise {
         const commandOptions = options?.commandOptions;
         return new AzureBlobStorageContainerResourcePromise(this._withCommandInternal(name, displayName, executeCommand, commandOptions));
+    }
+
+    /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<AzureBlobStorageContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<AzureBlobStorageContainerResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new AzureBlobStorageContainerResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureBlobStorageContainerResourcePromise {
+        return new AzureBlobStorageContainerResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
     }
 
     /** @internal */
@@ -6206,8 +6301,8 @@ export class AzureBlobStorageContainerResourcePromise implements PromiseLike<Azu
         return new AzureBlobStorageContainerResourcePromise(this._promise.then(obj => obj.withRequiredCommand(command, options)));
     }
 
-    /** Adds a connection property with a reference expression */
-    withConnectionProperty(name: string, value: ReferenceExpression): AzureBlobStorageContainerResourcePromise {
+    /** Adds a connection property with a string or reference expression value */
+    withConnectionProperty(name: string, value: string | ReferenceExpression): AzureBlobStorageContainerResourcePromise {
         return new AzureBlobStorageContainerResourcePromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
     }
 
@@ -6264,6 +6359,11 @@ export class AzureBlobStorageContainerResourcePromise implements PromiseLike<Azu
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureBlobStorageContainerResourcePromise {
         return new AzureBlobStorageContainerResourcePromise(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)));
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureBlobStorageContainerResourcePromise {
+        return new AzureBlobStorageContainerResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
     }
 
     /** Sets the parent relationship */
@@ -6399,7 +6499,7 @@ export class AzureBlobStorageResource extends ResourceBuilderBase<AzureBlobStora
     }
 
     /** @internal */
-    private async _withConnectionPropertyInternal(name: string, value: ReferenceExpression): Promise<AzureBlobStorageResource> {
+    private async _withConnectionPropertyInternal(name: string, value: string | ReferenceExpression): Promise<AzureBlobStorageResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<AzureBlobStorageResourceHandle>(
             'Aspire.Hosting/withConnectionProperty',
@@ -6408,8 +6508,8 @@ export class AzureBlobStorageResource extends ResourceBuilderBase<AzureBlobStora
         return new AzureBlobStorageResource(result, this._client);
     }
 
-    /** Adds a connection property with a reference expression */
-    withConnectionProperty(name: string, value: ReferenceExpression): AzureBlobStorageResourcePromise {
+    /** Adds a connection property with a string or reference expression value */
+    withConnectionProperty(name: string, value: string | ReferenceExpression): AzureBlobStorageResourcePromise {
         return new AzureBlobStorageResourcePromise(this._withConnectionPropertyInternal(name, value));
     }
 
@@ -6595,6 +6695,21 @@ export class AzureBlobStorageResource extends ResourceBuilderBase<AzureBlobStora
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureBlobStorageResourcePromise {
         const commandOptions = options?.commandOptions;
         return new AzureBlobStorageResourcePromise(this._withCommandInternal(name, displayName, executeCommand, commandOptions));
+    }
+
+    /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<AzureBlobStorageResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<AzureBlobStorageResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new AzureBlobStorageResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureBlobStorageResourcePromise {
+        return new AzureBlobStorageResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
     }
 
     /** @internal */
@@ -6883,8 +6998,8 @@ export class AzureBlobStorageResourcePromise implements PromiseLike<AzureBlobSto
         return new AzureBlobStorageResourcePromise(this._promise.then(obj => obj.withRequiredCommand(command, options)));
     }
 
-    /** Adds a connection property with a reference expression */
-    withConnectionProperty(name: string, value: ReferenceExpression): AzureBlobStorageResourcePromise {
+    /** Adds a connection property with a string or reference expression value */
+    withConnectionProperty(name: string, value: string | ReferenceExpression): AzureBlobStorageResourcePromise {
         return new AzureBlobStorageResourcePromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
     }
 
@@ -6941,6 +7056,11 @@ export class AzureBlobStorageResourcePromise implements PromiseLike<AzureBlobSto
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureBlobStorageResourcePromise {
         return new AzureBlobStorageResourcePromise(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)));
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureBlobStorageResourcePromise {
+        return new AzureBlobStorageResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
     }
 
     /** Sets the parent relationship */
@@ -7076,7 +7196,7 @@ export class AzureDataLakeStorageFileSystemResource extends ResourceBuilderBase<
     }
 
     /** @internal */
-    private async _withConnectionPropertyInternal(name: string, value: ReferenceExpression): Promise<AzureDataLakeStorageFileSystemResource> {
+    private async _withConnectionPropertyInternal(name: string, value: string | ReferenceExpression): Promise<AzureDataLakeStorageFileSystemResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<AzureDataLakeStorageFileSystemResourceHandle>(
             'Aspire.Hosting/withConnectionProperty',
@@ -7085,8 +7205,8 @@ export class AzureDataLakeStorageFileSystemResource extends ResourceBuilderBase<
         return new AzureDataLakeStorageFileSystemResource(result, this._client);
     }
 
-    /** Adds a connection property with a reference expression */
-    withConnectionProperty(name: string, value: ReferenceExpression): AzureDataLakeStorageFileSystemResourcePromise {
+    /** Adds a connection property with a string or reference expression value */
+    withConnectionProperty(name: string, value: string | ReferenceExpression): AzureDataLakeStorageFileSystemResourcePromise {
         return new AzureDataLakeStorageFileSystemResourcePromise(this._withConnectionPropertyInternal(name, value));
     }
 
@@ -7272,6 +7392,21 @@ export class AzureDataLakeStorageFileSystemResource extends ResourceBuilderBase<
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureDataLakeStorageFileSystemResourcePromise {
         const commandOptions = options?.commandOptions;
         return new AzureDataLakeStorageFileSystemResourcePromise(this._withCommandInternal(name, displayName, executeCommand, commandOptions));
+    }
+
+    /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<AzureDataLakeStorageFileSystemResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<AzureDataLakeStorageFileSystemResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new AzureDataLakeStorageFileSystemResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureDataLakeStorageFileSystemResourcePromise {
+        return new AzureDataLakeStorageFileSystemResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
     }
 
     /** @internal */
@@ -7560,8 +7695,8 @@ export class AzureDataLakeStorageFileSystemResourcePromise implements PromiseLik
         return new AzureDataLakeStorageFileSystemResourcePromise(this._promise.then(obj => obj.withRequiredCommand(command, options)));
     }
 
-    /** Adds a connection property with a reference expression */
-    withConnectionProperty(name: string, value: ReferenceExpression): AzureDataLakeStorageFileSystemResourcePromise {
+    /** Adds a connection property with a string or reference expression value */
+    withConnectionProperty(name: string, value: string | ReferenceExpression): AzureDataLakeStorageFileSystemResourcePromise {
         return new AzureDataLakeStorageFileSystemResourcePromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
     }
 
@@ -7618,6 +7753,11 @@ export class AzureDataLakeStorageFileSystemResourcePromise implements PromiseLik
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureDataLakeStorageFileSystemResourcePromise {
         return new AzureDataLakeStorageFileSystemResourcePromise(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)));
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureDataLakeStorageFileSystemResourcePromise {
+        return new AzureDataLakeStorageFileSystemResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
     }
 
     /** Sets the parent relationship */
@@ -7753,7 +7893,7 @@ export class AzureDataLakeStorageResource extends ResourceBuilderBase<AzureDataL
     }
 
     /** @internal */
-    private async _withConnectionPropertyInternal(name: string, value: ReferenceExpression): Promise<AzureDataLakeStorageResource> {
+    private async _withConnectionPropertyInternal(name: string, value: string | ReferenceExpression): Promise<AzureDataLakeStorageResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<AzureDataLakeStorageResourceHandle>(
             'Aspire.Hosting/withConnectionProperty',
@@ -7762,8 +7902,8 @@ export class AzureDataLakeStorageResource extends ResourceBuilderBase<AzureDataL
         return new AzureDataLakeStorageResource(result, this._client);
     }
 
-    /** Adds a connection property with a reference expression */
-    withConnectionProperty(name: string, value: ReferenceExpression): AzureDataLakeStorageResourcePromise {
+    /** Adds a connection property with a string or reference expression value */
+    withConnectionProperty(name: string, value: string | ReferenceExpression): AzureDataLakeStorageResourcePromise {
         return new AzureDataLakeStorageResourcePromise(this._withConnectionPropertyInternal(name, value));
     }
 
@@ -7949,6 +8089,21 @@ export class AzureDataLakeStorageResource extends ResourceBuilderBase<AzureDataL
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureDataLakeStorageResourcePromise {
         const commandOptions = options?.commandOptions;
         return new AzureDataLakeStorageResourcePromise(this._withCommandInternal(name, displayName, executeCommand, commandOptions));
+    }
+
+    /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<AzureDataLakeStorageResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<AzureDataLakeStorageResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new AzureDataLakeStorageResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureDataLakeStorageResourcePromise {
+        return new AzureDataLakeStorageResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
     }
 
     /** @internal */
@@ -8237,8 +8392,8 @@ export class AzureDataLakeStorageResourcePromise implements PromiseLike<AzureDat
         return new AzureDataLakeStorageResourcePromise(this._promise.then(obj => obj.withRequiredCommand(command, options)));
     }
 
-    /** Adds a connection property with a reference expression */
-    withConnectionProperty(name: string, value: ReferenceExpression): AzureDataLakeStorageResourcePromise {
+    /** Adds a connection property with a string or reference expression value */
+    withConnectionProperty(name: string, value: string | ReferenceExpression): AzureDataLakeStorageResourcePromise {
         return new AzureDataLakeStorageResourcePromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
     }
 
@@ -8295,6 +8450,11 @@ export class AzureDataLakeStorageResourcePromise implements PromiseLike<AzureDat
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureDataLakeStorageResourcePromise {
         return new AzureDataLakeStorageResourcePromise(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)));
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureDataLakeStorageResourcePromise {
+        return new AzureDataLakeStorageResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
     }
 
     /** Sets the parent relationship */
@@ -8587,6 +8747,21 @@ export class AzureEnvironmentResource extends ResourceBuilderBase<AzureEnvironme
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureEnvironmentResourcePromise {
         const commandOptions = options?.commandOptions;
         return new AzureEnvironmentResourcePromise(this._withCommandInternal(name, displayName, executeCommand, commandOptions));
+    }
+
+    /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<AzureEnvironmentResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<AzureEnvironmentResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new AzureEnvironmentResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureEnvironmentResourcePromise {
+        return new AzureEnvironmentResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
     }
 
     /** @internal */
@@ -8930,6 +9105,11 @@ export class AzureEnvironmentResourcePromise implements PromiseLike<AzureEnviron
         return new AzureEnvironmentResourcePromise(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)));
     }
 
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureEnvironmentResourcePromise {
+        return new AzureEnvironmentResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
+    }
+
     /** Sets the parent relationship */
     withParentRelationship(parent: ResourceBuilderBase): AzureEnvironmentResourcePromise {
         return new AzureEnvironmentResourcePromise(this._promise.then(obj => obj.withParentRelationship(parent)));
@@ -9225,6 +9405,21 @@ export class AzureNatGatewayResource extends ResourceBuilderBase<AzureNatGateway
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureNatGatewayResourcePromise {
         const commandOptions = options?.commandOptions;
         return new AzureNatGatewayResourcePromise(this._withCommandInternal(name, displayName, executeCommand, commandOptions));
+    }
+
+    /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<AzureNatGatewayResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<AzureNatGatewayResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new AzureNatGatewayResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureNatGatewayResourcePromise {
+        return new AzureNatGatewayResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
     }
 
     /** @internal */
@@ -9674,23 +9869,9 @@ export class AzureNatGatewayResource extends ResourceBuilderBase<AzureNatGateway
     }
 
     /** @internal */
-    private async _runAsExistingFromParametersInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzureNatGatewayResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
-        const result = await this._client.invokeCapability<AzureNatGatewayResourceHandle>(
-            'Aspire.Hosting.Azure/runAsExistingFromParameters',
-            rpcArgs
-        );
-        return new AzureNatGatewayResource(result, this._client);
-    }
-
-    /** Marks an Azure resource as existing in run mode by using parameter resources */
-    runAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureNatGatewayResourcePromise {
-        return new AzureNatGatewayResourcePromise(this._runAsExistingFromParametersInternal(nameParameter, resourceGroupParameter));
-    }
-
-    /** @internal */
-    private async _runAsExistingInternal(name: string, resourceGroup: string): Promise<AzureNatGatewayResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, resourceGroup };
+    private async _runAsExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzureNatGatewayResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<AzureNatGatewayResourceHandle>(
             'Aspire.Hosting.Azure/runAsExisting',
             rpcArgs
@@ -9699,28 +9880,15 @@ export class AzureNatGatewayResource extends ResourceBuilderBase<AzureNatGateway
     }
 
     /** Marks an Azure resource as existing in run mode */
-    runAsExisting(name: string, resourceGroup: string): AzureNatGatewayResourcePromise {
+    runAsExisting(name: string | ParameterResource, options?: RunAsExistingOptions): AzureNatGatewayResourcePromise {
+        const resourceGroup = options?.resourceGroup;
         return new AzureNatGatewayResourcePromise(this._runAsExistingInternal(name, resourceGroup));
     }
 
     /** @internal */
-    private async _publishAsExistingFromParametersInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzureNatGatewayResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
-        const result = await this._client.invokeCapability<AzureNatGatewayResourceHandle>(
-            'Aspire.Hosting.Azure/publishAsExistingFromParameters',
-            rpcArgs
-        );
-        return new AzureNatGatewayResource(result, this._client);
-    }
-
-    /** Marks an Azure resource as existing in publish mode by using parameter resources */
-    publishAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureNatGatewayResourcePromise {
-        return new AzureNatGatewayResourcePromise(this._publishAsExistingFromParametersInternal(nameParameter, resourceGroupParameter));
-    }
-
-    /** @internal */
-    private async _publishAsExistingInternal(name: string, resourceGroup: string): Promise<AzureNatGatewayResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, resourceGroup };
+    private async _publishAsExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzureNatGatewayResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<AzureNatGatewayResourceHandle>(
             'Aspire.Hosting.Azure/publishAsExisting',
             rpcArgs
@@ -9729,23 +9897,26 @@ export class AzureNatGatewayResource extends ResourceBuilderBase<AzureNatGateway
     }
 
     /** Marks an Azure resource as existing in publish mode */
-    publishAsExisting(name: string, resourceGroup: string): AzureNatGatewayResourcePromise {
+    publishAsExisting(name: string | ParameterResource, options?: PublishAsExistingOptions): AzureNatGatewayResourcePromise {
+        const resourceGroup = options?.resourceGroup;
         return new AzureNatGatewayResourcePromise(this._publishAsExistingInternal(name, resourceGroup));
     }
 
     /** @internal */
-    private async _asExistingInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzureNatGatewayResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
+    private async _asExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzureNatGatewayResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<AzureNatGatewayResourceHandle>(
-            'Aspire.Hosting.Azure/asExistingFromParameters',
+            'Aspire.Hosting.Azure/asExisting',
             rpcArgs
         );
         return new AzureNatGatewayResource(result, this._client);
     }
 
-    /** Marks an Azure resource as existing in both run and publish modes by using parameter resources */
-    asExisting(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureNatGatewayResourcePromise {
-        return new AzureNatGatewayResourcePromise(this._asExistingInternal(nameParameter, resourceGroupParameter));
+    /** Marks an Azure resource as existing in both run and publish modes */
+    asExisting(name: string | ParameterResource, options?: AsExistingOptions): AzureNatGatewayResourcePromise {
+        const resourceGroup = options?.resourceGroup;
+        return new AzureNatGatewayResourcePromise(this._asExistingInternal(name, resourceGroup));
     }
 
 }
@@ -9823,6 +9994,11 @@ export class AzureNatGatewayResourcePromise implements PromiseLike<AzureNatGatew
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureNatGatewayResourcePromise {
         return new AzureNatGatewayResourcePromise(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)));
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureNatGatewayResourcePromise {
+        return new AzureNatGatewayResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
     }
 
     /** Sets the parent relationship */
@@ -9965,29 +10141,19 @@ export class AzureNatGatewayResourcePromise implements PromiseLike<AzureNatGatew
         return this._promise.then(obj => obj.isExisting());
     }
 
-    /** Marks an Azure resource as existing in run mode by using parameter resources */
-    runAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureNatGatewayResourcePromise {
-        return new AzureNatGatewayResourcePromise(this._promise.then(obj => obj.runAsExistingFromParameters(nameParameter, resourceGroupParameter)));
-    }
-
     /** Marks an Azure resource as existing in run mode */
-    runAsExisting(name: string, resourceGroup: string): AzureNatGatewayResourcePromise {
-        return new AzureNatGatewayResourcePromise(this._promise.then(obj => obj.runAsExisting(name, resourceGroup)));
-    }
-
-    /** Marks an Azure resource as existing in publish mode by using parameter resources */
-    publishAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureNatGatewayResourcePromise {
-        return new AzureNatGatewayResourcePromise(this._promise.then(obj => obj.publishAsExistingFromParameters(nameParameter, resourceGroupParameter)));
+    runAsExisting(name: string | ParameterResource, options?: RunAsExistingOptions): AzureNatGatewayResourcePromise {
+        return new AzureNatGatewayResourcePromise(this._promise.then(obj => obj.runAsExisting(name, options)));
     }
 
     /** Marks an Azure resource as existing in publish mode */
-    publishAsExisting(name: string, resourceGroup: string): AzureNatGatewayResourcePromise {
-        return new AzureNatGatewayResourcePromise(this._promise.then(obj => obj.publishAsExisting(name, resourceGroup)));
+    publishAsExisting(name: string | ParameterResource, options?: PublishAsExistingOptions): AzureNatGatewayResourcePromise {
+        return new AzureNatGatewayResourcePromise(this._promise.then(obj => obj.publishAsExisting(name, options)));
     }
 
-    /** Marks an Azure resource as existing in both run and publish modes by using parameter resources */
-    asExisting(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureNatGatewayResourcePromise {
-        return new AzureNatGatewayResourcePromise(this._promise.then(obj => obj.asExisting(nameParameter, resourceGroupParameter)));
+    /** Marks an Azure resource as existing in both run and publish modes */
+    asExisting(name: string | ParameterResource, options?: AsExistingOptions): AzureNatGatewayResourcePromise {
+        return new AzureNatGatewayResourcePromise(this._promise.then(obj => obj.asExisting(name, options)));
     }
 
 }
@@ -10210,6 +10376,21 @@ export class AzureNetworkSecurityGroupResource extends ResourceBuilderBase<Azure
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureNetworkSecurityGroupResourcePromise {
         const commandOptions = options?.commandOptions;
         return new AzureNetworkSecurityGroupResourcePromise(this._withCommandInternal(name, displayName, executeCommand, commandOptions));
+    }
+
+    /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<AzureNetworkSecurityGroupResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<AzureNetworkSecurityGroupResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new AzureNetworkSecurityGroupResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureNetworkSecurityGroupResourcePromise {
+        return new AzureNetworkSecurityGroupResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
     }
 
     /** @internal */
@@ -10659,23 +10840,9 @@ export class AzureNetworkSecurityGroupResource extends ResourceBuilderBase<Azure
     }
 
     /** @internal */
-    private async _runAsExistingFromParametersInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzureNetworkSecurityGroupResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
-        const result = await this._client.invokeCapability<AzureNetworkSecurityGroupResourceHandle>(
-            'Aspire.Hosting.Azure/runAsExistingFromParameters',
-            rpcArgs
-        );
-        return new AzureNetworkSecurityGroupResource(result, this._client);
-    }
-
-    /** Marks an Azure resource as existing in run mode by using parameter resources */
-    runAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureNetworkSecurityGroupResourcePromise {
-        return new AzureNetworkSecurityGroupResourcePromise(this._runAsExistingFromParametersInternal(nameParameter, resourceGroupParameter));
-    }
-
-    /** @internal */
-    private async _runAsExistingInternal(name: string, resourceGroup: string): Promise<AzureNetworkSecurityGroupResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, resourceGroup };
+    private async _runAsExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzureNetworkSecurityGroupResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<AzureNetworkSecurityGroupResourceHandle>(
             'Aspire.Hosting.Azure/runAsExisting',
             rpcArgs
@@ -10684,28 +10851,15 @@ export class AzureNetworkSecurityGroupResource extends ResourceBuilderBase<Azure
     }
 
     /** Marks an Azure resource as existing in run mode */
-    runAsExisting(name: string, resourceGroup: string): AzureNetworkSecurityGroupResourcePromise {
+    runAsExisting(name: string | ParameterResource, options?: RunAsExistingOptions): AzureNetworkSecurityGroupResourcePromise {
+        const resourceGroup = options?.resourceGroup;
         return new AzureNetworkSecurityGroupResourcePromise(this._runAsExistingInternal(name, resourceGroup));
     }
 
     /** @internal */
-    private async _publishAsExistingFromParametersInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzureNetworkSecurityGroupResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
-        const result = await this._client.invokeCapability<AzureNetworkSecurityGroupResourceHandle>(
-            'Aspire.Hosting.Azure/publishAsExistingFromParameters',
-            rpcArgs
-        );
-        return new AzureNetworkSecurityGroupResource(result, this._client);
-    }
-
-    /** Marks an Azure resource as existing in publish mode by using parameter resources */
-    publishAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureNetworkSecurityGroupResourcePromise {
-        return new AzureNetworkSecurityGroupResourcePromise(this._publishAsExistingFromParametersInternal(nameParameter, resourceGroupParameter));
-    }
-
-    /** @internal */
-    private async _publishAsExistingInternal(name: string, resourceGroup: string): Promise<AzureNetworkSecurityGroupResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, resourceGroup };
+    private async _publishAsExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzureNetworkSecurityGroupResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<AzureNetworkSecurityGroupResourceHandle>(
             'Aspire.Hosting.Azure/publishAsExisting',
             rpcArgs
@@ -10714,23 +10868,26 @@ export class AzureNetworkSecurityGroupResource extends ResourceBuilderBase<Azure
     }
 
     /** Marks an Azure resource as existing in publish mode */
-    publishAsExisting(name: string, resourceGroup: string): AzureNetworkSecurityGroupResourcePromise {
+    publishAsExisting(name: string | ParameterResource, options?: PublishAsExistingOptions): AzureNetworkSecurityGroupResourcePromise {
+        const resourceGroup = options?.resourceGroup;
         return new AzureNetworkSecurityGroupResourcePromise(this._publishAsExistingInternal(name, resourceGroup));
     }
 
     /** @internal */
-    private async _asExistingInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzureNetworkSecurityGroupResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
+    private async _asExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzureNetworkSecurityGroupResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<AzureNetworkSecurityGroupResourceHandle>(
-            'Aspire.Hosting.Azure/asExistingFromParameters',
+            'Aspire.Hosting.Azure/asExisting',
             rpcArgs
         );
         return new AzureNetworkSecurityGroupResource(result, this._client);
     }
 
-    /** Marks an Azure resource as existing in both run and publish modes by using parameter resources */
-    asExisting(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureNetworkSecurityGroupResourcePromise {
-        return new AzureNetworkSecurityGroupResourcePromise(this._asExistingInternal(nameParameter, resourceGroupParameter));
+    /** Marks an Azure resource as existing in both run and publish modes */
+    asExisting(name: string | ParameterResource, options?: AsExistingOptions): AzureNetworkSecurityGroupResourcePromise {
+        const resourceGroup = options?.resourceGroup;
+        return new AzureNetworkSecurityGroupResourcePromise(this._asExistingInternal(name, resourceGroup));
     }
 
 }
@@ -10808,6 +10965,11 @@ export class AzureNetworkSecurityGroupResourcePromise implements PromiseLike<Azu
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureNetworkSecurityGroupResourcePromise {
         return new AzureNetworkSecurityGroupResourcePromise(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)));
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureNetworkSecurityGroupResourcePromise {
+        return new AzureNetworkSecurityGroupResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
     }
 
     /** Sets the parent relationship */
@@ -10950,29 +11112,19 @@ export class AzureNetworkSecurityGroupResourcePromise implements PromiseLike<Azu
         return this._promise.then(obj => obj.isExisting());
     }
 
-    /** Marks an Azure resource as existing in run mode by using parameter resources */
-    runAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureNetworkSecurityGroupResourcePromise {
-        return new AzureNetworkSecurityGroupResourcePromise(this._promise.then(obj => obj.runAsExistingFromParameters(nameParameter, resourceGroupParameter)));
-    }
-
     /** Marks an Azure resource as existing in run mode */
-    runAsExisting(name: string, resourceGroup: string): AzureNetworkSecurityGroupResourcePromise {
-        return new AzureNetworkSecurityGroupResourcePromise(this._promise.then(obj => obj.runAsExisting(name, resourceGroup)));
-    }
-
-    /** Marks an Azure resource as existing in publish mode by using parameter resources */
-    publishAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureNetworkSecurityGroupResourcePromise {
-        return new AzureNetworkSecurityGroupResourcePromise(this._promise.then(obj => obj.publishAsExistingFromParameters(nameParameter, resourceGroupParameter)));
+    runAsExisting(name: string | ParameterResource, options?: RunAsExistingOptions): AzureNetworkSecurityGroupResourcePromise {
+        return new AzureNetworkSecurityGroupResourcePromise(this._promise.then(obj => obj.runAsExisting(name, options)));
     }
 
     /** Marks an Azure resource as existing in publish mode */
-    publishAsExisting(name: string, resourceGroup: string): AzureNetworkSecurityGroupResourcePromise {
-        return new AzureNetworkSecurityGroupResourcePromise(this._promise.then(obj => obj.publishAsExisting(name, resourceGroup)));
+    publishAsExisting(name: string | ParameterResource, options?: PublishAsExistingOptions): AzureNetworkSecurityGroupResourcePromise {
+        return new AzureNetworkSecurityGroupResourcePromise(this._promise.then(obj => obj.publishAsExisting(name, options)));
     }
 
-    /** Marks an Azure resource as existing in both run and publish modes by using parameter resources */
-    asExisting(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureNetworkSecurityGroupResourcePromise {
-        return new AzureNetworkSecurityGroupResourcePromise(this._promise.then(obj => obj.asExisting(nameParameter, resourceGroupParameter)));
+    /** Marks an Azure resource as existing in both run and publish modes */
+    asExisting(name: string | ParameterResource, options?: AsExistingOptions): AzureNetworkSecurityGroupResourcePromise {
+        return new AzureNetworkSecurityGroupResourcePromise(this._promise.then(obj => obj.asExisting(name, options)));
     }
 
 }
@@ -11195,6 +11347,21 @@ export class AzurePrivateEndpointResource extends ResourceBuilderBase<AzurePriva
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzurePrivateEndpointResourcePromise {
         const commandOptions = options?.commandOptions;
         return new AzurePrivateEndpointResourcePromise(this._withCommandInternal(name, displayName, executeCommand, commandOptions));
+    }
+
+    /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<AzurePrivateEndpointResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<AzurePrivateEndpointResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new AzurePrivateEndpointResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzurePrivateEndpointResourcePromise {
+        return new AzurePrivateEndpointResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
     }
 
     /** @internal */
@@ -11629,23 +11796,9 @@ export class AzurePrivateEndpointResource extends ResourceBuilderBase<AzurePriva
     }
 
     /** @internal */
-    private async _runAsExistingFromParametersInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzurePrivateEndpointResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
-        const result = await this._client.invokeCapability<AzurePrivateEndpointResourceHandle>(
-            'Aspire.Hosting.Azure/runAsExistingFromParameters',
-            rpcArgs
-        );
-        return new AzurePrivateEndpointResource(result, this._client);
-    }
-
-    /** Marks an Azure resource as existing in run mode by using parameter resources */
-    runAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzurePrivateEndpointResourcePromise {
-        return new AzurePrivateEndpointResourcePromise(this._runAsExistingFromParametersInternal(nameParameter, resourceGroupParameter));
-    }
-
-    /** @internal */
-    private async _runAsExistingInternal(name: string, resourceGroup: string): Promise<AzurePrivateEndpointResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, resourceGroup };
+    private async _runAsExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzurePrivateEndpointResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<AzurePrivateEndpointResourceHandle>(
             'Aspire.Hosting.Azure/runAsExisting',
             rpcArgs
@@ -11654,28 +11807,15 @@ export class AzurePrivateEndpointResource extends ResourceBuilderBase<AzurePriva
     }
 
     /** Marks an Azure resource as existing in run mode */
-    runAsExisting(name: string, resourceGroup: string): AzurePrivateEndpointResourcePromise {
+    runAsExisting(name: string | ParameterResource, options?: RunAsExistingOptions): AzurePrivateEndpointResourcePromise {
+        const resourceGroup = options?.resourceGroup;
         return new AzurePrivateEndpointResourcePromise(this._runAsExistingInternal(name, resourceGroup));
     }
 
     /** @internal */
-    private async _publishAsExistingFromParametersInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzurePrivateEndpointResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
-        const result = await this._client.invokeCapability<AzurePrivateEndpointResourceHandle>(
-            'Aspire.Hosting.Azure/publishAsExistingFromParameters',
-            rpcArgs
-        );
-        return new AzurePrivateEndpointResource(result, this._client);
-    }
-
-    /** Marks an Azure resource as existing in publish mode by using parameter resources */
-    publishAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzurePrivateEndpointResourcePromise {
-        return new AzurePrivateEndpointResourcePromise(this._publishAsExistingFromParametersInternal(nameParameter, resourceGroupParameter));
-    }
-
-    /** @internal */
-    private async _publishAsExistingInternal(name: string, resourceGroup: string): Promise<AzurePrivateEndpointResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, resourceGroup };
+    private async _publishAsExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzurePrivateEndpointResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<AzurePrivateEndpointResourceHandle>(
             'Aspire.Hosting.Azure/publishAsExisting',
             rpcArgs
@@ -11684,23 +11824,26 @@ export class AzurePrivateEndpointResource extends ResourceBuilderBase<AzurePriva
     }
 
     /** Marks an Azure resource as existing in publish mode */
-    publishAsExisting(name: string, resourceGroup: string): AzurePrivateEndpointResourcePromise {
+    publishAsExisting(name: string | ParameterResource, options?: PublishAsExistingOptions): AzurePrivateEndpointResourcePromise {
+        const resourceGroup = options?.resourceGroup;
         return new AzurePrivateEndpointResourcePromise(this._publishAsExistingInternal(name, resourceGroup));
     }
 
     /** @internal */
-    private async _asExistingInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzurePrivateEndpointResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
+    private async _asExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzurePrivateEndpointResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<AzurePrivateEndpointResourceHandle>(
-            'Aspire.Hosting.Azure/asExistingFromParameters',
+            'Aspire.Hosting.Azure/asExisting',
             rpcArgs
         );
         return new AzurePrivateEndpointResource(result, this._client);
     }
 
-    /** Marks an Azure resource as existing in both run and publish modes by using parameter resources */
-    asExisting(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzurePrivateEndpointResourcePromise {
-        return new AzurePrivateEndpointResourcePromise(this._asExistingInternal(nameParameter, resourceGroupParameter));
+    /** Marks an Azure resource as existing in both run and publish modes */
+    asExisting(name: string | ParameterResource, options?: AsExistingOptions): AzurePrivateEndpointResourcePromise {
+        const resourceGroup = options?.resourceGroup;
+        return new AzurePrivateEndpointResourcePromise(this._asExistingInternal(name, resourceGroup));
     }
 
 }
@@ -11778,6 +11921,11 @@ export class AzurePrivateEndpointResourcePromise implements PromiseLike<AzurePri
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzurePrivateEndpointResourcePromise {
         return new AzurePrivateEndpointResourcePromise(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)));
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzurePrivateEndpointResourcePromise {
+        return new AzurePrivateEndpointResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
     }
 
     /** Sets the parent relationship */
@@ -11915,29 +12063,19 @@ export class AzurePrivateEndpointResourcePromise implements PromiseLike<AzurePri
         return this._promise.then(obj => obj.isExisting());
     }
 
-    /** Marks an Azure resource as existing in run mode by using parameter resources */
-    runAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzurePrivateEndpointResourcePromise {
-        return new AzurePrivateEndpointResourcePromise(this._promise.then(obj => obj.runAsExistingFromParameters(nameParameter, resourceGroupParameter)));
-    }
-
     /** Marks an Azure resource as existing in run mode */
-    runAsExisting(name: string, resourceGroup: string): AzurePrivateEndpointResourcePromise {
-        return new AzurePrivateEndpointResourcePromise(this._promise.then(obj => obj.runAsExisting(name, resourceGroup)));
-    }
-
-    /** Marks an Azure resource as existing in publish mode by using parameter resources */
-    publishAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzurePrivateEndpointResourcePromise {
-        return new AzurePrivateEndpointResourcePromise(this._promise.then(obj => obj.publishAsExistingFromParameters(nameParameter, resourceGroupParameter)));
+    runAsExisting(name: string | ParameterResource, options?: RunAsExistingOptions): AzurePrivateEndpointResourcePromise {
+        return new AzurePrivateEndpointResourcePromise(this._promise.then(obj => obj.runAsExisting(name, options)));
     }
 
     /** Marks an Azure resource as existing in publish mode */
-    publishAsExisting(name: string, resourceGroup: string): AzurePrivateEndpointResourcePromise {
-        return new AzurePrivateEndpointResourcePromise(this._promise.then(obj => obj.publishAsExisting(name, resourceGroup)));
+    publishAsExisting(name: string | ParameterResource, options?: PublishAsExistingOptions): AzurePrivateEndpointResourcePromise {
+        return new AzurePrivateEndpointResourcePromise(this._promise.then(obj => obj.publishAsExisting(name, options)));
     }
 
-    /** Marks an Azure resource as existing in both run and publish modes by using parameter resources */
-    asExisting(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzurePrivateEndpointResourcePromise {
-        return new AzurePrivateEndpointResourcePromise(this._promise.then(obj => obj.asExisting(nameParameter, resourceGroupParameter)));
+    /** Marks an Azure resource as existing in both run and publish modes */
+    asExisting(name: string | ParameterResource, options?: AsExistingOptions): AzurePrivateEndpointResourcePromise {
+        return new AzurePrivateEndpointResourcePromise(this._promise.then(obj => obj.asExisting(name, options)));
     }
 
 }
@@ -12160,6 +12298,21 @@ export class AzureProvisioningResource extends ResourceBuilderBase<AzureProvisio
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureProvisioningResourcePromise {
         const commandOptions = options?.commandOptions;
         return new AzureProvisioningResourcePromise(this._withCommandInternal(name, displayName, executeCommand, commandOptions));
+    }
+
+    /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<AzureProvisioningResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<AzureProvisioningResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new AzureProvisioningResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureProvisioningResourcePromise {
+        return new AzureProvisioningResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
     }
 
     /** @internal */
@@ -12594,23 +12747,9 @@ export class AzureProvisioningResource extends ResourceBuilderBase<AzureProvisio
     }
 
     /** @internal */
-    private async _runAsExistingFromParametersInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzureProvisioningResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
-        const result = await this._client.invokeCapability<AzureProvisioningResourceHandle>(
-            'Aspire.Hosting.Azure/runAsExistingFromParameters',
-            rpcArgs
-        );
-        return new AzureProvisioningResource(result, this._client);
-    }
-
-    /** Marks an Azure resource as existing in run mode by using parameter resources */
-    runAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureProvisioningResourcePromise {
-        return new AzureProvisioningResourcePromise(this._runAsExistingFromParametersInternal(nameParameter, resourceGroupParameter));
-    }
-
-    /** @internal */
-    private async _runAsExistingInternal(name: string, resourceGroup: string): Promise<AzureProvisioningResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, resourceGroup };
+    private async _runAsExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzureProvisioningResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<AzureProvisioningResourceHandle>(
             'Aspire.Hosting.Azure/runAsExisting',
             rpcArgs
@@ -12619,28 +12758,15 @@ export class AzureProvisioningResource extends ResourceBuilderBase<AzureProvisio
     }
 
     /** Marks an Azure resource as existing in run mode */
-    runAsExisting(name: string, resourceGroup: string): AzureProvisioningResourcePromise {
+    runAsExisting(name: string | ParameterResource, options?: RunAsExistingOptions): AzureProvisioningResourcePromise {
+        const resourceGroup = options?.resourceGroup;
         return new AzureProvisioningResourcePromise(this._runAsExistingInternal(name, resourceGroup));
     }
 
     /** @internal */
-    private async _publishAsExistingFromParametersInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzureProvisioningResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
-        const result = await this._client.invokeCapability<AzureProvisioningResourceHandle>(
-            'Aspire.Hosting.Azure/publishAsExistingFromParameters',
-            rpcArgs
-        );
-        return new AzureProvisioningResource(result, this._client);
-    }
-
-    /** Marks an Azure resource as existing in publish mode by using parameter resources */
-    publishAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureProvisioningResourcePromise {
-        return new AzureProvisioningResourcePromise(this._publishAsExistingFromParametersInternal(nameParameter, resourceGroupParameter));
-    }
-
-    /** @internal */
-    private async _publishAsExistingInternal(name: string, resourceGroup: string): Promise<AzureProvisioningResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, resourceGroup };
+    private async _publishAsExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzureProvisioningResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<AzureProvisioningResourceHandle>(
             'Aspire.Hosting.Azure/publishAsExisting',
             rpcArgs
@@ -12649,23 +12775,26 @@ export class AzureProvisioningResource extends ResourceBuilderBase<AzureProvisio
     }
 
     /** Marks an Azure resource as existing in publish mode */
-    publishAsExisting(name: string, resourceGroup: string): AzureProvisioningResourcePromise {
+    publishAsExisting(name: string | ParameterResource, options?: PublishAsExistingOptions): AzureProvisioningResourcePromise {
+        const resourceGroup = options?.resourceGroup;
         return new AzureProvisioningResourcePromise(this._publishAsExistingInternal(name, resourceGroup));
     }
 
     /** @internal */
-    private async _asExistingInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzureProvisioningResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
+    private async _asExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzureProvisioningResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<AzureProvisioningResourceHandle>(
-            'Aspire.Hosting.Azure/asExistingFromParameters',
+            'Aspire.Hosting.Azure/asExisting',
             rpcArgs
         );
         return new AzureProvisioningResource(result, this._client);
     }
 
-    /** Marks an Azure resource as existing in both run and publish modes by using parameter resources */
-    asExisting(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureProvisioningResourcePromise {
-        return new AzureProvisioningResourcePromise(this._asExistingInternal(nameParameter, resourceGroupParameter));
+    /** Marks an Azure resource as existing in both run and publish modes */
+    asExisting(name: string | ParameterResource, options?: AsExistingOptions): AzureProvisioningResourcePromise {
+        const resourceGroup = options?.resourceGroup;
+        return new AzureProvisioningResourcePromise(this._asExistingInternal(name, resourceGroup));
     }
 
 }
@@ -12743,6 +12872,11 @@ export class AzureProvisioningResourcePromise implements PromiseLike<AzureProvis
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureProvisioningResourcePromise {
         return new AzureProvisioningResourcePromise(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)));
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureProvisioningResourcePromise {
+        return new AzureProvisioningResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
     }
 
     /** Sets the parent relationship */
@@ -12880,29 +13014,19 @@ export class AzureProvisioningResourcePromise implements PromiseLike<AzureProvis
         return this._promise.then(obj => obj.isExisting());
     }
 
-    /** Marks an Azure resource as existing in run mode by using parameter resources */
-    runAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureProvisioningResourcePromise {
-        return new AzureProvisioningResourcePromise(this._promise.then(obj => obj.runAsExistingFromParameters(nameParameter, resourceGroupParameter)));
-    }
-
     /** Marks an Azure resource as existing in run mode */
-    runAsExisting(name: string, resourceGroup: string): AzureProvisioningResourcePromise {
-        return new AzureProvisioningResourcePromise(this._promise.then(obj => obj.runAsExisting(name, resourceGroup)));
-    }
-
-    /** Marks an Azure resource as existing in publish mode by using parameter resources */
-    publishAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureProvisioningResourcePromise {
-        return new AzureProvisioningResourcePromise(this._promise.then(obj => obj.publishAsExistingFromParameters(nameParameter, resourceGroupParameter)));
+    runAsExisting(name: string | ParameterResource, options?: RunAsExistingOptions): AzureProvisioningResourcePromise {
+        return new AzureProvisioningResourcePromise(this._promise.then(obj => obj.runAsExisting(name, options)));
     }
 
     /** Marks an Azure resource as existing in publish mode */
-    publishAsExisting(name: string, resourceGroup: string): AzureProvisioningResourcePromise {
-        return new AzureProvisioningResourcePromise(this._promise.then(obj => obj.publishAsExisting(name, resourceGroup)));
+    publishAsExisting(name: string | ParameterResource, options?: PublishAsExistingOptions): AzureProvisioningResourcePromise {
+        return new AzureProvisioningResourcePromise(this._promise.then(obj => obj.publishAsExisting(name, options)));
     }
 
-    /** Marks an Azure resource as existing in both run and publish modes by using parameter resources */
-    asExisting(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureProvisioningResourcePromise {
-        return new AzureProvisioningResourcePromise(this._promise.then(obj => obj.asExisting(nameParameter, resourceGroupParameter)));
+    /** Marks an Azure resource as existing in both run and publish modes */
+    asExisting(name: string | ParameterResource, options?: AsExistingOptions): AzureProvisioningResourcePromise {
+        return new AzureProvisioningResourcePromise(this._promise.then(obj => obj.asExisting(name, options)));
     }
 
 }
@@ -13125,6 +13249,21 @@ export class AzurePublicIPAddressResource extends ResourceBuilderBase<AzurePubli
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzurePublicIPAddressResourcePromise {
         const commandOptions = options?.commandOptions;
         return new AzurePublicIPAddressResourcePromise(this._withCommandInternal(name, displayName, executeCommand, commandOptions));
+    }
+
+    /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<AzurePublicIPAddressResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<AzurePublicIPAddressResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new AzurePublicIPAddressResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzurePublicIPAddressResourcePromise {
+        return new AzurePublicIPAddressResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
     }
 
     /** @internal */
@@ -13559,23 +13698,9 @@ export class AzurePublicIPAddressResource extends ResourceBuilderBase<AzurePubli
     }
 
     /** @internal */
-    private async _runAsExistingFromParametersInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzurePublicIPAddressResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
-        const result = await this._client.invokeCapability<AzurePublicIPAddressResourceHandle>(
-            'Aspire.Hosting.Azure/runAsExistingFromParameters',
-            rpcArgs
-        );
-        return new AzurePublicIPAddressResource(result, this._client);
-    }
-
-    /** Marks an Azure resource as existing in run mode by using parameter resources */
-    runAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzurePublicIPAddressResourcePromise {
-        return new AzurePublicIPAddressResourcePromise(this._runAsExistingFromParametersInternal(nameParameter, resourceGroupParameter));
-    }
-
-    /** @internal */
-    private async _runAsExistingInternal(name: string, resourceGroup: string): Promise<AzurePublicIPAddressResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, resourceGroup };
+    private async _runAsExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzurePublicIPAddressResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<AzurePublicIPAddressResourceHandle>(
             'Aspire.Hosting.Azure/runAsExisting',
             rpcArgs
@@ -13584,28 +13709,15 @@ export class AzurePublicIPAddressResource extends ResourceBuilderBase<AzurePubli
     }
 
     /** Marks an Azure resource as existing in run mode */
-    runAsExisting(name: string, resourceGroup: string): AzurePublicIPAddressResourcePromise {
+    runAsExisting(name: string | ParameterResource, options?: RunAsExistingOptions): AzurePublicIPAddressResourcePromise {
+        const resourceGroup = options?.resourceGroup;
         return new AzurePublicIPAddressResourcePromise(this._runAsExistingInternal(name, resourceGroup));
     }
 
     /** @internal */
-    private async _publishAsExistingFromParametersInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzurePublicIPAddressResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
-        const result = await this._client.invokeCapability<AzurePublicIPAddressResourceHandle>(
-            'Aspire.Hosting.Azure/publishAsExistingFromParameters',
-            rpcArgs
-        );
-        return new AzurePublicIPAddressResource(result, this._client);
-    }
-
-    /** Marks an Azure resource as existing in publish mode by using parameter resources */
-    publishAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzurePublicIPAddressResourcePromise {
-        return new AzurePublicIPAddressResourcePromise(this._publishAsExistingFromParametersInternal(nameParameter, resourceGroupParameter));
-    }
-
-    /** @internal */
-    private async _publishAsExistingInternal(name: string, resourceGroup: string): Promise<AzurePublicIPAddressResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, resourceGroup };
+    private async _publishAsExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzurePublicIPAddressResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<AzurePublicIPAddressResourceHandle>(
             'Aspire.Hosting.Azure/publishAsExisting',
             rpcArgs
@@ -13614,23 +13726,26 @@ export class AzurePublicIPAddressResource extends ResourceBuilderBase<AzurePubli
     }
 
     /** Marks an Azure resource as existing in publish mode */
-    publishAsExisting(name: string, resourceGroup: string): AzurePublicIPAddressResourcePromise {
+    publishAsExisting(name: string | ParameterResource, options?: PublishAsExistingOptions): AzurePublicIPAddressResourcePromise {
+        const resourceGroup = options?.resourceGroup;
         return new AzurePublicIPAddressResourcePromise(this._publishAsExistingInternal(name, resourceGroup));
     }
 
     /** @internal */
-    private async _asExistingInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzurePublicIPAddressResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
+    private async _asExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzurePublicIPAddressResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<AzurePublicIPAddressResourceHandle>(
-            'Aspire.Hosting.Azure/asExistingFromParameters',
+            'Aspire.Hosting.Azure/asExisting',
             rpcArgs
         );
         return new AzurePublicIPAddressResource(result, this._client);
     }
 
-    /** Marks an Azure resource as existing in both run and publish modes by using parameter resources */
-    asExisting(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzurePublicIPAddressResourcePromise {
-        return new AzurePublicIPAddressResourcePromise(this._asExistingInternal(nameParameter, resourceGroupParameter));
+    /** Marks an Azure resource as existing in both run and publish modes */
+    asExisting(name: string | ParameterResource, options?: AsExistingOptions): AzurePublicIPAddressResourcePromise {
+        const resourceGroup = options?.resourceGroup;
+        return new AzurePublicIPAddressResourcePromise(this._asExistingInternal(name, resourceGroup));
     }
 
 }
@@ -13708,6 +13823,11 @@ export class AzurePublicIPAddressResourcePromise implements PromiseLike<AzurePub
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzurePublicIPAddressResourcePromise {
         return new AzurePublicIPAddressResourcePromise(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)));
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzurePublicIPAddressResourcePromise {
+        return new AzurePublicIPAddressResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
     }
 
     /** Sets the parent relationship */
@@ -13845,29 +13965,19 @@ export class AzurePublicIPAddressResourcePromise implements PromiseLike<AzurePub
         return this._promise.then(obj => obj.isExisting());
     }
 
-    /** Marks an Azure resource as existing in run mode by using parameter resources */
-    runAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzurePublicIPAddressResourcePromise {
-        return new AzurePublicIPAddressResourcePromise(this._promise.then(obj => obj.runAsExistingFromParameters(nameParameter, resourceGroupParameter)));
-    }
-
     /** Marks an Azure resource as existing in run mode */
-    runAsExisting(name: string, resourceGroup: string): AzurePublicIPAddressResourcePromise {
-        return new AzurePublicIPAddressResourcePromise(this._promise.then(obj => obj.runAsExisting(name, resourceGroup)));
-    }
-
-    /** Marks an Azure resource as existing in publish mode by using parameter resources */
-    publishAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzurePublicIPAddressResourcePromise {
-        return new AzurePublicIPAddressResourcePromise(this._promise.then(obj => obj.publishAsExistingFromParameters(nameParameter, resourceGroupParameter)));
+    runAsExisting(name: string | ParameterResource, options?: RunAsExistingOptions): AzurePublicIPAddressResourcePromise {
+        return new AzurePublicIPAddressResourcePromise(this._promise.then(obj => obj.runAsExisting(name, options)));
     }
 
     /** Marks an Azure resource as existing in publish mode */
-    publishAsExisting(name: string, resourceGroup: string): AzurePublicIPAddressResourcePromise {
-        return new AzurePublicIPAddressResourcePromise(this._promise.then(obj => obj.publishAsExisting(name, resourceGroup)));
+    publishAsExisting(name: string | ParameterResource, options?: PublishAsExistingOptions): AzurePublicIPAddressResourcePromise {
+        return new AzurePublicIPAddressResourcePromise(this._promise.then(obj => obj.publishAsExisting(name, options)));
     }
 
-    /** Marks an Azure resource as existing in both run and publish modes by using parameter resources */
-    asExisting(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzurePublicIPAddressResourcePromise {
-        return new AzurePublicIPAddressResourcePromise(this._promise.then(obj => obj.asExisting(nameParameter, resourceGroupParameter)));
+    /** Marks an Azure resource as existing in both run and publish modes */
+    asExisting(name: string | ParameterResource, options?: AsExistingOptions): AzurePublicIPAddressResourcePromise {
+        return new AzurePublicIPAddressResourcePromise(this._promise.then(obj => obj.asExisting(name, options)));
     }
 
 }
@@ -13933,7 +14043,7 @@ export class AzureQueueStorageQueueResource extends ResourceBuilderBase<AzureQue
     }
 
     /** @internal */
-    private async _withConnectionPropertyInternal(name: string, value: ReferenceExpression): Promise<AzureQueueStorageQueueResource> {
+    private async _withConnectionPropertyInternal(name: string, value: string | ReferenceExpression): Promise<AzureQueueStorageQueueResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<AzureQueueStorageQueueResourceHandle>(
             'Aspire.Hosting/withConnectionProperty',
@@ -13942,8 +14052,8 @@ export class AzureQueueStorageQueueResource extends ResourceBuilderBase<AzureQue
         return new AzureQueueStorageQueueResource(result, this._client);
     }
 
-    /** Adds a connection property with a reference expression */
-    withConnectionProperty(name: string, value: ReferenceExpression): AzureQueueStorageQueueResourcePromise {
+    /** Adds a connection property with a string or reference expression value */
+    withConnectionProperty(name: string, value: string | ReferenceExpression): AzureQueueStorageQueueResourcePromise {
         return new AzureQueueStorageQueueResourcePromise(this._withConnectionPropertyInternal(name, value));
     }
 
@@ -14129,6 +14239,21 @@ export class AzureQueueStorageQueueResource extends ResourceBuilderBase<AzureQue
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureQueueStorageQueueResourcePromise {
         const commandOptions = options?.commandOptions;
         return new AzureQueueStorageQueueResourcePromise(this._withCommandInternal(name, displayName, executeCommand, commandOptions));
+    }
+
+    /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<AzureQueueStorageQueueResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<AzureQueueStorageQueueResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new AzureQueueStorageQueueResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureQueueStorageQueueResourcePromise {
+        return new AzureQueueStorageQueueResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
     }
 
     /** @internal */
@@ -14417,8 +14542,8 @@ export class AzureQueueStorageQueueResourcePromise implements PromiseLike<AzureQ
         return new AzureQueueStorageQueueResourcePromise(this._promise.then(obj => obj.withRequiredCommand(command, options)));
     }
 
-    /** Adds a connection property with a reference expression */
-    withConnectionProperty(name: string, value: ReferenceExpression): AzureQueueStorageQueueResourcePromise {
+    /** Adds a connection property with a string or reference expression value */
+    withConnectionProperty(name: string, value: string | ReferenceExpression): AzureQueueStorageQueueResourcePromise {
         return new AzureQueueStorageQueueResourcePromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
     }
 
@@ -14475,6 +14600,11 @@ export class AzureQueueStorageQueueResourcePromise implements PromiseLike<AzureQ
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureQueueStorageQueueResourcePromise {
         return new AzureQueueStorageQueueResourcePromise(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)));
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureQueueStorageQueueResourcePromise {
+        return new AzureQueueStorageQueueResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
     }
 
     /** Sets the parent relationship */
@@ -14610,7 +14740,7 @@ export class AzureQueueStorageResource extends ResourceBuilderBase<AzureQueueSto
     }
 
     /** @internal */
-    private async _withConnectionPropertyInternal(name: string, value: ReferenceExpression): Promise<AzureQueueStorageResource> {
+    private async _withConnectionPropertyInternal(name: string, value: string | ReferenceExpression): Promise<AzureQueueStorageResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<AzureQueueStorageResourceHandle>(
             'Aspire.Hosting/withConnectionProperty',
@@ -14619,8 +14749,8 @@ export class AzureQueueStorageResource extends ResourceBuilderBase<AzureQueueSto
         return new AzureQueueStorageResource(result, this._client);
     }
 
-    /** Adds a connection property with a reference expression */
-    withConnectionProperty(name: string, value: ReferenceExpression): AzureQueueStorageResourcePromise {
+    /** Adds a connection property with a string or reference expression value */
+    withConnectionProperty(name: string, value: string | ReferenceExpression): AzureQueueStorageResourcePromise {
         return new AzureQueueStorageResourcePromise(this._withConnectionPropertyInternal(name, value));
     }
 
@@ -14806,6 +14936,21 @@ export class AzureQueueStorageResource extends ResourceBuilderBase<AzureQueueSto
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureQueueStorageResourcePromise {
         const commandOptions = options?.commandOptions;
         return new AzureQueueStorageResourcePromise(this._withCommandInternal(name, displayName, executeCommand, commandOptions));
+    }
+
+    /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<AzureQueueStorageResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<AzureQueueStorageResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new AzureQueueStorageResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureQueueStorageResourcePromise {
+        return new AzureQueueStorageResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
     }
 
     /** @internal */
@@ -15094,8 +15239,8 @@ export class AzureQueueStorageResourcePromise implements PromiseLike<AzureQueueS
         return new AzureQueueStorageResourcePromise(this._promise.then(obj => obj.withRequiredCommand(command, options)));
     }
 
-    /** Adds a connection property with a reference expression */
-    withConnectionProperty(name: string, value: ReferenceExpression): AzureQueueStorageResourcePromise {
+    /** Adds a connection property with a string or reference expression value */
+    withConnectionProperty(name: string, value: string | ReferenceExpression): AzureQueueStorageResourcePromise {
         return new AzureQueueStorageResourcePromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
     }
 
@@ -15152,6 +15297,11 @@ export class AzureQueueStorageResourcePromise implements PromiseLike<AzureQueueS
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureQueueStorageResourcePromise {
         return new AzureQueueStorageResourcePromise(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)));
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureQueueStorageResourcePromise {
+        return new AzureQueueStorageResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
     }
 
     /** Sets the parent relationship */
@@ -15358,7 +15508,7 @@ export class AzureSqlDatabaseResource extends ResourceBuilderBase<AzureSqlDataba
     }
 
     /** @internal */
-    private async _withConnectionPropertyInternal(name: string, value: ReferenceExpression): Promise<AzureSqlDatabaseResource> {
+    private async _withConnectionPropertyInternal(name: string, value: string | ReferenceExpression): Promise<AzureSqlDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<AzureSqlDatabaseResourceHandle>(
             'Aspire.Hosting/withConnectionProperty',
@@ -15367,8 +15517,8 @@ export class AzureSqlDatabaseResource extends ResourceBuilderBase<AzureSqlDataba
         return new AzureSqlDatabaseResource(result, this._client);
     }
 
-    /** Adds a connection property with a reference expression */
-    withConnectionProperty(name: string, value: ReferenceExpression): AzureSqlDatabaseResourcePromise {
+    /** Adds a connection property with a string or reference expression value */
+    withConnectionProperty(name: string, value: string | ReferenceExpression): AzureSqlDatabaseResourcePromise {
         return new AzureSqlDatabaseResourcePromise(this._withConnectionPropertyInternal(name, value));
     }
 
@@ -15554,6 +15704,21 @@ export class AzureSqlDatabaseResource extends ResourceBuilderBase<AzureSqlDataba
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureSqlDatabaseResourcePromise {
         const commandOptions = options?.commandOptions;
         return new AzureSqlDatabaseResourcePromise(this._withCommandInternal(name, displayName, executeCommand, commandOptions));
+    }
+
+    /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<AzureSqlDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<AzureSqlDatabaseResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new AzureSqlDatabaseResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureSqlDatabaseResourcePromise {
+        return new AzureSqlDatabaseResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
     }
 
     /** @internal */
@@ -15857,8 +16022,8 @@ export class AzureSqlDatabaseResourcePromise implements PromiseLike<AzureSqlData
         return new AzureSqlDatabaseResourcePromise(this._promise.then(obj => obj.withRequiredCommand(command, options)));
     }
 
-    /** Adds a connection property with a reference expression */
-    withConnectionProperty(name: string, value: ReferenceExpression): AzureSqlDatabaseResourcePromise {
+    /** Adds a connection property with a string or reference expression value */
+    withConnectionProperty(name: string, value: string | ReferenceExpression): AzureSqlDatabaseResourcePromise {
         return new AzureSqlDatabaseResourcePromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
     }
 
@@ -15915,6 +16080,11 @@ export class AzureSqlDatabaseResourcePromise implements PromiseLike<AzureSqlData
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureSqlDatabaseResourcePromise {
         return new AzureSqlDatabaseResourcePromise(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)));
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureSqlDatabaseResourcePromise {
+        return new AzureSqlDatabaseResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
     }
 
     /** Sets the parent relationship */
@@ -16228,7 +16398,7 @@ export class AzureSqlServerResource extends ResourceBuilderBase<AzureSqlServerRe
     }
 
     /** @internal */
-    private async _withConnectionPropertyInternal(name: string, value: ReferenceExpression): Promise<AzureSqlServerResource> {
+    private async _withConnectionPropertyInternal(name: string, value: string | ReferenceExpression): Promise<AzureSqlServerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<AzureSqlServerResourceHandle>(
             'Aspire.Hosting/withConnectionProperty',
@@ -16237,8 +16407,8 @@ export class AzureSqlServerResource extends ResourceBuilderBase<AzureSqlServerRe
         return new AzureSqlServerResource(result, this._client);
     }
 
-    /** Adds a connection property with a reference expression */
-    withConnectionProperty(name: string, value: ReferenceExpression): AzureSqlServerResourcePromise {
+    /** Adds a connection property with a string or reference expression value */
+    withConnectionProperty(name: string, value: string | ReferenceExpression): AzureSqlServerResourcePromise {
         return new AzureSqlServerResourcePromise(this._withConnectionPropertyInternal(name, value));
     }
 
@@ -16424,6 +16594,21 @@ export class AzureSqlServerResource extends ResourceBuilderBase<AzureSqlServerRe
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureSqlServerResourcePromise {
         const commandOptions = options?.commandOptions;
         return new AzureSqlServerResourcePromise(this._withCommandInternal(name, displayName, executeCommand, commandOptions));
+    }
+
+    /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<AzureSqlServerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<AzureSqlServerResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new AzureSqlServerResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureSqlServerResourcePromise {
+        return new AzureSqlServerResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
     }
 
     /** @internal */
@@ -16947,23 +17132,9 @@ export class AzureSqlServerResource extends ResourceBuilderBase<AzureSqlServerRe
     }
 
     /** @internal */
-    private async _runAsExistingFromParametersInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzureSqlServerResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
-        const result = await this._client.invokeCapability<AzureSqlServerResourceHandle>(
-            'Aspire.Hosting.Azure/runAsExistingFromParameters',
-            rpcArgs
-        );
-        return new AzureSqlServerResource(result, this._client);
-    }
-
-    /** Marks an Azure resource as existing in run mode by using parameter resources */
-    runAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureSqlServerResourcePromise {
-        return new AzureSqlServerResourcePromise(this._runAsExistingFromParametersInternal(nameParameter, resourceGroupParameter));
-    }
-
-    /** @internal */
-    private async _runAsExistingInternal(name: string, resourceGroup: string): Promise<AzureSqlServerResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, resourceGroup };
+    private async _runAsExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzureSqlServerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<AzureSqlServerResourceHandle>(
             'Aspire.Hosting.Azure/runAsExisting',
             rpcArgs
@@ -16972,28 +17143,15 @@ export class AzureSqlServerResource extends ResourceBuilderBase<AzureSqlServerRe
     }
 
     /** Marks an Azure resource as existing in run mode */
-    runAsExisting(name: string, resourceGroup: string): AzureSqlServerResourcePromise {
+    runAsExisting(name: string | ParameterResource, options?: RunAsExistingOptions): AzureSqlServerResourcePromise {
+        const resourceGroup = options?.resourceGroup;
         return new AzureSqlServerResourcePromise(this._runAsExistingInternal(name, resourceGroup));
     }
 
     /** @internal */
-    private async _publishAsExistingFromParametersInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzureSqlServerResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
-        const result = await this._client.invokeCapability<AzureSqlServerResourceHandle>(
-            'Aspire.Hosting.Azure/publishAsExistingFromParameters',
-            rpcArgs
-        );
-        return new AzureSqlServerResource(result, this._client);
-    }
-
-    /** Marks an Azure resource as existing in publish mode by using parameter resources */
-    publishAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureSqlServerResourcePromise {
-        return new AzureSqlServerResourcePromise(this._publishAsExistingFromParametersInternal(nameParameter, resourceGroupParameter));
-    }
-
-    /** @internal */
-    private async _publishAsExistingInternal(name: string, resourceGroup: string): Promise<AzureSqlServerResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, resourceGroup };
+    private async _publishAsExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzureSqlServerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<AzureSqlServerResourceHandle>(
             'Aspire.Hosting.Azure/publishAsExisting',
             rpcArgs
@@ -17002,23 +17160,26 @@ export class AzureSqlServerResource extends ResourceBuilderBase<AzureSqlServerRe
     }
 
     /** Marks an Azure resource as existing in publish mode */
-    publishAsExisting(name: string, resourceGroup: string): AzureSqlServerResourcePromise {
+    publishAsExisting(name: string | ParameterResource, options?: PublishAsExistingOptions): AzureSqlServerResourcePromise {
+        const resourceGroup = options?.resourceGroup;
         return new AzureSqlServerResourcePromise(this._publishAsExistingInternal(name, resourceGroup));
     }
 
     /** @internal */
-    private async _asExistingInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzureSqlServerResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
+    private async _asExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzureSqlServerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<AzureSqlServerResourceHandle>(
-            'Aspire.Hosting.Azure/asExistingFromParameters',
+            'Aspire.Hosting.Azure/asExisting',
             rpcArgs
         );
         return new AzureSqlServerResource(result, this._client);
     }
 
-    /** Marks an Azure resource as existing in both run and publish modes by using parameter resources */
-    asExisting(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureSqlServerResourcePromise {
-        return new AzureSqlServerResourcePromise(this._asExistingInternal(nameParameter, resourceGroupParameter));
+    /** Marks an Azure resource as existing in both run and publish modes */
+    asExisting(name: string | ParameterResource, options?: AsExistingOptions): AzureSqlServerResourcePromise {
+        const resourceGroup = options?.resourceGroup;
+        return new AzureSqlServerResourcePromise(this._asExistingInternal(name, resourceGroup));
     }
 
 }
@@ -17053,8 +17214,8 @@ export class AzureSqlServerResourcePromise implements PromiseLike<AzureSqlServer
         return new AzureSqlServerResourcePromise(this._promise.then(obj => obj.withRequiredCommand(command, options)));
     }
 
-    /** Adds a connection property with a reference expression */
-    withConnectionProperty(name: string, value: ReferenceExpression): AzureSqlServerResourcePromise {
+    /** Adds a connection property with a string or reference expression value */
+    withConnectionProperty(name: string, value: string | ReferenceExpression): AzureSqlServerResourcePromise {
         return new AzureSqlServerResourcePromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
     }
 
@@ -17111,6 +17272,11 @@ export class AzureSqlServerResourcePromise implements PromiseLike<AzureSqlServer
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureSqlServerResourcePromise {
         return new AzureSqlServerResourcePromise(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)));
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureSqlServerResourcePromise {
+        return new AzureSqlServerResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
     }
 
     /** Sets the parent relationship */
@@ -17273,29 +17439,19 @@ export class AzureSqlServerResourcePromise implements PromiseLike<AzureSqlServer
         return this._promise.then(obj => obj.isExisting());
     }
 
-    /** Marks an Azure resource as existing in run mode by using parameter resources */
-    runAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureSqlServerResourcePromise {
-        return new AzureSqlServerResourcePromise(this._promise.then(obj => obj.runAsExistingFromParameters(nameParameter, resourceGroupParameter)));
-    }
-
     /** Marks an Azure resource as existing in run mode */
-    runAsExisting(name: string, resourceGroup: string): AzureSqlServerResourcePromise {
-        return new AzureSqlServerResourcePromise(this._promise.then(obj => obj.runAsExisting(name, resourceGroup)));
-    }
-
-    /** Marks an Azure resource as existing in publish mode by using parameter resources */
-    publishAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureSqlServerResourcePromise {
-        return new AzureSqlServerResourcePromise(this._promise.then(obj => obj.publishAsExistingFromParameters(nameParameter, resourceGroupParameter)));
+    runAsExisting(name: string | ParameterResource, options?: RunAsExistingOptions): AzureSqlServerResourcePromise {
+        return new AzureSqlServerResourcePromise(this._promise.then(obj => obj.runAsExisting(name, options)));
     }
 
     /** Marks an Azure resource as existing in publish mode */
-    publishAsExisting(name: string, resourceGroup: string): AzureSqlServerResourcePromise {
-        return new AzureSqlServerResourcePromise(this._promise.then(obj => obj.publishAsExisting(name, resourceGroup)));
+    publishAsExisting(name: string | ParameterResource, options?: PublishAsExistingOptions): AzureSqlServerResourcePromise {
+        return new AzureSqlServerResourcePromise(this._promise.then(obj => obj.publishAsExisting(name, options)));
     }
 
-    /** Marks an Azure resource as existing in both run and publish modes by using parameter resources */
-    asExisting(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureSqlServerResourcePromise {
-        return new AzureSqlServerResourcePromise(this._promise.then(obj => obj.asExisting(nameParameter, resourceGroupParameter)));
+    /** Marks an Azure resource as existing in both run and publish modes */
+    asExisting(name: string | ParameterResource, options?: AsExistingOptions): AzureSqlServerResourcePromise {
+        return new AzureSqlServerResourcePromise(this._promise.then(obj => obj.asExisting(name, options)));
     }
 
 }
@@ -17513,17 +17669,17 @@ export class AzureStorageEmulatorResource extends ResourceBuilderBase<AzureStora
     }
 
     /** @internal */
-    private async _withBuildArgInternal(name: string, value: ParameterResource): Promise<AzureStorageEmulatorResource> {
+    private async _withBuildArgInternal(name: string, value: string | ParameterResource): Promise<AzureStorageEmulatorResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<AzureStorageEmulatorResourceHandle>(
-            'Aspire.Hosting/withParameterBuildArg',
+            'Aspire.Hosting/withBuildArg',
             rpcArgs
         );
         return new AzureStorageEmulatorResource(result, this._client);
     }
 
-    /** Adds a build argument from a parameter resource */
-    withBuildArg(name: string, value: ParameterResource): AzureStorageEmulatorResourcePromise {
+    /** Adds a build argument from a string value or parameter resource */
+    withBuildArg(name: string, value: string | ParameterResource): AzureStorageEmulatorResourcePromise {
         return new AzureStorageEmulatorResourcePromise(this._withBuildArgInternal(name, value));
     }
 
@@ -17540,6 +17696,27 @@ export class AzureStorageEmulatorResource extends ResourceBuilderBase<AzureStora
     /** Adds a build secret from a parameter resource */
     withBuildSecret(name: string, value: ParameterResource): AzureStorageEmulatorResourcePromise {
         return new AzureStorageEmulatorResourcePromise(this._withBuildSecretInternal(name, value));
+    }
+
+    /** @internal */
+    private async _withContainerCertificatePathsInternal(customCertificatesDestination?: string, defaultCertificateBundlePaths?: string[], defaultCertificateDirectoryPaths?: string[]): Promise<AzureStorageEmulatorResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (customCertificatesDestination !== undefined) rpcArgs.customCertificatesDestination = customCertificatesDestination;
+        if (defaultCertificateBundlePaths !== undefined) rpcArgs.defaultCertificateBundlePaths = defaultCertificateBundlePaths;
+        if (defaultCertificateDirectoryPaths !== undefined) rpcArgs.defaultCertificateDirectoryPaths = defaultCertificateDirectoryPaths;
+        const result = await this._client.invokeCapability<AzureStorageEmulatorResourceHandle>(
+            'Aspire.Hosting/withContainerCertificatePaths',
+            rpcArgs
+        );
+        return new AzureStorageEmulatorResource(result, this._client);
+    }
+
+    /** Overrides container certificate bundle and directory paths used for trust configuration */
+    withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): AzureStorageEmulatorResourcePromise {
+        const customCertificatesDestination = options?.customCertificatesDestination;
+        const defaultCertificateBundlePaths = options?.defaultCertificateBundlePaths;
+        const defaultCertificateDirectoryPaths = options?.defaultCertificateDirectoryPaths;
+        return new AzureStorageEmulatorResourcePromise(this._withContainerCertificatePathsInternal(customCertificatesDestination, defaultCertificateBundlePaths, defaultCertificateDirectoryPaths));
     }
 
     /** @internal */
@@ -17805,6 +17982,21 @@ export class AzureStorageEmulatorResource extends ResourceBuilderBase<AzureStora
     /** Sets command-line arguments via async callback */
     withArgsCallbackAsync(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): AzureStorageEmulatorResourcePromise {
         return new AzureStorageEmulatorResourcePromise(this._withArgsCallbackAsyncInternal(callback));
+    }
+
+    /** @internal */
+    private async _withReferenceEnvironmentInternal(options: ReferenceEnvironmentInjectionOptions): Promise<AzureStorageEmulatorResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, options };
+        const result = await this._client.invokeCapability<AzureStorageEmulatorResourceHandle>(
+            'Aspire.Hosting/withReferenceEnvironment',
+            rpcArgs
+        );
+        return new AzureStorageEmulatorResource(result, this._client);
+    }
+
+    /** Configures which reference values are injected into environment variables */
+    withReferenceEnvironment(options: ReferenceEnvironmentInjectionOptions): AzureStorageEmulatorResourcePromise {
+        return new AzureStorageEmulatorResourcePromise(this._withReferenceEnvironmentInternal(options));
     }
 
     /** @internal */
@@ -18331,6 +18523,21 @@ export class AzureStorageEmulatorResource extends ResourceBuilderBase<AzureStora
     /** Removes HTTPS certificate configuration */
     withoutHttpsCertificate(): AzureStorageEmulatorResourcePromise {
         return new AzureStorageEmulatorResourcePromise(this._withoutHttpsCertificateInternal());
+    }
+
+    /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<AzureStorageEmulatorResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<AzureStorageEmulatorResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new AzureStorageEmulatorResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureStorageEmulatorResourcePromise {
+        return new AzureStorageEmulatorResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
     }
 
     /** @internal */
@@ -18892,14 +19099,19 @@ export class AzureStorageEmulatorResourcePromise implements PromiseLike<AzureSto
         return new AzureStorageEmulatorResourcePromise(this._promise.then(obj => obj.withContainerName(name)));
     }
 
-    /** Adds a build argument from a parameter resource */
-    withBuildArg(name: string, value: ParameterResource): AzureStorageEmulatorResourcePromise {
+    /** Adds a build argument from a string value or parameter resource */
+    withBuildArg(name: string, value: string | ParameterResource): AzureStorageEmulatorResourcePromise {
         return new AzureStorageEmulatorResourcePromise(this._promise.then(obj => obj.withBuildArg(name, value)));
     }
 
     /** Adds a build secret from a parameter resource */
     withBuildSecret(name: string, value: ParameterResource): AzureStorageEmulatorResourcePromise {
         return new AzureStorageEmulatorResourcePromise(this._promise.then(obj => obj.withBuildSecret(name, value)));
+    }
+
+    /** Overrides container certificate bundle and directory paths used for trust configuration */
+    withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): AzureStorageEmulatorResourcePromise {
+        return new AzureStorageEmulatorResourcePromise(this._promise.then(obj => obj.withContainerCertificatePaths(options)));
     }
 
     /** Configures endpoint proxy support */
@@ -18980,6 +19192,11 @@ export class AzureStorageEmulatorResourcePromise implements PromiseLike<AzureSto
     /** Sets command-line arguments via async callback */
     withArgsCallbackAsync(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): AzureStorageEmulatorResourcePromise {
         return new AzureStorageEmulatorResourcePromise(this._promise.then(obj => obj.withArgsCallbackAsync(callback)));
+    }
+
+    /** Configures which reference values are injected into environment variables */
+    withReferenceEnvironment(options: ReferenceEnvironmentInjectionOptions): AzureStorageEmulatorResourcePromise {
+        return new AzureStorageEmulatorResourcePromise(this._promise.then(obj => obj.withReferenceEnvironment(options)));
     }
 
     /** Adds a reference to another resource */
@@ -19130,6 +19347,11 @@ export class AzureStorageEmulatorResourcePromise implements PromiseLike<AzureSto
     /** Removes HTTPS certificate configuration */
     withoutHttpsCertificate(): AzureStorageEmulatorResourcePromise {
         return new AzureStorageEmulatorResourcePromise(this._promise.then(obj => obj.withoutHttpsCertificate()));
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureStorageEmulatorResourcePromise {
+        return new AzureStorageEmulatorResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
     }
 
     /** Sets the parent relationship */
@@ -19667,6 +19889,21 @@ export class AzureStorageResource extends ResourceBuilderBase<AzureStorageResour
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureStorageResourcePromise {
         const commandOptions = options?.commandOptions;
         return new AzureStorageResourcePromise(this._withCommandInternal(name, displayName, executeCommand, commandOptions));
+    }
+
+    /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<AzureStorageResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<AzureStorageResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new AzureStorageResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureStorageResourcePromise {
+        return new AzureStorageResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
     }
 
     /** @internal */
@@ -20283,23 +20520,9 @@ export class AzureStorageResource extends ResourceBuilderBase<AzureStorageResour
     }
 
     /** @internal */
-    private async _runAsExistingFromParametersInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzureStorageResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
-        const result = await this._client.invokeCapability<AzureStorageResourceHandle>(
-            'Aspire.Hosting.Azure/runAsExistingFromParameters',
-            rpcArgs
-        );
-        return new AzureStorageResource(result, this._client);
-    }
-
-    /** Marks an Azure resource as existing in run mode by using parameter resources */
-    runAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureStorageResourcePromise {
-        return new AzureStorageResourcePromise(this._runAsExistingFromParametersInternal(nameParameter, resourceGroupParameter));
-    }
-
-    /** @internal */
-    private async _runAsExistingInternal(name: string, resourceGroup: string): Promise<AzureStorageResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, resourceGroup };
+    private async _runAsExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzureStorageResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<AzureStorageResourceHandle>(
             'Aspire.Hosting.Azure/runAsExisting',
             rpcArgs
@@ -20308,28 +20531,15 @@ export class AzureStorageResource extends ResourceBuilderBase<AzureStorageResour
     }
 
     /** Marks an Azure resource as existing in run mode */
-    runAsExisting(name: string, resourceGroup: string): AzureStorageResourcePromise {
+    runAsExisting(name: string | ParameterResource, options?: RunAsExistingOptions): AzureStorageResourcePromise {
+        const resourceGroup = options?.resourceGroup;
         return new AzureStorageResourcePromise(this._runAsExistingInternal(name, resourceGroup));
     }
 
     /** @internal */
-    private async _publishAsExistingFromParametersInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzureStorageResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
-        const result = await this._client.invokeCapability<AzureStorageResourceHandle>(
-            'Aspire.Hosting.Azure/publishAsExistingFromParameters',
-            rpcArgs
-        );
-        return new AzureStorageResource(result, this._client);
-    }
-
-    /** Marks an Azure resource as existing in publish mode by using parameter resources */
-    publishAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureStorageResourcePromise {
-        return new AzureStorageResourcePromise(this._publishAsExistingFromParametersInternal(nameParameter, resourceGroupParameter));
-    }
-
-    /** @internal */
-    private async _publishAsExistingInternal(name: string, resourceGroup: string): Promise<AzureStorageResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, resourceGroup };
+    private async _publishAsExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzureStorageResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<AzureStorageResourceHandle>(
             'Aspire.Hosting.Azure/publishAsExisting',
             rpcArgs
@@ -20338,23 +20548,26 @@ export class AzureStorageResource extends ResourceBuilderBase<AzureStorageResour
     }
 
     /** Marks an Azure resource as existing in publish mode */
-    publishAsExisting(name: string, resourceGroup: string): AzureStorageResourcePromise {
+    publishAsExisting(name: string | ParameterResource, options?: PublishAsExistingOptions): AzureStorageResourcePromise {
+        const resourceGroup = options?.resourceGroup;
         return new AzureStorageResourcePromise(this._publishAsExistingInternal(name, resourceGroup));
     }
 
     /** @internal */
-    private async _asExistingInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzureStorageResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
+    private async _asExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzureStorageResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<AzureStorageResourceHandle>(
-            'Aspire.Hosting.Azure/asExistingFromParameters',
+            'Aspire.Hosting.Azure/asExisting',
             rpcArgs
         );
         return new AzureStorageResource(result, this._client);
     }
 
-    /** Marks an Azure resource as existing in both run and publish modes by using parameter resources */
-    asExisting(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureStorageResourcePromise {
-        return new AzureStorageResourcePromise(this._asExistingInternal(nameParameter, resourceGroupParameter));
+    /** Marks an Azure resource as existing in both run and publish modes */
+    asExisting(name: string | ParameterResource, options?: AsExistingOptions): AzureStorageResourcePromise {
+        const resourceGroup = options?.resourceGroup;
+        return new AzureStorageResourcePromise(this._asExistingInternal(name, resourceGroup));
     }
 
 }
@@ -20477,6 +20690,11 @@ export class AzureStorageResourcePromise implements PromiseLike<AzureStorageReso
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureStorageResourcePromise {
         return new AzureStorageResourcePromise(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)));
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureStorageResourcePromise {
+        return new AzureStorageResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
     }
 
     /** Sets the parent relationship */
@@ -20664,29 +20882,19 @@ export class AzureStorageResourcePromise implements PromiseLike<AzureStorageReso
         return this._promise.then(obj => obj.isExisting());
     }
 
-    /** Marks an Azure resource as existing in run mode by using parameter resources */
-    runAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureStorageResourcePromise {
-        return new AzureStorageResourcePromise(this._promise.then(obj => obj.runAsExistingFromParameters(nameParameter, resourceGroupParameter)));
-    }
-
     /** Marks an Azure resource as existing in run mode */
-    runAsExisting(name: string, resourceGroup: string): AzureStorageResourcePromise {
-        return new AzureStorageResourcePromise(this._promise.then(obj => obj.runAsExisting(name, resourceGroup)));
-    }
-
-    /** Marks an Azure resource as existing in publish mode by using parameter resources */
-    publishAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureStorageResourcePromise {
-        return new AzureStorageResourcePromise(this._promise.then(obj => obj.publishAsExistingFromParameters(nameParameter, resourceGroupParameter)));
+    runAsExisting(name: string | ParameterResource, options?: RunAsExistingOptions): AzureStorageResourcePromise {
+        return new AzureStorageResourcePromise(this._promise.then(obj => obj.runAsExisting(name, options)));
     }
 
     /** Marks an Azure resource as existing in publish mode */
-    publishAsExisting(name: string, resourceGroup: string): AzureStorageResourcePromise {
-        return new AzureStorageResourcePromise(this._promise.then(obj => obj.publishAsExisting(name, resourceGroup)));
+    publishAsExisting(name: string | ParameterResource, options?: PublishAsExistingOptions): AzureStorageResourcePromise {
+        return new AzureStorageResourcePromise(this._promise.then(obj => obj.publishAsExisting(name, options)));
     }
 
-    /** Marks an Azure resource as existing in both run and publish modes by using parameter resources */
-    asExisting(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureStorageResourcePromise {
-        return new AzureStorageResourcePromise(this._promise.then(obj => obj.asExisting(nameParameter, resourceGroupParameter)));
+    /** Marks an Azure resource as existing in both run and publish modes */
+    asExisting(name: string | ParameterResource, options?: AsExistingOptions): AzureStorageResourcePromise {
+        return new AzureStorageResourcePromise(this._promise.then(obj => obj.asExisting(name, options)));
     }
 
 }
@@ -20909,6 +21117,21 @@ export class AzureSubnetResource extends ResourceBuilderBase<AzureSubnetResource
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureSubnetResourcePromise {
         const commandOptions = options?.commandOptions;
         return new AzureSubnetResourcePromise(this._withCommandInternal(name, displayName, executeCommand, commandOptions));
+    }
+
+    /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<AzureSubnetResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<AzureSubnetResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new AzureSubnetResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureSubnetResourcePromise {
+        return new AzureSubnetResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
     }
 
     /** @internal */
@@ -21375,6 +21598,11 @@ export class AzureSubnetResourcePromise implements PromiseLike<AzureSubnetResour
         return new AzureSubnetResourcePromise(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)));
     }
 
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureSubnetResourcePromise {
+        return new AzureSubnetResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
+    }
+
     /** Sets the parent relationship */
     withParentRelationship(parent: ResourceBuilderBase): AzureSubnetResourcePromise {
         return new AzureSubnetResourcePromise(this._promise.then(obj => obj.withParentRelationship(parent)));
@@ -21538,7 +21766,7 @@ export class AzureTableStorageResource extends ResourceBuilderBase<AzureTableSto
     }
 
     /** @internal */
-    private async _withConnectionPropertyInternal(name: string, value: ReferenceExpression): Promise<AzureTableStorageResource> {
+    private async _withConnectionPropertyInternal(name: string, value: string | ReferenceExpression): Promise<AzureTableStorageResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<AzureTableStorageResourceHandle>(
             'Aspire.Hosting/withConnectionProperty',
@@ -21547,8 +21775,8 @@ export class AzureTableStorageResource extends ResourceBuilderBase<AzureTableSto
         return new AzureTableStorageResource(result, this._client);
     }
 
-    /** Adds a connection property with a reference expression */
-    withConnectionProperty(name: string, value: ReferenceExpression): AzureTableStorageResourcePromise {
+    /** Adds a connection property with a string or reference expression value */
+    withConnectionProperty(name: string, value: string | ReferenceExpression): AzureTableStorageResourcePromise {
         return new AzureTableStorageResourcePromise(this._withConnectionPropertyInternal(name, value));
     }
 
@@ -21734,6 +21962,21 @@ export class AzureTableStorageResource extends ResourceBuilderBase<AzureTableSto
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureTableStorageResourcePromise {
         const commandOptions = options?.commandOptions;
         return new AzureTableStorageResourcePromise(this._withCommandInternal(name, displayName, executeCommand, commandOptions));
+    }
+
+    /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<AzureTableStorageResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<AzureTableStorageResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new AzureTableStorageResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureTableStorageResourcePromise {
+        return new AzureTableStorageResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
     }
 
     /** @internal */
@@ -22022,8 +22265,8 @@ export class AzureTableStorageResourcePromise implements PromiseLike<AzureTableS
         return new AzureTableStorageResourcePromise(this._promise.then(obj => obj.withRequiredCommand(command, options)));
     }
 
-    /** Adds a connection property with a reference expression */
-    withConnectionProperty(name: string, value: ReferenceExpression): AzureTableStorageResourcePromise {
+    /** Adds a connection property with a string or reference expression value */
+    withConnectionProperty(name: string, value: string | ReferenceExpression): AzureTableStorageResourcePromise {
         return new AzureTableStorageResourcePromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
     }
 
@@ -22080,6 +22323,11 @@ export class AzureTableStorageResourcePromise implements PromiseLike<AzureTableS
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureTableStorageResourcePromise {
         return new AzureTableStorageResourcePromise(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)));
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureTableStorageResourcePromise {
+        return new AzureTableStorageResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
     }
 
     /** Sets the parent relationship */
@@ -22372,6 +22620,21 @@ export class AzureUserAssignedIdentityResource extends ResourceBuilderBase<Azure
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureUserAssignedIdentityResourcePromise {
         const commandOptions = options?.commandOptions;
         return new AzureUserAssignedIdentityResourcePromise(this._withCommandInternal(name, displayName, executeCommand, commandOptions));
+    }
+
+    /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<AzureUserAssignedIdentityResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<AzureUserAssignedIdentityResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new AzureUserAssignedIdentityResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureUserAssignedIdentityResourcePromise {
+        return new AzureUserAssignedIdentityResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
     }
 
     /** @internal */
@@ -22806,23 +23069,9 @@ export class AzureUserAssignedIdentityResource extends ResourceBuilderBase<Azure
     }
 
     /** @internal */
-    private async _runAsExistingFromParametersInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzureUserAssignedIdentityResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
-        const result = await this._client.invokeCapability<AzureUserAssignedIdentityResourceHandle>(
-            'Aspire.Hosting.Azure/runAsExistingFromParameters',
-            rpcArgs
-        );
-        return new AzureUserAssignedIdentityResource(result, this._client);
-    }
-
-    /** Marks an Azure resource as existing in run mode by using parameter resources */
-    runAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureUserAssignedIdentityResourcePromise {
-        return new AzureUserAssignedIdentityResourcePromise(this._runAsExistingFromParametersInternal(nameParameter, resourceGroupParameter));
-    }
-
-    /** @internal */
-    private async _runAsExistingInternal(name: string, resourceGroup: string): Promise<AzureUserAssignedIdentityResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, resourceGroup };
+    private async _runAsExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzureUserAssignedIdentityResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<AzureUserAssignedIdentityResourceHandle>(
             'Aspire.Hosting.Azure/runAsExisting',
             rpcArgs
@@ -22831,28 +23080,15 @@ export class AzureUserAssignedIdentityResource extends ResourceBuilderBase<Azure
     }
 
     /** Marks an Azure resource as existing in run mode */
-    runAsExisting(name: string, resourceGroup: string): AzureUserAssignedIdentityResourcePromise {
+    runAsExisting(name: string | ParameterResource, options?: RunAsExistingOptions): AzureUserAssignedIdentityResourcePromise {
+        const resourceGroup = options?.resourceGroup;
         return new AzureUserAssignedIdentityResourcePromise(this._runAsExistingInternal(name, resourceGroup));
     }
 
     /** @internal */
-    private async _publishAsExistingFromParametersInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzureUserAssignedIdentityResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
-        const result = await this._client.invokeCapability<AzureUserAssignedIdentityResourceHandle>(
-            'Aspire.Hosting.Azure/publishAsExistingFromParameters',
-            rpcArgs
-        );
-        return new AzureUserAssignedIdentityResource(result, this._client);
-    }
-
-    /** Marks an Azure resource as existing in publish mode by using parameter resources */
-    publishAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureUserAssignedIdentityResourcePromise {
-        return new AzureUserAssignedIdentityResourcePromise(this._publishAsExistingFromParametersInternal(nameParameter, resourceGroupParameter));
-    }
-
-    /** @internal */
-    private async _publishAsExistingInternal(name: string, resourceGroup: string): Promise<AzureUserAssignedIdentityResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, resourceGroup };
+    private async _publishAsExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzureUserAssignedIdentityResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<AzureUserAssignedIdentityResourceHandle>(
             'Aspire.Hosting.Azure/publishAsExisting',
             rpcArgs
@@ -22861,23 +23097,26 @@ export class AzureUserAssignedIdentityResource extends ResourceBuilderBase<Azure
     }
 
     /** Marks an Azure resource as existing in publish mode */
-    publishAsExisting(name: string, resourceGroup: string): AzureUserAssignedIdentityResourcePromise {
+    publishAsExisting(name: string | ParameterResource, options?: PublishAsExistingOptions): AzureUserAssignedIdentityResourcePromise {
+        const resourceGroup = options?.resourceGroup;
         return new AzureUserAssignedIdentityResourcePromise(this._publishAsExistingInternal(name, resourceGroup));
     }
 
     /** @internal */
-    private async _asExistingInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzureUserAssignedIdentityResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
+    private async _asExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzureUserAssignedIdentityResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<AzureUserAssignedIdentityResourceHandle>(
-            'Aspire.Hosting.Azure/asExistingFromParameters',
+            'Aspire.Hosting.Azure/asExisting',
             rpcArgs
         );
         return new AzureUserAssignedIdentityResource(result, this._client);
     }
 
-    /** Marks an Azure resource as existing in both run and publish modes by using parameter resources */
-    asExisting(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureUserAssignedIdentityResourcePromise {
-        return new AzureUserAssignedIdentityResourcePromise(this._asExistingInternal(nameParameter, resourceGroupParameter));
+    /** Marks an Azure resource as existing in both run and publish modes */
+    asExisting(name: string | ParameterResource, options?: AsExistingOptions): AzureUserAssignedIdentityResourcePromise {
+        const resourceGroup = options?.resourceGroup;
+        return new AzureUserAssignedIdentityResourcePromise(this._asExistingInternal(name, resourceGroup));
     }
 
 }
@@ -22955,6 +23194,11 @@ export class AzureUserAssignedIdentityResourcePromise implements PromiseLike<Azu
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureUserAssignedIdentityResourcePromise {
         return new AzureUserAssignedIdentityResourcePromise(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)));
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureUserAssignedIdentityResourcePromise {
+        return new AzureUserAssignedIdentityResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
     }
 
     /** Sets the parent relationship */
@@ -23092,29 +23336,19 @@ export class AzureUserAssignedIdentityResourcePromise implements PromiseLike<Azu
         return this._promise.then(obj => obj.isExisting());
     }
 
-    /** Marks an Azure resource as existing in run mode by using parameter resources */
-    runAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureUserAssignedIdentityResourcePromise {
-        return new AzureUserAssignedIdentityResourcePromise(this._promise.then(obj => obj.runAsExistingFromParameters(nameParameter, resourceGroupParameter)));
-    }
-
     /** Marks an Azure resource as existing in run mode */
-    runAsExisting(name: string, resourceGroup: string): AzureUserAssignedIdentityResourcePromise {
-        return new AzureUserAssignedIdentityResourcePromise(this._promise.then(obj => obj.runAsExisting(name, resourceGroup)));
-    }
-
-    /** Marks an Azure resource as existing in publish mode by using parameter resources */
-    publishAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureUserAssignedIdentityResourcePromise {
-        return new AzureUserAssignedIdentityResourcePromise(this._promise.then(obj => obj.publishAsExistingFromParameters(nameParameter, resourceGroupParameter)));
+    runAsExisting(name: string | ParameterResource, options?: RunAsExistingOptions): AzureUserAssignedIdentityResourcePromise {
+        return new AzureUserAssignedIdentityResourcePromise(this._promise.then(obj => obj.runAsExisting(name, options)));
     }
 
     /** Marks an Azure resource as existing in publish mode */
-    publishAsExisting(name: string, resourceGroup: string): AzureUserAssignedIdentityResourcePromise {
-        return new AzureUserAssignedIdentityResourcePromise(this._promise.then(obj => obj.publishAsExisting(name, resourceGroup)));
+    publishAsExisting(name: string | ParameterResource, options?: PublishAsExistingOptions): AzureUserAssignedIdentityResourcePromise {
+        return new AzureUserAssignedIdentityResourcePromise(this._promise.then(obj => obj.publishAsExisting(name, options)));
     }
 
-    /** Marks an Azure resource as existing in both run and publish modes by using parameter resources */
-    asExisting(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureUserAssignedIdentityResourcePromise {
-        return new AzureUserAssignedIdentityResourcePromise(this._promise.then(obj => obj.asExisting(nameParameter, resourceGroupParameter)));
+    /** Marks an Azure resource as existing in both run and publish modes */
+    asExisting(name: string | ParameterResource, options?: AsExistingOptions): AzureUserAssignedIdentityResourcePromise {
+        return new AzureUserAssignedIdentityResourcePromise(this._promise.then(obj => obj.asExisting(name, options)));
     }
 
 }
@@ -23337,6 +23571,21 @@ export class AzureVirtualNetworkResource extends ResourceBuilderBase<AzureVirtua
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureVirtualNetworkResourcePromise {
         const commandOptions = options?.commandOptions;
         return new AzureVirtualNetworkResourcePromise(this._withCommandInternal(name, displayName, executeCommand, commandOptions));
+    }
+
+    /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<AzureVirtualNetworkResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<AzureVirtualNetworkResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new AzureVirtualNetworkResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureVirtualNetworkResourcePromise {
+        return new AzureVirtualNetworkResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
     }
 
     /** @internal */
@@ -23788,23 +24037,9 @@ export class AzureVirtualNetworkResource extends ResourceBuilderBase<AzureVirtua
     }
 
     /** @internal */
-    private async _runAsExistingFromParametersInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzureVirtualNetworkResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
-        const result = await this._client.invokeCapability<AzureVirtualNetworkResourceHandle>(
-            'Aspire.Hosting.Azure/runAsExistingFromParameters',
-            rpcArgs
-        );
-        return new AzureVirtualNetworkResource(result, this._client);
-    }
-
-    /** Marks an Azure resource as existing in run mode by using parameter resources */
-    runAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureVirtualNetworkResourcePromise {
-        return new AzureVirtualNetworkResourcePromise(this._runAsExistingFromParametersInternal(nameParameter, resourceGroupParameter));
-    }
-
-    /** @internal */
-    private async _runAsExistingInternal(name: string, resourceGroup: string): Promise<AzureVirtualNetworkResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, resourceGroup };
+    private async _runAsExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzureVirtualNetworkResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<AzureVirtualNetworkResourceHandle>(
             'Aspire.Hosting.Azure/runAsExisting',
             rpcArgs
@@ -23813,28 +24048,15 @@ export class AzureVirtualNetworkResource extends ResourceBuilderBase<AzureVirtua
     }
 
     /** Marks an Azure resource as existing in run mode */
-    runAsExisting(name: string, resourceGroup: string): AzureVirtualNetworkResourcePromise {
+    runAsExisting(name: string | ParameterResource, options?: RunAsExistingOptions): AzureVirtualNetworkResourcePromise {
+        const resourceGroup = options?.resourceGroup;
         return new AzureVirtualNetworkResourcePromise(this._runAsExistingInternal(name, resourceGroup));
     }
 
     /** @internal */
-    private async _publishAsExistingFromParametersInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzureVirtualNetworkResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
-        const result = await this._client.invokeCapability<AzureVirtualNetworkResourceHandle>(
-            'Aspire.Hosting.Azure/publishAsExistingFromParameters',
-            rpcArgs
-        );
-        return new AzureVirtualNetworkResource(result, this._client);
-    }
-
-    /** Marks an Azure resource as existing in publish mode by using parameter resources */
-    publishAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureVirtualNetworkResourcePromise {
-        return new AzureVirtualNetworkResourcePromise(this._publishAsExistingFromParametersInternal(nameParameter, resourceGroupParameter));
-    }
-
-    /** @internal */
-    private async _publishAsExistingInternal(name: string, resourceGroup: string): Promise<AzureVirtualNetworkResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, resourceGroup };
+    private async _publishAsExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzureVirtualNetworkResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<AzureVirtualNetworkResourceHandle>(
             'Aspire.Hosting.Azure/publishAsExisting',
             rpcArgs
@@ -23843,23 +24065,26 @@ export class AzureVirtualNetworkResource extends ResourceBuilderBase<AzureVirtua
     }
 
     /** Marks an Azure resource as existing in publish mode */
-    publishAsExisting(name: string, resourceGroup: string): AzureVirtualNetworkResourcePromise {
+    publishAsExisting(name: string | ParameterResource, options?: PublishAsExistingOptions): AzureVirtualNetworkResourcePromise {
+        const resourceGroup = options?.resourceGroup;
         return new AzureVirtualNetworkResourcePromise(this._publishAsExistingInternal(name, resourceGroup));
     }
 
     /** @internal */
-    private async _asExistingInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzureVirtualNetworkResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
+    private async _asExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzureVirtualNetworkResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<AzureVirtualNetworkResourceHandle>(
-            'Aspire.Hosting.Azure/asExistingFromParameters',
+            'Aspire.Hosting.Azure/asExisting',
             rpcArgs
         );
         return new AzureVirtualNetworkResource(result, this._client);
     }
 
-    /** Marks an Azure resource as existing in both run and publish modes by using parameter resources */
-    asExisting(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureVirtualNetworkResourcePromise {
-        return new AzureVirtualNetworkResourcePromise(this._asExistingInternal(nameParameter, resourceGroupParameter));
+    /** Marks an Azure resource as existing in both run and publish modes */
+    asExisting(name: string | ParameterResource, options?: AsExistingOptions): AzureVirtualNetworkResourcePromise {
+        const resourceGroup = options?.resourceGroup;
+        return new AzureVirtualNetworkResourcePromise(this._asExistingInternal(name, resourceGroup));
     }
 
 }
@@ -23937,6 +24162,11 @@ export class AzureVirtualNetworkResourcePromise implements PromiseLike<AzureVirt
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): AzureVirtualNetworkResourcePromise {
         return new AzureVirtualNetworkResourcePromise(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)));
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): AzureVirtualNetworkResourcePromise {
+        return new AzureVirtualNetworkResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
     }
 
     /** Sets the parent relationship */
@@ -24079,29 +24309,19 @@ export class AzureVirtualNetworkResourcePromise implements PromiseLike<AzureVirt
         return this._promise.then(obj => obj.isExisting());
     }
 
-    /** Marks an Azure resource as existing in run mode by using parameter resources */
-    runAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureVirtualNetworkResourcePromise {
-        return new AzureVirtualNetworkResourcePromise(this._promise.then(obj => obj.runAsExistingFromParameters(nameParameter, resourceGroupParameter)));
-    }
-
     /** Marks an Azure resource as existing in run mode */
-    runAsExisting(name: string, resourceGroup: string): AzureVirtualNetworkResourcePromise {
-        return new AzureVirtualNetworkResourcePromise(this._promise.then(obj => obj.runAsExisting(name, resourceGroup)));
-    }
-
-    /** Marks an Azure resource as existing in publish mode by using parameter resources */
-    publishAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureVirtualNetworkResourcePromise {
-        return new AzureVirtualNetworkResourcePromise(this._promise.then(obj => obj.publishAsExistingFromParameters(nameParameter, resourceGroupParameter)));
+    runAsExisting(name: string | ParameterResource, options?: RunAsExistingOptions): AzureVirtualNetworkResourcePromise {
+        return new AzureVirtualNetworkResourcePromise(this._promise.then(obj => obj.runAsExisting(name, options)));
     }
 
     /** Marks an Azure resource as existing in publish mode */
-    publishAsExisting(name: string, resourceGroup: string): AzureVirtualNetworkResourcePromise {
-        return new AzureVirtualNetworkResourcePromise(this._promise.then(obj => obj.publishAsExisting(name, resourceGroup)));
+    publishAsExisting(name: string | ParameterResource, options?: PublishAsExistingOptions): AzureVirtualNetworkResourcePromise {
+        return new AzureVirtualNetworkResourcePromise(this._promise.then(obj => obj.publishAsExisting(name, options)));
     }
 
-    /** Marks an Azure resource as existing in both run and publish modes by using parameter resources */
-    asExisting(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureVirtualNetworkResourcePromise {
-        return new AzureVirtualNetworkResourcePromise(this._promise.then(obj => obj.asExisting(nameParameter, resourceGroupParameter)));
+    /** Marks an Azure resource as existing in both run and publish modes */
+    asExisting(name: string | ParameterResource, options?: AsExistingOptions): AzureVirtualNetworkResourcePromise {
+        return new AzureVirtualNetworkResourcePromise(this._promise.then(obj => obj.asExisting(name, options)));
     }
 
 }
@@ -24167,7 +24387,7 @@ export class ConnectionStringResource extends ResourceBuilderBase<ConnectionStri
     }
 
     /** @internal */
-    private async _withConnectionPropertyInternal(name: string, value: ReferenceExpression): Promise<ConnectionStringResource> {
+    private async _withConnectionPropertyInternal(name: string, value: string | ReferenceExpression): Promise<ConnectionStringResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<ConnectionStringResourceHandle>(
             'Aspire.Hosting/withConnectionProperty',
@@ -24176,8 +24396,8 @@ export class ConnectionStringResource extends ResourceBuilderBase<ConnectionStri
         return new ConnectionStringResource(result, this._client);
     }
 
-    /** Adds a connection property with a reference expression */
-    withConnectionProperty(name: string, value: ReferenceExpression): ConnectionStringResourcePromise {
+    /** Adds a connection property with a string or reference expression value */
+    withConnectionProperty(name: string, value: string | ReferenceExpression): ConnectionStringResourcePromise {
         return new ConnectionStringResourcePromise(this._withConnectionPropertyInternal(name, value));
     }
 
@@ -24440,6 +24660,21 @@ export class ConnectionStringResource extends ResourceBuilderBase<ConnectionStri
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ConnectionStringResourcePromise {
         const commandOptions = options?.commandOptions;
         return new ConnectionStringResourcePromise(this._withCommandInternal(name, displayName, executeCommand, commandOptions));
+    }
+
+    /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<ConnectionStringResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<ConnectionStringResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new ConnectionStringResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): ConnectionStringResourcePromise {
+        return new ConnectionStringResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
     }
 
     /** @internal */
@@ -24728,8 +24963,8 @@ export class ConnectionStringResourcePromise implements PromiseLike<ConnectionSt
         return new ConnectionStringResourcePromise(this._promise.then(obj => obj.withRequiredCommand(command, options)));
     }
 
-    /** Adds a connection property with a reference expression */
-    withConnectionProperty(name: string, value: ReferenceExpression): ConnectionStringResourcePromise {
+    /** Adds a connection property with a string or reference expression value */
+    withConnectionProperty(name: string, value: string | ReferenceExpression): ConnectionStringResourcePromise {
         return new ConnectionStringResourcePromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
     }
 
@@ -24811,6 +25046,11 @@ export class ConnectionStringResourcePromise implements PromiseLike<ConnectionSt
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ConnectionStringResourcePromise {
         return new ConnectionStringResourcePromise(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)));
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): ConnectionStringResourcePromise {
+        return new ConnectionStringResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
     }
 
     /** Sets the parent relationship */
@@ -25103,6 +25343,21 @@ export class ContainerRegistryResource extends ResourceBuilderBase<ContainerRegi
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ContainerRegistryResourcePromise {
         const commandOptions = options?.commandOptions;
         return new ContainerRegistryResourcePromise(this._withCommandInternal(name, displayName, executeCommand, commandOptions));
+    }
+
+    /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new ContainerRegistryResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
     }
 
     /** @internal */
@@ -25416,6 +25671,11 @@ export class ContainerRegistryResourcePromise implements PromiseLike<ContainerRe
         return new ContainerRegistryResourcePromise(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)));
     }
 
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
+    }
+
     /** Sets the parent relationship */
     withParentRelationship(parent: ResourceBuilderBase): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromise(this._promise.then(obj => obj.withParentRelationship(parent)));
@@ -25696,17 +25956,17 @@ export class ContainerResource extends ResourceBuilderBase<ContainerResourceHand
     }
 
     /** @internal */
-    private async _withBuildArgInternal(name: string, value: ParameterResource): Promise<ContainerResource> {
+    private async _withBuildArgInternal(name: string, value: string | ParameterResource): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
-            'Aspire.Hosting/withParameterBuildArg',
+            'Aspire.Hosting/withBuildArg',
             rpcArgs
         );
         return new ContainerResource(result, this._client);
     }
 
-    /** Adds a build argument from a parameter resource */
-    withBuildArg(name: string, value: ParameterResource): ContainerResourcePromise {
+    /** Adds a build argument from a string value or parameter resource */
+    withBuildArg(name: string, value: string | ParameterResource): ContainerResourcePromise {
         return new ContainerResourcePromise(this._withBuildArgInternal(name, value));
     }
 
@@ -25723,6 +25983,27 @@ export class ContainerResource extends ResourceBuilderBase<ContainerResourceHand
     /** Adds a build secret from a parameter resource */
     withBuildSecret(name: string, value: ParameterResource): ContainerResourcePromise {
         return new ContainerResourcePromise(this._withBuildSecretInternal(name, value));
+    }
+
+    /** @internal */
+    private async _withContainerCertificatePathsInternal(customCertificatesDestination?: string, defaultCertificateBundlePaths?: string[], defaultCertificateDirectoryPaths?: string[]): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (customCertificatesDestination !== undefined) rpcArgs.customCertificatesDestination = customCertificatesDestination;
+        if (defaultCertificateBundlePaths !== undefined) rpcArgs.defaultCertificateBundlePaths = defaultCertificateBundlePaths;
+        if (defaultCertificateDirectoryPaths !== undefined) rpcArgs.defaultCertificateDirectoryPaths = defaultCertificateDirectoryPaths;
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withContainerCertificatePaths',
+            rpcArgs
+        );
+        return new ContainerResource(result, this._client);
+    }
+
+    /** Overrides container certificate bundle and directory paths used for trust configuration */
+    withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): ContainerResourcePromise {
+        const customCertificatesDestination = options?.customCertificatesDestination;
+        const defaultCertificateBundlePaths = options?.defaultCertificateBundlePaths;
+        const defaultCertificateDirectoryPaths = options?.defaultCertificateDirectoryPaths;
+        return new ContainerResourcePromise(this._withContainerCertificatePathsInternal(customCertificatesDestination, defaultCertificateBundlePaths, defaultCertificateDirectoryPaths));
     }
 
     /** @internal */
@@ -25988,6 +26269,21 @@ export class ContainerResource extends ResourceBuilderBase<ContainerResourceHand
     /** Sets command-line arguments via async callback */
     withArgsCallbackAsync(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): ContainerResourcePromise {
         return new ContainerResourcePromise(this._withArgsCallbackAsyncInternal(callback));
+    }
+
+    /** @internal */
+    private async _withReferenceEnvironmentInternal(options: ReferenceEnvironmentInjectionOptions): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, options };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withReferenceEnvironment',
+            rpcArgs
+        );
+        return new ContainerResource(result, this._client);
+    }
+
+    /** Configures which reference values are injected into environment variables */
+    withReferenceEnvironment(options: ReferenceEnvironmentInjectionOptions): ContainerResourcePromise {
+        return new ContainerResourcePromise(this._withReferenceEnvironmentInternal(options));
     }
 
     /** @internal */
@@ -26517,6 +26813,21 @@ export class ContainerResource extends ResourceBuilderBase<ContainerResourceHand
     }
 
     /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new ContainerResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): ContainerResourcePromise {
+        return new ContainerResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
+    }
+
+    /** @internal */
     private async _withParentRelationshipInternal(parent: ResourceBuilderBase): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, parent };
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
@@ -26975,14 +27286,19 @@ export class ContainerResourcePromise implements PromiseLike<ContainerResource> 
         return new ContainerResourcePromise(this._promise.then(obj => obj.withContainerName(name)));
     }
 
-    /** Adds a build argument from a parameter resource */
-    withBuildArg(name: string, value: ParameterResource): ContainerResourcePromise {
+    /** Adds a build argument from a string value or parameter resource */
+    withBuildArg(name: string, value: string | ParameterResource): ContainerResourcePromise {
         return new ContainerResourcePromise(this._promise.then(obj => obj.withBuildArg(name, value)));
     }
 
     /** Adds a build secret from a parameter resource */
     withBuildSecret(name: string, value: ParameterResource): ContainerResourcePromise {
         return new ContainerResourcePromise(this._promise.then(obj => obj.withBuildSecret(name, value)));
+    }
+
+    /** Overrides container certificate bundle and directory paths used for trust configuration */
+    withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): ContainerResourcePromise {
+        return new ContainerResourcePromise(this._promise.then(obj => obj.withContainerCertificatePaths(options)));
     }
 
     /** Configures endpoint proxy support */
@@ -27063,6 +27379,11 @@ export class ContainerResourcePromise implements PromiseLike<ContainerResource> 
     /** Sets command-line arguments via async callback */
     withArgsCallbackAsync(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): ContainerResourcePromise {
         return new ContainerResourcePromise(this._promise.then(obj => obj.withArgsCallbackAsync(callback)));
+    }
+
+    /** Configures which reference values are injected into environment variables */
+    withReferenceEnvironment(options: ReferenceEnvironmentInjectionOptions): ContainerResourcePromise {
+        return new ContainerResourcePromise(this._promise.then(obj => obj.withReferenceEnvironment(options)));
     }
 
     /** Adds a reference to another resource */
@@ -27213,6 +27534,11 @@ export class ContainerResourcePromise implements PromiseLike<ContainerResource> 
     /** Removes HTTPS certificate configuration */
     withoutHttpsCertificate(): ContainerResourcePromise {
         return new ContainerResourcePromise(this._promise.then(obj => obj.withoutHttpsCertificate()));
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): ContainerResourcePromise {
+        return new ContainerResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
     }
 
     /** Sets the parent relationship */
@@ -27616,6 +27942,21 @@ export class CSharpAppResource extends ResourceBuilderBase<CSharpAppResourceHand
     /** Sets command-line arguments via async callback */
     withArgsCallbackAsync(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): CSharpAppResourcePromise {
         return new CSharpAppResourcePromise(this._withArgsCallbackAsyncInternal(callback));
+    }
+
+    /** @internal */
+    private async _withReferenceEnvironmentInternal(options: ReferenceEnvironmentInjectionOptions): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, options };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withReferenceEnvironment',
+            rpcArgs
+        );
+        return new CSharpAppResource(result, this._client);
+    }
+
+    /** Configures which reference values are injected into environment variables */
+    withReferenceEnvironment(options: ReferenceEnvironmentInjectionOptions): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromise(this._withReferenceEnvironmentInternal(options));
     }
 
     /** @internal */
@@ -28160,6 +28501,21 @@ export class CSharpAppResource extends ResourceBuilderBase<CSharpAppResourceHand
     }
 
     /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new CSharpAppResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
+    }
+
+    /** @internal */
     private async _withParentRelationshipInternal(parent: ResourceBuilderBase): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, parent };
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
@@ -28619,6 +28975,11 @@ export class CSharpAppResourcePromise implements PromiseLike<CSharpAppResource> 
         return new CSharpAppResourcePromise(this._promise.then(obj => obj.withArgsCallbackAsync(callback)));
     }
 
+    /** Configures which reference values are injected into environment variables */
+    withReferenceEnvironment(options: ReferenceEnvironmentInjectionOptions): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromise(this._promise.then(obj => obj.withReferenceEnvironment(options)));
+    }
+
     /** Adds a reference to another resource */
     withReference(source: ResourceBuilderBase, options?: WithReferenceOptions): CSharpAppResourcePromise {
         return new CSharpAppResourcePromise(this._promise.then(obj => obj.withReference(source, options)));
@@ -28772,6 +29133,11 @@ export class CSharpAppResourcePromise implements PromiseLike<CSharpAppResource> 
     /** Removes HTTPS certificate configuration */
     withoutHttpsCertificate(): CSharpAppResourcePromise {
         return new CSharpAppResourcePromise(this._promise.then(obj => obj.withoutHttpsCertificate()));
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
     }
 
     /** Sets the parent relationship */
@@ -29273,6 +29639,21 @@ export class DotnetToolResource extends ResourceBuilderBase<DotnetToolResourceHa
     /** Sets command-line arguments via async callback */
     withArgsCallbackAsync(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): DotnetToolResourcePromise {
         return new DotnetToolResourcePromise(this._withArgsCallbackAsyncInternal(callback));
+    }
+
+    /** @internal */
+    private async _withReferenceEnvironmentInternal(options: ReferenceEnvironmentInjectionOptions): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, options };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withReferenceEnvironment',
+            rpcArgs
+        );
+        return new DotnetToolResource(result, this._client);
+    }
+
+    /** Configures which reference values are injected into environment variables */
+    withReferenceEnvironment(options: ReferenceEnvironmentInjectionOptions): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromise(this._withReferenceEnvironmentInternal(options));
     }
 
     /** @internal */
@@ -29802,6 +30183,21 @@ export class DotnetToolResource extends ResourceBuilderBase<DotnetToolResourceHa
     }
 
     /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new DotnetToolResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
+    }
+
+    /** @internal */
     private async _withParentRelationshipInternal(parent: ResourceBuilderBase): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, parent };
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
@@ -30296,6 +30692,11 @@ export class DotnetToolResourcePromise implements PromiseLike<DotnetToolResource
         return new DotnetToolResourcePromise(this._promise.then(obj => obj.withArgsCallbackAsync(callback)));
     }
 
+    /** Configures which reference values are injected into environment variables */
+    withReferenceEnvironment(options: ReferenceEnvironmentInjectionOptions): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromise(this._promise.then(obj => obj.withReferenceEnvironment(options)));
+    }
+
     /** Adds a reference to another resource */
     withReference(source: ResourceBuilderBase, options?: WithReferenceOptions): DotnetToolResourcePromise {
         return new DotnetToolResourcePromise(this._promise.then(obj => obj.withReference(source, options)));
@@ -30444,6 +30845,11 @@ export class DotnetToolResourcePromise implements PromiseLike<DotnetToolResource
     /** Removes HTTPS certificate configuration */
     withoutHttpsCertificate(): DotnetToolResourcePromise {
         return new DotnetToolResourcePromise(this._promise.then(obj => obj.withoutHttpsCertificate()));
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
     }
 
     /** Sets the parent relationship */
@@ -30855,6 +31261,21 @@ export class ExecutableResource extends ResourceBuilderBase<ExecutableResourceHa
     /** Sets command-line arguments via async callback */
     withArgsCallbackAsync(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): ExecutableResourcePromise {
         return new ExecutableResourcePromise(this._withArgsCallbackAsyncInternal(callback));
+    }
+
+    /** @internal */
+    private async _withReferenceEnvironmentInternal(options: ReferenceEnvironmentInjectionOptions): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, options };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withReferenceEnvironment',
+            rpcArgs
+        );
+        return new ExecutableResource(result, this._client);
+    }
+
+    /** Configures which reference values are injected into environment variables */
+    withReferenceEnvironment(options: ReferenceEnvironmentInjectionOptions): ExecutableResourcePromise {
+        return new ExecutableResourcePromise(this._withReferenceEnvironmentInternal(options));
     }
 
     /** @internal */
@@ -31384,6 +31805,21 @@ export class ExecutableResource extends ResourceBuilderBase<ExecutableResourceHa
     }
 
     /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new ExecutableResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): ExecutableResourcePromise {
+        return new ExecutableResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
+    }
+
+    /** @internal */
     private async _withParentRelationshipInternal(parent: ResourceBuilderBase): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, parent };
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
@@ -31848,6 +32284,11 @@ export class ExecutableResourcePromise implements PromiseLike<ExecutableResource
         return new ExecutableResourcePromise(this._promise.then(obj => obj.withArgsCallbackAsync(callback)));
     }
 
+    /** Configures which reference values are injected into environment variables */
+    withReferenceEnvironment(options: ReferenceEnvironmentInjectionOptions): ExecutableResourcePromise {
+        return new ExecutableResourcePromise(this._promise.then(obj => obj.withReferenceEnvironment(options)));
+    }
+
     /** Adds a reference to another resource */
     withReference(source: ResourceBuilderBase, options?: WithReferenceOptions): ExecutableResourcePromise {
         return new ExecutableResourcePromise(this._promise.then(obj => obj.withReference(source, options)));
@@ -31996,6 +32437,11 @@ export class ExecutableResourcePromise implements PromiseLike<ExecutableResource
     /** Removes HTTPS certificate configuration */
     withoutHttpsCertificate(): ExecutableResourcePromise {
         return new ExecutableResourcePromise(this._promise.then(obj => obj.withoutHttpsCertificate()));
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): ExecutableResourcePromise {
+        return new ExecutableResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
     }
 
     /** Sets the parent relationship */
@@ -32340,6 +32786,21 @@ export class ExternalServiceResource extends ResourceBuilderBase<ExternalService
     }
 
     /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new ExternalServiceResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
+    }
+
+    /** @internal */
     private async _withParentRelationshipInternal(parent: ResourceBuilderBase): Promise<ExternalServiceResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, parent };
         const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
@@ -32655,6 +33116,11 @@ export class ExternalServiceResourcePromise implements PromiseLike<ExternalServi
         return new ExternalServiceResourcePromise(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)));
     }
 
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
+    }
+
     /** Sets the parent relationship */
     withParentRelationship(parent: ResourceBuilderBase): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromise(this._promise.then(obj => obj.withParentRelationship(parent)));
@@ -32957,6 +33423,21 @@ export class ParameterResource extends ResourceBuilderBase<ParameterResourceHand
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ParameterResourcePromise {
         const commandOptions = options?.commandOptions;
         return new ParameterResourcePromise(this._withCommandInternal(name, displayName, executeCommand, commandOptions));
+    }
+
+    /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new ParameterResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): ParameterResourcePromise {
+        return new ParameterResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
     }
 
     /** @internal */
@@ -33273,6 +33754,11 @@ export class ParameterResourcePromise implements PromiseLike<ParameterResource> 
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ParameterResourcePromise {
         return new ParameterResourcePromise(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)));
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): ParameterResourcePromise {
+        return new ParameterResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
     }
 
     /** Sets the parent relationship */
@@ -33636,6 +34122,21 @@ export class ProjectResource extends ResourceBuilderBase<ProjectResourceHandle> 
     /** Sets command-line arguments via async callback */
     withArgsCallbackAsync(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): ProjectResourcePromise {
         return new ProjectResourcePromise(this._withArgsCallbackAsyncInternal(callback));
+    }
+
+    /** @internal */
+    private async _withReferenceEnvironmentInternal(options: ReferenceEnvironmentInjectionOptions): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, options };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withReferenceEnvironment',
+            rpcArgs
+        );
+        return new ProjectResource(result, this._client);
+    }
+
+    /** Configures which reference values are injected into environment variables */
+    withReferenceEnvironment(options: ReferenceEnvironmentInjectionOptions): ProjectResourcePromise {
+        return new ProjectResourcePromise(this._withReferenceEnvironmentInternal(options));
     }
 
     /** @internal */
@@ -34180,6 +34681,21 @@ export class ProjectResource extends ResourceBuilderBase<ProjectResourceHandle> 
     }
 
     /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new ProjectResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): ProjectResourcePromise {
+        return new ProjectResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
+    }
+
+    /** @internal */
     private async _withParentRelationshipInternal(parent: ResourceBuilderBase): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, parent };
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
@@ -34639,6 +35155,11 @@ export class ProjectResourcePromise implements PromiseLike<ProjectResource> {
         return new ProjectResourcePromise(this._promise.then(obj => obj.withArgsCallbackAsync(callback)));
     }
 
+    /** Configures which reference values are injected into environment variables */
+    withReferenceEnvironment(options: ReferenceEnvironmentInjectionOptions): ProjectResourcePromise {
+        return new ProjectResourcePromise(this._promise.then(obj => obj.withReferenceEnvironment(options)));
+    }
+
     /** Adds a reference to another resource */
     withReference(source: ResourceBuilderBase, options?: WithReferenceOptions): ProjectResourcePromise {
         return new ProjectResourcePromise(this._promise.then(obj => obj.withReference(source, options)));
@@ -34792,6 +35313,11 @@ export class ProjectResourcePromise implements PromiseLike<ProjectResource> {
     /** Removes HTTPS certificate configuration */
     withoutHttpsCertificate(): ProjectResourcePromise {
         return new ProjectResourcePromise(this._promise.then(obj => obj.withoutHttpsCertificate()));
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): ProjectResourcePromise {
+        return new ProjectResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
     }
 
     /** Sets the parent relationship */
@@ -35018,7 +35544,7 @@ export class SqlServerDatabaseResource extends ResourceBuilderBase<SqlServerData
     }
 
     /** @internal */
-    private async _withConnectionPropertyInternal(name: string, value: ReferenceExpression): Promise<SqlServerDatabaseResource> {
+    private async _withConnectionPropertyInternal(name: string, value: string | ReferenceExpression): Promise<SqlServerDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<SqlServerDatabaseResourceHandle>(
             'Aspire.Hosting/withConnectionProperty',
@@ -35027,8 +35553,8 @@ export class SqlServerDatabaseResource extends ResourceBuilderBase<SqlServerData
         return new SqlServerDatabaseResource(result, this._client);
     }
 
-    /** Adds a connection property with a reference expression */
-    withConnectionProperty(name: string, value: ReferenceExpression): SqlServerDatabaseResourcePromise {
+    /** Adds a connection property with a string or reference expression value */
+    withConnectionProperty(name: string, value: string | ReferenceExpression): SqlServerDatabaseResourcePromise {
         return new SqlServerDatabaseResourcePromise(this._withConnectionPropertyInternal(name, value));
     }
 
@@ -35214,6 +35740,21 @@ export class SqlServerDatabaseResource extends ResourceBuilderBase<SqlServerData
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): SqlServerDatabaseResourcePromise {
         const commandOptions = options?.commandOptions;
         return new SqlServerDatabaseResourcePromise(this._withCommandInternal(name, displayName, executeCommand, commandOptions));
+    }
+
+    /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<SqlServerDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<SqlServerDatabaseResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new SqlServerDatabaseResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): SqlServerDatabaseResourcePromise {
+        return new SqlServerDatabaseResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
     }
 
     /** @internal */
@@ -35517,8 +36058,8 @@ export class SqlServerDatabaseResourcePromise implements PromiseLike<SqlServerDa
         return new SqlServerDatabaseResourcePromise(this._promise.then(obj => obj.withRequiredCommand(command, options)));
     }
 
-    /** Adds a connection property with a reference expression */
-    withConnectionProperty(name: string, value: ReferenceExpression): SqlServerDatabaseResourcePromise {
+    /** Adds a connection property with a string or reference expression value */
+    withConnectionProperty(name: string, value: string | ReferenceExpression): SqlServerDatabaseResourcePromise {
         return new SqlServerDatabaseResourcePromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
     }
 
@@ -35575,6 +36116,11 @@ export class SqlServerDatabaseResourcePromise implements PromiseLike<SqlServerDa
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): SqlServerDatabaseResourcePromise {
         return new SqlServerDatabaseResourcePromise(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)));
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): SqlServerDatabaseResourcePromise {
+        return new SqlServerDatabaseResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
     }
 
     /** Sets the parent relationship */
@@ -36007,17 +36553,17 @@ export class SqlServerServerResource extends ResourceBuilderBase<SqlServerServer
     }
 
     /** @internal */
-    private async _withBuildArgInternal(name: string, value: ParameterResource): Promise<SqlServerServerResource> {
+    private async _withBuildArgInternal(name: string, value: string | ParameterResource): Promise<SqlServerServerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<SqlServerServerResourceHandle>(
-            'Aspire.Hosting/withParameterBuildArg',
+            'Aspire.Hosting/withBuildArg',
             rpcArgs
         );
         return new SqlServerServerResource(result, this._client);
     }
 
-    /** Adds a build argument from a parameter resource */
-    withBuildArg(name: string, value: ParameterResource): SqlServerServerResourcePromise {
+    /** Adds a build argument from a string value or parameter resource */
+    withBuildArg(name: string, value: string | ParameterResource): SqlServerServerResourcePromise {
         return new SqlServerServerResourcePromise(this._withBuildArgInternal(name, value));
     }
 
@@ -36034,6 +36580,27 @@ export class SqlServerServerResource extends ResourceBuilderBase<SqlServerServer
     /** Adds a build secret from a parameter resource */
     withBuildSecret(name: string, value: ParameterResource): SqlServerServerResourcePromise {
         return new SqlServerServerResourcePromise(this._withBuildSecretInternal(name, value));
+    }
+
+    /** @internal */
+    private async _withContainerCertificatePathsInternal(customCertificatesDestination?: string, defaultCertificateBundlePaths?: string[], defaultCertificateDirectoryPaths?: string[]): Promise<SqlServerServerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (customCertificatesDestination !== undefined) rpcArgs.customCertificatesDestination = customCertificatesDestination;
+        if (defaultCertificateBundlePaths !== undefined) rpcArgs.defaultCertificateBundlePaths = defaultCertificateBundlePaths;
+        if (defaultCertificateDirectoryPaths !== undefined) rpcArgs.defaultCertificateDirectoryPaths = defaultCertificateDirectoryPaths;
+        const result = await this._client.invokeCapability<SqlServerServerResourceHandle>(
+            'Aspire.Hosting/withContainerCertificatePaths',
+            rpcArgs
+        );
+        return new SqlServerServerResource(result, this._client);
+    }
+
+    /** Overrides container certificate bundle and directory paths used for trust configuration */
+    withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): SqlServerServerResourcePromise {
+        const customCertificatesDestination = options?.customCertificatesDestination;
+        const defaultCertificateBundlePaths = options?.defaultCertificateBundlePaths;
+        const defaultCertificateDirectoryPaths = options?.defaultCertificateDirectoryPaths;
+        return new SqlServerServerResourcePromise(this._withContainerCertificatePathsInternal(customCertificatesDestination, defaultCertificateBundlePaths, defaultCertificateDirectoryPaths));
     }
 
     /** @internal */
@@ -36247,7 +36814,7 @@ export class SqlServerServerResource extends ResourceBuilderBase<SqlServerServer
     }
 
     /** @internal */
-    private async _withConnectionPropertyInternal(name: string, value: ReferenceExpression): Promise<SqlServerServerResource> {
+    private async _withConnectionPropertyInternal(name: string, value: string | ReferenceExpression): Promise<SqlServerServerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<SqlServerServerResourceHandle>(
             'Aspire.Hosting/withConnectionProperty',
@@ -36256,8 +36823,8 @@ export class SqlServerServerResource extends ResourceBuilderBase<SqlServerServer
         return new SqlServerServerResource(result, this._client);
     }
 
-    /** Adds a connection property with a reference expression */
-    withConnectionProperty(name: string, value: ReferenceExpression): SqlServerServerResourcePromise {
+    /** Adds a connection property with a string or reference expression value */
+    withConnectionProperty(name: string, value: string | ReferenceExpression): SqlServerServerResourcePromise {
         return new SqlServerServerResourcePromise(this._withConnectionPropertyInternal(name, value));
     }
 
@@ -36329,6 +36896,21 @@ export class SqlServerServerResource extends ResourceBuilderBase<SqlServerServer
     /** Sets command-line arguments via async callback */
     withArgsCallbackAsync(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): SqlServerServerResourcePromise {
         return new SqlServerServerResourcePromise(this._withArgsCallbackAsyncInternal(callback));
+    }
+
+    /** @internal */
+    private async _withReferenceEnvironmentInternal(options: ReferenceEnvironmentInjectionOptions): Promise<SqlServerServerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, options };
+        const result = await this._client.invokeCapability<SqlServerServerResourceHandle>(
+            'Aspire.Hosting/withReferenceEnvironment',
+            rpcArgs
+        );
+        return new SqlServerServerResource(result, this._client);
+    }
+
+    /** Configures which reference values are injected into environment variables */
+    withReferenceEnvironment(options: ReferenceEnvironmentInjectionOptions): SqlServerServerResourcePromise {
+        return new SqlServerServerResourcePromise(this._withReferenceEnvironmentInternal(options));
     }
 
     /** @internal */
@@ -36864,6 +37446,21 @@ export class SqlServerServerResource extends ResourceBuilderBase<SqlServerServer
     /** Removes HTTPS certificate configuration */
     withoutHttpsCertificate(): SqlServerServerResourcePromise {
         return new SqlServerServerResourcePromise(this._withoutHttpsCertificateInternal());
+    }
+
+    /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<SqlServerServerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<SqlServerServerResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new SqlServerServerResource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): SqlServerServerResourcePromise {
+        return new SqlServerServerResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
     }
 
     /** @internal */
@@ -37430,14 +38027,19 @@ export class SqlServerServerResourcePromise implements PromiseLike<SqlServerServ
         return new SqlServerServerResourcePromise(this._promise.then(obj => obj.withContainerName(name)));
     }
 
-    /** Adds a build argument from a parameter resource */
-    withBuildArg(name: string, value: ParameterResource): SqlServerServerResourcePromise {
+    /** Adds a build argument from a string value or parameter resource */
+    withBuildArg(name: string, value: string | ParameterResource): SqlServerServerResourcePromise {
         return new SqlServerServerResourcePromise(this._promise.then(obj => obj.withBuildArg(name, value)));
     }
 
     /** Adds a build secret from a parameter resource */
     withBuildSecret(name: string, value: ParameterResource): SqlServerServerResourcePromise {
         return new SqlServerServerResourcePromise(this._promise.then(obj => obj.withBuildSecret(name, value)));
+    }
+
+    /** Overrides container certificate bundle and directory paths used for trust configuration */
+    withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): SqlServerServerResourcePromise {
+        return new SqlServerServerResourcePromise(this._promise.then(obj => obj.withContainerCertificatePaths(options)));
     }
 
     /** Configures endpoint proxy support */
@@ -37505,8 +38107,8 @@ export class SqlServerServerResourcePromise implements PromiseLike<SqlServerServ
         return new SqlServerServerResourcePromise(this._promise.then(obj => obj.withEnvironmentConnectionString(envVarName, resource)));
     }
 
-    /** Adds a connection property with a reference expression */
-    withConnectionProperty(name: string, value: ReferenceExpression): SqlServerServerResourcePromise {
+    /** Adds a connection property with a string or reference expression value */
+    withConnectionProperty(name: string, value: string | ReferenceExpression): SqlServerServerResourcePromise {
         return new SqlServerServerResourcePromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
     }
 
@@ -37528,6 +38130,11 @@ export class SqlServerServerResourcePromise implements PromiseLike<SqlServerServ
     /** Sets command-line arguments via async callback */
     withArgsCallbackAsync(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): SqlServerServerResourcePromise {
         return new SqlServerServerResourcePromise(this._promise.then(obj => obj.withArgsCallbackAsync(callback)));
+    }
+
+    /** Configures which reference values are injected into environment variables */
+    withReferenceEnvironment(options: ReferenceEnvironmentInjectionOptions): SqlServerServerResourcePromise {
+        return new SqlServerServerResourcePromise(this._promise.then(obj => obj.withReferenceEnvironment(options)));
     }
 
     /** Adds a reference to another resource */
@@ -37683,6 +38290,11 @@ export class SqlServerServerResourcePromise implements PromiseLike<SqlServerServ
     /** Removes HTTPS certificate configuration */
     withoutHttpsCertificate(): SqlServerServerResourcePromise {
         return new SqlServerServerResourcePromise(this._promise.then(obj => obj.withoutHttpsCertificate()));
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): SqlServerServerResourcePromise {
+        return new SqlServerServerResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
     }
 
     /** Sets the parent relationship */
@@ -37956,23 +38568,9 @@ export class AzureResource extends ResourceBuilderBase<IAzureResourceHandle> {
     }
 
     /** @internal */
-    private async _runAsExistingFromParametersInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzureResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
-        const result = await this._client.invokeCapability<IAzureResourceHandle>(
-            'Aspire.Hosting.Azure/runAsExistingFromParameters',
-            rpcArgs
-        );
-        return new AzureResource(result, this._client);
-    }
-
-    /** Marks an Azure resource as existing in run mode by using parameter resources */
-    runAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureResourcePromise {
-        return new AzureResourcePromise(this._runAsExistingFromParametersInternal(nameParameter, resourceGroupParameter));
-    }
-
-    /** @internal */
-    private async _runAsExistingInternal(name: string, resourceGroup: string): Promise<AzureResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, resourceGroup };
+    private async _runAsExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzureResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<IAzureResourceHandle>(
             'Aspire.Hosting.Azure/runAsExisting',
             rpcArgs
@@ -37981,28 +38579,15 @@ export class AzureResource extends ResourceBuilderBase<IAzureResourceHandle> {
     }
 
     /** Marks an Azure resource as existing in run mode */
-    runAsExisting(name: string, resourceGroup: string): AzureResourcePromise {
+    runAsExisting(name: string | ParameterResource, options?: RunAsExistingOptions): AzureResourcePromise {
+        const resourceGroup = options?.resourceGroup;
         return new AzureResourcePromise(this._runAsExistingInternal(name, resourceGroup));
     }
 
     /** @internal */
-    private async _publishAsExistingFromParametersInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzureResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
-        const result = await this._client.invokeCapability<IAzureResourceHandle>(
-            'Aspire.Hosting.Azure/publishAsExistingFromParameters',
-            rpcArgs
-        );
-        return new AzureResource(result, this._client);
-    }
-
-    /** Marks an Azure resource as existing in publish mode by using parameter resources */
-    publishAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureResourcePromise {
-        return new AzureResourcePromise(this._publishAsExistingFromParametersInternal(nameParameter, resourceGroupParameter));
-    }
-
-    /** @internal */
-    private async _publishAsExistingInternal(name: string, resourceGroup: string): Promise<AzureResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, resourceGroup };
+    private async _publishAsExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzureResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<IAzureResourceHandle>(
             'Aspire.Hosting.Azure/publishAsExisting',
             rpcArgs
@@ -38011,23 +38596,26 @@ export class AzureResource extends ResourceBuilderBase<IAzureResourceHandle> {
     }
 
     /** Marks an Azure resource as existing in publish mode */
-    publishAsExisting(name: string, resourceGroup: string): AzureResourcePromise {
+    publishAsExisting(name: string | ParameterResource, options?: PublishAsExistingOptions): AzureResourcePromise {
+        const resourceGroup = options?.resourceGroup;
         return new AzureResourcePromise(this._publishAsExistingInternal(name, resourceGroup));
     }
 
     /** @internal */
-    private async _asExistingInternal(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): Promise<AzureResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, nameParameter, resourceGroupParameter };
+    private async _asExistingInternal(name: string | ParameterResource, resourceGroup?: string | ParameterResource): Promise<AzureResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (resourceGroup !== undefined) rpcArgs.resourceGroup = resourceGroup;
         const result = await this._client.invokeCapability<IAzureResourceHandle>(
-            'Aspire.Hosting.Azure/asExistingFromParameters',
+            'Aspire.Hosting.Azure/asExisting',
             rpcArgs
         );
         return new AzureResource(result, this._client);
     }
 
-    /** Marks an Azure resource as existing in both run and publish modes by using parameter resources */
-    asExisting(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureResourcePromise {
-        return new AzureResourcePromise(this._asExistingInternal(nameParameter, resourceGroupParameter));
+    /** Marks an Azure resource as existing in both run and publish modes */
+    asExisting(name: string | ParameterResource, options?: AsExistingOptions): AzureResourcePromise {
+        const resourceGroup = options?.resourceGroup;
+        return new AzureResourcePromise(this._asExistingInternal(name, resourceGroup));
     }
 
 }
@@ -38067,29 +38655,19 @@ export class AzureResourcePromise implements PromiseLike<AzureResource> {
         return this._promise.then(obj => obj.isExisting());
     }
 
-    /** Marks an Azure resource as existing in run mode by using parameter resources */
-    runAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureResourcePromise {
-        return new AzureResourcePromise(this._promise.then(obj => obj.runAsExistingFromParameters(nameParameter, resourceGroupParameter)));
-    }
-
     /** Marks an Azure resource as existing in run mode */
-    runAsExisting(name: string, resourceGroup: string): AzureResourcePromise {
-        return new AzureResourcePromise(this._promise.then(obj => obj.runAsExisting(name, resourceGroup)));
-    }
-
-    /** Marks an Azure resource as existing in publish mode by using parameter resources */
-    publishAsExistingFromParameters(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureResourcePromise {
-        return new AzureResourcePromise(this._promise.then(obj => obj.publishAsExistingFromParameters(nameParameter, resourceGroupParameter)));
+    runAsExisting(name: string | ParameterResource, options?: RunAsExistingOptions): AzureResourcePromise {
+        return new AzureResourcePromise(this._promise.then(obj => obj.runAsExisting(name, options)));
     }
 
     /** Marks an Azure resource as existing in publish mode */
-    publishAsExisting(name: string, resourceGroup: string): AzureResourcePromise {
-        return new AzureResourcePromise(this._promise.then(obj => obj.publishAsExisting(name, resourceGroup)));
+    publishAsExisting(name: string | ParameterResource, options?: PublishAsExistingOptions): AzureResourcePromise {
+        return new AzureResourcePromise(this._promise.then(obj => obj.publishAsExisting(name, options)));
     }
 
-    /** Marks an Azure resource as existing in both run and publish modes by using parameter resources */
-    asExisting(nameParameter: ParameterResource, resourceGroupParameter: ParameterResource): AzureResourcePromise {
-        return new AzureResourcePromise(this._promise.then(obj => obj.asExisting(nameParameter, resourceGroupParameter)));
+    /** Marks an Azure resource as existing in both run and publish modes */
+    asExisting(name: string | ParameterResource, options?: AsExistingOptions): AzureResourcePromise {
+        return new AzureResourcePromise(this._promise.then(obj => obj.asExisting(name, options)));
     }
 
 }
@@ -38451,6 +39029,21 @@ export class Resource extends ResourceBuilderBase<IResourceHandle> {
     }
 
     /** @internal */
+    private async _withRelationshipInternal(resourceBuilder: ResourceBuilderBase, type: string): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceBuilder, type };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting/withBuilderRelationship',
+            rpcArgs
+        );
+        return new Resource(result, this._client);
+    }
+
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): ResourcePromise {
+        return new ResourcePromise(this._withRelationshipInternal(resourceBuilder, type));
+    }
+
+    /** @internal */
     private async _withParentRelationshipInternal(parent: ResourceBuilderBase): Promise<Resource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, parent };
         const result = await this._client.invokeCapability<IResourceHandle>(
@@ -38761,6 +39354,11 @@ export class ResourcePromise implements PromiseLike<Resource> {
         return new ResourcePromise(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)));
     }
 
+    /** Adds a relationship to another resource */
+    withRelationship(resourceBuilder: ResourceBuilderBase, type: string): ResourcePromise {
+        return new ResourcePromise(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)));
+    }
+
     /** Sets the parent relationship */
     withParentRelationship(parent: ResourceBuilderBase): ResourcePromise {
         return new ResourcePromise(this._promise.then(obj => obj.withParentRelationship(parent)));
@@ -38936,7 +39534,7 @@ export class ResourceWithConnectionString extends ResourceBuilderBase<IResourceW
     }
 
     /** @internal */
-    private async _withConnectionPropertyInternal(name: string, value: ReferenceExpression): Promise<ResourceWithConnectionString> {
+    private async _withConnectionPropertyInternal(name: string, value: string | ReferenceExpression): Promise<ResourceWithConnectionString> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<IResourceWithConnectionStringHandle>(
             'Aspire.Hosting/withConnectionProperty',
@@ -38945,8 +39543,8 @@ export class ResourceWithConnectionString extends ResourceBuilderBase<IResourceW
         return new ResourceWithConnectionString(result, this._client);
     }
 
-    /** Adds a connection property with a reference expression */
-    withConnectionProperty(name: string, value: ReferenceExpression): ResourceWithConnectionStringPromise {
+    /** Adds a connection property with a string or reference expression value */
+    withConnectionProperty(name: string, value: string | ReferenceExpression): ResourceWithConnectionStringPromise {
         return new ResourceWithConnectionStringPromise(this._withConnectionPropertyInternal(name, value));
     }
 
@@ -39011,8 +39609,8 @@ export class ResourceWithConnectionStringPromise implements PromiseLike<Resource
         return this._promise.then(onfulfilled, onrejected);
     }
 
-    /** Adds a connection property with a reference expression */
-    withConnectionProperty(name: string, value: ReferenceExpression): ResourceWithConnectionStringPromise {
+    /** Adds a connection property with a string or reference expression value */
+    withConnectionProperty(name: string, value: string | ReferenceExpression): ResourceWithConnectionStringPromise {
         return new ResourceWithConnectionStringPromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
     }
 
@@ -39533,6 +40131,21 @@ export class ResourceWithEnvironment extends ResourceBuilderBase<IResourceWithEn
     }
 
     /** @internal */
+    private async _withReferenceEnvironmentInternal(options: ReferenceEnvironmentInjectionOptions): Promise<ResourceWithEnvironment> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, options };
+        const result = await this._client.invokeCapability<IResourceWithEnvironmentHandle>(
+            'Aspire.Hosting/withReferenceEnvironment',
+            rpcArgs
+        );
+        return new ResourceWithEnvironment(result, this._client);
+    }
+
+    /** Configures which reference values are injected into environment variables */
+    withReferenceEnvironment(options: ReferenceEnvironmentInjectionOptions): ResourceWithEnvironmentPromise {
+        return new ResourceWithEnvironmentPromise(this._withReferenceEnvironmentInternal(options));
+    }
+
+    /** @internal */
     private async _withReferenceInternal(source: ResourceBuilderBase, connectionName?: string, optional?: boolean, name?: string): Promise<ResourceWithEnvironment> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, source };
         if (connectionName !== undefined) rpcArgs.connectionName = connectionName;
@@ -39740,6 +40353,11 @@ export class ResourceWithEnvironmentPromise implements PromiseLike<ResourceWithE
     /** Sets an environment variable from a connection string resource */
     withEnvironmentConnectionString(envVarName: string, resource: ResourceBuilderBase): ResourceWithEnvironmentPromise {
         return new ResourceWithEnvironmentPromise(this._promise.then(obj => obj.withEnvironmentConnectionString(envVarName, resource)));
+    }
+
+    /** Configures which reference values are injected into environment variables */
+    withReferenceEnvironment(options: ReferenceEnvironmentInjectionOptions): ResourceWithEnvironmentPromise {
+        return new ResourceWithEnvironmentPromise(this._promise.then(obj => obj.withReferenceEnvironment(options)));
     }
 
     /** Adds a reference to another resource */

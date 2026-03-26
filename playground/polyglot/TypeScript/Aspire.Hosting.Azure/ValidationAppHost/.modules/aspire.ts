@@ -7934,6 +7934,21 @@ export class ConnectionStringResource extends ResourceBuilderBase<ConnectionStri
         return new ConnectionStringResourcePromise(this._withConnectionPropertyInternal(name, value));
     }
 
+    /** @internal */
+    private async _withConnectionPropertyValueInternal(name: string, value: string): Promise<ConnectionStringResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<ConnectionStringResourceHandle>(
+            'Aspire.Hosting/withConnectionPropertyValue',
+            rpcArgs
+        );
+        return new ConnectionStringResource(result, this._client);
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): ConnectionStringResourcePromise {
+        return new ConnectionStringResourcePromise(this._withConnectionPropertyValueInternal(name, value));
+    }
+
     /** Gets a connection property by key */
     async getConnectionProperty(key: string): Promise<ReferenceExpression> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle, key };
@@ -8469,6 +8484,11 @@ export class ConnectionStringResourcePromise implements PromiseLike<ConnectionSt
     /** Adds a connection property with a string or reference expression value */
     withConnectionProperty(name: string, value: string | ReferenceExpression): ConnectionStringResourcePromise {
         return new ConnectionStringResourcePromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): ConnectionStringResourcePromise {
+        return new ConnectionStringResourcePromise(this._promise.then(obj => obj.withConnectionPropertyValue(name, value)));
     }
 
     /** Gets a connection property by key */
@@ -19773,6 +19793,21 @@ export class ResourceWithConnectionString extends ResourceBuilderBase<IResourceW
         return new ResourceWithConnectionStringPromise(this._withConnectionPropertyInternal(name, value));
     }
 
+    /** @internal */
+    private async _withConnectionPropertyValueInternal(name: string, value: string): Promise<ResourceWithConnectionString> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
+        const result = await this._client.invokeCapability<IResourceWithConnectionStringHandle>(
+            'Aspire.Hosting/withConnectionPropertyValue',
+            rpcArgs
+        );
+        return new ResourceWithConnectionString(result, this._client);
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): ResourceWithConnectionStringPromise {
+        return new ResourceWithConnectionStringPromise(this._withConnectionPropertyValueInternal(name, value));
+    }
+
     /** Gets a connection property by key */
     async getConnectionProperty(key: string): Promise<ReferenceExpression> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle, key };
@@ -19822,6 +19857,11 @@ export class ResourceWithConnectionStringPromise implements PromiseLike<Resource
     /** Adds a connection property with a string or reference expression value */
     withConnectionProperty(name: string, value: string | ReferenceExpression): ResourceWithConnectionStringPromise {
         return new ResourceWithConnectionStringPromise(this._promise.then(obj => obj.withConnectionProperty(name, value)));
+    }
+
+    /** Adds a connection property with a string value */
+    withConnectionPropertyValue(name: string, value: string): ResourceWithConnectionStringPromise {
+        return new ResourceWithConnectionStringPromise(this._promise.then(obj => obj.withConnectionPropertyValue(name, value)));
     }
 
     /** Gets a connection property by key */
