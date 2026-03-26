@@ -96,7 +96,14 @@ public class ResourceCommandService
 
         if (failures.Count == 0 && cancellations.Count == 0)
         {
-            return new ExecuteCommandResult { Success = true };
+            // All succeeded. Return result data from the first successful result that has any.
+            var resultWithData = results.FirstOrDefault(r => r.Result is not null);
+            return new ExecuteCommandResult
+            {
+                Success = true,
+                Result = resultWithData?.Result,
+                ResultFormat = resultWithData?.ResultFormat ?? CommandResultFormat.None
+            };
         }
         else if (failures.Count == 0 && cancellations.Count > 0)
         {

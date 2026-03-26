@@ -74,9 +74,19 @@ internal sealed class ExecuteResourceCommandTool(
 
             if (response.Success)
             {
+                var content = new List<ContentBlock>
+                {
+                    new TextContentBlock { Text = $"Command '{commandName}' executed successfully on resource '{resourceName}'." }
+                };
+
+                if (response.Result is { Length: > 0 })
+                {
+                    content.Add(new TextContentBlock { Text = response.Result });
+                }
+
                 return new CallToolResult
                 {
-                    Content = [new TextContentBlock { Text = $"Command '{commandName}' executed successfully on resource '{resourceName}'." }]
+                    Content = content
                 };
             }
             else if (response.Canceled)

@@ -7,6 +7,15 @@ public class ResourceCommandResponseViewModel
 {
     public required ResourceCommandResponseKind Kind { get; init; }
     public string? ErrorMessage { get; init; }
+    public string? Result { get; init; }
+    public CommandResultFormat ResultFormat { get; init; }
+}
+
+public enum CommandResultFormat
+{
+    None = 0,
+    Text = 1,
+    Json = 2
 }
 
 // Must be kept in sync with ResourceCommandResponseKind in the resource_service.proto file

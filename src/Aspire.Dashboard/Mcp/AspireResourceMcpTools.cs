@@ -140,7 +140,7 @@ internal sealed class AspireResourceMcpTools
 
     [McpServerTool(Name = "execute_resource_command")]
     [Description("Executes a command on a resource. If a resource needs to be restarted and is currently stopped, use the start command instead.")]
-    public async Task ExecuteResourceCommand([Description("The resource name")] string resourceName, [Description("The command name")] string commandName)
+    public async Task<string> ExecuteResourceCommand([Description("The resource name")] string resourceName, [Description("The command name")] string commandName)
     {
         _logger.LogDebug("MCP tool execute_resource_command called with resource '{ResourceName}' and command '{CommandName}'.", resourceName, commandName);
 
@@ -182,7 +182,12 @@ internal sealed class AspireResourceMcpTools
             switch (response.Kind)
             {
                 case ResourceCommandResponseKind.Succeeded:
-                    return;
+                    if (response.Result is { Length: > 0 })
+                    {
+                        return response.Result;
+                    }
+
+                    return $"Command '{commandName}' executed successfully on resource '{resourceName}'.";
                 case ResourceCommandResponseKind.Cancelled:
                     throw new McpProtocolException($"Command '{commandName}' was cancelled.", McpErrorCode.InternalError);
                 case ResourceCommandResponseKind.Failed:

@@ -125,6 +125,13 @@ public static class CommandResults
     public static ExecuteCommandResult Success() => new() { Success = true };
 
     /// <summary>
+    /// Produces a success result with output data.
+    /// </summary>
+    /// <param name="result">The result output of the command.</param>
+    /// <param name="resultFormat">The format of the result. Defaults to <see cref="CommandResultFormat.Text"/>.</param>
+    public static ExecuteCommandResult Success(string result, CommandResultFormat resultFormat = CommandResultFormat.Text) => new() { Success = true, Result = result, ResultFormat = resultFormat };
+
+    /// <summary>
     /// Produces an unsuccessful result with an error message.
     /// </summary>
     /// <param name="errorMessage">An optional error message.</param>
@@ -162,6 +169,37 @@ public sealed class ExecuteCommandResult
     /// An optional error message that can be set when the command is unsuccessful.
     /// </summary>
     public string? ErrorMessage { get; init; }
+
+    /// <summary>
+    /// An optional result output from the command.
+    /// </summary>
+    public string? Result { get; init; }
+
+    /// <summary>
+    /// The format of the <see cref="Result"/>. Indicates how consumers should interpret and render the result.
+    /// </summary>
+    public CommandResultFormat ResultFormat { get; init; }
+}
+
+/// <summary>
+/// Specifies the format of a command result, similar to a content type.
+/// </summary>
+public enum CommandResultFormat
+{
+    /// <summary>
+    /// No result format specified. Used when <see cref="ExecuteCommandResult.Result"/> is <see langword="null"/>.
+    /// </summary>
+    None = 0,
+
+    /// <summary>
+    /// The result is plain text.
+    /// </summary>
+    Text = 1,
+
+    /// <summary>
+    /// The result is JSON.
+    /// </summary>
+    Json = 2
 }
 
 /// <summary>

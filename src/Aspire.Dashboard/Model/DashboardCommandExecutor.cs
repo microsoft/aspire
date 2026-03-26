@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
@@ -13,7 +14,7 @@ namespace Aspire.Dashboard.Model;
 
 public sealed class DashboardCommandExecutor(
     IDashboardClient dashboardClient,
-    IDialogService dialogService,
+    DashboardDialogService dialogService,
     IToastService toastService,
     IStringLocalizer<Dashboard.Resources.Resources> loc,
     NavigationManager navigationManager,
@@ -148,6 +149,24 @@ public sealed class DashboardCommandExecutor(
             toastParameters.Title = string.Format(CultureInfo.InvariantCulture, loc[nameof(Dashboard.Resources.Resources.ResourceCommandSuccess)], messageResourceName, command.GetDisplayName());
             toastParameters.Intent = ToastIntent.Success;
             toastParameters.Icon = GetIntentIcon(ToastIntent.Success);
+
+            if (!string.IsNullOrEmpty(response.Result))
+            {
+                // Map the result format to a TextVisualizer format hint.
+                var fixedFormat = response.ResultFormat switch
+                {
+                    CommandResultFormat.Json => DashboardUIHelpers.JsonFormat,
+                    _ => (string?)null // Let auto-detection handle text and other formats.
+                };
+
+                await TextVisualizerDialog.OpenDialogAsync(new OpenTextVisualizerDialogOptions
+                {
+                    DialogService = dialogService,
+                    ValueDescription = command.GetDisplayName(),
+                    Value = response.Result,
+                    FixedFormat = fixedFormat
+                }).ConfigureAwait(false);
+            }
         }
         else if (response.Kind == ResourceCommandResponseKind.Cancelled)
         {

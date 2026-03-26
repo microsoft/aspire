@@ -4,6 +4,7 @@
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
 using Microsoft.Extensions.Logging;
+using Spectre.Console;
 
 namespace Aspire.Cli.Commands;
 
@@ -66,6 +67,12 @@ internal static class ResourceCommandHelper
         if (response.Success)
         {
             interactionService.DisplaySuccess($"Command '{commandName}' executed successfully on resource '{resourceName}'.");
+
+            if (!string.IsNullOrEmpty(response.Result))
+            {
+                interactionService.DisplayMessage("clipboard", response.Result.EscapeMarkup());
+            }
+
             return ExitCodeConstants.Success;
         }
         else if (response.Canceled)

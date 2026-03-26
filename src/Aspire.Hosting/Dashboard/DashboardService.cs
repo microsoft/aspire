@@ -360,7 +360,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
 
     public override async Task<ResourceCommandResponse> ExecuteResourceCommand(ResourceCommandRequest request, ServerCallContext context)
     {
-        var (result, errorMessage) = await serviceData.ExecuteCommandAsync(request.ResourceName, request.CommandName, context.CancellationToken).ConfigureAwait(false);
+        var (result, errorMessage, commandResult, resultFormat) = await serviceData.ExecuteCommandAsync(request.ResourceName, request.CommandName, context.CancellationToken).ConfigureAwait(false);
         var responseKind = result switch
         {
             ExecuteCommandResultType.Success => ResourceCommandResponseKind.Succeeded,
@@ -369,11 +369,19 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             _ => ResourceCommandResponseKind.Undefined
         };
 
-        return new ResourceCommandResponse
+        var response = new ResourceCommandResponse
         {
             Kind = responseKind,
-            ErrorMessage = errorMessage ?? string.Empty
+            ErrorMessage = errorMessage ?? string.Empty,
+            ResultFormat = (Aspire.DashboardService.Proto.V1.CommandResultFormat)resultFormat
         };
+
+        if (commandResult is not null)
+        {
+            response.Result = commandResult;
+        }
+
+        return response;
     }
 
     private async Task ExecuteAsync(Func<CancellationToken, Task> execute, ServerCallContext serverCallContext)

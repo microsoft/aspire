@@ -150,5 +150,64 @@ public class ExecuteResourceCommandToolTests
             () => tool.CallToolAsync(CallToolContextTestHelper.Create(partialArgs), CancellationToken.None).AsTask()).DefaultTimeout();
         Assert.Contains("Missing required arguments", exception2.Message);
     }
+
+    [Fact]
+    public async Task ExecuteResourceCommandTool_ReturnsResultJson_WhenCommandReturnsJson()
+    {
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
+            {
+                Success = true,
+                Result = """{"token":"token-value","expires":"2025-01-01"}""",
+                ResultFormat = "json"
+            }
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var tool = new ExecuteResourceCommandTool(monitor, NullLogger<ExecuteResourceCommandTool>.Instance);
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(CreateArguments("api-service", "generate-token")), CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.IsError is null or false);
+        Assert.NotNull(result.Content);
+        Assert.Equal(2, result.Content.Count);
+
+        var successMessage = result.Content[0] as ModelContextProtocol.Protocol.TextContentBlock;
+        Assert.NotNull(successMessage);
+        Assert.Contains("successfully", successMessage.Text);
+
+        var resultContent = result.Content[1] as ModelContextProtocol.Protocol.TextContentBlock;
+        Assert.NotNull(resultContent);
+        Assert.Contains("token-value", resultContent.Text);
+        Assert.Contains("expires", resultContent.Text);
+    }
+
+    [Fact]
+    public async Task ExecuteResourceCommandTool_ReturnsResultText_WhenCommandReturnsTextOnly()
+    {
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
+            {
+                Success = true,
+                Result = "eyJhbGciOiJIUzI1NiJ9.token",
+                ResultFormat = "text"
+            }
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var tool = new ExecuteResourceCommandTool(monitor, NullLogger<ExecuteResourceCommandTool>.Instance);
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(CreateArguments("api-service", "generate-token")), CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.IsError is null or false);
+        Assert.NotNull(result.Content);
+        Assert.Equal(2, result.Content.Count);
+
+        var resultContent = result.Content[1] as ModelContextProtocol.Protocol.TextContentBlock;
+        Assert.NotNull(resultContent);
+        Assert.Equal("eyJhbGciOiJIUzI1NiJ9.token", resultContent.Text);
+    }
 }
 

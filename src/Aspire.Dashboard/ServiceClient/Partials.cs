@@ -199,7 +199,9 @@ partial class ResourceCommandResponse
         return new ResourceCommandResponseViewModel()
         {
             ErrorMessage = ErrorMessage,
-            Kind = (Dashboard.Model.ResourceCommandResponseKind)Kind
+            Kind = (Dashboard.Model.ResourceCommandResponseKind)Kind,
+            Result = HasResult ? Result : null,
+            ResultFormat = (Dashboard.Model.CommandResultFormat)ResultFormat
         };
     }
 }

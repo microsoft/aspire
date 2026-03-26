@@ -325,6 +325,103 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         Assert.Null(result.ErrorMessage);
     }
 
+    [Fact]
+    public async Task ExecuteCommandAsync_Success_WithResultText()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "generate-token",
+                displayName: "Generate Token",
+                executeCommand: e =>
+                {
+                    return Task.FromResult(CommandResults.Success("eyJhbGciOiJIUzI1NiJ9.token"));
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(custom.Resource, "generate-token");
+
+        Assert.True(result.Success);
+        Assert.Equal("eyJhbGciOiJIUzI1NiJ9.token", result.Result);
+        Assert.Equal(CommandResultFormat.Text, result.ResultFormat);
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_Success_WithJsonResult()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "generate-token",
+                displayName: "Generate Token",
+                executeCommand: e =>
+                {
+                    return Task.FromResult(CommandResults.Success(
+                        """{"token":"eyJhbGciOiJIUzI1NiJ9.token","expires":"2025-01-01"}""",
+                        CommandResultFormat.Json));
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(custom.Resource, "generate-token");
+
+        Assert.True(result.Success);
+        Assert.Equal("""{"token":"eyJhbGciOiJIUzI1NiJ9.token","expires":"2025-01-01"}""", result.Result);
+        Assert.Equal(CommandResultFormat.Json, result.ResultFormat);
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_HasReplicas_Success_PreservesResultData()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithAnnotation(new DcpInstancesAnnotation([
+            new DcpInstance("myResource-abcdwxyz", "abcdwxyz", 0),
+            new DcpInstance("myResource-efghwxyz", "efghwxyz", 1)
+            ]));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: e =>
+                {
+                    return Task.FromResult(CommandResults.Success("result-output"));
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(custom.Resource, "mycommand");
+
+        Assert.True(result.Success);
+        Assert.Equal("result-output", result.Result);
+        Assert.Equal(CommandResultFormat.Text, result.ResultFormat);
+    }
+
+    [Fact]
+    public void CommandResults_Success_WithResult_ProducesCorrectResult()
+    {
+        var result = CommandResults.Success("""{"key":"value"}""", CommandResultFormat.Json);
+
+        Assert.True(result.Success);
+        Assert.False(result.Canceled);
+        Assert.Null(result.ErrorMessage);
+        Assert.Equal("""{"key":"value"}""", result.Result);
+        Assert.Equal(CommandResultFormat.Json, result.ResultFormat);
+    }
+
+    [Fact]
+    public void CommandResults_Success_WithTextOnly_ProducesCorrectResult()
+    {
+        var result = CommandResults.Success("just text");
+
+        Assert.True(result.Success);
+        Assert.Equal("just text", result.Result);
+        Assert.Equal(CommandResultFormat.Text, result.ResultFormat);
+    }
+
     private sealed class CustomResource(string name) : Resource(name), IResourceWithEndpoints, IResourceWithWaitSupport
     {
 

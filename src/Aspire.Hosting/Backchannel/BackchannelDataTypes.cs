@@ -295,6 +295,16 @@ internal sealed class ExecuteResourceCommandResponse
     /// Gets the error message if the command failed.
     /// </summary>
     public string? ErrorMessage { get; init; }
+
+    /// <summary>
+    /// Gets the result output of the command, if any.
+    /// </summary>
+    public string? Result { get; init; }
+
+    /// <summary>
+    /// Gets the format of the result (e.g., "text", "json").
+    /// </summary>
+    public string? ResultFormat { get; init; }
 }
 
 #endregion
