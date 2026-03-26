@@ -268,6 +268,8 @@ Validates that the pipeline artifacts on disk match what the app model defines. 
 - Have a separate "pipeline sync check" that runs as a GitHub status check or bot comment rather than as a step inside the pipeline itself.
 - Accept that the verify step runs in the pipeline defined by the *base branch*, so it validates the previous contract, and only enforce strict verification on the default branch after merge.
 
+Worth noting: in both GitHub Actions and Azure DevOps, by the time any job agent is running, the pipeline definition is fully materialized — template expressions have been evaluated and the workflow structure is concrete. This means `aspire pipeline verify` running *inside* the pipeline has access to the fully resolved definition, which simplifies validation considerably compared to trying to statically parse YAML with unresolved expressions from disk.
+
 #### Validating Existing Pipeline References
 
 When using the bring-your-own-pipeline model:
