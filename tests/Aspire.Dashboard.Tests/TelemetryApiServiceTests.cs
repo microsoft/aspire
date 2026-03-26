@@ -410,7 +410,7 @@ public class TelemetryApiServiceTests
     }
 
     [Theory]
-    [InlineData("747261636531", true)] // full hex trace ID for "trace1"
+    [InlineData("747261636531", true)] // full hex trace ID
     [InlineData("7472616", true)] // shortened (7 char) prefix
     [InlineData("747261", false)] // too short
     [InlineData("nonexistent", false)]
