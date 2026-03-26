@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text;
 using Aspire.Dashboard.Api;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
@@ -416,6 +417,7 @@ public class TelemetryApiServiceTests
     public void GetTrace_VariousTraceIds_ReturnsExpectedResult(string lookupId, bool expectFound)
     {
         var repository = CreateRepository();
+        var traceId = Encoding.UTF8.GetString(Convert.FromHexString("747261636531"));
 
         repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
         {
@@ -429,7 +431,7 @@ public class TelemetryApiServiceTests
                         Scope = CreateScope(),
                         Spans =
                         {
-                            CreateSpan(traceId: "trace1", spanId: "span1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1))
+                            CreateSpan(traceId: traceId, spanId: "span1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1))
                         }
                     }
                 }
