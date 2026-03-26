@@ -207,7 +207,7 @@ internal static class CommonAgentApplicators
         |---|---|---|
         | AppHost project (`apphost.cs`/`apphost.ts`) | `aspire start` | Resource graph changed; full restart required |
         | Compiled resource (C#, Go, Java, etc.) | `aspire resource <name> rebuild` | Rebuilds and restarts only that resource |
-        | Interpreted resource (JavaScript, Python) | Nothing — file watchers handle it | Hot reload picks up changes automatically |
+        | Interpreted resource (JavaScript, Python) | Typically nothing — most run with file watchers | Restart the resource if no watch mode is configured |
 
         **Never restart the entire AppHost just because a single resource changed.** Use `aspire resource <name> rebuild` for compiled resources — it coordinates stop, build, and restart for just that resource.
 
