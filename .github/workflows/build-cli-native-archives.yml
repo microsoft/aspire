@@ -28,7 +28,7 @@ on:
 jobs:
 
   build_cli_archives:
-    name: Build CLI (${{ matrix.targets.os }})
+    name: Build CLI (${{ matrix.targets.rids }})
     runs-on: ${{ matrix.targets.runner }}
     strategy:
       matrix:
