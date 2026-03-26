@@ -171,8 +171,8 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, CliExecuti
             return Path.GetFullPath(parentDir);
         }
 
-        // Non-standard install location — fall back to ~/.aspire/ to avoid writing into
-        // system directories like /usr/local/ or C:\Program Files\.
+        // Non-standard install location — fall back to ~/.aspire/ to avoid writing
+        // into system directories like /usr/local/ or C:\Program Files\.
         return aspireDir;
     }
 
