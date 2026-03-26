@@ -209,7 +209,7 @@ internal static class CommonAgentApplicators
         | Compiled .NET project resource | `aspire resource <name> rebuild` | Rebuilds and restarts only that resource |
         | Interpreted resource (JavaScript, Python) | Typically nothing — most run with file watchers | Restart the resource if no watch mode is configured |
 
-        **Never restart the entire AppHost just because a single resource changed.** Use `aspire resource <name> rebuild` for compiled resources — it coordinates stop, build, and restart for just that resource.
+        **Never restart the entire AppHost just because a single resource changed.** Use `aspire resource <name> rebuild` for .NET project resources — it coordinates stop, build, and restart for just that resource. Use `aspire describe --format Json` to check which commands a resource supports.
 
         ### Debugging issues
 
