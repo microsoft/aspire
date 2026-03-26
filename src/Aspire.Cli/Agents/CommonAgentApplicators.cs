@@ -244,6 +244,7 @@ internal static class CommonAgentApplicators
         - Use `--isolated` when working in a worktree.
         - **Avoid persistent containers** early in development to prevent state management issues.
         - **Never install the Aspire workload** — it is obsolete.
+        - **For Aspire API reference and documentation, always use `aspire docs search <query>` and `aspire docs get <slug>`.** Do NOT search NuGet package caches, XML doc files, or local package folders for Aspire documentation. The CLI docs commands provide accurate, up-to-date content from aspire.dev.
         - Prefer `aspire.dev` and `learn.microsoft.com/microsoft/aspire` for official documentation.
 
         ## Playwright CLI
