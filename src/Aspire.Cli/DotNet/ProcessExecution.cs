@@ -7,17 +7,17 @@ using Microsoft.Extensions.Logging;
 namespace Aspire.Cli.DotNet;
 
 /// <summary>
-/// Represents a configured dotnet CLI execution backed by a real process.
+/// Represents a configured process execution backed by a real OS process.
 /// </summary>
-internal sealed class DotNetCliExecution : IDotNetCliExecution
+internal sealed class ProcessExecution : IProcessExecution
 {
     private readonly Process _process;
     private readonly ILogger _logger;
-    private readonly DotNetCliRunnerInvocationOptions _options;
+    private readonly ProcessInvocationOptions _options;
     private Task? _stdoutForwarder;
     private Task? _stderrForwarder;
 
-    internal DotNetCliExecution(Process process, ILogger logger, DotNetCliRunnerInvocationOptions options)
+    internal ProcessExecution(Process process, ILogger logger, ProcessInvocationOptions options)
     {
         _process = process;
         _logger = logger;
@@ -51,14 +51,14 @@ internal sealed class DotNetCliExecution : IDotNetCliExecution
         {
             if (!suppressLogging)
             {
-                _logger.LogDebug("Failed to start dotnet process with args: {Args}", string.Join(" ", Arguments));
+                _logger.LogDebug("Failed to start process {FileName} with args: {Args}", FileName, string.Join(" ", Arguments));
             }
             return false;
         }
 
         if (!suppressLogging)
         {
-            _logger.LogDebug("Started dotnet with PID: {ProcessId}", _process.Id);
+            _logger.LogDebug("Started {FileName} with PID: {ProcessId}", FileName, _process.Id);
         }
 
         // Start stream forwarders
@@ -90,7 +90,7 @@ internal sealed class DotNetCliExecution : IDotNetCliExecution
 
         if (!suppressLogging)
         {
-            _logger.LogDebug("Waiting for dotnet process to exit with PID: {ProcessId}", _process.Id);
+            _logger.LogDebug("Waiting for process to exit with PID: {ProcessId}", _process.Id);
         }
 
         await _process.WaitForExitAsync(cancellationToken);
@@ -99,7 +99,7 @@ internal sealed class DotNetCliExecution : IDotNetCliExecution
         {
             if (!suppressLogging)
             {
-                _logger.LogDebug("dotnet process with PID: {ProcessId} has not exited, killing it.", _process.Id);
+                _logger.LogDebug("Process with PID: {ProcessId} has not exited, killing it.", _process.Id);
             }
             _process.Kill(false);
         }
@@ -107,7 +107,7 @@ internal sealed class DotNetCliExecution : IDotNetCliExecution
         {
             if (!suppressLogging)
             {
-                _logger.LogDebug("dotnet process with PID: {ProcessId} has exited with code: {ExitCode}", _process.Id, _process.ExitCode);
+                _logger.LogDebug("Process with PID: {ProcessId} has exited with code: {ExitCode}", _process.Id, _process.ExitCode);
             }
         }
 
@@ -141,6 +141,18 @@ internal sealed class DotNetCliExecution : IDotNetCliExecution
         return _process.ExitCode;
     }
 
+    /// <inheritdoc />
+    public void Kill(bool entireProcessTree)
+    {
+        _process.Kill(entireProcessTree);
+    }
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        _process.Dispose();
+    }
+
     private async Task ForwardStreamToLoggerAsync(StreamReader reader, string identifier, Action<string>? lineCallback, bool suppressLogging)
     {
         if (!suppressLogging)
@@ -160,7 +172,8 @@ internal sealed class DotNetCliExecution : IDotNetCliExecution
                 if (!suppressLogging)
                 {
                     _logger.LogTrace(
-                        "dotnet({ProcessId}) {Identifier}: {Line}",
+                        "{FileName}({ProcessId}) {Identifier}: {Line}",
+                        FileName,
                         _process.Id,
                         identifier,
                         line

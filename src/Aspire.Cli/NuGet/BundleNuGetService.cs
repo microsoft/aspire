@@ -32,17 +32,20 @@ public interface INuGetService
 /// <summary>
 /// NuGet service implementation that uses the bundle's NuGetHelper tool.
 /// </summary>
-public sealed class BundleNuGetService : INuGetService
+internal sealed class BundleNuGetService : INuGetService
 {
     private readonly ILayoutDiscovery _layoutDiscovery;
+    private readonly LayoutProcessRunner _layoutProcessRunner;
     private readonly ILogger<BundleNuGetService> _logger;
     private readonly string _cacheDirectory;
 
     public BundleNuGetService(
         ILayoutDiscovery layoutDiscovery,
+        LayoutProcessRunner layoutProcessRunner,
         ILogger<BundleNuGetService> logger)
     {
         _layoutDiscovery = layoutDiscovery;
+        _layoutProcessRunner = layoutProcessRunner;
         _logger = logger;
         _cacheDirectory = GetCacheDirectory();
     }
@@ -130,7 +133,7 @@ public sealed class BundleNuGetService : INuGetService
         _logger.LogDebug("aspire-managed path: {ManagedPath}", managedPath);
         _logger.LogDebug("NuGet restore args: {Args}", string.Join(" ", restoreArgs));
 
-        var (exitCode, output, error) = await LayoutProcessRunner.RunAsync(
+        var (exitCode, output, error) = await _layoutProcessRunner.RunAsync(
             managedPath,
             restoreArgs,
             ct: ct);
@@ -169,7 +172,7 @@ public sealed class BundleNuGetService : INuGetService
         _logger.LogDebug("Creating layout from {AssetsPath}", assetsPath);
         _logger.LogDebug("NuGet layout args: {Args}", string.Join(" ", layoutArgs));
 
-        (exitCode, output, error) = await LayoutProcessRunner.RunAsync(
+        (exitCode, output, error) = await _layoutProcessRunner.RunAsync(
             managedPath,
             layoutArgs,
             ct: ct);

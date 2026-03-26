@@ -410,7 +410,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         var outputCollector = new OutputCollector();
         var projectFile = new FileInfo(Path.Combine(_projectModelPath, ProjectFileName));
 
-        var options = new DotNetCliRunnerInvocationOptions
+        var options = new ProcessInvocationOptions
         {
             StandardOutputCallback = outputCollector.AppendOutput,
             StandardErrorCallback = outputCollector.AppendError

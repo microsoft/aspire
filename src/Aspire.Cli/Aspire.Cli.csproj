@@ -77,6 +77,7 @@
     <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Layout\BundleDiscovery.cs" />
     <Compile Include="$(SharedDir)EnumerableExtensions.cs" Link="Utils\EnumerableExtensions.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />
+    <Compile Include="$(SharedDir)DashboardExitCodes.cs" Link="Utils\DashboardExitCodes.cs" />
     <Compile Include="$(SharedDir)KnownOtelConfigNames.cs" Link="Utils\KnownOtelConfigNames.cs" />
     <Compile Include="$(SharedDir)KnownFormats.cs" Link="Utils\KnownFormats.cs" />
     <Compile Include="$(SharedDir)TokenGenerator.cs" Link="Utils\TokenGenerator.cs" />
@@ -99,6 +100,7 @@
     <Compile Include="$(SharedDir)Model\KnownProperties.cs" Link="Model\KnownProperties.cs" />
     <Compile Include="$(SharedDir)Model\KnownResourceTypes.cs" Link="Model\KnownResourceTypes.cs" />
     <Compile Include="$(SharedDir)Model\ResourceSourceViewModel.cs" Link="Model\ResourceSourceViewModel.cs" />
+    <Compile Include="$(SharedDir)TokenGenerator.cs" Link="Utils\TokenGenerator.cs" />
     <Compile Include="$(SharedDir)DashboardUrls.cs" Link="Utils\DashboardUrls.cs" />
     <Compile Include="$(SharedDir)FormatHelpers.cs" Link="Utils\FormatHelpers.cs" />
     <Compile Include="$(SharedDir)DateFormatStringsHelpers.cs" Link="Utils\DateFormatStringsHelpers.cs" />

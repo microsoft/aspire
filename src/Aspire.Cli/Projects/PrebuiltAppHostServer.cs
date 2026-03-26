@@ -241,7 +241,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         var exitCode = await _dotNetCliRunner.BuildAsync(
             new FileInfo(projectFilePath),
             noRestore: false,
-            new DotNetCliRunnerInvocationOptions
+            new ProcessInvocationOptions
             {
                 StandardOutputCallback = buildOutput.AppendOutput,
                 StandardErrorCallback = buildOutput.AppendError

@@ -224,7 +224,7 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
         initContext.GetSolutionProjectsOutputCollector = new OutputCollector();
         var (getSolutionExitCode, solutionProjects) = await InteractionService.ShowStatusAsync("Reading solution...", async () =>
         {
-            var options = new DotNetCliRunnerInvocationOptions
+            var options = new ProcessInvocationOptions
             {
                 StandardOutputCallback = initContext.GetSolutionProjectsOutputCollector.AppendOutput,
                 StandardErrorCallback = initContext.GetSolutionProjectsOutputCollector.AppendError
@@ -368,7 +368,7 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
                 "Getting templates...",
                 async () =>
                 {
-                    var options = new DotNetCliRunnerInvocationOptions
+                    var options = new ProcessInvocationOptions
                     {
                         StandardOutputCallback = initContext.InstallTemplateOutputCollector.AppendOutput,
                         StandardErrorCallback = initContext.InstallTemplateOutputCollector.AppendError
@@ -396,7 +396,7 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
                 "Creating Aspire projects from template...",
                 async () =>
                 {
-                    var options = new DotNetCliRunnerInvocationOptions
+                    var options = new ProcessInvocationOptions
                     {
                         StandardOutputCallback = initContext.NewProjectOutputCollector.AppendOutput,
                         StandardErrorCallback = initContext.NewProjectOutputCollector.AppendError
@@ -451,7 +451,7 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
                 InitCommandStrings.AddingAppHostProjectToSolution,
                 async () =>
                 {
-                    var options = new DotNetCliRunnerInvocationOptions
+                    var options = new ProcessInvocationOptions
                     {
                         StandardOutputCallback = initContext.AddAppHostToSolutionOutputCollector.AppendOutput,
                         StandardErrorCallback = initContext.AddAppHostToSolutionOutputCollector.AppendError
@@ -477,7 +477,7 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
                 InitCommandStrings.AddingServiceDefaultsProjectToSolution,
                 async () =>
                 {
-                    var options = new DotNetCliRunnerInvocationOptions
+                    var options = new ProcessInvocationOptions
                     {
                         StandardOutputCallback = initContext.AddServiceDefaultsToSolutionOutputCollector.AppendOutput,
                         StandardErrorCallback = initContext.AddServiceDefaultsToSolutionOutputCollector.AppendError
@@ -509,7 +509,7 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
                     var addRefResult = await InteractionService.ShowStatusAsync(
                         $"Adding {project.ProjectFile.Name} to AppHost...", async () =>
                         {
-                            var options = new DotNetCliRunnerInvocationOptions
+                            var options = new ProcessInvocationOptions
                             {
                                 StandardOutputCallback = outputCollector.AppendOutput,
                                 StandardErrorCallback = outputCollector.AppendError
@@ -543,7 +543,7 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
                     var addRefResult = await InteractionService.ShowStatusAsync(
                         $"Adding ServiceDefaults reference to {project.ProjectFile.Name}...", async () =>
                         {
-                            var options = new DotNetCliRunnerInvocationOptions
+                            var options = new ProcessInvocationOptions
                             {
                                 StandardOutputCallback = outputCollector.AppendOutput,
                                 StandardErrorCallback = outputCollector.AppendError
@@ -650,7 +650,7 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
         foreach (var project in initContext.SolutionProjects)
         {
-            var options = new DotNetCliRunnerInvocationOptions
+            var options = new ProcessInvocationOptions
             {
                 StandardOutputCallback = initContext.EvaluateSolutionProjectsOutputCollector.AppendOutput,
                 StandardErrorCallback = initContext.EvaluateSolutionProjectsOutputCollector.AppendError
