@@ -165,6 +165,7 @@ internal static class CommonAgentApplicators
         | List resources | `aspire describe` or `aspire resources` |
         | Run resource command | `aspire resource <resource> <command>` |
         | Start/stop/restart resource | `aspire resource <resource> start|stop|restart` |
+        | Rebuild a resource | `aspire resource <resource> rebuild` |
         | View console logs | `aspire logs [resource]` |
         | View structured logs | `aspire otel logs [resource]` |
         | View traces | `aspire otel traces [resource]` |
@@ -198,7 +199,17 @@ internal static class CommonAgentApplicators
         aspire wait myapi
         ```
 
-        Relaunching is safe — `aspire start` automatically stops any previous instance. Re-run `aspire start` whenever changes are made to the AppHost project.
+        ### Applying code changes
+
+        Choose the right action based on what changed:
+
+        | What changed | Action | Why |
+        |---|---|---|
+        | AppHost project (`apphost.cs`/`apphost.ts`) | `aspire start` | Resource graph changed; full restart required |
+        | Compiled resource (C#, Go, Java, etc.) | `aspire resource <name> rebuild` | Rebuilds and restarts only that resource |
+        | Interpreted resource (JavaScript, Python) | Nothing — file watchers handle it | Hot reload picks up changes automatically |
+
+        **Never restart the entire AppHost just because a single resource changed.** Use `aspire resource <name> rebuild` for compiled resources — it coordinates stop, build, and restart for just that resource.
 
         ### Debugging issues
 
@@ -229,6 +240,7 @@ internal static class CommonAgentApplicators
 
         - **Always start the app first** (`aspire start`) before making changes to verify the starting state.
         - **To restart, just run `aspire start` again** — it automatically stops the previous instance. NEVER use `aspire stop` then `aspire run`. NEVER use `aspire run` at all.
+        - **Only restart the AppHost when AppHost code changes.** For individual compiled resources, use `aspire resource <name> rebuild` instead.
         - Use `--isolated` when working in a worktree.
         - **Avoid persistent containers** early in development to prevent state management issues.
         - **Never install the Aspire workload** — it is obsolete.
