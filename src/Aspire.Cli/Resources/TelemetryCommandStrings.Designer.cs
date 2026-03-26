@@ -248,5 +248,53 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("HeaderStatus", resourceCulture);
             }
         }
+
+        internal static string DashboardUrlOptionDescription {
+            get {
+                return ResourceManager.GetString("DashboardUrlOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string ApiKeyOptionDescription {
+            get {
+                return ResourceManager.GetString("ApiKeyOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string DashboardUrlAndAppHostExclusive {
+            get {
+                return ResourceManager.GetString("DashboardUrlAndAppHostExclusive", resourceCulture);
+            }
+        }
+
+        internal static string DashboardAuthFailed {
+            get {
+                return ResourceManager.GetString("DashboardAuthFailed", resourceCulture);
+            }
+        }
+
+        internal static string DashboardUrlNotReachable {
+            get {
+                return ResourceManager.GetString("DashboardUrlNotReachable", resourceCulture);
+            }
+        }
+
+        internal static string DashboardApiNotEnabled {
+            get {
+                return ResourceManager.GetString("DashboardApiNotEnabled", resourceCulture);
+            }
+        }
+
+        internal static string DashboardConnectionFailed {
+            get {
+                return ResourceManager.GetString("DashboardConnectionFailed", resourceCulture);
+            }
+        }
+
+        internal static string DashboardUrlInvalid {
+            get {
+                return ResourceManager.GetString("DashboardUrlInvalid", resourceCulture);
+            }
+        }
     }
 }
