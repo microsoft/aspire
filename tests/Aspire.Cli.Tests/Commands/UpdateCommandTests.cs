@@ -1034,6 +1034,8 @@ internal sealed class CancellationTrackingInteractionService : IInteractionServi
         set => _innerService.Console = value;
     }
 
+    public bool SupportsInteractiveInput => _innerService.SupportsInteractiveInput;
+
     public Action? OnCancellationMessageDisplayed { get; set; }
 
     public CancellationTrackingInteractionService(IInteractionService innerService)

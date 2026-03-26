@@ -156,6 +156,7 @@ public class ExtensionGuestLauncherTests
         public void ConsoleDisplaySubtleMessage(string message, bool allowMarkup = false) => throw new NotImplementedException();
         public void WriteConsoleLog(string message, int? lineNumber = null, string? type = null, bool isErrorMessage = false) => throw new NotImplementedException();
         public ConsoleOutput Console { get; set; }
+        public bool SupportsInteractiveInput => true;
         public Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false) => throw new NotImplementedException();
         public void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false) => throw new NotImplementedException();
         public Task<string> PromptForStringAsync(string promptText, string? defaultValue = null, Func<string, Spectre.Console.ValidationResult>? validator = null, bool isSecret = false, bool required = false, CancellationToken cancellationToken = default) => throw new NotImplementedException();
