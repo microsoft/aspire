@@ -408,6 +408,49 @@ public class TelemetryApiServiceTests
         Assert.Empty(receivedItems);
     }
 
+    [Theory]
+    [InlineData("747261636531", true)] // full hex trace ID for "trace1"
+    [InlineData("7472616", true)] // shortened (7 char) prefix
+    [InlineData("747261", false)] // too short
+    [InlineData("nonexistent", false)]
+    public void GetTrace_VariousTraceIds_ReturnsExpectedResult(string lookupId, bool expectFound)
+    {
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "trace1", spanId: "span1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1))
+                        }
+                    }
+                }
+            }
+        });
+
+        var service = CreateService(repository);
+
+        var result = service.GetTrace(lookupId);
+
+        if (expectFound)
+        {
+            Assert.NotNull(result);
+            Assert.Equal(1, result.ReturnedCount);
+        }
+        else
+        {
+            Assert.Null(result);
+        }
+    }
+
     /// <summary>
     /// Creates a TelemetryApiService instance for testing with optional custom dependencies.
     /// </summary>

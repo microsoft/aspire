@@ -995,6 +995,11 @@ public sealed partial class TelemetryRepository : IDisposable
     {
         Debug.Assert(_tracesLock.IsReadLockHeld || _tracesLock.IsWriteLockHeld, $"Must get lock before calling {nameof(GetTraceUnsynchronized)}.");
 
+        if (traceId.Length < OtlpHelpers.ShortenedIdLength)
+        {
+            return null;
+        }
+
         foreach (var trace in _traces)
         {
             if (OtlpHelpers.MatchTelemetryId(traceId, trace.TraceId))
