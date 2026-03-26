@@ -147,23 +147,33 @@ internal static class CliE2EAutomatorHelpers
     }
 
     /// <summary>
-    /// Verifies the installed Aspire CLI version matches the expected version.
+    /// Verifies the installed Aspire CLI version matches the expected build.
+    /// Always checks the dynamic version prefix from eng/Versions.props.
+    /// For non-stabilized builds (all normal PR builds), also verifies the commit SHA suffix.
     /// </summary>
-#pragma warning disable IDE0060 // commitSha is unused during stabilized builds — restore when merging back to main
     internal static async Task VerifyAspireCliVersionAsync(
         this Hex1bTerminalAutomator auto,
         string commitSha,
         SequenceCounter counter)
-#pragma warning restore IDE0060
     {
+        var versionPrefix = CliE2ETestHelpers.GetVersionPrefix();
+        var isStabilized = CliE2ETestHelpers.IsStabilizedBuild();
+
         await auto.TypeAsync("aspire --version");
         await auto.EnterAsync();
 
-        // When the build is stabilized (StabilizePackageVersion=true), the CLI version
-        // is just "13.2.0" with no commit SHA suffix. When not stabilized, it includes
-        // the SHA (e.g., "13.2.0-preview.1.g<sha>"). In both cases, "13.2.0" is present.
-        // TODO: This change should be reverted on the integration to the main branch.
-        await auto.WaitUntilTextAsync("13.2.1", timeout: TimeSpan.FromSeconds(10));
+        // Always verify the version prefix matches the branch's version (e.g., "13.3.0").
+        await auto.WaitUntilTextAsync(versionPrefix, timeout: TimeSpan.FromSeconds(10));
+
+        // For non-stabilized builds (all PR CI builds), also verify the commit SHA suffix
+        // to uniquely identify the exact build. Stabilized builds (official releases only)
+        // produce versions without SHA suffixes, so we skip this check.
+        if (!isStabilized && commitSha.Length == 40)
+        {
+            var shortCommitSha = commitSha[..8];
+            var expectedVersionSuffix = $"g{shortCommitSha}";
+            await auto.WaitUntilTextAsync(expectedVersionSuffix, timeout: TimeSpan.FromSeconds(10));
+        }
 
         await auto.WaitForSuccessPromptAsync(counter);
     }
