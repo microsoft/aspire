@@ -1686,6 +1686,15 @@ class ConnectionStringResource extends ResourceBuilderBase {
         return (IResourceWithConnectionString) getClient().invokeCapability("Aspire.Hosting/withConnectionProperty", reqArgs);
     }
 
+    /** Adds a connection property with a string value */
+    public IResourceWithConnectionString withConnectionPropertyValue(String name, String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        return (IResourceWithConnectionString) getClient().invokeCapability("Aspire.Hosting/withConnectionPropertyValue", reqArgs);
+    }
+
     /** Gets a connection property by key */
     public ReferenceExpression getConnectionProperty(String key) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -10187,6 +10196,15 @@ class TestRedisResource extends ResourceBuilderBase {
         reqArgs.put("name", AspireClient.serializeValue(name));
         reqArgs.put("value", AspireClient.serializeValue(value));
         return (IResourceWithConnectionString) getClient().invokeCapability("Aspire.Hosting/withConnectionProperty", reqArgs);
+    }
+
+    /** Adds a connection property with a string value */
+    public IResourceWithConnectionString withConnectionPropertyValue(String name, String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        return (IResourceWithConnectionString) getClient().invokeCapability("Aspire.Hosting/withConnectionPropertyValue", reqArgs);
     }
 
     /** Adds arguments */

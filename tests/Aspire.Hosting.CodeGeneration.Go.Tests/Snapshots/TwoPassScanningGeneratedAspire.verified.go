@@ -1938,6 +1938,20 @@ func (s *ConnectionStringResource) WithConnectionProperty(name string, value any
 	return result.(*IResourceWithConnectionString), nil
 }
 
+// WithConnectionPropertyValue adds a connection property with a string value
+func (s *ConnectionStringResource) WithConnectionPropertyValue(name string, value string) (*IResourceWithConnectionString, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["name"] = SerializeValue(name)
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withConnectionPropertyValue", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithConnectionString), nil
+}
+
 // GetConnectionProperty gets a connection property by key
 func (s *ConnectionStringResource) GetConnectionProperty(key string) (*ReferenceExpression, error) {
 	reqArgs := map[string]any{
@@ -14739,6 +14753,20 @@ func (s *TestRedisResource) WithConnectionProperty(name string, value any) (*IRe
 	reqArgs["name"] = SerializeValue(name)
 	reqArgs["value"] = SerializeValue(value)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withConnectionProperty", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithConnectionString), nil
+}
+
+// WithConnectionPropertyValue adds a connection property with a string value
+func (s *TestRedisResource) WithConnectionPropertyValue(name string, value string) (*IResourceWithConnectionString, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["name"] = SerializeValue(name)
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withConnectionPropertyValue", reqArgs)
 	if err != nil {
 		return nil, err
 	}

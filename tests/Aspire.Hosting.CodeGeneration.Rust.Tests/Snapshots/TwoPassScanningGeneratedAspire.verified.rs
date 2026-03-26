@@ -2014,6 +2014,17 @@ impl ConnectionStringResource {
         Ok(IResourceWithConnectionString::new(handle, self.client.clone()))
     }
 
+    /// Adds a connection property with a string value
+    pub fn with_connection_property_value(&self, name: &str, value: &str) -> Result<IResourceWithConnectionString, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withConnectionPropertyValue", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithConnectionString::new(handle, self.client.clone()))
+    }
+
     /// Gets a connection property by key
     pub fn get_connection_property(&self, key: &str) -> Result<ReferenceExpression, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -13004,6 +13015,17 @@ impl TestRedisResource {
         args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
         args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withConnectionProperty", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithConnectionString::new(handle, self.client.clone()))
+    }
+
+    /// Adds a connection property with a string value
+    pub fn with_connection_property_value(&self, name: &str, value: &str) -> Result<IResourceWithConnectionString, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withConnectionPropertyValue", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithConnectionString::new(handle, self.client.clone()))
     }

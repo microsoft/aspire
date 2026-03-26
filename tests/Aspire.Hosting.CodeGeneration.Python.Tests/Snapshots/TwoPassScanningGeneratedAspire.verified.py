@@ -1063,6 +1063,13 @@ class ConnectionStringResource(ResourceBuilderBase):
         args["value"] = serialize_value(value)
         return self._client.invoke_capability("Aspire.Hosting/withConnectionProperty", args)
 
+    def with_connection_property_value(self, name: str, value: str) -> IResourceWithConnectionString:
+        """Adds a connection property with a string value"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["name"] = serialize_value(name)
+        args["value"] = serialize_value(value)
+        return self._client.invoke_capability("Aspire.Hosting/withConnectionPropertyValue", args)
+
     def get_connection_property(self, key: str) -> ReferenceExpression:
         """Gets a connection property by key"""
         args: Dict[str, Any] = { "resource": serialize_value(self._handle) }
@@ -7385,6 +7392,13 @@ class TestRedisResource(ResourceBuilderBase):
         args["name"] = serialize_value(name)
         args["value"] = serialize_value(value)
         return self._client.invoke_capability("Aspire.Hosting/withConnectionProperty", args)
+
+    def with_connection_property_value(self, name: str, value: str) -> IResourceWithConnectionString:
+        """Adds a connection property with a string value"""
+        args: Dict[str, Any] = { "builder": serialize_value(self._handle) }
+        args["name"] = serialize_value(name)
+        args["value"] = serialize_value(value)
+        return self._client.invoke_capability("Aspire.Hosting/withConnectionPropertyValue", args)
 
     def with_args(self, args: list[str]) -> IResourceWithArgs:
         """Adds arguments"""
