@@ -221,10 +221,82 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
         Assert.NotNull(result);
     }
 
+    [Fact]
+    public async Task EnsureCertificatesTrustedAsync_ExportsPemCertificate()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var exportCalled = false;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CertificateToolRunnerFactory = sp =>
+            {
+                return new TestCertificateToolRunner
+                {
+                    CheckHttpCertificateCallback = () =>
+                    {
+                        return new CertificateTrustResult
+                        {
+                            HasCertificates = true,
+                            TrustLevel = CertificateManager.TrustLevel.Full,
+                            Certificates = [new DevCertInfo { Version = 5, TrustLevel = CertificateManager.TrustLevel.Full, IsHttpsDevelopmentCertificate = true, ValidityNotBefore = DateTimeOffset.Now.AddDays(-1), ValidityNotAfter = DateTimeOffset.Now.AddDays(365) }]
+                        };
+                    },
+                    ExportDevCertificatePublicPemCallback = (path) =>
+                    {
+                        exportCalled = true;
+                        return path;
+                    }
+                };
+            };
+        });
+
+        var sp = services.BuildServiceProvider();
+        var cs = sp.GetRequiredService<ICertificateService>();
+
+        await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.True(exportCalled);
+    }
+
+    [Fact]
+    public async Task EnsureCertificatesTrustedAsync_PemExportFailure_DoesNotThrow()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CertificateToolRunnerFactory = sp =>
+            {
+                return new TestCertificateToolRunner
+                {
+                    CheckHttpCertificateCallback = () =>
+                    {
+                        return new CertificateTrustResult
+                        {
+                            HasCertificates = true,
+                            TrustLevel = CertificateManager.TrustLevel.Full,
+                            Certificates = [new DevCertInfo { Version = 5, TrustLevel = CertificateManager.TrustLevel.Full, IsHttpsDevelopmentCertificate = true, ValidityNotBefore = DateTimeOffset.Now.AddDays(-1), ValidityNotAfter = DateTimeOffset.Now.AddDays(365) }]
+                        };
+                    },
+                    ExportDevCertificatePublicPemCallback = (_) => throw new IOException("Disk full")
+                };
+            };
+        });
+
+        var sp = services.BuildServiceProvider();
+        var cs = sp.GetRequiredService<ICertificateService>();
+
+        // Should not throw even when PEM export fails
+        var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+        Assert.NotNull(result);
+    }
+
     private sealed class TestCertificateToolRunner : ICertificateToolRunner
     {
         public Func<CertificateTrustResult>? CheckHttpCertificateCallback { get; set; }
         public Func<EnsureCertificateResult>? TrustHttpCertificateCallback { get; set; }
+        public Func<string, string?>? ExportDevCertificatePublicPemCallback { get; set; }
 
         public CertificateTrustResult CheckHttpCertificate()
         {
@@ -251,5 +323,12 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
 
         public CertificateCleanResult CleanHttpCertificate()
             => new CertificateCleanResult { Success = true };
+
+        public string? ExportDevCertificatePublicPem(string outputPath)
+        {
+            return ExportDevCertificatePublicPemCallback is not null
+                ? ExportDevCertificatePublicPemCallback(outputPath)
+                : null;
+        }
     }
 }

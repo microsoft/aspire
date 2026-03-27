@@ -346,10 +346,12 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         {
             // Step 1: Ensure certificates are trusted
             Dictionary<string, string> certEnvVars;
+            string? devCertPemPath;
             try
             {
                 var certResult = await _certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
                 certEnvVars = new Dictionary<string, string>(certResult.EnvironmentVariables);
+                devCertPemPath = certResult.DevCertPemPath;
             }
             catch
             {
@@ -488,6 +490,13 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 ["ASPIRE_PROJECT_DIRECTORY"] = directory.FullName,
                 ["ASPIRE_APPHOST_FILEPATH"] = appHostFile.FullName
             };
+
+            // Set NODE_EXTRA_CA_CERTS for Node.js-based runtimes so the TypeScript app host
+            // trusts the ASP.NET Core development certificate when connecting over HTTPS
+            if (devCertPemPath is not null && LanguageId.Contains("nodejs", StringComparison.OrdinalIgnoreCase))
+            {
+                environmentVariables["NODE_EXTRA_CA_CERTS"] = devCertPemPath;
+            }
 
             // Check if the extension should launch the guest app host (for VS Code debugging).
             // This mirrors the pattern in DotNetCliRunner.ExecuteAsync for .NET app hosts.
