@@ -223,6 +223,24 @@ public class AtsMarshallerTests
     }
 
     [Fact]
+    public void ConvertPrimitive_ConvertsIntFromWholeDouble()
+    {
+        var value = JsonValue.Create(11433.0);
+
+        var result = AtsMarshaller.ConvertPrimitive(value!, typeof(int));
+
+        Assert.Equal(11433, result);
+    }
+
+    [Fact]
+    public void ConvertPrimitive_ThrowsForIntFromFractionalDouble()
+    {
+        var value = JsonValue.Create(11433.5);
+
+        Assert.Throws<InvalidCastException>(() => AtsMarshaller.ConvertPrimitive(value!, typeof(int)));
+    }
+
+    [Fact]
     public void ConvertPrimitive_ConvertsBoolCorrectly()
     {
         var value = JsonValue.Create(true);
@@ -497,6 +515,16 @@ public class AtsMarshallerTests
         var result = AtsMarshaller.ConvertPrimitive(value!, typeof(long));
 
         Assert.Equal(9223372036854775807L, result);
+    }
+
+    [Fact]
+    public void ConvertPrimitive_ConvertsLongFromWholeDouble()
+    {
+        var value = JsonValue.Create(5000000000d);
+
+        var result = AtsMarshaller.ConvertPrimitive(value!, typeof(long));
+
+        Assert.Equal(5000000000L, result);
     }
 
     [Fact]

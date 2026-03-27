@@ -537,6 +537,43 @@ internal sealed class AtsMarshaller
         return type.ToString();
     }
 
+    private static decimal ReadNumericValue(JsonValue value, Type targetType)
+    {
+        if (value.TryGetValue<decimal>(out var decimalValue))
+        {
+            return decimalValue;
+        }
+
+        if (value.TryGetValue<long>(out var longValue))
+        {
+            return longValue;
+        }
+
+        if (value.TryGetValue<ulong>(out var ulongValue))
+        {
+            return ulongValue;
+        }
+
+        if (value.TryGetValue<double>(out var doubleValue) && double.IsFinite(doubleValue))
+        {
+            return (decimal)doubleValue;
+        }
+
+        throw new InvalidCastException($"Value cannot be converted to {targetType.Name}.");
+    }
+
+    private static decimal ReadIntegralNumericValue(JsonValue value, Type targetType, decimal minValue, decimal maxValue)
+    {
+        var numericValue = ReadNumericValue(value, targetType);
+
+        if (decimal.Truncate(numericValue) != numericValue || numericValue < minValue || numericValue > maxValue)
+        {
+            throw new InvalidCastException($"Value cannot be converted to {targetType.Name}.");
+        }
+
+        return numericValue;
+    }
+
     /// <summary>
     /// Converts a JSON primitive to the target .NET type.
     /// </summary>
@@ -570,27 +607,57 @@ internal sealed class AtsMarshaller
 
         if (underlyingType == typeof(int))
         {
-            return value.GetValue<int>();
+            return decimal.ToInt32(ReadIntegralNumericValue(value, underlyingType, int.MinValue, int.MaxValue));
         }
 
         if (underlyingType == typeof(long))
         {
-            return value.GetValue<long>();
+            return decimal.ToInt64(ReadIntegralNumericValue(value, underlyingType, long.MinValue, long.MaxValue));
+        }
+
+        if (underlyingType == typeof(byte))
+        {
+            return decimal.ToByte(ReadIntegralNumericValue(value, underlyingType, byte.MinValue, byte.MaxValue));
+        }
+
+        if (underlyingType == typeof(short))
+        {
+            return decimal.ToInt16(ReadIntegralNumericValue(value, underlyingType, short.MinValue, short.MaxValue));
+        }
+
+        if (underlyingType == typeof(uint))
+        {
+            return decimal.ToUInt32(ReadIntegralNumericValue(value, underlyingType, uint.MinValue, uint.MaxValue));
+        }
+
+        if (underlyingType == typeof(ulong))
+        {
+            return decimal.ToUInt64(ReadIntegralNumericValue(value, underlyingType, ulong.MinValue, ulong.MaxValue));
+        }
+
+        if (underlyingType == typeof(ushort))
+        {
+            return decimal.ToUInt16(ReadIntegralNumericValue(value, underlyingType, ushort.MinValue, ushort.MaxValue));
+        }
+
+        if (underlyingType == typeof(sbyte))
+        {
+            return decimal.ToSByte(ReadIntegralNumericValue(value, underlyingType, sbyte.MinValue, sbyte.MaxValue));
         }
 
         if (underlyingType == typeof(double))
         {
-            return value.GetValue<double>();
+            return (double)ReadNumericValue(value, underlyingType);
         }
 
         if (underlyingType == typeof(float))
         {
-            return (float)value.GetValue<double>();
+            return (float)ReadNumericValue(value, underlyingType);
         }
 
         if (underlyingType == typeof(decimal))
         {
-            return value.GetValue<decimal>();
+            return ReadNumericValue(value, underlyingType);
         }
 
         // TimeSpan: accept milliseconds (number) or parseable string
