@@ -1,8 +1,8 @@
 import contextlib
 import datetime
-//#if UseRedisCache
+# {{#redis}}
 import json
-//#endif
+# {{/redis}}
 import logging
 import os
 import random
@@ -11,10 +11,10 @@ import fastapi
 import fastapi.responses
 import fastapi.staticfiles
 import opentelemetry.instrumentation.fastapi as otel_fastapi
-//#if UseRedisCache
+# {{#redis}}
 import opentelemetry.instrumentation.redis as otel_redis
 import redis
-//#endif
+# {{/redis}}
 import telemetry
 
 
@@ -27,7 +27,7 @@ async def lifespan(app):
 app = fastapi.FastAPI(lifespan=lifespan)
 otel_fastapi.FastAPIInstrumentor.instrument_app(app, exclude_spans=["send"])
 
-//#if UseRedisCache
+# {{#redis}}
 # Create a global to store the Redis client.
 redis_client = None
 otel_redis.RedisInstrumentor().instrument()
@@ -54,7 +54,7 @@ def get_redis_client():
             )
     return redis_client
 
-//#endif
+# {{/redis}}
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +66,7 @@ if not os.path.exists("static"):
         return "API service is running. Navigate to <a href='/api/weatherforecast'>/api/weatherforecast</a> to see sample data."
 
 @app.get("/api/weatherforecast")
-//#if UseRedisCache
+# {{#redis}}
 async def weather_forecast(redis_client=fastapi.Depends(get_redis_client)):
     """Weather forecast endpoint."""
     cache_key = "weatherforecast"
@@ -82,10 +82,11 @@ async def weather_forecast(redis_client=fastapi.Depends(get_redis_client)):
         except Exception as e:
             logger.warning(f"Redis cache read error: {e}")
 
-//#else
+# {{/redis}}
+# {{#no-redis}}
 async def weather_forecast():
     """Weather forecast endpoint."""
-//#endif
+# {{/no-redis}}
     # Generate fresh data if not in cache or cache unavailable.
     summaries = [
         "Freezing",
@@ -112,7 +113,7 @@ async def weather_forecast():
         }
         forecast.append(forecast_item)
 
-//#if UseRedisCache
+# {{#redis}}
     # Cache the data
     if redis_client:
         try:
@@ -120,20 +121,21 @@ async def weather_forecast():
         except Exception as e:
             logger.warning(f"Redis cache write error: {e}")
 
-//#endif
+# {{/redis}}
     return forecast
 
 
 @app.get("/health", response_class=fastapi.responses.PlainTextResponse)
-//#if UseRedisCache
+# {{#redis}}
 async def health_check(redis_client=fastapi.Depends(get_redis_client)):
     """Health check endpoint."""
     if redis_client:
         redis_client.ping()
-//#else
+# {{/redis}}
+# {{#no-redis}}
 async def health_check():
     """Health check endpoint."""
-//#endif
+# {{/no-redis}}
     return "Healthy"
 
 
