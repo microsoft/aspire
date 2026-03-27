@@ -104,7 +104,7 @@ function isAbortSignal(value: unknown): value is AbortSignal {
     );
 }
 
-function isCancellationTokenLike(value: unknown): value is ICancellationToken {
+function isCancellationTokenLike(value: unknown): value is CancellationToken {
     return (
         value !== null &&
         typeof value === 'object' &&
@@ -216,12 +216,12 @@ export class Handle<T extends string = string> {
  * const connectionString = await connectionStringExpression.getValue(cancellationToken);
  * ```
  */
-export interface ICancellationToken {
+export interface CancellationToken {
     toJSON(): string | undefined;
     register(client?: AspireClient): string | undefined;
 }
 
-export class CancellationToken implements ICancellationToken {
+class CancellationTokenImpl implements CancellationToken {
     private readonly _signal?: AbortSignal;
     private readonly _remoteTokenId?: string;
 
@@ -238,33 +238,6 @@ export class CancellationToken implements ICancellationToken {
     /**
      * Creates a cancellation token from a local {@link AbortSignal}.
      */
-    static from(signal?: AbortSignal): CancellationToken {
-        return new CancellationToken(signal);
-    }
-
-    /**
-     * Creates a cancellation token from a transport value.
-     * Generated code uses this to materialize values that come from the AppHost.
-     */
-    static fromValue(value: unknown): ICancellationToken {
-        if (isCancellationTokenLike(value)) {
-            return value;
-        }
-
-        if (typeof value === 'string') {
-            return new CancellationToken(value);
-        }
-
-        if (isAbortSignal(value)) {
-            return new CancellationToken(value);
-        }
-
-        return new CancellationToken();
-    }
-
-    /**
-     * Serializes the token for JSON-RPC transport.
-     */
     toJSON(): string | undefined {
         return this._remoteTokenId;
     }
@@ -279,6 +252,35 @@ export class CancellationToken implements ICancellationToken {
             : registerCancellation(this._signal);
     }
 }
+
+/**
+ * Creates transport-safe cancellation token values for the generated SDK.
+ */
+export const CancellationToken = {
+    from(signal?: AbortSignal): CancellationToken {
+        return new CancellationTokenImpl(signal);
+    },
+
+    /**
+     * Creates a cancellation token from a transport value.
+     * Generated code uses this to materialize values that come from the AppHost.
+     */
+    fromValue(value: unknown): CancellationToken {
+        if (isCancellationTokenLike(value)) {
+            return value;
+        }
+
+        if (typeof value === 'string') {
+            return new CancellationTokenImpl(value);
+        }
+
+        if (isAbortSignal(value)) {
+            return new CancellationTokenImpl(value);
+        }
+
+        return new CancellationTokenImpl();
+    }
+};
 
 // ============================================================================
 // Handle Wrapper Registry
@@ -601,7 +603,7 @@ function isAspireClientLike(value: unknown): value is AspireClient {
  * @param signalOrToken - The signal or token to register (optional)
  * @returns The cancellation ID, or undefined if no value was provided or the token maps to CancellationToken.None
  */
-export function registerCancellation(client: AspireClient, signalOrToken?: AbortSignal | ICancellationToken): string | undefined;
+export function registerCancellation(client: AspireClient, signalOrToken?: AbortSignal | CancellationToken): string | undefined;
 /**
  * Registers cancellation support using the single connected AspireClient.
  *
@@ -618,15 +620,15 @@ export function registerCancellation(client: AspireClient, signalOrToken?: Abort
  * // Pass id to capability invocation
  * // Later: controller.abort() will cancel the operation
  */
-export function registerCancellation(signalOrToken?: AbortSignal | ICancellationToken): string | undefined;
+export function registerCancellation(signalOrToken?: AbortSignal | CancellationToken): string | undefined;
 export function registerCancellation(
-    clientOrSignalOrToken?: AspireClient | AbortSignal | ICancellationToken,
-    maybeSignalOrToken?: AbortSignal | ICancellationToken
+    clientOrSignalOrToken?: AspireClient | AbortSignal | CancellationToken,
+    maybeSignalOrToken?: AbortSignal | CancellationToken
 ): string | undefined {
     const client = isAspireClientLike(clientOrSignalOrToken) ? clientOrSignalOrToken : undefined;
     const signalOrToken = client
         ? maybeSignalOrToken
-        : clientOrSignalOrToken as AbortSignal | ICancellationToken | undefined;
+        : clientOrSignalOrToken as AbortSignal | CancellationToken | undefined;
 
     if (!signalOrToken) {
         return undefined;

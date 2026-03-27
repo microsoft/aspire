@@ -1,10 +1,9 @@
-// base.ts - Core Aspire types: base classes, ReferenceExpression
-import type { ICancellationToken } from './transport.js';
+﻿// base.ts - Core Aspire types: base classes, ReferenceExpression
 import { Handle, AspireClient, MarshalledHandle, CancellationToken, registerCancellation, registerHandleWrapper, unregisterCancellation } from './transport.js';
 
 // Re-export transport types for convenience
 export { Handle, AspireClient, CapabilityError, CancellationToken, registerCallback, unregisterCallback, registerCancellation, unregisterCancellation } from './transport.js';
-export type { ICancellationToken, MarshalledHandle, AtsError, AtsErrorDetails, CallbackFunction } from './transport.js';
+export type { MarshalledHandle, AtsError, AtsErrorDetails, CallbackFunction } from './transport.js';
 export { AtsErrorCodes, isMarshalledHandle, isAtsError, wrapIfHandle } from './transport.js';
 
 // ============================================================================
@@ -39,22 +38,22 @@ export { AtsErrorCodes, isMarshalledHandle, isAtsError, wrapIfHandle } from './t
  * await api.withEnvironment("REDIS_URL", expr);
  * ```
  */
-export interface IReferenceExpression {
+export interface ReferenceExpression {
     readonly isConditional: boolean;
     toJSON(): { $expr: { format: string; valueProviders?: unknown[] } | { condition: unknown; whenTrue: unknown; whenFalse: unknown; matchValue: string } } | MarshalledHandle;
-    getValue(cancellationToken?: AbortSignal | ICancellationToken): Promise<string | null>;
+    getValue(cancellationToken?: AbortSignal | CancellationToken): Promise<string | null>;
     toString(): string;
 }
 
-export class ReferenceExpression implements IReferenceExpression {
+class ReferenceExpressionImpl implements ReferenceExpression {
     // Expression mode fields
     private readonly _format?: string;
     private readonly _valueProviders?: unknown[];
 
     // Conditional mode fields
     private readonly _condition?: unknown;
-    private readonly _whenTrue?: IReferenceExpression;
-    private readonly _whenFalse?: IReferenceExpression;
+    private readonly _whenTrue?: ReferenceExpression;
+    private readonly _whenFalse?: ReferenceExpression;
     private readonly _matchValue?: string;
 
     // Handle mode fields (when wrapping a server-returned handle)
@@ -63,12 +62,12 @@ export class ReferenceExpression implements IReferenceExpression {
 
     constructor(format: string, valueProviders: unknown[]);
     constructor(handle: Handle, client: AspireClient);
-    constructor(condition: unknown, matchValue: string, whenTrue: IReferenceExpression, whenFalse: IReferenceExpression);
+    constructor(condition: unknown, matchValue: string, whenTrue: ReferenceExpression, whenFalse: ReferenceExpression);
     constructor(
         handleOrFormatOrCondition: Handle | string | unknown,
         clientOrValueProvidersOrMatchValue: AspireClient | unknown[] | string,
-        whenTrueOrWhenFalse?: IReferenceExpression,
-        whenFalse?: IReferenceExpression
+        whenTrueOrWhenFalse?: ReferenceExpression,
+        whenFalse?: ReferenceExpression
     ) {
         if (typeof handleOrFormatOrCondition === 'string') {
             this._format = handleOrFormatOrCondition;
@@ -98,55 +97,6 @@ export class ReferenceExpression implements IReferenceExpression {
      * @param values - The interpolated values (handles to value providers)
      * @returns A ReferenceExpression instance
      */
-    static create(strings: TemplateStringsArray, ...values: unknown[]): IReferenceExpression {
-        // Build the format string with {0}, {1}, etc. placeholders
-        let format = '';
-        for (let i = 0; i < strings.length; i++) {
-            format += strings[i];
-            if (i < values.length) {
-                format += `{${i}}`;
-            }
-        }
-
-        // Extract handles from values
-        const valueProviders = values.map(extractHandleForExpr);
-
-        return new ReferenceExpression(format, valueProviders);
-    }
-
-    /**
-     * Creates a conditional reference expression from its constituent parts.
-     *
-     * @param condition - A value provider whose result is compared to matchValue
-     * @param whenTrue - The expression to use when the condition matches
-     * @param whenFalse - The expression to use when the condition does not match
-     * @param matchValue - The value to compare the condition against (defaults to "True")
-     * @returns A ReferenceExpression instance in conditional mode
-     */
-    static createConditional(
-        condition: unknown,
-        whenTrue: IReferenceExpression,
-        whenFalse: IReferenceExpression
-    ): IReferenceExpression;
-    static createConditional(
-        condition: unknown,
-        matchValue: string,
-        whenTrue: IReferenceExpression,
-        whenFalse: IReferenceExpression
-    ): IReferenceExpression;
-    static createConditional(
-        condition: unknown,
-        matchValueOrWhenTrue: string | IReferenceExpression,
-        whenTrueOrWhenFalse: IReferenceExpression,
-        whenFalse?: IReferenceExpression
-    ): IReferenceExpression {
-        if (typeof matchValueOrWhenTrue === 'string') {
-            return new ReferenceExpression(condition, matchValueOrWhenTrue, whenTrueOrWhenFalse, whenFalse!);
-        }
-
-        return new ReferenceExpression(condition, 'True', matchValueOrWhenTrue, whenTrueOrWhenFalse);
-    }
-
     /**
      * Serializes the reference expression for JSON-RPC transport.
      * In expression mode, uses the $expr format with format + valueProviders.
@@ -184,7 +134,7 @@ export class ReferenceExpression implements IReferenceExpression {
      * @param cancellationToken - Optional AbortSignal or CancellationToken for cancellation support
      * @returns The resolved string value, or null if the expression resolves to null
      */
-    async getValue(cancellationToken?: AbortSignal | ICancellationToken): Promise<string | null> {
+    async getValue(cancellationToken?: AbortSignal | CancellationToken): Promise<string | null> {
         if (!this._handle || !this._client) {
             throw new Error('getValue is only available on server-returned ReferenceExpression instances');
         }
@@ -215,8 +165,51 @@ export class ReferenceExpression implements IReferenceExpression {
     }
 }
 
+function createReferenceExpression(strings: TemplateStringsArray, ...values: unknown[]): ReferenceExpression {
+    let format = '';
+    for (let i = 0; i < strings.length; i++) {
+        format += strings[i];
+        if (i < values.length) {
+            format += `{${i}}`;
+        }
+    }
+
+    const valueProviders = values.map(extractHandleForExpr);
+
+    return new ReferenceExpressionImpl(format, valueProviders);
+}
+
+function createConditionalReferenceExpression(
+    condition: unknown,
+    whenTrue: ReferenceExpression,
+    whenFalse: ReferenceExpression
+): ReferenceExpression;
+function createConditionalReferenceExpression(
+    condition: unknown,
+    matchValue: string,
+    whenTrue: ReferenceExpression,
+    whenFalse: ReferenceExpression
+): ReferenceExpression;
+function createConditionalReferenceExpression(
+    condition: unknown,
+    matchValueOrWhenTrue: string | ReferenceExpression,
+    whenTrueOrWhenFalse: ReferenceExpression,
+    whenFalse?: ReferenceExpression
+): ReferenceExpression {
+    if (typeof matchValueOrWhenTrue === 'string') {
+        return new ReferenceExpressionImpl(condition, matchValueOrWhenTrue, whenTrueOrWhenFalse, whenFalse!);
+    }
+
+    return new ReferenceExpressionImpl(condition, 'True', matchValueOrWhenTrue, whenTrueOrWhenFalse);
+}
+
+export const ReferenceExpression = {
+    create: createReferenceExpression,
+    createConditional: createConditionalReferenceExpression
+};
+
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression', (handle, client) =>
-    new ReferenceExpression(handle, client)
+    new ReferenceExpressionImpl(handle, client)
 );
 
 /**
@@ -281,7 +274,7 @@ function extractHandleForExpr(value: unknown): unknown {
  * await api.withEnvironment("REDIS_URL", expr);
  * ```
  */
-export function refExpr(strings: TemplateStringsArray, ...values: unknown[]): IReferenceExpression {
+export function refExpr(strings: TemplateStringsArray, ...values: unknown[]): ReferenceExpression {
     return ReferenceExpression.create(strings, ...values);
 }
 
@@ -289,7 +282,7 @@ export function refExpr(strings: TemplateStringsArray, ...values: unknown[]): IR
 // ResourceBuilderBase
 // ============================================================================
 
-export interface IHandleReference {
+export interface HandleReference {
     toJSON(): MarshalledHandle;
 }
 
@@ -297,7 +290,7 @@ export interface IHandleReference {
  * Base class for resource builders (e.g., RedisBuilder, ContainerBuilder).
  * Provides handle management and JSON serialization.
  */
-export class ResourceBuilderBase<THandle extends Handle = Handle> implements IHandleReference {
+export class ResourceBuilderBase<THandle extends Handle = Handle> implements HandleReference {
     constructor(protected _handle: THandle, protected _client: AspireClient) {}
 
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }

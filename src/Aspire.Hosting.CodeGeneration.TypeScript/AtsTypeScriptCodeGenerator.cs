@@ -122,15 +122,19 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     // Mapping of enum type IDs to TypeScript enum names
     private readonly Dictionary<string, string> _enumTypeNames = new(StringComparer.Ordinal);
 
-    private static string GetInterfaceName(string className) => $"I{className}";
+    private static string GetInterfaceName(string className) => className;
 
-    private static string GetPromiseInterfaceName(string className) => $"I{className}Promise";
+    private static string GetPromiseInterfaceName(string className) => $"{className}Promise";
 
-    private static string GetReferenceExpressionInterfaceName() => "IReferenceExpression";
+    private static string GetImplementationClassName(string className) => $"{className}Impl";
 
-    private static string GetCancellationTokenInterfaceName() => "ICancellationToken";
+    private static string GetImplementationPromiseClassName(string className) => $"{className}PromiseImpl";
 
-    private static string GetHandleReferenceInterfaceName() => "IHandleReference";
+    private static string GetReferenceExpressionInterfaceName() => "ReferenceExpression";
+
+    private static string GetCancellationTokenInterfaceName() => "CancellationToken";
+
+    private static string GetHandleReferenceInterfaceName() => "HandleReference";
 
     private string GetConcreteClassName(string typeId) => _wrapperClassNames.GetValueOrDefault(typeId)
         ?? DeriveClassName(typeId);
@@ -410,11 +414,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 registerHandleWrapper
             } from './transport.js';
 
-            import type {
-                ICancellationToken,
-                IHandleReference,
-                IReferenceExpression
-            } from './base.js';
+            import type { HandleReference } from './base.js';
 
             import {
                 ResourceBuilderBase,
@@ -1175,15 +1175,17 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         GenerateBuilderInterface(builder);
         GenerateBuilderPromiseInterface(builder);
 
+        var implementationClassName = GetImplementationClassName(builder.BuilderClassName);
+
         WriteLine("// ============================================================================");
-        WriteLine($"// {builder.BuilderClassName}");
+        WriteLine($"// {implementationClassName}");
         WriteLine("// ============================================================================");
         WriteLine();
 
         var handleType = GetHandleTypeName(builder.TypeId);
 
         // Generate builder class extending ResourceBuilderBase
-        WriteLine($"export class {builder.BuilderClassName} extends ResourceBuilderBase<{handleType}> {{");
+        WriteLine($"class {implementationClassName} extends ResourceBuilderBase<{handleType}> implements {builder.BuilderClassName} {{");
 
         // Constructor
         WriteLine($"    constructor(handle: {handleType}, client: AspireClientRpc) {{");
@@ -1276,6 +1278,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             ? GetHandleTypeName(returnTypeId)
             : "void";
         var returnsBuilder = capability.ReturnsBuilder;
+        var returnImplementationClassName = GetImplementationClassName(returnClassName);
 
         // Check if this method returns a non-builder, non-void type (e.g., getEndpoint returns EndpointReference)
         var hasNonBuilderReturn = !returnsBuilder && capability.ReturnType != null;
@@ -1351,7 +1354,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             WriteLine($"            '{capability.CapabilityId}',");
             WriteLine($"            rpcArgs");
             WriteLine("        );");
-            WriteLine($"        return new {returnClassName}(result, this._client);");
+            WriteLine($"        return new {returnImplementationClassName}(result, this._client);");
         }
         else
         {
@@ -1370,6 +1373,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             WriteLine($"    /** {capability.Description} */");
         }
         var promiseClass = $"{returnClassName}Promise";
+        var promiseImplementationClass = GetImplementationPromiseClassName(returnClassName);
         Write($"    {methodName}(");
         Write(publicParamsString);
         Write($"): {promiseClass} {{");
@@ -1383,7 +1387,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
         // Forward all params to internal method
         var allParamNames = capability.Parameters.Select(p => p.Name);
-        Write($"        return new {promiseClass}(this.{internalMethodName}(");
+        Write($"        return new {promiseImplementationClass}(this.{internalMethodName}(");
         Write(string.Join(", ", allParamNames));
         WriteLine("));");
         WriteLine("    }");
@@ -1417,14 +1421,24 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
     private void GenerateThenableClass(BuilderModel builder)
     {
+        var capabilities = builder.Capabilities.Where(c =>
+            c.CapabilityKind != AtsCapabilityKind.PropertyGetter &&
+            c.CapabilityKind != AtsCapabilityKind.PropertySetter).ToList();
+
+        if (capabilities.Count == 0)
+        {
+            return;
+        }
+
         var promiseClass = $"{builder.BuilderClassName}Promise";
+        var promiseImplementationClass = GetImplementationPromiseClassName(builder.BuilderClassName);
 
         WriteLine($"/**");
         WriteLine($" * Thenable wrapper for {builder.BuilderClassName} that enables fluent chaining.");
         WriteLine($" * @example");
         WriteLine($" * await builder.addSomething().withX().withY();");
         WriteLine($" */");
-        WriteLine($"export class {promiseClass} implements PromiseLike<{builder.BuilderClassName}> {{");
+        WriteLine($"class {promiseImplementationClass} implements {promiseClass} {{");
         WriteLine($"    constructor(private _promise: Promise<{builder.BuilderClassName}>) {{}}");
         WriteLine();
 
@@ -1440,9 +1454,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         // Generate fluent methods that chain via .then()
         // Capabilities are already flattened - no need to collect from parents
         // Filter out property getters and setters - they are not methods
-        foreach (var capability in builder.Capabilities.Where(c =>
-            c.CapabilityKind != AtsCapabilityKind.PropertyGetter &&
-            c.CapabilityKind != AtsCapabilityKind.PropertySetter))
+        foreach (var capability in capabilities)
         {
             var methodName = capability.MethodName;
 
@@ -1501,6 +1513,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 // For fluent builder methods, determine the correct promise class.
                 // Factory methods returning a different builder type use the return type's promise class.
                 var methodPromiseClass = promiseClass;
+                var methodPromiseImplementationClass = promiseImplementationClass;
                 if (capability.ReturnsBuilder && capability.ReturnType?.TypeId != null &&
                     !string.Equals(capability.ReturnType.TypeId, builder.TypeId, StringComparison.Ordinal) &&
                     !string.Equals(capability.ReturnType.TypeId, capability.TargetTypeId, StringComparison.Ordinal))
@@ -1508,6 +1521,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                     var returnClass = _wrapperClassNames.GetValueOrDefault(capability.ReturnType.TypeId)
                         ?? DeriveClassName(capability.ReturnType.TypeId);
                     methodPromiseClass = $"{returnClass}Promise";
+                    methodPromiseImplementationClass = GetImplementationPromiseClassName(returnClass);
                 }
 
                 Write($"    {methodName}(");
@@ -1515,7 +1529,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 Write($"): {methodPromiseClass} {{");
                 WriteLine();
                 // Forward to the public method on the underlying object, wrapping result in promise class
-                Write($"        return new {methodPromiseClass}(this._promise.then(obj => obj.{methodName}(");
+                Write($"        return new {methodPromiseImplementationClass}(this._promise.then(obj => obj.{methodName}(");
                 Write(argsString);
                 WriteLine(")));");
                 WriteLine("    }");
@@ -1580,6 +1594,8 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             // Return type has Promise wrapper - generate fluent function
             var returnWrapperClass = _wrapperClassNames.GetValueOrDefault(capReturnTypeId)
                 ?? DeriveClassName(capReturnTypeId);
+            var returnWrapperImplementationClass = GetImplementationClassName(returnWrapperClass);
+            var returnPromiseImplementationClass = GetImplementationPromiseClassName(returnWrapperClass);
             var handleType = GetHandleTypeName(capReturnTypeId);
 
             Write($"export function {methodName}(");
@@ -1596,8 +1612,8 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             WriteLine($"    const promise = client.invokeCapability<{handleType}>(");
             WriteLine($"        '{capability.CapabilityId}',");
             WriteLine("        rpcArgs");
-            WriteLine($"    ).then(handle => new {returnWrapperClass}(handle, client));");
-            WriteLine($"    return new {returnPromiseWrapper}(promise);");
+            WriteLine($"    ).then(handle => new {returnWrapperImplementationClass}(handle, client));");
+            WriteLine($"    return new {returnPromiseImplementationClass}(promise);");
             WriteLine("}");
         }
         else
@@ -1747,7 +1763,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 // For types with wrapper classes, create an instance of the wrapper
                 var handleType = GetHandleTypeName(cbTypeId);
                 WriteLine($"            const {cbParam.Name}Handle = wrapIfHandle({cbParam.Name}Data) as {handleType};");
-                WriteLine($"            const {cbParam.Name} = new {wrapperClassName}({cbParam.Name}Handle, this._client);");
+                WriteLine($"            const {cbParam.Name} = new {GetImplementationClassName(wrapperClassName)}({cbParam.Name}Handle, this._client);");
             }
             else
             {
@@ -1776,7 +1792,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                     // For types with wrapper classes, create an instance of the wrapper
                     var handleType = GetHandleTypeName(cbTypeId);
                     WriteLine($"            const {cbParam.Name}Handle = wrapIfHandle({callbackArgName}) as {handleType};");
-                    WriteLine($"            const {cbParam.Name} = new {wrapperClassName}({cbParam.Name}Handle, this._client);");
+                    WriteLine($"            const {cbParam.Name} = new {GetImplementationClassName(wrapperClassName)}({cbParam.Name}Handle, this._client);");
                 }
                 else
                 {
@@ -1854,13 +1870,13 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                     'Aspire.Hosting/createBuilderWithOptions',
                     { options: effectiveOptions }
                 );
-                return new DistributedApplicationBuilder(handle, client);
+                return new DistributedApplicationBuilderImpl(handle, client);
             }
 
             // Re-export commonly used types
             export { Handle, AppHostUsageError, CancellationToken, CapabilityError, registerCallback } from './transport.js';
             export { refExpr, ReferenceExpression } from './base.js';
-            export type { ICancellationToken, IHandleReference, IReferenceExpression } from './base.js';
+            export type { HandleReference } from './base.js';
             """);
         WriteLine();
     }
@@ -1929,7 +1945,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         {
             var className = _wrapperClassNames.GetValueOrDefault(typeClass.TypeId) ?? DeriveClassName(typeClass.TypeId);
             var handleType = GetHandleTypeName(typeClass.TypeId);
-            WriteLine($"registerHandleWrapper('{typeClass.TypeId}', (handle, client) => new {className}(handle as {handleType}, client));");
+            WriteLine($"registerHandleWrapper('{typeClass.TypeId}', (handle, client) => new {GetImplementationClassName(className)}(handle as {handleType}, client));");
         }
 
         // Register resource builder classes
@@ -1937,7 +1953,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         {
             var className = _wrapperClassNames.GetValueOrDefault(builder.TypeId) ?? DeriveClassName(builder.TypeId);
             var handleType = GetHandleTypeName(builder.TypeId);
-            WriteLine($"registerHandleWrapper('{builder.TypeId}', (handle, client) => new {className}(handle as {handleType}, client));");
+            WriteLine($"registerHandleWrapper('{builder.TypeId}', (handle, client) => new {GetImplementationClassName(className)}(handle as {handleType}, client));");
         }
 
         WriteLine();
@@ -1952,12 +1968,13 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     {
         var handleType = GetHandleTypeName(model.TypeId);
         var className = DeriveClassName(model.TypeId);
+        var implementationClassName = GetImplementationClassName(className);
         var hasMethods = HasChainableMethods(model);
 
         GenerateTypeClassInterface(model);
 
         WriteLine("// ============================================================================");
-        WriteLine($"// {className}");
+        WriteLine($"// {implementationClassName}");
         WriteLine("// ============================================================================");
         WriteLine();
 
@@ -1973,7 +1990,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         WriteLine($"/**");
         WriteLine($" * Type class for {className}.");
         WriteLine($" */");
-        WriteLine($"export class {className} {{");
+        WriteLine($"class {implementationClassName} implements {className} {{");
         WriteLine($"    constructor(private _handle: {handleType}, private _client: AspireClientRpc) {{}}");
         WriteLine();
         WriteLine($"    /** Serialize for JSON-RPC transport */");
@@ -2171,6 +2188,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     private void GenerateWrapperPropertyObject(string propertyName, AtsCapabilityInfo getter, AtsCapabilityInfo? setter, string wrapperClassName)
     {
         var handleType = GetHandleTypeName(getter.ReturnType!.TypeId);
+        var wrapperImplementationClassName = GetImplementationClassName(wrapperClassName);
 
         if (!string.IsNullOrEmpty(getter.Description))
         {
@@ -2183,7 +2201,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         WriteLine($"                '{getter.CapabilityId}',");
         WriteLine($"                {{ context: this._handle }}");
         WriteLine("            );");
-        WriteLine($"            return new {wrapperClassName}(handle, this._client);");
+        WriteLine($"            return new {wrapperImplementationClassName}(handle, this._client);");
         WriteLine("        },");
 
         if (setter != null)
@@ -2482,6 +2500,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     {
         var className = DeriveClassName(model.TypeId);
         var promiseClass = $"{className}Promise";
+        var promiseImplementationClass = GetImplementationPromiseClassName(className);
 
         // Use OwningTypeName if available to extract method name, otherwise parse from MethodName
         var methodName = !string.IsNullOrEmpty(capability.OwningTypeName) && capability.MethodName.Contains('.')
@@ -2538,6 +2557,8 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         {
             var returnWrapperClass = _wrapperClassNames.GetValueOrDefault(capability.ReturnType!.TypeId)
                 ?? DeriveClassName(capability.ReturnType.TypeId);
+            var returnWrapperImplementationClass = GetImplementationClassName(returnWrapperClass);
+            var returnPromiseImplementationClass = GetImplementationPromiseClassName(returnWrapperClass);
             var returnHandleType = GetHandleTypeName(capability.ReturnType.TypeId);
 
             // Generate internal async method
@@ -2560,7 +2581,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             WriteLine($"            '{capability.CapabilityId}',");
             WriteLine($"            rpcArgs");
             WriteLine("        );");
-            WriteLine($"        return new {returnWrapperClass}(result, this._client);");
+            WriteLine($"        return new {returnWrapperImplementationClass}(result, this._client);");
             WriteLine("    }");
             WriteLine();
 
@@ -2575,7 +2596,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 WriteLine($"        const {param.Name} = options?.{param.Name};");
             }
 
-            Write($"        return new {returnPromiseWrapper}(this.{internalMethodName}(");
+            Write($"        return new {returnPromiseImplementationClass}(this.{internalMethodName}(");
             Write(string.Join(", ", userParams.Select(p => p.Name)));
             WriteLine("));");
             WriteLine("    }");
@@ -2618,7 +2639,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 WriteLine($"        const {param.Name} = options?.{param.Name};");
             }
 
-            Write($"        return new {promiseClass}(this.{internalMethodName}(");
+            Write($"        return new {promiseImplementationClass}(this.{internalMethodName}(");
             Write(string.Join(", ", userParams.Select(p => p.Name)));
             WriteLine("));");
             WriteLine("    }");
@@ -2673,11 +2694,12 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     {
         var className = DeriveClassName(model.TypeId);
         var promiseClass = $"{className}Promise";
+        var promiseImplementationClass = GetImplementationPromiseClassName(className);
 
         WriteLine($"/**");
         WriteLine($" * Thenable wrapper for {className} that enables fluent chaining.");
         WriteLine($" */");
-        WriteLine($"export class {promiseClass} implements PromiseLike<{className}> {{");
+        WriteLine($"class {promiseImplementationClass} implements {promiseClass} {{");
         WriteLine($"    constructor(private _promise: Promise<{className}>) {{}}");
         WriteLine();
 
@@ -2742,11 +2764,14 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
             if (returnPromiseWrapper != null)
             {
+                var returnPromiseImplementationClass = GetImplementationPromiseClassName(
+                    _wrapperClassNames.GetValueOrDefault(capability.ReturnType!.TypeId)
+                        ?? DeriveClassName(capability.ReturnType.TypeId));
                 // Return type has Promise wrapper - forward to public method, wrap result
                 Write($"    {methodName}(");
                 Write(paramsString);
                 WriteLine($"): {returnPromiseWrapper} {{");
-                Write($"        return new {returnPromiseWrapper}(this._promise.then(obj => obj.{methodName}(");
+                Write($"        return new {returnPromiseImplementationClass}(this._promise.then(obj => obj.{methodName}(");
                 Write(argsString);
                 WriteLine(")));");
                 WriteLine("    }");
@@ -2757,7 +2782,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 Write($"    {methodName}(");
                 Write(paramsString);
                 WriteLine($"): {promiseClass} {{");
-                Write($"        return new {promiseClass}(this._promise.then(obj => obj.{methodName}(");
+                Write($"        return new {promiseImplementationClass}(this._promise.then(obj => obj.{methodName}(");
                 Write(argsString);
                 WriteLine(")));");
                 WriteLine("    }");

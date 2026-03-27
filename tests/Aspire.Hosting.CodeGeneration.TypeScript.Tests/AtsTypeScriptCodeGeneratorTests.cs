@@ -339,7 +339,7 @@ public class AtsTypeScriptCodeGeneratorTests
 
         // Verify the thenable class also uses the child type's promise class.
         // In TestRedisResourcePromise, addTestChildDatabase should return TestDatabaseResourcePromise.
-        Assert.Contains("new TestDatabaseResourcePromise(this._promise.then(obj => obj.addTestChildDatabase(", aspireTs);
+        Assert.Contains("new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.addTestChildDatabase(", aspireTs);
     }
 
     [Fact]
@@ -590,8 +590,8 @@ public class AtsTypeScriptCodeGeneratorTests
         var files = _generator.GenerateDistributedApplication(atsContext);
         var aspireTs = files["aspire.ts"];
 
-        Assert.Contains("export type { ICancellationToken, IHandleReference, IReferenceExpression } from './base.js';", aspireTs);
-        Assert.Contains("withDependency(dependency: IHandleReference)", aspireTs);
+        Assert.Contains("export type { HandleReference } from './base.js';", aspireTs);
+        Assert.Contains("withDependency(dependency: HandleReference)", aspireTs);
         Assert.DoesNotContain("withDependency(dependency: ResourceBuilderBase)", aspireTs);
     }
 
@@ -1060,8 +1060,8 @@ public class AtsTypeScriptCodeGeneratorTests
         var code = GenerateTwoPassCode();
 
         // TestResourceContext has ExposeMethods=true - gets Promise wrapper
-        Assert.Contains("export class TestResourceContextPromise", code);
-        Assert.Contains("implements PromiseLike<TestResourceContext>", code);
+        Assert.Contains("class TestResourceContextPromiseImpl implements TestResourceContextPromise", code);
+        Assert.Contains("implements TestResourceContextPromise", code);
     }
 
     [Fact]
@@ -1136,9 +1136,9 @@ public class AtsTypeScriptCodeGeneratorTests
         // while callbacks and returned values use the structural SDK cancellation token interface.
         var code = GenerateTwoPassCode();
 
-        Assert.Contains("cancellationToken?: AbortSignal | ICancellationToken;", code);
-        Assert.Contains("set: async (value: AbortSignal | ICancellationToken): Promise<void> => {", code);
-        Assert.Contains("withCancellableOperation(operation: (arg: ICancellationToken) => Promise<void>)", code);
+        Assert.Contains("cancellationToken?: AbortSignal | CancellationToken;", code);
+        Assert.Contains("set: async (value: AbortSignal | CancellationToken): Promise<void> => {", code);
+        Assert.Contains("withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>)", code);
     }
 
     [Fact]
@@ -1348,12 +1348,12 @@ public class AtsTypeScriptCodeGeneratorTests
         var files = _generator.GenerateDistributedApplication(atsContext);
         var code = files["aspire.ts"];
 
-        // Count occurrences of the class definition
-        var classCount = CountOccurrences(code, "export class TestVaultResource ");
+        // Count occurrences of the public interface definition.
+        var classCount = CountOccurrences(code, "export interface TestVaultResource ");
         Assert.Equal(1, classCount);
 
-        // Also verify the Promise wrapper is not duplicated
-        var promiseCount = CountOccurrences(code, "export class TestVaultResourcePromise ");
+        // Also verify the Promise wrapper interface is not duplicated.
+        var promiseCount = CountOccurrences(code, "export interface TestVaultResourcePromise ");
         Assert.Equal(1, promiseCount);
     }
 
