@@ -18,7 +18,7 @@ dotnet add package Aspire.RabbitMQ.Client
 
 ## Usage example
 
-In the _AppHost.cs_ file of your project, call the `AddRabbitMQClient` extension method to register an `IConnection` for use via the dependency injection container. The method takes a connection name parameter.
+In the _Program.cs_ file of your project, call the `AddRabbitMQClient` extension method to register an `IConnection` for use via the dependency injection container. The method takes a connection name parameter.
 
 ```csharp
 builder.AddRabbitMQClient("messaging");
@@ -87,6 +87,22 @@ You can also setup the [ConnectionFactory](https://rabbitmq.github.io/rabbitmq-d
 
 ```csharp
 builder.AddRabbitMQClient("messaging", configureConnectionFactory: factory => factory.ClientProvidedName = "MyApp");
+```
+
+## Observability
+
+### Tracing
+
+The Aspire RabbitMQ Client integration includes the following activity sources for OpenTelemetry tracing:
+
+- `Aspire.RabbitMQ.Client` - Tracks connection establishment and retry attempts.
+- `RabbitMQ.Client.Publisher` - Tracks message publishing operations.
+- `RabbitMQ.Client.Subscriber` - Tracks message consumption operations.
+
+Tracing is enabled by default. To disable it, set `DisableTracing` to `true` in the settings:
+
+```csharp
+builder.AddRabbitMQClient("messaging", settings => settings.DisableTracing = true);
 ```
 
 ## AppHost extensions

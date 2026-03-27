@@ -1,11 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using Aspire.TestUtilities;
 using Aspire.Components.ConformanceTests;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using OpenTelemetry.Trace;
 using RabbitMQ.Client;
 using Xunit;
 
@@ -13,11 +16,15 @@ namespace Aspire.RabbitMQ.Client.Tests;
 
 public class ConformanceTests : ConformanceTests<IConnection, RabbitMQClientSettings>, IClassFixture<RabbitMQContainerFixture>
 {
-    private readonly RabbitMQContainerFixture _containerFixture;
+    private readonly RabbitMQContainerFixture? _containerFixture;
+    private string ConnectionString { get; set; }
 
-    public ConformanceTests(RabbitMQContainerFixture containerFixture, ITestOutputHelper? output = null) : base(output)
+    public ConformanceTests(RabbitMQContainerFixture? containerFixture, ITestOutputHelper? output = null) : base(output)
     {
         _containerFixture = containerFixture;
+        ConnectionString = (_containerFixture is not null && RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker))
+                                    ? _containerFixture.GetConnectionString()
+                                    : "amqp://localhost:5672";
     }
 
     protected override ServiceLifetime ServiceLifetime => ServiceLifetime.Singleton;
@@ -31,7 +38,11 @@ public class ConformanceTests : ConformanceTests<IConnection, RabbitMQClientSett
 
     protected override string[] RequiredLogCategories => Array.Empty<string>();
 
-    protected override string ActivitySourceName => "";
+#if RABBITMQ_V6
+    protected override string ActivitySourceName => "Aspire.RabbitMQ.Client";
+#else
+    protected override string ActivitySourceName => "RabbitMQ.Client.Publisher";
+#endif
 
     protected override string? ConfigurationSectionName => "Aspire:RabbitMQ:Client";
 
@@ -69,15 +80,9 @@ public class ConformanceTests : ConformanceTests<IConnection, RabbitMQClientSett
         };
 
     protected override void PopulateConfiguration(ConfigurationManager configuration, string? key = null)
-    {
-        var connectionString = RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker) ?
-            _containerFixture.GetConnectionString() :
-            "amqp://localhost:5672";
-
-        configuration.AddInMemoryCollection([
-            new(CreateConfigKey("Aspire:RabbitMQ:Client", key, "ConnectionString"), connectionString)
+        => configuration.AddInMemoryCollection([
+            new(CreateConfigKey("Aspire:RabbitMQ:Client", key, "ConnectionString"), ConnectionString)
         ]);
-    }
 
     protected override void RegisterComponent(HostApplicationBuilder builder, Action<RabbitMQClientSettings>? configure = null, string? key = null)
     {
@@ -132,4 +137,48 @@ public class ConformanceTests : ConformanceTests<IConnection, RabbitMQClientSett
     {
         Assert.Skip("RabbitMQ connects to localhost by default if the connection information isn't available.");
     }
+
+#if !RABBITMQ_V6
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public void TracingEnablesTheRightActivitySource()
+        => RemoteInvokeWithLogging(static connectionStringToUse =>
+            RunWithConnectionString(connectionStringToUse, static obj => obj.RunActivitySourceTest(key: null)),
+            ConnectionString, Output);
+
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public void TracingEnablesTheRightActivitySource_Keyed()
+        => RemoteInvokeWithLogging(static connectionStringToUse =>
+            RunWithConnectionString(connectionStringToUse, static obj => obj.RunActivitySourceTest(key: "key")),
+            ConnectionString, Output);
+
+    private void RunActivitySourceTest(string? key)
+    {
+        HostApplicationBuilder builder = CreateHostBuilder(key: key);
+        builder.Logging.AddConsole();
+        RegisterComponent(builder, options => SetTracing(options, true), key);
+
+        List<Activity> exportedActivities = [];
+        builder.Services.AddOpenTelemetry().WithTracing(traceBuilder => traceBuilder.AddInMemoryExporter(exportedActivities));
+
+        using IHost host = builder.Build();
+        host.Start();
+
+        IConnection service = key is null
+            ? host.Services.GetRequiredService<IConnection>()
+            : host.Services.GetRequiredKeyedService<IConnection>(key);
+
+        // Clear activities generated during connection establishment (from "Aspire.RabbitMQ.Client" source)
+        exportedActivities.Clear();
+
+        TriggerActivity(service);
+
+        Assert.NotEmpty(exportedActivities);
+        Assert.Contains(exportedActivities, activity => activity.Source.Name == ActivitySourceName);
+    }
+
+    private static void RunWithConnectionString(string connectionString, Action<ConformanceTests> test)
+        => test(new ConformanceTests(null) { ConnectionString = connectionString });
+#endif
 }
