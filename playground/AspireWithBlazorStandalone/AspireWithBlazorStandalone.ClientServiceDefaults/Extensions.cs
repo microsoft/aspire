@@ -12,11 +12,14 @@ namespace Microsoft.Extensions.Hosting;
 
 public static class BlazorClientExtensions
 {
-    private const string ServiceName = "blazorapp-client";
 
     public static WebAssemblyHostBuilder AddBlazorClientServiceDefaults(this WebAssemblyHostBuilder builder)
     {
-        builder.ConfigureBlazorClientOpenTelemetry(ServiceName);
+        // Use OTEL_SERVICE_NAME from configuration (set by Aspire hosting via the gateway)
+        // to identify this app in the dashboard. Falls back to a default if not set.
+        var serviceName = builder.Configuration["OTEL_SERVICE_NAME"] ?? "blazor-client";
+
+        builder.ConfigureBlazorClientOpenTelemetry(serviceName);
 
         builder.Services.AddServiceDiscovery();
 
@@ -32,8 +35,18 @@ public static class BlazorClientExtensions
         return builder;
     }
 
+    private const string OtlpHttpClientName = "OtlpExporter";
+
     private static WebAssemblyHostBuilder ConfigureBlazorClientOpenTelemetry(this WebAssemblyHostBuilder builder, string serviceName)
     {
+        // Register a named HttpClient for OTLP exporters and suppress only its logs.
+        // This avoids a blanket filter on all System.Net.Http.HttpClient logs, so user
+        // app HttpClient logs remain visible while the noisy OTLP export "End processing
+        // HTTP request after ..." entries are suppressed.
+        builder.Services.AddHttpClient(OtlpHttpClientName)
+            .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(30));
+        builder.Logging.AddFilter($"System.Net.Http.HttpClient.{OtlpHttpClientName}.LogicalHandler", LogLevel.Warning);
+        builder.Logging.AddFilter($"System.Net.Http.HttpClient.{OtlpHttpClientName}.ClientHandler", LogLevel.Warning);
 
         builder.Logging.AddOpenTelemetry(logging =>
         {
@@ -55,7 +68,18 @@ public static class BlazorClientExtensions
             .WithTracing(tracing =>
             {
                 tracing.AddSource(serviceName)
-                    .AddHttpClientInstrumentation()
+                    .AddHttpClientInstrumentation(options =>
+                    {
+                        // Filter out OTLP export requests to avoid a feedback loop.
+                        // Without this, every telemetry export POST (v1/traces, v1/metrics,
+                        // v1/logs) generates a new trace, which then gets exported, creating
+                        // an ever-growing cycle that floods the dashboard.
+                        options.FilterHttpRequestMessage = request =>
+                            request.RequestUri is null
+                            || (!request.RequestUri.AbsolutePath.Contains("/v1/traces")
+                                && !request.RequestUri.AbsolutePath.Contains("/v1/metrics")
+                                && !request.RequestUri.AbsolutePath.Contains("/v1/logs"));
+                    })
                     // Add Blazor component tracing
                     .AddSource("Microsoft.AspNetCore.Components");
             });
@@ -98,10 +122,14 @@ public static class BlazorClientExtensions
                 {
                     tracing.AddProcessor(sp =>
                     {
+                        var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+                        var httpClient = httpClientFactory.CreateClient(OtlpHttpClientName);
+
                         var exporter = new WebAssemblyOtlpTraceExporter(
                             new Uri(endpoint, "v1/traces"),
                             serviceName,
-                            headers);
+                            headers,
+                            httpClient);
 
                         return new TaskBasedBatchExportProcessor<Activity>(
                             exporter,
@@ -117,11 +145,17 @@ public static class BlazorClientExtensions
             // because it requires threading primitives not available in the browser.
             // Our custom exporter uses MeterListener (a .NET runtime feature) instead,
             // which works in the single-threaded WebAssembly environment.
-            var metricExporter = new WebAssemblyOtlpMetricExporter(
-                new Uri(endpoint, "v1/metrics"),
-                serviceName,
-                headers);
-            builder.Services.AddSingleton(metricExporter);
+            builder.Services.AddSingleton(sp =>
+            {
+                var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+                var httpClient = httpClientFactory.CreateClient(OtlpHttpClientName);
+
+                return new WebAssemblyOtlpMetricExporter(
+                    new Uri(endpoint, "v1/metrics"),
+                    serviceName,
+                    headers,
+                    httpClient: httpClient);
+            });
 
             // Configure logging with WebAssembly-compatible exporter
             // The custom exporter uses truly async HTTP calls without blocking,
@@ -132,10 +166,14 @@ public static class BlazorClientExtensions
                 {
                     logging.AddProcessor(sp =>
                     {
+                        var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+                        var httpClient = httpClientFactory.CreateClient(OtlpHttpClientName);
+
                         var exporter = new WebAssemblyOtlpLogExporter(
                             new Uri(endpoint, "v1/logs"),
                             serviceName,
-                            headers);
+                            headers,
+                            httpClient);
 
                         return new TaskBasedBatchExportProcessor<LogRecord>(
                             exporter,

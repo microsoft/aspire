@@ -2,15 +2,19 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 var weatherApi = builder.AddProject<Projects.AspireWithBlazorStandalone_WeatherApi>("weatherapi");
 
-// The standalone WASM project references the Gateway package which:
-// - Removes DevServer dependency
-// - Adds a JS initializer that fetches config from /_blazor/_configuration
-// 
-// When running via Aspire, the Gateway will be a separate process that:
-// - Serves the WASM static files
-// - Exposes /_blazor/_configuration with OTEL and service discovery config
-var standaloneWasm = builder.AddProject<Projects.AspireWithBlazorStandalone>("standalonewasm")
+// Register the standalone Blazor WASM app as a resource.
+// The resource name becomes the URL path prefix (e.g., "app" → served at /app/).
+// WithReference declares service dependencies that the gateway will proxy via YARP.
+var blazorApp = builder.AddBlazorWasmProject<Projects.AspireWithBlazorStandalone>("app")
     .WithReference(weatherApi);
+
+// The Blazor Gateway serves WASM static files and proxies API/OTLP traffic.
+// WithClient reads service references from the WASM resource and automatically
+// configures YARP routes and service discovery on the gateway.
+var gateway = builder.AddBlazorGateway("gateway")
+    .WithExternalHttpEndpoints()
+    .WithOtlpExporter(Aspire.Hosting.OtlpProtocol.HttpProtobuf)
+    .WithClient(blazorApp);
 
 #if !SKIP_DASHBOARD_REFERENCE
 // This project is only added in playground projects to support development/debugging
