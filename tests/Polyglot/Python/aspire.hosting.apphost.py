@@ -24,8 +24,8 @@ with create_builder() as builder:
     secret_param = builder.add_parameter_from_config("parameter", "Config:Key")
     # withDockerfileBaseImage
     container.with_dockerfile_base_image()
-    # withContainerRegistry
-    container.with_container_registry()
+    # withImageRegistry
+    container.with_image_registry("docker.io")
     # ===================================================================
     docker_container.with_http_endpoint()
     endpoint = docker_container.get_endpoint("default")
@@ -138,8 +138,6 @@ with create_builder() as builder:
     container.with_url("http://localhost")
     # withUrlExpression
     container.with_url_expression("http://localhost")
-    # withHealthCheck
-    container.with_health_check("check")
     # withHttpHealthCheck
     container.with_http_health_check()
     # withCommand

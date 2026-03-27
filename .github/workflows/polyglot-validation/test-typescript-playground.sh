@@ -24,27 +24,27 @@ aspire --version
 # Locate validation root (works from repo root or /workspace mount)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [ -d "/workspace/tests/Polyglot/TypeScript" ]; then
-    PLAYGROUND_ROOT="/workspace/tests/Polyglot/TypeScript"
+    VALIDATION_ROOT="/workspace/tests/Polyglot/TypeScript"
 elif [ -d "$SCRIPT_DIR/../../../tests/Polyglot/TypeScript" ]; then
-    PLAYGROUND_ROOT="$(cd "$SCRIPT_DIR/../../../tests/Polyglot/TypeScript" && pwd)"
+    VALIDATION_ROOT="$(cd "$SCRIPT_DIR/../../../tests/Polyglot/TypeScript" && pwd)"
 else
     echo "❌ Cannot find tests/Polyglot/TypeScript directory"
     exit 1
 fi
 
-echo "Validation root: $PLAYGROUND_ROOT"
+echo "Validation root: $VALIDATION_ROOT"
 
-cd "$PLAYGROUND_ROOT"
+cd "$VALIDATION_ROOT"
 
 echo "→ npm install..."
 npm_output=$(npm install --ignore-scripts --no-audit --no-fund 2>&1) || {
     echo "$npm_output" | tail -5
-    echo "❌ npm install failed for $PLAYGROUND_ROOT"
+    echo "❌ npm install failed for $VALIDATION_ROOT"
     exit 1
 }
 echo "$npm_output" | tail -3
 
-mapfile -t APP_HOSTS < <(find "$PLAYGROUND_ROOT" -maxdepth 1 -type f -name '*.apphost.ts' | sort)
+mapfile -t APP_HOSTS < <(find "$VALIDATION_ROOT" -maxdepth 1 -type f -name '*.apphost.ts' -exec basename {} \; | sort)
 
 if [ ${#APP_HOSTS[@]} -eq 0 ]; then
     echo "❌ No TypeScript validation AppHosts found"
@@ -59,18 +59,17 @@ echo ""
 
 FAILED=()
 PASSED=()
-TEMP_TSCONFIG="$PLAYGROUND_ROOT/.validation.tsconfig.json"
+TEMP_TSCONFIG="$VALIDATION_ROOT/.validation.tsconfig.json"
 trap 'rm -f "$TEMP_TSCONFIG"' EXIT
 
-for app_host in "${APP_HOSTS[@]}"; do
-    app_name="$(basename "$app_host")"
+for app_name in "${APP_HOSTS[@]}"; do
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Testing: $app_name"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
     # Step 1: Regenerate SDK code for the selected AppHost
     echo "  → aspire restore --apphost $app_name..."
-    if ! aspire restore --non-interactive --apphost "$app_host" 2>&1; then
+    if ! aspire restore --non-interactive --apphost "$app_name" 2>&1; then
         echo "  ❌ aspire restore failed for $app_name"
         FAILED+=("$app_name (aspire restore)")
         continue

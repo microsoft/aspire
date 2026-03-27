@@ -44,8 +44,8 @@ const secretParam = await builder.addParameterFromConfiguration("mysecret", "MyC
 // withDockerfileBaseImage
 await container.withDockerfileBaseImage({ buildImage: "mcr.microsoft.com/dotnet/sdk:8.0" });
 
-// withContainerRegistry
-await container.withContainerRegistry(container);
+// withImageRegistry
+await container.withImageRegistry("docker.io");
 
 // ===================================================================
 // ConnectionStringBuilderExtensions.cs — NEW exports
@@ -398,8 +398,8 @@ await container.withUrl("http://localhost:8080");
 // withUrlExpression
 await container.withUrlExpression(refExpr`http://${endpoint}`);
 
-// withHealthCheck
-await container.withHealthCheck("mycheck");
+// withHttpHealthCheck
+await container.withHttpHealthCheck();
 
 // withHttpHealthCheck
 await container.withHttpHealthCheck();

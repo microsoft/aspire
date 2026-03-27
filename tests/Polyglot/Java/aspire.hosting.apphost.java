@@ -12,7 +12,7 @@ void main() throws Exception {
         var configParam = builder.addParameterFromConfiguration("myconfig", "MyConfig:Key");
         var secretParam = builder.addParameterFromConfiguration("mysecret", "MyConfig:Secret", true);
         container.withDockerfileBaseImage(new WithDockerfileBaseImageOptions().buildImage("mcr.microsoft.com/dotnet/sdk:8.0"));
-        container.withContainerRegistry(container);
+        container.withImageRegistry("docker.io");
         dockerContainer.withHttpEndpoint(new WithHttpEndpointOptions().name("http").targetPort(80.0));
         var endpoint = dockerContainer.getEndpoint("http");
         var expr = ReferenceExpression.refExpr("Host=%s", endpoint);
@@ -85,7 +85,7 @@ void main() throws Exception {
         container.withExplicitStart();
         container.withUrl("http://localhost:8080");
         container.withUrlExpression(ReferenceExpression.refExpr("http://%s", endpoint));
-        container.withHealthCheck("mycheck");
+        container.withHttpHealthCheck();
         container.withHttpHealthCheck();
         container.withCommand("restart", "Restart", (_ctx) -> {
             var result = new ExecuteCommandResult();

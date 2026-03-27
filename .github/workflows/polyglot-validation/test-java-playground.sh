@@ -83,7 +83,12 @@ for app_host in "${APP_HOSTS[@]}"; do
     fi
 
     temp_apphost="$build_dir/AppHost.java"
-    cp "$app_host" "$temp_apphost"
+    if ! cp "$app_host" "$temp_apphost"; then
+        echo "  ❌ Failed to prepare AppHost.java for $app_name"
+        FAILED+=("$app_name (prepare apphost)")
+        rm -rf "$build_dir"
+        continue
+    fi
 
     if ! javac --enable-preview --source 25 -d "$build_dir" @.modules/sources.txt "$temp_apphost" 2>&1; then
         echo "  ❌ javac compilation failed for $app_name"
