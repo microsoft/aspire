@@ -272,6 +272,13 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             return GenerateCallbackTypeSignature(param.CallbackParameters, param.CallbackReturnType);
         }
 
+        if (param.Type?.Category == AtsTypeCategory.Union && param.Type.UnionTypes is { Count: > 0 })
+        {
+            return string.Join(" | ", param.Type.UnionTypes
+                .Select(MapInputTypeToTypeScript)
+                .Distinct());
+        }
+
         return MapInputTypeToTypeScript(param.Type);
     }
 

@@ -78,7 +78,7 @@ public static class AzureBicepResourceExtensions
     /// <param name="name">The name of the environment variable.</param>
     /// <param name="bicepOutputReference">The reference to the bicep output.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withEnvironmentFromOutput", Description = "Sets an environment variable from a Bicep output reference")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
     public static IResourceBuilder<T> WithEnvironment<T>(this IResourceBuilder<T> builder, string name, BicepOutputReference bicepOutputReference)
         where T : IResourceWithEnvironment
     {
@@ -116,7 +116,7 @@ public static class AzureBicepResourceExtensions
     /// <param name="name">The name of the environment variable.</param>
     /// <param name="secretReference">The reference to the key vault secret.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withEnvironmentFromKeyVaultSecret", Description = "Sets an environment variable from an Azure Key Vault secret reference")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
     public static IResourceBuilder<T> WithEnvironment<T>(this IResourceBuilder<T> builder, string name, IAzureKeyVaultSecretReference secretReference)
         where T : IResourceWithEnvironment
     {

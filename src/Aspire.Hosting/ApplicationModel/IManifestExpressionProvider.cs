@@ -6,6 +6,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <summary>
 /// An interface that allows an object to express how it should be represented in a manifest.
 /// </summary>
+[AspireExport]
 public interface IManifestExpressionProvider
 {
     /// <summary>

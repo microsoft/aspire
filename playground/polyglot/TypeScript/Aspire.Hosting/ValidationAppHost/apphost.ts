@@ -73,14 +73,14 @@ await builtConnectionString.withConnectionPropertyValue("Mode", "Development");
 // ResourceBuilderExtensions.cs — NEW exports on ContainerResource
 // ===================================================================
 
-// withEnvironmentEndpoint
-await container.withEnvironmentEndpoint("MY_ENDPOINT", endpoint);
+// withEnvironment - EndpointReference
+await container.withEnvironment("MY_ENDPOINT", endpoint);
 
-// withEnvironmentParameter
-await container.withEnvironmentParameter("MY_PARAM", configParam);
+// withEnvironment - ParameterResource
+await container.withEnvironment("MY_PARAM", configParam);
 
-// withEnvironmentConnectionString
-await container.withEnvironmentConnectionString("MY_CONN", builtConnectionString);
+// withEnvironment - connection string resource
+await container.withEnvironment("MY_CONN", builtConnectionString);
 
 // withConnectionProperty — with ReferenceExpression
 await builtConnectionString.withConnectionProperty("Endpoint", expr);

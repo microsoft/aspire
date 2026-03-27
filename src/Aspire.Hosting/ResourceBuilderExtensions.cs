@@ -32,13 +32,42 @@ public static class ResourceBuilderExtensions
     /// <param name="name">The name of the environment variable.</param>
     /// <param name="value">The value of the environment variable.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withEnvironment", Description = "Sets an environment variable")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
     public static IResourceBuilder<T> WithEnvironment<T>(this IResourceBuilder<T> builder, string name, string? value) where T : IResourceWithEnvironment
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(name);
 
         return builder.WithAnnotation(new EnvironmentAnnotation(name, value ?? string.Empty));
+    }
+
+    [AspireExport("withEnvironment", Description = "Sets an environment variable")]
+    internal static IResourceBuilder<T> WithEnvironment<T>(
+        this IResourceBuilder<T> builder,
+        string name,
+        [AspireUnion(
+            typeof(string),
+            typeof(ReferenceExpression),
+            typeof(EndpointReference),
+            typeof(IResourceBuilder<ParameterResource>),
+            typeof(IResourceBuilder<IResourceWithConnectionString>),
+            typeof(IValueProvider))]
+        object value)
+        where T : IResourceWithEnvironment
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(value);
+
+        return value switch
+        {
+            string stringValue => builder.WithEnvironment(name, stringValue),
+            IResourceBuilder<ParameterResource> parameter => builder.WithEnvironment(name, parameter),
+            IResourceBuilder<IResourceWithConnectionString> connectionStringResource => builder.WithEnvironment(name, connectionStringResource),
+            IValueProvider valueProvider when value is IManifestExpressionProvider manifestExpressionProvider => builder.WithEnvironmentValue(name, manifestExpressionProvider, valueProvider),
+            _ => throw new InvalidOperationException(
+                $"The value '{value.GetType().FullName}' can't be used with withEnvironment because it doesn't provide a supported environment value.")
+        };
     }
 
     /// <summary>
@@ -81,7 +110,7 @@ public static class ResourceBuilderExtensions
     /// const redis = await builder.addRedis("cache");
     /// const endpoint = await redis.getEndpoint("tcp");
     /// const expr = refExpr`redis://${endpoint}:6379`;
-    /// await api.withEnvironmentExpression("REDIS_URL", expr);
+    /// await api.withEnvironment("REDIS_URL", expr);
     /// </code>
     /// </para>
     /// </remarks>
@@ -90,7 +119,7 @@ public static class ResourceBuilderExtensions
     /// <param name="name">The name of the environment variable.</param>
     /// <param name="value">A ReferenceExpression that will be evaluated at runtime.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withEnvironmentExpression", Description = "Adds an environment variable with a reference expression")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
     public static IResourceBuilder<T> WithEnvironment<T>(this IResourceBuilder<T> builder, string name, ReferenceExpression value)
         where T : IResourceWithEnvironment
     {
@@ -164,7 +193,7 @@ public static class ResourceBuilderExtensions
     /// <param name="name">The name of the environment variable.</param>
     /// <param name="endpointReference">The endpoint from which to extract the url.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withEnvironmentEndpoint", Description = "Sets an environment variable from an endpoint reference")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
     public static IResourceBuilder<T> WithEnvironment<T>(this IResourceBuilder<T> builder, string name, EndpointReference endpointReference)
         where T : IResourceWithEnvironment
     {
@@ -231,7 +260,7 @@ public static class ResourceBuilderExtensions
     /// <param name="name">Name of environment variable.</param>
     /// <param name="parameter">Resource builder for the parameter resource.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withEnvironmentParameter", Description = "Sets an environment variable from a parameter resource")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
     public static IResourceBuilder<T> WithEnvironment<T>(this IResourceBuilder<T> builder, string name, IResourceBuilder<ParameterResource> parameter) where T : IResourceWithEnvironment
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -254,7 +283,7 @@ public static class ResourceBuilderExtensions
     /// <param name="envVarName">The name of the environment variable under which the connection string will be set.</param>
     /// <param name="resource">The resource builder of the referenced service from which to pull the connection string.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withEnvironmentConnectionString", Description = "Sets an environment variable from a connection string resource")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
     public static IResourceBuilder<T> WithEnvironment<T>(
         this IResourceBuilder<T> builder,
         string envVarName,
@@ -270,6 +299,29 @@ public static class ResourceBuilderExtensions
         return builder.WithEnvironment(context =>
         {
             context.EnvironmentVariables[envVarName] = new ConnectionStringReference(resource.Resource, optional: false);
+        });
+    }
+
+    private static IResourceBuilder<T> WithEnvironmentValue<T>(
+        this IResourceBuilder<T> builder,
+        string name,
+        IManifestExpressionProvider manifestExpressionProvider,
+        IValueProvider valueProvider)
+        where T : IResourceWithEnvironment
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(manifestExpressionProvider);
+        ArgumentNullException.ThrowIfNull(valueProvider);
+
+        if (valueProvider is IValueWithReferences valueWithReferences)
+        {
+            WalkAndLinkResourceReferences(builder, valueWithReferences.References);
+        }
+
+        return builder.WithEnvironment(context =>
+        {
+            context.EnvironmentVariables[name] = valueProvider;
         });
     }
 
