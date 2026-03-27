@@ -1058,14 +1058,21 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
     private void GenerateBuilderPromiseInterface(BuilderModel builder)
     {
+        var capabilities = builder.Capabilities.Where(c =>
+            c.CapabilityKind != AtsCapabilityKind.PropertyGetter &&
+            c.CapabilityKind != AtsCapabilityKind.PropertySetter).ToList();
+
+        if (capabilities.Count == 0)
+        {
+            return;
+        }
+
         var interfaceName = GetInterfaceName(builder.BuilderClassName);
         var promiseInterfaceName = GetPromiseInterfaceName(builder.BuilderClassName);
 
         WriteLine($"export interface {promiseInterfaceName} extends PromiseLike<{interfaceName}> {{");
 
-        foreach (var capability in builder.Capabilities.Where(c =>
-            c.CapabilityKind != AtsCapabilityKind.PropertyGetter &&
-            c.CapabilityKind != AtsCapabilityKind.PropertySetter))
+        foreach (var capability in capabilities)
         {
             var (requiredParams, optionalParams) = SeparateParameters(capability.Parameters);
             var hasOptionals = optionalParams.Count > 0;

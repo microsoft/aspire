@@ -640,7 +640,7 @@ export function registerCancellation(
     const cancellationClient = resolveCancellationClient(client);
 
     if (signal.aborted) {
-        return undefined;
+        throw createAbortError('The operation was aborted before it was sent to the AppHost.');
     }
 
     const cancellationId = `ct_${++cancellationIdCounter}_${Date.now()}`;
@@ -693,32 +693,29 @@ async function marshalTransportValue(
         throw createCircularReferenceError(capabilityId, path);
     }
 
-    ancestors.add(value);
+    const nextAncestors = new Set(ancestors);
+    nextAncestors.add(value);
 
-    try {
-        if (hasTransportValue(value)) {
-            return await marshalTransportValue(await value.toTransportValue(), client, cancellationIds, capabilityId, path, ancestors);
-        }
-
-        if (Array.isArray(value)) {
-            return await Promise.all(
-                value.map((item, index) => marshalTransportValue(item, client, cancellationIds, capabilityId, `${path}[${index}]`, ancestors))
-            );
-        }
-
-        if (isPlainObject(value)) {
-            const entries = await Promise.all(
-                Object.entries(value).map(async ([key, nestedValue]) =>
-                    [key, await marshalTransportValue(nestedValue, client, cancellationIds, capabilityId, `${path}.${key}`, ancestors)] as const)
-            );
-
-            return Object.fromEntries(entries);
-        }
-
-        return value;
-    } finally {
-        ancestors.delete(value);
+    if (hasTransportValue(value)) {
+        return await marshalTransportValue(await value.toTransportValue(), client, cancellationIds, capabilityId, path, nextAncestors);
     }
+
+    if (Array.isArray(value)) {
+        return await Promise.all(
+            value.map((item, index) => marshalTransportValue(item, client, cancellationIds, capabilityId, `${path}[${index}]`, nextAncestors))
+        );
+    }
+
+    if (isPlainObject(value)) {
+        const entries = await Promise.all(
+            Object.entries(value).map(async ([key, nestedValue]) =>
+                [key, await marshalTransportValue(nestedValue, client, cancellationIds, capabilityId, `${path}.${key}`, nextAncestors)] as const)
+        );
+
+        return Object.fromEntries(entries);
+    }
+
+    return value;
 }
 
 /**
