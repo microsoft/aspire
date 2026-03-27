@@ -1109,6 +1109,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
             options.InteractionServiceFactory = _ => new TestInteractionService
             {
+                ConfirmCallback = (_, _) => false,
                 PromptForSelectionCallback = (promptText, choices, choiceFormatter, cancellationToken) =>
                 {
                     if (string.Equals(promptText, TemplatingStrings.UseLocalhostTld_Prompt, StringComparison.Ordinal))
@@ -1286,6 +1287,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
             options.InteractionServiceFactory = _ => new TestInteractionService
             {
+                ConfirmCallback = (_, _) => false,
                 PromptForSelectionCallback = (promptText, choices, choiceFormatter, cancellationToken) =>
                 {
                     if (string.Equals(promptText, TemplatingStrings.UseLocalhostTld_Prompt, StringComparison.Ordinal))
