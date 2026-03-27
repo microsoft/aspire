@@ -537,6 +537,7 @@ internal sealed class AtsMarshaller
         return type.ToString();
     }
 
+    // IEEE 754 doubles can exactly represent integers only through 2^53 - 1.
     private const double MaxSafeIntegerDouble = 9_007_199_254_740_991d;
 
     private static decimal ReadDecimalValue(JsonValue value, Type targetType)
@@ -546,6 +547,7 @@ internal sealed class AtsMarshaller
             return intValue;
         }
 
+        // Prefer decimal here because this helper is only used for decimal targets.
         if (value.TryGetValue<decimal>(out var decimalValue))
         {
             return decimalValue;

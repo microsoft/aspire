@@ -583,7 +583,7 @@ public class AtsMarshallerTests
     [Fact]
     public void ConvertPrimitive_RejectsLongFromUnsafeDouble()
     {
-        var value = JsonValue.Create(9007199254740993d);
+        var value = JsonValue.Create(9007199254740992d);
 
         Assert.Throws<InvalidCastException>(() => AtsMarshaller.ConvertPrimitive(value!, typeof(long)));
     }
