@@ -173,6 +173,43 @@ internal sealed class NativeCertificateToolRunner(CertificateManager certificate
         }
     }
 
+    public string? ExportDevCertificatePublicPem(string outputPath)
+    {
+        var availableCertificates = certificateManager.ListCertificates(
+            StoreName.My, StoreLocation.CurrentUser, isValid: true);
+
+        try
+        {
+            var now = DateTimeOffset.Now;
+            var certificate = availableCertificates
+                .Where(c => CertificateManager.IsHttpsDevelopmentCertificate(c)
+                    && c.NotBefore <= now && now <= c.NotAfter)
+                .OrderByDescending(CertificateManager.GetCertificateVersion)
+                .ThenByDescending(c => c.NotAfter)
+                .FirstOrDefault();
+
+            if (certificate is null)
+            {
+                return null;
+            }
+
+            var directory = Path.GetDirectoryName(outputPath);
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            var pem = certificate.ExportCertificatePem();
+            File.WriteAllText(outputPath, pem);
+
+            return outputPath;
+        }
+        finally
+        {
+            CertificateManager.DisposeCertificates(availableCertificates);
+        }
+    }
+
     private static string[]? GetSanExtension(X509Certificate2 cert)
     {
         var dnsNames = new List<string>();

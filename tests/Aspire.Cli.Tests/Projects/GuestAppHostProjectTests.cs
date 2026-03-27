@@ -335,8 +335,18 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
 
     private static GuestAppHostProject CreateGuestAppHostProject(DirectoryInfo workspaceRoot)
     {
+        return CreateGuestAppHostProject(workspaceRoot, out _);
+    }
+
+    private static GuestAppHostProject CreateGuestAppHostProject(DirectoryInfo workspaceRoot, out TestInteractionService interactionService)
+    {
+        return CreateGuestAppHostProject(workspaceRoot, "typescript/nodejs", out interactionService);
+    }
+
+    private static GuestAppHostProject CreateGuestAppHostProject(DirectoryInfo workspaceRoot, string languageId, out TestInteractionService interactionService)
+    {
         var language = new LanguageInfo(
-            LanguageId: "typescript/nodejs",
+            LanguageId: languageId,
             DisplayName: "TypeScript (Node.js)",
             PackageName: "Aspire.Hosting.CodeGeneration.TypeScript",
             DetectionPatterns: ["apphost.ts"],
@@ -353,9 +363,11 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
 
         var logFilePath = Path.Combine(Path.GetTempPath(), $"test-guest-{Guid.NewGuid()}.log");
 
+        interactionService = new TestInteractionService();
+
         return new GuestAppHostProject(
             language: language,
-            interactionService: new TestInteractionService(),
+            interactionService: interactionService,
             backchannel: new TestAppHostBackchannel(),
             appHostServerProjectFactory: new TestAppHostServerProjectFactory(),
             certificateService: new TestCertificateService(),
@@ -367,5 +379,58 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
             languageDiscovery: new TestLanguageDiscovery(),
             logger: NullLogger<GuestAppHostProject>.Instance,
             fileLoggerProvider: new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()));
+    }
+
+    [Fact]
+    public void ConfigureNodeCertificateEnvironment_SetsNodeExtraCaCerts_WhenPemPathProvided()
+    {
+        var project = CreateGuestAppHostProject(_workspace.WorkspaceRoot);
+        var envVars = new Dictionary<string, string>();
+        var contextEnvVars = new Dictionary<string, string>();
+
+        project.ConfigureNodeCertificateEnvironment(envVars, contextEnvVars, "/path/to/cert.pem");
+
+        Assert.Equal("/path/to/cert.pem", envVars["NODE_EXTRA_CA_CERTS"]);
+    }
+
+    [Fact]
+    public void ConfigureNodeCertificateEnvironment_DoesNotSet_WhenPemPathIsNull()
+    {
+        var project = CreateGuestAppHostProject(_workspace.WorkspaceRoot);
+        var envVars = new Dictionary<string, string>();
+        var contextEnvVars = new Dictionary<string, string>();
+
+        project.ConfigureNodeCertificateEnvironment(envVars, contextEnvVars, devCertPemPath: null);
+
+        Assert.False(envVars.ContainsKey("NODE_EXTRA_CA_CERTS"));
+    }
+
+    [Fact]
+    public void ConfigureNodeCertificateEnvironment_DoesNotSet_WhenLanguageIsNotNodeJs()
+    {
+        var project = CreateGuestAppHostProject(_workspace.WorkspaceRoot, "python", out _);
+        var envVars = new Dictionary<string, string>();
+        var contextEnvVars = new Dictionary<string, string>();
+
+        project.ConfigureNodeCertificateEnvironment(envVars, contextEnvVars, "/path/to/cert.pem");
+
+        Assert.False(envVars.ContainsKey("NODE_EXTRA_CA_CERTS"));
+    }
+
+    [Fact]
+    public void ConfigureNodeCertificateEnvironment_WarnsAndSkips_WhenAlreadySetInContext()
+    {
+        var project = CreateGuestAppHostProject(_workspace.WorkspaceRoot, out var interactionService);
+        var envVars = new Dictionary<string, string>();
+        var contextEnvVars = new Dictionary<string, string>
+        {
+            ["NODE_EXTRA_CA_CERTS"] = "/existing/ca-certs.pem"
+        };
+
+        project.ConfigureNodeCertificateEnvironment(envVars, contextEnvVars, "/path/to/cert.pem");
+
+        Assert.False(envVars.ContainsKey("NODE_EXTRA_CA_CERTS"));
+        Assert.Single(interactionService.DisplayedMessages);
+        Assert.Contains("NODE_EXTRA_CA_CERTS is already set", interactionService.DisplayedMessages[0].Message);
     }
 }

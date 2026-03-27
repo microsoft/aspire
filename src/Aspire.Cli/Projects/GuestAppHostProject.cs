@@ -345,10 +345,12 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         {
             // Step 1: Ensure certificates are trusted
             Dictionary<string, string> certEnvVars;
+            string? devCertPemPath;
             try
             {
                 var certResult = await _certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
                 certEnvVars = new Dictionary<string, string>(certResult.EnvironmentVariables);
+                devCertPemPath = certResult.DevCertPemPath;
             }
             catch
             {
@@ -490,6 +492,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 ["ASPIRE_PROJECT_DIRECTORY"] = directory.FullName,
                 ["ASPIRE_APPHOST_FILEPATH"] = appHostFile.FullName
             };
+
+            // Set NODE_EXTRA_CA_CERTS for Node.js-based runtimes so the TypeScript app host
+            // trusts the ASP.NET Core development certificate when connecting over HTTPS
+            ConfigureNodeCertificateEnvironment(environmentVariables, context.EnvironmentVariables, devCertPemPath);
 
             // Pass debug flag to the guest process
             if (context.Debug)
@@ -1403,5 +1409,34 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     {
         var id = UserSecretsPathHelper.ComputeSyntheticUserSecretsId(appHostFile.FullName);
         return Task.FromResult<string?>(id);
+    }
+
+    /// <summary>
+    /// Configures NODE_EXTRA_CA_CERTS for Node.js-based runtimes to trust the ASP.NET Core
+    /// development certificate. Skips configuration and warns if the variable is already set.
+    /// </summary>
+    internal void ConfigureNodeCertificateEnvironment(
+        IDictionary<string, string> environmentVariables,
+        IDictionary<string, string> contextEnvironmentVariables,
+        string? devCertPemPath)
+    {
+        if (devCertPemPath is null || !LanguageId.Contains("nodejs", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var existingNodeExtraCaCerts = Environment.GetEnvironmentVariable("NODE_EXTRA_CA_CERTS")
+            ?? (contextEnvironmentVariables.TryGetValue("NODE_EXTRA_CA_CERTS", out var ctxValue) ? ctxValue : null);
+
+        if (existingNodeExtraCaCerts is not null)
+        {
+            _interactionService.DisplayMessage(
+                KnownEmojis.Warning,
+                $"NODE_EXTRA_CA_CERTS is already set to '{existingNodeExtraCaCerts}'. Skipping Aspire dev certificate configuration.");
+        }
+        else
+        {
+            environmentVariables["NODE_EXTRA_CA_CERTS"] = devCertPemPath;
+        }
     }
 }

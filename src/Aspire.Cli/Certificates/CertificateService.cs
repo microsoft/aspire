@@ -8,6 +8,7 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Microsoft.AspNetCore.Certificates.Generation;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Certificates;
 
@@ -21,6 +22,11 @@ internal sealed class EnsureCertificatesTrustedResult
     /// to ensure certificates are properly trusted.
     /// </summary>
     public required IDictionary<string, string> EnvironmentVariables { get; init; }
+
+    /// <summary>
+    /// Gets the path to the exported PEM certificate file, if one was exported.
+    /// </summary>
+    public string? DevCertPemPath { get; init; }
 }
 
 internal interface ICertificateService
@@ -31,9 +37,15 @@ internal interface ICertificateService
 internal sealed class CertificateService(
     ICertificateToolRunner certificateToolRunner,
     IInteractionService interactionService,
-    AspireCliTelemetry telemetry) : ICertificateService
+    AspireCliTelemetry telemetry,
+    CliExecutionContext executionContext,
+    ILogger<CertificateService> logger) : ICertificateService
 {
     private const string SslCertDirEnvVar = "SSL_CERT_DIR";
+    private const string DevCertPemFileName = "aspire-dev-cert.pem";
+
+    internal string DevCertPemPath => Path.Combine(
+        executionContext.HomeDirectory.FullName, ".aspire", "dev-certs", DevCertPemFileName);
 
     public async Task<EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(CancellationToken cancellationToken)
     {
@@ -45,9 +57,12 @@ internal sealed class CertificateService(
         var trustResult = await CheckMachineReadableAsync();
         await HandleMachineReadableTrustAsync(trustResult, environmentVariables);
 
+        var devCertPemPath = ExportDevCertificatePem();
+
         return new EnsureCertificatesTrustedResult
         {
-            EnvironmentVariables = environmentVariables
+            EnvironmentVariables = environmentVariables,
+            DevCertPemPath = devCertPemPath
         };
     }
 
@@ -127,6 +142,29 @@ internal sealed class CertificateService(
             systemCertDirs.Add(devCertsTrustPath);
 
             environmentVariables[SslCertDirEnvVar] = string.Join(Path.PathSeparator, systemCertDirs);
+        }
+    }
+
+    private string? ExportDevCertificatePem()
+    {
+        try
+        {
+            var result = certificateToolRunner.ExportDevCertificatePublicPem(DevCertPemPath);
+            if (result is not null)
+            {
+                logger.LogDebug("Exported dev certificate public PEM to {Path}", result);
+            }
+            else
+            {
+                logger.LogDebug("No valid dev certificate found to export as PEM");
+            }
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Failed to export dev certificate as PEM");
+            return null;
         }
     }
 

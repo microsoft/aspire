@@ -192,7 +192,7 @@ public sealed class TypeScriptLanguageSupport : ILanguageSupport
             Execute = new CommandSpec
             {
                 Command = "npx",
-                Args = ["tsx", "{appHostFile}"]
+                Args = ["tsx", "{appHostFile}"],
             },
             WatchExecute = new CommandSpec
             {
@@ -205,7 +205,7 @@ public sealed class TypeScriptLanguageSupport : ILanguageSupport
                     "--ignore", "node_modules/",
                     "--ignore", ".modules/",
                     "--exec", "npx tsx {appHostFile}"
-                ]
+                ],
             }
         };
     }
