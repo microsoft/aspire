@@ -364,6 +364,19 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         _steps.Add(step);
     }
 
+    public void ScheduleStep(string stepName, IPipelineStepTarget target)
+    {
+        ArgumentNullException.ThrowIfNull(stepName);
+        ArgumentNullException.ThrowIfNull(target);
+
+        var step = _steps.FirstOrDefault(s => s.Name == stepName)
+            ?? throw new InvalidOperationException(
+                $"No step with the name '{stepName}' exists in the pipeline. " +
+                $"Use AddStep to add the step first, or check the step name is correct.");
+
+        step.ScheduledBy = target;
+    }
+
     public void AddPipelineConfiguration(Func<PipelineConfigurationContext, Task> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);

@@ -34,6 +34,18 @@ public interface IDistributedApplicationPipeline
     void AddStep(PipelineStep step);
 
     /// <summary>
+    /// Schedules an existing pipeline step onto a specific target (e.g., a CI/CD job).
+    /// This is useful for scheduling built-in steps that are already registered by
+    /// integrations or the core platform.
+    /// </summary>
+    /// <param name="stepName">The name of the existing step to schedule.</param>
+    /// <param name="target">The pipeline step target to schedule the step onto.</param>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when no step with the specified name exists in the pipeline.
+    /// </exception>
+    void ScheduleStep(string stepName, IPipelineStepTarget target);
+
+    /// <summary>
     /// Registers a callback to be executed during the pipeline configuration phase.
     /// </summary>
     /// <param name="callback">The callback function to execute during the configuration phase.</param>
