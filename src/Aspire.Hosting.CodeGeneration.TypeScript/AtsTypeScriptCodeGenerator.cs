@@ -103,6 +103,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     // Mapping of typeId -> wrapper class name for all generated wrapper types
     // Used to resolve parameter types to wrapper classes instead of handle types
     private readonly Dictionary<string, string> _wrapperClassNames = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, AtsTypeRef> _typeRefsById = new(StringComparer.Ordinal);
 
     // Set of type IDs that have Promise wrappers (types with chainable methods)
     // Used to determine return types for methods
@@ -251,6 +252,11 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     {
         if (IsInterfaceHandleType(typeRef))
         {
+            if (TryMapInterfaceInputTypeToTypeScript(typeRef!) is { } interfaceInputType)
+            {
+                return interfaceInputType;
+            }
+
             return "ResourceBuilderBase";
         }
 
@@ -280,6 +286,68 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         }
 
         return MapInputTypeToTypeScript(param.Type);
+    }
+
+    private string? TryMapInterfaceInputTypeToTypeScript(AtsTypeRef typeRef)
+    {
+        List<string>? assignableWrapperTypes = null;
+        var includesResourceBuilder = false;
+
+        foreach (var candidateTypeRef in _typeRefsById.Values)
+        {
+            if (!IsAssignableToInterface(candidateTypeRef, typeRef.TypeId) ||
+                !_wrapperClassNames.TryGetValue(candidateTypeRef.TypeId, out var wrapperClassName))
+            {
+                continue;
+            }
+
+            if (candidateTypeRef.IsResourceBuilder)
+            {
+                includesResourceBuilder = true;
+                continue;
+            }
+
+            assignableWrapperTypes ??= [];
+            assignableWrapperTypes.Add(wrapperClassName);
+        }
+
+        if (!includesResourceBuilder && assignableWrapperTypes is not { Count: > 0 })
+        {
+            return null;
+        }
+
+        var typeNames = new List<string>();
+        if (includesResourceBuilder)
+        {
+            typeNames.Add("ResourceBuilderBase");
+        }
+
+        if (assignableWrapperTypes is { Count: > 0 })
+        {
+            typeNames.AddRange(assignableWrapperTypes
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(static n => n, StringComparer.Ordinal));
+        }
+
+        return string.Join(" | ", typeNames);
+    }
+
+    private static bool IsAssignableToInterface(AtsTypeRef candidateTypeRef, string interfaceTypeId)
+    {
+        if (string.Equals(candidateTypeRef.TypeId, interfaceTypeId, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        foreach (var implementedInterface in candidateTypeRef.ImplementedInterfaces)
+        {
+            if (IsAssignableToInterface(implementedInterface, interfaceTypeId))
+            {
+                return true;
+            }
+        }
+
+        return candidateTypeRef.BaseType is not null && IsAssignableToInterface(candidateTypeRef.BaseType, interfaceTypeId);
     }
 
     /// <summary>
@@ -493,6 +561,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         // Build wrapper class name mapping for type resolution BEFORE generating options interfaces
         // This allows parameter types to use wrapper class names instead of handle types
         _wrapperClassNames.Clear();
+        _typeRefsById.Clear();
         _typesWithPromiseWrappers.Clear();
         _generatedOptionsInterfaces.Clear();
         _optionsInterfacesToGenerate.Clear();
@@ -501,12 +570,14 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         foreach (var builder in resourceBuilders)
         {
             _wrapperClassNames[builder.TypeId] = builder.BuilderClassName;
+            _typeRefsById[builder.TypeId] = builder.TargetType!;
             // All resource builders get Promise wrappers
             _typesWithPromiseWrappers.Add(builder.TypeId);
         }
         foreach (var typeClass in typeClasses)
         {
             _wrapperClassNames[typeClass.TypeId] = DeriveClassName(typeClass.TypeId);
+            _typeRefsById[typeClass.TypeId] = typeClass.TargetType!;
             // Type classes with methods get Promise wrappers
             if (HasChainableMethods(typeClass))
             {
