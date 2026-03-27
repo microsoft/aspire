@@ -628,7 +628,7 @@ public sealed class BicepSecretOutputReference(string name, AzureBicepResource r
 /// <param name="name">The name of the output</param>
 /// <param name="resource">The <see cref="AzureBicepResource"/>.</param>
 [AspireExport(ExposeProperties = true)]
-public sealed class BicepOutputReference(string name, AzureBicepResource resource) : IManifestExpressionProvider, IValueProvider, IValueWithReferences, IEquatable<BicepOutputReference>
+public sealed class BicepOutputReference(string name, AzureBicepResource resource) : IManifestExpressionProvider, IValueProvider, IValueWithReferences, IValueWithCustomWithEnvironment<BicepOutputReference>, IEquatable<BicepOutputReference>
 {
     /// <summary>
     /// Name of the output.
@@ -686,4 +686,12 @@ public sealed class BicepOutputReference(string name, AzureBicepResource resourc
     /// <inheritdoc/>
     public override int GetHashCode() =>
         HashCode.Combine(Resource, Name);
+
+    static IResourceBuilder<TDestination>? IValueWithCustomWithEnvironment<BicepOutputReference>.TryWithEnvironment<TDestination>(
+        IResourceBuilder<TDestination> builder,
+        string name,
+        BicepOutputReference value)
+    {
+        return ResourceBuilderExtensions.WithEnvironment<TDestination, BicepOutputReference>(builder, name, value);
+    }
 }

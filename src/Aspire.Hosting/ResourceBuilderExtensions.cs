@@ -22,6 +22,7 @@ namespace Aspire.Hosting;
 public static class ResourceBuilderExtensions
 {
     private const string ConnectionStringEnvironmentName = "ConnectionStrings__";
+    private static readonly MethodInfo s_dispatchCustomWithEnvironmentMethod = typeof(ResourceBuilderExtensions).GetMethod(nameof(DispatchCustomWithEnvironment), BindingFlags.NonPublic | BindingFlags.Static)!;
     private static readonly MethodInfo s_dispatchCustomWithReferenceMethod = typeof(ResourceBuilderExtensions).GetMethod(nameof(DispatchCustomWithReference), BindingFlags.NonPublic | BindingFlags.Static)!;
 
     /// <summary>
@@ -58,6 +59,11 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(value);
+
+        if (TryDispatchCustomWithEnvironment(builder, name, value, out var dispatchedBuilder))
+        {
+            return dispatchedBuilder;
+        }
 
         return value switch
         {
@@ -354,6 +360,40 @@ public static class ResourceBuilderExtensions
         {
             context.EnvironmentVariables[name] = value;
         });
+    }
+
+    private static bool TryDispatchCustomWithEnvironment<TDestination>(
+        IResourceBuilder<TDestination> builder,
+        string name,
+        object value,
+        [NotNullWhen(true)] out IResourceBuilder<TDestination>? dispatchedBuilder)
+        where TDestination : IResourceWithEnvironment
+    {
+        var customType = value.GetType();
+        var customWithEnvironmentInterface = customType.GetInterfaces()
+            .FirstOrDefault(i => i.IsGenericType
+                && i.GetGenericTypeDefinition() == typeof(IValueWithCustomWithEnvironment<>)
+                && i.GetGenericArguments()[0] == customType);
+
+        if (customWithEnvironmentInterface is null)
+        {
+            dispatchedBuilder = null;
+            return false;
+        }
+
+        var dispatchMethod = s_dispatchCustomWithEnvironmentMethod.MakeGenericMethod(typeof(TDestination), customType);
+        dispatchedBuilder = (IResourceBuilder<TDestination>?)dispatchMethod.Invoke(null, [builder, name, value]);
+        return dispatchedBuilder is not null;
+    }
+
+    private static IResourceBuilder<TDestination>? DispatchCustomWithEnvironment<TDestination, TCustom>(
+        IResourceBuilder<TDestination> builder,
+        string name,
+        TCustom value)
+        where TDestination : IResourceWithEnvironment
+        where TCustom : IValueProvider, IManifestExpressionProvider, IValueWithCustomWithEnvironment<TCustom>
+    {
+        return TCustom.TryWithEnvironment(builder, name, value);
     }
 
     /// <summary>

@@ -82,12 +82,7 @@ public static class AzureBicepResourceExtensions
     public static IResourceBuilder<T> WithEnvironment<T>(this IResourceBuilder<T> builder, string name, BicepOutputReference bicepOutputReference)
         where T : IResourceWithEnvironment
     {
-        builder.WithReferenceRelationship(bicepOutputReference.Resource);
-
-        return builder.WithEnvironment(ctx =>
-        {
-            ctx.EnvironmentVariables[name] = bicepOutputReference;
-        });
+        return ResourceBuilderExtensions.WithEnvironment<T, BicepOutputReference>(builder, name, bicepOutputReference);
     }
 
     /// <summary>
@@ -120,10 +115,7 @@ public static class AzureBicepResourceExtensions
     public static IResourceBuilder<T> WithEnvironment<T>(this IResourceBuilder<T> builder, string name, IAzureKeyVaultSecretReference secretReference)
         where T : IResourceWithEnvironment
     {
-        return builder.WithEnvironment(ctx =>
-        {
-            ctx.EnvironmentVariables[name] = secretReference;
-        });
+        return ResourceBuilderExtensions.WithEnvironment<T, IAzureKeyVaultSecretReference>(builder, name, secretReference);
     }
 
     /// <summary>

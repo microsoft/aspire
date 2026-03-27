@@ -15,7 +15,7 @@ namespace Aspire.Hosting.Azure;
 /// </remarks>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Secret = {SecretName}")]
 public class AzureKeyVaultSecretResource(string name, string secretName, AzureKeyVaultResource parent, object value)
-    : Resource(name), IResourceWithParent<AzureKeyVaultResource>, IAzureKeyVaultSecretReference
+    : Resource(name), IResourceWithParent<AzureKeyVaultResource>, IAzureKeyVaultSecretReference, IValueWithCustomWithEnvironment<AzureKeyVaultSecretResource>
 {
     private readonly IAzureKeyVaultSecretReference _secret = parent.GetSecret(secretName);
 
@@ -53,4 +53,12 @@ public class AzureKeyVaultSecretResource(string name, string secretName, AzureKe
     /// <returns>The secret value.</returns>
     ValueTask<string?> IValueProvider.GetValueAsync(CancellationToken cancellationToken) =>
         _secret.GetValueAsync(cancellationToken);
+
+    static IResourceBuilder<TDestination>? IValueWithCustomWithEnvironment<AzureKeyVaultSecretResource>.TryWithEnvironment<TDestination>(
+        IResourceBuilder<TDestination> builder,
+        string name,
+        AzureKeyVaultSecretResource value)
+    {
+        return ResourceBuilderExtensions.WithEnvironment<TDestination, AzureKeyVaultSecretResource>(builder, name, value);
+    }
 }
