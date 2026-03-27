@@ -128,7 +128,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     {
         // Check if file matches this language's detection patterns
         return _resolvedLanguage.DetectionPatterns.Any(p =>
-            appHostFile.Name.Equals(p, StringComparison.OrdinalIgnoreCase));
+            LanguageDetectionPatternMatcher.MatchesPattern(appHostFile.Name, p));
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -320,7 +320,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
         // Use the resolved language's detection patterns (set in constructor)
         var patterns = _resolvedLanguage.DetectionPatterns;
-        if (!patterns.Any(p => appHostFile.Name.Equals(p, StringComparison.OrdinalIgnoreCase)))
+        if (!patterns.Any(p => LanguageDetectionPatternMatcher.MatchesPattern(appHostFile.Name, p)))
         {
             _logger.LogDebug("AppHost file {File} does not match {Language} detection patterns: {Patterns}",
                 appHostFile.Name, _resolvedLanguage.DisplayName, string.Join(", ", patterns));

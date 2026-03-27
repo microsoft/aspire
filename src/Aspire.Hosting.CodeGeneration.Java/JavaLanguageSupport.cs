@@ -102,11 +102,13 @@ public sealed class JavaLanguageSupport : ILanguageSupport
             Execute = new CommandSpec
             {
                 // Use a shell to compile and run in sequence
-                // On Windows, use cmd /c; on Unix, use sh -c
+                // On Windows, use cmd /c; on Unix, use sh -c. Java source-file execution
+                // and javac both expect a conventional source file name, so copy the selected
+                // AppHost to a temporary AppHost.java before compiling.
                 Command = OperatingSystem.IsWindows() ? "cmd" : "sh",
                 Args = OperatingSystem.IsWindows()
-                    ? ["/c", "if not exist .java-build mkdir .java-build && javac --enable-preview --source 25 -d .java-build @.modules\\sources.txt AppHost.java && java --enable-preview -cp .java-build AppHost {args}"]
-                    : ["-c", "mkdir -p .java-build && javac --enable-preview --source 25 -d .java-build @.modules/sources.txt AppHost.java && java --enable-preview -cp .java-build AppHost {args}"]
+                    ? ["/c", "if not exist .java-build mkdir .java-build && copy /Y \"{appHostFile}\" .java-build\\AppHost.java >nul && javac --enable-preview --source 25 -d .java-build @.modules\\sources.txt .java-build\\AppHost.java && java --enable-preview -cp .java-build AppHost {args}"]
+                    : ["-c", "mkdir -p .java-build && cp \"{appHostFile}\" .java-build/AppHost.java && javac --enable-preview --source 25 -d .java-build @.modules/sources.txt .java-build/AppHost.java && java --enable-preview -cp .java-build AppHost {args}"]
             }
         };
     }

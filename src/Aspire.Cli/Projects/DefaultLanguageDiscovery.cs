@@ -28,14 +28,14 @@ internal sealed class DefaultLanguageDiscovery(IFeatures features) : ILanguageDi
             LanguageId: new LanguageId("typescript/nodejs"),
             DisplayName: "TypeScript (Node.js)",
             PackageName: "Aspire.Hosting.CodeGeneration.TypeScript",
-            DetectionPatterns: ["apphost.ts"],
+            DetectionPatterns: ["apphost.ts", "*.apphost.ts"],
             CodeGenerator: "TypeScript", // Matches ICodeGenerator.Language
             AppHostFileName: "apphost.ts"),
         new LanguageInfo(
             LanguageId: new LanguageId(KnownLanguageId.Python),
             DisplayName: KnownLanguageId.PythonDisplayName,
             PackageName: "Aspire.Hosting.CodeGeneration.Python",
-            DetectionPatterns: ["apphost.py"],
+            DetectionPatterns: ["apphost.py", "*.apphost.py"],
             CodeGenerator: "Python",
             AppHostFileName: "apphost.py",
             IsExperimental: true),
@@ -51,7 +51,7 @@ internal sealed class DefaultLanguageDiscovery(IFeatures features) : ILanguageDi
             LanguageId: new LanguageId(KnownLanguageId.Java),
             DisplayName: KnownLanguageId.JavaDisplayName,
             PackageName: "Aspire.Hosting.CodeGeneration.Java",
-            DetectionPatterns: ["AppHost.java"],
+            DetectionPatterns: ["AppHost.java", "*.apphost.java"],
             CodeGenerator: "Java",
             AppHostFileName: "AppHost.java",
             IsExperimental: true),
@@ -95,8 +95,7 @@ internal sealed class DefaultLanguageDiscovery(IFeatures features) : ILanguageDi
         {
             foreach (var pattern in language.DetectionPatterns)
             {
-                var filePath = Path.Combine(directory.FullName, pattern);
-                if (File.Exists(filePath))
+                if (LanguageDetectionPatternMatcher.DirectoryContainsMatch(directory, pattern))
                 {
                     return Task.FromResult<LanguageId?>(language.LanguageId);
                 }
@@ -133,7 +132,7 @@ internal sealed class DefaultLanguageDiscovery(IFeatures features) : ILanguageDi
     public LanguageInfo? GetLanguageByFile(FileInfo file)
     {
         var match = s_allLanguages.FirstOrDefault(l =>
-            l.DetectionPatterns.Any(p => MatchesPattern(file.Name, p)));
+            l.DetectionPatterns.Any(p => LanguageDetectionPatternMatcher.MatchesPattern(file.Name, p)));
 
         if (match is not null && !IsLanguageEnabled(match))
         {
@@ -156,18 +155,5 @@ internal sealed class DefaultLanguageDiscovery(IFeatures features) : ILanguageDi
         }
 
         return true;
-    }
-
-    private static bool MatchesPattern(string fileName, string pattern)
-    {
-        // Handle wildcard patterns like "*.csproj"
-        if (pattern.StartsWith("*.", StringComparison.Ordinal))
-        {
-            var extension = pattern[1..]; // ".csproj"
-            return fileName.EndsWith(extension, StringComparison.OrdinalIgnoreCase);
-        }
-        
-        // Exact match
-        return fileName.Equals(pattern, StringComparison.OrdinalIgnoreCase);
     }
 }

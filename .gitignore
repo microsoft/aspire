@@ -134,10 +134,12 @@ dependency-reduced-pom.xml
 # Java AppHost build artifacts
 playground/**/.java-build/
 playground/**/*.class
+tests/Polyglot/Java/.java-build/
+tests/Polyglot/Java/**/*.class
 
 # Generated Java AppHost SDK sources
 /playground/JavaAppHost/.modules/
-/playground/polyglot/Java/**/ValidationAppHost/.modules/
+/tests/Polyglot/Java/.modules/
 
 # Ignore cache created with the Angular CLI.
 .angular/
@@ -171,6 +173,7 @@ playground/**/publish/
 
 # TypeScript AppHost
 playground/**/dist/
+tests/Polyglot/TypeScript/dist/
 
 # Verify
 *.received.*
@@ -179,7 +182,7 @@ playground/**/dist/
 .aspire/
 
 # Required for polyglot apps
-!playground/polyglot/**/.aspire/
+!tests/Polyglot/**/.aspire/
 
 # Release notes automation output
 tools/ReleaseNotes/analysis-output/
