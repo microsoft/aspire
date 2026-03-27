@@ -7,6 +7,8 @@ public class ResourceCommandResponseViewModel
 {
     public required ResourceCommandResponseKind Kind { get; init; }
     public string? ErrorMessage { get; init; }
+    public string? Result { get; init; }
+    public CommandResultFormat ResultFormat { get; init; }
 }
 
 // Must be kept in sync with ResourceCommandResponseKind in the resource_service.proto file
@@ -16,4 +18,25 @@ public enum ResourceCommandResponseKind
     Succeeded = 1,
     Failed = 2,
     Cancelled = 3
+}
+
+/// <summary>
+/// Specifies the format of a command result.
+/// </summary>
+public enum CommandResultFormat
+{
+    /// <summary>
+    /// No result data.
+    /// </summary>
+    None = 0,
+
+    /// <summary>
+    /// Plain text result.
+    /// </summary>
+    Text = 1,
+
+    /// <summary>
+    /// JSON result.
+    /// </summary>
+    Json = 2
 }

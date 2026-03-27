@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
@@ -124,7 +125,51 @@ builder.AddProject<Projects.Stress_TelemetryService>("stress-telemetryservice")
                await ExecuteCommandForAllResourcesAsync(c.ServiceProvider, KnownResourceCommands.StartCommand, c.CancellationToken);
                return CommandResults.Success();
            },
-           commandOptions: new() { IconName = "Play", IconVariant = IconVariant.Filled });
+           commandOptions: new() { IconName = "Play", IconVariant = IconVariant.Filled })
+       .WithCommand(
+           name: "generate-token",
+           displayName: "Generate Token",
+           executeCommand: (c) =>
+           {
+               var token = new
+               {
+                   accessToken = Convert.ToBase64String(Guid.NewGuid().ToByteArray()) + Convert.ToBase64String(Guid.NewGuid().ToByteArray()),
+                   tokenType = "Bearer",
+                   expiresIn = 3600,
+                   scope = "api.read api.write",
+                   issuedAt = DateTime.UtcNow
+               };
+               var json = JsonSerializer.Serialize(token, new JsonSerializerOptions { WriteIndented = true });
+               return Task.FromResult(CommandResults.Success(json, CommandResultFormat.Json));
+           },
+           commandOptions: new() { IconName = "Key", Description = "Generate a temporary access token" })
+       .WithCommand(
+           name: "get-connection-string",
+           displayName: "Get Connection String",
+           executeCommand: (c) =>
+           {
+               var connectionString = $"Server=localhost,1433;Database=StressDb;User Id=sa;Password={Guid.NewGuid():N};TrustServerCertificate=true";
+               return Task.FromResult(CommandResults.Success(connectionString, CommandResultFormat.Text));
+           },
+           commandOptions: new() { IconName = "LinkMultiple", Description = "Get the connection string for this resource" })
+       .WithCommand(
+           name: "validate-config",
+           displayName: "Validate Config",
+           executeCommand: (c) =>
+           {
+               var errors = new { errors = new[] { new { field = "connectionString", message = "Invalid host" }, new { field = "timeout", message = "Must be positive" } } };
+               var json = JsonSerializer.Serialize(errors, new JsonSerializerOptions { WriteIndented = true });
+               return Task.FromResult(CommandResults.Failure("Validation failed", json, CommandResultFormat.Json));
+           },
+           commandOptions: new() { IconName = "Warning", Description = "Validate resource configuration (always fails with details)" })
+       .WithCommand(
+           name: "check-health",
+           displayName: "Check Health",
+           executeCommand: (c) =>
+           {
+               return Task.FromResult(CommandResults.Failure("Health check failed", "Connection refused: ECONNREFUSED 127.0.0.1:5432\nRetries exhausted after 3 attempts", CommandResultFormat.Text));
+           },
+           commandOptions: new() { IconName = "HeartBroken", Description = "Check resource health (always fails with details)" });
 
 #if !SKIP_DASHBOARD_REFERENCE
 // This project is only added in playground projects to support development/debugging

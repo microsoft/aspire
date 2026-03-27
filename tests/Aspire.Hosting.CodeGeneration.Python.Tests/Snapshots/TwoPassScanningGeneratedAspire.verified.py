@@ -1491,6 +1491,8 @@ def _validate_dict_types(args: typing.Any, arg_types: typing.Any) -> bool:
 
 CertificateTrustScope = typing.Literal["None", "Append", "Override", "System"]
 
+CommandResultFormat = typing.Literal["None", "Text", "Json"]
+
 ContainerLifetime = typing.Literal["Session", "Persistent"]
 
 DistributedApplicationOperation = typing.Literal["Run", "Publish"]
@@ -1678,6 +1680,8 @@ class ExecuteCommandResult(typing.TypedDict, total=False):
     Success: bool
     Canceled: bool
     ErrorMessage: str
+    Result: str
+    ResultFormat: CommandResultFormat
 
 class ResourceEventDto(typing.TypedDict, total=False):
     ResourceName: str

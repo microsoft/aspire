@@ -315,6 +315,28 @@ impl std::fmt::Display for EndpointProperty {
     }
 }
 
+/// CommandResultFormat
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CommandResultFormat {
+    #[default]
+    #[serde(rename = "None")]
+    None,
+    #[serde(rename = "Text")]
+    Text,
+    #[serde(rename = "Json")]
+    Json,
+}
+
+impl std::fmt::Display for CommandResultFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::None => write!(f, "None"),
+            Self::Text => write!(f, "Text"),
+            Self::Json => write!(f, "Json"),
+        }
+    }
+}
+
 /// UrlDisplayLocation
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum UrlDisplayLocation {
@@ -493,6 +515,10 @@ pub struct ExecuteCommandResult {
     pub canceled: bool,
     #[serde(rename = "ErrorMessage")]
     pub error_message: String,
+    #[serde(rename = "Result")]
+    pub result: String,
+    #[serde(rename = "ResultFormat")]
+    pub result_format: CommandResultFormat,
 }
 
 impl ExecuteCommandResult {
@@ -501,6 +527,8 @@ impl ExecuteCommandResult {
         map.insert("Success".to_string(), serde_json::to_value(&self.success).unwrap_or(Value::Null));
         map.insert("Canceled".to_string(), serde_json::to_value(&self.canceled).unwrap_or(Value::Null));
         map.insert("ErrorMessage".to_string(), serde_json::to_value(&self.error_message).unwrap_or(Value::Null));
+        map.insert("Result".to_string(), serde_json::to_value(&self.result).unwrap_or(Value::Null));
+        map.insert("ResultFormat".to_string(), serde_json::to_value(&self.result_format).unwrap_or(Value::Null));
         map
     }
 }

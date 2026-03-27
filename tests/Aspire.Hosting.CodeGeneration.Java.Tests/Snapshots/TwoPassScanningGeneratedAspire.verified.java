@@ -2750,6 +2750,36 @@ public class CommandOptions {
     }
 }
 
+// ===== CommandResultFormat.java =====
+// CommandResultFormat.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** CommandResultFormat enum. */
+public enum CommandResultFormat implements WireValueEnum {
+    NONE("None"),
+    TEXT("Text"),
+    JSON("Json");
+
+    private final String value;
+
+    CommandResultFormat(String value) {
+        this.value = value;
+    }
+
+    public String getValue() { return value; }
+
+    public static CommandResultFormat fromValue(String value) {
+        for (CommandResultFormat e : values()) {
+            if (e.value.equals(value)) return e;
+        }
+        throw new IllegalArgumentException("Unknown value: " + value);
+    }
+}
+
 // ===== CompleteStepMarkdownOptions.java =====
 // CompleteStepMarkdownOptions.java - GENERATED CODE - DO NOT EDIT
 
@@ -9117,6 +9147,8 @@ public class ExecuteCommandResult {
     private boolean success;
     private boolean canceled;
     private String errorMessage;
+    private String result;
+    private CommandResultFormat resultFormat;
 
     public boolean getSuccess() { return success; }
     public void setSuccess(boolean value) { this.success = value; }
@@ -9124,12 +9156,18 @@ public class ExecuteCommandResult {
     public void setCanceled(boolean value) { this.canceled = value; }
     public String getErrorMessage() { return errorMessage; }
     public void setErrorMessage(String value) { this.errorMessage = value; }
+    public String getResult() { return result; }
+    public void setResult(String value) { this.result = value; }
+    public CommandResultFormat getResultFormat() { return resultFormat; }
+    public void setResultFormat(CommandResultFormat value) { this.resultFormat = value; }
 
     public Map<String, Object> toMap() {
         Map<String, Object> map = new HashMap<>();
         map.put("Success", AspireClient.serializeValue(success));
         map.put("Canceled", AspireClient.serializeValue(canceled));
         map.put("ErrorMessage", AspireClient.serializeValue(errorMessage));
+        map.put("Result", AspireClient.serializeValue(result));
+        map.put("ResultFormat", AspireClient.serializeValue(resultFormat));
         return map;
     }
 }
@@ -20081,6 +20119,7 @@ public final class WithVolumeOptions {
 .modules/CertificateTrustScope.java
 .modules/CommandLineArgsCallbackContext.java
 .modules/CommandOptions.java
+.modules/CommandResultFormat.java
 .modules/CompleteStepMarkdownOptions.java
 .modules/CompleteStepOptions.java
 .modules/CompleteTaskMarkdownOptions.java
