@@ -3,18 +3,18 @@
   <file datatype="xml" source-language="en" target-language="fr" original="../LogsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Display logs from resources in a running apphost.</source>
-        <target state="translated">Afficher les journaux des ressources dans un Apphost en cours d’exécution.</target>
+        <source>Display logs from resources in a running apphost</source>
+        <target state="needs-review-translation">Afficher les journaux des ressources dans un Apphost Aspire en cours d’exécution.</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
-        <source>Stream logs in real-time as they are written.</source>
-        <target state="translated">Diffuser les journaux en temps réel au fur et à mesure de leur écriture.</target>
+        <source>Stream logs in real-time as they are written</source>
+        <target state="needs-review-translation">Diffuser les journaux en temps réel au fur et à mesure de leur écriture.</target>
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">Format de sortie (Tableau ou JSON).</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">Générer les journaux au format JSON (NDJSON).</target>
         <note />
       </trans-unit>
       <trans-unit id="NoResourcesFound">
@@ -24,7 +24,7 @@
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The name of the resource to get logs for. If not specified, logs from all resources are shown.</source>
-        <target state="translated">Le nom de la ressource pour laquelle obtenir les journaux. Si aucun nom n’est spécifié, les journaux d’activité de toutes les ressources sont affichées.</target>
+        <target state="needs-review-translation">Le nom de la ressource pour laquelle obtenir les journaux. Si aucun nom n’est spécifié, les journaux d’activité de toutes les ressources sont affichées.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">
@@ -48,8 +48,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TailOptionDescription">
-        <source>Number of lines to show from the end of logs (default: all).</source>
-        <target state="translated">Nombre de lignes à afficher à partir de la fin des journaux (par défaut : toutes).</target>
+        <source>Number of lines to show from the end of logs (default: all)</source>
+        <target state="needs-review-translation">Nombre de lignes à afficher à partir de la fin des journaux (par défaut : toutes).</target>
         <note />
       </trans-unit>
       <trans-unit id="TailRequiresResource">
@@ -58,8 +58,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TimestampsOptionDescription">
-        <source>Show timestamps for each log line.</source>
-        <target state="translated">Afficher les horodatages pour chaque ligne de journal.</target>
+        <source>Show timestamps for each log line</source>
+        <target state="new">Show timestamps for each log line</target>
         <note />
       </trans-unit>
       <trans-unit id="GettingLogs">

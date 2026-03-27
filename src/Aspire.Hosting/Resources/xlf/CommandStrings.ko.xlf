@@ -12,6 +12,16 @@
         <target state="translated">매개 변수 삭제</target>
         <note />
       </trans-unit>
+      <trans-unit id="RebuildDescription">
+        <source>Stop the resource, rebuild the project from source, and restart. Use this to apply source code changes.</source>
+        <target state="new">Stop the resource, rebuild the project from source, and restart. Use this to apply source code changes.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RebuildName">
+        <source>Rebuild</source>
+        <target state="new">Rebuild</target>
+        <note />
+      </trans-unit>
       <trans-unit id="RestartDescription">
         <source>Restart resource</source>
         <target state="translated">리소스 다시 시작</target>
@@ -55,6 +65,11 @@
       <trans-unit id="StopName">
         <source>Stop</source>
         <target state="translated">중지</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RebuilderResourceNotFound">
+        <source>Rebuilder resource for '{0}' not found.</source>
+        <target state="new">Rebuilder resource for '{0}' not found.</target>
         <note />
       </trans-unit>
     </body>

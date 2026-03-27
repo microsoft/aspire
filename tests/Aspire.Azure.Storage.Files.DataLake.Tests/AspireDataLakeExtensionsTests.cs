@@ -152,7 +152,7 @@ public sealed class AspireDataLakeExtensionsTests
 
         using var host = builder.Build();
 
-        // Unkeyed services don't work with keyed services. See https://github.com/dotnet/aspire/issues/3890
+        // Unkeyed services don't work with keyed services. See https://github.com/microsoft/aspire/issues/3890
         //var client1 = host.Services.GetRequiredService<DataLakeServiceClient>();
         var client2 = host.Services.GetRequiredKeyedService<DataLakeServiceClient>($"{ConnectionName}2");
         var client3 = host.Services.GetRequiredKeyedService<DataLakeServiceClient>($"{ConnectionName}3");

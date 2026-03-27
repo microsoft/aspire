@@ -3,18 +3,18 @@
   <file datatype="xml" source-language="en" target-language="cs" original="../ResourceCommandStrings.resx">
     <body>
       <trans-unit id="CommandDescription">
-        <source>Execute a command on a resource (e.g. start, stop, restart).</source>
-        <target state="translated">Spusťte příkaz pro prostředek (např. start, stop, restart).</target>
+        <source>Execute a command on a resource (e.g. start, stop, restart)</source>
+        <target state="needs-review-translation">Spusťte příkaz pro prostředek.</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandNameArgumentDescription">
-        <source>The name of the command to execute (e.g. start, stop, restart).</source>
-        <target state="translated">Název příkazu, který se má spustit (např. start, stop, restart).</target>
+        <source>The name of the command to execute (e.g. start, stop, restart)</source>
+        <target state="needs-review-translation">Název příkazu, který se má spustit</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandResourceArgumentDescription">
-        <source>The name of the resource to execute the command on.</source>
-        <target state="translated">Název prostředku, na kterém se má příkaz provést</target>
+        <source>The name of the resource to execute the command on</source>
+        <target state="needs-review-translation">Název prostředku, na kterém se má příkaz provést</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">

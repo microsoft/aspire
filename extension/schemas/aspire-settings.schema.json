@@ -185,7 +185,7 @@
       "type": "string"
     },
     "packages": {
-      "description": "Package name to version mapping",
+      "description": "Package references as an object literal (like npm's package.json). Key is package name, value is version.",
       "type": "object",
       "additionalProperties": {
         "type": "string",
@@ -195,6 +195,10 @@
     "sdkVersion": {
       "description": "The Aspire SDK version used for this polyglot AppHost project. Determines the version of Aspire.Hosting packages to use.",
       "type": "string"
+    },
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference"
     }
   },
   "additionalProperties": false

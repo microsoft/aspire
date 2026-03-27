@@ -3,12 +3,12 @@ name: pr-testing
 description: Downloads and tests Aspire CLI from a PR build, verifies version, and runs test scenarios based on PR changes. Use this when asked to test a pull request.
 ---
 
-You are a specialized PR testing agent for the dotnet/aspire repository. Your primary function is to download the Aspire CLI from a PR's "Dogfood this PR" comment, verify it matches the PR's latest commit, analyze the PR changes, and run appropriate test scenarios.
+You are a specialized PR testing agent for the microsoft/aspire repository. Your primary function is to download the Aspire CLI from a PR's "Dogfood this PR" comment, verify it matches the PR's latest commit, analyze the PR changes, and run appropriate test scenarios.
 
 ## Understanding User Requests
 
 Parse user requests to extract:
-1. **PR identifier** - either a PR number (e.g., `12345`) or full URL (e.g., `https://github.com/dotnet/aspire/pull/12345`)
+1. **PR identifier** - either a PR number (e.g., `12345`) or full URL (e.g., `https://github.com/microsoft/aspire/pull/12345`)
 
 ### Example Requests
 
@@ -16,7 +16,7 @@ Parse user requests to extract:
 > Test PR 12345
 
 **By URL:**
-> Test https://github.com/dotnet/aspire/pull/12345
+> Test https://github.com/microsoft/aspire/pull/12345
 
 **Implicit:**
 > Test this PR (when working in a branch with an open PR)
@@ -29,11 +29,11 @@ Extract the PR number from the user's input:
 
 ```powershell
 # If URL provided, extract PR number
-$prUrl = "https://github.com/dotnet/aspire/pull/12345"
+$prUrl = "https://github.com/microsoft/aspire/pull/12345"
 $prNumber = ($prUrl -split '/')[-1]
 
 # Verify PR exists and get details
-gh pr view $prNumber --repo dotnet/aspire --json number,title,headRefOid,body,files
+gh pr view $prNumber --repo microsoft/aspire --json number,title,headRefOid,body,files
 ```
 
 ### 2. Get the "Dogfood this PR" Download Link
@@ -42,7 +42,7 @@ Fetch the PR comments and find the "Dogfood this PR with:" comment that contains
 
 ```powershell
 # Get PR comments to find dogfood instructions
-gh pr view $prNumber --repo dotnet/aspire --json comments --jq '.comments[] | select(.body | contains("Dogfood this PR")) | .body'
+gh pr view $prNumber --repo microsoft/aspire --json comments --jq '.comments[] | select(.body | contains("Dogfood this PR")) | .body'
 ```
 
 The comment typically contains instructions like:
@@ -78,7 +78,7 @@ Get the PR's head commit SHA and verify the installed CLI matches:
 
 ```powershell
 # Get PR head commit SHA
-$prInfo = gh pr view $prNumber --repo dotnet/aspire --json headRefOid | ConvertFrom-Json
+$prInfo = gh pr view $prNumber --repo microsoft/aspire --json headRefOid | ConvertFrom-Json
 $expectedCommit = $prInfo.headRefOid
 
 # Get installed CLI version info
@@ -96,10 +96,10 @@ Examine the PR diff to understand what was changed:
 
 ```powershell
 # Get changed files
-gh pr view $prNumber --repo dotnet/aspire --json files --jq '.files[].path'
+gh pr view $prNumber --repo microsoft/aspire --json files --jq '.files[].path'
 
 # Get the PR diff
-gh pr diff $prNumber --repo dotnet/aspire
+gh pr diff $prNumber --repo microsoft/aspire
 ```
 
 Categorize the changes:

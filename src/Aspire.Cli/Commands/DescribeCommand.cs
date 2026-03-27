@@ -11,6 +11,7 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Shared;
 using Aspire.Shared.Model.Serialization;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
@@ -142,7 +143,7 @@ internal sealed class DescribeCommand : BaseCommand
 
         await Task.WhenAll(dashboardUrlsTask, snapshotsTask).ConfigureAwait(false);
 
-        var dashboardBaseUrl = (await dashboardUrlsTask.ConfigureAwait(false))?.BaseUrlWithLoginToken;
+        var dashboardBaseUrl = TelemetryCommandHelpers.ExtractDashboardBaseUrl((await dashboardUrlsTask.ConfigureAwait(false))?.BaseUrlWithLoginToken);
         var snapshots = await snapshotsTask.ConfigureAwait(false);
 
         // Pre-resolve colors for all resource names so that assignment is
@@ -262,7 +263,7 @@ internal sealed class DescribeCommand : BaseCommand
     {
         if (snapshots.Count == 0)
         {
-            _interactionService.DisplayPlainText("No resources found.");
+            _interactionService.DisplayMessage(KnownEmojis.Information, "No resources found.");
             return;
         }
 
@@ -281,7 +282,8 @@ internal sealed class DescribeCommand : BaseCommand
         foreach (var (snapshot, displayName) in orderedItems)
         {
             var endpoints = snapshot.Urls.Length > 0
-                ? string.Join(", ", snapshot.Urls.Where(e => !e.IsInternal).Select(e => e.Url.EscapeMarkup()))
+                ? string.Join(", ", OrderUrls(snapshot.Urls.Where(e => !e.IsInternal))
+                    .Select(e => FormatEndpointUrl(e.Url, e.DisplayProperties?.DisplayName)))
                 : "-";
 
             var type = snapshot.ResourceType?.EscapeMarkup() ?? "-";
@@ -298,9 +300,9 @@ internal sealed class DescribeCommand : BaseCommand
     {
         var displayName = ResourceSnapshotMapper.GetResourceName(snapshot, allResources);
 
-        var endpoints = snapshot.Urls.Length > 0
-            ? string.Join(", ", snapshot.Urls.Where(e => !e.IsInternal).Select(e => e.Url))
-            : "";
+        var endpoints = OrderUrls(snapshot.Urls.Where(e => !e.IsInternal))
+            .Select(e => (e.Url, DisplayName: e.DisplayProperties?.DisplayName ?? ""))
+            .ToArray();
 
         return new ResourceDisplayState(displayName, snapshot.State, snapshot.HealthStatus, endpoints);
     }
@@ -309,7 +311,9 @@ internal sealed class DescribeCommand : BaseCommand
     {
         var stateText = ColorState(state.State);
         var healthText = !string.IsNullOrEmpty(state.HealthStatus) ? $" ({ColorHealth(state.HealthStatus.EscapeMarkup())})" : "";
-        var endpointsStr = !string.IsNullOrEmpty(state.Endpoints) ? $" - {state.Endpoints.EscapeMarkup()}" : "";
+        var endpointsStr = state.Endpoints.Length > 0
+            ? $" - {string.Join(", ", state.Endpoints.Select(e => FormatEndpointUrl(e.Url, e.DisplayName)))}"
+            : "";
 
         _interactionService.DisplayMarkupLine($"{ColorResourceName(state.DisplayName, $"[[{state.DisplayName.EscapeMarkup()}]]")} {stateText}{healthText}{endpointsStr}");
     }
@@ -335,6 +339,20 @@ internal sealed class DescribeCommand : BaseCommand
         };
     }
 
+    private static IOrderedEnumerable<ResourceSnapshotUrl> OrderUrls(IEnumerable<ResourceSnapshotUrl> urls) =>
+        urls.OrderByDescending(e => e.DisplayProperties?.SortOrder ?? 0)
+            .ThenByDescending(e => e.Url.StartsWith("https", StringComparison.OrdinalIgnoreCase))
+            .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase);
+
+    private static string FormatEndpointUrl(string url, string? displayName = null)
+    {
+        var escaped = url.EscapeMarkup();
+        var text = !string.IsNullOrEmpty(displayName) ? displayName.EscapeMarkup() : escaped;
+        return KnownUnsupportedUrlSchemes.IsLinkableUrl(url)
+            ? $"[link={escaped}]{text}[/]"
+            : text;
+    }
+
     private static string ColorHealth(string health) => health.ToUpperInvariant() switch
     {
         "HEALTHY" => $"[green]{health}[/]",
@@ -346,5 +364,23 @@ internal sealed class DescribeCommand : BaseCommand
     /// <summary>
     /// Represents the display state of a resource for deduplication during watch mode.
     /// </summary>
-    private sealed record ResourceDisplayState(string DisplayName, string? State, string? HealthStatus, string Endpoints);
+    private sealed class ResourceDisplayState(string displayName, string? state, string? healthStatus, (string Url, string DisplayName)[] endpoints) : IEquatable<ResourceDisplayState>
+    {
+        public string DisplayName { get; } = displayName;
+        public string? State { get; } = state;
+        public string? HealthStatus { get; } = healthStatus;
+        public (string Url, string DisplayName)[] Endpoints { get; } = endpoints;
+
+        public bool Equals(ResourceDisplayState? other) =>
+            other is not null &&
+            DisplayName == other.DisplayName &&
+            State == other.State &&
+            HealthStatus == other.HealthStatus &&
+            Endpoints.AsSpan().SequenceEqual(other.Endpoints);
+
+        public override bool Equals(object? obj) => Equals(obj as ResourceDisplayState);
+
+        public override int GetHashCode() =>
+            HashCode.Combine(DisplayName, State, HealthStatus, Endpoints.Length);
+    }
 }

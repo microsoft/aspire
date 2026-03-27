@@ -12,6 +12,8 @@ internal sealed class TestProjectLocator : IProjectLocator
 
     public Func<FileInfo?, MultipleAppHostProjectsFoundBehavior, bool, CancellationToken, Task<AppHostProjectSearchResult>>? UseOrFindAppHostProjectFileWithBehaviorAsyncCallback { get; set; }
 
+    public Func<CancellationToken, Task<FileInfo?>>? GetAppHostFromSettingsAsyncCallback { get; set; }
+
     public async Task<FileInfo?> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, bool createSettingsFile, CancellationToken cancellationToken)
     {
         if (UseOrFindAppHostProjectFileAsyncCallback != null)
@@ -44,6 +46,17 @@ internal sealed class TestProjectLocator : IProjectLocator
         }
 
         return new AppHostProjectSearchResult(appHostFile, [appHostFile]);
+    }
+
+    public async Task<FileInfo?> GetAppHostFromSettingsAsync(CancellationToken cancellationToken = default)
+    {
+        if (GetAppHostFromSettingsAsyncCallback != null)
+        {
+            return await GetAppHostFromSettingsAsyncCallback(cancellationToken);
+        }
+
+        // Default: no settings file found
+        return null;
     }
 }
 

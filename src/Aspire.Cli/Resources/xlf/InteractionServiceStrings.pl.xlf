@@ -8,8 +8,8 @@
         <note />
       </trans-unit>
       <trans-unit id="AppHostNotCompatibleConsiderUpgrading">
-        <source>The AppHost version is not compatible. Please upgrade the apphost or Aspire CLI.</source>
-        <target state="translated">Wersja hosta AppHost jest niezgodna. Uaktualnij hosta AppHost lub interfejs wiersza polecenia platformy Aspire.</target>
+        <source>The apphost version is not compatible. Please upgrade the apphost or Aspire CLI.</source>
+        <target state="needs-review-translation">Wersja hosta AppHost jest niezgodna. Uaktualnij hosta AppHost lub interfejs wiersza polecenia platformy Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireCLIVersion">
@@ -138,8 +138,8 @@
         <note />
       </trans-unit>
       <trans-unit id="SpecifiedProjectFileNotAppHostProject">
-        <source>The specified project file is not an Aspire AppHost project.</source>
-        <target state="translated">Określony plik projektu nie jest projektem hosta AppHost platformy Aspire.</target>
+        <source>The specified project file is not an Aspire apphost project.</source>
+        <target state="needs-review-translation">Określony plik projektu nie jest projektem hosta AppHost platformy Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="StoppingAspire">
@@ -166,6 +166,11 @@
         <source>An unexpected error occurred: {0}</source>
         <target state="translated">Wystąpił nieoczekiwany błąd: {0}</target>
         <note>{0} is the exception message</note>
+      </trans-unit>
+      <trans-unit id="UpdatedSettingsFile">
+        <source>Updated settings file at {0}.</source>
+        <target state="new">Updated settings file at {0}.</target>
+        <note>{0} is a path</note>
       </trans-unit>
       <trans-unit id="WaitingForDebuggerToAttachToAppHost">
         <source>Waiting for debugger to attach to app host process</source>

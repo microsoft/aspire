@@ -3,18 +3,18 @@
   <file datatype="xml" source-language="en" target-language="zh-Hant" original="../ResourceCommandStrings.resx">
     <body>
       <trans-unit id="CommandDescription">
-        <source>Execute a command on a resource (e.g. start, stop, restart).</source>
-        <target state="translated">在資源上執行命令 (例如啟動、停止、重新啟動)。</target>
+        <source>Execute a command on a resource (e.g. start, stop, restart)</source>
+        <target state="needs-review-translation">在資源上執行命令。</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandNameArgumentDescription">
-        <source>The name of the command to execute (e.g. start, stop, restart).</source>
-        <target state="translated">要執行的命令名稱 (例如啟動、停止、重新啟動)。</target>
+        <source>The name of the command to execute (e.g. start, stop, restart)</source>
+        <target state="needs-review-translation">所要執行命令的名稱。</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandResourceArgumentDescription">
-        <source>The name of the resource to execute the command on.</source>
-        <target state="translated">要執行命令的資源名稱。</target>
+        <source>The name of the resource to execute the command on</source>
+        <target state="needs-review-translation">要執行命令的資源名稱。</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">

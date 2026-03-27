@@ -8,13 +8,13 @@
         <note />
       </trans-unit>
       <trans-unit id="AnalyzeAppHost">
-        <source>Analyze App Host</source>
-        <target state="translated">アプリ ホスティング プロセスの分析</target>
+        <source>Analyze apphost</source>
+        <target state="needs-review-translation">アプリ ホスティング プロセスの分析</target>
         <note />
       </trans-unit>
       <trans-unit id="AnalyzeAppHostSdk">
-        <source>Analyze App Host SDK</source>
-        <target state="translated">アプリ ホスティング プロセス SDK の分析</target>
+        <source>Analyze apphost SDK</source>
+        <target state="needs-review-translation">アプリ ホスティング プロセス SDK の分析</target>
         <note />
       </trans-unit>
       <trans-unit id="AnalyzeProjectFormat">
@@ -73,8 +73,8 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Update integrations in the Aspire project. (Preview)</source>
-        <target state="translated">Aspire プロジェクトの統合を更新します。(プレビュー)</target>
+        <source>Update integrations in the Aspire project (Preview)</source>
+        <target state="needs-review-translation">Aspire プロジェクトの統合を更新します。(プレビュー)</target>
         <note />
       </trans-unit>
       <trans-unit id="DotNetToolSelfUpdateMessage">
@@ -113,8 +113,8 @@
         <note />
       </trans-unit>
       <trans-unit id="FallbackParsingWarning">
-        <source>Note: Update plan generated using fallback parsing due to unresolvable AppHost SDK. Dependency analysis may have reduced accuracy.</source>
-        <target state="translated">注: 解決できない AppHost SDK が原因でフォールバック解析を使用して生成されたプランを更新します。依存関係分析の精度が低下する可能性があります。</target>
+        <source>Note: Update plan generated using fallback parsing due to unresolvable apphost SDK. Dependency analysis may have reduced accuracy.</source>
+        <target state="needs-review-translation">注: 解決できない AppHost SDK が原因でフォールバック解析を使用して生成されたプランを更新します。依存関係分析の精度が低下する可能性があります。</target>
         <note />
       </trans-unit>
       <trans-unit id="MappingAddedFormat">
@@ -138,8 +138,8 @@
         <note />
       </trans-unit>
       <trans-unit id="NoAppHostFoundUpdateCliPrompt">
-        <source>No Aspire AppHost project found. Would you like to update the Aspire CLI instead?</source>
-        <target state="translated">Aspire AppHost プロジェクトが見つかりませんでした。代わりに Aspire CLI を更新しますか?</target>
+        <source>No Aspire apphost project found. Would you like to update the Aspire CLI instead?</source>
+        <target state="needs-review-translation">Aspire AppHost プロジェクトが見つかりませんでした。代わりに Aspire CLI を更新しますか?</target>
         <note />
       </trans-unit>
       <trans-unit id="NoChangesDetectedInNuGetConfig">
@@ -173,8 +173,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="translated">Aspire アプリ ホスティング プロセス プロジェクト ファイルへのパス。</target>
+        <source>The path to the Aspire apphost project file</source>
+        <target state="needs-review-translation">Aspire アプリ ホスティング プロセス プロジェクト ファイルへのパス。</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectReferenceNoFullPath">
@@ -225,6 +225,11 @@
       <trans-unit id="SelectChannelPrompt">
         <source>Select a channel:</source>
         <target state="translated">チャネルを選択:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SelfOptionDescription">
+        <source>Update the Aspire CLI itself to the latest version</source>
+        <target state="new">Update the Aspire CLI itself to the latest version</target>
         <note />
       </trans-unit>
       <trans-unit id="UnxpectedCodePath">

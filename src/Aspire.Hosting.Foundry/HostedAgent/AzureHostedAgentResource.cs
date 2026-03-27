@@ -41,9 +41,7 @@ public class AzureHostedAgentResource : Resource, IComputeResource, IResourceWit
                 Action = async (ctx) =>
                 {
                     var version = await DeployAsync(ctx, project).ConfigureAwait(false);
-#pragma warning disable CS0618
-                    ctx.ReportingStep.Log(LogLevel.Information, $"Successfully deployed **{Name}** as Hosted Agent (version {version})", enableMarkdown: true);
-#pragma warning restore CS0618
+                    ctx.ReportingStep.Log(LogLevel.Information, new MarkdownString($"Successfully deployed **{Name}** as Hosted Agent (version {version})"));
                     Version.Set(version.Version);
                 },
                 Tags = [WellKnownPipelineTags.DeployCompute],
@@ -128,7 +126,7 @@ public class AzureHostedAgentResource : Resource, IComputeResource, IResourceWit
     }
 
     /// <summary>
-    /// Deploys the specified agent to the given Azure Cognitive Services project.
+    /// Deploys the specified agent to the given Microsoft Foundry project.
     /// </summary>
     public async Task<AgentVersion> DeployAsync(PipelineStepContext context, AzureCognitiveServicesProjectResource project)
     {

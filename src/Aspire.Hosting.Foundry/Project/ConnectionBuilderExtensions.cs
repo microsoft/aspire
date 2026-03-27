@@ -12,18 +12,18 @@ using Azure.Provisioning.Storage;
 namespace Aspire.Hosting;
 
 /// <summary>
-/// Extension methods for adding Azure Cognitive Services connection resources to the distributed application model.
+/// Extension methods for adding Microsoft Foundry project connection resources to the distributed application model.
 /// </summary>
 public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
 {
     /// <summary>
-    /// Adds an Azure Cognitive Services connection resource to a project. This is a low level
+    /// Adds a Microsoft Foundry project connection resource to a project. This is a low level
     /// interface that requires the caller to specify all connection properties.
     /// </summary>
-    /// <param name="builder">The <see cref="IResourceBuilder{T}"/> for the parent Azure Cognitive Services project resource.</param>
-    /// <param name="name">The name of the Azure Cognitive Services connection resource.</param>
+    /// <param name="builder">The <see cref="IResourceBuilder{T}"/> for the parent Microsoft Foundry project resource.</param>
+    /// <param name="name">The name of the Microsoft Foundry project connection resource.</param>
     /// <param name="configureProperties">Action to customize the resource.</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the Azure Cognitive Services connection resource.</returns>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the Microsoft Foundry project connection resource.</returns>
     /// <remarks>This method is not available in polyglot app hosts.</remarks>
     [AspireExportIgnore(Reason = "The configureProperties callback returns Azure provisioning types that are not ATS-compatible.")]
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
@@ -150,7 +150,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     }
 
     /// <summary>
-    /// Adds a container registry connection to the Azure Cognitive Services project.
+    /// Adds a container registry connection to the Microsoft Foundry project.
     /// </summary>
     /// <returns></returns>
     /// <remarks>This overload is not available in polyglot app hosts. Use the resource-builder overload instead.</remarks>
@@ -183,7 +183,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     }
 
     /// <summary>
-    /// Adds a container registry connection to the Azure Cognitive Services project.
+    /// Adds a container registry connection to the Microsoft Foundry project.
     /// </summary>
     /// <returns></returns>
     [AspireExport("addContainerRegistryConnection", Description = "Adds an Azure Container Registry connection to a Microsoft Foundry project.")]
@@ -195,7 +195,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     }
 
     /// <summary>
-    /// Adds a Key Vault connection to the Azure Cognitive Services project.
+    /// Adds a Key Vault connection to the Microsoft Foundry project.
     /// </summary>
     /// <remarks>
     /// This connection allows the Microsoft Foundry project to store secrets for various other connections.

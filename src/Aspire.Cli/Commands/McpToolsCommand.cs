@@ -28,7 +28,7 @@ internal sealed class McpToolsCommand : BaseCommand
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", SharedCommandStrings.AppHostOptionDescription);
     private static readonly Option<OutputFormat> s_formatOption = new("--format")
     {
-        Description = "Output format (Table or Json)."
+        Description = McpCommandStrings.ToolsCommand_FormatOptionDescription
     };
 
     public McpToolsCommand(
@@ -39,7 +39,7 @@ internal sealed class McpToolsCommand : BaseCommand
         CliExecutionContext executionContext,
         AspireCliTelemetry telemetry,
         ILogger<McpToolsCommand> logger)
-        : base("tools", "List MCP tools exposed by running resources.", features, updateNotifier, executionContext, interactionService, telemetry)
+        : base("tools", McpCommandStrings.ToolsCommand_Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _interactionService = interactionService;
         _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, executionContext, logger);

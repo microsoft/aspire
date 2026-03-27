@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Reflection;
-using Aspire.Hosting.Ats;
+using Aspire.TypeSystem;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -51,7 +51,6 @@ internal sealed class LanguageSupportResolver
         IReadOnlyList<Assembly> assemblies)
     {
         var languages = new Dictionary<string, ILanguageSupport>(StringComparer.OrdinalIgnoreCase);
-        var languageInterface = typeof(ILanguageSupport);
 
         foreach (var assembly in assemblies)
         {
@@ -69,16 +68,15 @@ internal sealed class LanguageSupportResolver
 
             foreach (var type in types)
             {
-                if (!type.IsAbstract && !type.IsInterface && languageInterface.IsAssignableFrom(type))
+                if (!type.IsAbstract &&
+                    !type.IsInterface &&
+                    typeof(ILanguageSupport).IsAssignableFrom(type))
                 {
                     try
                     {
-                        var language = (ILanguageSupport?)ActivatorUtilities.CreateInstance(serviceProvider, type);
-                        if (language is not null)
-                        {
-                            languages[language.Language] = language;
-                            _logger.LogDebug("Discovered language support: {TypeName} for language '{Language}'", type.Name, language.Language);
-                        }
+                        var language = (ILanguageSupport)ActivatorUtilities.CreateInstance(serviceProvider, type);
+                        languages[language.Language] = language;
+                        _logger.LogDebug("Discovered language support: {TypeName} for language '{Language}'", type.Name, language.Language);
                     }
                     catch (Exception ex)
                     {

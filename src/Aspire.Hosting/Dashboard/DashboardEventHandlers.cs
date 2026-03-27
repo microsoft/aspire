@@ -44,9 +44,6 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
                                              IFileSystemService directoryService
                                              ) : IDistributedApplicationEventingSubscriber, IAsyncDisposable
 {
-    // Internal for testing
-    internal const string McpEndpointName = "mcp";
-
     // Fallback defaults for framework versions and TFM
     private const string FallbackTargetFrameworkMoniker = "net8.0";
     private const string FallbackNetCoreVersion = "8.0.0";
@@ -65,7 +62,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
     {
         Debug.Assert(executionContext.IsRunMode, "Dashboard resource should only be added in run mode");
 
-        if (@event.Model.Resources.SingleOrDefault(r => StringComparers.ResourceName.Equals(r.Name, KnownResourceNames.AspireDashboard)) is { } dashboardResource)
+        if (@event.Model.Resources.SingleOrDefault(r => string.Equals(r.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName)) is { } dashboardResource)
         {
             ConfigureAspireDashboardResource(dashboardResource);
 
@@ -367,7 +364,6 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         var dashboardUrls = options.DashboardUrl;
         var otlpGrpcEndpointUrl = options.OtlpGrpcEndpointUrl;
         var otlpHttpEndpointUrl = options.OtlpHttpEndpointUrl;
-        var mcpEndpointUrl = options.McpEndpointUrl;
 
         eventing.Subscribe<ResourceReadyEvent>(dashboardResource, async (@event, cancellationToken) =>
         {
@@ -433,16 +429,6 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         {
             var address = BindingAddress.Parse(otlpHttpEndpointUrl);
             dashboardResource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, name: KnownEndpointNames.OtlpHttpEndpointName, uriScheme: address.Scheme, port: address.Port, isProxied: true)
-            {
-                TargetHost = address.Host
-            });
-        }
-
-        if (mcpEndpointUrl != null)
-        {
-            var address = BindingAddress.Parse(mcpEndpointUrl);
-
-            dashboardResource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, name: McpEndpointName, uriScheme: address.Scheme, port: address.Port, isProxied: true)
             {
                 TargetHost = address.Host
             });
@@ -549,7 +535,6 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         var environment = options.AspNetCoreEnvironment;
         var browserToken = options.DashboardToken;
         var otlpApiKey = options.OtlpApiKey;
-        var mcpApiKey = options.McpApiKey;
         var apiKey = options.ApiKey;
 
         var resourceServiceUrl = await dashboardEndpointProvider.GetResourceServiceUriAsync(context.CancellationToken).ConfigureAwait(false);
@@ -612,19 +597,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             context.EnvironmentVariables[DashboardConfigNames.DashboardOtlpAuthModeName.EnvVarName] = "Unsecured";
         }
 
-        // Configure MCP API key. Falls back to ApiKey if McpApiKey not set.
-        var effectiveMcpApiKey = mcpApiKey ?? apiKey;
-        if (!string.IsNullOrEmpty(effectiveMcpApiKey))
-        {
-            context.EnvironmentVariables[DashboardConfigNames.DashboardMcpAuthModeName.EnvVarName] = "ApiKey";
-            context.EnvironmentVariables[DashboardConfigNames.DashboardMcpPrimaryApiKeyName.EnvVarName] = effectiveMcpApiKey;
-        }
-        else
-        {
-            context.EnvironmentVariables[DashboardConfigNames.DashboardMcpAuthModeName.EnvVarName] = "Unsecured";
-        }
-
-        // Configure API key (for Telemetry API). ApiKey is canonical, no fallback from McpApiKey.
+        // Configure API key (for Telemetry API).
         if (!string.IsNullOrEmpty(apiKey))
         {
             context.EnvironmentVariables[DashboardConfigNames.DashboardApiAuthModeName.EnvVarName] = "ApiKey";
@@ -635,8 +608,8 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             context.EnvironmentVariables[DashboardConfigNames.DashboardApiAuthModeName.EnvVarName] = "Unsecured";
         }
 
-        // Configure dashboard to show CLI MCP instructions when running with an AppHost (not in standalone mode)
-        context.EnvironmentVariables[DashboardConfigNames.DashboardMcpUseCliMcpName.EnvVarName] = "true";
+        // Enable dashboard API
+        context.EnvironmentVariables[DashboardConfigNames.DashboardAspireApiEnabledName.EnvVarName] = "true";
 
         // Change the dashboard formatter to use JSON so we can parse the logs and render them in the
         // via the ILogger.
@@ -690,26 +663,6 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         if (otlpHttp.Exists)
         {
             context.EnvironmentVariables[DashboardConfigNames.DashboardOtlpHttpUrlName.EnvVarName] = GetTargetUrlExpression(otlpHttp);
-        }
-
-        var mcp = dashboardResource.GetEndpoint(McpEndpointName, KnownNetworkIdentifiers.LocalhostNetwork);
-        if (!mcp.Exists)
-        {
-            // Fallback to frontend https or http endpoint if not configured.
-            mcp = dashboardResource.GetEndpoint("https", KnownNetworkIdentifiers.LocalhostNetwork);
-            if (!mcp.Exists)
-            {
-                mcp = dashboardResource.GetEndpoint("http", KnownNetworkIdentifiers.LocalhostNetwork);
-            }
-        }
-
-        if (mcp.Exists)
-        {
-            // The URL that the dashboard binds to is proxied. We need to set the public URL to the proxied URL.
-            // This lets the dashboard provide the correct URL to clients.
-            context.EnvironmentVariables[DashboardConfigNames.DashboardMcpPublicUrlName.EnvVarName] = mcp.Url;
-
-            context.EnvironmentVariables[DashboardConfigNames.DashboardMcpUrlName.EnvVarName] = GetTargetUrlExpression(mcp);
         }
 
         var frontendEndpoints = dashboardResource.GetEndpoints(KnownNetworkIdentifiers.LocalhostNetwork).ToList();
@@ -795,7 +748,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             {
                 // Track all dashboard resources and start watching their logs.
                 // TODO: In the future when resources can restart, we should handle purging the taskCache.
-                if (StringComparers.ResourceName.Equals(notification.Resource.Name, KnownResourceNames.AspireDashboard) && !dashboardResourceTasks.ContainsKey(notification.ResourceId))
+                if (string.Equals(notification.Resource.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName) && !dashboardResourceTasks.ContainsKey(notification.ResourceId))
                 {
                     dashboardResourceTasks[notification.ResourceId] = WatchResourceLogsAsync(notification.ResourceId, loggerCache, defaultDashboardLogger, resourceLoggerService, loggerFactory, cancellationToken);
                 }

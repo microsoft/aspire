@@ -3,13 +3,13 @@
   <file datatype="xml" source-language="en" target-language="tr" original="../TelemetryCommandStrings.resx">
     <body>
       <trans-unit id="DashboardApiNotAvailable">
-        <source>Dashboard API is not available. Ensure the AppHost is running with Dashboard enabled.</source>
-        <target state="translated">Pano API'si kullanılamıyor. AppHost'un Pano özelliği etkin olarak çalıştığından emin olun.</target>
+        <source>Dashboard API is not available. Ensure the apphost is running with Dashboard enabled.</source>
+        <target state="needs-review-translation">Pano API'si kullanılamıyor. AppHost'un Pano özelliği etkin olarak çalıştığından emin olun.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>View OpenTelemetry data (logs, spans, traces) from a running apphost.</source>
-        <target state="translated">Çalışan bir apphost dosyasından OpenTelemetry verilerini (günlükler, yayılmalar, izlemeler) görüntüleyin.</target>
+        <source>View OpenTelemetry data (logs, spans, traces) from a running apphost</source>
+        <target state="needs-review-translation">Çalışan bir Aspire uygulamasından telemetri verilerini (günlükler, yayılmalar, izlemeler) görüntüleyin.</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedToFetchTelemetry">
@@ -18,18 +18,18 @@
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
-        <source>Stream telemetry in real-time as it arrives.</source>
-        <target state="translated">Telemetri geldikçe gerçek zamanlı olarak akışını yapın.</target>
+        <source>Stream telemetry in real-time as it arrives</source>
+        <target state="needs-review-translation">Telemetri geldikçe gerçek zamanlı olarak akışını yapın.</target>
         <note />
       </trans-unit>
       <trans-unit id="FormatOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">Çıktı biçimi (Tablo veya Json).</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">Çıktı biçimi (Tablo veya Json).</target>
         <note />
       </trans-unit>
       <trans-unit id="HasErrorOptionDescription">
-        <source>Filter by error status (true to show only errors, false to exclude errors).</source>
-        <target state="translated">Hata durumuna göre filtreleyin (yalnızca hataları göstermek için true, hataları hariç tutmak için false).</target>
+        <source>Filter by error status (true to show only errors, false to exclude errors)</source>
+        <target state="needs-review-translation">Hata durumuna göre filtreleyin (yalnızca hataları göstermek için true, hataları hariç tutmak için false).</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderDuration">
@@ -63,18 +63,18 @@
         <note />
       </trans-unit>
       <trans-unit id="LimitOptionDescription">
-        <source>Maximum number of items to return.</source>
-        <target state="translated">Döndürülecek maksimum öğe sayısı.</target>
+        <source>Maximum number of items to return</source>
+        <target state="needs-review-translation">Döndürülecek maksimum öğe sayısı.</target>
         <note />
       </trans-unit>
       <trans-unit id="LogsDescription">
-        <source>View structured logs from the Dashboard telemetry API.</source>
-        <target state="translated">Pano telemetri API'sinden yapılandırılmış günlükleri görüntüleyin.</target>
+        <source>View structured logs from the Dashboard telemetry API</source>
+        <target state="needs-review-translation">Pano telemetri API'sinden yapılandırılmış günlükleri görüntüleyin.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
-        <source>Filter by resource name.</source>
-        <target state="translated">Kaynak adına göre filtreleyin.</target>
+        <source>Filter by resource name</source>
+        <target state="needs-review-translation">Kaynak adına göre filtreleyin.</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">
@@ -83,23 +83,23 @@
         <note />
       </trans-unit>
       <trans-unit id="SeverityOptionDescription">
-        <source>Filter logs by minimum severity (Trace, Debug, Information, Warning, Error, Critical).</source>
-        <target state="translated">Günlükleri en düşük önem derecesine göre filtreleyin (İzleme, Hata Ayıklama, Bilgi, Uyarı, Hata, Kritik).</target>
+        <source>Filter logs by minimum severity (Trace, Debug, Information, Warning, Error, Critical)</source>
+        <target state="needs-review-translation">Günlükleri en düşük önem derecesine göre filtreleyin (İzleme, Hata Ayıklama, Bilgi, Uyarı, Hata, Kritik).</target>
         <note />
       </trans-unit>
       <trans-unit id="SpansDescription">
-        <source>View spans from the Dashboard telemetry API.</source>
-        <target state="translated">Pano telemetri API'sinden yayılmaları görüntüleyin.</target>
+        <source>View spans from the Dashboard telemetry API</source>
+        <target state="needs-review-translation">Pano telemetri API'sinden yayılmaları görüntüleyin.</target>
         <note />
       </trans-unit>
       <trans-unit id="TraceIdArgumentDescription">
         <source>The trace ID to view. If not specified, lists all traces.</source>
-        <target state="translated">Görüntülenecek izleme kimliği. Belirtilmezse, tüm izlemeler listelenir.</target>
+        <target state="needs-review-translation">Görüntülenecek izleme kimliği. Belirtilmezse, tüm izlemeler listelenir.</target>
         <note />
       </trans-unit>
       <trans-unit id="TraceIdOptionDescription">
-        <source>Filter by trace ID.</source>
-        <target state="translated">İzleme kimliğine göre filtreleyin.</target>
+        <source>Filter by trace ID</source>
+        <target state="needs-review-translation">İzleme kimliğine göre filtreleyin.</target>
         <note />
       </trans-unit>
       <trans-unit id="TraceNotFound">
@@ -108,8 +108,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TracesDescription">
-        <source>View traces from the Dashboard telemetry API.</source>
-        <target state="translated">Pano telemetri API'sinden izlemeleri görüntüleyin.</target>
+        <source>View traces from the Dashboard telemetry API</source>
+        <target state="needs-review-translation">Pano telemetri API'sinden izlemeleri görüntüleyin.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnexpectedContentType">

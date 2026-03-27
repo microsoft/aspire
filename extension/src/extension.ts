@@ -29,6 +29,9 @@ import { AspireAppHostTreeProvider } from './views/AspireAppHostTreeProvider';
 import { AppHostDataRepository } from './views/AppHostDataRepository';
 import { installCliStableCommand, installCliDailyCommand, verifyCliInstalledCommand } from './commands/walkthroughCommands';
 import { AspireMcpServerDefinitionProvider } from './mcp/AspireMcpServerDefinitionProvider';
+import { AspireCodeLensProvider } from './editor/AspireCodeLensProvider';
+import { AspireGutterDecorationProvider } from './editor/AspireGutterDecorationProvider';
+import { getSupportedLanguageIds } from './editor/parsers/AppHostResourceParser';
 
 let aspireExtensionContext = new AspireExtensionContext();
 
@@ -97,14 +100,53 @@ export async function activate(context: vscode.ExtensionContext) {
   const restartResourceRegistration = vscode.commands.registerCommand('aspire-vscode.restartResource', (element) => appHostTreeProvider.restartResource(element));
   const viewResourceLogsRegistration = vscode.commands.registerCommand('aspire-vscode.viewResourceLogs', (element) => appHostTreeProvider.viewResourceLogs(element));
   const executeResourceCommandRegistration = vscode.commands.registerCommand('aspire-vscode.executeResourceCommand', (element) => appHostTreeProvider.executeResourceCommand(element));
+  const copyEndpointUrlRegistration = vscode.commands.registerCommand('aspire-vscode.copyEndpointUrl', (element) => appHostTreeProvider.copyEndpointUrl(element));
+  const openInExternalBrowserRegistration = vscode.commands.registerCommand('aspire-vscode.openInExternalBrowser', (element) => appHostTreeProvider.openInExternalBrowser(element));
+  const openInSimpleBrowserRegistration = vscode.commands.registerCommand('aspire-vscode.openInSimpleBrowser', (element) => appHostTreeProvider.openInSimpleBrowser(element));
+  const copyResourceNameRegistration = vscode.commands.registerCommand('aspire-vscode.copyResourceName', (element) => appHostTreeProvider.copyResourceName(element));
+  const copyPidRegistration = vscode.commands.registerCommand('aspire-vscode.copyPid', (element) => appHostTreeProvider.copyPid(element));
+  const copyAppHostPathRegistration = vscode.commands.registerCommand('aspire-vscode.copyAppHostPath', (element) => appHostTreeProvider.copyAppHostPath(element));
 
   // Set initial context for welcome view
   vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', true);
+  vscode.commands.executeCommand('setContext', 'aspire.loading', true);
 
   // Activate the data repository (starts workspace describe --follow; global polling begins when the panel is visible)
   dataRepository.activate();
 
-  context.subscriptions.push(appHostTreeView, refreshRunningAppHostsRegistration, switchToGlobalViewRegistration, switchToWorkspaceViewRegistration, openDashboardRegistration, stopAppHostRegistration, stopResourceRegistration, startResourceRegistration, restartResourceRegistration, viewResourceLogsRegistration, executeResourceCommandRegistration, { dispose: () => { appHostTreeProvider.dispose(); dataRepository.dispose(); } });
+  context.subscriptions.push(appHostTreeView, refreshRunningAppHostsRegistration, switchToGlobalViewRegistration, switchToWorkspaceViewRegistration, openDashboardRegistration, stopAppHostRegistration, stopResourceRegistration, startResourceRegistration, restartResourceRegistration, viewResourceLogsRegistration, executeResourceCommandRegistration, copyEndpointUrlRegistration, openInExternalBrowserRegistration, openInSimpleBrowserRegistration, copyResourceNameRegistration, copyPidRegistration, copyAppHostPathRegistration, { dispose: () => { appHostTreeProvider.dispose(); dataRepository.dispose(); } });
+
+  // CodeLens provider — shows Debug on pipeline steps, resource state on resources
+  const codeLensProvider = new AspireCodeLensProvider(appHostTreeProvider);
+  const languageFilters = getSupportedLanguageIds().map(lang => ({ language: lang, scheme: 'file' }));
+  const codeLensRegistration = vscode.languages.registerCodeLensProvider(languageFilters, codeLensProvider);
+  const codeLensDebugPipelineStepRegistration = vscode.commands.registerCommand('aspire-vscode.codeLensDebugPipelineStep', (stepName: string) => editorCommandProvider.tryExecuteDoAppHost(false, stepName));
+  const codeLensResourceActionRegistration = vscode.commands.registerCommand('aspire-vscode.codeLensResourceAction', (resourceName: string, action: string, appHostPath: string) => {
+    let command = `resource "${resourceName}" ${action}`;
+    if (appHostPath) {
+      command += ` --apphost "${appHostPath}"`;
+    }
+    terminalProvider.sendAspireCommandToAspireTerminal(command);
+  });
+  const codeLensViewLogsRegistration = vscode.commands.registerCommand('aspire-vscode.codeLensViewLogs', (resourceName: string, appHostPath: string) => {
+    let command = `logs "${resourceName}"`;
+    if (appHostPath) {
+      command += ` --apphost "${appHostPath}"`;
+    }
+    command += ' --follow';
+    terminalProvider.sendAspireCommandToAspireTerminal(command);
+  });
+  const codeLensRevealResourceRegistration = vscode.commands.registerCommand('aspire-vscode.codeLensRevealResource', (resourceName: string) => {
+    const element = appHostTreeProvider.findResourceElement(resourceName);
+    if (element) {
+      appHostTreeView.reveal(element, { select: true, focus: true });
+    }
+  });
+  context.subscriptions.push(codeLensRegistration, codeLensDebugPipelineStepRegistration, codeLensResourceActionRegistration, codeLensViewLogsRegistration, codeLensRevealResourceRegistration, codeLensProvider);
+
+  // Gutter decorations — colored dots next to resources showing runtime state
+  const gutterDecorationProvider = new AspireGutterDecorationProvider(appHostTreeProvider);
+  context.subscriptions.push(gutterDecorationProvider);
 
   context.subscriptions.push(cliAddCommandRegistration, cliNewCommandRegistration, cliInitCommandRegistration, cliDeployCommandRegistration, cliPublishCommandRegistration, cliDoCommandRegistration, openTerminalCommandRegistration, configureLaunchJsonCommandRegistration);
   context.subscriptions.push(cliUpdateCommandRegistration, cliUpdateSelfCommandRegistration, settingsCommandRegistration, openLocalSettingsCommandRegistration, openGlobalSettingsCommandRegistration, runAppHostCommandRegistration, debugAppHostCommandRegistration);

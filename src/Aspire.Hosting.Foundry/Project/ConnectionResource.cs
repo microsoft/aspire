@@ -8,7 +8,7 @@ using Azure.Provisioning.CognitiveServices;
 namespace Aspire.Hosting.Foundry;
 
 /// <summary>
-/// The Azure Cognitive Services connection resource scoped to a project.
+/// The Microsoft Foundry project connection resource scoped to a project.
 /// </summary>
 public class AzureCognitiveServicesProjectConnectionResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure, AzureCognitiveServicesProjectResource parent) :
     AzureProvisionableAspireResourceWithParent<CognitiveServicesProjectConnection, AzureCognitiveServicesProjectResource>(name, configureInfrastructure, parent)

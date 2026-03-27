@@ -121,7 +121,8 @@ internal sealed class DoctorCommand : BaseCommand
         // Show link to detailed prerequisites if there are warnings or failures
         if (warnings > 0 || failed > 0)
         {
-            _ansiConsole.MarkupLine(DoctorCommandStrings.DetailedPrerequisitesLink);
+            const string prerequisitesUrl = "https://aka.ms/aspire-prerequisites";
+            _ansiConsole.MarkupLine(string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DetailedPrerequisitesLink, $"[link]{prerequisitesUrl}[/]"));
         }
     }
 
@@ -159,7 +160,7 @@ internal sealed class DoctorCommand : BaseCommand
 
             if (hasLink)
             {
-                detailGrid.AddRow(new Markup($"See: {result.Link!.EscapeMarkup()}"));
+                detailGrid.AddRow(new Markup($"See: [link={result.Link!.EscapeMarkup()}]{result.Link!.EscapeMarkup()}[/]"));
             }
 
             if (hasDetails)

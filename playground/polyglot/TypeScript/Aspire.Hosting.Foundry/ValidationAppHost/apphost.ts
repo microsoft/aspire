@@ -41,10 +41,48 @@ const _storageConnection = await project.addStorageConnection(storage);
 const _registryConnection = await project.addContainerRegistryConnection(registry);
 const _keyVaultConnection = await project.addKeyVaultConnection(keyVault);
 
-const builderProject = await builder.addFoundryProject('builder-project');
+const builderProjectFoundry = await builder.addFoundry('builder-project-foundry');
+const builderProject = await builderProjectFoundry.addProject('builder-project');
 const _builderProjectModel = await builderProject.addModelDeployment('builder-project-model', 'Phi-4-mini', '1', 'Microsoft');
 const projectModel = await project.addModelDeploymentFromModel('project-model', model);
 const _promptAgent = await project.addAndPublishPromptAgent(projectModel, 'writer-agent', 'Write concise answers.');
+const hostedAgent = await builder.addExecutable(
+    'hosted-agent',
+    'node',
+    '.',
+    [
+        '-e',
+        `
+const http = require('node:http');
+const port = Number(process.env.DEFAULT_AD_PORT ?? '8088');
+const server = http.createServer((req, res) => {
+  if (req.url === '/liveness' || req.url === '/readiness') {
+    res.writeHead(200, { 'content-type': 'text/plain' });
+    res.end('ok');
+    return;
+  }
+  if (req.url === '/responses') {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ output: 'hello from validation app host' }));
+    return;
+  }
+  res.writeHead(404);
+  res.end();
+});
+server.listen(port, '127.0.0.1');
+`
+    ]);
+
+await hostedAgent.publishAsHostedAgent({
+    project,
+    configure: async (configuration) => {
+        await configuration.description.set('Validation hosted agent');
+        await configuration.cpu.set(1);
+        await configuration.memory.set(2);
+        await configuration.metadata.set('scenario', 'validation');
+        await configuration.environmentVariables.set('VALIDATION_MODE', 'true');
+    }
+});
 
 const api = await builder.addContainer('api', 'nginx');
 await api.withRoleAssignments(foundry, [

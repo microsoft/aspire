@@ -55,7 +55,7 @@ public static class TestDistributedApplicationBuilder
 
         // TODO: consider centralizing this to DistributedApplicationFactory by default once consumers have a way to opt-out
         // E.g., once https://github.com/dotnet/extensions/pull/5801 is released.
-        // Discussion: https://github.com/dotnet/aspire/pull/7335/files#r1936799460
+        // Discussion: https://github.com/microsoft/aspire/pull/7335/files#r1936799460
         builder.Services.ConfigureHttpClientDefaults(http => http.AddStandardResilienceHandler());
 
         builder.Services.AddSingleton<ApplicationOrchestratorProxy>(sp => new ApplicationOrchestratorProxy(sp.GetRequiredService<ApplicationOrchestrator>()));

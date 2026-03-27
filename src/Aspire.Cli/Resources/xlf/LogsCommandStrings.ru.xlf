@@ -3,18 +3,18 @@
   <file datatype="xml" source-language="en" target-language="ru" original="../LogsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Display logs from resources in a running apphost.</source>
-        <target state="translated">Отображать журналы ресурсов в запущенном хосте приложений.</target>
+        <source>Display logs from resources in a running apphost</source>
+        <target state="needs-review-translation">Отображать журналы ресурсов в запущенном хосте приложений Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
-        <source>Stream logs in real-time as they are written.</source>
-        <target state="translated">Потоковая передача журналов в реальном времени по мере их записи.</target>
+        <source>Stream logs in real-time as they are written</source>
+        <target state="needs-review-translation">Потоковая передача журналов в реальном времени по мере их записи.</target>
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">Формат вывода (таблица или JSON).</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">Вывод журналов в формате JSON (NDJSON).</target>
         <note />
       </trans-unit>
       <trans-unit id="NoResourcesFound">
@@ -24,7 +24,7 @@
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The name of the resource to get logs for. If not specified, logs from all resources are shown.</source>
-        <target state="translated">Имя ресурса, для которого нужно получить журналы. Если не указано, отображаются журналы из всех ресурсов.</target>
+        <target state="needs-review-translation">Имя ресурса, для которого нужно получить журналы. Если не указано, отображаются журналы из всех ресурсов.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">
@@ -48,8 +48,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TailOptionDescription">
-        <source>Number of lines to show from the end of logs (default: all).</source>
-        <target state="translated">Количество строк, отображаемых с конца журналов (по умолчанию: все).</target>
+        <source>Number of lines to show from the end of logs (default: all)</source>
+        <target state="needs-review-translation">Количество строк, отображаемых с конца журналов (по умолчанию: все).</target>
         <note />
       </trans-unit>
       <trans-unit id="TailRequiresResource">
@@ -58,8 +58,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TimestampsOptionDescription">
-        <source>Show timestamps for each log line.</source>
-        <target state="translated">Отображать метки времени для каждой строки журнала.</target>
+        <source>Show timestamps for each log line</source>
+        <target state="new">Show timestamps for each log line</target>
         <note />
       </trans-unit>
       <trans-unit id="GettingLogs">

@@ -36,6 +36,11 @@ internal interface ITemplate
     Func<string, string> PathDeriver { get; }
 
     /// <summary>
+    /// Gets the AppHost language identifier associated with this template.
+    /// </summary>
+    string? LanguageId { get; }
+
+    /// <summary>
     /// Determines whether this template is available for the selected language.
     /// </summary>
     /// <param name="languageId">The selected language identifier.</param>

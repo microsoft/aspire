@@ -95,7 +95,7 @@ public static class RedisBuilderExtensions
             .WithImage(RedisContainerImageTags.Image, RedisContainerImageTags.Tag)
             .WithImageRegistry(RedisContainerImageTags.Registry)
             .WithHealthCheck(healthCheckKey)
-            // see https://github.com/dotnet/aspire/issues/3838 for why the password is passed this way
+            // see https://github.com/microsoft/aspire/issues/3838 for why the password is passed this way
             .WithEntrypoint("/bin/sh")
             .WithEnvironment(context =>
             {
@@ -249,7 +249,7 @@ public static class RedisBuilderExtensions
                     var endpoint = redisInstance.PrimaryEndpoint;
                     if (redisInstance.TryGetEndpoints(out var endpoints))
                     {
-                        var secondaryEndpoint = endpoints.FirstOrDefault(ep => StringComparer.OrdinalIgnoreCase.Equals(ep.Name, RedisResource.SecondaryEndpointName));
+                        var secondaryEndpoint = endpoints.FirstOrDefault(ep => string.Equals(ep.Name, RedisResource.SecondaryEndpointName, StringComparisons.EndpointAnnotationName));
                         if (secondaryEndpoint is not null)
                         {
                             endpoint = new EndpointReference(redisInstance, secondaryEndpoint);

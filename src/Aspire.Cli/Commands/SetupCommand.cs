@@ -24,7 +24,7 @@ internal sealed class SetupCommand : BaseCommand
 
     private static readonly Option<bool> s_forceOption = new("--force")
     {
-        Description = "Force extraction even if the layout already exists."
+        Description = "Force extraction even if the layout already exists"
     };
 
     public SetupCommand(
@@ -34,7 +34,7 @@ internal sealed class SetupCommand : BaseCommand
         CliExecutionContext executionContext,
         IInteractionService interactionService,
         AspireCliTelemetry telemetry)
-        : base("setup", "Extract the embedded bundle to set up the Aspire CLI runtime.", features, updateNotifier, executionContext, interactionService, telemetry)
+        : base("setup", "Extract the embedded bundle to set up the Aspire CLI runtime", features, updateNotifier, executionContext, interactionService, telemetry)
     {
         // Hidden: the setup command is an implementation detail used by install scripts.
         Hidden = true;

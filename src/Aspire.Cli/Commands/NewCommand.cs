@@ -13,6 +13,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Utils;
+using Microsoft.Extensions.Configuration;
 using Spectre.Console;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
@@ -53,7 +54,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
     };
 
     private readonly Option<string?> _channelOption;
-    private readonly Option<AppHostLanguage?> _languageOption;
+    private readonly Option<string?> _languageOption;
 
     /// <summary>
     /// NewCommand prefetches both template and CLI package metadata.
@@ -76,7 +77,8 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         IPackagingService packagingService,
         IConfigurationService configurationService,
         AgentInitCommand agentInitCommand,
-        ICliHostEnvironment hostEnvironment)
+        ICliHostEnvironment hostEnvironment,
+        IConfiguration configuration)
         : base("new", NewCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _prompter = prompter;
@@ -93,7 +95,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         Options.Add(s_versionOption);
 
         // Customize description based on whether staging channel is enabled
-        var isStagingEnabled = _features.IsFeatureEnabled(KnownFeatures.StagingChannelEnabled, false);
+        var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(_features, configuration);
         _channelOption = new Option<string?>("--channel")
         {
             Description = isStagingEnabled
@@ -103,10 +105,9 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         };
         Options.Add(_channelOption);
 
-        _languageOption = new Option<AppHostLanguage?>("--language")
+        _languageOption = new Option<string?>("--language")
         {
-            Description = NewCommandStrings.LanguageOptionDescription,
-            Recursive = true
+            Description = NewCommandStrings.LanguageOptionDescription
         };
         Options.Add(_languageOption);
 
@@ -125,13 +126,8 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
     private string? ParseExplicitLanguageId(ParseResult parseResult)
     {
-        return parseResult.GetValue(_languageOption) switch
-        {
-            AppHostLanguage.CSharp => KnownLanguageId.CSharp,
-            AppHostLanguage.TypeScript => KnownLanguageId.TypeScript,
-            null => null,
-            _ => null
-        };
+        var explicitLanguageId = parseResult.GetValue(_languageOption);
+        return string.IsNullOrWhiteSpace(explicitLanguageId) ? null : NormalizeLanguageId(explicitLanguageId);
     }
 
     private static string NormalizeLanguageId(string languageId)
@@ -147,6 +143,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         {
             KnownLanguageId.CSharp => KnownLanguageId.CSharpDisplayName,
             KnownLanguageId.TypeScript => "TypeScript (Node.js)",
+            KnownLanguageId.Python => KnownLanguageId.PythonDisplayName,
             _ => languageId
         };
     }
@@ -180,7 +177,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
                 return (false, null);
             }
 
-            return (true, explicitLanguageId);
+            return (true, explicitLanguageId ?? template.LanguageId);
         }
 
         if (!string.IsNullOrWhiteSpace(explicitLanguageId))
@@ -204,6 +201,11 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             {
                 return (true, normalizedConfiguredLanguageId);
             }
+        }
+
+        if (!_hostEnvironment.SupportsInteractiveInput)
+        {
+            return (true, NormalizeLanguageId(template.SelectableAppHostLanguages[0]));
         }
 
         var selectedLanguageId = await PromptForAppHostLanguageAsync(template.SelectableAppHostLanguages, cancellationToken);
@@ -381,13 +383,16 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             Language = selectedLanguageId
         };
         var templateResult = await template.ApplyTemplateAsync(inputs, parseResult, cancellationToken);
+
+        var workspaceRoot = new DirectoryInfo(templateResult.OutputPath ?? ExecutionContext.WorkingDirectory.FullName);
+        var exitCode = await _agentInitCommand.PromptAndChainAsync(_hostEnvironment, InteractionService, templateResult.ExitCode, workspaceRoot, cancellationToken);
+
         if (templateResult.OutputPath is not null && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _))
         {
             extensionInteractionService.OpenEditor(templateResult.OutputPath);
         }
 
-        var workspaceRoot = new DirectoryInfo(templateResult.OutputPath ?? ExecutionContext.WorkingDirectory.FullName);
-        return await _agentInitCommand.PromptAndChainAsync(_hostEnvironment, InteractionService, templateResult.ExitCode, workspaceRoot, cancellationToken);
+        return exitCode;
     }
 
     private static bool ShouldResolveCliTemplateVersion(ITemplate template)
@@ -395,11 +400,6 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         return template.Runtime is TemplateRuntime.Cli;
     }
 
-    private enum AppHostLanguage
-    {
-        CSharp,
-        TypeScript
-    }
 }
 
 internal interface INewCommandPrompter

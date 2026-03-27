@@ -3,15 +3,24 @@
 
 #pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only
 
+using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Hosting.JavaScript.Tests;
 
 public class AddNodeAppTests
 {
+    private static readonly MethodInfo s_polyglotWithReferenceMethod = typeof(ResourceBuilderExtensions)
+        .GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
+        .Single(m => m.Name == nameof(ResourceBuilderExtensions.WithReference)
+            && m.IsGenericMethodDefinition
+            && m.GetParameters() is { Length: 5 } parameters
+            && parameters[1].ParameterType == typeof(IResourceBuilder<IResource>));
+
     [Fact]
     public async Task VerifyManifest()
     {
@@ -539,6 +548,44 @@ public class AddNodeAppTests
         // The browser debugger resource should still be created
         var browserDebuggerResource = appModel.Resources.OfType<BrowserDebuggerResource>().SingleOrDefault();
         Assert.NotNull(browserDebuggerResource);
+    }
+
+    [Fact]
+    public async Task WithReferenceDispatchesNodeAppServiceReference()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+        using var tempDir = new TestTempDirectory();
+
+        File.WriteAllText(Path.Combine(tempDir.Path, "app.js"), "console.log('hello');");
+
+        var nodeApp = builder.AddNodeApp("nodeapp", tempDir.Path, "app.js")
+            .WithHttpEndpoint(port: 5031, env: "PORT")
+            .WithEndpoint("http", e =>
+            {
+                e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 5031);
+                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "nodeapp.dev.internal", 5031, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+            });
+        var consumer = builder.AddContainer("consumer", "fake");
+
+        InvokeWithReference(consumer, nodeApp, name: "custom-name");
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(consumer.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+
+        Assert.Equal("http://nodeapp.dev.internal:5031", config["services__custom-name__http__0"]);
+        Assert.Equal("http://nodeapp.dev.internal:5031", config["custom_name_HTTP"]);
+    }
+
+    private static IResourceBuilder<TDestination> InvokeWithReference<TDestination>(
+        IResourceBuilder<TDestination> builder,
+        IResourceBuilder<IResource> source,
+        string? connectionName = null,
+        bool optional = false,
+        string? name = null)
+        where TDestination : IResourceWithEnvironment
+    {
+        return (IResourceBuilder<TDestination>)s_polyglotWithReferenceMethod
+            .MakeGenericMethod(typeof(TDestination))
+            .Invoke(null, [builder, source, connectionName, optional, name])!;
     }
 
 #pragma warning restore ASPIREEXTENSION001 // Type is for evaluation purposes only

@@ -16,6 +16,7 @@ const cliPath = path.join(__dirname, '..', '..', 'artifacts', 'bin', 'Aspire.Cli
 // Output paths for the schemas (relative to extension directory)
 const localSchemaOutputPath = path.join(__dirname, '..', 'schemas', 'aspire-settings.schema.json');
 const globalSchemaOutputPath = path.join(__dirname, '..', 'schemas', 'aspire-global-settings.schema.json');
+const configSchemaOutputPath = path.join(__dirname, '..', 'schemas', 'aspire-config.schema.json');
 
 console.log('Generating Aspire settings schemas...');
 
@@ -58,6 +59,20 @@ try {
     console.log(`  - ${configInfo.GlobalSettingsSchema.Properties.length} top-level properties`);
 
     console.log(`  - ${configInfo.AvailableFeatures.length} feature flags`);
+
+    // Generate aspire.config.json schema (new unified format)
+    if (configInfo.ConfigFileSchema) {
+        const configSchema = generateJsonSchema(configInfo, configInfo.ConfigFileSchema, {
+            id: 'https://json.schemastore.org/aspire-config.json',
+            title: 'Aspire Configuration',
+            description: 'Aspire CLI unified configuration file (aspire.config.json). Replaces .aspire/settings.json and apphost.run.json.'
+        });
+        fs.writeFileSync(configSchemaOutputPath, JSON.stringify(configSchema, null, 2), 'utf8');
+        console.log(`✓ Config file schema generated: ${configSchemaOutputPath}`);
+        console.log(`  - ${configInfo.ConfigFileSchema.Properties.length} top-level properties`);
+    } else {
+        console.warn('WARNING: ConfigFileSchema not available in config info output. Skipping aspire-config.schema.json generation.');
+    }
 } catch (error) {
     console.error('ERROR: Failed to generate schema:', error.message);
     console.warn('Skipping schema generation. This may happen if the CLI is not built yet.');
@@ -77,6 +92,12 @@ function generateJsonSchema(configInfo, settingsSchema, options) {
         }
     }
 
+    // Allow $schema property so users can reference the schema in their files
+    properties['$schema'] = {
+        type: 'string',
+        description: 'JSON Schema reference'
+    };
+
     return {
         $schema: 'http://json-schema.org/draft-07/schema#',
         $id: options.id,
@@ -89,6 +110,14 @@ function generateJsonSchema(configInfo, settingsSchema, options) {
     };
 }
 
+/**
+ * Creates a JSON Schema property definition from a CLI PropertyInfo object.
+ * Handles both legacy flat schemas and new config file schemas with nested types.
+ * - 'features' properties are expanded using AvailableFeatures metadata.
+ * - Properties with SubProperties are recursed into (typed objects or dictionary values).
+ * - Properties with AdditionalPropertiesType describe dictionary value types.
+ * - Legacy 'packages' property name is handled as a fallback for older CLI output.
+ */
 function createPropertySchema(prop, configInfo) {
     const schema = {
         description: prop.Description
@@ -111,12 +140,11 @@ function createPropertySchema(prop, configInfo) {
     } else if (lowerType === 'object') {
         schema.type = 'object';
 
-        // Special handling for 'features' object
+        // Expand known features as individual boolean properties
         if (prop.Name === 'features') {
             schema.properties = {};
             schema.additionalProperties = false;
 
-            // Add each feature as a boolean property
             for (const feature of configInfo.AvailableFeatures) {
                 schema.properties[feature.Name] = {
                     anyOf: [
@@ -127,19 +155,41 @@ function createPropertySchema(prop, configInfo) {
                     default: feature.DefaultValue
                 };
             }
+        } else if (prop.SubProperties && prop.SubProperties.length > 0) {
+            if (prop.AdditionalPropertiesType === 'object') {
+                // Dictionary with complex values (e.g., profiles)
+                const valueProperties = {};
+                for (const subProp of prop.SubProperties) {
+                    valueProperties[subProp.Name] = createPropertySchema(subProp, configInfo);
+                }
+                schema.additionalProperties = {
+                    type: 'object',
+                    properties: valueProperties,
+                    additionalProperties: false
+                };
+            } else {
+                // Known typed object (e.g., appHost, sdk)
+                schema.properties = {};
+                for (const subProp of prop.SubProperties) {
+                    schema.properties[subProp.Name] = createPropertySchema(subProp, configInfo);
+                }
+                schema.additionalProperties = false;
+            }
+        } else if (prop.AdditionalPropertiesType) {
+            // Simple dictionary (e.g., packages: string -> string)
+            schema.additionalProperties = {
+                type: prop.AdditionalPropertiesType
+            };
         } else if (prop.Name === 'packages') {
-            // Packages is an object with string keys and string values (name: version)
-            schema.description = 'Package name to version mapping';
+            // Legacy fallback for older CLI output without AdditionalPropertiesType
             schema.additionalProperties = {
                 type: 'string',
                 description: 'Package version'
             };
         } else {
-            // Generic object
             schema.additionalProperties = true;
         }
     } else {
-        // Fallback to string for unknown types
         schema.type = 'string';
     }
 

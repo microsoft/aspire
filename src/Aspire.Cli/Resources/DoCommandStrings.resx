@@ -118,10 +118,10 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>Execute a specific pipeline step and its dependencies. (Preview)</value>
+    <value>Execute a specific pipeline step and its dependencies (Preview)</value>
   </data>
   <data name="OutputPathArgumentDescription" xml:space="preserve">
-    <value>The optional output path for artifacts.</value>
+    <value>The optional output path for artifacts</value>
   </data>
   <data name="OperationCanceled" xml:space="preserve">
     <value>The operation was canceled.</value>
@@ -136,6 +136,6 @@
     <value>Executing pipeline...</value>
   </data>
   <data name="StepArgumentDescription" xml:space="preserve">
-    <value>The name of the step to execute.</value>
+    <value>The name of the step to execute</value>
   </data>
 </root>

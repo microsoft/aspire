@@ -70,12 +70,12 @@ public class FoundryResource(string name, Action<AzureResourceInfrastructure> co
     public CognitiveServicesCapabilityHost? CapabilityHost { get; set; }
 
     /// <summary>
-    /// Gets whether the resource is running in the Foundry Local.
+    /// Gets whether the resource is running in Foundry Local.
     /// </summary>
     public bool IsEmulator => this.IsEmulator();
 
     /// <summary>
-    /// The API key to access Foundry Local
+    /// The API key to access Foundry Local.
     /// </summary>
     public string? ApiKey { get; internal set; }
 

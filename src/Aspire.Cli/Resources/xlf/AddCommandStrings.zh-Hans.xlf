@@ -8,8 +8,8 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Add a hosting integration to the apphost.</source>
-        <target state="translated">将托管集成添加到 apphost。</target>
+        <source>Add a hosting integration to the apphost</source>
+        <target state="needs-review-translation">将托管集成添加到 Aspire AppHost。</target>
         <note />
       </trans-unit>
       <trans-unit id="ErrorOccurredWhileAddingPackage">
@@ -18,8 +18,8 @@
         <note />
       </trans-unit>
       <trans-unit id="IntegrationArgumentDescription">
-        <source>The name of the integration to add (e.g. redis, postgres).</source>
-        <target state="translated">要添加的集成的名称(例如 redis、postgres)。</target>
+        <source>The name of the integration to add (e.g. redis, postgres)</source>
+        <target state="needs-review-translation">要添加的集成的名称(例如 redis、postgres)。</target>
         <note />
       </trans-unit>
       <trans-unit id="NoIntegrationPackagesFound">
@@ -48,8 +48,8 @@
         <note>{0} is a number, {1} is the log file path</note>
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file to add the integration to.</source>
-        <target state="translated">要将集成添加到的 Aspire AppHost 项目文件的路径。</target>
+        <source>The path to the Aspire apphost project file to add the integration to</source>
+        <target state="needs-review-translation">要将集成添加到的项目文件的路径。</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchingForAspirePackages">
@@ -68,17 +68,17 @@
         <note />
       </trans-unit>
       <trans-unit id="SourceArgumentDescription">
-        <source>The NuGet source to use for the integration.</source>
-        <target state="translated">用于集成的 NuGet 源。</target>
+        <source>The NuGet source to use for the integration</source>
+        <target state="needs-review-translation">用于集成的 NuGet 源。</target>
         <note />
       </trans-unit>
       <trans-unit id="StoppedRunningInstance" translate="yes" xml:space="preserve">
-          <source>Stopped a running Aspire AppHost instance to allow package modification.</source>
-          <target state="translated">已停止正在运行的 Aspire AppHost 实例以允许修改包。</target><note />
+          <source>Stopped a running Aspire apphost instance to allow package modification.</source>
+          <target state="new">Stopped a running Aspire apphost instance to allow package modification.</target><note />
         </trans-unit>
       <trans-unit id="UnableToStopRunningInstances">
-        <source>Unable to stop one or more running Aspire AppHost instances. Please stop the application and try again.</source>
-        <target state="translated">无法停止一个或多个正在运行的 Aspire AppHost 实例。请停止应用程序，然后重试。</target>
+        <source>Unable to stop one or more running Aspire apphost instances. Please stop the application and try again.</source>
+        <target state="new">Unable to stop one or more running Aspire apphost instances. Please stop the application and try again.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnexpectedNumberOfPackagesFound">
@@ -92,8 +92,8 @@
         <note />
       </trans-unit>
       <trans-unit id="VersionArgumentDescription">
-        <source>The version of the integration to add.</source>
-        <target state="translated">要添加的集成的版本。</target>
+        <source>The version of the integration to add</source>
+        <target state="needs-review-translation">要添加的集成的版本。</target>
         <note />
       </trans-unit>
     </body>

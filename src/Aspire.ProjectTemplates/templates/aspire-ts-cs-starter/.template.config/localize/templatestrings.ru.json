@@ -1,4 +1,4 @@
-﻿{
+{
   "author": "Майкрософт",
   "name": "Начальное приложение Aspire (ASP.NET Core/React)",
   "description": "Шаблон проекта для создания приложения Aspire с интерфейсной частью React и серверной службой минимального API на C# с необязательным кэшированием Redis.",
@@ -10,11 +10,9 @@
   "symbols/UseRedisCache/description": "Определяет, следует ли настраивать приложение с целью использования Redis для кэширования. Для локального запуска требуется поддерживаемая среда выполнения контейнеров. Дополнительные сведения см. на странице https://aka.ms/aspire/containers.",
   "symbols/appHostHttpPort/description": "Номер порта, который будет использоваться для конечной точки HTTP в файле launchSettings.json проекта AppHost.",
   "symbols/appHostOtlpHttpPort/description": "Номер порта, который будет использоваться для конечной точки HTTP OTLP в файле launchSettings.json проекта AppHost.",
-  "symbols/appHostMcpHttpPort/description": "Номер порта для использования в конечной точке MCP HTTP в launchSettings.json проекта AppHost.",
   "symbols/appHostResourceHttpPort/description": "Номер порта, который будет использоваться для конечной точки HTTP службы ресурсов в файле launchSettings.json проекта AppHost.",
   "symbols/appHostHttpsPort/description": "Номер порта, который будет использоваться для конечной точки HTTPS в файле launchSettings.json проекта AppHost. Этот параметр применим только в том случае, если NO-HTTP не используется.",
   "symbols/appHostOtlpHttpsPort/description": "Номер порта, который будет использоваться для конечной точки OTLP HTTPS в файле launchSettings.json проекта AppHost.",
-  "symbols/appHostMcpHttpsPort/description": "Номер порта для использования в конечной точке MCP HTTPS в launchSettings.json проекта AppHost.",
   "symbols/appHostResourceHttpsPort/description": "Номер порта, который будет использоваться для конечной точки HTTPS службы ресурсов в файле launchSettings.json проекта AppHost.",
   "symbols/serverHttpPort/description": "Номер порта, который будет использоваться для конечной точки HTTP в файле launchSettings.json проекта сервера.",
   "symbols/serverHttpsPort/description": "Номер порта, который будет использоваться для конечной точки HTTPS в файле launchSettings.json проекта сервера. Этот параметр применим только в том случае, если NO-HTTP не используется.",

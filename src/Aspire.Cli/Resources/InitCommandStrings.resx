@@ -61,13 +61,13 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>Initialize Aspire in an existing codebase.</value>
+    <value>Initialize Aspire in an existing codebase</value>
   </data>
   <data name="SolutionDetected" xml:space="preserve">
     <value>Solution detected: {0}</value>
   </data>
   <data name="CreatingAppHostProject" xml:space="preserve">
-    <value>Creating AppHost project...</value>
+    <value>Creating apphost project...</value>
   </data>
   <data name="CreatingServiceDefaultsProject" xml:space="preserve">
     <value>Creating ServiceDefaults project...</value>
@@ -76,7 +76,7 @@
     <value>Adding projects to solution...</value>
   </data>
   <data name="NoSolutionFoundCreatingSingleFileAppHost" xml:space="preserve">
-    <value>No solution file found. Creating single-file AppHost...</value>
+    <value>No solution file found. Creating single-file apphost...</value>
   </data>
   <data name="AspireInitializationComplete" xml:space="preserve">
     <value>Aspire initialization complete!</value>
@@ -88,7 +88,7 @@
     <value>Solution has already been initialized with Aspire.</value>
   </data>
   <data name="AddingAppHostProjectToSolution" xml:space="preserve">
-    <value>Adding AppHost project to solution...</value>
+    <value>Adding apphost project to solution...</value>
   </data>
   <data name="AddingServiceDefaultsProjectToSolution" xml:space="preserve">
     <value>Adding ServiceDefaults project to solution...</value>
@@ -97,6 +97,9 @@
     <value>Resolving template version...</value>
   </data>
   <data name="SolutionAndProjectInSameDirectory" xml:space="preserve">
-    <value>The solution file '{0}' and project file '{1}' are in the same directory. The AppHost and ServiceDefaults projects cannot be created inside an existing project directory. Move the solution file to a parent directory or the project file to a subdirectory.</value>
+    <value>The solution file '{0}' and project file '{1}' are in the same directory. The apphost and ServiceDefaults projects cannot be created inside an existing project directory. Move the solution file to a parent directory or the project file to a subdirectory.</value>
+  </data>
+  <data name="LanguageOptionDescription" xml:space="preserve">
+    <value>The programming language for the apphost (csharp, typescript)</value>
   </data>
 </root>

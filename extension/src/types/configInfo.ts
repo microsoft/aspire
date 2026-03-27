@@ -14,6 +14,8 @@ export interface PropertyInfo {
     Type: string;
     Description: string;
     Required: boolean;
+    SubProperties?: PropertyInfo[];
+    AdditionalPropertiesType?: string;
 }
 
 export interface SettingsSchema {
@@ -24,6 +26,8 @@ export interface ConfigInfo {
     LocalSettingsPath: string;
     GlobalSettingsPath: string;
     AvailableFeatures: FeatureInfo[];
-    SettingsSchema: SettingsSchema;
+    LocalSettingsSchema: SettingsSchema;
+    GlobalSettingsSchema: SettingsSchema;
+    ConfigFileSchema?: SettingsSchema;
     Capabilities?: string[];
 }

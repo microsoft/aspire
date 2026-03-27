@@ -118,46 +118,46 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>View OpenTelemetry data (logs, spans, traces) from a running apphost.</value>
+    <value>View OpenTelemetry data (logs, spans, traces) from a running apphost</value>
   </data>
   <data name="LogsDescription" xml:space="preserve">
-    <value>View structured logs from the Dashboard telemetry API.</value>
+    <value>View structured logs from the Dashboard telemetry API</value>
   </data>
   <data name="SpansDescription" xml:space="preserve">
-    <value>View spans from the Dashboard telemetry API.</value>
+    <value>View spans from the Dashboard telemetry API</value>
   </data>
   <data name="TracesDescription" xml:space="preserve">
-    <value>View traces from the Dashboard telemetry API.</value>
+    <value>View traces from the Dashboard telemetry API</value>
   </data>
   <data name="ResourceArgumentDescription" xml:space="preserve">
-    <value>Filter by resource name.</value>
+    <value>Filter by resource name</value>
   </data>
   <data name="FollowOptionDescription" xml:space="preserve">
-    <value>Stream telemetry in real-time as it arrives.</value>
+    <value>Stream telemetry in real-time as it arrives</value>
   </data>
   <data name="FormatOptionDescription" xml:space="preserve">
-    <value>Output format (Table or Json).</value>
+    <value>Output format (Table or Json)</value>
   </data>
   <data name="LimitOptionDescription" xml:space="preserve">
-    <value>Maximum number of items to return.</value>
+    <value>Maximum number of items to return</value>
   </data>
   <data name="TraceIdOptionDescription" xml:space="preserve">
-    <value>Filter by trace ID.</value>
+    <value>Filter by trace ID</value>
   </data>
   <data name="TraceIdArgumentDescription" xml:space="preserve">
     <value>The trace ID to view. If not specified, lists all traces.</value>
   </data>
   <data name="SeverityOptionDescription" xml:space="preserve">
-    <value>Filter logs by minimum severity (Trace, Debug, Information, Warning, Error, Critical).</value>
+    <value>Filter logs by minimum severity (Trace, Debug, Information, Warning, Error, Critical)</value>
   </data>
   <data name="HasErrorOptionDescription" xml:space="preserve">
-    <value>Filter by error status (true to show only errors, false to exclude errors).</value>
+    <value>Filter by error status (true to show only errors, false to exclude errors)</value>
   </data>
   <data name="LimitMustBePositive" xml:space="preserve">
     <value>The --limit value must be a positive number.</value>
   </data>
   <data name="DashboardApiNotAvailable" xml:space="preserve">
-    <value>Dashboard API is not available. Ensure the AppHost is running with Dashboard enabled.</value>
+    <value>Dashboard API is not available. Ensure the apphost is running with Dashboard enabled.</value>
   </data>
   <data name="FailedToFetchTelemetry" xml:space="preserve">
     <value>Failed to fetch telemetry: {0}</value>

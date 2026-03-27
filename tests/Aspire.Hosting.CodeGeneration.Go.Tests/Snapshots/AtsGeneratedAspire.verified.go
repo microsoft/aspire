@@ -102,12 +102,14 @@ func NewIDistributedApplicationBuilder(handle *Handle, client *AspireClient) *ID
 }
 
 // AddTestRedis adds a test Redis resource
-func (s *IDistributedApplicationBuilder) AddTestRedis(name string, port float64) (*TestRedisResource, error) {
+func (s *IDistributedApplicationBuilder) AddTestRedis(name string, port *float64) (*TestRedisResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["name"] = SerializeValue(name)
-	reqArgs["port"] = SerializeValue(port)
+	if port != nil {
+		reqArgs["port"] = SerializeValue(port)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/addTestRedis", reqArgs)
 	if err != nil {
 		return nil, err
@@ -308,12 +310,16 @@ func NewTestDatabaseResource(handle *Handle, client *AspireClient) *TestDatabase
 }
 
 // WithOptionalString adds an optional string parameter
-func (s *TestDatabaseResource) WithOptionalString(value string, enabled bool) (*IResource, error) {
+func (s *TestDatabaseResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["value"] = SerializeValue(value)
-	reqArgs["enabled"] = SerializeValue(enabled)
+	if value != nil {
+		reqArgs["value"] = SerializeValue(value)
+	}
+	if enabled != nil {
+		reqArgs["enabled"] = SerializeValue(enabled)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalString", reqArgs)
 	if err != nil {
 		return nil, err
@@ -512,16 +518,146 @@ func (s *TestDatabaseResource) WithCancellableOperation(operation func(...any) a
 }
 
 // WithDataVolume adds a data volume
-func (s *TestDatabaseResource) WithDataVolume(name string) (*TestDatabaseResource, error) {
+func (s *TestDatabaseResource) WithDataVolume(name *string) (*TestDatabaseResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["name"] = SerializeValue(name)
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withDataVolume", reqArgs)
 	if err != nil {
 		return nil, err
 	}
 	return result.(*TestDatabaseResource), nil
+}
+
+// WithMergeLabel adds a label to the resource
+func (s *TestDatabaseResource) WithMergeLabel(label string) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["label"] = SerializeValue(label)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLabel", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithMergeLabelCategorized adds a categorized label to the resource
+func (s *TestDatabaseResource) WithMergeLabelCategorized(label string, category string) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["label"] = SerializeValue(label)
+	reqArgs["category"] = SerializeValue(category)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLabelCategorized", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithMergeEndpoint configures a named endpoint
+func (s *TestDatabaseResource) WithMergeEndpoint(endpointName string, port float64) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["endpointName"] = SerializeValue(endpointName)
+	reqArgs["port"] = SerializeValue(port)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withMergeEndpoint", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithMergeEndpointScheme configures a named endpoint with scheme
+func (s *TestDatabaseResource) WithMergeEndpointScheme(endpointName string, port float64, scheme string) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["endpointName"] = SerializeValue(endpointName)
+	reqArgs["port"] = SerializeValue(port)
+	reqArgs["scheme"] = SerializeValue(scheme)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withMergeEndpointScheme", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithMergeLogging configures resource logging
+func (s *TestDatabaseResource) WithMergeLogging(logLevel string, enableConsole *bool, maxFiles *float64) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["logLevel"] = SerializeValue(logLevel)
+	if enableConsole != nil {
+		reqArgs["enableConsole"] = SerializeValue(enableConsole)
+	}
+	if maxFiles != nil {
+		reqArgs["maxFiles"] = SerializeValue(maxFiles)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLogging", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithMergeLoggingPath configures resource logging with file path
+func (s *TestDatabaseResource) WithMergeLoggingPath(logLevel string, logPath string, enableConsole *bool, maxFiles *float64) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["logLevel"] = SerializeValue(logLevel)
+	reqArgs["logPath"] = SerializeValue(logPath)
+	if enableConsole != nil {
+		reqArgs["enableConsole"] = SerializeValue(enableConsole)
+	}
+	if maxFiles != nil {
+		reqArgs["maxFiles"] = SerializeValue(maxFiles)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLoggingPath", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithMergeRoute configures a route
+func (s *TestDatabaseResource) WithMergeRoute(path string, method string, handler string, priority float64) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["path"] = SerializeValue(path)
+	reqArgs["method"] = SerializeValue(method)
+	reqArgs["handler"] = SerializeValue(handler)
+	reqArgs["priority"] = SerializeValue(priority)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withMergeRoute", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithMergeRouteMiddleware configures a route with middleware
+func (s *TestDatabaseResource) WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["path"] = SerializeValue(path)
+	reqArgs["method"] = SerializeValue(method)
+	reqArgs["handler"] = SerializeValue(handler)
+	reqArgs["priority"] = SerializeValue(priority)
+	reqArgs["middleware"] = SerializeValue(middleware)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withMergeRouteMiddleware", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
 }
 
 // TestEnvironmentContext wraps a handle for Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext.
@@ -626,12 +762,14 @@ func NewTestRedisResource(handle *Handle, client *AspireClient) *TestRedisResour
 }
 
 // AddTestChildDatabase adds a child database to a test Redis resource
-func (s *TestRedisResource) AddTestChildDatabase(name string, databaseName string) (*TestDatabaseResource, error) {
+func (s *TestRedisResource) AddTestChildDatabase(name string, databaseName *string) (*TestDatabaseResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["name"] = SerializeValue(name)
-	reqArgs["databaseName"] = SerializeValue(databaseName)
+	if databaseName != nil {
+		reqArgs["databaseName"] = SerializeValue(databaseName)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/addTestChildDatabase", reqArgs)
 	if err != nil {
 		return nil, err
@@ -640,11 +778,13 @@ func (s *TestRedisResource) AddTestChildDatabase(name string, databaseName strin
 }
 
 // WithPersistence configures the Redis resource with persistence
-func (s *TestRedisResource) WithPersistence(mode TestPersistenceMode) (*TestRedisResource, error) {
+func (s *TestRedisResource) WithPersistence(mode *TestPersistenceMode) (*TestRedisResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["mode"] = SerializeValue(mode)
+	if mode != nil {
+		reqArgs["mode"] = SerializeValue(mode)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withPersistence", reqArgs)
 	if err != nil {
 		return nil, err
@@ -653,12 +793,16 @@ func (s *TestRedisResource) WithPersistence(mode TestPersistenceMode) (*TestRedi
 }
 
 // WithOptionalString adds an optional string parameter
-func (s *TestRedisResource) WithOptionalString(value string, enabled bool) (*IResource, error) {
+func (s *TestRedisResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["value"] = SerializeValue(value)
-	reqArgs["enabled"] = SerializeValue(enabled)
+	if value != nil {
+		reqArgs["value"] = SerializeValue(value)
+	}
+	if enabled != nil {
+		reqArgs["enabled"] = SerializeValue(enabled)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalString", reqArgs)
 	if err != nil {
 		return nil, err
@@ -970,17 +1114,149 @@ func (s *TestRedisResource) WithMultiParamHandleCallback(callback func(...any) a
 }
 
 // WithDataVolume adds a data volume with persistence
-func (s *TestRedisResource) WithDataVolume(name string, isReadOnly bool) (*TestRedisResource, error) {
+func (s *TestRedisResource) WithDataVolume(name *string, isReadOnly *bool) (*TestRedisResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["name"] = SerializeValue(name)
-	reqArgs["isReadOnly"] = SerializeValue(isReadOnly)
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if isReadOnly != nil {
+		reqArgs["isReadOnly"] = SerializeValue(isReadOnly)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withDataVolume", reqArgs)
 	if err != nil {
 		return nil, err
 	}
 	return result.(*TestRedisResource), nil
+}
+
+// WithMergeLabel adds a label to the resource
+func (s *TestRedisResource) WithMergeLabel(label string) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["label"] = SerializeValue(label)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLabel", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithMergeLabelCategorized adds a categorized label to the resource
+func (s *TestRedisResource) WithMergeLabelCategorized(label string, category string) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["label"] = SerializeValue(label)
+	reqArgs["category"] = SerializeValue(category)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLabelCategorized", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithMergeEndpoint configures a named endpoint
+func (s *TestRedisResource) WithMergeEndpoint(endpointName string, port float64) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["endpointName"] = SerializeValue(endpointName)
+	reqArgs["port"] = SerializeValue(port)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withMergeEndpoint", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithMergeEndpointScheme configures a named endpoint with scheme
+func (s *TestRedisResource) WithMergeEndpointScheme(endpointName string, port float64, scheme string) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["endpointName"] = SerializeValue(endpointName)
+	reqArgs["port"] = SerializeValue(port)
+	reqArgs["scheme"] = SerializeValue(scheme)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withMergeEndpointScheme", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithMergeLogging configures resource logging
+func (s *TestRedisResource) WithMergeLogging(logLevel string, enableConsole *bool, maxFiles *float64) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["logLevel"] = SerializeValue(logLevel)
+	if enableConsole != nil {
+		reqArgs["enableConsole"] = SerializeValue(enableConsole)
+	}
+	if maxFiles != nil {
+		reqArgs["maxFiles"] = SerializeValue(maxFiles)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLogging", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithMergeLoggingPath configures resource logging with file path
+func (s *TestRedisResource) WithMergeLoggingPath(logLevel string, logPath string, enableConsole *bool, maxFiles *float64) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["logLevel"] = SerializeValue(logLevel)
+	reqArgs["logPath"] = SerializeValue(logPath)
+	if enableConsole != nil {
+		reqArgs["enableConsole"] = SerializeValue(enableConsole)
+	}
+	if maxFiles != nil {
+		reqArgs["maxFiles"] = SerializeValue(maxFiles)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLoggingPath", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithMergeRoute configures a route
+func (s *TestRedisResource) WithMergeRoute(path string, method string, handler string, priority float64) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["path"] = SerializeValue(path)
+	reqArgs["method"] = SerializeValue(method)
+	reqArgs["handler"] = SerializeValue(handler)
+	reqArgs["priority"] = SerializeValue(priority)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withMergeRoute", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithMergeRouteMiddleware configures a route with middleware
+func (s *TestRedisResource) WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["path"] = SerializeValue(path)
+	reqArgs["method"] = SerializeValue(method)
+	reqArgs["handler"] = SerializeValue(handler)
+	reqArgs["priority"] = SerializeValue(priority)
+	reqArgs["middleware"] = SerializeValue(middleware)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withMergeRouteMiddleware", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
 }
 
 // TestResourceContext wraps a handle for Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext.
@@ -1092,12 +1368,16 @@ func NewTestVaultResource(handle *Handle, client *AspireClient) *TestVaultResour
 }
 
 // WithOptionalString adds an optional string parameter
-func (s *TestVaultResource) WithOptionalString(value string, enabled bool) (*IResource, error) {
+func (s *TestVaultResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
-	reqArgs["value"] = SerializeValue(value)
-	reqArgs["enabled"] = SerializeValue(enabled)
+	if value != nil {
+		reqArgs["value"] = SerializeValue(value)
+	}
+	if enabled != nil {
+		reqArgs["enabled"] = SerializeValue(enabled)
+	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalString", reqArgs)
 	if err != nil {
 		return nil, err
@@ -1306,6 +1586,134 @@ func (s *TestVaultResource) WithVaultDirect(option string) (*ITestVaultResource,
 		return nil, err
 	}
 	return result.(*ITestVaultResource), nil
+}
+
+// WithMergeLabel adds a label to the resource
+func (s *TestVaultResource) WithMergeLabel(label string) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["label"] = SerializeValue(label)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLabel", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithMergeLabelCategorized adds a categorized label to the resource
+func (s *TestVaultResource) WithMergeLabelCategorized(label string, category string) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["label"] = SerializeValue(label)
+	reqArgs["category"] = SerializeValue(category)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLabelCategorized", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithMergeEndpoint configures a named endpoint
+func (s *TestVaultResource) WithMergeEndpoint(endpointName string, port float64) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["endpointName"] = SerializeValue(endpointName)
+	reqArgs["port"] = SerializeValue(port)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withMergeEndpoint", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithMergeEndpointScheme configures a named endpoint with scheme
+func (s *TestVaultResource) WithMergeEndpointScheme(endpointName string, port float64, scheme string) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["endpointName"] = SerializeValue(endpointName)
+	reqArgs["port"] = SerializeValue(port)
+	reqArgs["scheme"] = SerializeValue(scheme)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withMergeEndpointScheme", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithMergeLogging configures resource logging
+func (s *TestVaultResource) WithMergeLogging(logLevel string, enableConsole *bool, maxFiles *float64) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["logLevel"] = SerializeValue(logLevel)
+	if enableConsole != nil {
+		reqArgs["enableConsole"] = SerializeValue(enableConsole)
+	}
+	if maxFiles != nil {
+		reqArgs["maxFiles"] = SerializeValue(maxFiles)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLogging", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithMergeLoggingPath configures resource logging with file path
+func (s *TestVaultResource) WithMergeLoggingPath(logLevel string, logPath string, enableConsole *bool, maxFiles *float64) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["logLevel"] = SerializeValue(logLevel)
+	reqArgs["logPath"] = SerializeValue(logPath)
+	if enableConsole != nil {
+		reqArgs["enableConsole"] = SerializeValue(enableConsole)
+	}
+	if maxFiles != nil {
+		reqArgs["maxFiles"] = SerializeValue(maxFiles)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLoggingPath", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithMergeRoute configures a route
+func (s *TestVaultResource) WithMergeRoute(path string, method string, handler string, priority float64) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["path"] = SerializeValue(path)
+	reqArgs["method"] = SerializeValue(method)
+	reqArgs["handler"] = SerializeValue(handler)
+	reqArgs["priority"] = SerializeValue(priority)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withMergeRoute", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithMergeRouteMiddleware configures a route with middleware
+func (s *TestVaultResource) WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["path"] = SerializeValue(path)
+	reqArgs["method"] = SerializeValue(method)
+	reqArgs["handler"] = SerializeValue(handler)
+	reqArgs["priority"] = SerializeValue(priority)
+	reqArgs["middleware"] = SerializeValue(middleware)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withMergeRouteMiddleware", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
 }
 
 // ============================================================================

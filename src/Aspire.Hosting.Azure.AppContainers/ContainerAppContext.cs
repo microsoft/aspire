@@ -22,7 +22,7 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
     {
         _infrastructure = infra;
         // Write a fake parameter for the container app environment
-        // so azd knows the Dashboard URL - see https://github.com/dotnet/aspire/issues/8449.
+        // so azd knows the Dashboard URL - see https://github.com/microsoft/aspire/issues/8449.
         // This is temporary until a real fix can be made in azd.
         AllocateParameter(_containerAppEnvironmentContext.Environment.ContainerAppDomain);
 
@@ -110,11 +110,10 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
         };
         containerApp.Configuration = configuration;
 
-        const string latestPreview = "2025-02-02-preview"; // these properties are currently only available in preview
-
         // default autoConfigureDataProtection to true for .NET projects
         if (Resource is ProjectResource)
         {
+            const string latestPreview = "2025-10-02-preview"; // this property is currently only available in preview
             containerApp.ResourceVersion = latestPreview;
 
             var value = new BicepValue<bool>(true);
@@ -125,11 +124,7 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
         // default kind to functionapp for Azure Functions
         if (Resource.HasAnnotationOfType<AzureFunctionsAnnotation>())
         {
-            containerApp.ResourceVersion = latestPreview;
-
-            var value = new BicepValue<string>("functionapp");
-            ((IBicepValue)value).Self = new BicepValueReference(containerApp, "Kind", ["kind"]);
-            containerApp.ProvisionableProperties["Kind"] = value;
+            containerApp.Kind = ContainerAppKind.Functionapp;
         }
 
         return containerApp;

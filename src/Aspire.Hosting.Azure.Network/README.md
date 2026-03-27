@@ -158,4 +158,4 @@ storage.ConfigureInfrastructure(infra =>
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

@@ -3,18 +3,18 @@
   <file datatype="xml" source-language="en" target-language="ko" original="../ResourceCommandStrings.resx">
     <body>
       <trans-unit id="CommandDescription">
-        <source>Execute a command on a resource (e.g. start, stop, restart).</source>
-        <target state="translated">리소스에서 명령을 실행합니다(예: start, stop, restart).</target>
+        <source>Execute a command on a resource (e.g. start, stop, restart)</source>
+        <target state="needs-review-translation">리소스에서 명령을 실행합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandNameArgumentDescription">
-        <source>The name of the command to execute (e.g. start, stop, restart).</source>
-        <target state="translated">실행할 명령의 이름입니다(예: start, stop, restart).</target>
+        <source>The name of the command to execute (e.g. start, stop, restart)</source>
+        <target state="needs-review-translation">실행할 명령의 이름입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandResourceArgumentDescription">
-        <source>The name of the resource to execute the command on.</source>
-        <target state="translated">명령을 실행할 대상 리소스의 이름입니다.</target>
+        <source>The name of the resource to execute the command on</source>
+        <target state="needs-review-translation">명령을 실행할 대상 리소스의 이름입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">

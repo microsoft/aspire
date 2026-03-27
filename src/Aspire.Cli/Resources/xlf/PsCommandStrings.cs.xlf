@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="cs" original="../PsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>List running apphosts.</source>
-        <target state="translated">Vypíše spuštěné hostitele aplikací.</target>
+        <source>List running apphosts</source>
+        <target state="needs-review-translation">Vypíše spuštěné hostitele aplikací Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderCliPid">
@@ -28,13 +28,13 @@
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">Výstupní formát (tabulka nebo JSON)</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">Výstup ve formátu JSON</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesOptionDescription">
-        <source>Include resource details for each running app host. Only applies to JSON output.</source>
-        <target state="translated">Zahrňte podrobnosti o prostředku pro každého běžícího hostitele aplikací. Platí jenom pro výstup JSON.</target>
+        <source>Include resource details for each running apphost. Only applies to JSON output.</source>
+        <target state="new">Include resource details for each running apphost. Only applies to JSON output.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnknownPath">

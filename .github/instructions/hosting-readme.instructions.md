@@ -133,7 +133,7 @@ configured. See [Local Azure Provisioning](https://aspire.dev/integrations/cloud
 ```markdown
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire
 ```
 
 **Guidelines:**
@@ -195,7 +195,7 @@ https://aspire.dev/integrations/databases/postgresql-extensions/
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire
 
 _*Postgres*, *PostgreSQL* and the *Slonik Logo* are trademarks or registered trademarks of the *PostgreSQL Community Association of Canada*, and used with their permission._
 ````

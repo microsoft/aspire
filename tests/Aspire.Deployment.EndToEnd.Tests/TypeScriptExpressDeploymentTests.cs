@@ -65,20 +65,12 @@ public sealed class TypeScriptExpressDeploymentTests(ITestOutputHelper output)
             using var terminal = DeploymentE2ETestHelpers.CreateTestTerminal();
             var pendingRun = terminal.RunAsync(cancellationToken);
 
-            // Pattern searchers for aspire add prompts
-            var waitingForAddVersionSelectionPrompt = new CellPatternSearcher()
-                .Find("(based on NuGet.config)");
-
-            // Pattern searcher for deployment success
-            var waitingForPipelineSucceeded = new CellPatternSearcher()
-                .Find("PIPELINE SUCCEEDED");
-
             var counter = new SequenceCounter();
-            var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+            var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
             // Step 1: Prepare environment
             output.WriteLine("Step 1: Preparing environment...");
-            sequenceBuilder.PrepareEnvironment(workspace, counter);
+            await auto.PrepareEnvironmentAsync(workspace, counter);
 
             // Step 2: Set up CLI environment (in CI)
             // TypeScript apphosts need the full bundle (not just the CLI binary) because
@@ -89,39 +81,36 @@ public sealed class TypeScriptExpressDeploymentTests(ITestOutputHelper output)
                 if (prNumber > 0)
                 {
                     output.WriteLine($"Step 2: Installing Aspire bundle from PR #{prNumber}...");
-                    sequenceBuilder.InstallAspireBundleFromPullRequest(prNumber, counter);
+                    await auto.InstallAspireBundleFromPullRequestAsync(prNumber, counter);
                 }
-                sequenceBuilder.SourceAspireBundleEnvironment(counter);
+                await auto.SourceAspireBundleEnvironmentAsync(counter);
             }
 
             // Step 3: Create TypeScript Express/React project using aspire new
             output.WriteLine("Step 3: Creating TypeScript Express/React project...");
-            sequenceBuilder.AspireNew(projectName, counter, template: AspireTemplate.ExpressReact);
+            await auto.AspireNewAsync(projectName, counter, template: AspireTemplate.ExpressReact);
 
             // Step 4: Navigate to project directory
             output.WriteLine("Step 4: Navigating to project directory...");
-            sequenceBuilder
-                .Type($"cd {projectName}")
-                .Enter()
-                .WaitForSuccessPrompt(counter);
+            await auto.TypeAsync($"cd {projectName}");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
 
             // Step 5: Add Aspire.Hosting.Azure.AppContainers package
             output.WriteLine("Step 5: Adding Azure Container Apps hosting package...");
-            sequenceBuilder.Type("aspire add Aspire.Hosting.Azure.AppContainers")
-                .Enter();
+            await auto.TypeAsync("aspire add Aspire.Hosting.Azure.AppContainers");
+            await auto.EnterAsync();
 
             // In CI, aspire add shows a version selection prompt
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
-                sequenceBuilder
-                    .WaitUntil(s => waitingForAddVersionSelectionPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(60))
-                    .Enter(); // select first version (PR build)
+                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
+                await auto.EnterAsync(); // select first version (PR build)
             }
 
-            sequenceBuilder.WaitForSuccessPrompt(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
 
             // Step 6: Modify apphost.ts to add Azure Container App Environment for deployment
-            sequenceBuilder.ExecuteCallback(() =>
             {
                 var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
                 var appHostFilePath = Path.Combine(projectDir, "apphost.ts");
@@ -144,25 +133,23 @@ await builder.build().run();
                 File.WriteAllText(appHostFilePath, content);
 
                 output.WriteLine($"Modified apphost.ts at: {appHostFilePath}");
-            });
+            }
 
             // Step 7: Set environment for deployment
-            sequenceBuilder.Type($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}")
-                .Enter()
-                .WaitForSuccessPrompt(counter);
+            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
 
             // Step 8: Deploy to Azure Container Apps using aspire deploy
             output.WriteLine("Step 8: Starting Azure Container Apps deployment...");
-            sequenceBuilder
-                .Type("aspire deploy --clear-cache")
-                .Enter()
-                .WaitUntil(s => waitingForPipelineSucceeded.Search(s).Count > 0, TimeSpan.FromMinutes(30))
-                .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(2));
+            await auto.TypeAsync("aspire deploy --clear-cache");
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("PIPELINE SUCCEEDED", timeout: TimeSpan.FromMinutes(30));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
             // Step 9: Extract deployment URLs and verify endpoints with retry
             output.WriteLine("Step 9: Verifying deployed endpoints...");
-            sequenceBuilder
-                .Type($"RG_NAME=\"{resourceGroupName}\" && " +
+            await auto.TypeAsync($"RG_NAME=\"{resourceGroupName}\" && " +
                       "echo \"Resource group: $RG_NAME\" && " +
                       "if ! az group show -n \"$RG_NAME\" &>/dev/null; then echo \"❌ Resource group not found\"; exit 1; fi && " +
                       "urls=$(az containerapp list -g \"$RG_NAME\" --query \"[].properties.configuration.ingress.fqdn\" -o tsv 2>/dev/null | grep -v '\\.internal\\.') && " +
@@ -178,17 +165,14 @@ await builder.build().run();
                       "done; " +
                       "if [ \"$success\" -eq 0 ]; then echo \"  ❌ Failed after 18 attempts\"; failed=1; fi; " +
                       "done && " +
-                      "if [ \"$failed\" -ne 0 ]; then echo \"❌ One or more endpoint checks failed\"; exit 1; fi")
-                .Enter()
-                .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(5));
+                      "if [ \"$failed\" -ne 0 ]; then echo \"❌ One or more endpoint checks failed\"; exit 1; fi");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
 
             // Step 10: Exit terminal
-            sequenceBuilder
-                .Type("exit")
-                .Enter();
+            await auto.TypeAsync("exit");
+            await auto.EnterAsync();
 
-            var sequence = sequenceBuilder.Build();
-            await sequence.ApplyAsync(terminal, cancellationToken);
             await pendingRun;
 
             var duration = DateTime.UtcNow - startTime;

@@ -78,7 +78,7 @@ builder.AddOpenAIClient("chat")
 
 ### Emulator usage
 
-Aspire supports the usage of the Foundry Local. Add the following to your AppHost project:
+Aspire supports the usage of Foundry Local. Add the following to your AppHost project:
 
 ```csharp
 // AppHost
@@ -87,9 +87,9 @@ var chat = builder.AddFoundry("foundry")
                   .AddDeployment("chat", "phi-3.5-mini", "1", "Microsoft");
 ```
 
-When the AppHost starts up the local Microsoft Foundry service also be started.
+When the AppHost starts up, the local Foundry service will also be started.
 
-This requires the local machine to have the [Foundry Local](https://learn.microsoft.com/azure/ai-foundry/foundry-local/get-started) installed and running.
+This requires the local machine to have [Foundry Local](https://learn.microsoft.com/azure/ai-foundry/foundry-local/get-started) installed and running.
 
 ## Connection Properties
 
@@ -102,7 +102,7 @@ The Microsoft Foundry resource exposes the following connection properties:
 | Property Name | Description |
 |---------------|-------------|
 | `Uri` | The endpoint URI for the Microsoft Foundry resource, with the format `https://<resource_name>.services.ai.azure.com/` or the emulator service URI when running Foundry Local (e.g., `http://127.0.0.1:61799/v1`) |
-| `Key` | The API key when using Foundry Local emulator |
+| `Key` | The API key when using Foundry Local |
 
 ### Microsoft Foundry deployment
 
@@ -169,8 +169,8 @@ In run mode, the agent runs locally with health check endpoints and OpenTelemetr
 
 * https://learn.microsoft.com/azure/ai-foundry/what-is-azure-ai-foundry
 * https://learn.microsoft.com/azure/ai-foundry/foundry-local/
-* https://github.com/dotnet/aspire/tree/main/src/Components/README.md
+* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

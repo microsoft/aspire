@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="cs" original="../PublishCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Generate deployment artifacts for an apphost. (Preview)</source>
-        <target state="translated">Generuje artefakty nasazení pro apphost. (Preview)</target>
+        <source>Generate deployment artifacts for an apphost (Preview)</source>
+        <target state="needs-review-translation">Generuje artefakty nasazení pro hostitele aplikací Aspire. (Preview)</target>
         <note />
       </trans-unit>
       <trans-unit id="GeneratingArtifacts">
@@ -18,8 +18,8 @@
         <note />
       </trans-unit>
       <trans-unit id="NoBuildArgumentDescription">
-        <source>Do not build or restore the project before running.</source>
-        <target state="translated">Před spuštěním nevytvářejte ani neobnovujte projekt.</target>
+        <source>Do not build or restore the project before running</source>
+        <target state="new">Do not build or restore the project before running</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationCompletedPrefix">
@@ -34,12 +34,12 @@
       </trans-unit>
       <trans-unit id="OutputPathArgumentDescription">
         <source>The output path for the generated artifacts. Defaults to './aspire-output' if not specified.</source>
-        <target state="translated">Výstupní cesta pro vygenerované artefakty. Pokud není zadaná, použije se výchozí hodnota ./aspire-output.</target>
+        <target state="needs-review-translation">Výstupní cesta pro vygenerované artefakty. Pokud není zadaná, použije se výchozí hodnota ./aspire-output.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="translated">Cesta k souboru projektu Aspire AppHost.</target>
+        <source>The path to the Aspire apphost project file</source>
+        <target state="needs-review-translation">Cesta k souboru projektu Aspire AppHost.</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAPublisher">

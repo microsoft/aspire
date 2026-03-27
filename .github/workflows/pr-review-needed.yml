@@ -24,7 +24,7 @@ permissions:
 jobs:
   get-prs-needing-review:
     runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'dotnet' }}
+    if: ${{ github.repository_owner == 'microsoft' }}
     outputs:
       prs: ${{ steps.get-prs.outputs.prs }}
     steps:

@@ -3,18 +3,18 @@
   <file datatype="xml" source-language="en" target-language="it" original="../LogsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Display logs from resources in a running apphost.</source>
-        <target state="translated">Consente di visualizzare i log delle risorse in un AppHost in esecuzione.</target>
+        <source>Display logs from resources in a running apphost</source>
+        <target state="needs-review-translation">Consente di visualizzare i log delle risorse in un apphost Aspire in esecuzione.</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
-        <source>Stream logs in real-time as they are written.</source>
-        <target state="translated">Consente di trasmettere i log in tempo reale man mano che vengono scritti.</target>
+        <source>Stream logs in real-time as they are written</source>
+        <target state="needs-review-translation">Consente di trasmettere i log in tempo reale man mano che vengono scritti.</target>
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">Formato di output (Tabella o JSON).</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">Log di output in formato JSON (NDJSON).</target>
         <note />
       </trans-unit>
       <trans-unit id="NoResourcesFound">
@@ -24,7 +24,7 @@
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The name of the resource to get logs for. If not specified, logs from all resources are shown.</source>
-        <target state="translated">Nome della risorsa per cui ottenere i log. Se non specificato, vengono visualizzati i log di tutte le risorse.</target>
+        <target state="needs-review-translation">Nome della risorsa per cui ottenere i log. Se non specificato, vengono visualizzati i log di tutte le risorse.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">
@@ -48,8 +48,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TailOptionDescription">
-        <source>Number of lines to show from the end of logs (default: all).</source>
-        <target state="translated">Numero di righe da visualizzare dalla fine dei log (impostazione predefinita: all).</target>
+        <source>Number of lines to show from the end of logs (default: all)</source>
+        <target state="needs-review-translation">Numero di righe da visualizzare dalla fine dei log (impostazione predefinita: all).</target>
         <note />
       </trans-unit>
       <trans-unit id="TailRequiresResource">
@@ -58,8 +58,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TimestampsOptionDescription">
-        <source>Show timestamps for each log line.</source>
-        <target state="translated">Mostra i timestamp per ogni riga di log.</target>
+        <source>Show timestamps for each log line</source>
+        <target state="new">Show timestamps for each log line</target>
         <note />
       </trans-unit>
       <trans-unit id="GettingLogs">

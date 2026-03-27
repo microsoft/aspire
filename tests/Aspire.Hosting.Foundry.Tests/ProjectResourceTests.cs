@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure;
 using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Foundry.Tests;
@@ -21,18 +22,43 @@ public class ProjectResourceTests
     }
 
     [Fact]
-    public void AddFoundryProject_CreatesAccountAndProject()
+    public void AddProject_ReferencesDefaultContainerRegistryForProvisioningOrdering()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var project = builder.AddFoundryProject("my-project");
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        Assert.IsType<AzureCognitiveServicesProjectResource>(project.Resource);
-        Assert.Equal("my-project", project.Resource.Name);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
 
-        // Should also create a parent account
-        var account = builder.Resources.OfType<FoundryResource>().SingleOrDefault();
-        Assert.NotNull(account);
-        Assert.Same(account, project.Resource.Parent);
+        var registry = project.Resource.ContainerRegistry;
+        Assert.NotNull(registry);
+        Assert.Same(project.Resource.DefaultContainerRegistry, registry);
+    }
+
+    [Fact]
+    public void AddProject_InRunMode_ModelsDefaultContainerRegistry()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        Assert.Empty(builder.Resources.OfType<AzureContainerRegistryResource>());
+        Assert.Same(project.Resource.DefaultContainerRegistry, project.Resource.ContainerRegistry);
+    }
+
+    [Fact]
+    public void WithContainerRegistry_ReferencesExplicitContainerRegistryForProvisioningOrdering()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var registry = builder.AddAzureContainerRegistry("registry");
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project")
+            .WithContainerRegistry(registry);
+
+        Assert.Same(registry.Resource, project.Resource.ContainerRegistry);
+        Assert.True(project.Resource.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var annotation));
+        Assert.Same(registry.Resource, annotation.Registry);
     }
 
     [Fact]
@@ -160,14 +186,4 @@ public class ProjectResourceTests
         Assert.Same(foundry.Resource, project.Resource.CapabilityHostConfiguration.AzureOpenAI);
     }
 
-    [Fact]
-    public void AddFoundryProject_ResourceIsCreated()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var project = builder.AddFoundryProject("my-project");
-
-        // If the resource was created, the basic infrastructure is functional
-        Assert.NotNull(project.Resource);
-        Assert.IsType<AzureCognitiveServicesProjectResource>(project.Resource);
-    }
 }

@@ -91,7 +91,7 @@ public static class QdrantBuilderExtensions
             .WithUrlForEndpoint(QdrantServerResource.PrimaryEndpointName, c =>
             {
                 c.DisplayText = "Qdrant (GRPC)";
-                // https://github.com/dotnet/aspire/issues/8809
+                // https://github.com/microsoft/aspire/issues/8809
                 c.DisplayLocation = UrlDisplayLocation.DetailsOnly;
             })
             .WithUrlForEndpoint(QdrantServerResource.HttpEndpointName, c => c.DisplayText = "Qdrant (HTTP)")
@@ -153,7 +153,7 @@ public static class QdrantBuilderExtensions
     /// <param name="qdrantResource">The Qdrant server resource.</param>
     /// <param name="connectionName">An override of the source resource's name for the connection string. The resulting connection string will be "ConnectionStrings__connectionName" if this is not null.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withQdrantReference", Description = "Adds a reference to a Qdrant resource")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference export.")]
     public static IResourceBuilder<TDestination> WithReference<TDestination>(this IResourceBuilder<TDestination> builder, IResourceBuilder<QdrantServerResource> qdrantResource, string? connectionName = null)
          where TDestination : IResourceWithEnvironment
     {

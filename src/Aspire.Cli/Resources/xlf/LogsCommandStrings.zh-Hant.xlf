@@ -3,18 +3,18 @@
   <file datatype="xml" source-language="en" target-language="zh-Hant" original="../LogsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Display logs from resources in a running apphost.</source>
-        <target state="translated">顯示來自正在執行 Apphost 中資源的記錄。</target>
+        <source>Display logs from resources in a running apphost</source>
+        <target state="needs-review-translation">顯示正在執行 Aspire Apphost 中的資源記錄。</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
-        <source>Stream logs in real-time as they are written.</source>
-        <target state="translated">在寫入記錄時即時串流這些記錄。</target>
+        <source>Stream logs in real-time as they are written</source>
+        <target state="needs-review-translation">在寫入記錄時即時串流這些記錄。</target>
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">輸出格式 (資料表或 Json)。</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">輸出記錄採用 JSON 格式 (NDJSON)。</target>
         <note />
       </trans-unit>
       <trans-unit id="NoResourcesFound">
@@ -24,7 +24,7 @@
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The name of the resource to get logs for. If not specified, logs from all resources are shown.</source>
-        <target state="translated">要取得其記錄的資源名稱。如果未指定，則顯示所有資源的記錄。</target>
+        <target state="needs-review-translation">要取得其記錄的資源名稱。如果未指定，則顯示所有資源的記錄。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">
@@ -48,8 +48,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TailOptionDescription">
-        <source>Number of lines to show from the end of logs (default: all).</source>
-        <target state="translated">從記錄末端顯示的行數 (預設: 全部)。</target>
+        <source>Number of lines to show from the end of logs (default: all)</source>
+        <target state="needs-review-translation">從記錄末端顯示的行數 (預設: 全部)。</target>
         <note />
       </trans-unit>
       <trans-unit id="TailRequiresResource">
@@ -58,8 +58,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TimestampsOptionDescription">
-        <source>Show timestamps for each log line.</source>
-        <target state="translated">顯示每個記錄行的時間戳。</target>
+        <source>Show timestamps for each log line</source>
+        <target state="new">Show timestamps for each log line</target>
         <note />
       </trans-unit>
       <trans-unit id="GettingLogs">

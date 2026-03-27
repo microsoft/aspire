@@ -143,7 +143,7 @@
     <value>Save to user secrets</value>
   </data>
   <data name="ParametersInputsRememberDescriptionNotConfigured" xml:space="preserve">
-    <value>Requires a `UserSecretsId` to be configured in the AppHost project file. Run `aspire secret set &lt;key&gt; &lt;value&gt;` to initialize user secrets, or see [user secrets](https://aka.ms/aspire/user-secrets) for more information.</value>
+    <value>Requires user secrets to be configured for the AppHost. Run `aspire secret set &lt;key&gt; &lt;value&gt;` to initialize user secrets, or see [user secrets](https://aka.ms/aspire/user-secrets) for more information.</value>
   </data>
   <data name="ParametersInputsTitle" xml:space="preserve">
     <value>Set unresolved parameters</value>

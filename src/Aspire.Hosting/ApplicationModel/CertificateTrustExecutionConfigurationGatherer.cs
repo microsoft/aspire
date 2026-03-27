@@ -73,7 +73,7 @@ internal class CertificateTrustExecutionConfigurationGatherer : IExecutionConfig
 
         additionalData.Certificates.AddRange(certificates);
 
-        if (!additionalData.Certificates.Any())
+        if (additionalData.Certificates.Count == 0)
         {
             // No certificates to configure
             resourceLogger.LogInformation("No custom certificate authorities to configure for '{ResourceName}'. Default certificate authority trust behavior will be used.", resource.Name);
@@ -97,9 +97,12 @@ internal class CertificateTrustExecutionConfigurationGatherer : IExecutionConfig
             Scope = additionalData.Scope,
             CertificateBundlePath = configurationContext.CertificateBundlePath,
             CertificateDirectoriesPath = configurationContext.CertificateDirectoriesPath,
+            // Must use the tracked reference to ensure proper tracking of usage
+            RootCertificatesPath = configurationContext.RootCertificatesPath,
             Arguments = context.Arguments,
             EnvironmentVariables = context.EnvironmentVariables,
             CancellationToken = cancellationToken,
+            IsContainer = configurationContext.IsContainer,
         };
 
         if (resource.TryGetAnnotationsOfType<CertificateTrustConfigurationCallbackAnnotation>(out var callbacks))
@@ -108,6 +111,11 @@ internal class CertificateTrustExecutionConfigurationGatherer : IExecutionConfig
             {
                 await callback.Callback(callbackContext).ConfigureAwait(false);
             }
+        }
+
+        foreach (var bundleFactory in callbackContext.CustomBundlesFactories)
+        {
+            additionalData.CustomBundlesFactories[bundleFactory.Key] = bundleFactory.Value;
         }
 
         if (additionalData.Scope == CertificateTrustScope.System)
@@ -133,6 +141,11 @@ public class CertificateTrustExecutionConfigurationData : IExecutionConfiguratio
     /// The collection of certificates to trust.
     /// </summary>
     public X509Certificate2Collection Certificates { get; } = new();
+
+    /// <summary>
+    /// Collection of custom certificate bundle generators added via the <see cref="CertificateTrustConfigurationCallbackAnnotationContext.CreateCustomBundle"/> method, keyed by the bundle's relative path under the root certificates path. The value is a function that generates the bundle contents as a byte array given a collection of X509 certificates and a cancellation token.
+    /// </summary>
+    public Dictionary<string, Func<X509Certificate2Collection, CancellationToken, Task<byte[]>>> CustomBundlesFactories { get; } = new();
 }
 
 /// <summary>
@@ -142,7 +155,7 @@ public class CertificateTrustExecutionConfigurationData : IExecutionConfiguratio
 public class CertificateTrustExecutionConfigurationContext
 {
     /// <summary>
-    /// The path to the certificate bundle file in the resource context (e.g., container filesystem).
+    /// The path to the PEM certificate bundle file in the resource context (e.g., container filesystem).
     /// </summary>
     public required ReferenceExpression CertificateBundlePath { get; init; }
 
@@ -150,4 +163,14 @@ public class CertificateTrustExecutionConfigurationContext
     /// The path(s) to the certificate directories in the resource context (e.g., container filesystem).
     /// </summary>
     public required ReferenceExpression CertificateDirectoriesPath { get; init; }
+
+    /// <summary>
+    /// The root path certificates will be written to in the resource context (e.g., container filesystem).
+    /// </summary>
+    public required string RootCertificatesPath { get; init; }
+
+    /// <summary>
+    /// Is this request being generated for a container resource (i.e. does it require Linux style paths?).
+    /// </summary>
+    public bool IsContainer { get; init; }
 }

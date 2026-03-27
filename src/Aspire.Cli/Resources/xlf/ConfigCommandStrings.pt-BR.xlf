@@ -28,18 +28,18 @@
         <note>{0} is the key, {1} is the value</note>
       </trans-unit>
       <trans-unit id="DeleteCommand_Description">
-        <source>Delete a configuration value.</source>
-        <target state="translated">Exclua um valor de configuração.</target>
+        <source>Delete a configuration value</source>
+        <target state="needs-review-translation">Exclua um valor de configuração.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteCommand_GlobalArgumentDescription">
-        <source>Delete the configuration value from the global $HOME/.aspire/settings.json instead of the local settings file.</source>
-        <target state="translated">Exclua o valor de configuração do arquivo global $HOME/.aspire/settings.json em vez do arquivo de configurações local.</target>
+        <source>Delete the configuration value from the global $HOME/.aspire/settings.json instead of the local settings file</source>
+        <target state="needs-review-translation">Exclua o valor de configuração do arquivo global $HOME/.aspire/settings.json em vez do arquivo de configurações local.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteCommand_KeyArgumentDescription">
-        <source>The configuration key to delete.</source>
-        <target state="translated">A chave de configuração a ser excluída.</target>
+        <source>The configuration key to delete</source>
+        <target state="needs-review-translation">A chave de configuração a ser excluída.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteCommand_PromptForGlobal">
@@ -53,8 +53,8 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Manage CLI configuration including feature flags.</source>
-        <target state="translated">Gerencie a configuração da CLI, incluindo os sinalizadores de recursos.</target>
+        <source>Manage CLI configuration including feature flags</source>
+        <target state="needs-review-translation">Gerencie as definições de configuração.</target>
         <note />
       </trans-unit>
       <trans-unit id="ExtensionActionPrompt">
@@ -63,13 +63,13 @@
         <note />
       </trans-unit>
       <trans-unit id="GetCommand_Description">
-        <source>Get a configuration value.</source>
-        <target state="translated">Obtenha um valor de configuração.</target>
+        <source>Get a configuration value</source>
+        <target state="needs-review-translation">Obtenha um valor de configuração.</target>
         <note />
       </trans-unit>
       <trans-unit id="GetCommand_KeyArgumentDescription">
-        <source>The configuration key to retrieve.</source>
-        <target state="translated">A chave de configuração a ser recuperada.</target>
+        <source>The configuration key to retrieve</source>
+        <target state="needs-review-translation">A chave de configuração a ser recuperada.</target>
         <note />
       </trans-unit>
       <trans-unit id="GetCommand_PromptForKey">
@@ -98,8 +98,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InfoCommand_Description">
-        <source>Display configuration file paths and available features.</source>
-        <target state="translated">Exiba os caminhos de arquivo de configuração e recursos disponíveis.</target>
+        <source>Display configuration file paths and available features</source>
+        <target state="needs-review-translation">Exiba os caminhos de arquivo de configuração e recursos disponíveis.</target>
         <note />
       </trans-unit>
       <trans-unit id="InfoCommand_GlobalSettingsPath">
@@ -108,8 +108,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InfoCommand_JsonOptionDescription">
-        <source>Output information in JSON format.</source>
-        <target state="translated">Informações de saída no formato JSON.</target>
+        <source>Output information in JSON format</source>
+        <target state="needs-review-translation">Informações de saída no formato JSON.</target>
         <note />
       </trans-unit>
       <trans-unit id="InfoCommand_LocalSettingsPath">
@@ -128,13 +128,13 @@
         <note />
       </trans-unit>
       <trans-unit id="ListCommand_AllOptionDescription">
-        <source>Show all available features that can be configured.</source>
-        <target state="new">Show all available features that can be configured.</target>
+        <source>Show all available features that can be configured</source>
+        <target state="new">Show all available features that can be configured</target>
         <note />
       </trans-unit>
       <trans-unit id="ListCommand_Description">
-        <source>List all configuration values.</source>
-        <target state="translated">Liste todos os valores de configuração.</target>
+        <source>List all configuration values</source>
+        <target state="needs-review-translation">Liste todos os valores de configuração.</target>
         <note />
       </trans-unit>
       <trans-unit id="LocalConfigurationHeader">
@@ -158,18 +158,18 @@
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_Description">
-        <source>Set a configuration value.</source>
-        <target state="translated">Defina um valor de configuração.</target>
+        <source>Set a configuration value</source>
+        <target state="needs-review-translation">Defina um valor de configuração.</target>
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_GlobalArgumentDescription">
-        <source>Set the configuration value globally in $HOME/.aspire/settings.json instead of the local settings file.</source>
-        <target state="translated">Defina o valor de configuração globalmente em $HOME/.aspire/settings.json em vez do arquivo de configurações local.</target>
+        <source>Set the configuration value globally in $HOME/.aspire/settings.json instead of the local settings file</source>
+        <target state="needs-review-translation">Defina o valor de configuração globalmente em $HOME/.aspire/settings.json em vez do arquivo de configurações local.</target>
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_KeyArgumentDescription">
-        <source>The configuration key to set.</source>
-        <target state="translated">A chave de configuração a ser definida.</target>
+        <source>The configuration key to set</source>
+        <target state="needs-review-translation">A chave de configuração a ser definida.</target>
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_PromptForGlobal">
@@ -198,8 +198,8 @@
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_ValueArgumentDescription">
-        <source>The configuration value to set.</source>
-        <target state="translated">O valor de configuração a ser definido.</target>
+        <source>The configuration value to set</source>
+        <target state="needs-review-translation">O valor de configuração a ser definido.</target>
         <note />
       </trans-unit>
       <trans-unit id="SetFeatureHint">

@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="ja" original="../PsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>List running apphosts.</source>
-        <target state="translated">実行中の apphost を一覧表示します。</target>
+        <source>List running apphosts</source>
+        <target state="needs-review-translation">実行中の Aspire apphost を一覧表示します。</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderCliPid">
@@ -28,13 +28,13 @@
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">出力形式 (テーブルまたは JSON)。</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">JSON 形式で出力します。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesOptionDescription">
-        <source>Include resource details for each running app host. Only applies to JSON output.</source>
-        <target state="translated">実行中の各アプリ ホストのリソースの詳細を含めます。JSON 出力にのみ適用されます。</target>
+        <source>Include resource details for each running apphost. Only applies to JSON output.</source>
+        <target state="new">Include resource details for each running apphost. Only applies to JSON output.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnknownPath">

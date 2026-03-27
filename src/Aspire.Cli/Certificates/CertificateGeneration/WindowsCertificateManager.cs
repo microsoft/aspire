@@ -13,6 +13,9 @@ namespace Microsoft.AspNetCore.Certificates.Generation;
 [SupportedOSPlatform("windows")]
 internal sealed class WindowsCertificateManager : CertificateManager
 {
+    /// Win32 ERROR_CANCELLED (0x4C7) encoded as an HRESULT (0x800704C7).
+    /// Thrown when the user dismisses the Windows certificate-store security dialog.
+    private const int UserCancelledHResult = unchecked((int)0x800704C7);
     private const int UserCancelledErrorCode = 1223;
 
     public WindowsCertificateManager(ILogger logger) : base(logger)
@@ -89,7 +92,7 @@ internal sealed class WindowsCertificateManager : CertificateManager
             store.Add(publicCertificate);
             return TrustLevel.Full;
         }
-        catch (CryptographicException exception) when (exception.HResult == UserCancelledErrorCode)
+        catch (CryptographicException exception) when (exception.HResult == UserCancelledHResult || exception.HResult == UserCancelledErrorCode)
         {
             Log.WindowsCertificateTrustCanceled();
             throw new UserCancelledTrustException();

@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="tr" original="../PsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>List running apphosts.</source>
-        <target state="translated">Çalışan apphost dosyalarını listeleyin.</target>
+        <source>List running apphosts</source>
+        <target state="needs-review-translation">Çalışan bir Aspire uygulama ana işlemlerini listeleyin.</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderCliPid">
@@ -28,13 +28,13 @@
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">Çıktı biçimi (Tablo veya Json).</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">Çıkışı JSON biçiminde oluşturun.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesOptionDescription">
-        <source>Include resource details for each running app host. Only applies to JSON output.</source>
-        <target state="translated">Çalışan her uygulama ana bilgisayarı için kaynak ayrıntılarını ekleyin. Yalnızca JSON çıktısı için geçerlidir.</target>
+        <source>Include resource details for each running apphost. Only applies to JSON output.</source>
+        <target state="new">Include resource details for each running apphost. Only applies to JSON output.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnknownPath">

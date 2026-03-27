@@ -20,86 +20,50 @@ CLI E2E tests use the Hex1b library to automate terminal sessions, simulating re
 ### Core Classes
 
 - **`Hex1bTerminal`**: The main terminal class from the Hex1b library for terminal automation
-- **`Hex1bTerminalInputSequenceBuilder`**: Fluent API for building sequences of terminal input/output operations
+- **`Hex1bTerminalAutomator`**: Async/await API for driving a `Hex1bTerminal` — the preferred approach for new tests
+- **`Hex1bAutomatorTestHelpers`** (shared helpers): Async extension methods on `Hex1bTerminalAutomator` (`WaitForSuccessPromptAsync`, `AspireNewAsync`, etc.)
+- **`CliE2EAutomatorHelpers`** (`Helpers/CliE2EAutomatorHelpers.cs`): CLI-specific async extension methods on `Hex1bTerminalAutomator` (`PrepareDockerEnvironmentAsync`, `InstallAspireCliInDockerAsync`, etc.)
 - **`CellPatternSearcher`**: Pattern matching for terminal cell content
 - **`SequenceCounter`** (`Helpers/SequenceCounter.cs`): Tracks command execution count for deterministic prompt detection
-- **`CliE2ETestHelpers`** (`Helpers/CliE2ETestHelpers.cs`): Extension methods and environment variable helpers
+- **`CliE2ETestHelpers`** (`Helpers/CliE2ETestHelpers.cs`): Environment variable helpers and terminal factory methods
 - **`TemporaryWorkspace`**: Creates isolated temporary directories for test execution
+- **`Hex1bTerminalInputSequenceBuilder`** *(legacy)*: Fluent builder API for building sequences of terminal input/output operations. Prefer `Hex1bTerminalAutomator` for new tests.
 
 ### Test Architecture
 
 Each test:
 1. Creates a `TemporaryWorkspace` for isolation
 2. Builds a `Hex1bTerminal` with headless mode and asciinema recording
-3. Creates a `Hex1bTerminalInputSequenceBuilder` with operations
-4. Applies the sequence to the terminal and awaits completion
+3. Creates a `Hex1bTerminalAutomator` wrapping the terminal
+4. Drives the terminal with async/await calls and awaits completion
 
 ## Test Structure
 
 ```csharp
-public sealed class SmokeTests : IAsyncDisposable
+public sealed class SmokeTests(ITestOutputHelper output)
 {
-    private readonly ITestOutputHelper _output;
-    private readonly string _workDirectory;
-
-    public SmokeTests(ITestOutputHelper output)
-    {
-        _output = output;
-        _workDirectory = Path.Combine(Path.GetTempPath(), "aspire-cli-e2e", Guid.NewGuid().ToString("N")[..8]);
-        Directory.CreateDirectory(_workDirectory);
-    }
-
     [Fact]
     public async Task MyCliTest()
     {
-        var workspace = TemporaryWorkspace.Create(_output);
+        var workspace = TemporaryWorkspace.Create(output);
+        var installMode = CliE2ETestHelpers.DetectDockerInstallMode();
 
-        var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
-        var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
-        var isCI = CliE2ETestHelpers.IsRunningInCI;
-        
-        using var terminal = CliE2ETestHelpers.CreateTestTerminal();
-
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal();
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
-        // Define pattern searchers for expected output
-        var waitingForExpectedOutput = new CellPatternSearcher()
-            .Find("Expected output text");
-
-        // Create a sequence counter for tracking command prompts
         var counter = new SequenceCounter();
-        var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
-        // Build the input sequence
-        sequenceBuilder.PrepareEnvironment(workspace, counter);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliInDockerAsync(installMode, counter);
 
-        if (isCI)
-        {
-            sequenceBuilder.InstallAspireCliFromPullRequest(prNumber, counter);
-            sequenceBuilder.SourceAspireCliEnvironment(counter);
-        }
+        await auto.TypeAsync("aspire --version");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
-        sequenceBuilder
-            .Type("aspire --version")
-            .Enter()
-            .WaitForSuccessPrompt(counter)
-            .Type("exit")
-            .Enter();
-
-        var sequence = sequenceBuilder.Build();
-
-        await sequence.ApplyAsync(terminal, TestContext.Current.CancellationToken);
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
         await pendingRun;
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        // Clean up work directory
-        if (Directory.Exists(_workDirectory))
-        {
-            Directory.Delete(_workDirectory, recursive: true);
-        }
-        await ValueTask.CompletedTask;
     }
 }
 ```
@@ -110,22 +74,26 @@ The `SequenceCounter` class tracks the number of shell commands executed. This e
 
 ### How It Works
 
-1. `PrepareEnvironment()` configures the shell with a custom prompt: `[N OK] $ ` or `[N ERR:code] $ `
+1. `PrepareDockerEnvironmentAsync()` configures the shell with a custom prompt: `[N OK] $ ` or `[N ERR:code] $ `
 2. Each command increments the counter
-3. `WaitForSuccessPrompt(counter)` waits for a prompt showing the current count with `OK`
+3. `WaitForSuccessPromptAsync(counter)` waits for a prompt showing the current count with `OK`
 
 ```csharp
 var counter = new SequenceCounter();
+var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
-sequenceBuilder.PrepareEnvironment(workspace, counter)  // Sets up prompt, counter starts at 1
-    .Type("echo hello")
-    .Enter()
-    .WaitForSuccessPrompt(counter)  // Waits for "[1 OK] $ ", then increments to 2
-    .Type("ls -la")
-    .Enter()
-    .WaitForSuccessPrompt(counter)  // Waits for "[2 OK] $ ", then increments to 3
-    .Type("exit")
-    .Enter();
+await auto.PrepareDockerEnvironmentAsync(counter, workspace);  // Sets up prompt, counter starts at 1
+
+await auto.TypeAsync("echo hello");
+await auto.EnterAsync();
+await auto.WaitForSuccessPromptAsync(counter);  // Waits for "[1 OK] $ ", then increments to 2
+
+await auto.TypeAsync("ls -la");
+await auto.EnterAsync();
+await auto.WaitForSuccessPromptAsync(counter);  // Waits for "[2 OK] $ ", then increments to 3
+
+await auto.TypeAsync("exit");
+await auto.EnterAsync();
 ```
 
 This approach is more reliable than arbitrary timeouts because it deterministically waits for each command to complete.
@@ -151,10 +119,11 @@ var waitingForAnyStarter = new CellPatternSearcher()
 var waitingForShell = new CellPatternSearcher()
     .Find("b").RightUntil("$").Right(' ').Right(' ');
 
-// Use in WaitUntil
-sequenceBuilder.WaitUntil(
+// Use in WaitUntilAsync
+await auto.WaitUntilAsync(
     snapshot => waitingForPrompt.Search(snapshot).Count > 0,
-    TimeSpan.FromSeconds(30));
+    TimeSpan.FromSeconds(30),
+    description: "waiting for prompt");
 ```
 
 ### Find vs FindPattern
@@ -166,28 +135,43 @@ sequenceBuilder.WaitUntil(
 
 ## Extension Methods
 
-### Hex1bTestHelpers Extensions (Shared)
+### Hex1bAutomatorTestHelpers Extensions (Shared — Automator API)
 
 | Method | Description |
 |--------|-------------|
-| `AspireNew(projectName, counter, template?, useRedisCache?)` | Runs `aspire new` interactively, handling template selection, project name, output path, URLs, Redis, and test project prompts |
+| `WaitForSuccessPromptAsync(counter, timeout?)` | Waits for `[N OK] $ ` prompt and increments counter |
+| `WaitForAnyPromptAsync(counter, timeout?)` | Waits for any prompt (`OK` or `ERR`) and increments counter |
+| `WaitForErrorPromptAsync(counter, timeout?)` | Waits for `[N ERR:code] $ ` prompt and increments counter |
+| `WaitForSuccessPromptFailFastAsync(counter, timeout?)` | Waits for success prompt, fails immediately if error prompt appears |
+| `DeclineAgentInitPromptAsync()` | Declines the `aspire agent init` prompt if it appears |
+| `AspireNewAsync(projectName, counter, template?, useRedisCache?)` | Runs `aspire new` interactively, handling template selection, project name, output path, URLs, Redis, and test project prompts |
 
 See [AspireNew Helper](#aspirenew-helper) below for detailed usage.
 
-### CliE2ETestHelpers Extensions on Hex1bTerminalInputSequenceBuilder
+### CliE2EAutomatorHelpers Extensions on Hex1bTerminalAutomator
 
 | Method | Description |
 |--------|-------------|
-| `PrepareEnvironment(workspace, counter)` | Sets up custom prompt with command tracking, changes to workspace directory |
-| `InstallAspireCliFromPullRequest(prNumber, counter)` | Downloads and installs CLI from PR artifacts |
-| `SourceAspireCliEnvironment(counter)` | Adds `~/.aspire/bin` to PATH (Linux only) |
+| `PrepareDockerEnvironmentAsync(counter, workspace)` | Sets up Docker container environment with custom prompt and command tracking |
+| `InstallAspireCliInDockerAsync(installMode, counter)` | Installs the Aspire CLI inside the Docker container |
+| `ClearScreenAsync(counter)` | Clears the terminal screen and waits for prompt |
 
 ### SequenceCounterExtensions
 
 | Method | Description |
 |--------|-------------|
-| `WaitForSuccessPrompt(counter, timeout?)` | Waits for `[N OK] $ ` prompt and increments counter |
 | `IncrementSequence(counter)` | Manually increments the counter |
+
+### Legacy Builder Extensions
+
+The following extensions on `Hex1bTerminalInputSequenceBuilder` are still available but should not be used in new tests:
+
+| Method | Description |
+|--------|-------------|
+| `WaitForSuccessPrompt(counter, timeout?)` | *(legacy)* Waits for `[N OK] $ ` prompt and increments counter |
+| `PrepareEnvironment(workspace, counter)` | *(legacy)* Sets up custom prompt with command tracking |
+| `InstallAspireCliFromPullRequest(prNumber, counter)` | *(legacy)* Downloads and installs CLI from PR artifacts |
+| `SourceAspireCliEnvironment(counter)` | *(legacy)* Adds `~/.aspire/bin` to PATH |
 
 ## DO: Use CellPatternSearcher for Output Detection
 
@@ -197,24 +181,26 @@ Wait for specific output patterns rather than arbitrary delays:
 var waitingForMessage = new CellPatternSearcher()
     .Find("Project created successfully.");
 
-sequenceBuilder
-    .Type("aspire new")
-    .Enter()
-    .WaitUntil(s => waitingForMessage.Search(s).Count > 0, TimeSpan.FromMinutes(2));
+await auto.TypeAsync("aspire new");
+await auto.EnterAsync();
+await auto.WaitUntilAsync(
+    s => waitingForMessage.Search(s).Count > 0,
+    TimeSpan.FromMinutes(2),
+    description: "waiting for project created message");
 ```
 
-## DO: Use WaitForSuccessPrompt After Commands
+## DO: Use WaitForSuccessPromptAsync After Commands
 
-After running shell commands, use `WaitForSuccessPrompt()` to wait for the command to complete:
+After running shell commands, use `WaitForSuccessPromptAsync()` to wait for the command to complete:
 
 ```csharp
-sequenceBuilder
-    .Type("dotnet build")
-    .Enter()
-    .WaitForSuccessPrompt(counter)  // Waits for prompt, verifies success
-    .Type("dotnet run")
-    .Enter()
-    .WaitForSuccessPrompt(counter);
+await auto.TypeAsync("dotnet build");
+await auto.EnterAsync();
+await auto.WaitForSuccessPromptAsync(counter);  // Waits for prompt, verifies success
+
+await auto.TypeAsync("dotnet run");
+await auto.EnterAsync();
+await auto.WaitForSuccessPromptAsync(counter);
 ```
 
 ## AspireNew Helper
@@ -244,44 +230,49 @@ The `AspireNew` extension method centralizes the multi-step `aspire new` interac
 
 ```csharp
 // Starter template with defaults (Redis=Yes, TestProject=No)
-sequenceBuilder.AspireNew("MyProject", counter);
+await auto.AspireNewAsync("MyProject", counter);
 
 // Starter template, no Redis
-sequenceBuilder.AspireNew("MyProject", counter, useRedisCache: false);
+await auto.AspireNewAsync("MyProject", counter, useRedisCache: false);
 
 // JsReact template, no Redis
-sequenceBuilder.AspireNew("MyProject", counter, template: AspireTemplate.JsReact, useRedisCache: false);
+await auto.AspireNewAsync("MyProject", counter, template: AspireTemplate.JsReact, useRedisCache: false);
 
 // PythonReact template
-sequenceBuilder.AspireNew("MyProject", counter,
+await auto.AspireNewAsync("MyProject", counter,
     template: AspireTemplate.PythonReact,
     useRedisCache: false);
 
 // Empty app host
-sequenceBuilder.AspireNew("MyProject", counter, template: AspireTemplate.EmptyAppHost);
+await auto.AspireNewAsync("MyProject", counter, template: AspireTemplate.EmptyAppHost);
 ```
 
 ## DO: Handle Interactive Prompts
 
-For `aspire new`, use the `AspireNew` helper instead of manually building the prompt sequence:
+For `aspire new`, use the `AspireNewAsync` helper instead of manually building the prompt sequence:
 
 ```csharp
 // DO: Use the helper
-sequenceBuilder.AspireNew("MyProject", counter);
+await auto.AspireNewAsync("MyProject", counter);
 
-// DON'T: Manually build the sequence (this is what AspireNew does internally)
+// DON'T: Manually build the sequence (this is what AspireNewAsync does internally)
 var waitingForTemplatePrompt = new CellPatternSearcher()
     .FindPattern("> Starter App");
 var waitingForProjectNamePrompt = new CellPatternSearcher()
     .Find("Enter the project name");
-sequenceBuilder
-    .Type("aspire new")
-    .Enter()
-    .WaitUntil(s => waitingForTemplatePrompt.Search(s).Count > 0, TimeSpan.FromSeconds(30))
-    .Enter()
-    .WaitUntil(s => waitingForProjectNamePrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-    .Type("MyProject")
-    .Enter();
+await auto.TypeAsync("aspire new");
+await auto.EnterAsync();
+await auto.WaitUntilAsync(
+    s => waitingForTemplatePrompt.Search(s).Count > 0,
+    TimeSpan.FromSeconds(30),
+    description: "waiting for template prompt");
+await auto.EnterAsync();
+await auto.WaitUntilAsync(
+    s => waitingForProjectNamePrompt.Search(s).Count > 0,
+    TimeSpan.FromSeconds(10),
+    description: "waiting for project name prompt");
+await auto.TypeAsync("MyProject");
+await auto.EnterAsync();
 ```
 
 For other interactive CLI commands, wait for each prompt before responding:
@@ -290,11 +281,13 @@ For other interactive CLI commands, wait for each prompt before responding:
 var waitingForPrompt = new CellPatternSearcher()
     .Find("Enter your choice");
 
-sequenceBuilder
-    .Type("aspire some-command")
-    .Enter()
-    .WaitUntil(s => waitingForPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(30))
-    .Enter();
+await auto.TypeAsync("aspire some-command");
+await auto.EnterAsync();
+await auto.WaitUntilAsync(
+    s => waitingForPrompt.Search(s).Count > 0,
+    TimeSpan.FromSeconds(30),
+    description: "waiting for choice prompt");
+await auto.EnterAsync();
 ```
 
 ## DO: Use Ctrl+C to Stop Long-Running Processes
@@ -302,12 +295,16 @@ sequenceBuilder
 For processes like `aspire run` that don't exit on their own:
 
 ```csharp
-sequenceBuilder
-    .Type("aspire run")
-    .Enter()
-    .WaitUntil(s => waitForCtrlCMessage.Search(s).Count > 0, TimeSpan.FromSeconds(30))
-    .Ctrl().Key(Hex1bKey.C)  // Send Ctrl+C
-    .WaitForSuccessPrompt(counter);
+using Hex1b.Input;
+
+await auto.TypeAsync("aspire run");
+await auto.EnterAsync();
+await auto.WaitUntilAsync(
+    s => waitForCtrlCMessage.Search(s).Count > 0,
+    TimeSpan.FromSeconds(30),
+    description: "waiting for Ctrl+C message");
+await auto.Ctrl().KeyAsync(Hex1bKey.C);  // Send Ctrl+C
+await auto.WaitForSuccessPromptAsync(counter);
 ```
 
 ## DO: Check IsRunningInCI for CI-Only Operations
@@ -315,15 +312,10 @@ sequenceBuilder
 Some operations only apply in CI (like installing CLI from PR artifacts):
 
 ```csharp
-var isCI = CliE2ETestHelpers.IsRunningInCI;
+var installMode = CliE2ETestHelpers.DetectDockerInstallMode();
 
-sequenceBuilder.PrepareEnvironment(workspace, counter);
-
-if (isCI)
-{
-    sequenceBuilder.InstallAspireCliFromPullRequest(prNumber, counter);
-    sequenceBuilder.SourceAspireCliEnvironment(counter);
-}
+await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+await auto.InstallAspireCliInDockerAsync(installMode, counter);
 
 // Continue with test commands...
 ```
@@ -338,30 +330,68 @@ var commitSha = CliE2ETestHelpers.GetRequiredCommitSha(); // GITHUB_PR_HEAD_SHA 
 var isCI = CliE2ETestHelpers.IsRunningInCI;               // true when both env vars set
 ```
 
+## DO: Always Include `description:` on WaitUntilAsync
+
+Every `WaitUntilAsync` call requires a named `description:` parameter. This description appears in logs and asciinema recordings to make debugging easier when a wait times out.
+
+```csharp
+// DON'T: Missing description
+await auto.WaitUntilAsync(
+    s => pattern.Search(s).Count > 0,
+    TimeSpan.FromSeconds(30));
+
+// DO: Include a meaningful description
+await auto.WaitUntilAsync(
+    s => pattern.Search(s).Count > 0,
+    TimeSpan.FromSeconds(30),
+    description: "waiting for build output");
+```
+
+## DO: Inline Code Where `ExecuteCallback` Was Used
+
+The old builder API used `ExecuteCallback()` to run synchronous operations mid-sequence. With the automator API, simply inline the code directly — no special wrapper is needed.
+
+```csharp
+// Old builder API (DON'T use in new tests)
+sequenceBuilder
+    .ExecuteCallback(() => File.WriteAllText(configPath, newConfig))
+    .Type("aspire run")
+    .Enter();
+
+// Automator API (DO)
+File.WriteAllText(configPath, newConfig);
+await auto.TypeAsync("aspire run");
+await auto.EnterAsync();
+```
+
 ## DON'T: Use Hard-coded Delays
 
-Use `WaitUntil()` with specific output patterns instead of arbitrary delays:
+Use `WaitUntilAsync()` with specific output patterns instead of arbitrary delays:
 
 ```csharp
 // DON'T: Arbitrary delays
-.Wait(TimeSpan.FromSeconds(30))
+await Task.Delay(TimeSpan.FromSeconds(30));
 
 // DO: Wait for specific output
-.WaitUntil(
+await auto.WaitUntilAsync(
     snapshot => pattern.Search(snapshot).Count > 0,
-    TimeSpan.FromSeconds(30))
+    TimeSpan.FromSeconds(30),
+    description: "waiting for expected output");
 ```
 
 ## DON'T: Hard-code Prompt Sequence Numbers
 
-Don't hard-code the sequence numbers in `WaitForSuccessPrompt` calls. Use the counter:
+Don't hard-code the sequence numbers in `WaitForSuccessPromptAsync` calls. Use the counter:
 
 ```csharp
 // DON'T: Hard-coded sequence numbers
-.WaitUntil(s => s.GetScreenText().Contains("[3 OK] $ "), timeout)
+await auto.WaitUntilAsync(
+    s => s.GetScreenText().Contains("[3 OK] $ "),
+    timeout,
+    description: "waiting for prompt");
 
 // DO: Use the counter
-.WaitForSuccessPrompt(counter)
+await auto.WaitForSuccessPromptAsync(counter);
 ```
 
 The counter automatically tracks which command you're waiting for, even if command sequences change.
@@ -405,11 +435,11 @@ This reveals the exact strings like:
 
 ## Adding New Extension Methods
 
-When adding new CLI operations as extension methods:
+When adding new CLI operations as extension methods, define them on `Hex1bTerminalAutomator`:
 
 ```csharp
-internal static Hex1bTerminalInputSequenceBuilder MyNewOperation(
-    this Hex1bTerminalInputSequenceBuilder builder,
+internal static async Task MyNewOperationAsync(
+    this Hex1bTerminalAutomator auto,
     string arg,
     SequenceCounter counter,
     TimeSpan? timeout = null)
@@ -417,22 +447,23 @@ internal static Hex1bTerminalInputSequenceBuilder MyNewOperation(
     var expectedOutput = new CellPatternSearcher()
         .Find("Expected output");
 
-    return builder
-        .Type($"aspire my-command {arg}")
-        .Enter()
-        .WaitUntil(
-            snapshot => expectedOutput.Search(snapshot).Count > 0,
-            timeout ?? TimeSpan.FromSeconds(30))
-        .WaitForSuccessPrompt(counter);
+    await auto.TypeAsync($"aspire my-command {arg}");
+    await auto.EnterAsync();
+    await auto.WaitUntilAsync(
+        snapshot => expectedOutput.Search(snapshot).Count > 0,
+        timeout ?? TimeSpan.FromSeconds(30),
+        description: "waiting for expected output from my-command");
+    await auto.WaitForSuccessPromptAsync(counter);
 }
 ```
 
 Key points:
-1. Define as extension method on `Hex1bTerminalInputSequenceBuilder`
+1. Define as async extension method on `Hex1bTerminalAutomator`
 2. Accept `SequenceCounter` parameter for prompt tracking
 3. Use `CellPatternSearcher` for output detection
-4. Call `WaitForSuccessPrompt(counter)` after command completion
-5. Return the builder for fluent chaining
+4. Always include `description:` on `WaitUntilAsync` calls
+5. Call `WaitForSuccessPromptAsync(counter)` after command completion
+6. Return `Task` (no fluent chaining needed with async/await)
 
 ## CI Configuration
 
@@ -493,7 +524,7 @@ gh run list --branch $(git branch --show-current) --workflow CI --limit 5
 # Get the run ID from the output or use:
 RUN_ID=$(gh run list --branch $(git branch --show-current) --workflow CI --limit 1 --json databaseId --jq '.[0].databaseId')
 echo "Run ID: $RUN_ID"
-echo "URL: https://github.com/dotnet/aspire/actions/runs/$RUN_ID"
+echo "URL: https://github.com/microsoft/aspire/actions/runs/$RUN_ID"
 ```
 
 ### Step 2: Find CLI E2E Test Artifacts
@@ -507,7 +538,7 @@ Artifact names follow the pattern: `logs-<TestClass>-ubuntu-latest`
 gh run view $RUN_ID --json jobs --jq '.jobs[] | select(.name | test("Cli E2E")) | {name, conclusion}'
 
 # List available CLI E2E artifacts
-gh api --paginate "repos/dotnet/aspire/actions/runs/$RUN_ID/artifacts" \
+gh api --paginate "repos/microsoft/aspire/actions/runs/$RUN_ID/artifacts" \
   --jq '.artifacts[].name' | grep -i "smoke"
 ```
 

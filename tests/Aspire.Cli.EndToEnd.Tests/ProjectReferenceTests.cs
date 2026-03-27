@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Xunit;
@@ -12,7 +14,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// <summary>
 /// End-to-end test for polyglot project reference support.
 /// Creates a .NET hosting integration project and a TypeScript AppHost that references it
-/// via settings.json, then verifies the integration is discovered, code-generated, and functional.
+/// via <c>aspire.config.json</c>, then verifies the integration is discovered, code-generated, and functional.
 /// </summary>
 public sealed class ProjectReferenceTests(ITestOutputHelper output)
 {
@@ -27,44 +29,28 @@ public sealed class ProjectReferenceTests(ITestOutputHelper output)
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
-        var waitingForAppHostCreated = new CellPatternSearcher()
-            .Find("Created apphost.ts");
-
-        var waitForStartSuccess = new CellPatternSearcher()
-            .Find("AppHost started successfully.");
-
-        // Pattern to verify our custom integration was code-generated
-        var waitForAddMyServiceInCodegen = new CellPatternSearcher()
-            .Find("addMyService");
-
-        // Pattern to verify the resource appears in describe output
-        var waitForMyServiceInDescribe = new CellPatternSearcher()
-            .Find("my-svc");
-
         var counter = new SequenceCounter();
-        var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
-        sequenceBuilder.PrepareDockerEnvironment(counter, workspace);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        sequenceBuilder.InstallAspireCliInDocker(installMode, counter);
+        await auto.InstallAspireCliInDockerAsync(installMode, counter);
 
-        // Step 1: Create a TypeScript AppHost (so we get the sdkVersion in settings.json)
-        sequenceBuilder
-            .Type("aspire init --language typescript --non-interactive")
-            .Enter()
-            .WaitUntil(s => waitingForAppHostCreated.Search(s).Count > 0, TimeSpan.FromMinutes(2))
-            .WaitForSuccessPrompt(counter);
+        // Step 1: Create a TypeScript AppHost (so we get the SDK version in aspire.config.json)
+        await auto.TypeAsync("aspire init --language typescript --non-interactive");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter);
 
-        // Step 2: Create the integration project, update settings.json, and modify apphost.ts
-        sequenceBuilder.ExecuteCallback(() =>
+        // Step 2: Create the integration project, update aspire.config.json, and modify apphost.ts
         {
             var workDir = workspace.WorkspaceRoot.FullName;
 
-            // Read the sdkVersion from the settings.json that aspire init created
-            var settingsPath = Path.Combine(workDir, ".aspire", "settings.json");
-            var settingsJson = File.ReadAllText(settingsPath);
-            using var doc = JsonDocument.Parse(settingsJson);
-            var sdkVersion = doc.RootElement.GetProperty("sdkVersion").GetString()!;
+            // Read the SDK version from the aspire.config.json that aspire init created.
+            var configPath = Path.Combine(workDir, "aspire.config.json");
+            var configJson = File.ReadAllText(configPath);
+            using var doc = JsonDocument.Parse(configJson);
+            var sdkVersion = doc.RootElement.GetProperty("sdk").GetProperty("version").GetString()!;
 
             // Create the .NET hosting integration project
             var integrationDir = Path.Combine(workDir, "MyIntegration");
@@ -129,20 +115,15 @@ public sealed class ProjectReferenceTests(ITestOutputHelper output)
                 }
                 """);
 
-            // Update settings.json to add the project reference
-            using var settingsDoc = JsonDocument.Parse(settingsJson);
-            var settings = new Dictionary<string, object>();
-            foreach (var prop in settingsDoc.RootElement.EnumerateObject())
-            {
-                settings[prop.Name] = prop.Value.Clone();
-            }
-            settings["packages"] = new Dictionary<string, string>
-            {
-                ["MyIntegration"] = "./MyIntegration/MyIntegration.csproj"
-            };
+            // Update aspire.config.json to add the project reference.
+            var config = JsonNode.Parse(configJson)?.AsObject()
+                ?? throw new InvalidOperationException("Expected aspire.config.json to contain a JSON object.");
+            var packages = config["packages"] as JsonObject ?? new JsonObject();
+            packages["MyIntegration"] = "./MyIntegration/MyIntegration.csproj";
+            config["packages"] = packages;
 
-            var updatedJson = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(settingsPath, updatedJson);
+            var updatedJson = config.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(configPath, updatedJson);
 
             // Delete the generated .modules folder to force re-codegen with the new integration
             var modulesDir = Path.Combine(workDir, ".modules");
@@ -159,67 +140,53 @@ public sealed class ProjectReferenceTests(ITestOutputHelper output)
                 await builder.addMyService("my-svc");
                 await builder.build().run();
                 """);
-        });
+        }
 
         // Step 3: Start the AppHost (triggers project ref build + codegen)
-        // Detect either success or failure
-        var waitForStartFailure = new CellPatternSearcher()
-            .Find("AppHost failed to build");
-
-        sequenceBuilder
-            .Type("aspire start --non-interactive 2>&1 | tee /tmp/aspire-start-output.txt")
-            .Enter()
-            .WaitUntil(s =>
+        await auto.TypeAsync("aspire start --non-interactive 2>&1 | tee /tmp/aspire-start-output.txt");
+        await auto.EnterAsync();
+        await auto.WaitUntilAsync(s =>
+        {
+            if (s.ContainsText(RunCommandStrings.AppHostFailedToBuild))
             {
-                if (waitForStartFailure.Search(s).Count > 0)
-                {
-                    // Dump child logs before failing
-                    return true;
-                }
-                return waitForStartSuccess.Search(s).Count > 0;
-            }, TimeSpan.FromMinutes(2))
-            .WaitForSuccessPrompt(counter);
+                // Dump child logs before failing
+                return true;
+            }
+            return s.ContainsText(RunCommandStrings.AppHostStartedSuccessfully);
+        }, timeout: TimeSpan.FromMinutes(2), description: "waiting for apphost start success or failure");
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // If start failed, dump the child log for debugging before the test fails
-        sequenceBuilder
-            .Type("CHILD_LOG=$(ls -t ~/.aspire/logs/cli_*detach*.log 2>/dev/null | head -1) && if [ -n \"$CHILD_LOG\" ]; then echo '=== CHILD LOG ==='; cat \"$CHILD_LOG\"; echo '=== END CHILD LOG ==='; fi")
-            .Enter()
-            .WaitForSuccessPrompt(counter, TimeSpan.FromSeconds(10));
+        await auto.TypeAsync("CHILD_LOG=$(ls -t ~/.aspire/logs/cli_*detach*.log 2>/dev/null | head -1) && if [ -n \"$CHILD_LOG\" ]; then echo '=== CHILD LOG ==='; cat \"$CHILD_LOG\"; echo '=== END CHILD LOG ==='; fi");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
 
         // Step 4: Verify the custom integration was code-generated
-        sequenceBuilder
-            .Type("grep addMyService .modules/aspire.ts")
-            .Enter()
-            .WaitUntil(s => waitForAddMyServiceInCodegen.Search(s).Count > 0, TimeSpan.FromSeconds(5))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("grep addMyService .modules/aspire.ts");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("addMyService", timeout: TimeSpan.FromSeconds(5));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 5: Wait for the custom resource to be up
-        sequenceBuilder
-            .Type("aspire wait my-svc --timeout 60")
-            .Enter()
-            .WaitForSuccessPrompt(counter, TimeSpan.FromSeconds(90));
+        await auto.TypeAsync("aspire wait my-svc --timeout 60");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(90));
 
         // Step 6: Verify the resource appears in describe
-        sequenceBuilder
-            .Type("aspire describe my-svc --format json > /tmp/my-svc-describe.json")
-            .Enter()
-            .WaitForSuccessPrompt(counter, TimeSpan.FromSeconds(15))
-            .Type("cat /tmp/my-svc-describe.json")
-            .Enter()
-            .WaitUntil(s => waitForMyServiceInDescribe.Search(s).Count > 0, TimeSpan.FromSeconds(5))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire describe my-svc --format json > /tmp/my-svc-describe.json");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(15));
+        await auto.TypeAsync("cat /tmp/my-svc-describe.json");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("my-svc", timeout: TimeSpan.FromSeconds(5));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 7: Clean up
-        sequenceBuilder
-            .Type("aspire stop")
-            .Enter()
-            .WaitForSuccessPrompt(counter)
-            .Type("exit")
-            .Enter();
-
-        var sequence = sequenceBuilder.Build();
-
-        await sequence.ApplyAsync(terminal, TestContext.Current.CancellationToken);
+        await auto.TypeAsync("aspire stop");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
 
         await pendingRun;
     }

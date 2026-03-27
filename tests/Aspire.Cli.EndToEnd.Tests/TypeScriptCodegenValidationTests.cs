@@ -27,94 +27,72 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
         var counter = new SequenceCounter();
-        var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
-        var waitingForAppHostCreated = new CellPatternSearcher()
-            .Find("Created apphost.ts");
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        var waitingForPackageAdded = new CellPatternSearcher()
-            .Find("The package Aspire.Hosting.");
-
-        var waitingForRestoreSuccess = new CellPatternSearcher()
-            .Find("SDK code restored successfully");
-
-        sequenceBuilder.PrepareDockerEnvironment(counter, workspace);
-
-        sequenceBuilder.InstallAspireCliInDocker(installMode, counter);
-
-        // Enable polyglot support
-        sequenceBuilder.EnablePolyglotSupport(counter);
+        await auto.InstallAspireCliInDockerAsync(installMode, counter);
 
         // Step 1: Create a TypeScript AppHost
-        sequenceBuilder
-            .Type("aspire init --language typescript --non-interactive")
-            .Enter()
-            .WaitUntil(s => waitingForAppHostCreated.Search(s).Count > 0, TimeSpan.FromMinutes(2))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire init --language typescript --non-interactive");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 2: Add two integrations
-        sequenceBuilder
-            .Type("aspire add Aspire.Hosting.Redis")
-            .Enter()
-            .WaitUntil(s => waitingForPackageAdded.Search(s).Count > 0, TimeSpan.FromMinutes(2))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire add Aspire.Hosting.Redis");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("The package Aspire.Hosting.", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter);
 
-        sequenceBuilder
-            .Type("aspire add Aspire.Hosting.SqlServer")
-            .Enter()
-            .WaitUntil(s => waitingForPackageAdded.Search(s).Count > 0, TimeSpan.FromMinutes(2))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire add Aspire.Hosting.SqlServer");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("The package Aspire.Hosting.", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 3: Run aspire restore and verify success
-        sequenceBuilder
-            .Type("aspire restore")
-            .Enter()
-            .WaitUntil(s => waitingForRestoreSuccess.Search(s).Count > 0, TimeSpan.FromMinutes(3))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire restore");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 4: Verify generated SDK files exist
-        sequenceBuilder.ExecuteCallback(() =>
+        var modulesDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".modules");
+        if (!Directory.Exists(modulesDir))
         {
-            var modulesDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".modules");
-            if (!Directory.Exists(modulesDir))
+            throw new InvalidOperationException($".modules directory was not created at {modulesDir}");
+        }
+
+        var expectedFiles = new[] { "aspire.ts", "base.ts", "transport.ts" };
+        foreach (var file in expectedFiles)
+        {
+            var filePath = Path.Combine(modulesDir, file);
+            if (!File.Exists(filePath))
             {
-                throw new InvalidOperationException($".modules directory was not created at {modulesDir}");
+                throw new InvalidOperationException($"Expected generated file not found: {filePath}");
             }
 
-            var expectedFiles = new[] { "aspire.ts", "base.ts", "transport.ts" };
-            foreach (var file in expectedFiles)
+            var content = File.ReadAllText(filePath);
+            if (string.IsNullOrWhiteSpace(content))
             {
-                var filePath = Path.Combine(modulesDir, file);
-                if (!File.Exists(filePath))
-                {
-                    throw new InvalidOperationException($"Expected generated file not found: {filePath}");
-                }
-
-                var content = File.ReadAllText(filePath);
-                if (string.IsNullOrWhiteSpace(content))
-                {
-                    throw new InvalidOperationException($"Generated file is empty: {filePath}");
-                }
+                throw new InvalidOperationException($"Generated file is empty: {filePath}");
             }
+        }
 
-            // Verify aspire.ts contains symbols from both integrations
-            var aspireTs = File.ReadAllText(Path.Combine(modulesDir, "aspire.ts"));
-            if (!aspireTs.Contains("addRedis"))
-            {
-                throw new InvalidOperationException("aspire.ts does not contain addRedis from Aspire.Hosting.Redis");
-            }
-            if (!aspireTs.Contains("addSqlServer"))
-            {
-                throw new InvalidOperationException("aspire.ts does not contain addSqlServer from Aspire.Hosting.SqlServer");
-            }
-        });
+        // Verify aspire.ts contains symbols from both integrations
+        var aspireTs = File.ReadAllText(Path.Combine(modulesDir, "aspire.ts"));
+        if (!aspireTs.Contains("addRedis"))
+        {
+            throw new InvalidOperationException("aspire.ts does not contain addRedis from Aspire.Hosting.Redis");
+        }
+        if (!aspireTs.Contains("addSqlServer"))
+        {
+            throw new InvalidOperationException("aspire.ts does not contain addSqlServer from Aspire.Hosting.SqlServer");
+        }
 
-        sequenceBuilder
-            .Type("exit")
-            .Enter();
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
 
-        var sequence = sequenceBuilder.Build();
-        await sequence.ApplyAsync(terminal, TestContext.Current.CancellationToken);
         await pendingRun;
     }
 
@@ -131,85 +109,60 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
         var counter = new SequenceCounter();
-        var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
-        var waitingForAppHostCreated = new CellPatternSearcher()
-            .Find("Created apphost.ts");
-
-        var waitingForPackageAdded = new CellPatternSearcher()
-            .Find("The package Aspire.Hosting.");
-
-        var waitingForRestoreSuccess = new CellPatternSearcher()
-            .Find("SDK code restored successfully");
-
-        var waitingForAppHostError = new CellPatternSearcher()
-            .Find("❌ AppHost Error:");
-
-        var waitingForAwaitHint = new CellPatternSearcher()
-            .Find("Did you forget 'await'");
-
-        sequenceBuilder.PrepareEnvironment(workspace, counter);
+        // PrepareEnvironment
+        await auto.PrepareEnvironmentAsync(workspace, counter);
 
         if (isCI)
         {
-            sequenceBuilder.InstallAspireBundleFromPullRequest(prNumber, counter);
-            sequenceBuilder.SourceAspireBundleEnvironment(counter);
-            sequenceBuilder.VerifyAspireCliVersion(commitSha, counter);
+            await auto.InstallAspireBundleFromPullRequestAsync(prNumber, counter);
+            await auto.SourceAspireBundleEnvironmentAsync(counter);
+            await auto.VerifyAspireCliVersionAsync(commitSha, counter);
         }
 
-        sequenceBuilder.EnablePolyglotSupport(counter);
+        await auto.TypeAsync("aspire init --language typescript --non-interactive");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter);
 
-        sequenceBuilder
-            .Type("aspire init --language typescript --non-interactive")
-            .Enter()
-            .WaitUntil(s => waitingForAppHostCreated.Search(s).Count > 0, TimeSpan.FromMinutes(2))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire add Aspire.Hosting.PostgreSQL");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("The package Aspire.Hosting.", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter);
 
-        sequenceBuilder
-            .Type("aspire add Aspire.Hosting.PostgreSQL")
-            .Enter()
-            .WaitUntil(s => waitingForPackageAdded.Search(s).Count > 0, TimeSpan.FromMinutes(2))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire restore");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptAsync(counter);
 
-        sequenceBuilder
-            .Type("aspire restore")
-            .Enter()
-            .WaitUntil(s => waitingForRestoreSuccess.Search(s).Count > 0, TimeSpan.FromMinutes(3))
-            .WaitForSuccessPrompt(counter);
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
+        var newContent = """
+            import { createBuilder } from './.modules/aspire.js';
 
-        sequenceBuilder.ExecuteCallback(() =>
-        {
-            var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
-            var newContent = """
-                import { createBuilder } from './.modules/aspire.js';
+            const builder = await createBuilder();
 
-                const builder = await createBuilder();
+            const postgres = builder.addPostgres("postgres");
+            const db = postgres.addDatabase("db");
 
-                const postgres = builder.addPostgres("postgres");
-                const db = postgres.addDatabase("db");
+            await builder.addContainer("consumer", "nginx")
+                .withReference(db);
 
-                await builder.addContainer("consumer", "nginx")
-                    .withReference(db);
+            await builder.build().run();
+            """;
 
-                await builder.build().run();
-                """;
+        File.WriteAllText(appHostPath, newContent);
 
-            File.WriteAllText(appHostPath, newContent);
-        });
+        await auto.TypeAsync("aspire run");
+        await auto.EnterAsync();
+        await auto.WaitUntilAsync(s =>
+            s.ContainsText("❌ AppHost Error:") &&
+            s.ContainsText("Did you forget 'await'"),
+            timeout: TimeSpan.FromMinutes(3), description: "waiting for AppHost error with await hint");
+        await auto.WaitForAnyPromptAsync(counter);
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
 
-        sequenceBuilder
-            .Type("aspire run")
-            .Enter()
-            .WaitUntil(s =>
-                waitingForAppHostError.Search(s).Count > 0 &&
-                waitingForAwaitHint.Search(s).Count > 0,
-                TimeSpan.FromMinutes(3))
-            .WaitForAnyPrompt(counter)
-            .Type("exit")
-            .Enter();
-
-        var sequence = sequenceBuilder.Build();
-        await sequence.ApplyAsync(terminal, TestContext.Current.CancellationToken);
         await pendingRun;
     }
 }

@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
@@ -35,7 +35,7 @@
     <PackageReference Include="Azure.Provisioning.CognitiveServices" />
     <PackageReference Include="Azure.Provisioning.ContainerRegistry" />
     <PackageReference Include="Microsoft.AI.Foundry.Local" />
-    <PackageReference Include="Microsoft.Bcl.Memory" VersionOverride="10.0.0" />
+    <PackageReference Include="Microsoft.Bcl.Memory" />
   </ItemGroup>
 
 </Project>

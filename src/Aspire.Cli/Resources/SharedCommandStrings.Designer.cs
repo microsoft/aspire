@@ -104,5 +104,23 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("PromptRunAgentInit", resourceCulture);
             }
         }
+
+        internal static string PipelineLogLevelOptionDescription {
+            get {
+                return ResourceManager.GetString("PipelineLogLevelOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string PipelineIncludeExceptionDetailsOptionDescription {
+            get {
+                return ResourceManager.GetString("PipelineIncludeExceptionDetailsOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string PipelineEnvironmentOptionDescription {
+            get {
+                return ResourceManager.GetString("PipelineEnvironmentOptionDescription", resourceCulture);
+            }
+        }
     }
 }

@@ -3,48 +3,63 @@
   <file datatype="xml" source-language="en" target-language="es" original="../SharedCommandStrings.resx">
     <body>
       <trans-unit id="AppHostNotRunning">
-        <source>No running AppHost found. Use 'aspire run' to start one first.</source>
-        <target state="translated">No se encontró ningún AppHost en ejecución. Usa 'aspire run' para iniciar uno primero.</target>
+        <source>No running apphost found. Use 'aspire run' to start one first.</source>
+        <target state="new">No running apphost found. Use 'aspire run' to start one first.</target>
         <note />
       </trans-unit>
       <trans-unit id="FormatOptionDescription">
-        <source>Output format for detached AppHost results.</source>
-        <target state="translated">Formato de salida para los resultados de AppHost desasociados.</target>
+        <source>Output format for detached apphost results</source>
+        <target state="new">Output format for detached apphost results</target>
         <note />
       </trans-unit>
       <trans-unit id="IsolatedOptionDescription">
-        <source>Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously.</source>
-        <target state="translated">Ejecutar en modo aislado con puertos aleatorios y secretos de usuario aislados, lo que permite que varias instancias se ejecuten simultáneamente.</target>
+        <source>Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously</source>
+        <target state="new">Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleInScopeAppHosts">
-        <source>Multiple running AppHosts found in the current directory. Select from running AppHosts.</source>
-        <target state="translated">Se encontraron varios AppHosts en ejecución en el directorio actual. Seleccione Apphosts en ejecución.</target>
+        <source>Multiple running apphosts found in the current directory. Select from running apphosts.</source>
+        <target state="new">Multiple running apphosts found in the current directory. Select from running apphosts.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoInScopeAppHostsShowingAll">
-        <source>No running AppHosts found in the current directory. Select from all running AppHosts.</source>
-        <target state="translated">No se encontró ningún AppHosts en ejecución en el directorio actual. Seleccione entre todos los AppHosts en ejecución.</target>
+        <source>No running apphosts found in the current directory. Select from all running apphosts.</source>
+        <target state="new">No running apphosts found in the current directory. Select from all running apphosts.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostOptionDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="translated">La ruta de acceso al archivo del proyecto host de la AppHost Aspire.</target>
+        <source>The path to the Aspire apphost project file</source>
+        <target state="new">The path to the Aspire apphost project file</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PipelineEnvironmentOptionDescription">
+        <source>The environment to use for the operation. The default is 'Production'.</source>
+        <target state="new">The environment to use for the operation. The default is 'Production'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PipelineIncludeExceptionDetailsOptionDescription">
+        <source>Include exception details (stack traces) in pipeline logs</source>
+        <target state="new">Include exception details (stack traces) in pipeline logs</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PipelineLogLevelOptionDescription">
+        <source>Set the minimum log level for pipeline logging (trace, debug, information, warning, error, critical). The default is 'information'.</source>
+        <target state="new">Set the minimum log level for pipeline logging (trace, debug, information, warning, error, critical). The default is 'information'.</target>
         <note />
       </trans-unit>
       <trans-unit id="ScanningForRunningAppHosts">
-        <source>Scanning for running AppHosts...</source>
-        <target state="translated">Buscando AppHosts en ejecución...</target>
+        <source>Scanning for running apphosts...</source>
+        <target state="new">Scanning for running apphosts...</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHost">
-        <source>Select an AppHost to {0}:</source>
-        <target state="translated">Seleccione un AppHost para {0}:</target>
+        <source>Select an apphost to {0}:</source>
+        <target state="new">Select an apphost to {0}:</target>
         <note />
       </trans-unit>
       <trans-unit id="UsingAppHost">
-        <source>Using AppHost: {0}</source>
-        <target state="translated">Uso de AppHost: {0}</target>
+        <source>Using apphost: {0}</source>
+        <target state="new">Using apphost: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="PromptRunAgentInit">

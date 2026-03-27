@@ -63,88 +63,60 @@ public sealed class AzureServiceBusDeploymentTests(ITestOutputHelper output)
             using var terminal = DeploymentE2ETestHelpers.CreateTestTerminal();
             var pendingRun = terminal.RunAsync(cancellationToken);
 
-            // Pattern searchers for aspire init
-            var waitingForInitComplete = new CellPatternSearcher()
-                .Find("Aspire initialization complete");
-
-            // Pattern searchers for aspire add prompts
-            // Integration selection prompt appears when multiple packages match the search term
-            var waitingForIntegrationSelectionPrompt = new CellPatternSearcher()
-                .Find("Select an integration to add:");
-
-            // Version selection prompt appears when selecting a package version in CI
-            var waitingForVersionSelectionPrompt = new CellPatternSearcher()
-                .Find("(based on NuGet.config)");
-
-            // Pattern searcher for deployment success
-            var waitingForPipelineSucceeded = new CellPatternSearcher()
-                .Find("PIPELINE SUCCEEDED");
-
             var counter = new SequenceCounter();
-            var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+            var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
             // Step 1: Prepare environment
             output.WriteLine("Step 1: Preparing environment...");
-            sequenceBuilder.PrepareEnvironment(workspace, counter);
+            await auto.PrepareEnvironmentAsync(workspace, counter);
 
             // Step 2: Set up CLI environment (in CI)
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
                 output.WriteLine("Step 2: Using pre-installed Aspire CLI from local build...");
-                sequenceBuilder.SourceAspireCliEnvironment(counter);
+                await auto.SourceAspireCliEnvironmentAsync(counter);
             }
 
             // Step 3: Create single-file AppHost using aspire init
             output.WriteLine("Step 3: Creating single-file AppHost with aspire init...");
-            sequenceBuilder.Type("aspire init --language csharp")
-                .Enter()
-                // NuGet.config prompt may or may not appear depending on environment.
-                // Wait a moment then press Enter to dismiss if present, then wait for completion.
-                .Wait(TimeSpan.FromSeconds(5))
-                .Enter()  // Dismiss NuGet.config prompt if present (no-op if already auto-accepted)
-                .WaitUntil(s => waitingForInitComplete.Search(s).Count > 0, TimeSpan.FromMinutes(2))
-                .DeclineAgentInitPrompt()
-                .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(2));
+            await auto.AspireInitAsync(counter);
 
             // Step 4a: Add Aspire.Hosting.Azure.ContainerApps package (for managed identity support)
             // This command triggers TWO prompts in sequence:
             // 1. Integration selection prompt (because "ContainerApps" matches multiple Azure packages)
             // 2. Version selection prompt (in CI, to select package version)
             output.WriteLine("Step 4a: Adding Azure Container Apps hosting package...");
-            sequenceBuilder.Type("aspire add Aspire.Hosting.Azure.ContainerApps")
-                .Enter();
+            await auto.TypeAsync("aspire add Aspire.Hosting.Azure.ContainerApps");
+            await auto.EnterAsync();
 
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
                 // First, handle integration selection prompt
-                sequenceBuilder
-                    .WaitUntil(s => waitingForIntegrationSelectionPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(60))
-                    .Enter()  // Select first integration (azure-appcontainers)
-                    // Then, handle version selection prompt
-                    .WaitUntil(s => waitingForVersionSelectionPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(60))
-                    .Enter();  // Select first version (PR build)
+                await auto.WaitUntilTextAsync("Select an integration to add:", timeout: TimeSpan.FromSeconds(60));
+                await auto.EnterAsync();  // Select first integration (azure-appcontainers)
+                // Then, handle version selection prompt
+                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
+                await auto.EnterAsync();  // Select first version (PR build)
             }
 
-            sequenceBuilder.WaitForSuccessPrompt(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
 
             // Step 4b: Add Aspire.Hosting.Azure.ServiceBus package
             // This command may only show version selection prompt (unique match)
             output.WriteLine("Step 4b: Adding Azure Service Bus hosting package...");
-            sequenceBuilder.Type("aspire add Aspire.Hosting.Azure.ServiceBus")
-                .Enter();
+            await auto.TypeAsync("aspire add Aspire.Hosting.Azure.ServiceBus");
+            await auto.EnterAsync();
 
             // In CI, aspire add shows version selection prompt
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
-                sequenceBuilder
-                    .WaitUntil(s => waitingForVersionSelectionPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(60))
-                    .Enter(); // Select first version
+                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
+                await auto.EnterAsync(); // Select first version
             }
 
-            sequenceBuilder.WaitForSuccessPrompt(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
 
             // Step 5: Modify apphost.cs to add Azure Service Bus resource
-            sequenceBuilder.ExecuteCallback(() =>
             {
                 var appHostFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
 
@@ -167,35 +139,30 @@ builder.Build().Run();
                 File.WriteAllText(appHostFilePath, content);
 
                 output.WriteLine($"Modified apphost.cs to add Azure Service Bus resource");
-            });
+            }
 
             // Step 6: Set environment variables for deployment
-            sequenceBuilder.Type($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}")
-                .Enter()
-                .WaitForSuccessPrompt(counter);
+            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
 
             // Step 7: Deploy to Azure using aspire deploy
             output.WriteLine("Step 7: Starting Azure deployment...");
-            sequenceBuilder
-                .Type("aspire deploy --clear-cache")
-                .Enter()
-                .WaitUntil(s => waitingForPipelineSucceeded.Search(s).Count > 0, TimeSpan.FromMinutes(20))
-                .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(2));
+            await auto.TypeAsync("aspire deploy --clear-cache");
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("PIPELINE SUCCEEDED", timeout: TimeSpan.FromMinutes(20));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
             // Step 8: Verify the Azure Service Bus namespace was created
             output.WriteLine("Step 8: Verifying Azure Service Bus namespace...");
-            sequenceBuilder
-                .Type($"az servicebus namespace list -g \"{resourceGroupName}\" --query \"[].name\" -o tsv")
-                .Enter()
-                .WaitForSuccessPrompt(counter, TimeSpan.FromSeconds(30));
+            await auto.TypeAsync($"az servicebus namespace list -g \"{resourceGroupName}\" --query \"[].name\" -o tsv");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
             // Step 9: Exit terminal
-            sequenceBuilder
-                .Type("exit")
-                .Enter();
+            await auto.TypeAsync("exit");
+            await auto.EnterAsync();
 
-            var sequence = sequenceBuilder.Build();
-            await sequence.ApplyAsync(terminal, cancellationToken);
             await pendingRun;
 
             var duration = DateTime.UtcNow - startTime;

@@ -13,10 +13,10 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>Update integrations in the Aspire project. (Preview)</value>
+    <value>Update integrations in the Aspire project (Preview)</value>
   </data>
   <data name="ProjectArgumentDescription" xml:space="preserve">
-    <value>The path to the Aspire AppHost project file.</value>
+    <value>The path to the Aspire apphost project file</value>
   </data>
   <data name="SelectChannelPrompt" xml:space="preserve">
     <value>Select a channel:</value>
@@ -40,10 +40,10 @@
     <value>Update successful!</value>
   </data>
   <data name="AnalyzeAppHost" xml:space="preserve">
-    <value>Analyze App Host</value>
+    <value>Analyze apphost</value>
   </data>
   <data name="AnalyzeAppHostSdk" xml:space="preserve">
-    <value>Analyze App Host SDK</value>
+    <value>Analyze apphost SDK</value>
   </data>
   <data name="AnalyzeProjectFormat" xml:space="preserve">
     <value>Analyze project: {0}</value>
@@ -112,10 +112,10 @@
     <value>   Mapping: {0}</value>
   </data>
   <data name="FallbackParsingWarning" xml:space="preserve">
-    <value>Note: Update plan generated using fallback parsing due to unresolvable AppHost SDK. Dependency analysis may have reduced accuracy.</value>
+    <value>Note: Update plan generated using fallback parsing due to unresolvable apphost SDK. Dependency analysis may have reduced accuracy.</value>
   </data>
   <data name="NoAppHostFoundUpdateCliPrompt" xml:space="preserve">
-    <value>No Aspire AppHost project found. Would you like to update the Aspire CLI instead?</value>
+    <value>No Aspire apphost project found. Would you like to update the Aspire CLI instead?</value>
   </data>
   <data name="UpdateCliAfterProjectUpdatePrompt" xml:space="preserve">
     <value>An update is available for the Aspire CLI. Would you like to update it now?</value>
@@ -161,5 +161,8 @@
   </data>
   <data name="RegeneratedSdkCode" xml:space="preserve">
     <value>Regenerated SDK code with updated packages.</value>
+  </data>
+  <data name="SelfOptionDescription" xml:space="preserve">
+    <value>Update the Aspire CLI itself to the latest version</value>
   </data>
 </root>

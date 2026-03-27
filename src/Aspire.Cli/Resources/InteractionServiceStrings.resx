@@ -122,7 +122,7 @@
     <comment>{0} is the original selection prompt text.</comment>
   </data>
   <data name="AppHostNotCompatibleConsiderUpgrading" xml:space="preserve">
-    <value>The AppHost version is not compatible. Please upgrade the apphost or Aspire CLI.</value>
+    <value>The apphost version is not compatible. Please upgrade the apphost or Aspire CLI.</value>
   </data>
   <data name="AspireHostingSDKVersion" xml:space="preserve">
     <value>Aspire.Hosting Version</value>
@@ -172,6 +172,10 @@
     <value>Created settings file at {0}.</value>
     <comment>{0} is a path</comment>
   </data>
+  <data name="UpdatedSettingsFile" xml:space="preserve">
+    <value>Updated settings file at {0}.</value>
+    <comment>{0} is a path</comment>
+  </data>
   <data name="ProjectOptionDoesntExist" xml:space="preserve">
     <value>The --apphost option specified a project that does not exist.</value>
   </data>
@@ -188,7 +192,7 @@
     <value>The operation was canceled.</value>
   </data>
   <data name="SpecifiedProjectFileNotAppHostProject" xml:space="preserve">
-    <value>The specified project file is not an Aspire AppHost project.</value>
+    <value>The specified project file is not an Aspire apphost project.</value>
   </data>
   <data name="ErrorConnectingToAppHost" xml:space="preserve">
     <value>An error occurred while connecting to the app host. The app host possibly crashed before it was available: {0}.</value>

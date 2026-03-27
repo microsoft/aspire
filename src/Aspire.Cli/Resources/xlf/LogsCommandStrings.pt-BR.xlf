@@ -3,18 +3,18 @@
   <file datatype="xml" source-language="en" target-language="pt-BR" original="../LogsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Display logs from resources in a running apphost.</source>
-        <target state="translated">Exiba os logs de recursos em um apphost em execução.</target>
+        <source>Display logs from resources in a running apphost</source>
+        <target state="needs-review-translation">Exiba logs de recursos em um apphost do Aspire em execução.</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
-        <source>Stream logs in real-time as they are written.</source>
-        <target state="translated">Transmita logs em tempo real conforme eles são gravados.</target>
+        <source>Stream logs in real-time as they are written</source>
+        <target state="needs-review-translation">Transmita logs em tempo real conforme eles são gravados.</target>
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">Formato de saída (Tabela ou Json).</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">Logs de saída no formato JSON (NDJSON).</target>
         <note />
       </trans-unit>
       <trans-unit id="NoResourcesFound">
@@ -24,7 +24,7 @@
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The name of the resource to get logs for. If not specified, logs from all resources are shown.</source>
-        <target state="translated">O nome do recurso para o qual obter logs. Se não for especificado, os logs de todos os recursos serão mostrados.</target>
+        <target state="needs-review-translation">O nome do recurso para o qual obter logs. Se não for especificado, os logs de todos os recursos serão mostrados.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">
@@ -48,8 +48,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TailOptionDescription">
-        <source>Number of lines to show from the end of logs (default: all).</source>
-        <target state="translated">Número de linhas a serem mostradas a partir do final dos logs (padrão: todos).</target>
+        <source>Number of lines to show from the end of logs (default: all)</source>
+        <target state="needs-review-translation">Número de linhas a serem mostradas a partir do final dos logs (padrão: todos).</target>
         <note />
       </trans-unit>
       <trans-unit id="TailRequiresResource">
@@ -58,8 +58,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TimestampsOptionDescription">
-        <source>Show timestamps for each log line.</source>
-        <target state="translated">Mostre os carimbos de data/hora para cada linha de log.</target>
+        <source>Show timestamps for each log line</source>
+        <target state="new">Show timestamps for each log line</target>
         <note />
       </trans-unit>
       <trans-unit id="GettingLogs">

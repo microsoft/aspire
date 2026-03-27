@@ -1,36 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyName>aspire-server</AssemblyName>
-    <Description>Remote host server for polyglot Aspire AppHosts.</Description>
-    <PackageTags>aspire hosting polyglot</PackageTags>
-
-    <!-- This is included in the Aspire bundle layout -->
-    <IsPackable>true</IsPackable>
-    <!-- New package, no baseline to compare against yet -->
-    <EnablePackageValidation>false</EnablePackageValidation>
-
-    <!-- Framework-dependent deployment - uses the bundled runtime -->
-    <SelfContained>false</SelfContained>
-    <PublishSingleFile>false</PublishSingleFile>
-
-    <!-- Suppress IL3000 for single-file - code handles Assembly.Location returning empty -->
-    <NoWarn>$(NoWarn);IL3000</NoWarn>
-
-    <!-- Allow running on newer .NET versions -->
-    <RollForward>Major</RollForward>
-
-    <!-- Minimize size by not including unnecessary metadata -->
-    <DebugType>none</DebugType>
-    <DebugSymbols>false</DebugSymbols>
-
-    <!-- Skip Aspire workload checks - this is internal tooling -->
-    <SkipValidateAspireHostProjectResources>true</SkipValidateAspireHostProjectResources>
-    <SkipAddAspireDefaultReferences>true</SkipAddAspireDefaultReferences>
+    <IsPackable>false</IsPackable>
+    <SkipAspireIntegrationAnalyzersReference>true</SkipAspireIntegrationAnalyzersReference>
   </PropertyGroup>
 
   <ItemGroup>
@@ -39,7 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Aspire.Hosting\Aspire.Hosting.csproj" />
+    <ProjectReference Include="..\Aspire.TypeSystem\Aspire.TypeSystem.csproj" />
   </ItemGroup>
 
   <ItemGroup>

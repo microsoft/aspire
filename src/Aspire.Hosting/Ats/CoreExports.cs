@@ -78,12 +78,12 @@ internal static class CoreExports
     /// <returns>The same resource builder handle for chaining.</returns>
     [AspireExport("withVolume", Description = "Adds a volume")]
     public static IResourceBuilder<ContainerResource> WithVolume(
-        IResourceBuilder<ContainerResource> resource,
+        this IResourceBuilder<ContainerResource> resource,
         string target,
         string? name = null,
         bool isReadOnly = false)
     {
-        return resource.WithVolume(name, target, isReadOnly);
+        return ContainerResourceBuilderExtensions.WithVolume(resource, name, target, isReadOnly);
     }
 
     #endregion
@@ -101,7 +101,7 @@ internal static class CoreExports
     /// <param name="resource">The resource builder handle.</param>
     /// <returns>The resource name.</returns>
     [AspireExport("getResourceName", Description = "Gets the resource name")]
-    public static string GetResourceName(IResourceBuilder<IResource> resource)
+    public static string GetResourceName(this IResourceBuilder<IResource> resource)
     {
         return resource.Resource.Name;
     }

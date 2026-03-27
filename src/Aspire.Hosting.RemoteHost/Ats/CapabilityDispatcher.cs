@@ -5,8 +5,8 @@ using System.Collections.Concurrent;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Ats;
+using System.Text.RegularExpressions;
+using Aspire.TypeSystem;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.RemoteHost.Ats;
@@ -31,7 +31,7 @@ internal sealed class CapabilityDispatcher
     private readonly HandleRegistry _handles;
     private readonly AtsMarshaller _marshaller;
     private readonly ILogger _logger;
-    private Hosting.Ats.AtsContext? _atsContext;
+    private AtsContext? _atsContext;
 
     /// <summary>
     /// Represents a registered capability.
@@ -307,31 +307,21 @@ internal sealed class CapabilityDispatcher
             var invokeTarget = ResolveContextTarget(contextObj!, methodToInvoke.DeclaringType!);
 
             object? result;
-            result = await InvokeMethodAsync(methodToInvoke, invokeTarget, methodArgs, capability.RunSyncOnBackgroundThread).ConfigureAwait(false);
-
-            // Handle async methods - await instead of blocking
-            if (result is Task task)
+            try
             {
-                try
-                {
-                    await task.ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    throw new InvalidOperationException(ex.Message, ex);
-                }
-
-                var taskType = task.GetType();
-                if (taskType.IsGenericType)
-                {
-                    var resultProperty = taskType.GetProperty("Result");
-                    result = resultProperty?.GetValue(task);
-                }
-                else
-                {
-                    result = null;
-                }
+                result = await InvokeMethodAsync(methodToInvoke, invokeTarget, methodArgs, capability.RunSyncOnBackgroundThread).ConfigureAwait(false);
             }
+            catch (TargetInvocationException tie) when (tie.InnerException is not null)
+            {
+                throw tie.InnerException;
+            }
+            catch (ArgumentException ex)
+            {
+                var (mismatchParam, expected, actual) = FindMismatchedParameter(methodToInvoke.GetParameters(), methodArgs, ex);
+                throw CapabilityException.TypeMismatch(capabilityId, mismatchParam, expected, actual);
+            }
+
+            result = await UnwrapAsyncResultAsync(result, methodToInvoke.ReturnType).ConfigureAwait(false);
 
             return _marshaller.MarshalToJson(result, capability.ReturnType);
         };
@@ -391,33 +381,22 @@ internal sealed class CapabilityDispatcher
             }
 
             object? result;
-            result = await InvokeMethodAsync(methodToInvoke, target: null, methodArgs, capability.RunSyncOnBackgroundThread).ConfigureAwait(false);
-
-            // Handle async methods - await instead of blocking
-            if (result is Task task)
+            try
             {
-                try
-                {
-                    await task.ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    // Rethrow the exception - it will be caught by the outer handler
-                    // and converted to a CapabilityException
-                    throw new InvalidOperationException(ex.Message, ex);
-                }
-
-                var taskType = task.GetType();
-                if (taskType.IsGenericType)
-                {
-                    var resultProperty = taskType.GetProperty("Result");
-                    result = resultProperty?.GetValue(task);
-                }
-                else
-                {
-                    result = null;
-                }
+                result = await InvokeMethodAsync(methodToInvoke, target: null, methodArgs, capability.RunSyncOnBackgroundThread).ConfigureAwait(false);
             }
+            catch (TargetInvocationException tie) when (tie.InnerException is not null)
+            {
+                // Unwrap the TargetInvocationException to get the actual exception
+                throw tie.InnerException;
+            }
+            catch (ArgumentException ex)
+            {
+                var (mismatchParam, expected, actual) = FindMismatchedParameter(methodToInvoke.GetParameters(), methodArgs, ex);
+                throw CapabilityException.TypeMismatch(capabilityId, mismatchParam, expected, actual);
+            }
+
+            result = await UnwrapAsyncResultAsync(result, methodToInvoke.ReturnType).ConfigureAwait(false);
 
             return _marshaller.MarshalToJson(result, capability.ReturnType);
         };
@@ -474,18 +453,14 @@ internal sealed class CapabilityDispatcher
         {
             throw;
         }
-        catch (ArgumentException ex) when (IsTypeMismatchException(ex))
-        {
-            // Convert CLR type mismatch to ATS error
-            throw CapabilityException.TypeMismatch(capabilityId, "argument", "expected type", ex.Message);
-        }
         catch (InvalidCastException ex)
         {
             // Convert CLR cast failures to ATS error
-            throw CapabilityException.TypeMismatch(capabilityId, "argument", "expected type", ex.Message);
+            throw CapabilityException.TypeMismatch(capabilityId, "unknown", "unknown", ex.Message);
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Capability {CapabilityId} failed with {ExceptionType}: {Message}", capabilityId, ex.GetType().Name, ex.Message);
             throw CapabilityException.InternalError(capabilityId, ex.Message, ex);
         }
     }
@@ -505,12 +480,69 @@ internal sealed class CapabilityDispatcher
 
     private static async Task<object?> InvokeMethodAsync(MethodInfo method, object? target, object?[] methodArgs, bool runSyncOnBackgroundThread)
     {
-        if (runSyncOnBackgroundThread && !typeof(Task).IsAssignableFrom(method.ReturnType))
+        if (runSyncOnBackgroundThread && !IsAsyncReturnType(method.ReturnType))
         {
             return await Task.Run(() => InvokeMethodCore(method, target, methodArgs)).ConfigureAwait(false);
         }
 
         return InvokeMethodCore(method, target, methodArgs);
+    }
+
+    private static bool IsAsyncReturnType(Type returnType)
+    {
+        if (typeof(Task).IsAssignableFrom(returnType) || returnType == typeof(ValueTask))
+        {
+            return true;
+        }
+
+        return returnType.IsGenericType && returnType.GetGenericTypeDefinition() == typeof(ValueTask<>);
+    }
+
+    private static async Task<object?> UnwrapAsyncResultAsync(object? result, Type returnType)
+    {
+        try
+        {
+            if (result is Task task)
+            {
+                await task.ConfigureAwait(false);
+                return GetAsyncResultValue(task);
+            }
+
+            if (returnType == typeof(ValueTask) && result is ValueTask valueTask)
+            {
+                await valueTask.ConfigureAwait(false);
+                return null;
+            }
+
+            if (returnType.IsGenericType && returnType.GetGenericTypeDefinition() == typeof(ValueTask<>))
+            {
+                var asTask = returnType.GetMethod(nameof(ValueTask<int>.AsTask), BindingFlags.Instance | BindingFlags.Public)
+                    ?? throw new InvalidOperationException($"Unable to await ValueTask result for return type '{returnType}'.");
+                var boxedTask = asTask.Invoke(result, null) as Task
+                    ?? throw new InvalidOperationException($"Unable to convert ValueTask result for return type '{returnType}' to Task.");
+
+                await boxedTask.ConfigureAwait(false);
+                return GetAsyncResultValue(boxedTask);
+            }
+
+            return result;
+        }
+        catch (Exception ex) when (ex is not InvalidOperationException)
+        {
+            throw new InvalidOperationException(ex.Message, ex);
+        }
+    }
+
+    private static object? GetAsyncResultValue(Task task)
+    {
+        var taskType = task.GetType();
+        if (!taskType.IsGenericType)
+        {
+            return null;
+        }
+
+        var resultProperty = taskType.GetProperty("Result");
+        return resultProperty?.GetValue(task);
     }
 
     private static object? InvokeMethodCore(MethodInfo method, object? target, object?[] methodArgs)
@@ -526,20 +558,46 @@ internal sealed class CapabilityDispatcher
     }
 
     /// <summary>
-    /// Checks if an exception indicates a type mismatch.
+    /// Finds the mismatched parameter by comparing actual argument types against expected parameter types.
+    /// Falls back to parsing the exception message if no mismatch is found by inspection.
     /// </summary>
-    private static bool IsTypeMismatchException(ArgumentException ex)
+    private static (string ParameterName, string ExpectedType, string ActualType) FindMismatchedParameter(
+        ParameterInfo[] parameters, object?[] args, ArgumentException ex)
     {
-        // Check for common type mismatch patterns in exception messages
+        // Inspect actual args vs parameter types to find the mismatch
+        for (int i = 0; i < parameters.Length && i < args.Length; i++)
+        {
+            var param = parameters[i];
+            var arg = args[i];
+            var paramType = param.ParameterType;
+
+            if (arg is null)
+            {
+                if (paramType.IsValueType && Nullable.GetUnderlyingType(paramType) is null)
+                {
+                    return (param.Name ?? $"arg{i}", paramType.ToString(), "null");
+                }
+            }
+            else if (!paramType.IsAssignableFrom(arg.GetType()))
+            {
+                return (param.Name ?? $"arg{i}", paramType.ToString(), arg.GetType().ToString());
+            }
+        }
+
+        // Fallback: parse the exception message for type names
         var message = ex.Message;
-        return message.Contains("cannot be converted") ||
-               message.Contains("is not assignable") ||
-               message.Contains("type mismatch", StringComparison.OrdinalIgnoreCase);
+        var match = Regex.Match(message, @"type '([^']+)'.*(?:to|into) type '([^']+)'");
+        if (match.Success)
+        {
+            return (ex.ParamName ?? "unknown", match.Groups[2].Value, match.Groups[1].Value);
+        }
+
+        return (ex.ParamName ?? "unknown", "unknown", "unknown");
     }
 
     /// <summary>
     /// Resolves the correct target object for a member invocation.
-    /// Handles the case where the handle contains an <see cref="IResourceBuilder{T}"/> but the
+    /// Handles the case where the handle contains an <c>IResourceBuilder&lt;T&gt;</c> but the
     /// member is declared on the resource type <c>T</c>, since
     /// <c>AtsCapabilityScanner.MapToAtsTypeId</c> maps both to the same type ID.
     /// </summary>
@@ -551,10 +609,16 @@ internal sealed class CapabilityDispatcher
         }
 
         // Handle is a builder, but the member is on the resource type - extract .Resource
-        if (contextObj is IResourceBuilder<IResource> builder &&
-            declaringType.IsInstanceOfType(builder.Resource))
+        if (HostingTypeHelpers.IsResourceBuilderType(contextObj.GetType()))
         {
-            return builder.Resource;
+            var resource = contextObj.GetType()
+                .GetProperty("Resource", BindingFlags.Instance | BindingFlags.Public)?
+                .GetValue(contextObj);
+
+            if (resource is not null && declaringType.IsInstanceOfType(resource))
+            {
+                return resource;
+            }
         }
 
         // No bridge matched — return as-is; the CLR will throw TargetException if the

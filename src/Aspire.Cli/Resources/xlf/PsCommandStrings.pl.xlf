@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="pl" original="../PsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>List running apphosts.</source>
-        <target state="translated">Wyświetl listę uruchomionych hostów aplikacji.</target>
+        <source>List running apphosts</source>
+        <target state="needs-review-translation">Wyświetl listę uruchomionych hostów aplikacji Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderCliPid">
@@ -28,13 +28,13 @@
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">Format danych wyjściowych (Tabela lub JSON).</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">Wynik w formacie JSON.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesOptionDescription">
-        <source>Include resource details for each running app host. Only applies to JSON output.</source>
-        <target state="translated">Uwzględnij szczegóły zasobu dla każdego uruchomionego hosta aplikacji. Dotyczy tylko danych wyjściowych JSON.</target>
+        <source>Include resource details for each running apphost. Only applies to JSON output.</source>
+        <target state="new">Include resource details for each running apphost. Only applies to JSON output.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnknownPath">

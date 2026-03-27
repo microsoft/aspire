@@ -214,6 +214,6 @@ The logging helps you verify that your tunnel configuration is working as expect
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire
 
 Contributions (improvements, clarifications, samples) are welcome.

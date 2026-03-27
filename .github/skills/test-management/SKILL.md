@@ -3,7 +3,7 @@ name: test-management
 description: Quarantines or disables flaky/problematic tests using the QuarantineTools utility
 ---
 
-You are a specialized test management agent for the dotnet/aspire repository. Your primary function is to quarantine or disable broken tests using the `tools/QuarantineTools` project.
+You are a specialized test management agent for the microsoft/aspire repository. Your primary function is to quarantine or disable broken tests using the `tools/QuarantineTools` project.
 
 ## Understanding User Requests
 
@@ -21,18 +21,18 @@ Parse user requests to extract:
 ### Example Requests
 
 **Disable with ActiveIssue:**
-> Disable CliOrphanDetectorAfterTheProcessWasRunningForAWhileThenStops with https://github.com/dotnet/aspire/issues/12314
+> Disable CliOrphanDetectorAfterTheProcessWasRunningForAWhileThenStops with https://github.com/microsoft/aspire/issues/12314
 
 **Quarantine with QuarantinedTest:**
-> Quarantine HealthChecksRegistersHealthCheckService with https://github.com/dotnet/aspire/issues/11820
+> Quarantine HealthChecksRegistersHealthCheckService with https://github.com/microsoft/aspire/issues/11820
 
 **Multiple tests:**
 > Disable these tests:
-> - HealthChecksRegistersHealthCheckService - https://github.com/dotnet/aspire/issues/11820
-> - TracingRegistersTraceProvider - https://github.com/dotnet/aspire/issues/11820
+> - HealthChecksRegistersHealthCheckService - https://github.com/microsoft/aspire/issues/11820
+> - TracingRegistersTraceProvider - https://github.com/microsoft/aspire/issues/11820
 
 **With condition:**
-> Disable HealthChecksRegistersHealthCheckService with https://github.com/dotnet/aspire/issues/11820 only on Azure DevOps
+> Disable HealthChecksRegistersHealthCheckService with https://github.com/microsoft/aspire/issues/11820 only on Azure DevOps
 
 ## Task Execution Steps
 
@@ -90,11 +90,11 @@ If the user specified conditional requirements (e.g., "only on Azure DevOps"), Q
 - "on macOS" → `PlatformDetection.IsMacOS`
 
 **Steps to add conditions:**
-1. QuarantineTools adds: `[ActiveIssue("https://github.com/dotnet/aspire/issues/12314")]`
+1. QuarantineTools adds: `[ActiveIssue("https://github.com/microsoft/aspire/issues/12314")]`
 2. Locate the file modified by QuarantineTools
 3. Edit the attribute to add the conditional parameters:
 ```csharp
-[ActiveIssue("https://github.com/dotnet/aspire/issues/12314", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
+[ActiveIssue("https://github.com/microsoft/aspire/issues/12314", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
 ```
 
 **Example for Theory test with condition:**
@@ -102,7 +102,7 @@ If the user specified conditional requirements (e.g., "only on Azure DevOps"), Q
 [Theory]
 [InlineData(true)]
 [InlineData(false)]
-[ActiveIssue("https://github.com/dotnet/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
+[ActiveIssue("https://github.com/microsoft/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
 public void ParameterizedTest(bool parameter)
 {
     // test code
@@ -146,7 +146,7 @@ If build fails:
 
 - {Quarantined|Disabled}: TestMethod1
 - {Quarantined|Disabled}: TestMethod2
-- Issue: https://github.com/dotnet/aspire/issues/XXXXX
+- Issue: https://github.com/microsoft/aspire/issues/XXXXX
 
 These tests are being {quarantined|disabled} due to {brief reason from issue}.
 ```
@@ -157,7 +157,7 @@ These tests are being {quarantined|disabled} due to {brief reason from issue}.
 
 - {Unquarantined|Re-enabled}: TestMethod1
 - {Unquarantined|Re-enabled}: TestMethod2
-- Issue: https://github.com/dotnet/aspire/issues/XXXXX
+- Issue: https://github.com/microsoft/aspire/issues/XXXXX
 
 These tests are being {unquarantined|re-enabled} as the underlying issue has been resolved.
 ```
@@ -270,7 +270,7 @@ After completing the task, provide a summary:
 
 ### ✅ Successfully {Quarantined|Disabled|Unquarantined|Re-enabled}
 - **TestMethod1** in `tests/Project.Tests/File.cs`
-  - Issue: https://github.com/dotnet/aspire/issues/XXXXX
+  - Issue: https://github.com/microsoft/aspire/issues/XXXXX
   - Attribute: [{QuarantinedTest|ActiveIssue}]
   - Verification: Passed ✓
 

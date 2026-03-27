@@ -7,6 +7,7 @@ using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
@@ -25,10 +26,8 @@ namespace Aspire.Cli.Projects;
 /// Handler for guest (non-.NET) AppHost projects.
 /// Supports any language registered via <see cref="ILanguageDiscovery"/>.
 /// </summary>
-internal sealed class GuestAppHostProject : IAppHostProject
+internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGenerator
 {
-    private const string GeneratedFolderName = ".modules";
-
     private readonly IInteractionService _interactionService;
     private readonly IAppHostCliBackchannel _backchannel;
     private readonly IAppHostServerProjectFactory _appHostServerProjectFactory;
@@ -36,9 +35,11 @@ internal sealed class GuestAppHostProject : IAppHostProject
     private readonly IDotNetCliRunner _runner;
     private readonly IPackagingService _packagingService;
     private readonly IConfiguration _configuration;
+    private readonly IConfigurationService _configurationService;
     private readonly IFeatures _features;
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly ILogger<GuestAppHostProject> _logger;
+    private readonly FileLoggerProvider _fileLoggerProvider;
     private readonly TimeProvider _timeProvider;
     private readonly RunningInstanceManager _runningInstanceManager;
 
@@ -55,9 +56,11 @@ internal sealed class GuestAppHostProject : IAppHostProject
         IDotNetCliRunner runner,
         IPackagingService packagingService,
         IConfiguration configuration,
+        IConfigurationService configurationService,
         IFeatures features,
         ILanguageDiscovery languageDiscovery,
         ILogger<GuestAppHostProject> logger,
+        FileLoggerProvider fileLoggerProvider,
         TimeProvider? timeProvider = null)
     {
         _resolvedLanguage = language;
@@ -68,9 +71,11 @@ internal sealed class GuestAppHostProject : IAppHostProject
         _runner = runner;
         _packagingService = packagingService;
         _configuration = configuration;
+        _configurationService = configurationService;
         _features = features;
         _languageDiscovery = languageDiscovery;
         _logger = logger;
+        _fileLoggerProvider = fileLoggerProvider;
         _timeProvider = timeProvider ?? TimeProvider.System;
         _runningInstanceManager = new RunningInstanceManager(_logger, _interactionService, _timeProvider);
     }
@@ -94,9 +99,9 @@ internal sealed class GuestAppHostProject : IAppHostProject
     /// </summary>
     private string GetEffectiveSdkVersion()
     {
-        // IConfiguration merges settings from parent directories and global settings
-        // The key "sdkVersion" is the flattened key from settings.json
-        var configuredVersion = _configuration["sdkVersion"];
+        // IConfiguration merges settings from parent directories and global settings.
+        // Prefer the new nested sdk:version key and fall back to the legacy sdkVersion key.
+        var configuredVersion = _configuration["sdk:version"] ?? _configuration["sdkVersion"];
         if (!string.IsNullOrEmpty(configuredVersion))
         {
             _logger.LogDebug("Using SDK version from configuration: {Version}", configuredVersion);
@@ -143,7 +148,7 @@ internal sealed class GuestAppHostProject : IAppHostProject
     /// Gets all integration references including the code generation package for the current language.
     /// </summary>
     private async Task<List<IntegrationReference>> GetIntegrationReferencesAsync(
-        AspireJsonConfiguration config,
+        AspireConfigFile config,
         DirectoryInfo directory,
         CancellationToken cancellationToken)
     {
@@ -158,13 +163,57 @@ internal sealed class GuestAppHostProject : IAppHostProject
         return integrations;
     }
 
-    private AspireJsonConfiguration LoadConfiguration(DirectoryInfo directory)
+    /// <summary>
+    /// Resolves the directory containing the nearest aspire.config.json (or legacy settings file)
+    /// by using the already-resolved path from <see cref="IConfigurationService"/>.
+    /// Falls back to <paramref name="appHostDirectory"/> when no config file is found.
+    /// </summary>
+    private DirectoryInfo GetConfigDirectory(DirectoryInfo appHostDirectory)
     {
-        var effectiveSdkVersion = GetEffectiveSdkVersion();
-        return AspireJsonConfiguration.LoadOrCreate(directory.FullName, effectiveSdkVersion);
+        var settingsFilePath = _configurationService.GetSettingsFilePath(isGlobal: false);
+        var settingsFile = new FileInfo(settingsFilePath);
+
+        // If the settings file exists and has a parent directory, use that
+        if (settingsFile.Directory is { Exists: true })
+        {
+            // For legacy .aspire/settings.json, the config directory is the parent of .aspire/
+            // TODO: Remove legacy .aspire/ check once confident most users have migrated.
+            // Tracked by https://github.com/microsoft/aspire/issues/15239
+            if (string.Equals(settingsFile.Directory.Name, ".aspire", StringComparison.OrdinalIgnoreCase)
+                && settingsFile.Directory.Parent is not null)
+            {
+                return settingsFile.Directory.Parent;
+            }
+
+            return settingsFile.Directory;
+        }
+
+        return appHostDirectory;
     }
 
-    private string GetPrepareSdkVersion(AspireJsonConfiguration config)
+    private AspireConfigFile LoadConfiguration(DirectoryInfo directory)
+    {
+        var configDir = GetConfigDirectory(directory);
+        try
+        {
+            var config = AspireConfigFile.LoadOrCreate(configDir.FullName, GetEffectiveSdkVersion());
+            _logger.LogInformation("Loaded config from {Directory} (file exists: {Exists})", configDir.FullName, AspireConfigFile.Exists(configDir.FullName));
+            return config;
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Failed to load configuration from {Directory}", configDir.FullName);
+            throw;
+        }
+    }
+
+    private void SaveConfiguration(AspireConfigFile config, DirectoryInfo directory)
+    {
+        var configDir = GetConfigDirectory(directory);
+        config.Save(configDir.FullName);
+    }
+
+    private string GetPrepareSdkVersion(AspireConfigFile config)
     {
         return config.GetEffectiveSdkVersion(GetEffectiveSdkVersion());
     }
@@ -215,16 +264,17 @@ internal sealed class GuestAppHostProject : IAppHostProject
             // Step 3: Connect to server
             await using var rpcClient = await AppHostRpcClient.ConnectAsync(socketPath, cancellationToken);
 
-            // Step 4: Install dependencies using GuestRuntime (best effort - don't block code generation)
-            await InstallDependenciesAsync(directory, rpcClient, cancellationToken);
-
-            // Step 5: Generate SDK code via RPC
+            // Step 4: Generate SDK code via RPC
+            // This must happen before dependency installation because the generated
+            // code directory (.modules) may not exist yet and dependency files reference it.
             await GenerateCodeViaRpcAsync(
                 directory.FullName,
                 rpcClient,
                 integrations,
                 cancellationToken);
 
+            // Step 5: Install dependencies using GuestRuntime (best effort - don't block code generation)
+            await InstallDependenciesAsync(directory, rpcClient, cancellationToken);
             return true;
         }
         finally
@@ -242,6 +292,11 @@ internal sealed class GuestAppHostProject : IAppHostProject
                 }
             }
         }
+    }
+
+    Task<bool> IGuestAppHostSdkGenerator.BuildAndGenerateSdkAsync(DirectoryInfo directory, CancellationToken cancellationToken)
+    {
+        return BuildAndGenerateSdkAsync(directory, cancellationToken);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -323,11 +378,11 @@ internal sealed class GuestAppHostProject : IAppHostProject
                     return (Success: true, Output: prepareOutput, Error: (string?)null, ChannelName: channelName, NeedsCodeGen: needsCodeGen);
                 }, emoji: KnownEmojis.Gear);
 
-            // Save the channel to settings.json if available (config already has SdkVersion)
+            // Save the channel to settings if available (config already has SdkVersion)
             if (buildResult.ChannelName is not null)
             {
                 config.Channel = buildResult.ChannelName;
-                config.Save(directory.FullName);
+                SaveConfiguration(config, directory);
             }
 
             if (!buildResult.Success)
@@ -390,7 +445,20 @@ internal sealed class GuestAppHostProject : IAppHostProject
             // Step 5: Connect to server for RPC calls
             await using var rpcClient = await AppHostRpcClient.ConnectAsync(socketPath, cancellationToken);
 
-            // Step 6: Install dependencies (using GuestRuntime)
+            // Step 6: Generate SDK code via RPC if needed
+            // This must happen before dependency installation because the generated
+            // code directory (.modules) may not exist yet (e.g., freshly cloned project)
+            // and dependency files (pylock.toml, requirements.txt) reference it.
+            if (buildResult.NeedsCodeGen)
+            {
+                await GenerateCodeViaRpcAsync(
+                    directory.FullName,
+                    rpcClient,
+                    integrations,
+                    cancellationToken);
+            }
+
+            // Step 7: Install dependencies (using GuestRuntime)
             // The GuestRuntime will skip if the RuntimeSpec doesn't have InstallDependencies configured
             var installResult = await InstallDependenciesAsync(directory, rpcClient, cancellationToken);
             if (installResult != 0)
@@ -413,16 +481,6 @@ internal sealed class GuestAppHostProject : IAppHostProject
                 return installResult;
             }
 
-            // Step 7: Generate SDK code via RPC if needed
-            if (buildResult.NeedsCodeGen)
-            {
-                await GenerateCodeViaRpcAsync(
-                    directory.FullName,
-                    rpcClient,
-                    integrations,
-                    cancellationToken);
-            }
-
             // Step 8: Execute the guest apphost
 
             // Pass the socket path, project directory, and apphost file path to the guest process
@@ -432,6 +490,12 @@ internal sealed class GuestAppHostProject : IAppHostProject
                 ["ASPIRE_PROJECT_DIRECTORY"] = directory.FullName,
                 ["ASPIRE_APPHOST_FILEPATH"] = appHostFile.FullName
             };
+
+            // Pass debug flag to the guest process
+            if (context.Debug)
+            {
+                environmentVariables["ASPIRE_DEBUG"] = "true";
+            }
 
             // Check if the extension should launch the guest app host (for VS Code debugging).
             // This mirrors the pattern in DotNetCliRunner.ExecuteAsync for .NET app hosts.
@@ -533,7 +597,7 @@ internal sealed class GuestAppHostProject : IAppHostProject
         }
     }
 
-    private Dictionary<string, string> GetServerEnvironmentVariables(DirectoryInfo directory)
+    internal Dictionary<string, string> GetServerEnvironmentVariables(DirectoryInfo directory)
     {
         var envVars = ReadLaunchSettingsEnvironmentVariables(directory) ?? new Dictionary<string, string>();
 
@@ -550,8 +614,22 @@ internal sealed class GuestAppHostProject : IAppHostProject
 
     private Dictionary<string, string>? ReadLaunchSettingsEnvironmentVariables(DirectoryInfo directory)
     {
-        // For guest apphosts, look for apphost.run.json
-        // similar to how .NET single-file apphosts use apphost.run.json
+        // Check aspire.config.json first for launch profiles (may be in a parent directory)
+        var configDir = GetConfigDirectory(directory);
+        try
+        {
+            var aspireConfig = AspireConfigFile.Load(configDir.FullName);
+            if (aspireConfig?.Profiles is { Count: > 0 })
+            {
+                return ReadProfileFromAspireConfig(aspireConfig);
+            }
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "Failed to load config for launch profiles from {Directory}", configDir.FullName);
+        }
+
+        // Fall back to apphost.run.json / launchSettings.json
         var apphostRunPath = Path.Combine(directory.FullName, "apphost.run.json");
         var launchSettingsPath = Path.Combine(directory.FullName, "Properties", "launchSettings.json");
 
@@ -559,14 +637,15 @@ internal sealed class GuestAppHostProject : IAppHostProject
 
         if (!File.Exists(configPath))
         {
-            _logger.LogDebug("No apphost.run.json or launchSettings.json found in {Path}", directory.FullName);
+            _logger.LogDebug("No aspire.config.json, apphost.run.json, or launchSettings.json found in {Path}", directory.FullName);
             return null;
         }
 
         try
         {
+            _logger.LogDebug("Reading launch settings from {ConfigPath}", configPath);
             var json = File.ReadAllText(configPath);
-            using var doc = JsonDocument.Parse(json);
+            using var doc = JsonDocument.Parse(json, ConfigurationHelper.ParseOptions);
 
             if (!doc.RootElement.TryGetProperty("profiles", out var profiles))
             {
@@ -620,14 +699,57 @@ internal sealed class GuestAppHostProject : IAppHostProject
                 return null;
             }
 
-            _logger.LogDebug("Read {Count} environment variables from apphost.run.json", result.Count);
+            _logger.LogDebug("Read {Count} environment variables from {ConfigPath}", result.Count, configPath);
             return result;
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to read launchSettings.json");
+            _logger.LogWarning(ex, "Failed to read {ConfigPath}", configPath);
             return null;
         }
+    }
+
+    private Dictionary<string, string>? ReadProfileFromAspireConfig(AspireConfigFile aspireConfig)
+    {
+        AspireConfigProfile? profile;
+
+        // Prefer 'https' profile, then fall back to first
+        if (aspireConfig.Profiles!.TryGetValue("https", out var httpsProfile))
+        {
+            profile = httpsProfile;
+        }
+        else
+        {
+            profile = aspireConfig.Profiles.Values.FirstOrDefault();
+        }
+
+        if (profile is null)
+        {
+            return null;
+        }
+
+        var result = new Dictionary<string, string>();
+
+        if (!string.IsNullOrEmpty(profile.ApplicationUrl))
+        {
+            result["ASPNETCORE_URLS"] = profile.ApplicationUrl;
+        }
+
+        if (profile.EnvironmentVariables is not null)
+        {
+            foreach (var kvp in profile.EnvironmentVariables)
+            {
+                result[kvp.Key] = kvp.Value;
+            }
+        }
+
+        if (result.Count == 0)
+        {
+            return null;
+        }
+
+        _logger.LogDebug("Read {Count} environment variables from aspire.config.json", result.Count);
+        return result;
     }
 
     /// <inheritdoc />
@@ -696,7 +818,20 @@ internal sealed class GuestAppHostProject : IAppHostProject
             // Step 3: Connect to server for RPC calls
             await using var rpcClient = await AppHostRpcClient.ConnectAsync(jsonRpcSocketPath, cancellationToken);
 
-            // Step 4: Install dependencies if needed (using GuestRuntime)
+            // Step 4: Generate code via RPC if needed
+            // This must happen before dependency installation because the generated
+            // code directory (.modules) may not exist yet (e.g., freshly cloned project)
+            // and dependency files (pylock.toml, requirements.txt) reference it.
+            if (needsCodeGen)
+            {
+                await GenerateCodeViaRpcAsync(
+                    directory.FullName,
+                    rpcClient,
+                    integrations,
+                    cancellationToken);
+            }
+
+            // Step 5: Install dependencies if needed (using GuestRuntime)
             // The GuestRuntime will skip if the RuntimeSpec doesn't have InstallDependencies configured
             var installResult = await InstallDependenciesAsync(directory, rpcClient, cancellationToken);
             if (installResult != 0)
@@ -717,16 +852,6 @@ internal sealed class GuestAppHostProject : IAppHostProject
                 }
 
                 return installResult;
-            }
-
-            // Step 5: Generate code via RPC if needed
-            if (needsCodeGen)
-            {
-                await GenerateCodeViaRpcAsync(
-                    directory.FullName,
-                    rpcClient,
-                    integrations,
-                    cancellationToken);
             }
 
             // Pass the socket path, project directory, and apphost file path to the guest process
@@ -787,7 +912,10 @@ internal sealed class GuestAppHostProject : IAppHostProject
 
             await appHostServerProcess.WaitForExitAsync(cancellationToken);
 
-            return appHostServerProcess.ExitCode;
+            // The guest apphost's publish result determines command success.
+            // The helper server may be terminated by the CLI as part of normal cleanup,
+            // which can yield a non-zero process exit code on Unix-like systems.
+            return guestExitCode;
         }
         catch (OperationCanceledException)
         {
@@ -893,9 +1021,9 @@ internal sealed class GuestAppHostProject : IAppHostProject
         // Load config - source of truth for SDK version and packages
         var config = LoadConfiguration(directory);
 
-        // Update .aspire/settings.json with the new package
+        // Update configuration with the new package
         config.AddOrUpdatePackage(context.PackageId, context.PackageVersion);
-        config.Save(directory.FullName);
+        SaveConfiguration(config, directory);
 
         // Build and regenerate SDK code with the new package
         return await BuildAndGenerateSdkAsync(directory, cancellationToken);
@@ -1006,7 +1134,7 @@ internal sealed class GuestAppHostProject : IAppHostProject
         {
             config.AddOrUpdatePackage(packageId, newVersion);
         }
-        config.Save(directory.FullName);
+        SaveConfiguration(config, directory);
 
         // Rebuild and regenerate SDK code with updated packages
         _interactionService.DisplayEmptyLine();
@@ -1088,7 +1216,7 @@ internal sealed class GuestAppHostProject : IAppHostProject
         var files = await rpcClient.GenerateCodeAsync(codeGenerator, cancellationToken);
 
         // Write generated files to the output directory
-        var outputPath = Path.Combine(appPath, GeneratedFolderName);
+        var outputPath = Path.Combine(appPath, LanguageInfo.GeneratedFolderName);
         Directory.CreateDirectory(outputPath);
 
         foreach (var (fileName, content) in files)
@@ -1162,7 +1290,7 @@ internal sealed class GuestAppHostProject : IAppHostProject
         if (_guestRuntime is null)
         {
             var runtimeSpec = await rpcClient.GetRuntimeSpecAsync(_resolvedLanguage.LanguageId, cancellationToken);
-            _guestRuntime = new GuestRuntime(runtimeSpec, _logger);
+            _guestRuntime = new GuestRuntime(runtimeSpec, _logger, _fileLoggerProvider);
 
             _logger.LogDebug("Created GuestRuntime for {Language}: Execute={Command} {Args}",
                 _resolvedLanguage.LanguageId,
@@ -1189,6 +1317,21 @@ internal sealed class GuestAppHostProject : IAppHostProject
         {
             _interactionService.DisplayError("GuestRuntime not initialized. This is a bug.");
             return ExitCodeConstants.FailedToBuildArtifacts;
+        }
+
+        var (initResult, initOutput) = await _guestRuntime.InitializeAsync(directory, cancellationToken);
+        if (initResult != 0)
+        {
+            var lines = initOutput.GetLines().ToArray();
+            if (lines.Length > 0)
+            {
+                _interactionService.DisplayLines(lines);
+            }
+            else
+            {
+                _interactionService.DisplayError($"Failed to initialize {_resolvedLanguage?.DisplayName ?? "guest"} environment.");
+            }
+            return initResult;
         }
 
         var (result, output) = await _guestRuntime.InstallDependenciesAsync(directory, cancellationToken);

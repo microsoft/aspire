@@ -3,18 +3,18 @@
   <file datatype="xml" source-language="en" target-language="tr" original="../ErrorStrings.resx">
     <body>
       <trans-unit id="AlreadyConnectedToBackchannel">
-        <source>Already connected to AppHost backchannel.</source>
-        <target state="translated">AppHost arka kanala zaten bağlı.</target>
+        <source>Already connected to apphost backchannel.</source>
+        <target state="needs-review-translation">AppHost arka kanala zaten bağlı.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostIncompatibleWithCli">
-        <source>AppHost is incompatible with the CLI. The AppHost must be updated to a version that supports the {0} capability.</source>
-        <target state="translated">AppHost, CLI ile uyumsuzdur. AppHost, bu {0} yeteneğini destekleyen bir sürüme güncelleştirilmelidir.</target>
+        <source>Apphost is incompatible with the CLI. The apphost must be updated to a version that supports the {0} capability.</source>
+        <target state="needs-review-translation">AppHost, CLI ile uyumsuzdur. AppHost, bu {0} yeteneğini destekleyen bir sürüme güncelleştirilmelidir.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostWasSpecifiedButDoesntExist">
-        <source>AppHost file was specified in '{0}' but it does not exist at '{1}'.</source>
-        <target state="translated">AppHost dosyası '{0}' dosyasında belirtilmiş ancak '{1}' konumunda mevcut değil.</target>
+        <source>Apphost file was specified in '{0}' but it does not exist at '{1}'.</source>
+        <target state="needs-review-translation">AppHost dosyası '{0}' dosyasında belirtilmiş ancak '{1}' konumunda mevcut değil.</target>
         <note>{0} is a path</note>
       </trans-unit>
       <trans-unit id="AppHostsMayNotBeBuildable">
@@ -43,8 +43,8 @@
         <note />
       </trans-unit>
       <trans-unit id="CommandNotSupportedWithSingleFileAppHost">
-        <source>This command is not yet supported with single file AppHosts.</source>
-        <target state="translated">Bu komut, tek dosya Uygulama Ana İşlemlerinde henüz desteklenmemektedir.</target>
+        <source>This command is not yet supported with single file apphosts.</source>
+        <target state="needs-review-translation">Bu komut, tek dosya Uygulama Ana İşlemlerinde henüz desteklenmemektedir.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigurationKeyNotFound">
@@ -107,6 +107,11 @@
         <target state="translated">Paketler aranamadı. Çıkış kodu: {0}.</target>
         <note>{0} is a number</note>
       </trans-unit>
+      <trans-unit id="InvalidJsonInConfigFile">
+        <source>The configuration file '{0}' contains invalid JSON: {1}</source>
+        <target state="new">The configuration file '{0}' contains invalid JSON: {1}</target>
+        <note>{0} is the file path, {1} is the exception message</note>
+      </trans-unit>
       <trans-unit id="InvalidLocaleProvided">
         <source>Invalid locale {0} provided will not be used.</source>
         <target state="translated">Sağlanan geçersiz {0} yerel ayarı kullanılmayacaktır.</target>
@@ -153,8 +158,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectFileNotAppHostProject">
-        <source>Project file is not an Aspire AppHost project.</source>
-        <target state="translated">Proje dosyası bir Aspire AppHost projesi değil.</target>
+        <source>Project file is not an Aspire apphost project.</source>
+        <target state="needs-review-translation">Proje dosyası bir Aspire AppHost projesi değil.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectFileUnsupportedInCurrentEnvironment">
@@ -168,8 +173,8 @@
         <note />
       </trans-unit>
       <trans-unit id="SingleFileAppHostFeatureNotEnabled">
-        <source>Single file AppHost feature is not enabled. To use .cs AppHost files, enable the feature using configuration.</source>
-        <target state="translated">Tek dosya Uygulama Ana İşlemi özelliği etkinleştirilmemiştir. .cs AppHost dosyalarını kullanmak için, yapılandırmaları kullanarak özelliği etkinleştirin.</target>
+        <source>Single file apphost feature is not enabled. To use .cs apphost files, enable the feature using configuration.</source>
+        <target state="needs-review-translation">Tek dosya Uygulama Ana İşlemi özelliği etkinleştirilmemiştir. .cs AppHost dosyalarını kullanmak için, yapılandırmaları kullanarak özelliği etkinleştirin.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnableToRetrieveAssemblyVersion">

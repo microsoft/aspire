@@ -3,38 +3,38 @@
   <file datatype="xml" source-language="en" target-language="ja" original="../StopCommandStrings.resx">
     <body>
       <trans-unit id="AllOptionDescription">
-        <source>Stop all running AppHosts.</source>
-        <target state="translated">実行中のすべての AppHost を停止します。</target>
+        <source>Stop all running apphosts</source>
+        <target state="new">Stop all running apphosts</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostStoppedSuccessfully">
-        <source>AppHost stopped successfully.</source>
-        <target state="translated">AppHost が正常に停止しました。</target>
+        <source>Apphost stopped successfully.</source>
+        <target state="needs-review-translation">AppHost が正常に停止しました。</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Stop a running apphost.</source>
-        <target state="translated">実行中の AppHost を停止します。</target>
+        <source>Stop a running apphost</source>
+        <target state="needs-review-translation">実行中の Aspire apphost を停止します。</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedToStopAppHost">
-        <source>Failed to stop the AppHost.</source>
-        <target state="translated">AppHost を停止できませんでした。</target>
+        <source>Failed to stop the apphost.</source>
+        <target state="needs-review-translation">AppHost を停止できませんでした。</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleAppHostsNonInteractive">
-        <source>Multiple AppHosts are running. Use {0} to specify which one to stop, or use {1} to stop all of them.</source>
-        <target state="translated">複数の AppHost が実行されています。停止するものを指定するために {0} を使用するか、それらのすべてを停止するために {1} を使用します。</target>
+        <source>Multiple apphosts are running. Use {0} to specify which one to stop, or use {1} to stop all of them.</source>
+        <target state="new">Multiple apphosts are running. Use {0} to specify which one to stop, or use {1} to stop all of them.</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleAppHostsRunning">
-        <source>Multiple AppHosts are running. Use --apphost to specify which one to stop, or select one:</source>
-        <target state="translated">複数の AppHost が実行されています。--apphost を使用して停止するものを指定するか、次のいずれかを選択します。</target>
+        <source>Multiple apphosts are running. Use --apphost to specify which one to stop, or select one:</source>
+        <target state="needs-review-translation">複数の AppHost が実行されています。--apphost を使用して停止するものを指定するか、次のいずれかを選択します。</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="translated">Aspire AppHost プロジェクト ファイルへのパス。</target>
+        <source>The path to the Aspire apphost project file</source>
+        <target state="needs-review-translation">Aspire AppHost プロジェクト ファイルへのパス。</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">

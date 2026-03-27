@@ -51,9 +51,9 @@
         <source>Are you sure you want to delete the value for parameter `{0}`?
 
 The value is currently saved in [user secrets](https://aka.ms/aspire/user-secrets). You can choose to also delete it from there.</source>
-        <target state="translated">確定要刪除參數 `{0}` 的值?
+        <target state="needs-review-translation">確定要刪除參數 `{0}` 的值?
 
-值目前儲存於 [使用者祕密](https://aka.ms/aspire/user-secrets)。您可以選擇也從該處刪除它。</target>
+值目前儲存於 [使用者祕密](https://learn.microsoft.com/aspnet/core/security/app-secrets)。您可以選擇也從該處刪除它。</target>
         <note>Contains markdown. {0} is the parameter name.</note>
       </trans-unit>
       <trans-unit id="DeleteParameterPrimaryButtonText">
@@ -127,8 +127,8 @@ The value is currently saved in [user secrets](https://aka.ms/aspire/user-secret
         <note />
       </trans-unit>
       <trans-unit id="ParametersInputsRememberDescriptionNotConfigured">
-        <source>Requires a `UserSecretsId` to be configured in the AppHost project file. Run `aspire secret set &lt;key&gt; &lt;value&gt;` to initialize user secrets, or see [user secrets](https://aka.ms/aspire/user-secrets) for more information.</source>
-        <target state="translated">需要在 AppHost 專案檔案中設定 `UserSecretsId`。請執行 `aspire secret set &lt;key&gt; &lt;value&gt;` 來初始化使用者祕密，或參考 [使用者祕密](https://aka.ms/aspire/user-secrets) 以取得更多資訊。</target>
+        <source>Requires user secrets to be configured for the AppHost. Run `aspire secret set &lt;key&gt; &lt;value&gt;` to initialize user secrets, or see [user secrets](https://aka.ms/aspire/user-secrets) for more information.</source>
+        <target state="new">Requires user secrets to be configured for the AppHost. Run `aspire secret set &lt;key&gt; &lt;value&gt;` to initialize user secrets, or see [user secrets](https://aka.ms/aspire/user-secrets) for more information.</target>
         <note />
       </trans-unit>
       <trans-unit id="ParametersInputsRememberLabel">
@@ -165,7 +165,7 @@ The value is currently saved in [user secrets](https://aka.ms/aspire/user-secret
         <source>Please provide a value for the parameter. The parameter can be saved to [user secrets](https://aka.ms/aspire/user-secrets) for future use.
 
 New parameter values may not be used until dependent resources are restarted.</source>
-        <target state="translated">請提供參數的值。參數可以儲存到 [使用者祕密](https://aka.ms/aspire/user-secrets) 供未來使用。
+        <target state="needs-review-translation">請提供參數的值。參數可以儲存到 [使用者祕密](https://learn.microsoft.com/aspnet/core/security/app-secrets) 供未來使用。
 
 除非重新啟動相依資源，否則無法使用新的參數值。</target>
         <note>Contains markdown</note>

@@ -3,6 +3,7 @@ import * as path from 'path';
 import { noAppHostInWorkspace } from '../loc/strings';
 import { getResourceDebuggerExtensions } from '../debugger/debuggerExtensions';
 import { AspireCommandType } from '../dcp/types';
+import { aspireConfigFileName, getAppHostPathFromConfig, readJsonFile } from '../utils/cliTypes';
 
 export class AspireEditorCommandProvider implements vscode.Disposable {
     private _workspaceAppHostPath: string | null = null;
@@ -10,7 +11,7 @@ export class AspireEditorCommandProvider implements vscode.Disposable {
     private _disposables: vscode.Disposable[] = [];
 
     constructor() {
-        // if .aspire/settings.json exists, we only need to watch one folder
+        // Watch for both aspire.config.json and .aspire/settings.json changes
         const workspaceFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file('/'));
         if (workspaceFolder) {
             this._workspaceSettingsJsonWatchers.set(workspaceFolder, this.watchWorkspaceForAppHostPathChanges(workspaceFolder, this.onChangeAppHostPath.bind(this)));
@@ -101,33 +102,92 @@ export class AspireEditorCommandProvider implements vscode.Disposable {
     }
 
     private watchWorkspaceForAppHostPathChanges(workspaceFolder: vscode.WorkspaceFolder, onChangeAppHostPath: (newPath: string | null) => void): vscode.Disposable {
-        const watcher = vscode.workspace.createFileSystemWatcher(
+        const disposables: vscode.Disposable[] = [];
+
+        // Watch new format: aspire.config.json in workspace root
+        const newFormatWatcher = vscode.workspace.createFileSystemWatcher(
+            new vscode.RelativePattern(workspaceFolder, aspireConfigFileName)
+        );
+        newFormatWatcher.onDidCreate(async uri => readConfigFileAndInvokeCallback(uri));
+        newFormatWatcher.onDidChange(uri => readConfigFileAndInvokeCallback(uri));
+        newFormatWatcher.onDidDelete(() => {
+            // When new format is deleted, try to fall back to legacy format
+            const legacyUri = vscode.Uri.joinPath(workspaceFolder.uri, '.aspire', 'settings.json');
+            vscode.workspace.fs.stat(legacyUri).then(
+                () => readConfigFileAndInvokeCallback(legacyUri),
+                () => onChangeAppHostPath(null)
+            );
+        });
+        disposables.push(newFormatWatcher);
+
+        // Watch legacy format: .aspire/settings.json
+        const legacyWatcher = vscode.workspace.createFileSystemWatcher(
             new vscode.RelativePattern(workspaceFolder, '.aspire/settings.json')
         );
+        legacyWatcher.onDidCreate(async uri => {
+            // Only use legacy if new format doesn't exist
+            const newFormatUri = vscode.Uri.joinPath(workspaceFolder.uri, aspireConfigFileName);
+            try {
+                await vscode.workspace.fs.stat(newFormatUri);
+                // New format exists, ignore legacy change
+            } catch {
+                readConfigFileAndInvokeCallback(uri);
+            }
+        });
+        legacyWatcher.onDidChange(async uri => {
+            const newFormatUri = vscode.Uri.joinPath(workspaceFolder.uri, aspireConfigFileName);
+            try {
+                await vscode.workspace.fs.stat(newFormatUri);
+                // New format exists, ignore legacy change
+            } catch {
+                readConfigFileAndInvokeCallback(uri);
+            }
+        });
+        legacyWatcher.onDidDelete(() => {
+            // Legacy deleted; check if new format exists
+            const newFormatUri = vscode.Uri.joinPath(workspaceFolder.uri, aspireConfigFileName);
+            vscode.workspace.fs.stat(newFormatUri).then(
+                () => readConfigFileAndInvokeCallback(newFormatUri),
+                () => onChangeAppHostPath(null)
+            );
+        });
+        disposables.push(legacyWatcher);
 
-        watcher.onDidCreate(async uri => readJsonAndInvokeCallback(uri));
-        watcher.onDidChange(uri => readJsonAndInvokeCallback(uri));
-        watcher.onDidDelete(uri => onChangeAppHostPath(null));
-
-        // Read the initial value if the file exists
-        const settingsFileUri = vscode.Uri.joinPath(workspaceFolder.uri, '.aspire', 'settings.json');
-        vscode.workspace.fs.stat(settingsFileUri).then(
-            () => readJsonAndInvokeCallback(settingsFileUri),
-            () => onChangeAppHostPath(null) // File does not exist
+        // Read the initial value, preferring new format over legacy
+        const newFormatUri = vscode.Uri.joinPath(workspaceFolder.uri, aspireConfigFileName);
+        const legacyUri = vscode.Uri.joinPath(workspaceFolder.uri, '.aspire', 'settings.json');
+        vscode.workspace.fs.stat(newFormatUri).then(
+            () => readConfigFileAndInvokeCallback(newFormatUri),
+            () => {
+                // New format doesn't exist, try legacy
+                vscode.workspace.fs.stat(legacyUri).then(
+                    () => readConfigFileAndInvokeCallback(legacyUri),
+                    () => onChangeAppHostPath(null)
+                );
+            }
         );
 
-        return watcher;
+        return {
+            dispose() {
+                disposables.forEach(d => d.dispose());
+            }
+        };
 
-        async function readJsonAndInvokeCallback(uri: vscode.Uri) {
+        async function readConfigFileAndInvokeCallback(uri: vscode.Uri) {
             try {
-                const json = JSON.parse(await vscode.workspace.fs.readFile(uri).then(buffer => buffer.toString()));
-                if (!json.appHostPath) {
+                const json = await readJsonFile(uri);
+                const appHostRelativePath = getAppHostPathFromConfig(json);
+                if (!appHostRelativePath) {
                     onChangeAppHostPath(null);
+                    return;
                 }
-                else {
-                    const appHostPath = path.isAbsolute(json.appHostPath) ? json.appHostPath : path.join(workspaceFolder.uri.fsPath, ".aspire",json.appHostPath);
-                    onChangeAppHostPath(appHostPath);
-                }
+
+                // Resolve relative path based on the config file's directory
+                const configDir = path.dirname(uri.fsPath);
+                const appHostPath = path.isAbsolute(appHostRelativePath)
+                    ? appHostRelativePath
+                    : path.join(configDir, appHostRelativePath);
+                onChangeAppHostPath(appHostPath);
             }
             catch {
                 onChangeAppHostPath(null);

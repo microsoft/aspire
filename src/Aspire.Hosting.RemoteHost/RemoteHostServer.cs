@@ -19,7 +19,7 @@ public static class RemoteHostServer
     /// </summary>
     /// <remarks>
     /// The server reads the "AtsAssemblies" section from appsettings.json to determine which
-    /// assemblies to scan for <see cref="Aspire.Hosting.AspireExportAttribute"/> capabilities, and it also
+    /// assemblies to scan for <c>Aspire.Hosting.AspireExportAttribute</c> capabilities, and it also
     /// probes available <c>Aspire.Hosting*</c> assemblies from the application output and
     /// integration libraries. The appsettings.json should be in the current working directory.
     /// </remarks>

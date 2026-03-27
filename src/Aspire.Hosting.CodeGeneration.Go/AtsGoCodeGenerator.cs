@@ -4,8 +4,7 @@
 using System.Globalization;
 using System.Reflection;
 using System.Text;
-using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Ats;
+using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.Go;
 
@@ -349,13 +348,10 @@ public sealed class AtsGoCodeGenerator : ICodeGenerator
                 continue;
             }
 
-            // Only use nil checks for pointer types (types starting with *)
             var paramTypeStr = MapTypeRefToGo(parameter.Type, parameter.IsOptional);
-            var isPointerType = paramTypeStr.StartsWith("*", StringComparison.Ordinal) ||
-                               paramTypeStr == "any" ||
-                               paramTypeStr.StartsWith("func(", StringComparison.Ordinal);
+            var isNilableType = IsNilableGoType(paramTypeStr);
 
-            if (parameter.IsOptional && isPointerType)
+            if (parameter.IsOptional && isNilableType)
             {
                 WriteLine($"\tif {paramName} != nil {{");
                 WriteLine($"\t\treqArgs[\"{parameter.Name}\"] = SerializeValue({paramName})");
@@ -578,8 +574,7 @@ public sealed class AtsGoCodeGenerator : ICodeGenerator
             var isResourceBuilder = false;
             if (handleTypeMap.TryGetValue(typeId, out var typeInfo))
             {
-                isResourceBuilder = typeInfo.ClrType is not null &&
-                    typeof(IResource).IsAssignableFrom(typeInfo.ClrType);
+                isResourceBuilder = typeInfo.IsResourceBuilder;
             }
 
             results.Add(new GoHandleType(typeId, _structNames[typeId], isResourceBuilder));
@@ -682,9 +677,20 @@ public sealed class AtsGoCodeGenerator : ICodeGenerator
             _ => "any"
         };
 
-        // In Go, pointers are already optional (can be nil), so we don't need to wrap
+        if (isOptional && !IsNilableGoType(baseType))
+        {
+            return $"*{baseType}";
+        }
+
         return baseType;
     }
+
+    private static bool IsNilableGoType(string typeName) =>
+        typeName.StartsWith("*", StringComparison.Ordinal) ||
+        typeName.StartsWith("[]", StringComparison.Ordinal) ||
+        typeName.StartsWith("map[", StringComparison.Ordinal) ||
+        typeName == "any" ||
+        typeName.StartsWith("func(", StringComparison.Ordinal);
 
     private string MapHandleType(string typeId) =>
         _structNames.TryGetValue(typeId, out var name) ? name : "Handle";

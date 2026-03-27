@@ -3,38 +3,38 @@
   <file datatype="xml" source-language="en" target-language="de" original="../StopCommandStrings.resx">
     <body>
       <trans-unit id="AllOptionDescription">
-        <source>Stop all running AppHosts.</source>
-        <target state="translated">Beenden Sie alle ausgeführten AppHosts.</target>
+        <source>Stop all running apphosts</source>
+        <target state="new">Stop all running apphosts</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostStoppedSuccessfully">
-        <source>AppHost stopped successfully.</source>
-        <target state="translated">AppHost wurde erfolgreich beendet.</target>
+        <source>Apphost stopped successfully.</source>
+        <target state="needs-review-translation">AppHost wurde erfolgreich beendet.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Stop a running apphost.</source>
-        <target state="translated">Beenden Sie einen aktiven AppHost.</target>
+        <source>Stop a running apphost</source>
+        <target state="needs-review-translation">Beenden Sie einen aktiven Aspire-AppHost.</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedToStopAppHost">
-        <source>Failed to stop the AppHost.</source>
-        <target state="translated">Beim Beenden des AppHost ist ein Fehler aufgetreten.</target>
+        <source>Failed to stop the apphost.</source>
+        <target state="needs-review-translation">Beim Beenden des AppHost ist ein Fehler aufgetreten.</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleAppHostsNonInteractive">
-        <source>Multiple AppHosts are running. Use {0} to specify which one to stop, or use {1} to stop all of them.</source>
-        <target state="translated">Mehrere AppHosts sind aktiv. Verwenden Sie {0}, um anzugeben, welche beendet werden soll, oder {1} um sie alle zu beenden.</target>
+        <source>Multiple apphosts are running. Use {0} to specify which one to stop, or use {1} to stop all of them.</source>
+        <target state="new">Multiple apphosts are running. Use {0} to specify which one to stop, or use {1} to stop all of them.</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleAppHostsRunning">
-        <source>Multiple AppHosts are running. Use --apphost to specify which one to stop, or select one:</source>
-        <target state="translated">Mehrere AppHosts sind aktiv. Verwenden Sie --apphost, um anzugeben, welcher AppHost gestoppt werden soll, oder wählen Sie einen aus:</target>
+        <source>Multiple apphosts are running. Use --apphost to specify which one to stop, or select one:</source>
+        <target state="needs-review-translation">Mehrere AppHosts sind aktiv. Verwenden Sie --apphost, um anzugeben, welcher AppHost gestoppt werden soll, oder wählen Sie einen aus:</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="translated">Der Pfad zur Aspire AppHost-Projektdatei.</target>
+        <source>The path to the Aspire apphost project file</source>
+        <target state="needs-review-translation">Der Pfad zur Aspire AppHost-Projektdatei.</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">

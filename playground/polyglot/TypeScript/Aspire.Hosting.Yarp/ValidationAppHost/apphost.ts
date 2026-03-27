@@ -26,13 +26,61 @@ await proxy.withBuildSecret("MY_SECRET", buildSecret);
 await proxy.withConfiguration(async (config) => {
     const endpoint = await backend.getEndpoint("http");
     const endpointCluster = await config.addClusterFromEndpoint(endpoint);
-    const resourceCluster = await config.addCluster(backend);
+    const resourceCluster = await config.addClusterFromResource(backend);
     const externalServiceCluster = await config.addClusterFromExternalService(externalBackend);
     const singleDestinationCluster = await config.addClusterWithDestination("single-destination", "https://example.net");
     const multiDestinationCluster = await config.addClusterWithDestinations("multi-destination", [
         "https://example.org",
         "https://example.edu"
     ]);
+    const routeFromEndpoint = await config.addRouteFromEndpoint("/from-endpoint/{**catchall}", endpoint);
+    const routeFromResource = await config.addRouteFromResource("/from-resource/{**catchall}", backend);
+    const routeFromExternalService = await config.addRouteFromExternalService("/from-external/{**catchall}", externalBackend);
+    const catchAllRoute = await config.addCatchAllRoute(endpointCluster);
+    const catchAllRouteFromEndpoint = await config.addCatchAllRouteFromEndpoint(endpoint);
+    const catchAllRouteFromResource = await config.addCatchAllRouteFromResource(backend);
+    const catchAllRouteFromExternalService = await config.addCatchAllRouteFromExternalService(externalBackend);
+
+    await endpointCluster.withForwarderRequestConfig({
+        activityTimeout: 30_000_000,
+        allowResponseBuffering: true,
+        version: "2.0",
+    });
+    await endpointCluster.withHttpClientConfig({
+        dangerousAcceptAnyServerCertificate: true,
+        enableMultipleHttp2Connections: true,
+        maxConnectionsPerServer: 10,
+        requestHeaderEncoding: "utf-8",
+        responseHeaderEncoding: "utf-8",
+    });
+    await endpointCluster.withSessionAffinityConfig({
+        affinityKeyName: ".Aspire.Affinity",
+        enabled: true,
+        failurePolicy: "Redistribute",
+        policy: "Cookie",
+        cookie: {
+            domain: "example.com",
+            httpOnly: true,
+            isEssential: true,
+            path: "/",
+        },
+    });
+    await endpointCluster.withHealthCheckConfig({
+        availableDestinationsPolicy: "HealthyOrPanic",
+        active: {
+            enabled: true,
+            interval: 50_000_000,
+            path: "/health",
+            policy: "ConsecutiveFailures",
+            query: "probe=1",
+            timeout: 20_000_000,
+        },
+        passive: {
+            enabled: true,
+            policy: "TransportFailureRateHealthPolicy",
+            reactivationPeriod: 100_000_000,
+        },
+    });
 
     await config.addRoute("/{**catchall}", endpointCluster)
         .withTransformXForwarded()
@@ -60,6 +108,34 @@ await proxy.withConfiguration(async (config) => {
         .withTransformResponseTrailer("X-Response-Trailer", "trailer-value")
         .withTransformResponseTrailerRemove("X-Remove-Trailer")
         .withTransformResponseTrailersAllowed(["X-Response-Trailer"]);
+
+    await routeFromEndpoint.withMatch({
+        path: "/from-endpoint/{**catchall}",
+        methods: ["GET", "POST"],
+        hosts: ["endpoint.example.com"],
+    });
+    await routeFromEndpoint.withTransform({
+        PathPrefix: "/endpoint",
+        RequestHeadersCopy: "true",
+    });
+    await routeFromResource.withTransform({
+        PathPrefix: "/resource",
+    });
+    await routeFromExternalService.withTransform({
+        PathPrefix: "/external",
+    });
+    await catchAllRoute.withTransform({
+        PathPrefix: "/cluster",
+    });
+    await catchAllRouteFromEndpoint.withTransform({
+        PathPrefix: "/catchall-endpoint",
+    });
+    await catchAllRouteFromResource.withTransform({
+        PathPrefix: "/catchall-resource",
+    });
+    await catchAllRouteFromExternalService.withTransform({
+        PathPrefix: "/catchall-external",
+    });
 
     await config.addRoute("/resource/{**catchall}", resourceCluster);
     await config.addRoute("/external/{**catchall}", externalServiceCluster);

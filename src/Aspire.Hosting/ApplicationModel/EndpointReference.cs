@@ -53,14 +53,12 @@ public sealed class EndpointReference : IManifestExpressionProvider, IValueProvi
     /// <summary>
     /// Gets a value indicating whether the endpoint uses HTTP scheme.
     /// </summary>
-    public bool IsHttp => StringComparers.EndpointAnnotationUriScheme.Equals(Scheme, "http");
+    public bool IsHttp => string.Equals(Scheme, "http", StringComparisons.EndpointAnnotationUriScheme);
 
     /// <summary>
-    ///
-    /// </summary> <summary>
     /// Gets a value indicating whether the endpoint uses HTTPS scheme.
     /// </summary>
-    public bool IsHttps => StringComparers.EndpointAnnotationUriScheme.Equals(Scheme, "https");
+    public bool IsHttps => string.Equals(Scheme, "https", StringComparisons.EndpointAnnotationUriScheme);
 
     /// <summary>
     /// Gets a value indicating whether TLS is enabled for this endpoint.
@@ -70,6 +68,15 @@ public sealed class EndpointReference : IManifestExpressionProvider, IValueProvi
     /// Once the annotation exists, this property delegates to <see cref="EndpointAnnotation.TlsEnabled"/>.
     /// </remarks>
     public bool TlsEnabled => Exists && EndpointAnnotation.TlsEnabled;
+
+    /// <summary>
+    /// Gets a value indicating whether this endpoint is excluded from the default set when referencing the resource's endpoints.
+    /// </summary>
+    /// <remarks>
+    /// Returns <see langword="false"/> if the endpoint annotation has not been added to the resource yet.
+    /// Once the annotation exists, this property delegates to <see cref="EndpointAnnotation.ExcludeReferenceEndpoint"/>.
+    /// </remarks>
+    public bool ExcludeReferenceEndpoint => Exists && EndpointAnnotation.ExcludeReferenceEndpoint;
 
     string IManifestExpressionProvider.ValueExpression => GetExpression();
 
@@ -192,7 +199,7 @@ public sealed class EndpointReference : IManifestExpressionProvider, IValueProvi
         }
 
         _endpointAnnotation ??= Resource.Annotations.OfType<EndpointAnnotation>()
-            .SingleOrDefault(a => StringComparers.EndpointAnnotationName.Equals(a.Name, EndpointName));
+            .SingleOrDefault(a => string.Equals(a.Name, EndpointName, StringComparisons.EndpointAnnotationName));
         return _endpointAnnotation;
     }
 
@@ -206,7 +213,7 @@ public sealed class EndpointReference : IManifestExpressionProvider, IValueProvi
 
         foreach (var nes in endpointAnnotation.AllAllocatedEndpoints)
         {
-            if (StringComparers.NetworkID.Equals(nes.NetworkID, _contextNetworkID ?? KnownNetworkIdentifiers.LocalhostNetwork))
+            if (string.Equals(nes.NetworkID.Value, (_contextNetworkID ?? KnownNetworkIdentifiers.LocalhostNetwork).Value, StringComparisons.NetworkID))
             {
                 if (!nes.Snapshot.IsValueSet)
                 {

@@ -16,4 +16,6 @@ internal sealed class NoProjectFileProjectLocator : IProjectLocator
     {
         throw new ProjectLocatorException("No project file found.", ProjectLocatorFailureReason.NoProjectFileFound);
     }
+
+    public Task<FileInfo?> GetAppHostFromSettingsAsync(CancellationToken cancellationToken = default) => Task.FromResult<FileInfo?>(null);
 }

@@ -131,7 +131,7 @@ public static class GarnetBuilderExtensions
             .WithImage(GarnetContainerImageTags.Image, GarnetContainerImageTags.Tag)
             .WithImageRegistry(GarnetContainerImageTags.Registry)
             .WithHealthCheck(healthCheckKey)
-            // see https://github.com/dotnet/aspire/issues/3838 for why the password is passed this way
+            // see https://github.com/microsoft/aspire/issues/3838 for why the password is passed this way
             .WithEntrypoint("/bin/sh")
             .WithEnvironment(context =>
             {

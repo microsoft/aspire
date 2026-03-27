@@ -2,6 +2,7 @@
 const failureConclusions = new Set(['failure', 'cancelled', 'timed_out', 'startup_failure']);
 const ignoredJobs = new Set(['Final Results', 'Tests / Final Test Results']);
 const defaultMaxRetryableJobs = 5;
+const defaultMaxRunAttempt = 3;
 
 const retryableWithAnnotationStepPatterns = [
     /^Set up job$/i,
@@ -26,6 +27,11 @@ const ignoredFailureStepPatterns = [
     /^Upload CLI E2E recordings$/i,
     /^Post Checkout code$/i,
     /^Install dependencies$/i,
+];
+
+const testExecutionFailureStepPatterns = [
+    /^Run tests\b/i,
+    /^Run nuget dependent tests\b/i,
 ];
 
 const transientAnnotationPatterns = [
@@ -72,23 +78,27 @@ const windowsProcessInitializationFailurePatterns = [
     /\b0xC0000142\b/i,
 ];
 
-const feedNetworkFailureStepPatterns = [
-    /^Install sdk for nuget based testing$/i,
-    /^Build test project$/i,
-    /^Build and archive test project$/i,
-    /^Build with packages$/i,
-    /^Build RID-specific packages\b/i,
-    /^Build .*validation image$/i,
-    /^Run .*SDK validation$/i,
-    /^Rebuild for Azure Functions project$/i,
-];
-
-const ignoredBuildFailureLogOverridePatterns = [
+const infrastructureNetworkFailureLogOverridePatterns = [
     /Unable to load the service index for source https:\/\/(?:pkgs\.dev\.azure\.com\/dnceng|dnceng\.pkgs\.visualstudio\.com)\/public\/_packaging\//i,
+    /(timed out|failed to connect|could not resolve|ENOTFOUND|ECONNRESET|EPROTO|Bad Gateway|SSL connection could not be established).{0,160}https:\/\/(?:pkgs\.dev\.azure\.com\/dnceng|dnceng\.pkgs\.visualstudio\.com)\/public\/_packaging\//i,
+    /https:\/\/(?:pkgs\.dev\.azure\.com\/dnceng|dnceng\.pkgs\.visualstudio\.com)\/public\/_packaging\/.{0,160}(timed out|failed to connect|could not resolve|ENOTFOUND|ECONNRESET|EPROTO|Bad Gateway|SSL connection could not be established)/i,
+    /(timed out|failed to connect|could not resolve|ENOTFOUND|ECONNRESET|EPROTO|Bad Gateway|SSL connection could not be established).{0,160}builds\.dotnet\.microsoft\.com/i,
+    /builds\.dotnet\.microsoft\.com.{0,160}(timed out|failed to connect|could not resolve|ENOTFOUND|ECONNRESET|EPROTO|Bad Gateway|SSL connection could not be established)/i,
+    /(timed out|failed to connect|failed to respond|could not resolve|ENOTFOUND|ECONNRESET|EPROTO|Bad Gateway|SSL connection could not be established).{0,160}api\.github\.com/i,
+    /api\.github\.com.{0,160}(timed out|failed to connect|failed to respond|could not resolve|ENOTFOUND|ECONNRESET|EPROTO|Bad Gateway|SSL connection could not be established)/i,
+    /fatal: unable to access 'https:\/\/github\.com\/.*': The requested URL returned error:\s*(502|503|504)/i,
+    /Failed to connect to github\.com port/i,
+    /expected 'packfile'/i,
+    /\bRPC failed\b/i,
+    /\bRecv failure\b/i,
 ];
 
 function matchesAny(value, patterns) {
     return patterns.some(pattern => pattern.test(value));
+}
+
+function findMatchingPattern(value, patterns) {
+    return patterns.find(pattern => pattern.test(value)) ?? null;
 }
 
 function parseCheckRunId(checkRunUrl) {
@@ -103,6 +113,97 @@ function parseCheckRunId(checkRunUrl) {
 
     const checkRunId = Number(match[1]);
     return Number.isInteger(checkRunId) && checkRunId > 0 ? checkRunId : null;
+}
+
+function getPullRequestNumbers(workflowRun) {
+    return [...new Set((workflowRun?.pull_requests || [])
+        .map(pullRequest => pullRequest.number)
+        .filter(Number.isInteger))];
+}
+
+function getHeadRepositoryOwnerLogin(workflowRun) {
+    return workflowRun?.head_repository?.owner?.login ?? workflowRun?.head_repository?.owner?.name ?? null;
+}
+
+function matchesWorkflowRunHead(pullRequest, workflowRun, headOwner, headBranch) {
+    const pullRequestHead = pullRequest?.head;
+    const pullRequestHeadOwner = pullRequestHead?.repo?.owner?.login ?? pullRequestHead?.user?.login ?? null;
+
+    if (typeof pullRequestHeadOwner !== 'string' || pullRequestHeadOwner.toLowerCase() !== headOwner.toLowerCase()) {
+        return false;
+    }
+
+    if (pullRequestHead?.ref !== headBranch) {
+        return false;
+    }
+
+    const workflowHeadSha = workflowRun?.head_sha;
+    const pullRequestHeadSha = pullRequestHead?.sha;
+
+    return typeof workflowHeadSha !== 'string'
+        || workflowHeadSha.length === 0
+        || typeof pullRequestHeadSha !== 'string'
+        || pullRequestHeadSha.length === 0
+        || pullRequestHeadSha === workflowHeadSha;
+}
+
+async function listPullRequestsByHead({ github, owner, repo, head, warn }) {
+    const pullRequests = [];
+
+    try {
+        for (let page = 1; ; page++) {
+            const response = await github.request('GET /repos/{owner}/{repo}/pulls', {
+                owner,
+                repo,
+                state: 'all',
+                head,
+                per_page: 100,
+                page,
+            });
+
+            pullRequests.push(...(response.data || []));
+
+            if (!response.headers?.link || !response.headers.link.includes('rel="next"')) {
+                return pullRequests;
+            }
+        }
+    }
+    catch (error) {
+        if (typeof warn === 'function') {
+            warn(`Failed to resolve pull requests for head '${head}': ${error.message}`);
+        }
+        return [];
+    }
+}
+
+async function getAssociatedPullRequestNumbers({ github, owner, repo, workflowRun, warn }) {
+    const pullRequestNumbers = getPullRequestNumbers(workflowRun);
+    if (pullRequestNumbers.length > 0) {
+        return pullRequestNumbers;
+    }
+
+    const headOwner = getHeadRepositoryOwnerLogin(workflowRun);
+    const headBranch = workflowRun?.head_branch;
+
+    if (typeof headOwner !== 'string' || headOwner.length === 0 || typeof headBranch !== 'string' || headBranch.length === 0) {
+        return [];
+    }
+
+    const responseData = await listPullRequestsByHead({
+        github,
+        owner,
+        repo,
+        head: `${headOwner}:${headBranch}`,
+        warn,
+    });
+
+    const matchingPullRequests = responseData
+        .filter(pullRequest => matchesWorkflowRunHead(pullRequest, workflowRun, headOwner, headBranch));
+    const fallbackPullRequestNumbers = [...new Set(matchingPullRequests
+        .map(pullRequest => pullRequest.number)
+        .filter(Number.isInteger))];
+
+    return fallbackPullRequestNumbers.length === 1 ? fallbackPullRequestNumbers : [];
 }
 
 async function getCheckRunIdForJob({ job, getJobForWorkflowRun }) {
@@ -154,16 +255,110 @@ function getFailureStepSignals(failedSteps) {
     };
 }
 
-function classifyFailedJob(job, annotationsOrText, jobLogText = '') {
+function canUseInfrastructureNetworkLogOverride(failedSteps) {
+    return failedSteps.length > 0 && !failedSteps.some(step => matchesAny(step, testExecutionFailureStepPatterns));
+}
+
+function formatFailedStepLabel(failedSteps, failedStepText) {
+    const label = failedSteps.length === 1 ? 'Failed step' : 'Failed steps';
+    return `${label} '${failedStepText}'`;
+}
+
+function isSingleFailedStep(failedSteps) {
+    return failedSteps.length === 1;
+}
+
+function formatMatchedPatternForMarkdown(matchedPattern) {
+    if (!matchedPattern) {
+        return '';
+    }
+
+    const patternText = String(matchedPattern);
+    let maxBacktickRun = 0;
+    const backtickRunRegex = /`+/g;
+    let match;
+
+    while ((match = backtickRunRegex.exec(patternText)) !== null) {
+        if (match[0].length > maxBacktickRun) {
+            maxBacktickRun = match[0].length;
+        }
+    }
+
+    const fence = '`'.repeat(maxBacktickRun + 1);
+    return ` Matched pattern: ${fence}${patternText}${fence}.`;
+}
+
+function findInfrastructureNetworkLogOverridePattern(jobLogText) {
+    return findMatchingPattern(jobLogText, infrastructureNetworkFailureLogOverridePatterns);
+}
+
+function getInfrastructureNetworkLogOverrideReason(failedSteps, failedStepText, matchedPattern) {
+    const patternText = formatMatchedPatternForMarkdown(matchedPattern);
+    return `${formatFailedStepLabel(failedSteps, failedStepText)} will be retried because the job log shows a likely transient infrastructure network failure.${patternText}`;
+}
+
+function getOutsideRetryRulesReason(failedSteps, failedStepText) {
+    return `${formatFailedStepLabel(failedSteps, failedStepText)} ${isSingleFailedStep(failedSteps) ? 'is' : 'are'} not covered by the retry-safe rerun rules.`;
+}
+
+function getNoRetryMatchReason({
+    failedSteps,
+    failedStepText,
+    hasRetryableStep,
+    hasIgnoredFailureStep,
+    hasTestExecutionFailureStep,
+    annotationsText,
+}) {
+    const failedStepLabel = formatFailedStepLabel(failedSteps, failedStepText);
+
+    if (hasTestExecutionFailureStep) {
+        return `${failedStepLabel} ${isSingleFailedStep(failedSteps) ? 'includes' : 'include'} a test execution failure, so the job was not retried without a high-confidence infrastructure override.`;
+    }
+
+    if (hasIgnoredFailureStep) {
+        return `${failedStepLabel} ${isSingleFailedStep(failedSteps) ? 'is' : 'are'} only retried when the job shows a high-confidence infrastructure override, and none was found.`;
+    }
+
+    if (hasRetryableStep) {
+        return `${failedStepLabel} did not include a retry-safe transient infrastructure signal in the job annotations.`;
+    }
+
+    if (annotationsText) {
+        return 'The job annotations did not show a retry-safe transient infrastructure failure.';
+    }
+
+    return 'No retry-safe transient infrastructure signal was found in the available job diagnostics.';
+}
+
+function classifyFailedJob(job, annotationsOrText, jobLogText = '', options = {}) {
+    const {
+        matchedInfrastructureNetworkLogOverridePattern: preMatchedInfrastructureNetworkLogOverridePattern,
+    } = options;
     const failedSteps = getFailedSteps(job);
     const failedStepText = failedSteps.join(' | ');
     const { hasRetryableStep, hasIgnoredFailureStep, shouldInspectAnnotations } = getFailureStepSignals(failedSteps);
+    const hasTestExecutionFailureStep = failedSteps.some(step => matchesAny(step, testExecutionFailureStepPatterns));
+    const matchedInfrastructureNetworkLogOverridePattern =
+        !hasTestExecutionFailureStep
+            ? preMatchedInfrastructureNetworkLogOverridePattern === undefined
+                ? findInfrastructureNetworkLogOverridePattern(jobLogText)
+                : preMatchedInfrastructureNetworkLogOverridePattern
+            : null;
+    const matchesInfrastructureNetworkLogOverride = matchedInfrastructureNetworkLogOverridePattern !== null;
 
     if (!shouldInspectAnnotations) {
+        if (matchesInfrastructureNetworkLogOverride) {
+            return {
+                retryable: true,
+                failedSteps,
+                reason: getInfrastructureNetworkLogOverrideReason(failedSteps, failedStepText, matchedInfrastructureNetworkLogOverridePattern),
+            };
+        }
+
         return {
             retryable: false,
             failedSteps,
-            reason: 'Failed steps are outside the retry-safe allowlist.',
+            reason: getOutsideRetryRulesReason(failedSteps, failedStepText),
         };
     }
 
@@ -206,25 +401,38 @@ function classifyFailedJob(job, annotationsOrText, jobLogText = '') {
         };
     }
 
-    const hasIgnoredBuildFailureStep = failedSteps.some(step => matchesAny(step, feedNetworkFailureStepPatterns));
-    if (hasIgnoredBuildFailureStep && matchesAny(jobLogText, ignoredBuildFailureLogOverridePatterns)) {
+    if (matchesInfrastructureNetworkLogOverride) {
         return {
             retryable: true,
             failedSteps,
-            reason: `Ignored failed step '${failedStepText}' matched the feed network failure override allowlist.`,
+            reason: getInfrastructureNetworkLogOverrideReason(failedSteps, failedStepText, matchedInfrastructureNetworkLogOverridePattern),
         };
     }
 
     return {
         retryable: false,
         failedSteps,
-        reason: annotationsText
-            ? 'Annotations did not match the transient allowlist.'
-            : 'No retry-safe step or annotation signature matched.',
+        reason: getNoRetryMatchReason({
+            failedSteps,
+            failedStepText,
+            hasRetryableStep,
+            hasIgnoredFailureStep,
+            hasTestExecutionFailureStep,
+            annotationsText,
+        }),
     };
 }
 
-async function analyzeFailedJobs({ jobs, getAnnotationsForJob, getJobLogTextForJob }) {
+async function analyzeFailedJobs({
+    jobs,
+    getAnnotationsForJob,
+    getJobLogTextForJob,
+    maxRetryableJobs = defaultMaxRetryableJobs,
+}) {
+    const normalizedMaxRetryableJobs =
+        Number.isInteger(maxRetryableJobs) && maxRetryableJobs >= 0
+            ? maxRetryableJobs
+            : defaultMaxRetryableJobs;
     const failedJobs = (jobs || []).filter(job => failureConclusions.has(job.conclusion) && !ignoredJobs.has(job.name));
     const retryableJobs = [];
     const skippedJobs = [];
@@ -243,13 +451,18 @@ async function analyzeFailedJobs({ jobs, getAnnotationsForJob, getJobLogTextForJ
         const shouldInspectLogs =
             !classification.retryable &&
             getJobLogTextForJob &&
-            failedSteps.some(step => matchesAny(step, feedNetworkFailureStepPatterns));
+            canUseInfrastructureNetworkLogOverride(failedSteps) &&
+            normalizedMaxRetryableJobs > 0 &&
+            retryableJobs.length <= normalizedMaxRetryableJobs;
 
         if (shouldInspectLogs) {
+            const jobLogText = await getJobLogTextForJob(job);
+            const matchedInfrastructureNetworkLogOverridePattern = findInfrastructureNetworkLogOverridePattern(jobLogText);
             classification = classifyFailedJob(
                 job,
                 annotations,
-                await getJobLogTextForJob(job)
+                jobLogText,
+                { matchedInfrastructureNetworkLogOverridePattern }
             );
         }
 
@@ -272,8 +485,73 @@ async function analyzeFailedJobs({ jobs, getAnnotationsForJob, getJobLogTextForJ
     return { failedJobs, retryableJobs, skippedJobs };
 }
 
-function computeRerunEligibility({ dryRun, retryableCount, maxRetryableJobs = defaultMaxRetryableJobs }) {
-    return !dryRun && retryableCount > 0 && retryableCount <= maxRetryableJobs;
+function computeRerunEligibility({
+    retryableCount,
+    maxRetryableJobs = defaultMaxRetryableJobs,
+    runAttempt = 1,
+    maxRunAttempt = defaultMaxRunAttempt
+}) {
+    if (retryableCount <= 0 || runAttempt > maxRunAttempt) {
+        return false;
+    }
+
+    // For attempts after the first (runAttempt > 1) apply a stricter cap:
+    // fewer than maxRetryableJobs jobs (i.e. strictly less than the cap rather
+    // than less-than-or-equal).
+    return runAttempt <= 1
+        ? retryableCount <= maxRetryableJobs
+        : retryableCount < maxRetryableJobs;
+}
+
+function computeRerunExecutionEligibility({
+    dryRun,
+    retryableCount,
+    maxRetryableJobs = defaultMaxRetryableJobs,
+    runAttempt = 1,
+    maxRunAttempt = defaultMaxRunAttempt
+}) {
+    return !dryRun && computeRerunEligibility({ retryableCount, maxRetryableJobs, runAttempt, maxRunAttempt });
+}
+
+function buildSummaryReference(url, text) {
+    return { url, text };
+}
+
+function addSummaryReference(summary, label, reference) {
+    summary.addRaw(`${label}: `);
+
+    if (reference?.url) {
+        summary.addLink(reference.text, reference.url);
+    }
+    else {
+        summary.addRaw(reference?.text || 'not available');
+    }
+
+    return summary.addBreak();
+}
+
+function addSummaryCommentReferences(summary, postedComments) {
+    if (!postedComments?.length) {
+        summary.addRaw('Pull request comments: none posted').addBreak();
+        return summary;
+    }
+
+    summary.addRaw('Pull request comments:').addBreak();
+
+    for (const comment of postedComments) {
+        summary.addRaw('- ');
+
+        if (comment.htmlUrl) {
+            summary.addLink(`PR #${comment.pullRequestNumber} comment`, comment.htmlUrl);
+        }
+        else {
+            summary.addRaw(`PR #${comment.pullRequestNumber} comment`);
+        }
+
+        summary.addBreak();
+    }
+
+    return summary;
 }
 
 async function writeAnalysisSummary({
@@ -285,9 +563,27 @@ async function writeAnalysisSummary({
     dryRun,
     rerunEligible,
     sourceRunUrl,
+    sourceRunAttempt,
 }) {
+    const analyzedRunReference = buildSummaryReference(
+        buildWorkflowRunAttemptUrl(sourceRunUrl, sourceRunAttempt),
+        Number.isInteger(sourceRunAttempt) && sourceRunAttempt > 0
+            ? `workflow run attempt ${sourceRunAttempt}`
+            : 'workflow run'
+    );
+    const outcome = rerunEligible ? 'Rerun eligible' : 'Rerun skipped';
+    const outcomeDetails = rerunEligible
+        ? dryRun
+            ? `Matched ${retryableJobs.length} retry-safe job${retryableJobs.length === 1 ? '' : 's'} that would be rerun if dry run were disabled.`
+            : `Matched ${retryableJobs.length} retry-safe job${retryableJobs.length === 1 ? '' : 's'} for rerun.`
+        : retryableJobs.length === 0
+            ? 'No retry-safe jobs were found in the analyzed run.'
+            : retryableJobs.length > maxRetryableJobs
+                ? `Matched ${retryableJobs.length} jobs, which exceeds the cap of ${maxRetryableJobs}.`
+                : 'The analyzed run did not satisfy the workflow safety rails for reruns.';
     const summaryRows = [
         [{ data: 'Category', header: true }, { data: 'Count', header: true }],
+        ['Outcome', outcome],
         ['Failed jobs inspected', String(failedJobs.length)],
         ['Retryable jobs', String(retryableJobs.length)],
         ['Skipped jobs', String(skippedJobs.length)],
@@ -295,14 +591,15 @@ async function writeAnalysisSummary({
         ['Dry run', String(dryRun)],
         ['Eligible to rerun', String(rerunEligible)],
     ];
-    const sourceRunReference = sourceRunUrl
-        ? `[workflow run](${sourceRunUrl})`
-        : 'workflow run';
 
     await summary
-        .addHeading('Transient CI rerun analysis')
-        .addTable(summaryRows)
-        .addRaw(`Source run: ${sourceRunReference}\n\n`);
+        .addHeading(outcome)
+        .addTable(summaryRows);
+
+    addSummaryReference(summary, 'Analyzed run', analyzedRunReference)
+        .addRaw(outcomeDetails)
+        .addBreak()
+        .addBreak();
 
     if (retryableJobs.length > 0) {
         await summary.addHeading('Retryable jobs', 2);
@@ -318,12 +615,6 @@ async function writeAnalysisSummary({
             [{ data: 'Job', header: true }, { data: 'Reason', header: true }],
             ...skippedJobs.slice(0, 25).map(job => [job.name, job.reason]),
         ]);
-    }
-
-    if (retryableJobs.length > maxRetryableJobs) {
-        await summary
-            .addHeading('Automatic rerun skipped', 2)
-            .addRaw(`Matched ${retryableJobs.length} jobs, which exceeds the cap of ${maxRetryableJobs}.`, true);
     }
 
     await summary.write();
@@ -361,20 +652,17 @@ function buildWorkflowRunAttemptUrl(sourceRunUrl, runAttempt) {
     return `${sourceRunUrl.replace(/\/$/, '')}/attempts/${runAttempt}`;
 }
 
-function buildWorkflowRunReferenceText(sourceRunUrl, runAttempt) {
-    const workflowRunUrl = buildWorkflowRunAttemptUrl(sourceRunUrl, runAttempt);
-
-    if (!workflowRunUrl) {
-        return Number.isInteger(runAttempt) && runAttempt > 0
+function buildWorkflowRunReference(sourceRunUrl, runAttempt) {
+    return buildSummaryReference(
+        buildWorkflowRunAttemptUrl(sourceRunUrl, runAttempt),
+        Number.isInteger(runAttempt) && runAttempt > 0
             ? `workflow run attempt ${runAttempt}`
-            : 'workflow run';
-    }
+            : 'workflow run'
+    );
+}
 
-    const label = Number.isInteger(runAttempt) && runAttempt > 0
-        ? `workflow run attempt ${runAttempt}`
-        : 'workflow run';
-
-    return `[${label}](${workflowRunUrl})`;
+function formatMarkdownLink(text, url) {
+    return url ? `[${text}](${url})` : text;
 }
 
 async function getLatestRunAttempt({ github, owner, repo, runId }) {
@@ -403,9 +691,9 @@ function buildPullRequestCommentBody({
     retryableJobs,
 }) {
     return [
-        `The transient CI rerun workflow requested reruns for the following jobs after analyzing [the failed attempt](${failedAttemptUrl}).`,
-        `GitHub's job rerun API also reruns dependent jobs, so the retry is being tracked in [the rerun attempt](${rerunAttemptUrl}).`,
-        'The job links below point to the failed attempt that matched the retry-safe transient failure rules.',
+        `Re-running the failed jobs in the CI workflow for this pull request because ${retryableJobs.length} job${retryableJobs.length === 1 ? ' was' : 's were'} identified as retry-safe transient failures in ${formatMarkdownLink('the CI run attempt', failedAttemptUrl)}.`,
+        `GitHub was asked to rerun all failed jobs for that attempt, and the rerun is being tracked in ${formatMarkdownLink('the rerun attempt', rerunAttemptUrl)}.`,
+        'The job links below point to the failed attempt jobs that matched the retry-safe transient failure rules.',
         '',
         ...retryableJobs.map(job => {
             const jobReference = job.htmlUrl
@@ -418,14 +706,23 @@ function buildPullRequestCommentBody({
 }
 
 async function addPullRequestComments({ github, owner, repo, pullRequestNumbers, body }) {
+    const postedComments = [];
+
     for (const pullRequestNumber of pullRequestNumbers) {
-        await github.request('POST /repos/{owner}/{repo}/issues/{issue_number}/comments', {
+        const response = await github.request('POST /repos/{owner}/{repo}/issues/{issue_number}/comments', {
             owner,
             repo,
             issue_number: pullRequestNumber,
             body,
         });
+
+        postedComments.push({
+            pullRequestNumber,
+            htmlUrl: response.data?.html_url || null,
+        });
     }
+
+    return postedComments;
 }
 
 async function rerunMatchedJobs({
@@ -451,20 +748,30 @@ async function rerunMatchedJobs({
     });
 
     if (pullRequestNumbers.length > 0 && openPullRequestNumbers.length === 0) {
+        const failedAttemptReference = buildWorkflowRunReference(sourceRunUrl, sourceRunAttempt);
         await summary
-            .addHeading('Automatic rerun skipped')
-            .addRaw('All associated pull requests are closed. No jobs were rerun.', true)
+            .addHeading('Rerun skipped');
+
+        addSummaryReference(summary, 'Analyzed run', failedAttemptReference)
+            .addRaw('All associated pull requests are closed. No jobs were rerun.')
+            .addBreak()
+            .addBreak();
+
+        await summary
+            .addHeading('Retryable jobs', 2)
+            .addTable([
+                [{ data: 'Job', header: true }, { data: 'Reason', header: true }],
+                ...retryableJobs.map(job => [job.name, job.reason]),
+            ])
             .write();
         return;
     }
 
-    for (const job of retryableJobs) {
-        await github.request('POST /repos/{owner}/{repo}/actions/jobs/{job_id}/rerun', {
-            owner,
-            repo,
-            job_id: job.id,
-        });
-    }
+    await github.request('POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs', {
+        owner,
+        repo,
+        run_id: sourceRunId,
+    });
 
     const normalizedSourceRunAttempt = Number.isInteger(sourceRunAttempt) && sourceRunAttempt > 0
         ? sourceRunAttempt
@@ -480,40 +787,41 @@ async function rerunMatchedJobs({
         ? latestRunAttempt
         : normalizedSourceRunAttempt ? normalizedSourceRunAttempt + 1 : null;
     const rerunAttemptUrl = buildWorkflowRunAttemptUrl(sourceRunUrl, rerunAttemptNumber);
-    const failedAttemptReference = buildWorkflowRunReferenceText(sourceRunUrl, normalizedSourceRunAttempt);
-    const rerunAttemptReference = buildWorkflowRunReferenceText(sourceRunUrl, rerunAttemptNumber);
+    const failedAttemptReference = buildWorkflowRunReference(sourceRunUrl, normalizedSourceRunAttempt);
+    const rerunAttemptReference = buildWorkflowRunReference(sourceRunUrl, rerunAttemptNumber);
+    let postedComments = [];
 
     if (openPullRequestNumbers.length > 0) {
-        await addPullRequestComments({
+        postedComments = await addPullRequestComments({
             github,
             owner,
             repo,
             pullRequestNumbers: openPullRequestNumbers,
             body: buildPullRequestCommentBody({
-                failedAttemptUrl,
-                rerunAttemptUrl,
+                failedAttemptUrl: failedAttemptReference.url,
+                rerunAttemptUrl: rerunAttemptReference.url,
                 retryableJobs,
             }),
         });
     }
 
-    const commentedPullRequestsText = openPullRequestNumbers.length > 0
-        ? openPullRequestNumbers.map(number => `#${number}`).join(', ')
-        : null;
-
     const summaryBuilder = summary
-        .addHeading('Rerun requested')
-        .addRaw(`Failed attempt: ${failedAttemptReference}\nRerun attempt: ${rerunAttemptReference}\n\n`)
+        .addHeading('Rerun requested');
+
+    addSummaryReference(summaryBuilder, 'Failed attempt', failedAttemptReference);
+    addSummaryReference(summaryBuilder, 'Rerun attempt', rerunAttemptReference);
+    addSummaryCommentReferences(summaryBuilder, postedComments)
+        .addBreak()
+        .addRaw('The matched jobs below made the run eligible for rerun. GitHub was asked to rerun all failed jobs for the failed attempt.')
+        .addBreak()
+        .addBreak()
+        .addHeading('Retryable jobs', 2);
+
+    summaryBuilder
         .addTable([
             [{ data: 'Job', header: true }, { data: 'Reason', header: true }],
             ...retryableJobs.map(job => [job.name, job.reason]),
         ]);
-
-    if (commentedPullRequestsText) {
-        summaryBuilder
-            .addHeading('Pull request comments', 2)
-            .addRaw(`Posted rerun details to ${commentedPullRequestsText}.`, true);
-    }
 
     await summaryBuilder.write();
 }
@@ -525,10 +833,15 @@ module.exports = {
     buildPullRequestCommentBody,
     classifyFailedJob,
     computeRerunEligibility,
+    computeRerunExecutionEligibility,
     defaultMaxRetryableJobs,
+    formatMatchedPatternForMarkdown,
+    findInfrastructureNetworkLogOverridePattern,
+    getAssociatedPullRequestNumbers,
     getCheckRunIdForJob,
     getOpenPullRequestNumbers,
     getLatestRunAttempt,
+    listPullRequestsByHead,
     rerunMatchedJobs,
     writeAnalysisSummary,
 };

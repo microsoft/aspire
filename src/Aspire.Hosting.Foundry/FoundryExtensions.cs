@@ -22,6 +22,8 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class FoundryExtensions
 {
+    private const string DefaultCapabilityHostName = "foundry-caphost";
+
     /// <summary>
     /// Adds a Microsoft Foundry resource to the application model.
     /// </summary>
@@ -451,7 +453,7 @@ public static class FoundryExtensions
             // Provision a default capability host for hosted agents
             var capHost = new CognitiveServicesCapabilityHost(Infrastructure.NormalizeBicepIdentifier($"{resource.Name}-caphost"), "2025-10-01-preview")
             {
-                Name = $"{resource.Name}-caphost",
+                Name = DefaultCapabilityHostName,
                 Parent = cogServicesAccount,
                 // IMPORTANT: this is required to enable hosted agents deployment
                 // if no BYO Net is provided

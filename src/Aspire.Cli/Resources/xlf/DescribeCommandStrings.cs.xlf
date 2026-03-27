@@ -3,13 +3,13 @@
   <file datatype="xml" source-language="en" target-language="cs" original="../DescribeCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Describe resources in a running apphost.</source>
-        <target state="translated">Popište prostředky v běžícím hostiteli aplikace.</target>
+        <source>Describe resources in a running apphost</source>
+        <target state="needs-review-translation">Umožňuje zobrazit snímky prostředků ze spuštěného hostitele aplikací Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
-        <source>Continuously stream resource state changes.</source>
-        <target state="translated">Průběžné streamování změn stavu prostředků</target>
+        <source>Continuously stream resource state changes</source>
+        <target state="new">Continuously stream resource state changes</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderEndpoints">
@@ -38,18 +38,18 @@
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">Výstupní formát (tabulka nebo JSON)</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">Výstup ve formátu JSON pro spotřebu počítače.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoAppHostFound">
-        <source>No AppHost project found.</source>
-        <target state="translated">Nenašel se žádný projekt hostitele aplikací.</target>
+        <source>No apphost project found.</source>
+        <target state="needs-review-translation">Nenašel se žádný projekt hostitele aplikací.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The name of the resource to display. If not specified, all resources are shown.</source>
-        <target state="translated">Název prostředku, který se má zobrazit. Pokud se nezadá, zobrazí se všechny prostředky.</target>
+        <target state="needs-review-translation">Název prostředku, který se má zobrazit. Pokud se nezadá, zobrazí se všechny prostředky.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">

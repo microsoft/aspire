@@ -118,16 +118,16 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>Describe resources in a running apphost.</value>
+    <value>Describe resources in a running apphost</value>
   </data>
   <data name="FollowOptionDescription" xml:space="preserve">
-    <value>Continuously stream resource state changes.</value>
+    <value>Continuously stream resource state changes</value>
   </data>
   <data name="JsonOptionDescription" xml:space="preserve">
-    <value>Output format (Table or Json).</value>
+    <value>Output format (Table or Json)</value>
   </data>
   <data name="NoAppHostFound" xml:space="preserve">
-    <value>No AppHost project found.</value>
+    <value>No apphost project found.</value>
   </data>
   <data name="ResourceArgumentDescription" xml:space="preserve">
     <value>The name of the resource to display. If not specified, all resources are shown.</value>

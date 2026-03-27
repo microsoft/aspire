@@ -402,6 +402,7 @@ public static class AzureServiceBusExtensions
         builder
             .WithEndpoint(name: "emulator", targetPort: 5672)
             .WithHttpEndpoint(name: EmulatorHealthEndpointName, targetPort: 5300)
+            .WithEndpoint(EmulatorHealthEndpointName, e => e.ExcludeReferenceEndpoint = true)
             .WithAnnotation(new ContainerImageAnnotation
             {
                 Registry = ServiceBusEmulatorContainerImageTags.Registry,

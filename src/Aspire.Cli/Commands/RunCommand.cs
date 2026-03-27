@@ -9,6 +9,7 @@ using System.Text.Json.Serialization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
@@ -65,7 +66,7 @@ internal sealed class RunCommand : BaseCommand
     private readonly ILogger<RunCommand> _logger;
     private readonly IAppHostProjectFactory _projectFactory;
     private readonly AppHostLauncher _appHostLauncher;
-    private readonly Diagnostics.FileLoggerProvider _fileLoggerProvider;
+    private readonly FileLoggerProvider _fileLoggerProvider;
     private bool _isDetachMode;
 
     protected override bool UpdateNotificationsEnabled => !_isDetachMode;
@@ -94,7 +95,7 @@ internal sealed class RunCommand : BaseCommand
         ILogger<RunCommand> logger,
         IAppHostProjectFactory projectFactory,
         AppHostLauncher appHostLauncher,
-        Diagnostics.FileLoggerProvider fileLoggerProvider)
+        FileLoggerProvider fileLoggerProvider)
         : base("run", RunCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _runner = runner;
@@ -252,7 +253,7 @@ internal sealed class RunCommand : BaseCommand
 
             // Now wait for the backchannel to be established
             var backchannel = await InteractionService.ShowStatusAsync(
-                isExtensionHost ? InteractionServiceStrings.BuildingAppHost : RunCommandStrings.ConnectingToAppHost,
+                RunCommandStrings.ConnectingToAppHost,
                 async () => await backchannelCompletionSource.Task.WaitAsync(cancellationToken));
 
             // Set up log capture - writes to unified CLI log file
@@ -522,7 +523,7 @@ internal sealed class RunCommand : BaseCommand
         return longestLabelLength;
     }
 
-    private static async Task CaptureAppHostLogsAsync(Diagnostics.FileLoggerProvider fileLoggerProvider, IAppHostCliBackchannel backchannel, IInteractionService interactionService, CancellationToken cancellationToken)
+    internal static async Task CaptureAppHostLogsAsync(FileLoggerProvider fileLoggerProvider, IAppHostCliBackchannel backchannel, IInteractionService interactionService, CancellationToken cancellationToken)
     {
         try
         {
@@ -542,18 +543,8 @@ internal sealed class RunCommand : BaseCommand
                 }
 
                 // Write to the unified log file via FileLoggerProvider
-                var timestamp = entry.Timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
-                var level = entry.LogLevel switch
-                {
-                    LogLevel.Trace => "TRCE",
-                    LogLevel.Debug => "DBUG",
-                    LogLevel.Information => "INFO",
-                    LogLevel.Warning => "WARN",
-                    LogLevel.Error => "FAIL",
-                    LogLevel.Critical => "CRIT",
-                    _ => entry.LogLevel.ToString().ToUpperInvariant()
-                };
-                fileLoggerProvider.WriteLog($"[{timestamp}] [{level}] [AppHost/{entry.CategoryName}] {entry.Message}");
+                var shortCategory = FileLoggerProvider.GetShortCategoryName(entry.CategoryName);
+                fileLoggerProvider.WriteLog(entry.Timestamp, entry.LogLevel, $"AppHost/{shortCategory}", entry.Message);
             }
         }
         catch (OperationCanceledException)

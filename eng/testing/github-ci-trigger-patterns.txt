@@ -28,6 +28,8 @@ eng/testing/github-ci-trigger-patterns.txt
 eng/pipelines/**
 eng/test-configuration.json
 
+Aspire-Core.slnf
+
 .github/instructions/**
 .github/skills/**
 
@@ -47,3 +49,4 @@ eng/test-configuration.json
 .github/workflows/tests-outerloop.yml
 .github/workflows/tests-quarantine.yml
 .github/workflows/update-*.yml
+.github/workflows/auto-rerun-transient-ci-failures.*

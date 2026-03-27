@@ -37,7 +37,7 @@ public static class ConnectionStringBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("addConnectionStringExpression", MethodName = "addConnectionString", Description = "Adds a connection string with a reference expression")]
+    [AspireExport("addConnectionStringExpression", Description = "Adds a connection string with a reference expression")]
     public static IResourceBuilder<ConnectionStringResource> AddConnectionString(this IDistributedApplicationBuilder builder, [ResourceName] string name, ReferenceExpression connectionStringExpression)
     {
         var cs = new ConnectionStringResource(name, connectionStringExpression);

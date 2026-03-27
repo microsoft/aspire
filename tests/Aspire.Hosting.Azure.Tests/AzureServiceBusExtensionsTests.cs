@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Nodes;
@@ -67,7 +67,7 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
             
     }
 
-    [Fact(Skip = "Azure ServiceBus emulator is not reliable in CI - https://github.com/dotnet/aspire/issues/7066")]
+    [Fact(Skip = "Azure ServiceBus emulator is not reliable in CI - https://github.com/microsoft/aspire/issues/7066")]
     [RequiresFeature(TestFeature.Docker)]
     public async Task VerifyWaitForOnServiceBusEmulatorBlocksDependentResources()
     {
@@ -108,7 +108,7 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
         await app.StopAsync();
     }
 
-    [Theory(Skip = "Azure ServiceBus emulator is not reliable in CI - https://github.com/dotnet/aspire/issues/7066")]
+    [Theory(Skip = "Azure ServiceBus emulator is not reliable in CI - https://github.com/microsoft/aspire/issues/7066")]
     [InlineData(null)]
     [InlineData("other")]
     [RequiresFeature(TestFeature.Docker)]
@@ -768,7 +768,7 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
         Assert.Equal(expectedBicep, sbRolesManifest.BicepText);
     }
 
-    [Fact(Skip = "Azure ServiceBus emulator is not reliable in CI - https://github.com/dotnet/aspire/issues/7066")]
+    [Fact(Skip = "Azure ServiceBus emulator is not reliable in CI - https://github.com/microsoft/aspire/issues/7066")]
     [RequiresFeature(TestFeature.Docker)]
     public async Task AzureServiceBusEmulator_WithCustomConfig()
     {

@@ -1,0 +1,10 @@
+{
+  "appHost": {
+    "path": "ValidationAppHost/apphost.py",
+    "language": "python"
+  },
+  "packages": {
+    "Aspire.Hosting.Azure.Functions": "",
+    "Aspire.Hosting.Azure.Storage": ""
+  }
+}

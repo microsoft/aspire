@@ -1,0 +1,16 @@
+{
+  "name": "aspire-codegen-typescript-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.8.2",
+    "vitest": "^3.2.1",
+    "vscode-jsonrpc": "^8.2.0"
+  }
+}

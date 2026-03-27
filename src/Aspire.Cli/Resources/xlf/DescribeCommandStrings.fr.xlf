@@ -3,13 +3,13 @@
   <file datatype="xml" source-language="en" target-language="fr" original="../DescribeCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Describe resources in a running apphost.</source>
-        <target state="translated">Décrivez les ressources d'un hôte d'application en cours d'exécution.</target>
+        <source>Describe resources in a running apphost</source>
+        <target state="needs-review-translation">Afficher les instantanés de ressource d’un Apphost Aspire en cours d’exécution.</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
-        <source>Continuously stream resource state changes.</source>
-        <target state="translated">Flux continu des changements d'état des ressources.</target>
+        <source>Continuously stream resource state changes</source>
+        <target state="new">Continuously stream resource state changes</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderEndpoints">
@@ -38,18 +38,18 @@
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">Format de sortie (Tableau ou JSON).</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">Générer la sortie au format JSON pour traitement automatique.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoAppHostFound">
-        <source>No AppHost project found.</source>
-        <target state="translated">Désolé, aucun projet AppHost n’a été trouvé.</target>
+        <source>No apphost project found.</source>
+        <target state="needs-review-translation">Désolé, aucun projet AppHost n’a été trouvé.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The name of the resource to display. If not specified, all resources are shown.</source>
-        <target state="translated">Le nom de la ressource à afficher. Si aucun nom n’est spécifié, toutes les ressources sont affichées.</target>
+        <target state="needs-review-translation">Le nom de la ressource à afficher. Si aucun nom n’est spécifié, toutes les ressources sont affichées.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">

@@ -8,8 +8,8 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Add a hosting integration to the apphost.</source>
-        <target state="translated">AppHost'a bir barındırma tümleştirmesi ekleyin.</target>
+        <source>Add a hosting integration to the apphost</source>
+        <target state="needs-review-translation">Aspire AppHost'a bir barındırma tümleştirmesi ekleyin.</target>
         <note />
       </trans-unit>
       <trans-unit id="ErrorOccurredWhileAddingPackage">
@@ -18,8 +18,8 @@
         <note />
       </trans-unit>
       <trans-unit id="IntegrationArgumentDescription">
-        <source>The name of the integration to add (e.g. redis, postgres).</source>
-        <target state="translated">Eklenecek tümleştirmenin adı (ör. redis, postgres).</target>
+        <source>The name of the integration to add (e.g. redis, postgres)</source>
+        <target state="needs-review-translation">Eklenecek tümleştirmenin adı (ör. redis, postgres).</target>
         <note />
       </trans-unit>
       <trans-unit id="NoIntegrationPackagesFound">
@@ -48,8 +48,8 @@
         <note>{0} is a number, {1} is the log file path</note>
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file to add the integration to.</source>
-        <target state="translated">Tümleştirmenin ekleneceği Aspire AppHost proje dosyasının yolu.</target>
+        <source>The path to the Aspire apphost project file to add the integration to</source>
+        <target state="needs-review-translation">Tümleştirmenin ekleneceği proje dosyasının yolu.</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchingForAspirePackages">
@@ -68,17 +68,17 @@
         <note />
       </trans-unit>
       <trans-unit id="SourceArgumentDescription">
-        <source>The NuGet source to use for the integration.</source>
-        <target state="translated">Tümleştirme için kullanılacak NuGet kaynağı.</target>
+        <source>The NuGet source to use for the integration</source>
+        <target state="needs-review-translation">Tümleştirme için kullanılacak NuGet kaynağı.</target>
         <note />
       </trans-unit>
       <trans-unit id="StoppedRunningInstance" translate="yes" xml:space="preserve">
-          <source>Stopped a running Aspire AppHost instance to allow package modification.</source>
-          <target state="translated">Paket değişikliğine izin vermek için, çalışan bir Aspire AppHost örneği durduruldu.</target><note />
+          <source>Stopped a running Aspire apphost instance to allow package modification.</source>
+          <target state="new">Stopped a running Aspire apphost instance to allow package modification.</target><note />
         </trans-unit>
       <trans-unit id="UnableToStopRunningInstances">
-        <source>Unable to stop one or more running Aspire AppHost instances. Please stop the application and try again.</source>
-        <target state="translated">Çalışan bir veya birden fazla Aspire AppHost örneği durdurulamadı. Lütfen uygulamayı durdurun ve yeniden deneyin.</target>
+        <source>Unable to stop one or more running Aspire apphost instances. Please stop the application and try again.</source>
+        <target state="new">Unable to stop one or more running Aspire apphost instances. Please stop the application and try again.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnexpectedNumberOfPackagesFound">
@@ -92,8 +92,8 @@
         <note />
       </trans-unit>
       <trans-unit id="VersionArgumentDescription">
-        <source>The version of the integration to add.</source>
-        <target state="translated">Eklenecek tümleştirmenin sürümü.</target>
+        <source>The version of the integration to add</source>
+        <target state="needs-review-translation">Eklenecek tümleştirmenin sürümü.</target>
         <note />
       </trans-unit>
     </body>

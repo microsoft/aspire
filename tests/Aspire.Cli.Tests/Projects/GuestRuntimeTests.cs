@@ -1,9 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Utils;
-using Aspire.Hosting.Ats;
+using Aspire.TypeSystem;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Projects;
@@ -310,7 +312,7 @@ public class GuestRuntimeTests
                 InstallDependencies = new CommandSpec { Command = "npm", Args = ["install"] }
             },
             NullLogger.Instance,
-            _ => null);
+            commandResolver: _ => null);
 
         var (exitCode, output) = await runtime.InstallDependenciesAsync(new DirectoryInfo(Path.GetTempPath()), CancellationToken.None);
 
@@ -319,7 +321,7 @@ public class GuestRuntimeTests
             output.GetLines(),
             line =>
             {
-                Assert.Equal("stderr", line.Stream);
+                Assert.Equal(OutputLineStream.StdErr, line.Stream);
                 Assert.Equal("npm is not installed or not found in PATH. Please install Node.js and try again.", line.Line);
             });
     }
@@ -337,7 +339,7 @@ public class GuestRuntimeTests
                 Execute = new CommandSpec { Command = "npx", Args = ["tsx", "{appHostFile}"] }
             },
             NullLogger.Instance,
-            _ => null);
+            commandResolver: _ => null);
 
         var appHostFile = new FileInfo(Path.Combine(Path.GetTempPath(), "apphost.ts"));
         var (exitCode, output) = await runtime.RunAsync(
@@ -354,9 +356,59 @@ public class GuestRuntimeTests
             resolvedOutput.GetLines(),
             line =>
             {
-                Assert.Equal("stderr", line.Stream);
+                Assert.Equal(OutputLineStream.StdErr, line.Stream);
                 Assert.Equal("npx is not installed or not found in PATH. Please install Node.js and try again.", line.Line);
             });
+    }
+
+    [Fact]
+    public async Task ProcessGuestLauncher_WritesOutputToLogFile()
+    {
+        var logFilePath = Path.Combine(Path.GetTempPath(), $"guest-output-test-{Guid.NewGuid()}.log");
+
+        try
+        {
+            using var fileLoggerProvider = new FileLoggerProvider(logFilePath, new TestStartupErrorWriter());
+
+            var launcher = new ProcessGuestLauncher(
+                "test",
+                NullLogger.Instance,
+                fileLoggerProvider,
+                commandResolver: cmd => cmd == "dotnet" ? "dotnet" : null);
+
+            var (exitCode, output) = await launcher.LaunchAsync(
+                "dotnet",
+                ["--version"],
+                new DirectoryInfo(Path.GetTempPath()),
+                new Dictionary<string, string>(),
+                CancellationToken.None);
+
+            Assert.Equal(0, exitCode);
+            Assert.NotNull(output);
+
+            // OutputCollector should have captured stdout
+            var lines = output.GetLines().ToArray();
+            Assert.NotEmpty(lines);
+
+            // Dispose the provider to flush all pending writes
+            fileLoggerProvider.Dispose();
+
+            // Verify the log file was written and contains the output
+            Assert.True(File.Exists(logFilePath), "Log file should exist");
+            var logContents = await File.ReadAllTextAsync(logFilePath);
+            Assert.Contains("[AppHost]", logContents);
+
+            // The dotnet --version output should appear in the log
+            var stdoutLine = lines.First(l => l.Stream == OutputLineStream.StdOut);
+            Assert.Contains(stdoutLine.Line, logContents);
+        }
+        finally
+        {
+            if (File.Exists(logFilePath))
+            {
+                File.Delete(logFilePath);
+            }
+        }
     }
 
     private sealed class RecordingLauncher : IGuestProcessLauncher

@@ -18,8 +18,8 @@ public static class HostedAgentResourceBuilderExtensions
     /// <summary>
     /// In both run and publish modes, build, deploy, and run the containerized agent as a hosted agent in Microsoft Foundry.
     /// </summary>
-    /// <remarks>This overload is not available in polyglot app hosts. Use other Foundry project APIs to configure hosted agents from .NET.</remarks>
-    [AspireExportIgnore(Reason = "HostedAgentConfiguration callback parameters are not ATS-compatible.")]
+    /// <remarks>This overload is not available in polyglot app hosts because run-mode hosted agents are not yet implemented.</remarks>
+    [AspireExportIgnore(Reason = "RunAsHostedAgent is not yet implemented, so AsHostedAgent is not available in polyglot hosts.")]
     public static IResourceBuilder<T> AsHostedAgent<T>(
         this IResourceBuilder<T> builder, Action<HostedAgentConfiguration>? configure = null)
         where T : ExecutableResource
@@ -30,8 +30,8 @@ public static class HostedAgentResourceBuilderExtensions
     /// <summary>
     /// In both run and publish modes, build, deploy, and run the containerized agent as a hosted agent in Microsoft Foundry.
     /// </summary>
-    /// <remarks>This overload is not available in polyglot app hosts. Use other Foundry project APIs to configure hosted agents from .NET.</remarks>
-    [AspireExportIgnore(Reason = "HostedAgentConfiguration callback parameters are not ATS-compatible.")]
+    /// <remarks>This overload is not available in polyglot app hosts because run-mode hosted agents are not yet implemented.</remarks>
+    [AspireExportIgnore(Reason = "RunAsHostedAgent is not yet implemented, so AsHostedAgent is not available in polyglot hosts.")]
     public static IResourceBuilder<T> AsHostedAgent<T>(
         this IResourceBuilder<T> builder, IResourceBuilder<AzureCognitiveServicesProjectResource>? project = null, Action<HostedAgentConfiguration>? configure = null)
         where T : ExecutableResource
@@ -42,8 +42,8 @@ public static class HostedAgentResourceBuilderExtensions
     /// <summary>
     /// In run mode, build, deploy, and run the containerized agent as a hosted agent in Microsoft Foundry.
     /// </summary>
-    /// <remarks>This overload is not available in polyglot app hosts. Use other Foundry project APIs to configure hosted agents from .NET.</remarks>
-    [AspireExportIgnore(Reason = "HostedAgentConfiguration callback parameters are not ATS-compatible.")]
+    /// <remarks>This overload is not available in polyglot app hosts because run-mode hosted agents are not yet implemented.</remarks>
+    [AspireExportIgnore(Reason = "RunAsHostedAgent is not yet implemented.")]
     public static IResourceBuilder<T> RunAsHostedAgent<T>(
         this IResourceBuilder<T> builder, Action<HostedAgentConfiguration> configure)
         where T : ExecutableResource
@@ -54,8 +54,8 @@ public static class HostedAgentResourceBuilderExtensions
     /// <summary>
     /// In run mode, build, deploy, and run the containerized agent as a hosted agent in Microsoft Foundry.
     /// </summary>
-    /// <remarks>This overload is not available in polyglot app hosts. Use other Foundry project APIs to configure hosted agents from .NET.</remarks>
-    [AspireExportIgnore(Reason = "HostedAgentConfiguration callback parameters are not ATS-compatible.")]
+    /// <remarks>This overload is not available in polyglot app hosts because run-mode hosted agents are not yet implemented.</remarks>
+    [AspireExportIgnore(Reason = "RunAsHostedAgent is not yet implemented.")]
     public static IResourceBuilder<T> RunAsHostedAgent<T>(
         this IResourceBuilder<T> builder, IResourceBuilder<AzureCognitiveServicesProjectResource>? project = null, Action<HostedAgentConfiguration>? configure = null)
         where T : ExecutableResource
@@ -71,11 +71,10 @@ public static class HostedAgentResourceBuilderExtensions
     /// Publish the containerized agent as a hosted agent in Microsoft Foundry.
     ///
     /// If a project resource is not provided, the method will attempt to find an existing
-    /// Azure Cognitive Services Project resource in the application model. If none exists,
+    /// Microsoft Foundry project resource in the application model. If none exists,
     /// a new project resource (and its parent account resource) will be created automatically.
     /// </summary>
-    /// <remarks>This overload is not available in polyglot app hosts. Use other Foundry project APIs to configure hosted agents from .NET.</remarks>
-    [AspireExportIgnore(Reason = "HostedAgentConfiguration callback parameters are not ATS-compatible.")]
+    [AspireExportIgnore(Reason = "Subset of the full PublishAsHostedAgent overload which is exported.")]
     public static IResourceBuilder<T> PublishAsHostedAgent<T>(
         this IResourceBuilder<T> builder, Action<HostedAgentConfiguration> configure)
         where T : ExecutableResource
@@ -87,11 +86,10 @@ public static class HostedAgentResourceBuilderExtensions
     /// Publish the containerized agent as a hosted agent in Microsoft Foundry.
     ///
     /// If a project resource is not provided, the method will attempt to find an existing
-    /// Azure Cognitive Services Project resource in the application model. If none exists,
+    /// Microsoft Foundry project resource in the application model. If none exists,
     /// a new project resource (and its parent account resource) will be created automatically.
     /// </summary>
-    /// <remarks>This overload is not available in polyglot app hosts. Use other Foundry project APIs to configure hosted agents from .NET.</remarks>
-    [AspireExportIgnore(Reason = "HostedAgentConfiguration callback parameters are not ATS-compatible.")]
+    [AspireExport("publishAsHostedAgentExecutable", MethodName = "publishAsHostedAgent", Description = "Publishes an executable resource as a hosted agent in Microsoft Foundry.")]
     public static IResourceBuilder<T> PublishAsHostedAgent<T>(
         this IResourceBuilder<T> builder, IResourceBuilder<AzureCognitiveServicesProjectResource>? project = null, Action<HostedAgentConfiguration>? configure = null)
         where T : ExecutableResource
@@ -252,7 +250,9 @@ public static class HostedAgentResourceBuilderExtensions
             projResource = builder.ApplicationBuilder.Resources.OfType<AzureCognitiveServicesProjectResource>().FirstOrDefault();
             if (projResource is null)
             {
-                project = builder.ApplicationBuilder.AddFoundryProject($"{resource.Name}-proj");
+                project = builder.ApplicationBuilder
+                    .AddFoundry($"{resource.Name}-proj-foundry")
+                    .AddProject($"{resource.Name}-proj");
                 projResource = project.Resource;
             }
             else
@@ -315,7 +315,7 @@ public static class HostedAgentResourceBuilderExtensions
     /// Publish a simple prompt agent in Microsoft Foundry.
     ///
     /// If a project resource is not provided, the method will attempt to find an existing
-    /// Azure Cognitive Services Project resource in the application model.
+    /// Microsoft Foundry project resource in the application model.
     /// </summary>
     [AspireExport("addAndPublishPromptAgent", Description = "Adds and publishes a prompt agent to a Microsoft Foundry project.")]
     public static IResourceBuilder<AzurePromptAgentResource> AddAndPublishPromptAgent(

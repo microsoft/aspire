@@ -118,10 +118,10 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>Wait for a resource to reach a target status.</value>
+    <value>Wait for a resource to reach a target status</value>
   </data>
   <data name="ResourceArgumentDescription" xml:space="preserve">
-    <value>The name of the resource to wait for.</value>
+    <value>The name of the resource to wait for</value>
   </data>
   <data name="StatusOptionDescription" xml:space="preserve">
     <value>The target status to wait for (healthy, up, down). Defaults to healthy.</value>

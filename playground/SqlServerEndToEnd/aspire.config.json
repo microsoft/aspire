@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "SqlServerEndToEnd.AppHost/SqlServerEndToEnd.AppHost.csproj"
+  }
+}

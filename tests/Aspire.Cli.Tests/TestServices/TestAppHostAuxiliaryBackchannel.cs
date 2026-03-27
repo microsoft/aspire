@@ -15,7 +15,6 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
 {
     public string Hash { get; set; } = "test-hash";
     public string SocketPath { get; set; } = "/tmp/test.sock";
-    public DashboardMcpConnectionInfo? McpInfo { get; set; }
     public AppHostInformation? AppHostInfo { get; set; }
     public bool IsInScope { get; set; } = true;
     public DateTimeOffset ConnectedAt { get; set; } = DateTimeOffset.UtcNow;

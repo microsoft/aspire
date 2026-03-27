@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 
@@ -14,12 +15,14 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
 {
     private readonly string _language;
     private readonly ILogger _logger;
+    private readonly FileLoggerProvider? _fileLoggerProvider;
     private readonly Func<string, string?> _commandResolver;
 
-    public ProcessGuestLauncher(string language, ILogger logger, Func<string, string?>? commandResolver = null)
+    public ProcessGuestLauncher(string language, ILogger logger, FileLoggerProvider? fileLoggerProvider = null, Func<string, string?>? commandResolver = null)
     {
         _language = language;
         _logger = logger;
+        _fileLoggerProvider = fileLoggerProvider;
         _commandResolver = commandResolver ?? PathLookupHelper.FindFullPathFromPath;
     }
 
@@ -62,11 +65,18 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
 
         using var process = new Process { StartInfo = startInfo };
 
-        var outputCollector = new OutputCollector();
+        var outputCollector = new OutputCollector(_fileLoggerProvider, "AppHost");
+        var stdoutCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stderrCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         process.OutputDataReceived += (sender, e) =>
         {
-            if (e.Data is not null)
+            if (e.Data is null)
+            {
+                // ProcessDataReceivedEventArgs.Data is null when the redirected stdout stream closes.
+                stdoutCompleted.TrySetResult();
+            }
+            else
             {
                 _logger.LogDebug("{Language}({ProcessId}) stdout: {Line}", _language, process.Id, e.Data);
                 outputCollector.AppendOutput(e.Data);
@@ -75,7 +85,12 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
 
         process.ErrorDataReceived += (sender, e) =>
         {
-            if (e.Data is not null)
+            if (e.Data is null)
+            {
+                // ProcessDataReceivedEventArgs.Data is null when the redirected stderr stream closes.
+                stderrCompleted.TrySetResult();
+            }
+            else
             {
                 _logger.LogDebug("{Language}({ProcessId}) stderr: {Line}", _language, process.Id, e.Data);
                 outputCollector.AppendError(e.Data);
@@ -87,6 +102,28 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
         process.BeginErrorReadLine();
 
         await process.WaitForExitAsync(cancellationToken);
+
+        // Wait for the redirected streams to finish draining so no trailing lines are lost.
+        if (!await WaitForDrainAsync(Task.WhenAll(stdoutCompleted.Task, stderrCompleted.Task), cancellationToken))
+        {
+            _logger.LogWarning("{Language}({ProcessId}): Timed out waiting for output streams to drain after process exit", _language, process.Id);
+        }
+
         return (process.ExitCode, outputCollector);
+    }
+
+    private static async Task<bool> WaitForDrainAsync(Task drainTask, CancellationToken cancellationToken)
+    {
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(TimeSpan.FromSeconds(5));
+        try
+        {
+            await drainTask.WaitAsync(timeoutCts.Token);
+            return true;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
     }
 }

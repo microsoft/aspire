@@ -8,7 +8,7 @@ var orleans = builder.AddOrleans("my-app")
                      .WithClustering(clusteringTable)
                      .WithGrainStorage("Default", grainStorage);
 
-// For local development (see https://github.com/dotnet/aspire/issues/1823 for how to detect),
+// For local development (see https://github.com/microsoft/aspire/issues/1823 for how to detect),
 // instead of using the emulator, one can use the in memory provider from Orleans:
 //
 // var orleans = builder.AddOrleans("my-app")

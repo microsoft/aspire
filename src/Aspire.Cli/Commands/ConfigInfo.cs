@@ -11,6 +11,7 @@ namespace Aspire.Cli.Commands;
 /// <param name="AvailableFeatures">List of all available feature metadata.</param>
 /// <param name="LocalSettingsSchema">Schema for the local settings.json file structure (includes all properties).</param>
 /// <param name="GlobalSettingsSchema">Schema for the global settings.json file structure (excludes local-only properties).</param>
+/// <param name="ConfigFileSchema">Schema for the aspire.config.json file structure.</param>
 /// <param name="Capabilities">List of CLI capabilities advertised to extensions.</param>
 internal sealed record ConfigInfo(
     string LocalSettingsPath,
@@ -18,6 +19,7 @@ internal sealed record ConfigInfo(
     List<FeatureInfo> AvailableFeatures,
     SettingsSchema LocalSettingsSchema,
     SettingsSchema GlobalSettingsSchema,
+    SettingsSchema? ConfigFileSchema,
     string[] Capabilities);
 
 /// <summary>
@@ -41,4 +43,12 @@ internal sealed record SettingsSchema(List<PropertyInfo> Properties);
 /// <param name="Type">The property type (e.g., "string", "boolean", "object", "array").</param>
 /// <param name="Description">A description of what the property does.</param>
 /// <param name="Required">Whether the property is required.</param>
-internal sealed record PropertyInfo(string Name, string Type, string Description, bool Required);
+/// <param name="SubProperties">For object-typed properties with a known shape, the nested property definitions.</param>
+/// <param name="AdditionalPropertiesType">For dictionary-typed properties, the JSON type of the values (e.g., "string").</param>
+internal sealed record PropertyInfo(
+    string Name,
+    string Type,
+    string Description,
+    bool Required,
+    List<PropertyInfo>? SubProperties = null,
+    string? AdditionalPropertiesType = null);

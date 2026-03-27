@@ -3,18 +3,18 @@
   <file datatype="xml" source-language="en" target-language="tr" original="../LogsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Display logs from resources in a running apphost.</source>
-        <target state="translated">Çalışan bir apphost dosyasındaki kaynakların günlüklerini görüntüle.</target>
+        <source>Display logs from resources in a running apphost</source>
+        <target state="needs-review-translation">Çalışan bir Aspire apphost'taki kaynakların günlüklerini görüntüle.</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
-        <source>Stream logs in real-time as they are written.</source>
-        <target state="translated">Günlükleri yazıldıkça gerçek zamanlı olarak akışla aktar.</target>
+        <source>Stream logs in real-time as they are written</source>
+        <target state="needs-review-translation">Günlükleri yazıldıkça gerçek zamanlı olarak akışla aktar.</target>
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">Çıktı biçimi (Tablo veya Json).</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">Günlükleri JSON biçiminde (NDJSON) çıkar.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoResourcesFound">
@@ -24,7 +24,7 @@
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The name of the resource to get logs for. If not specified, logs from all resources are shown.</source>
-        <target state="translated">Günlükleri alınacak kaynağın adı. Belirtilmezse tüm kaynakların günlükleri gösterilir.</target>
+        <target state="needs-review-translation">Günlükleri alınacak kaynağın adı. Belirtilmezse tüm kaynakların günlükleri gösterilir.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">
@@ -48,8 +48,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TailOptionDescription">
-        <source>Number of lines to show from the end of logs (default: all).</source>
-        <target state="translated">Günlüklerin sonundan gösterilecek satır sayısı (varsayılan: tümü).</target>
+        <source>Number of lines to show from the end of logs (default: all)</source>
+        <target state="needs-review-translation">Günlüklerin sonundan gösterilecek satır sayısı (varsayılan: tümü).</target>
         <note />
       </trans-unit>
       <trans-unit id="TailRequiresResource">
@@ -58,8 +58,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TimestampsOptionDescription">
-        <source>Show timestamps for each log line.</source>
-        <target state="translated">Her günlük satırı için zaman damgalarını göster.</target>
+        <source>Show timestamps for each log line</source>
+        <target state="new">Show timestamps for each log line</target>
         <note />
       </trans-unit>
       <trans-unit id="GettingLogs">

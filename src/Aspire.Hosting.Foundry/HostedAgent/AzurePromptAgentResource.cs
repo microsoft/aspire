@@ -42,9 +42,7 @@ public class AzurePromptAgentResource : ExecutableResource, IComputeResource
                 Action = async (ctx) =>
                 {
                     var version = await DeployAsync(ctx, project).ConfigureAwait(false);
-#pragma warning disable CS0618
-                    ctx.ReportingStep.Log(LogLevel.Information, $"Successfully deployed **{Name}** as Prompt Agent (version {version})", enableMarkdown: true);
-#pragma warning restore CS0618
+                    ctx.ReportingStep.Log(LogLevel.Information, new MarkdownString($"Successfully deployed **{Name}** as Prompt Agent (version {version})"));
                     Version.Set(version.Version);
                 },
                 Tags = [WellKnownPipelineTags.DeployCompute],
@@ -105,7 +103,7 @@ public class AzurePromptAgentResource : ExecutableResource, IComputeResource
     }
 
     /// <summary>
-    /// Deploys the specified agent to the given Azure Cognitive Services project.
+    /// Deploys the specified agent to the given Microsoft Foundry project.
     /// </summary>
     public async Task<AgentVersion> DeployAsync(PipelineStepContext context, AzureCognitiveServicesProjectResource project)
     {

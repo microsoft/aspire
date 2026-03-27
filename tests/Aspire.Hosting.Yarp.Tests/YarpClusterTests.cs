@@ -1,8 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
+using Yarp.ReverseProxy.Configuration;
+using Yarp.ReverseProxy.Forwarder;
 
 namespace Aspire.Hosting.Yarp.Tests;
 
@@ -214,6 +217,36 @@ public class YarpClusterTests(ITestOutputHelper testOutputHelper)
             var ex = Assert.Throws<ArgumentException>(() => config.AddCluster("test-cluster2", (object)123));
             Assert.Contains("IValueProvider, string, or Uri", ex.Message);
         });
+    }
+
+    [Fact]
+    public void ClusterConfigDtos_StayInSyncWithYarpConfigurationTypes()
+    {
+        AssertDtoShapeMatchesYarpConfig<YarpForwarderRequestConfig, ForwarderRequestConfig>();
+        AssertDtoShapeMatchesYarpConfig<YarpHttpClientConfig, HttpClientConfig>();
+        AssertDtoShapeMatchesYarpConfig<YarpWebProxyConfig, WebProxyConfig>();
+        AssertDtoShapeMatchesYarpConfig<YarpSessionAffinityConfig, SessionAffinityConfig>();
+        AssertDtoShapeMatchesYarpConfig<YarpSessionAffinityCookieConfig, SessionAffinityCookieConfig>();
+        AssertDtoShapeMatchesYarpConfig<YarpHealthCheckConfig, HealthCheckConfig>();
+        AssertDtoShapeMatchesYarpConfig<YarpActiveHealthCheckConfig, ActiveHealthCheckConfig>();
+        AssertDtoShapeMatchesYarpConfig<YarpPassiveHealthCheckConfig, PassiveHealthCheckConfig>();
+    }
+
+    private static void AssertDtoShapeMatchesYarpConfig<TDto, TYarp>()
+    {
+        var dtoProperties = typeof(TDto)
+            .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+            .Select(property => property.Name)
+            .OrderBy(name => name)
+            .ToArray();
+
+        var yarpProperties = typeof(TYarp)
+            .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+            .Select(property => property.Name)
+            .OrderBy(name => name)
+            .ToArray();
+
+        Assert.Equal(yarpProperties, dtoProperties);
     }
 
     private sealed class TestResource(string name) : IResourceWithServiceDiscovery

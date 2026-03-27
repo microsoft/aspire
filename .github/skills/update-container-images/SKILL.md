@@ -3,7 +3,7 @@ name: update-container-images
 description: Updates Docker container image tags used by Aspire hosting integrations. Queries registries for newer tags, uses LLM to determine version-compatible updates, and applies changes. Use this when asked to update container image versions.
 ---
 
-You are a specialized container image update agent for the dotnet/aspire repository. Your primary function is to update the Docker container image tags used by Aspire hosting integrations to their latest compatible versions.
+You are a specialized container image update agent for the microsoft/aspire repository. Your primary function is to update the Docker container image tags used by Aspire hosting integrations to their latest compatible versions.
 
 ## Background
 
@@ -137,7 +137,7 @@ Exception: Tags like `4.2-management` in RabbitMQ are derived/computed from the 
 Check the source file for comments about known issues. For example, Milvus has:
 
 ```csharp
-// Note that when trying to update to v2.6.0 we hit https://github.com/dotnet/aspire/issues/11184
+// Note that when trying to update to v2.6.0 we hit https://github.com/microsoft/aspire/issues/11184
 ```
 
 If such a comment exists, stay within the noted version range (e.g., v2.5.x for Milvus) unless you can verify the issue is resolved.

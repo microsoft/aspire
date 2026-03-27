@@ -51,6 +51,14 @@ internal sealed class BannerService : IBannerService
     public async Task DisplayBannerAsync(CancellationToken cancellationToken = default)
     {
         var cliVersion = VersionHelper.GetDefaultTemplateVersion();
+
+        // Strip build metadata (everything after '+') for display purposes.
+        var plusIndex = cliVersion.IndexOf('+', StringComparison.Ordinal);
+        if (plusIndex >= 0)
+        {
+            cliVersion = cliVersion[..plusIndex];
+        }
+
         var aspireWidth = s_aspireLines[0].TrimEnd().Length;
         var welcomeText = RootCommandStrings.BannerWelcomeText;
         var versionText = string.Format(CultureInfo.CurrentCulture, RootCommandStrings.BannerVersionFormat, cliVersion);

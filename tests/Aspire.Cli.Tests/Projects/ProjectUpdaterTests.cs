@@ -2554,7 +2554,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         // Directory.Packages.props (as PackageVersion). After SDK migration, the
         // PackageReference is removed from csproj but the orphaned PackageVersion
         // must also be removed to avoid NU1009.
-        // See: https://github.com/dotnet/aspire/issues/14550
+        // See: https://github.com/microsoft/aspire/issues/14550
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj");
         var originalContent = """

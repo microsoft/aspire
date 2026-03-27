@@ -31,7 +31,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         appPath ??= _workspace.WorkspaceRoot.FullName;
         var runner = new TestDotNetCliRunner();
         var packagingService = new MockPackagingService();
-        var configurationService = new TrackingConfigurationService();
+        var configurationService = new TestConfigurationService();
         var logger = NullLogger<DotNetBasedAppHostServerProject>.Instance;
 
         // Generate socket path same way as factory
@@ -237,7 +237,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
 
         // Configure global config to return "pr-old" (the WRONG channel)
         // This simulates a stale global config that hasn't been updated
-        var configurationService = new TrackingConfigurationService
+        var configurationService = new TestConfigurationService
         {
             OnGetConfiguration = key => key == "channel" ? "pr-old" : null
         };

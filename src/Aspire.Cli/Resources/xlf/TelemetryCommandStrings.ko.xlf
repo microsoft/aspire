@@ -3,13 +3,13 @@
   <file datatype="xml" source-language="en" target-language="ko" original="../TelemetryCommandStrings.resx">
     <body>
       <trans-unit id="DashboardApiNotAvailable">
-        <source>Dashboard API is not available. Ensure the AppHost is running with Dashboard enabled.</source>
-        <target state="translated">대시보드 API를 사용할 수 없습니다. AppHost가 대시보드를 활성화한 상태로 실행 중인지 확인하세요.</target>
+        <source>Dashboard API is not available. Ensure the apphost is running with Dashboard enabled.</source>
+        <target state="needs-review-translation">대시보드 API를 사용할 수 없습니다. AppHost가 대시보드를 활성화한 상태로 실행 중인지 확인하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>View OpenTelemetry data (logs, spans, traces) from a running apphost.</source>
-        <target state="translated">실행 중인 AppHost의 OpenTelemetry 데이터(로그, 범위, 추적)를 확인합니다.</target>
+        <source>View OpenTelemetry data (logs, spans, traces) from a running apphost</source>
+        <target state="needs-review-translation">실행 중인 Aspire 애플리케이션의 원격 분석 데이터(로그, 범위, 추적)를 확인합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedToFetchTelemetry">
@@ -18,18 +18,18 @@
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
-        <source>Stream telemetry in real-time as it arrives.</source>
-        <target state="translated">원격 분석 데이터를 실시간으로 스트림합니다.</target>
+        <source>Stream telemetry in real-time as it arrives</source>
+        <target state="needs-review-translation">원격 분석 데이터를 실시간으로 스트림합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="FormatOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">출력 형식(테이블 또는 JSON)입니다.</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">출력 형식(테이블 또는 JSON)입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="HasErrorOptionDescription">
-        <source>Filter by error status (true to show only errors, false to exclude errors).</source>
-        <target state="translated">오류 상태로 필터링합니다(true면 오류만, false면 오류 제외).</target>
+        <source>Filter by error status (true to show only errors, false to exclude errors)</source>
+        <target state="needs-review-translation">오류 상태로 필터링합니다(true면 오류만, false면 오류 제외).</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderDuration">
@@ -63,18 +63,18 @@
         <note />
       </trans-unit>
       <trans-unit id="LimitOptionDescription">
-        <source>Maximum number of items to return.</source>
-        <target state="translated">반환할 최대 항목 수입니다.</target>
+        <source>Maximum number of items to return</source>
+        <target state="needs-review-translation">반환할 최대 항목 수입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="LogsDescription">
-        <source>View structured logs from the Dashboard telemetry API.</source>
-        <target state="translated">대시보드 원격 분석 API에서 구조화된 로그를 확인합니다.</target>
+        <source>View structured logs from the Dashboard telemetry API</source>
+        <target state="needs-review-translation">대시보드 원격 분석 API에서 구조화된 로그를 확인합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
-        <source>Filter by resource name.</source>
-        <target state="translated">리소스 이름으로 필터링</target>
+        <source>Filter by resource name</source>
+        <target state="needs-review-translation">리소스 이름으로 필터링</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">
@@ -83,23 +83,23 @@
         <note />
       </trans-unit>
       <trans-unit id="SeverityOptionDescription">
-        <source>Filter logs by minimum severity (Trace, Debug, Information, Warning, Error, Critical).</source>
-        <target state="translated">최소 심각도(Trace, Debug, Information, Warning, Error, Critical)로 로그를 필터링합니다.</target>
+        <source>Filter logs by minimum severity (Trace, Debug, Information, Warning, Error, Critical)</source>
+        <target state="needs-review-translation">최소 심각도(Trace, Debug, Information, Warning, Error, Critical)로 로그를 필터링합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="SpansDescription">
-        <source>View spans from the Dashboard telemetry API.</source>
-        <target state="translated">대시보드 원격 분석 API에서 범위를 확인합니다.</target>
+        <source>View spans from the Dashboard telemetry API</source>
+        <target state="needs-review-translation">대시보드 원격 분석 API에서 범위를 확인합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="TraceIdArgumentDescription">
         <source>The trace ID to view. If not specified, lists all traces.</source>
-        <target state="translated">조회할 추적 ID입니다. 지정하지 않으면 모든 추적이 나열됩니다.</target>
+        <target state="needs-review-translation">조회할 추적 ID입니다. 지정하지 않으면 모든 추적이 나열됩니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="TraceIdOptionDescription">
-        <source>Filter by trace ID.</source>
-        <target state="translated">추적 ID로 필터링합니다.</target>
+        <source>Filter by trace ID</source>
+        <target state="needs-review-translation">추적 ID로 필터링합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="TraceNotFound">
@@ -108,8 +108,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TracesDescription">
-        <source>View traces from the Dashboard telemetry API.</source>
-        <target state="translated">대시보드 원격 분석 API에서 추적을 확인하세요.</target>
+        <source>View traces from the Dashboard telemetry API</source>
+        <target state="needs-review-translation">대시보드 원격 분석 API에서 추적을 확인하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnexpectedContentType">

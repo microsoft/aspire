@@ -54,6 +54,7 @@ namespace Aspire.Hosting.Pipelines;
 /// </code>
 /// </example>
 [Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
+[AspireExport(ExposeMethods = true)]
 public sealed class PipelineSummary
 {
     private readonly object _lock = new();
@@ -95,6 +96,7 @@ public sealed class PipelineSummary
     /// </summary>
     /// <param name="key">The key or label for the item (e.g., "Namespace", "URL").</param>
     /// <param name="value">The Markdown-formatted value for the item.</param>
+    [AspireExportIgnore(Reason = "MarkdownString is not exported to ATS. Use addMarkdown instead.")]
     public void Add(string key, MarkdownString value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);

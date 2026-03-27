@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="ko" original="../StartCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Start an apphost in the background.</source>
-        <target state="translated">백그라운드에서 AppHost를 시작합니다.</target>
+        <source>Start an apphost in the background</source>
+        <target state="new">Start an apphost in the background</target>
         <note />
       </trans-unit>
     </body>

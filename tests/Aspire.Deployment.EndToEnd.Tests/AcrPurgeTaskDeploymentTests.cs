@@ -66,69 +66,54 @@ public sealed class AcrPurgeTaskDeploymentTests(ITestOutputHelper output)
             using var terminal = DeploymentE2ETestHelpers.CreateTestTerminal();
             var pendingRun = terminal.RunAsync(cancellationToken);
 
-            // Pattern searchers for aspire add prompts
-            var waitingForAddVersionSelectionPrompt = new CellPatternSearcher()
-                .Find("(based on NuGet.config)");
-
-            // Pattern searchers for deployment completion
-            var waitingForPipelineSucceeded = new CellPatternSearcher()
-                .Find("PIPELINE SUCCEEDED");
-
-            var waitingForPipelineFailed = new CellPatternSearcher()
-                .Find("PIPELINE FAILED");
-
             var counter = new SequenceCounter();
-            var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+            var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
             // Step 1: Prepare environment
             output.WriteLine("Step 1: Preparing environment...");
-            sequenceBuilder.PrepareEnvironment(workspace, counter);
+            await auto.PrepareEnvironmentAsync(workspace, counter);
 
             // Step 2: Set up CLI environment (in CI)
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
                 output.WriteLine("Step 2: Using pre-installed Aspire CLI from local build...");
-                sequenceBuilder.SourceAspireCliEnvironment(counter);
+                await auto.SourceAspireCliEnvironmentAsync(counter);
             }
 
             // Step 3: Create Python FastAPI project using aspire new
             output.WriteLine("Step 3: Creating Python FastAPI project...");
-            sequenceBuilder.AspireNew(projectName, counter, template: AspireTemplate.PythonReact, useRedisCache: false);
+            await auto.AspireNewAsync(projectName, counter, template: AspireTemplate.PythonReact, useRedisCache: false);
 
             // Step 4: Navigate to project directory
             output.WriteLine("Step 4: Navigating to project directory...");
-            sequenceBuilder
-                .Type($"cd {projectName}")
-                .Enter()
-                .WaitForSuccessPrompt(counter);
+            await auto.TypeAsync($"cd {projectName}");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
 
             // Step 5: Add Aspire.Hosting.Azure.AppContainers package
             output.WriteLine("Step 5: Adding Azure Container Apps hosting package...");
-            sequenceBuilder.Type("aspire add Aspire.Hosting.Azure.AppContainers")
-                .Enter();
+            await auto.TypeAsync("aspire add Aspire.Hosting.Azure.AppContainers");
+            await auto.EnterAsync();
 
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
-                sequenceBuilder
-                    .WaitUntil(s => waitingForAddVersionSelectionPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(60))
-                    .Enter();
+                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
+                await auto.EnterAsync();
             }
 
-            sequenceBuilder.WaitForSuccessPrompt(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
 
             // Step 6: Modify apphost.cs to add ACA environment with purge task
             // Python template uses single-file AppHost (apphost.cs in project root)
-            sequenceBuilder.ExecuteCallback(() =>
-            {
-                var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
-                var appHostFilePath = Path.Combine(projectDir, "apphost.cs");
+            var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
+            var appHostFilePath = Path.Combine(projectDir, "apphost.cs");
 
-                output.WriteLine($"Looking for apphost.cs at: {appHostFilePath}");
+            output.WriteLine($"Looking for apphost.cs at: {appHostFilePath}");
 
-                var content = File.ReadAllText(appHostFilePath);
+            var content = File.ReadAllText(appHostFilePath);
 
-                var buildRunPattern = "builder.Build().Run();";
-                var replacement = """
+            var buildRunPattern = "builder.Build().Run();";
+            var replacement = """
 // Add Azure Container App Environment and configure ACR purge task
 var infra = builder.AddAzureContainerAppEnvironment("infra");
 // Schedule once a month so it never fires during the test; the task is triggered manually via az acr task run
@@ -138,157 +123,137 @@ infra.GetAzureContainerRegistry()
 builder.Build().Run();
 """;
 
-                content = content.Replace(buildRunPattern, replacement);
-                File.WriteAllText(appHostFilePath, content);
+            content = content.Replace(buildRunPattern, replacement);
+            File.WriteAllText(appHostFilePath, content);
 
-                output.WriteLine($"Modified apphost.cs at: {appHostFilePath}");
-            });
+            output.WriteLine($"Modified apphost.cs at: {appHostFilePath}");
 
             // Step 7: Set environment variables for deployment
-            sequenceBuilder.Type($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}")
-                .Enter()
-                .WaitForSuccessPrompt(counter);
+            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
 
             // Step 8: First deployment to Azure
             output.WriteLine("Step 8: Starting first Azure deployment...");
             var pipelineSucceeded = false;
-            sequenceBuilder
-                .Type("aspire deploy --clear-cache")
-                .Enter()
-                .WaitUntil(s =>
+            await auto.TypeAsync("aspire deploy --clear-cache");
+            await auto.EnterAsync();
+            await auto.WaitUntilAsync(s =>
+            {
+                if (s.ContainsText("PIPELINE SUCCEEDED"))
                 {
-                    if (waitingForPipelineSucceeded.Search(s).Count > 0)
-                    {
-                        pipelineSucceeded = true;
-                        return true;
-                    }
-                    return waitingForPipelineFailed.Search(s).Count > 0;
-                }, TimeSpan.FromMinutes(30))
-                .ExecuteCallback(() =>
-                {
-                    if (!pipelineSucceeded)
-                    {
-                        throw new InvalidOperationException("First deployment pipeline failed. Check the terminal output for details.");
-                    }
-                })
-                .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(2));
+                    pipelineSucceeded = true;
+                    return true;
+                }
+                return s.ContainsText("PIPELINE FAILED");
+            }, timeout: TimeSpan.FromMinutes(30), description: "pipeline succeeded or failed");
+
+            if (!pipelineSucceeded)
+            {
+                throw new InvalidOperationException("First deployment pipeline failed. Check the terminal output for details.");
+            }
+
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
             // Step 9: Get the ACR name and count tags before second deploy
             output.WriteLine("Step 9: Getting ACR name and counting initial tags...");
-            sequenceBuilder
-                .Type($"ACR_NAME=$(az acr list -g \"{resourceGroupName}\" --query \"[0].name\" -o tsv) && " +
-                      "echo \"ACR: $ACR_NAME\" && " +
-                      "if [ -z \"$ACR_NAME\" ]; then echo \"❌ No ACR found in resource group\"; exit 1; fi && " +
-                      "REPOS=$(az acr repository list --name \"$ACR_NAME\" -o tsv) && " +
-                      "echo \"Repositories after first deploy:\" && " +
-                      "for repo in $REPOS; do " +
-                      "TAGS=$(az acr repository show-tags --name \"$ACR_NAME\" --repository \"$repo\" -o tsv); " +
-                      "TAG_COUNT=$(echo \"$TAGS\" | wc -l); " +
-                      "echo \"  $repo: $TAG_COUNT tag(s) - $TAGS\"; " +
-                      "done")
-                .Enter()
-                .WaitForSuccessPrompt(counter, TimeSpan.FromSeconds(60));
+            await auto.TypeAsync($"ACR_NAME=$(az acr list -g \"{resourceGroupName}\" --query \"[0].name\" -o tsv) && " +
+                  "echo \"ACR: $ACR_NAME\" && " +
+                  "if [ -z \"$ACR_NAME\" ]; then echo \"❌ No ACR found in resource group\"; exit 1; fi && " +
+                  "REPOS=$(az acr repository list --name \"$ACR_NAME\" -o tsv) && " +
+                  "echo \"Repositories after first deploy:\" && " +
+                  "for repo in $REPOS; do " +
+                  "TAGS=$(az acr repository show-tags --name \"$ACR_NAME\" --repository \"$repo\" -o tsv); " +
+                  "TAG_COUNT=$(echo \"$TAGS\" | wc -l); " +
+                  "echo \"  $repo: $TAG_COUNT tag(s) - $TAGS\"; " +
+                  "done");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
             // Step 10: Modify Python code to guarantee a new container image is pushed on second deploy
-            sequenceBuilder.ExecuteCallback(() =>
-            {
-                var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
-                var mainPyPath = Path.Combine(projectDir, "app", "main.py");
+            var projectDir2 = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
+            var mainPyPath = Path.Combine(projectDir2, "app", "main.py");
 
-                output.WriteLine($"Modifying {mainPyPath} to force new image...");
+            output.WriteLine($"Modifying {mainPyPath} to force new image...");
 
-                var content = File.ReadAllText(mainPyPath);
-                content += "\n# Force new image for E2E purge test\n";
-                File.WriteAllText(mainPyPath, content);
+            var content2 = File.ReadAllText(mainPyPath);
+            content2 += "\n# Force new image for E2E purge test\n";
+            File.WriteAllText(mainPyPath, content2);
 
-                output.WriteLine("Modified main.py to force a new container image build");
-            });
+            output.WriteLine("Modified main.py to force a new container image build");
 
             // Step 11: Second deployment to push new images
-            // Clear the terminal so the CellPatternSearcher doesn't match "PIPELINE SUCCEEDED" from the first deploy
+            // Clear the terminal so WaitUntilTextAsync doesn't match "PIPELINE SUCCEEDED" from the first deploy
             output.WriteLine("Step 11: Starting second Azure deployment...");
-            var waitingForPipelineSucceeded2 = new CellPatternSearcher()
-                .Find("PIPELINE SUCCEEDED");
-            var waitingForPipelineFailed2 = new CellPatternSearcher()
-                .Find("PIPELINE FAILED");
-
             var pipeline2Succeeded = false;
-            sequenceBuilder
-                .Type("export TERM=xterm && clear")
-                .Enter()
-                .WaitForSuccessPrompt(counter)
-                .Type("aspire deploy")
-                .Enter()
-                .WaitUntil(s =>
+            await auto.TypeAsync("export TERM=xterm && clear");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+            await auto.TypeAsync("aspire deploy");
+            await auto.EnterAsync();
+            await auto.WaitUntilAsync(s =>
+            {
+                if (s.ContainsText("PIPELINE SUCCEEDED"))
                 {
-                    if (waitingForPipelineSucceeded2.Search(s).Count > 0)
-                    {
-                        pipeline2Succeeded = true;
-                        return true;
-                    }
-                    return waitingForPipelineFailed2.Search(s).Count > 0;
-                }, TimeSpan.FromMinutes(30))
-                .ExecuteCallback(() =>
-                {
-                    if (!pipeline2Succeeded)
-                    {
-                        throw new InvalidOperationException("Second deployment pipeline failed. Check the terminal output for details.");
-                    }
-                })
-                .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(2));
+                    pipeline2Succeeded = true;
+                    return true;
+                }
+                return s.ContainsText("PIPELINE FAILED");
+            }, timeout: TimeSpan.FromMinutes(30), description: "pipeline succeeded or failed");
+
+            if (!pipeline2Succeeded)
+            {
+                throw new InvalidOperationException("Second deployment pipeline failed. Check the terminal output for details.");
+            }
+
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
             // Step 12: Verify there are now multiple tags (from both deploys)
             output.WriteLine("Step 12: Verifying multiple tags exist after second deploy...");
-            sequenceBuilder
-                .Type($"ACR_NAME=$(az acr list -g \"{resourceGroupName}\" --query \"[0].name\" -o tsv) && " +
-                      "echo \"ACR: $ACR_NAME\" && " +
-                      "REPOS=$(az acr repository list --name \"$ACR_NAME\" -o tsv) && " +
-                      "echo \"Repositories after second deploy:\" && " +
-                      "for repo in $REPOS; do " +
-                      "TAGS=$(az acr repository show-tags --name \"$ACR_NAME\" --repository \"$repo\" -o tsv); " +
-                      "TAG_COUNT=$(echo \"$TAGS\" | wc -l); " +
-                      "echo \"  $repo: $TAG_COUNT tag(s) - $TAGS\"; " +
-                      "done")
-                .Enter()
-                .WaitForSuccessPrompt(counter, TimeSpan.FromSeconds(60));
+            await auto.TypeAsync($"ACR_NAME=$(az acr list -g \"{resourceGroupName}\" --query \"[0].name\" -o tsv) && " +
+                  "echo \"ACR: $ACR_NAME\" && " +
+                  "REPOS=$(az acr repository list --name \"$ACR_NAME\" -o tsv) && " +
+                  "echo \"Repositories after second deploy:\" && " +
+                  "for repo in $REPOS; do " +
+                  "TAGS=$(az acr repository show-tags --name \"$ACR_NAME\" --repository \"$repo\" -o tsv); " +
+                  "TAG_COUNT=$(echo \"$TAGS\" | wc -l); " +
+                  "echo \"  $repo: $TAG_COUNT tag(s) - $TAGS\"; " +
+                  "done");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
             // Step 13: Run the purge task manually to trigger image cleanup
             // az acr task run is synchronous - it waits for completion and streams output
             output.WriteLine("Step 13: Running ACR purge task...");
-            sequenceBuilder
-                .Type($"ACR_NAME=$(az acr list -g \"{resourceGroupName}\" --query \"[0].name\" -o tsv) && " +
-                      "echo \"Running purge task on ACR: $ACR_NAME\" && " +
-                      "az acr task run --name purgeOldImages --registry \"$ACR_NAME\"")
-                .Enter()
-                .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(5));
+            await auto.TypeAsync($"ACR_NAME=$(az acr list -g \"{resourceGroupName}\" --query \"[0].name\" -o tsv) && " +
+                  "echo \"Running purge task on ACR: $ACR_NAME\" && " +
+                  "az acr task run --name purgeOldImages --registry \"$ACR_NAME\"");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
 
             // Step 14: Verify images were purged - only 1 tag should remain per repo
             output.WriteLine("Step 14: Verifying images were purged...");
-            sequenceBuilder
-                .Type($"ACR_NAME=$(az acr list -g \"{resourceGroupName}\" --query \"[0].name\" -o tsv) && " +
-                      "echo \"ACR: $ACR_NAME\" && " +
-                      "REPOS=$(az acr repository list --name \"$ACR_NAME\" -o tsv) && " +
-                      "if [ -z \"$REPOS\" ]; then echo \"❌ No repositories found in ACR - cannot verify purge\"; exit 1; fi && " +
-                      "echo \"Repositories after purge:\" && " +
-                      "all_ok=1 && " +
-                      "for repo in $REPOS; do " +
-                      "TAGS=$(az acr repository show-tags --name \"$ACR_NAME\" --repository \"$repo\" -o tsv); " +
-                      "TAG_COUNT=$(echo \"$TAGS\" | wc -l); " +
-                      "echo \"  $repo: $TAG_COUNT tag(s) - $TAGS\"; " +
-                      "if [ \"$TAG_COUNT\" -gt 1 ]; then echo \"  ❌ Expected at most 1 tag after purge, got $TAG_COUNT\"; all_ok=0; fi; " +
-                      "done && " +
-                      "if [ \"$all_ok\" -eq 1 ]; then echo \"✅ Purge task verified - only 1 tag remains per repo\"; " +
-                      "else echo \"❌ Purge task did not clean up as expected\"; exit 1; fi")
-                .Enter()
-                .WaitForSuccessPrompt(counter, TimeSpan.FromSeconds(60));
+            await auto.TypeAsync($"ACR_NAME=$(az acr list -g \"{resourceGroupName}\" --query \"[0].name\" -o tsv) && " +
+                  "echo \"ACR: $ACR_NAME\" && " +
+                  "REPOS=$(az acr repository list --name \"$ACR_NAME\" -o tsv) && " +
+                  "if [ -z \"$REPOS\" ]; then echo \"❌ No repositories found in ACR - cannot verify purge\"; exit 1; fi && " +
+                  "echo \"Repositories after purge:\" && " +
+                  "all_ok=1 && " +
+                  "for repo in $REPOS; do " +
+                  "TAGS=$(az acr repository show-tags --name \"$ACR_NAME\" --repository \"$repo\" -o tsv); " +
+                  "TAG_COUNT=$(echo \"$TAGS\" | wc -l); " +
+                  "echo \"  $repo: $TAG_COUNT tag(s) - $TAGS\"; " +
+                  "if [ \"$TAG_COUNT\" -gt 1 ]; then echo \"  ❌ Expected at most 1 tag after purge, got $TAG_COUNT\"; all_ok=0; fi; " +
+                  "done && " +
+                  "if [ \"$all_ok\" -eq 1 ]; then echo \"✅ Purge task verified - only 1 tag remains per repo\"; " +
+                  "else echo \"❌ Purge task did not clean up as expected\"; exit 1; fi");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
             // Step 15: Exit terminal
-            sequenceBuilder
-                .Type("exit")
-                .Enter();
+            await auto.TypeAsync("exit");
+            await auto.EnterAsync();
 
-            var sequence = sequenceBuilder.Build();
-            await sequence.ApplyAsync(terminal, cancellationToken);
             await pendingRun;
 
             var duration = DateTime.UtcNow - startTime;

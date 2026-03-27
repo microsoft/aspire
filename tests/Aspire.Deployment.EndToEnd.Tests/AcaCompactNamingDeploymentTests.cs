@@ -66,62 +66,44 @@ public sealed class AcaCompactNamingDeploymentTests(ITestOutputHelper output)
             using var terminal = DeploymentE2ETestHelpers.CreateTestTerminal();
             var pendingRun = terminal.RunAsync(cancellationToken);
 
-            var waitingForInitComplete = new CellPatternSearcher()
-                .Find("Aspire initialization complete");
-
-            var waitingForVersionSelectionPrompt = new CellPatternSearcher()
-                .Find("(based on NuGet.config)");
-
-            var waitingForPipelineSucceeded = new CellPatternSearcher()
-                .Find("PIPELINE SUCCEEDED");
-
             var counter = new SequenceCounter();
-            var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+            var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
             // Step 1: Prepare environment
             output.WriteLine("Step 1: Preparing environment...");
-            sequenceBuilder.PrepareEnvironment(workspace, counter);
+            await auto.PrepareEnvironmentAsync(workspace, counter);
 
             // Step 2: Set up CLI
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
                 output.WriteLine("Step 2: Using pre-installed Aspire CLI...");
-                sequenceBuilder.SourceAspireCliEnvironment(counter);
+                await auto.SourceAspireCliEnvironmentAsync(counter);
             }
 
             // Step 3: Create single-file AppHost
             output.WriteLine("Step 3: Creating single-file AppHost...");
-            sequenceBuilder.Type("aspire init --language csharp")
-                .Enter()
-                .Wait(TimeSpan.FromSeconds(5))
-                .Enter()
-                .WaitUntil(s => waitingForInitComplete.Search(s).Count > 0, TimeSpan.FromMinutes(2))
-                .DeclineAgentInitPrompt()
-                .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(2));
+            await auto.AspireInitAsync(counter);
 
             // Step 4: Add required packages
             output.WriteLine("Step 4: Adding Azure Container Apps package...");
-            sequenceBuilder.Type("aspire add Aspire.Hosting.Azure.AppContainers")
-                .Enter();
+            await auto.TypeAsync("aspire add Aspire.Hosting.Azure.AppContainers");
+            await auto.EnterAsync();
 
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
-                sequenceBuilder
-                    .WaitUntil(s => waitingForVersionSelectionPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(60))
-                    .Enter();
+                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
+                await auto.EnterAsync();
             }
 
-            sequenceBuilder.WaitForSuccessPrompt(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
 
             // Step 5: Modify apphost.cs with a long environment name and a container with volume.
             // Use WithCompactResourceNaming() so the storage account name preserves the uniqueString.
-            sequenceBuilder.ExecuteCallback(() =>
-            {
-                var appHostFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
-                var content = File.ReadAllText(appHostFilePath);
+            var appHostFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
+            var content = File.ReadAllText(appHostFilePath);
 
-                var buildRunPattern = "builder.Build().Run();";
-                var replacement = """
+            var buildRunPattern = "builder.Build().Run();";
+            var replacement = """
 // Long env name (16 chars) would truncate uniqueString without compact naming
 builder.AddAzureContainerAppEnvironment("my-long-env-name")
        .WithCompactResourceNaming();
@@ -133,49 +115,46 @@ builder.AddContainer("worker", "mcr.microsoft.com/dotnet/samples", "aspnetapp")
 builder.Build().Run();
 """;
 
-                content = content.Replace(buildRunPattern, replacement);
+            content = content.Replace(buildRunPattern, replacement);
 
-                // Suppress experimental diagnostic for WithCompactResourceNaming
-                content = "#pragma warning disable ASPIREACANAMING001\n" + content;
+            // Suppress experimental diagnostic for WithCompactResourceNaming
+            content = "#pragma warning disable ASPIREACANAMING001\n" + content;
 
-                File.WriteAllText(appHostFilePath, content);
+            File.WriteAllText(appHostFilePath, content);
 
-                output.WriteLine($"Modified apphost.cs with long env name + compact naming + volume");
-            });
+            output.WriteLine($"Modified apphost.cs with long env name + compact naming + volume");
 
             // Step 6: Set environment variables for deployment
-            sequenceBuilder.Type($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}")
-                .Enter()
-                .WaitForSuccessPrompt(counter);
+            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
 
             // Step 7: Deploy
             output.WriteLine("Step 7: Deploying with compact naming...");
-            sequenceBuilder
-                .Type("aspire deploy --clear-cache")
-                .Enter()
-                .WaitUntil(s => waitingForPipelineSucceeded.Search(s).Count > 0, TimeSpan.FromMinutes(30))
-                .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(2));
+            await auto.TypeAsync("aspire deploy --clear-cache");
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("PIPELINE SUCCEEDED", timeout: TimeSpan.FromMinutes(30));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
             // Step 8: Verify storage account was created and name contains uniqueString
             output.WriteLine("Step 8: Verifying storage account naming...");
-            sequenceBuilder
-                .Type($"STORAGE_NAMES=$(az storage account list -g \"{resourceGroupName}\" --query \"[].name\" -o tsv) && " +
-                      "echo \"Storage accounts: $STORAGE_NAMES\" && " +
-                      "STORAGE_COUNT=$(echo \"$STORAGE_NAMES\" | wc -l) && " +
-                      "echo \"Count: $STORAGE_COUNT\" && " +
-                      // Verify each storage name contains 'sv' (compact naming marker)
-                      "for name in $STORAGE_NAMES; do " +
-                      "if echo \"$name\" | grep -q 'sv'; then echo \"✅ $name uses compact naming\"; " +
-                      "else echo \"⚠️ $name does not use compact naming (may be ACR storage)\"; fi; " +
-                      "done")
-                .Enter()
-                .WaitForSuccessPrompt(counter, TimeSpan.FromSeconds(30));
+            await auto.TypeAsync(
+                $"STORAGE_NAMES=$(az storage account list -g \"{resourceGroupName}\" --query \"[].name\" -o tsv) && " +
+                "echo \"Storage accounts: $STORAGE_NAMES\" && " +
+                "STORAGE_COUNT=$(echo \"$STORAGE_NAMES\" | wc -l) && " +
+                "echo \"Count: $STORAGE_COUNT\" && " +
+                // Verify each storage name contains 'sv' (compact naming marker)
+                "for name in $STORAGE_NAMES; do " +
+                "if echo \"$name\" | grep -q 'sv'; then echo \"✅ $name uses compact naming\"; " +
+                "else echo \"⚠️ $name does not use compact naming (may be ACR storage)\"; fi; " +
+                "done");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
             // Step 9: Exit
-            sequenceBuilder.Type("exit").Enter();
+            await auto.TypeAsync("exit");
+            await auto.EnterAsync();
 
-            var sequence = sequenceBuilder.Build();
-            await sequence.ApplyAsync(terminal, cancellationToken);
             await pendingRun;
 
             var duration = DateTime.UtcNow - startTime;

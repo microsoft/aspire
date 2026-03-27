@@ -51,9 +51,9 @@
         <source>Are you sure you want to delete the value for parameter `{0}`?
 
 The value is currently saved in [user secrets](https://aka.ms/aspire/user-secrets). You can choose to also delete it from there.</source>
-        <target state="translated">Voulez-vous vraiment supprimer la valeur du paramètre `{0}` ?
+        <target state="needs-review-translation">Voulez-vous vraiment supprimer la valeur du paramètre «{0} » ?
 
-La valeur est actuellement enregistrée dans [secrets utilisateur](https://aka.ms/aspire/user-secrets). Vous pouvez également choisir de le supprimer à partir de là.</target>
+La valeur est actuellement enregistrée dans [secrets utilisateur](https://learn.microsoft.com/aspnet/core/security/app-secrets). Vous pouvez également choisir de le supprimer à partir de là.</target>
         <note>Contains markdown. {0} is the parameter name.</note>
       </trans-unit>
       <trans-unit id="DeleteParameterPrimaryButtonText">
@@ -127,8 +127,8 @@ La valeur est actuellement enregistrée dans [secrets utilisateur](https://aka.m
         <note />
       </trans-unit>
       <trans-unit id="ParametersInputsRememberDescriptionNotConfigured">
-        <source>Requires a `UserSecretsId` to be configured in the AppHost project file. Run `aspire secret set &lt;key&gt; &lt;value&gt;` to initialize user secrets, or see [user secrets](https://aka.ms/aspire/user-secrets) for more information.</source>
-        <target state="translated">Nécessite la configuration d’un `UserSecretsId` dans le fichier projet AppHost. Exécutez la commande `aspire secret set &lt;key&gt; &lt;value&gt;` pour initialiser les secrets utilisateur, ou consultez la page [user secrets](https://aka.ms/aspire/user-secrets) pour plus d’informations.</target>
+        <source>Requires user secrets to be configured for the AppHost. Run `aspire secret set &lt;key&gt; &lt;value&gt;` to initialize user secrets, or see [user secrets](https://aka.ms/aspire/user-secrets) for more information.</source>
+        <target state="new">Requires user secrets to be configured for the AppHost. Run `aspire secret set &lt;key&gt; &lt;value&gt;` to initialize user secrets, or see [user secrets](https://aka.ms/aspire/user-secrets) for more information.</target>
         <note />
       </trans-unit>
       <trans-unit id="ParametersInputsRememberLabel">
@@ -165,7 +165,7 @@ La valeur est actuellement enregistrée dans [secrets utilisateur](https://aka.m
         <source>Please provide a value for the parameter. The parameter can be saved to [user secrets](https://aka.ms/aspire/user-secrets) for future use.
 
 New parameter values may not be used until dependent resources are restarted.</source>
-        <target state="translated">Veuillez fournir une valeur pour le paramètre. Le paramètre peut être enregistré dans [secrets utilisateur](https://aka.ms/aspire/user-secrets) pour une utilisation ultérieure.
+        <target state="needs-review-translation">Veuillez fournir une valeur pour le paramètre. Le paramètre peut être enregistré dans [secrets utilisateur](https://learn.microsoft.com/aspnet/core/security/app-secrets) pour une utilisation ultérieure.
 
 Les nouvelles valeurs de paramètre ne peuvent pas être utilisées tant que les ressources dépendantes ne sont pas redémarrées.</target>
         <note>Contains markdown</note>

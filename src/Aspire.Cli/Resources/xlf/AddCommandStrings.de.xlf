@@ -8,8 +8,8 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Add a hosting integration to the apphost.</source>
-        <target state="translated">Fügen Sie dem AppHost eine Hosting-Integration hinzu.</target>
+        <source>Add a hosting integration to the apphost</source>
+        <target state="needs-review-translation">Fügen Sie dem Aspire AppHost eine Hosting-Integration hinzu.</target>
         <note />
       </trans-unit>
       <trans-unit id="ErrorOccurredWhileAddingPackage">
@@ -18,8 +18,8 @@
         <note />
       </trans-unit>
       <trans-unit id="IntegrationArgumentDescription">
-        <source>The name of the integration to add (e.g. redis, postgres).</source>
-        <target state="translated">Der Name der Integration, die Sie hinzufügen möchten (z. B. redis, postgres).</target>
+        <source>The name of the integration to add (e.g. redis, postgres)</source>
+        <target state="needs-review-translation">Der Name der Integration, die Sie hinzufügen möchten (z. B. redis, postgres).</target>
         <note />
       </trans-unit>
       <trans-unit id="NoIntegrationPackagesFound">
@@ -48,8 +48,8 @@
         <note>{0} is a number, {1} is the log file path</note>
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file to add the integration to.</source>
-        <target state="translated">Der Pfad zur Aspire AppHost-Projektdatei, der die Integration hinzugefügt werden soll.</target>
+        <source>The path to the Aspire apphost project file to add the integration to</source>
+        <target state="needs-review-translation">Der Pfad zur Projektdatei, der die Integration hinzugefügt werden soll.</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchingForAspirePackages">
@@ -68,17 +68,17 @@
         <note />
       </trans-unit>
       <trans-unit id="SourceArgumentDescription">
-        <source>The NuGet source to use for the integration.</source>
-        <target state="translated">Die NuGet-Quelle, die für die Integration verwendet werden soll.</target>
+        <source>The NuGet source to use for the integration</source>
+        <target state="needs-review-translation">Die NuGet-Quelle, die für die Integration verwendet werden soll.</target>
         <note />
       </trans-unit>
       <trans-unit id="StoppedRunningInstance" translate="yes" xml:space="preserve">
-          <source>Stopped a running Aspire AppHost instance to allow package modification.</source>
-          <target state="translated">Eine laufende Aspire AppHost-Instanz wurde gestoppt, um Paketänderungen zu ermöglichen.</target><note />
+          <source>Stopped a running Aspire apphost instance to allow package modification.</source>
+          <target state="new">Stopped a running Aspire apphost instance to allow package modification.</target><note />
         </trans-unit>
       <trans-unit id="UnableToStopRunningInstances">
-        <source>Unable to stop one or more running Aspire AppHost instances. Please stop the application and try again.</source>
-        <target state="translated">Mindestens eine laufende Aspire AppHost-Instanz konnte nicht gestoppt werden. Beenden Sie die Anwendung und versuchen Sie es erneut.</target>
+        <source>Unable to stop one or more running Aspire apphost instances. Please stop the application and try again.</source>
+        <target state="new">Unable to stop one or more running Aspire apphost instances. Please stop the application and try again.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnexpectedNumberOfPackagesFound">
@@ -92,8 +92,8 @@
         <note />
       </trans-unit>
       <trans-unit id="VersionArgumentDescription">
-        <source>The version of the integration to add.</source>
-        <target state="translated">Die Version der Integration, die Sie hinzufügen möchten.</target>
+        <source>The version of the integration to add</source>
+        <target state="needs-review-translation">Die Version der Integration, die Sie hinzufügen möchten.</target>
         <note />
       </trans-unit>
     </body>

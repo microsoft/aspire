@@ -1,8 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Utils;
-using Aspire.Hosting.Ats;
+using Aspire.TypeSystem;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Projects;
@@ -15,6 +16,7 @@ internal sealed class GuestRuntime
 {
     private readonly RuntimeSpec _spec;
     private readonly ILogger _logger;
+    private readonly FileLoggerProvider? _fileLoggerProvider;
     private readonly Func<string, string?> _commandResolver;
 
     /// <summary>
@@ -22,11 +24,13 @@ internal sealed class GuestRuntime
     /// </summary>
     /// <param name="spec">The runtime specification describing how to execute the guest language.</param>
     /// <param name="logger">Logger for debugging output.</param>
+    /// <param name="fileLoggerProvider">Optional file logger for writing output to disk.</param>
     /// <param name="commandResolver">Optional command resolver used to locate executables on PATH.</param>
-    public GuestRuntime(RuntimeSpec spec, ILogger logger, Func<string, string?>? commandResolver = null)
+    public GuestRuntime(RuntimeSpec spec, ILogger logger, FileLoggerProvider? fileLoggerProvider = null, Func<string, string?>? commandResolver = null)
     {
         _spec = spec;
         _logger = logger;
+        _fileLoggerProvider = fileLoggerProvider;
         _commandResolver = commandResolver ?? PathLookupHelper.FindFullPathFromPath;
     }
 
@@ -45,6 +49,44 @@ internal sealed class GuestRuntime
     /// Null if this language does not support extension-based launching.
     /// </summary>
     public string? ExtensionLaunchCapability => _spec.ExtensionLaunchCapability;
+
+    /// <summary>
+    /// Initializes the project environment (e.g., creates a virtual environment and installs dependencies).
+    /// Runs each command in <see cref="RuntimeSpec.Initialize"/> sequentially.
+    /// </summary>
+    /// <param name="directory">The project directory.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The exit code from the first failing command, or 0 if all succeed.</returns>
+    public async Task<(int ExitCode, OutputCollector Output)> InitializeAsync(DirectoryInfo directory, CancellationToken cancellationToken)
+    {
+        var outputCollector = new OutputCollector();
+
+        if (_spec.Initialize is null or { Length: 0 })
+        {
+            _logger.LogDebug("No initialization configured for {Language}", _spec.Language);
+            return (0, outputCollector);
+        }
+
+        foreach (var commandSpec in _spec.Initialize)
+        {
+            var args = ReplacePlaceholders(commandSpec.Args, null, directory, null);
+            var environmentVariables = commandSpec.EnvironmentVariables ?? new Dictionary<string, string>();
+
+            var launcher = CreateDefaultLauncher();
+            var (exitCode, output) = await launcher.LaunchAsync(
+                commandSpec.Command,
+                args,
+                directory,
+                environmentVariables,
+                cancellationToken);
+            if (exitCode != 0)
+            {
+                return (exitCode, output ?? outputCollector);
+            }
+        }
+
+        return (0, outputCollector);
+    }
 
     /// <summary>
     /// Installs dependencies for the guest language project.
@@ -151,7 +193,7 @@ internal sealed class GuestRuntime
     /// <summary>
     /// Creates the default process-based launcher for this runtime.
     /// </summary>
-    public ProcessGuestLauncher CreateDefaultLauncher() => new(_spec.Language, _logger, _commandResolver);
+    public ProcessGuestLauncher CreateDefaultLauncher() => new(_spec.Language, _logger, _fileLoggerProvider, _commandResolver);
 
     /// <summary>
     /// Replaces placeholders in command arguments with actual values.

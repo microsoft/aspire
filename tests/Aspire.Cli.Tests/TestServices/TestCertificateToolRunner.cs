@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Certificates;
-using Aspire.Cli.DotNet;
+using Microsoft.AspNetCore.Certificates.Generation;
 
 namespace Aspire.Cli.Tests.TestServices;
 
@@ -12,30 +12,45 @@ namespace Aspire.Cli.Tests.TestServices;
 /// </summary>
 internal sealed class TestCertificateToolRunner : ICertificateToolRunner
 {
-    public Func<DotNetCliRunnerInvocationOptions, CancellationToken, (int ExitCode, CertificateTrustResult? Result)>? CheckHttpCertificateMachineReadableAsyncCallback { get; set; }
-    public Func<DotNetCliRunnerInvocationOptions, CancellationToken, int>? TrustHttpCertificateAsyncCallback { get; set; }
+    public Func<CertificateTrustResult>? CheckHttpCertificateCallback { get; set; }
+    public Func<EnsureCertificateResult>? EnsureHttpCertificateExistsCallback { get; set; }
+    public Func<EnsureCertificateResult>? TrustHttpCertificateCallback { get; set; }
+    public Func<CertificateCleanResult>? CleanHttpCertificateCallback { get; set; }
 
-    public Task<(int ExitCode, CertificateTrustResult? Result)> CheckHttpCertificateMachineReadableAsync(DotNetCliRunnerInvocationOptions options, CancellationToken cancellationToken)
+    public CertificateTrustResult CheckHttpCertificate()
     {
-        if (CheckHttpCertificateMachineReadableAsyncCallback != null)
+        if (CheckHttpCertificateCallback is not null)
         {
-            return Task.FromResult(CheckHttpCertificateMachineReadableAsyncCallback(options, cancellationToken));
+            return CheckHttpCertificateCallback();
         }
 
         // Default: Return a fully trusted certificate result
-        var result = new CertificateTrustResult
+        return new CertificateTrustResult
         {
             HasCertificates = true,
-            TrustLevel = DevCertTrustLevel.Full,
+            TrustLevel = CertificateManager.TrustLevel.Full,
             Certificates = []
         };
-        return Task.FromResult<(int, CertificateTrustResult?)>((0, result));
     }
 
-    public Task<int> TrustHttpCertificateAsync(DotNetCliRunnerInvocationOptions options, CancellationToken cancellationToken)
+    public EnsureCertificateResult TrustHttpCertificate()
     {
-        return TrustHttpCertificateAsyncCallback != null
-            ? Task.FromResult(TrustHttpCertificateAsyncCallback(options, cancellationToken))
-            : Task.FromResult(0);
+        return TrustHttpCertificateCallback is not null
+            ? TrustHttpCertificateCallback()
+            : EnsureCertificateResult.ExistingHttpsCertificateTrusted;
+    }
+
+    public EnsureCertificateResult EnsureHttpCertificateExists()
+    {
+        return EnsureHttpCertificateExistsCallback is not null
+            ? EnsureHttpCertificateExistsCallback()
+            : EnsureCertificateResult.ValidCertificatePresent;
+    }
+
+    public CertificateCleanResult CleanHttpCertificate()
+    {
+        return CleanHttpCertificateCallback is not null
+            ? CleanHttpCertificateCallback()
+            : new CertificateCleanResult { Success = true };
     }
 }

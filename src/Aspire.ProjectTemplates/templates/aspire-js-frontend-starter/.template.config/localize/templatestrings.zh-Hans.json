@@ -1,4 +1,4 @@
-﻿{
+{
   "author": "Microsoft",
   "name": "React (Vite) 与 Minimal API 入门",
   "description": "用于使用 React (Vite)前端和 Minimal API 后端服务创建 Aspire 应用的项目模板，可以选择使用 Redis 进行缓存。",
@@ -10,11 +10,9 @@
   "symbols/UseRedisCache/description": "配置是否将应用程序设置为使用 Redis 进行缓存。需要支持的容器运行时才能在本地运行，有关详细信息，请访问 https://aka.ms/dotnet/aspire/containers。",
   "symbols/appHostHttpPort/description": "该端口号将用于 AppHost 项目的 launchSettings.json 中的 HTTP 终结点。",
   "symbols/appHostOtlpHttpPort/description": "该端口号将用于 AppHost 项目的 launchSettings.json 中的 OTLP HTTP 终结点。",
-  "symbols/appHostMcpHttpPort/description": "用于 AppHost 项目的 launchSettings.json 中 MCP HTTP 终结点的端口号。",
   "symbols/appHostResourceHttpPort/description": "该端口号将用于 AppHost 项目的 launchSettings.json 中的资源服务 HTTP 终结点。",
   "symbols/appHostHttpsPort/description": "该端口号将用于 AppHost 项目的 launchSettings.json 中的 HTTPS 终结点。仅当不使用参数 no-https 时，此选项才适用。",
   "symbols/appHostOtlpHttpsPort/description": "该端口号将用于 AppHost 项目的 launchSettings.json 中的 OTLP HTTPS 终结点。",
-  "symbols/appHostMcpHttpsPort/description": "用于 AppHost 项目的 launchSettings.json 中 MCP HTTPS 终结点的端口号。",
   "symbols/appHostResourceHttpsPort/description": "该端口号将用于 AppHost 项目的 launchSettings.json 中的资源服务 HTTPS 终结点。",
   "symbols/serverHttpPort/description": "该端口号将用于服务器项目的 launchSettings.json 中的 HTTP 终结点。",
   "symbols/serverHttpsPort/description": "该端口号将用于服务器项目的 launchSettings.json 中的 HTTPS 终结点。仅当不使用参数 no-https 时，此选项才适用。",
