@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <PackageTags>aspire integration hosting blazor webassembly gateway</PackageTags>
+    <Description>Blazor WebAssembly hosting support for Aspire.</Description>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <MinCodeCoverage>0</MinCodeCoverage>
+    <EnablePackageValidation>false</EnablePackageValidation>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Aspire.Hosting\Aspire.Hosting.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.Hosting.Blazor.Tests" />
+  </ItemGroup>
+
+  <!-- Scripts are file-based C# apps, not part of this library's compilation -->
+  <ItemGroup>
+    <Compile Remove="Scripts\**" />
+    <Content Include="Scripts\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

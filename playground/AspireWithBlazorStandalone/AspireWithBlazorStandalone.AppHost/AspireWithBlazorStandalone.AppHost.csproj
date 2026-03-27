@@ -16,11 +16,12 @@
   <ItemGroup>
     <AspireProjectOrPackageReference Include="Aspire.Hosting" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Blazor" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\AspireWithBlazorStandalone.WeatherApi\AspireWithBlazorStandalone.WeatherApi.csproj" />
-    <!-- WASM project uses Gateway package - it can't run standalone without DevServer -->
+    <!-- WASM project reference needed for IProjectMetadata discovery by AddBlazorWasmProject -->
     <ProjectReference Include="..\AspireWithBlazorStandalone\AspireWithBlazorStandalone.csproj" />
   </ItemGroup>
 
