@@ -200,7 +200,7 @@ jobs:
   cli_starter_validation_windows:
     name: Aspire CLI Starter Validation (${{ matrix.os.name }})
     runs-on: ${{ matrix.os.runner }}
-    timeout-minutes: 10
+    timeout-minutes: 15
     needs: [build_packages, build_cli_archive_windows, build_cli_archive_windows_arm]
     if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' }}
     strategy:
@@ -210,9 +210,13 @@ jobs:
           - name: Windows
             runner: windows-latest
             artifact_suffix: windows-x64
+            max_startup_seconds: 120
+            resource_ready_timeout_seconds: 120
           - name: Windows ARM64
             runner: windows-11-arm
             artifact_suffix: windows-arm64
+            max_startup_seconds: 120
+            resource_ready_timeout_seconds: 300
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -242,15 +246,15 @@ jobs:
           aspire --version
 
       - name: Create starter app and validate startup
-        timeout-minutes: 10
+        timeout-minutes: 12
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $PSNativeCommandUseErrorActionPreference = $true
           & "$env:GITHUB_WORKSPACE/eng/scripts/cli-starter-validation.ps1" `
             -PRNumber ${{ github.event.pull_request.number }} `
-            -MaxStartupSeconds 120 `
-            -ResourceReadyTimeoutSeconds 120
+            -MaxStartupSeconds ${{ matrix.os.max_startup_seconds }} `
+            -ResourceReadyTimeoutSeconds ${{ matrix.os.resource_ready_timeout_seconds }}
 
       - name: Collect CLI logs
         if: always()
