@@ -131,7 +131,6 @@ const (
 type CommandResultFormat string
 
 const (
-	CommandResultFormatNone CommandResultFormat = "None"
 	CommandResultFormatText CommandResultFormat = "Text"
 	CommandResultFormatJson CommandResultFormat = "Json"
 )

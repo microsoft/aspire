@@ -319,8 +319,6 @@ impl std::fmt::Display for EndpointProperty {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CommandResultFormat {
     #[default]
-    #[serde(rename = "None")]
-    None,
     #[serde(rename = "Text")]
     Text,
     #[serde(rename = "Json")]
@@ -330,7 +328,6 @@ pub enum CommandResultFormat {
 impl std::fmt::Display for CommandResultFormat {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::None => write!(f, "None"),
             Self::Text => write!(f, "Text"),
             Self::Json => write!(f, "Json"),
         }

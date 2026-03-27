@@ -111,7 +111,7 @@ public class ResourceCommandService
             {
                 Success = true,
                 Result = successWithResult?.Result,
-                ResultFormat = successWithResult?.ResultFormat ?? CommandResultFormat.None
+                ResultFormat = successWithResult?.ResultFormat
             };
         }
         else if (failures.Count == 0 && cancellations.Count > 0)

@@ -220,7 +220,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             Canceled = result.Canceled,
             ErrorMessage = result.ErrorMessage,
             Result = result.Result,
-            ResultFormat = result.ResultFormat.ToString().ToLowerInvariant()
+            ResultFormat = result.ResultFormat?.ToString().ToLowerInvariant()
         };
     }
 

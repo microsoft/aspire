@@ -1491,7 +1491,7 @@ def _validate_dict_types(args: typing.Any, arg_types: typing.Any) -> bool:
 
 CertificateTrustScope = typing.Literal["None", "Append", "Override", "System"]
 
-CommandResultFormat = typing.Literal["None", "Text", "Json"]
+CommandResultFormat = typing.Literal["Text", "Json"]
 
 ContainerLifetime = typing.Literal["Session", "Persistent"]
 

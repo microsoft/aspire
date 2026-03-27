@@ -252,7 +252,6 @@ export enum CertificateTrustScope {
 
 /** Enum type for CommandResultFormat */
 export enum CommandResultFormat {
-    None = "None",
     Text = "Text",
     Json = "Json",
 }

@@ -375,7 +375,6 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             ErrorMessage = errorMessage ?? string.Empty,
             ResultFormat = resultFormat switch
             {
-                ApplicationModel.CommandResultFormat.None => Aspire.DashboardService.Proto.V1.CommandResultFormat.None,
                 ApplicationModel.CommandResultFormat.Text => Aspire.DashboardService.Proto.V1.CommandResultFormat.Text,
                 ApplicationModel.CommandResultFormat.Json => Aspire.DashboardService.Proto.V1.CommandResultFormat.Json,
                 _ => Aspire.DashboardService.Proto.V1.CommandResultFormat.None

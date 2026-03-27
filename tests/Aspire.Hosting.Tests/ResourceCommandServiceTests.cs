@@ -405,7 +405,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
 
         Assert.True(result.Success);
         Assert.Null(result.Result);
-        Assert.Equal(CommandResultFormat.None, result.ResultFormat);
+        Assert.Null(result.ResultFormat);
     }
 
     [Fact]

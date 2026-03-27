@@ -203,10 +203,9 @@ partial class ResourceCommandResponse
             Result = HasResult ? Result : null,
             ResultFormat = ResultFormat switch
             {
-                CommandResultFormat.None => Dashboard.Model.CommandResultFormat.None,
                 CommandResultFormat.Text => Dashboard.Model.CommandResultFormat.Text,
                 CommandResultFormat.Json => Dashboard.Model.CommandResultFormat.Json,
-                _ => Dashboard.Model.CommandResultFormat.None
+                _ => null
             }
         };
     }

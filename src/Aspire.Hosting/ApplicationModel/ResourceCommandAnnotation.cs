@@ -120,19 +120,14 @@ public enum IconVariant
 public enum CommandResultFormat
 {
     /// <summary>
-    /// No result data.
-    /// </summary>
-    None = 0,
-
-    /// <summary>
     /// Plain text result.
     /// </summary>
-    Text = 1,
+    Text,
 
     /// <summary>
     /// JSON result.
     /// </summary>
-    Json = 2
+    Json
 }
 
 /// <summary>
@@ -207,7 +202,7 @@ public sealed class ExecuteCommandResult
     /// <summary>
     /// The format of the <see cref="Result"/> value.
     /// </summary>
-    public CommandResultFormat ResultFormat { get; init; }
+    public CommandResultFormat? ResultFormat { get; init; }
 }
 
 /// <summary>
