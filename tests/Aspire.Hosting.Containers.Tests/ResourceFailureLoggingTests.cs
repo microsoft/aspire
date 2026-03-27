@@ -15,38 +15,6 @@ namespace Aspire.Hosting.Containers.Tests;
 [Trait("Partition", "6")]
 public class ContainerResourceFailureLoggingTests(ITestOutputHelper testOutputHelper)
 {
-    /*
-    [Fact]
-    [RequiresFeature(TestFeature.Docker)]
-    // https://github.com/dotnet/aspire/issues/13756
-    public async Task IllegalBindMount()
-    {
-        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.DefaultOrchestratorTestLongTimeout);
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-
-        var illegalPath = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-            ? "blah:\\invalid"
-            : "/dev/null/invalid";
-
-        var container = builder.AddContainer("container", "nginx")
-            .WithBindMount(illegalPath, "/mtn/whatever");
-        AddFakeLogging(container);
-
-        FakeLogCollector logCollector;
-        using (var app = builder.Build())
-        {
-            logCollector = app.Services.GetFakeLogCollector();
-            await app.StartAsync(cts.Token).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
-            await app.ResourceNotifications.WaitForResourceAsync(container.Resource.Name, KnownResourceStates.FailedToStart, cts.Token).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
-        }
-
-        var logLines = GetLogLines(logCollector);
-        Assert.Contains(logLines, x =>
-            x.Contains("Error response from daemon") ||
-            x.Contains("Could not verify existence of bind mount source path"));
-    }
-    */
-
     [Fact]
     [RequiresFeature(TestFeature.Docker)]
     public async Task BadContainerRuntimeArg()
@@ -117,40 +85,6 @@ public class ContainerResourceFailureLoggingTests(ITestOutputHelper testOutputHe
         var logLines = GetLogLines(logCollector);
         Assert.Contains(logLines, x => x.EndsWith("Error response from daemon: error from registry: Authentication required"));
     }
-
-    /*
-    [Fact]
-    [RequiresFeature(TestFeature.Docker)]
-    // https://github.com/dotnet/aspire/issues/14262 
-    public async Task ContainerExitsImmediatelyAfterStart()
-    {
-        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.DefaultOrchestratorTestLongTimeout);
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-
-        var container = builder.AddContainer("container", "alpine")
-            .WithEntrypoint("sh")
-            .WithArgs("-c", """
-                echo "Hello from Stdout"
-                >&2 echo "Hello from Stderr"
-                sleep 1
-                exit 123
-                """);
-        AddFakeLogging(container);
-
-        FakeLogCollector logCollector;
-        using (var app = builder.Build())
-        {
-            logCollector = app.Services.GetFakeLogCollector();
-            await app.StartAsync(cts.Token).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
-            // This ought to be `Exited` instead - https://github.com/dotnet/aspire/issues/13760
-            await app.ResourceNotifications.WaitForResourceAsync(container.Resource.Name, KnownResourceStates.FailedToStart, cts.Token).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
-            await app.StopAsync(cts.Token).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
-        }
-
-        var logLines = GetLogLines(logCollector);
-        Assert.Contains(logLines, x => x.EndsWith("Hello from Stdout") || x.EndsWith("Hello from Stderr"));
-    }
-    */
 
     private static void AddFakeLogging<T>(IResourceBuilder<T> builder)
         where T : IResource
