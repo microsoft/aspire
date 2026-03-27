@@ -1,8 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
 
-  <!-- Import Gateway props early (before SDK defaults) -->
-  <Import Project="..\AspireWithBlazorStandalone.Gateway\build\Microsoft.AspNetCore.Components.Gateway.props" />
-
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <Nullable>enable</Nullable>
@@ -12,14 +9,10 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" />
     <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" VersionOverride="8.0.0" />
-    <!-- DevServer removed - using Gateway instead -->
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\AspireWithBlazorStandalone.ClientServiceDefaults\AspireWithBlazorStandalone.ClientServiceDefaults.csproj" />
   </ItemGroup>
-
-  <!-- Import Gateway targets late (after SDK defaults) -->
-  <Import Project="..\AspireWithBlazorStandalone.Gateway\build\Microsoft.AspNetCore.Components.Gateway.targets" />
 
 </Project>
