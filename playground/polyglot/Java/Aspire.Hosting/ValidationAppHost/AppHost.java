@@ -19,9 +19,9 @@ void main() throws Exception {
         var builtConnectionString = builder.addConnectionStringBuilder("customcs", (connectionStringBuilder) -> { var _isEmpty = connectionStringBuilder.isEmpty(); connectionStringBuilder.appendLiteral("Host="); connectionStringBuilder.appendValueProvider(endpoint); connectionStringBuilder.appendLiteral(";Key="); connectionStringBuilder.appendValueProvider(secretParam); var _builtExpression = connectionStringBuilder.build(); });
         builtConnectionString.withConnectionProperty("Host", expr);
         builtConnectionString.withConnectionPropertyValue("Mode", "Development");
-        container.withEnvironmentEndpoint("MY_ENDPOINT", endpoint);
-        container.withEnvironmentParameter("MY_PARAM", configParam);
-        container.withEnvironmentConnectionString("MY_CONN", builtConnectionString);
+        container.withEnvironment("MY_ENDPOINT", endpoint);
+        container.withEnvironment("MY_PARAM", configParam);
+        container.withEnvironment("MY_CONN", builtConnectionString);
         builtConnectionString.withConnectionProperty("Endpoint", expr);
         builtConnectionString.withConnectionPropertyValue("Protocol", "https");
         container.excludeFromManifest();

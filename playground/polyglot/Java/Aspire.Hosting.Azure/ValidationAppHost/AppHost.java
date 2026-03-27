@@ -73,11 +73,11 @@ void main() throws Exception {
         identity.publishAsExisting("identity-existing", "rg-identity");
         identity.publishAsExistingFromParameters(existingName, existingResourceGroup);
         identity.asExisting(existingName, existingResourceGroup);
-        container.withEnvironmentFromOutput("INFRA_URL", infrastructureOutput);
-        container.withEnvironmentFromKeyVaultSecret("SECRET_FROM_IDENTITY", identity);
+        container.withEnvironment("INFRA_URL", infrastructureOutput);
+        container.withEnvironment("SECRET_FROM_IDENTITY", identity);
         container.withAzureUserAssignedIdentity(identity);
-        executable.withEnvironmentFromOutput("INFRA_URL", infrastructureOutput);
-        executable.withEnvironmentFromKeyVaultSecret("SECRET_FROM_IDENTITY", identity);
+        executable.withEnvironment("INFRA_URL", infrastructureOutput);
+        executable.withEnvironment("SECRET_FROM_IDENTITY", identity);
         executable.withAzureUserAssignedIdentity(identity);
         builder.build().run();
     }

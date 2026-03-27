@@ -756,6 +756,11 @@ public sealed class AtsJavaCodeGenerator : ICodeGenerator
         }
 
         var wrapperType = MapInputTypeToJava(parameter.Type, parameter.IsOptional || parameter.IsNullable);
+        return GetResourceBuilderWrapperType(wrapperType);
+    }
+
+    private (string? ResourceWrapperType, string? ResourceWrapperParameterType) GetResourceBuilderWrapperType(string wrapperType)
+    {
         if (!wrapperType.StartsWith("I", StringComparison.Ordinal))
         {
             return (null, null);
@@ -1001,6 +1006,12 @@ public sealed class AtsJavaCodeGenerator : ICodeGenerator
             }
             WriteLine("    }");
             WriteLine();
+
+            GenerateResourceBuilderOverloads(
+                returnInfo.ReturnType,
+                methodName,
+                CreateUnionMethodParameters(parameters, unionParameter, unionType),
+                returnInfo.HasReturn);
         }
     }
 
@@ -1112,6 +1123,14 @@ public sealed class AtsJavaCodeGenerator : ICodeGenerator
             WriteLine("    }");
             WriteLine();
 
+            var bridgeParameters = CreateUnionMethodParameters(requiredParameters, unionParameter, unionType);
+            bridgeParameters.Add(new JavaMethodParameter(optionsClassName, "options"));
+            GenerateResourceBuilderOverloads(
+                returnInfo.ReturnType,
+                methodName,
+                bridgeParameters,
+                returnInfo.HasReturn);
+
             WriteLine($"    public {returnInfo.ReturnType} {methodName}({string.Join(", ", requiredParameters.Select(parameter => ReferenceEquals(parameter, unionParameter) ? $"{MapInputTypeToJava(unionType, unionParameter.IsOptional || unionParameter.IsNullable)} {ToCamelCase(parameter.Name)}" : $"{MapParameterToJava(parameter)} {ToCamelCase(parameter.Name)}"))}) {{");
             if (returnInfo.HasReturn)
             {
@@ -1124,6 +1143,40 @@ public sealed class AtsJavaCodeGenerator : ICodeGenerator
             WriteLine("    }");
             WriteLine();
         }
+    }
+
+    private List<JavaMethodParameter> CreateUnionMethodParameters(
+        List<AtsParameterInfo> parameters,
+        AtsParameterInfo unionParameter,
+        AtsTypeRef unionType)
+    {
+        var result = new List<JavaMethodParameter>(parameters.Count);
+
+        foreach (var parameter in parameters)
+        {
+            var parameterName = ToCamelCase(parameter.Name);
+
+            if (!ReferenceEquals(parameter, unionParameter))
+            {
+                var (parameterResourceWrapperType, parameterResourceWrapperParameterType) = GetResourceBuilderWrapperType(parameter);
+                result.Add(new JavaMethodParameter(
+                    MapParameterToJava(parameter),
+                    parameterName,
+                    parameterResourceWrapperType,
+                    parameterResourceWrapperParameterType));
+                continue;
+            }
+
+            var parameterType = MapInputTypeToJava(unionType, unionParameter.IsOptional || unionParameter.IsNullable);
+            var (resourceWrapperType, resourceWrapperParameterType) = GetResourceBuilderWrapperType(parameterType);
+            result.Add(new JavaMethodParameter(
+                parameterType,
+                parameterName,
+                resourceWrapperType,
+                resourceWrapperParameterType));
+        }
+
+        return result;
     }
 
     private void GenerateOptionsOverloads(

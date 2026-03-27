@@ -1385,8 +1385,16 @@ public class CSharpAppResource extends ResourceBuilderBase {
         return withEnvironment(name, AspireUnion.of(value));
     }
 
+    public CSharpAppResource withEnvironment(String name, ResourceBuilderBase value) {
+        return withEnvironment(name, new IResourceWithConnectionString(value.getHandle(), value.getClient()));
+    }
+
     public CSharpAppResource withEnvironment(String name, IEnvironmentValue value) {
         return withEnvironment(name, AspireUnion.of(value));
+    }
+
+    public CSharpAppResource withEnvironment(String name, HandleWrapperBase value) {
+        return withEnvironment(name, new IEnvironmentValue(value.getHandle(), value.getClient()));
     }
 
     /** Sets an environment variable */
@@ -4644,8 +4652,16 @@ public class ContainerResource extends ResourceBuilderBase {
         return withEnvironment(name, AspireUnion.of(value));
     }
 
+    public ContainerResource withEnvironment(String name, ResourceBuilderBase value) {
+        return withEnvironment(name, new IResourceWithConnectionString(value.getHandle(), value.getClient()));
+    }
+
     public ContainerResource withEnvironment(String name, IEnvironmentValue value) {
         return withEnvironment(name, AspireUnion.of(value));
+    }
+
+    public ContainerResource withEnvironment(String name, HandleWrapperBase value) {
+        return withEnvironment(name, new IEnvironmentValue(value.getHandle(), value.getClient()));
     }
 
     /** Sets an environment variable */
@@ -6274,8 +6290,16 @@ public class DotnetToolResource extends ResourceBuilderBase {
         return withEnvironment(name, AspireUnion.of(value));
     }
 
+    public DotnetToolResource withEnvironment(String name, ResourceBuilderBase value) {
+        return withEnvironment(name, new IResourceWithConnectionString(value.getHandle(), value.getClient()));
+    }
+
     public DotnetToolResource withEnvironment(String name, IEnvironmentValue value) {
         return withEnvironment(name, AspireUnion.of(value));
+    }
+
+    public DotnetToolResource withEnvironment(String name, HandleWrapperBase value) {
+        return withEnvironment(name, new IEnvironmentValue(value.getHandle(), value.getClient()));
     }
 
     /** Sets an environment variable */
@@ -7843,8 +7867,16 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withEnvironment(name, AspireUnion.of(value));
     }
 
+    public ExecutableResource withEnvironment(String name, ResourceBuilderBase value) {
+        return withEnvironment(name, new IResourceWithConnectionString(value.getHandle(), value.getClient()));
+    }
+
     public ExecutableResource withEnvironment(String name, IEnvironmentValue value) {
         return withEnvironment(name, AspireUnion.of(value));
+    }
+
+    public ExecutableResource withEnvironment(String name, HandleWrapperBase value) {
+        return withEnvironment(name, new IEnvironmentValue(value.getHandle(), value.getClient()));
     }
 
     /** Sets an environment variable */
@@ -12427,8 +12459,16 @@ public class ProjectResource extends ResourceBuilderBase {
         return withEnvironment(name, AspireUnion.of(value));
     }
 
+    public ProjectResource withEnvironment(String name, ResourceBuilderBase value) {
+        return withEnvironment(name, new IResourceWithConnectionString(value.getHandle(), value.getClient()));
+    }
+
     public ProjectResource withEnvironment(String name, IEnvironmentValue value) {
         return withEnvironment(name, AspireUnion.of(value));
+    }
+
+    public ProjectResource withEnvironment(String name, HandleWrapperBase value) {
+        return withEnvironment(name, new IEnvironmentValue(value.getHandle(), value.getClient()));
     }
 
     /** Sets an environment variable */
@@ -14722,8 +14762,16 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return withEnvironment(name, AspireUnion.of(value));
     }
 
+    public TestDatabaseResource withEnvironment(String name, ResourceBuilderBase value) {
+        return withEnvironment(name, new IResourceWithConnectionString(value.getHandle(), value.getClient()));
+    }
+
     public TestDatabaseResource withEnvironment(String name, IEnvironmentValue value) {
         return withEnvironment(name, AspireUnion.of(value));
+    }
+
+    public TestDatabaseResource withEnvironment(String name, HandleWrapperBase value) {
+        return withEnvironment(name, new IEnvironmentValue(value.getHandle(), value.getClient()));
     }
 
     /** Sets an environment variable */
@@ -16329,8 +16377,16 @@ public class TestRedisResource extends ResourceBuilderBase {
         return withEnvironment(name, AspireUnion.of(value));
     }
 
+    public TestRedisResource withEnvironment(String name, ResourceBuilderBase value) {
+        return withEnvironment(name, new IResourceWithConnectionString(value.getHandle(), value.getClient()));
+    }
+
     public TestRedisResource withEnvironment(String name, IEnvironmentValue value) {
         return withEnvironment(name, AspireUnion.of(value));
+    }
+
+    public TestRedisResource withEnvironment(String name, HandleWrapperBase value) {
+        return withEnvironment(name, new IEnvironmentValue(value.getHandle(), value.getClient()));
     }
 
     /** Sets an environment variable */
@@ -18073,8 +18129,16 @@ public class TestVaultResource extends ResourceBuilderBase {
         return withEnvironment(name, AspireUnion.of(value));
     }
 
+    public TestVaultResource withEnvironment(String name, ResourceBuilderBase value) {
+        return withEnvironment(name, new IResourceWithConnectionString(value.getHandle(), value.getClient()));
+    }
+
     public TestVaultResource withEnvironment(String name, IEnvironmentValue value) {
         return withEnvironment(name, AspireUnion.of(value));
+    }
+
+    public TestVaultResource withEnvironment(String name, HandleWrapperBase value) {
+        return withEnvironment(name, new IEnvironmentValue(value.getHandle(), value.getClient()));
     }
 
     /** Sets an environment variable */
