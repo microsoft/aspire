@@ -201,7 +201,13 @@ partial class ResourceCommandResponse
             ErrorMessage = ErrorMessage,
             Kind = (Dashboard.Model.ResourceCommandResponseKind)Kind,
             Result = HasResult ? Result : null,
-            ResultFormat = (Dashboard.Model.CommandResultFormat)ResultFormat
+            ResultFormat = ResultFormat switch
+            {
+                CommandResultFormat.None => Dashboard.Model.CommandResultFormat.None,
+                CommandResultFormat.Text => Dashboard.Model.CommandResultFormat.Text,
+                CommandResultFormat.Json => Dashboard.Model.CommandResultFormat.Json,
+                _ => Dashboard.Model.CommandResultFormat.None
+            }
         };
     }
 }
