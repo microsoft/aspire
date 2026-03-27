@@ -383,8 +383,9 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             // Signal that build/preparation is complete
             context.BuildCompletionSource?.TrySetResult(true);
 
-            // Read launch settings and set shared environment variables
-            var launchSettingsEnvVars = GetServerEnvironmentVariables(directory);
+            // Read launch settings once and reuse them for both the temporary server and guest AppHost.
+            var launchProfileEnvironmentVariables = ReadLaunchSettingsEnvironmentVariables(directory);
+            var launchSettingsEnvVars = GetServerEnvironmentVariables(launchProfileEnvironmentVariables);
 
             // Apply certificate environment variables (e.g., SSL_CERT_DIR on Linux)
             foreach (var kvp in certEnvVars)
@@ -472,7 +473,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
             // Pass the launch profile and certificate environment variables through to the guest AppHost
             // so it sees the same dashboard and resource service endpoints as the temporary .NET server.
-            var environmentVariables = CreateGuestEnvironmentVariables(directory, context.EnvironmentVariables, certEnvVars);
+            var environmentVariables = CreateGuestEnvironmentVariables(context.EnvironmentVariables, launchProfileEnvironmentVariables, certEnvVars);
             environmentVariables["REMOTE_APP_HOST_SOCKET_PATH"] = socketPath;
             environmentVariables["ASPIRE_PROJECT_DIRECTORY"] = directory.FullName;
             environmentVariables["ASPIRE_APPHOST_FILEPATH"] = appHostFile.FullName;
@@ -580,9 +581,13 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
     internal Dictionary<string, string> GetServerEnvironmentVariables(DirectoryInfo directory)
     {
-        var envVars = new Dictionary<string, string>();
-        MergeLaunchProfileEnvironmentVariables(directory, envVars, defaultEnvironment: "Development");
+        return GetServerEnvironmentVariables(ReadLaunchSettingsEnvironmentVariables(directory));
+    }
 
+    private static Dictionary<string, string> GetServerEnvironmentVariables(IDictionary<string, string>? launchProfileEnvironmentVariables)
+    {
+        var envVars = new Dictionary<string, string>();
+        MergeLaunchProfileEnvironmentVariables(launchProfileEnvironmentVariables, envVars, defaultEnvironment: "Development");
         return envVars;
     }
 
@@ -591,9 +596,20 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         IDictionary<string, string> contextEnvironmentVariables,
         IDictionary<string, string>? additionalEnvironmentVariables = null)
     {
+        return CreateGuestEnvironmentVariables(
+            contextEnvironmentVariables,
+            ReadLaunchSettingsEnvironmentVariables(directory),
+            additionalEnvironmentVariables);
+    }
+
+    internal static Dictionary<string, string> CreateGuestEnvironmentVariables(
+        IDictionary<string, string> contextEnvironmentVariables,
+        IDictionary<string, string>? launchProfileEnvironmentVariables,
+        IDictionary<string, string>? additionalEnvironmentVariables = null)
+    {
         var environmentVariables = new Dictionary<string, string>(contextEnvironmentVariables);
 
-        MergeLaunchProfileEnvironmentVariables(directory, environmentVariables);
+        MergeLaunchProfileEnvironmentVariables(launchProfileEnvironmentVariables, environmentVariables);
 
         if (additionalEnvironmentVariables is not null)
         {
@@ -606,13 +622,11 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         return environmentVariables;
     }
 
-    private void MergeLaunchProfileEnvironmentVariables(
-        DirectoryInfo directory,
+    private static void MergeLaunchProfileEnvironmentVariables(
+        IDictionary<string, string>? launchProfileEnvironmentVariables,
         IDictionary<string, string> environmentVariables,
         string? defaultEnvironment = null)
     {
-        var launchProfileEnvironmentVariables = ReadLaunchSettingsEnvironmentVariables(directory);
-
         if (launchProfileEnvironmentVariables is not null)
         {
             foreach (var (key, value) in launchProfileEnvironmentVariables)
@@ -804,8 +818,9 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             // Store output collector in context for exception handling
             context.OutputCollector = prepareOutput;
 
-            // Read launch settings and set shared environment variables
-            var launchSettingsEnvVars = GetServerEnvironmentVariables(directory);
+            // Read launch settings once and reuse them for both the temporary server and guest AppHost.
+            var launchProfileEnvironmentVariables = ReadLaunchSettingsEnvironmentVariables(directory);
+            var launchSettingsEnvVars = GetServerEnvironmentVariables(launchProfileEnvironmentVariables);
 
             // Generate a backchannel socket path for CLI to connect to AppHost server
             var backchannelSocketPath = GetBackchannelSocketPath();
@@ -881,7 +896,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
             // Pass the launch profile environment variables through to the guest AppHost so publish mode
             // uses the same dashboard and resource service endpoints as the temporary .NET server.
-            var environmentVariables = CreateGuestEnvironmentVariables(directory, context.EnvironmentVariables);
+            var environmentVariables = CreateGuestEnvironmentVariables(context.EnvironmentVariables, launchProfileEnvironmentVariables);
             environmentVariables["REMOTE_APP_HOST_SOCKET_PATH"] = jsonRpcSocketPath;
             environmentVariables["ASPIRE_PROJECT_DIRECTORY"] = directory.FullName;
             environmentVariables["ASPIRE_APPHOST_FILEPATH"] = appHostFile.FullName;
