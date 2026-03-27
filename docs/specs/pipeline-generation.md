@@ -222,68 +222,140 @@ The resolver computes:
 - **`publish` job**: `build-images` → `push-images` (no `needs:`)
 - **`deploy` job**: `deploy-infra` → `deploy-apps` (`needs: publish`)
 
-## Generated Workflow Structure (Future)
+## Generated Workflow Structure
 
-The YAML generator (not yet implemented) would produce:
+The YAML generator produces complete, valid GitHub Actions workflow files. Each job in the workflow follows a predictable structure:
+
+1. **Boilerplate** — `actions/checkout@v4`, `actions/setup-dotnet@v4`, `dotnet tool install -g aspire`
+2. **State download** — For jobs with dependencies, downloads state artifacts from upstream jobs
+3. **Execute** — `aspire do --continue --job <jobId>` runs only the steps assigned to this job
+4. **State upload** — Uploads `.aspire/state/` as a workflow artifact for downstream jobs
+
+### Example: Two-Job Build & Deploy Pipeline
 
 ```yaml
 name: deploy
+
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
 
 jobs:
-  publish:
+  build:
+    name: 'Build & Publish'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
       - name: Install Aspire CLI
         run: dotnet tool install -g aspire
       - name: Run pipeline steps
-        run: aspire do --continue --job publish
+        env:
+          DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+        run: aspire do --continue --job build
       - name: Upload state
         uses: actions/upload-artifact@v4
         with:
-          name: aspire-state-publish
+          name: aspire-state-build
           path: .aspire/state/
+          if-no-files-found: ignore
 
   deploy:
+    name: Deploy to Azure
     runs-on: ubuntu-latest
-    needs: [publish]
+    needs: build
     steps:
-      - uses: actions/checkout@v4
-      - name: Download state
-        uses: actions/download-artifact@v4
-        with:
-          name: aspire-state-publish
-          path: .aspire/state/
+      - name: Checkout code
+        uses: actions/checkout@v4
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
       - name: Install Aspire CLI
         run: dotnet tool install -g aspire
+      - name: Download state from build
+        uses: actions/download-artifact@v4
+        with:
+          name: aspire-state-build
+          path: .aspire/state/
       - name: Run pipeline steps
+        env:
+          DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
         run: aspire do --continue --job deploy
+      - name: Upload state
+        uses: actions/upload-artifact@v4
+        with:
+          name: aspire-state-deploy
+          path: .aspire/state/
+          if-no-files-found: ignore
 ```
 
-### `--continue` and `--job` Semantics (Future)
+### YAML Model
 
-When `aspire do --continue --job <jobId>` is invoked:
+The generated YAML is built from a simple C# object model:
 
-1. The AppHost starts and builds the pipeline as usual.
-2. It reads the job ID from the CLI argument.
-3. It runs only the steps assigned to that job (per the scheduling resolver).
-4. State from previous jobs is already available via downloaded artifacts.
+| Type | Purpose |
+|------|---------|
+| `WorkflowYaml` | Root workflow — name, triggers, permissions, jobs |
+| `JobYaml` | Single job — runs-on, needs, steps |
+| `StepYaml` | Single step — name, uses, run, with, env |
+| `WorkflowTriggers` | Trigger configuration — push, workflow_dispatch |
+| `PushTrigger` | Push trigger — branches list |
 
-## State Management (Future)
+A hand-rolled `WorkflowYamlSerializer` converts the model to YAML strings without external dependencies.
 
-Inter-job state is managed through CI/CD artifacts:
+### `WorkflowYamlGenerator`
 
-- **State directory**: `.aspire/state/`
-- **Upload**: Each job uploads its state after execution
-- **Download**: Each job downloads state from its dependency jobs before execution
-- **Content**: Serialized pipeline context, resource connection strings, provisioned resource metadata
-- **Security**: No secrets in artifacts — secrets use CI/CD native secret management
+`WorkflowYamlGenerator.Generate()` takes a `SchedulingResult` and `GitHubActionsWorkflowResource` and produces a `WorkflowYaml`:
+
+1. Sets workflow name from the resource name
+2. Configures default triggers (`workflow_dispatch` + `push` to `main`)
+3. Sets workflow-level permissions (`contents: read`, `id-token: write`)
+4. For each job:
+   - Adds boilerplate steps (checkout, setup-dotnet, install CLI)
+   - Adds state download steps from dependency jobs
+   - Adds `aspire do --continue --job <jobId>` execution step
+   - Adds state upload step
+
+## Step State Restore
+
+### Problem
+
+In CI/CD workflows, each job runs on a different machine. When `aspire do --continue --job deploy` runs, it needs to know what job `build` already did — without re-executing `build`'s steps.
+
+### Solution: `TryRestoreStepAsync`
+
+`PipelineStep` has a `TryRestoreStepAsync` property:
+
+```csharp
+public Func<PipelineStepContext, Task<bool>>? TryRestoreStepAsync { get; init; }
+```
+
+When the pipeline executor encounters a step with `TryRestoreStepAsync`:
+
+1. Before executing the step's `Action`, call `TryRestoreStepAsync`
+2. If it returns `true` → step is marked complete, `Action` is never called
+3. If it returns `false` → step executes normally via `Action`
+
+### How It Works with CI/CD
+
+Steps use the existing `IDeploymentStateManager` to persist their output:
+
+1. **Step A** (in build job): Provisions resources, saves metadata to `.aspire/state/` via `IDeploymentStateManager`
+2. **Build job**: Uploads `.aspire/state/` as GitHub Actions artifact
+3. **Deploy job**: Downloads artifact to `.aspire/state/`
+4. **Step A** (in deploy job): `TryRestoreStepAsync` checks if state exists → returns `true` → skips execution
+5. **Step B** (in deploy job): Depends on Step A's output, runs normally using restored state
 
 ## Extensibility
 
@@ -348,6 +420,52 @@ Environment resolution tests cover:
 - Round-trip: generate YAML → parse → verify structure
 - CLI `aspire pipeline init` command execution
 
+## Future Work
+
+### Cloud Auth Decoupling (`PipelineSetupRequirementAnnotation`)
+
+The current YAML generator produces boilerplate steps only. Real deployments need cloud-specific authentication steps (e.g., `azure/login@v2`, `docker/login-action`). The design for this:
+
+```text
+Aspire.Hosting (core)
+  └── PipelineSetupRequirementAnnotation
+        - ProviderId: "azure" | "docker-registry" | ...
+        - RequiredSecrets: { "AZURE_CLIENT_ID", ... }
+        - RequiredPermissions: { "id-token: write", ... }
+
+Aspire.Hosting.Azure (existing)
+  └── Adds PipelineSetupRequirementAnnotation("azure") when Azure resources are in the model
+
+Aspire.Hosting.Pipelines.GitHubActions
+  └── Built-in renderers: "azure" → azure/login@v2, "docker-registry" → docker/login-action
+```
+
+Key benefits:
+- Azure package doesn't reference GitHub Actions — just adds a generic annotation
+- GitHub Actions package doesn't reference Azure — reads annotations by string ID
+- Extensible — new cloud providers add their own annotations
+
+### Per-PR Environments
+
+Inspired by the tui.social pattern:
+
+```csharp
+workflow.WithPullRequestEnvironments(cleanup: true);
+```
+
+This would generate:
+- Conditional job execution (PR vs production)
+- Cleanup workflow on PR close
+- Environment-scoped deployments
+
+### `aspire pipeline init` Command
+
+CLI command that:
+1. Builds the AppHost
+2. Resolves the pipeline environment
+3. Runs the YAML generator
+4. Writes the output to `.github/workflows/`
+
 ## Open Questions
 
 1. **State serialization format** — JSON? Binary? How to handle large artifacts?
@@ -373,20 +491,26 @@ Environment resolution tests cover:
 | `src/Aspire.Hosting.Pipelines.GitHubActions/GitHubActionsWorkflowExtensions.cs` | Builder extension |
 | `src/Aspire.Hosting.Pipelines.GitHubActions/SchedulingResolver.cs` | Step-to-job resolver |
 | `src/Aspire.Hosting.Pipelines.GitHubActions/SchedulingValidationException.cs` | Validation errors |
+| `src/Aspire.Hosting.Pipelines.GitHubActions/WorkflowYamlGenerator.cs` | Scheduling result → YAML model |
+| `src/Aspire.Hosting.Pipelines.GitHubActions/Yaml/WorkflowYaml.cs` | YAML model POCOs |
+| `src/Aspire.Hosting.Pipelines.GitHubActions/Yaml/WorkflowYamlSerializer.cs` | YAML model → string |
 
 ### Tests
 
 | File | Description |
 |------|-------------|
-| `tests/Aspire.Hosting.Tests/Pipelines/PipelineEnvironmentTests.cs` | Environment resolution tests |
-| `tests/Aspire.Hosting.Pipelines.GitHubActions.Tests/GitHubActionsWorkflowResourceTests.cs` | Workflow model tests |
-| `tests/Aspire.Hosting.Pipelines.GitHubActions.Tests/SchedulingResolverTests.cs` | Scheduling validation tests |
+| `tests/Aspire.Hosting.Tests/Pipelines/PipelineEnvironmentTests.cs` | Environment resolution tests (7) |
+| `tests/Aspire.Hosting.Tests/Pipelines/StepStateRestoreTests.cs` | TryRestoreStepAsync integration tests (5) |
+| `tests/Aspire.Hosting.Pipelines.GitHubActions.Tests/GitHubActionsWorkflowResourceTests.cs` | Workflow model tests (9) |
+| `tests/Aspire.Hosting.Pipelines.GitHubActions.Tests/SchedulingResolverTests.cs` | Scheduling validation tests (13) |
+| `tests/Aspire.Hosting.Pipelines.GitHubActions.Tests/WorkflowYamlGeneratorTests.cs` | YAML generation tests (9) |
+| `tests/Aspire.Hosting.Pipelines.GitHubActions.Tests/WorkflowYamlSnapshotTests.cs` | Verify snapshot tests (4) |
 
 ### Modified
 
 | File | Change |
 |------|--------|
-| `src/Aspire.Hosting/Pipelines/PipelineStep.cs` | Added `ScheduledBy` property |
+| `src/Aspire.Hosting/Pipelines/PipelineStep.cs` | Added `ScheduledBy` and `TryRestoreStepAsync` properties |
 | `src/Aspire.Hosting/Pipelines/IDistributedApplicationPipeline.cs` | Added `scheduledBy` to `AddStep()`, added `GetEnvironmentAsync()` |
-| `src/Aspire.Hosting/Pipelines/DistributedApplicationPipeline.cs` | Constructor takes model, implements `GetEnvironmentAsync()` |
+| `src/Aspire.Hosting/Pipelines/DistributedApplicationPipeline.cs` | Constructor takes model, implements `GetEnvironmentAsync()`, `TryRestoreStepAsync` in executor |
 | `src/Aspire.Hosting/DistributedApplicationBuilder.cs` | Pipeline initialized with model |

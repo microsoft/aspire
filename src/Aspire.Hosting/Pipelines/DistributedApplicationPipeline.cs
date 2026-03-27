@@ -886,6 +886,18 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
     {
         try
         {
+            // If the step has a restore callback, try it first. If it returns true,
+            // the step is considered already complete (e.g., restored from CI/CD state
+            // persisted by a previous job) and its Action is not invoked.
+            if (step.TryRestoreStepAsync is not null)
+            {
+                var restored = await step.TryRestoreStepAsync(stepContext).ConfigureAwait(false);
+                if (restored)
+                {
+                    return;
+                }
+            }
+
             await step.Action(stepContext).ConfigureAwait(false);
         }
         catch (DistributedApplicationException)

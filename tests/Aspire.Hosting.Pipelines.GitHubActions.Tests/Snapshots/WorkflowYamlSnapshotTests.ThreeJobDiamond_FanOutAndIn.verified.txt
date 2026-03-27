@@ -1,0 +1,98 @@
+﻿name: ci-cd
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Install Aspire CLI
+        run: dotnet tool install -g aspire
+      - name: Run pipeline steps
+        env:
+          DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+        run: aspire do --continue --job build
+      - name: Upload state
+        uses: actions/upload-artifact@v4
+        with:
+          name: aspire-state-build
+          path: .aspire/state/
+          if-no-files-found: ignore
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Install Aspire CLI
+        run: dotnet tool install -g aspire
+      - name: Download state from build
+        uses: actions/download-artifact@v4
+        with:
+          name: aspire-state-build
+          path: .aspire/state/
+      - name: Run pipeline steps
+        env:
+          DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+        run: aspire do --continue --job test
+      - name: Upload state
+        uses: actions/upload-artifact@v4
+        with:
+          name: aspire-state-test
+          path: .aspire/state/
+          if-no-files-found: ignore
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: [build, test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Install Aspire CLI
+        run: dotnet tool install -g aspire
+      - name: Download state from build
+        uses: actions/download-artifact@v4
+        with:
+          name: aspire-state-build
+          path: .aspire/state/
+      - name: Download state from test
+        uses: actions/download-artifact@v4
+        with:
+          name: aspire-state-test
+          path: .aspire/state/
+      - name: Run pipeline steps
+        env:
+          DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+        run: aspire do --continue --job deploy
+      - name: Upload state
+        uses: actions/upload-artifact@v4
+        with:
+          name: aspire-state-deploy
+          path: .aspire/state/
+          if-no-files-found: ignore

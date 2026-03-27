@@ -1,0 +1,34 @@
+﻿name: deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  default:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Install Aspire CLI
+        run: dotnet tool install -g aspire
+      - name: Run pipeline steps
+        env:
+          DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+        run: aspire do --continue --job default
+      - name: Upload state
+        uses: actions/upload-artifact@v4
+        with:
+          name: aspire-state-default
+          path: .aspire/state/
+          if-no-files-found: ignore

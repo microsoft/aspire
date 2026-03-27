@@ -5,6 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Verify.XunitV3" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Pipelines.GitHubActions\Aspire.Hosting.Pipelines.GitHubActions.csproj" />
     <ProjectReference Include="..\Aspire.Hosting.Tests\Aspire.Hosting.Tests.csproj" />
   </ItemGroup>
