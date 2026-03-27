@@ -13,11 +13,11 @@ namespace Aspire.Hosting.ApplicationModel;
 /// This contract is used by the internal ATS-visible <c>withEnvironment</c> dispatcher
 /// to route environment values to type-specific logic at runtime. Implementations may
 /// customize dispatch when a value needs behavior that differs from the default
-/// <see cref="IValueProvider"/> and <see cref="IManifestExpressionProvider"/> handling.
+/// <see cref="IEnvironmentValue"/> handling.
 /// </remarks>
 [Experimental("ASPIREATS001")]
-public interface IValueWithCustomWithEnvironment<TSelf> : IValueProvider, IManifestExpressionProvider
-    where TSelf : IValueProvider, IManifestExpressionProvider, IValueWithCustomWithEnvironment<TSelf>
+public interface IValueWithCustomWithEnvironment<TSelf> : IEnvironmentValue
+    where TSelf : IEnvironmentValue, IValueWithCustomWithEnvironment<TSelf>
 {
     /// <summary>
     /// Applies an environment value to <paramref name="builder"/> using value-specific behavior.

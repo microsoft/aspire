@@ -27,7 +27,6 @@ public class ValueProviderContext
 /// <summary>
 /// An interface that allows the value to be provided for an environment variable.
 /// </summary>
-[AspireExport]
 public interface IValueProvider
 {
     /// <summary>

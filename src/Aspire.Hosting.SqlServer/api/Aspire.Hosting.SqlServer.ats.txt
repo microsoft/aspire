@@ -19,7 +19,7 @@ Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression [Expo
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext [ExposeProperties]
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext [ExposeProperties]
-Aspire.Hosting/Aspire.Hosting.ApplicationModel.IManifestExpressionProvider [interface]
+Aspire.Hosting/Aspire.Hosting.ApplicationModel.IEnvironmentValue [interface]
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent [ExposeProperties]
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource [interface]
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithArgs [interface]
@@ -28,7 +28,6 @@ Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints [interface
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment [interface]
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithParent [interface]
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithWaitSupport [interface]
-Aspire.Hosting/Aspire.Hosting.ApplicationModel.IValueProvider [interface]
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
@@ -417,7 +416,7 @@ Aspire.Hosting/withDockerfileBaseImage(buildImage?: string, runtimeImage?: strin
 Aspire.Hosting/withEndpoint(port?: number, targetPort?: number, scheme?: string, name?: string, env?: string, isProxied?: boolean, isExternal?: boolean, protocol?: enum:System.Net.Sockets.ProtocolType) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
 Aspire.Hosting/withEndpointProxySupport(proxyEnabled: boolean) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/withEntrypoint(entrypoint: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
-Aspire.Hosting/withEnvironment(name: string, value: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression|Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource|Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString|Aspire.Hosting/Aspire.Hosting.ApplicationModel.IValueProvider) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
+Aspire.Hosting/withEnvironment(name: string, value: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression|Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource|Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString|Aspire.Hosting/Aspire.Hosting.ApplicationModel.IEnvironmentValue) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
 Aspire.Hosting/withEnvironmentCallback(callback: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
 Aspire.Hosting/withExecutableCommand(command: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource
 Aspire.Hosting/withExplicitStart() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
