@@ -45,7 +45,7 @@ jobs:
             os: windows
           ${{ if eq(parameters.agentOs, 'linux') }}:
             name: NetCore1ESPool-Internal
-            image: 1es-mariner-2
+            image: build.azurelinux.3.amd64
             os: linux
           ${{ if eq(parameters.agentOs, 'macos') }}:
             name: Azure Pipelines
