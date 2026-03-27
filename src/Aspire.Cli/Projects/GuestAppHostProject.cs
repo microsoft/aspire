@@ -470,14 +470,13 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
             // Step 8: Execute the guest apphost
 
-            // Pass the socket path, project directory, and apphost file path to the guest process
-            var environmentVariables = new Dictionary<string, string>(context.EnvironmentVariables)
-            {
-                ["REMOTE_APP_HOST_SOCKET_PATH"] = socketPath,
-                ["ASPIRE_PROJECT_DIRECTORY"] = directory.FullName,
-                ["ASPIRE_APPHOST_FILEPATH"] = appHostFile.FullName,
-                [KnownConfigNames.RemoteAppHostToken] = authenticationToken
-            };
+            // Pass the launch profile and certificate environment variables through to the guest AppHost
+            // so it sees the same dashboard and resource service endpoints as the temporary .NET server.
+            var environmentVariables = CreateGuestEnvironmentVariables(directory, context.EnvironmentVariables, certEnvVars);
+            environmentVariables["REMOTE_APP_HOST_SOCKET_PATH"] = socketPath;
+            environmentVariables["ASPIRE_PROJECT_DIRECTORY"] = directory.FullName;
+            environmentVariables["ASPIRE_APPHOST_FILEPATH"] = appHostFile.FullName;
+            environmentVariables[KnownConfigNames.RemoteAppHostToken] = authenticationToken;
 
             // Check if the extension should launch the guest app host (for VS Code debugging).
             // This mirrors the pattern in DotNetCliRunner.ExecuteAsync for .NET app hosts.
@@ -581,17 +580,57 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
     internal Dictionary<string, string> GetServerEnvironmentVariables(DirectoryInfo directory)
     {
-        var envVars = ReadLaunchSettingsEnvironmentVariables(directory) ?? new Dictionary<string, string>();
-
-        // Support ASPIRE_ENVIRONMENT from the launch profile to set both DOTNET_ENVIRONMENT and ASPNETCORE_ENVIRONMENT
-        envVars.TryGetValue("ASPIRE_ENVIRONMENT", out var environment);
-        environment ??= "Development";
-
-        // Set the environment for the AppHost server process
-        envVars["DOTNET_ENVIRONMENT"] = environment;
-        envVars["ASPNETCORE_ENVIRONMENT"] = environment;
+        var envVars = new Dictionary<string, string>();
+        MergeLaunchProfileEnvironmentVariables(directory, envVars, defaultEnvironment: "Development");
 
         return envVars;
+    }
+
+    internal Dictionary<string, string> CreateGuestEnvironmentVariables(
+        DirectoryInfo directory,
+        IDictionary<string, string> contextEnvironmentVariables,
+        IDictionary<string, string>? additionalEnvironmentVariables = null)
+    {
+        var environmentVariables = new Dictionary<string, string>(contextEnvironmentVariables);
+
+        MergeLaunchProfileEnvironmentVariables(directory, environmentVariables);
+
+        if (additionalEnvironmentVariables is not null)
+        {
+            foreach (var (key, value) in additionalEnvironmentVariables)
+            {
+                environmentVariables[key] = value;
+            }
+        }
+
+        return environmentVariables;
+    }
+
+    private void MergeLaunchProfileEnvironmentVariables(
+        DirectoryInfo directory,
+        IDictionary<string, string> environmentVariables,
+        string? defaultEnvironment = null)
+    {
+        var launchProfileEnvironmentVariables = ReadLaunchSettingsEnvironmentVariables(directory);
+
+        if (launchProfileEnvironmentVariables is not null)
+        {
+            foreach (var (key, value) in launchProfileEnvironmentVariables)
+            {
+                environmentVariables[key] = value;
+            }
+        }
+
+        if (launchProfileEnvironmentVariables?.TryGetValue("ASPIRE_ENVIRONMENT", out var environment) == true)
+        {
+            environmentVariables["DOTNET_ENVIRONMENT"] = environment;
+            environmentVariables["ASPNETCORE_ENVIRONMENT"] = environment;
+        }
+        else if (defaultEnvironment is not null)
+        {
+            environmentVariables["DOTNET_ENVIRONMENT"] = defaultEnvironment;
+            environmentVariables["ASPNETCORE_ENVIRONMENT"] = defaultEnvironment;
+        }
     }
 
     private Dictionary<string, string>? ReadLaunchSettingsEnvironmentVariables(DirectoryInfo directory)
@@ -840,14 +879,13 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     cancellationToken);
             }
 
-            // Pass the socket path, project directory, and apphost file path to the guest process
-            var environmentVariables = new Dictionary<string, string>(context.EnvironmentVariables)
-            {
-                ["REMOTE_APP_HOST_SOCKET_PATH"] = jsonRpcSocketPath,
-                ["ASPIRE_PROJECT_DIRECTORY"] = directory.FullName,
-                ["ASPIRE_APPHOST_FILEPATH"] = appHostFile.FullName,
-                [KnownConfigNames.RemoteAppHostToken] = authenticationToken
-            };
+            // Pass the launch profile environment variables through to the guest AppHost so publish mode
+            // uses the same dashboard and resource service endpoints as the temporary .NET server.
+            var environmentVariables = CreateGuestEnvironmentVariables(directory, context.EnvironmentVariables);
+            environmentVariables["REMOTE_APP_HOST_SOCKET_PATH"] = jsonRpcSocketPath;
+            environmentVariables["ASPIRE_PROJECT_DIRECTORY"] = directory.FullName;
+            environmentVariables["ASPIRE_APPHOST_FILEPATH"] = appHostFile.FullName;
+            environmentVariables[KnownConfigNames.RemoteAppHostToken] = authenticationToken;
 
             // Step 6: Execute the guest apphost for publishing
             // Pass the publish arguments (e.g., --operation publish --step deploy)

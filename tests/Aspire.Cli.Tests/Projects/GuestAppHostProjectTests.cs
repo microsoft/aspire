@@ -333,6 +333,49 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
         Assert.False(envVars.ContainsKey("ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"));
     }
 
+    [Fact]
+    public void CreateGuestEnvironmentVariables_MergesLaunchProfileContextAndAdditionalEnvironmentVariables()
+    {
+        var project = CreateGuestAppHostProject();
+
+        var aspireConfigPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(aspireConfigPath, """
+            {
+              "profiles": {
+                "https": {
+                  "applicationUrl": "https://localhost:16319;http://localhost:16320",
+                  "environmentVariables": {
+                    "ASPIRE_ENVIRONMENT": "Staging",
+                    "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:17269",
+                    "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:18269"
+                  }
+                }
+              }
+            }
+            """);
+
+        var envVars = project.CreateGuestEnvironmentVariables(
+            _workspace.WorkspaceRoot,
+            new Dictionary<string, string>
+            {
+                ["CUSTOM_CONTEXT_VARIABLE"] = "context",
+                ["ASPNETCORE_URLS"] = "http://context"
+            },
+            new Dictionary<string, string>
+            {
+                ["SSL_CERT_DIR"] = "/tmp/certs"
+            });
+
+        Assert.Equal("context", envVars["CUSTOM_CONTEXT_VARIABLE"]);
+        Assert.Equal("https://localhost:16319;http://localhost:16320", envVars["ASPNETCORE_URLS"]);
+        Assert.Equal("Staging", envVars["ASPIRE_ENVIRONMENT"]);
+        Assert.Equal("Staging", envVars["DOTNET_ENVIRONMENT"]);
+        Assert.Equal("Staging", envVars["ASPNETCORE_ENVIRONMENT"]);
+        Assert.Equal("https://localhost:17269", envVars["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]);
+        Assert.Equal("https://localhost:18269", envVars["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]);
+        Assert.Equal("/tmp/certs", envVars["SSL_CERT_DIR"]);
+    }
+
     private static GuestAppHostProject CreateGuestAppHostProject()
     {
         var language = new LanguageInfo(
