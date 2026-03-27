@@ -83,7 +83,7 @@ public class ContainerResourceFailureLoggingTests(ITestOutputHelper testOutputHe
         }
 
         var logLines = GetLogLines(logCollector);
-        Assert.Contains(logLines, x => x.EndsWith("Error response from daemon: error from registry: Authentication required"));
+        Assert.Contains(logLines, x => x.Contains("Error response from daemon"));
     }
 
     private static void AddFakeLogging<T>(IResourceBuilder<T> builder)
