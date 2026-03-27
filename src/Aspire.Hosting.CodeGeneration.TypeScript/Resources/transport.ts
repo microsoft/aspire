@@ -575,6 +575,22 @@ function resolveCancellationClient(client?: AspireClient): AspireClient {
     );
 }
 
+function isAspireClientLike(value: unknown): value is AspireClient {
+    if (!value || typeof value !== 'object') {
+        return false;
+    }
+
+    const candidate = value as {
+        invokeCapability?: unknown;
+        cancelToken?: unknown;
+        connected?: unknown;
+    };
+
+    return typeof candidate.invokeCapability === 'function'
+        && typeof candidate.cancelToken === 'function'
+        && typeof candidate.connected === 'boolean';
+}
+
 /**
  * Registers cancellation support for a local signal or SDK cancellation token.
  * Returns a cancellation ID that should be passed to methods accepting cancellation input.
@@ -590,7 +606,7 @@ export function registerCancellation(client: AspireClient, signalOrToken?: Abort
  * Registers cancellation support using the single connected AspireClient.
  *
  * @param signalOrToken - The signal or token to register (optional)
- * @returns The cancellation ID, or undefined if no value was provided or the token maps to CancellationToken.None
+ * @returns The cancellation ID, or undefined if no value was provided, the signal was already aborted, or the token maps to CancellationToken.None
  *
  * @example
  * const controller = new AbortController();
@@ -607,7 +623,7 @@ export function registerCancellation(
     clientOrSignalOrToken?: AspireClient | AbortSignal | ICancellationToken,
     maybeSignalOrToken?: AbortSignal | ICancellationToken
 ): string | undefined {
-    const client = clientOrSignalOrToken instanceof AspireClient ? clientOrSignalOrToken : undefined;
+    const client = isAspireClientLike(clientOrSignalOrToken) ? clientOrSignalOrToken : undefined;
     const signalOrToken = client
         ? maybeSignalOrToken
         : clientOrSignalOrToken as AbortSignal | ICancellationToken | undefined;
@@ -624,7 +640,7 @@ export function registerCancellation(
     const cancellationClient = resolveCancellationClient(client);
 
     if (signal.aborted) {
-        throw createAbortError('The operation was aborted before it was sent to the AppHost.');
+        return undefined;
     }
 
     const cancellationId = `ct_${++cancellationIdCounter}_${Date.now()}`;
@@ -677,29 +693,32 @@ async function marshalTransportValue(
         throw createCircularReferenceError(capabilityId, path);
     }
 
-    const nextAncestors = new Set(ancestors);
-    nextAncestors.add(value);
+    ancestors.add(value);
 
-    if (hasTransportValue(value)) {
-        return await marshalTransportValue(await value.toTransportValue(), client, cancellationIds, capabilityId, path, nextAncestors);
+    try {
+        if (hasTransportValue(value)) {
+            return await marshalTransportValue(await value.toTransportValue(), client, cancellationIds, capabilityId, path, ancestors);
+        }
+
+        if (Array.isArray(value)) {
+            return await Promise.all(
+                value.map((item, index) => marshalTransportValue(item, client, cancellationIds, capabilityId, `${path}[${index}]`, ancestors))
+            );
+        }
+
+        if (isPlainObject(value)) {
+            const entries = await Promise.all(
+                Object.entries(value).map(async ([key, nestedValue]) =>
+                    [key, await marshalTransportValue(nestedValue, client, cancellationIds, capabilityId, `${path}.${key}`, ancestors)] as const)
+            );
+
+            return Object.fromEntries(entries);
+        }
+
+        return value;
+    } finally {
+        ancestors.delete(value);
     }
-
-    if (Array.isArray(value)) {
-        return await Promise.all(
-            value.map((item, index) => marshalTransportValue(item, client, cancellationIds, capabilityId, `${path}[${index}]`, nextAncestors))
-        );
-    }
-
-    if (isPlainObject(value)) {
-        const entries = await Promise.all(
-            Object.entries(value).map(async ([key, nestedValue]) =>
-                [key, await marshalTransportValue(nestedValue, client, cancellationIds, capabilityId, `${path}.${key}`, nextAncestors)] as const)
-        );
-
-        return Object.fromEntries(entries);
-    }
-
-    return value;
 }
 
 /**

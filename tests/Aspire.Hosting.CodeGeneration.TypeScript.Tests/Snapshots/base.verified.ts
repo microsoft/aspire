@@ -125,11 +125,26 @@ export class ReferenceExpression implements IReferenceExpression {
      */
     static createConditional(
         condition: unknown,
+        whenTrue: IReferenceExpression,
+        whenFalse: IReferenceExpression
+    ): IReferenceExpression;
+    static createConditional(
+        condition: unknown,
         matchValue: string,
         whenTrue: IReferenceExpression,
         whenFalse: IReferenceExpression
+    ): IReferenceExpression;
+    static createConditional(
+        condition: unknown,
+        matchValueOrWhenTrue: string | IReferenceExpression,
+        whenTrueOrWhenFalse: IReferenceExpression,
+        whenFalse?: IReferenceExpression
     ): IReferenceExpression {
-        return new ReferenceExpression(condition, matchValue, whenTrue, whenFalse);
+        if (typeof matchValueOrWhenTrue === 'string') {
+            return new ReferenceExpression(condition, matchValueOrWhenTrue, whenTrueOrWhenFalse, whenFalse!);
+        }
+
+        return new ReferenceExpression(condition, 'True', matchValueOrWhenTrue, whenTrueOrWhenFalse);
     }
 
     /**
