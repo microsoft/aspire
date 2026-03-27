@@ -537,8 +537,15 @@ internal sealed class AtsMarshaller
         return type.ToString();
     }
 
-    private static decimal ReadNumericValue(JsonValue value, Type targetType)
+    private const double MaxSafeIntegerDouble = 9_007_199_254_740_991d;
+
+    private static decimal ReadDecimalValue(JsonValue value, Type targetType)
     {
+        if (value.TryGetValue<int>(out var intValue))
+        {
+            return intValue;
+        }
+
         if (value.TryGetValue<decimal>(out var decimalValue))
         {
             return decimalValue;
@@ -556,7 +563,14 @@ internal sealed class AtsMarshaller
 
         if (value.TryGetValue<double>(out var doubleValue) && double.IsFinite(doubleValue))
         {
-            return (decimal)doubleValue;
+            try
+            {
+                return (decimal)doubleValue;
+            }
+            catch (OverflowException)
+            {
+                throw new InvalidCastException($"Value cannot be converted to {targetType.Name}.");
+            }
         }
 
         throw new InvalidCastException($"Value cannot be converted to {targetType.Name}.");
@@ -564,8 +578,41 @@ internal sealed class AtsMarshaller
 
     private static decimal ReadIntegralNumericValue(JsonValue value, Type targetType, decimal minValue, decimal maxValue)
     {
-        var numericValue = ReadNumericValue(value, targetType);
+        if (value.TryGetValue<int>(out var intValue))
+        {
+            return ValidateIntegralNumericValue(intValue, targetType, minValue, maxValue);
+        }
 
+        if (value.TryGetValue<long>(out var longValue))
+        {
+            return ValidateIntegralNumericValue(longValue, targetType, minValue, maxValue);
+        }
+
+        if (value.TryGetValue<ulong>(out var ulongValue))
+        {
+            return ValidateIntegralNumericValue(ulongValue, targetType, minValue, maxValue);
+        }
+
+        if (value.TryGetValue<decimal>(out var decimalValue))
+        {
+            return ValidateIntegralNumericValue(decimalValue, targetType, minValue, maxValue);
+        }
+
+        if (value.TryGetValue<double>(out var doubleValue) && double.IsFinite(doubleValue))
+        {
+            if (Math.Abs(doubleValue) > MaxSafeIntegerDouble)
+            {
+                throw new InvalidCastException($"Value cannot be converted to {targetType.Name}.");
+            }
+
+            return ValidateIntegralNumericValue((decimal)doubleValue, targetType, minValue, maxValue);
+        }
+
+        throw new InvalidCastException($"Value cannot be converted to {targetType.Name}.");
+    }
+
+    private static decimal ValidateIntegralNumericValue(decimal numericValue, Type targetType, decimal minValue, decimal maxValue)
+    {
         if (decimal.Truncate(numericValue) != numericValue || numericValue < minValue || numericValue > maxValue)
         {
             throw new InvalidCastException($"Value cannot be converted to {targetType.Name}.");
@@ -647,17 +694,17 @@ internal sealed class AtsMarshaller
 
         if (underlyingType == typeof(double))
         {
-            return (double)ReadNumericValue(value, underlyingType);
+            return value.GetValue<double>();
         }
 
         if (underlyingType == typeof(float))
         {
-            return (float)ReadNumericValue(value, underlyingType);
+            return value.TryGetValue<float>(out var floatValue) ? floatValue : (float)value.GetValue<double>();
         }
 
         if (underlyingType == typeof(decimal))
         {
-            return ReadNumericValue(value, underlyingType);
+            return ReadDecimalValue(value, underlyingType);
         }
 
         // TimeSpan: accept milliseconds (number) or parseable string
