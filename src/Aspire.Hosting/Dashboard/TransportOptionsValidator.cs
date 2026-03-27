@@ -55,13 +55,6 @@ internal class TransportOptionsValidator(IConfiguration configuration, Distribut
             return resultHttp;
         }
 
-        // Validate ASPIRE_DASHBOARD_MCP_ENDPOINT_URL
-        var dashboardMcpEndpointUrl = configuration[KnownConfigNames.DashboardMcpEndpointUrl];
-        if (!TryValidateEndpointUrl(KnownConfigNames.DashboardMcpEndpointUrl, dashboardMcpEndpointUrl, out var resultMcp))
-        {
-            return resultMcp;
-        }
-
         // Validate ASPIRE_DASHBOARD_RESOURCE_SERVER_ENDPOINT_URL
         var resourceServiceEndpointUrl = configuration.GetString(KnownConfigNames.ResourceServiceEndpointUrl, KnownConfigNames.Legacy.ResourceServiceEndpointUrl);
         if (string.IsNullOrEmpty(resourceServiceEndpointUrl))

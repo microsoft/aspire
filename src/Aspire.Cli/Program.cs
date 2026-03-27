@@ -589,8 +589,10 @@ public class Program
                 // Write to stderr to avoid interfering with tools that parse stdout
                 var consoleEnvironment = serviceProvider.GetRequiredService<ConsoleEnvironment>();
 
+                const string telemetryUrl = "https://aka.ms/aspire/cli-telemetry";
+
                 consoleEnvironment.Error.WriteLine();
-                consoleEnvironment.Error.WriteLine(RootCommandStrings.FirstTimeUseTelemetryNotice);
+                consoleEnvironment.Error.MarkupLine(string.Format(CultureInfo.CurrentCulture, RootCommandStrings.FirstTimeUseTelemetryNotice, $"[link]{telemetryUrl}[/]"));
                 consoleEnvironment.Error.WriteLine();
             }
 

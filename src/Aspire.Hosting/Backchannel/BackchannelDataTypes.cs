@@ -111,16 +111,6 @@ internal sealed class GetDashboardInfoRequest { }
 internal sealed class GetDashboardInfoResponse
 {
     /// <summary>
-    /// Gets the base URL of the Dashboard MCP endpoint.
-    /// </summary>
-    public string? McpBaseUrl { get; init; }
-
-    /// <summary>
-    /// Gets the Dashboard MCP API token.
-    /// </summary>
-    public string? McpApiToken { get; init; }
-
-    /// <summary>
     /// Gets the base URL of the Dashboard API (without login token).
     /// Use this for API calls like /api/telemetry/*.
     /// </summary>

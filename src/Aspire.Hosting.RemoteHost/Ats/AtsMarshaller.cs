@@ -382,41 +382,22 @@ internal sealed class AtsMarshaller
             return CancellationToken.None;
         }
 
-        // Handle primitives
-        if (node is JsonValue value)
+        try
         {
-            return ConvertPrimitive(value, targetType);
-        }
-
-        // Handle JsonArray -> Array or List<T>
-        if (node is JsonArray array)
-        {
-            // T[] arrays
-            if (targetType.IsArray)
+            // Handle primitives
+            if (node is JsonValue value)
             {
-                var elementType = targetType.GetElementType()!;
-                var converted = Array.CreateInstance(elementType, array.Count);
-                for (int i = 0; i < array.Count; i++)
-                {
-                    var elementContext = new UnmarshalContext
-                    {
-                        CapabilityId = context.CapabilityId,
-                        ParameterName = $"{paramName}[{i}]"
-                    };
-                    converted.SetValue(UnmarshalFromJson(array[i], elementType, elementContext), i);
-                }
-                return converted;
+                return ConvertPrimitive(value, targetType);
             }
 
-            // List<T> or IList<T>
-            if (targetType.IsGenericType)
+            // Handle JsonArray -> Array or List<T>
+            if (node is JsonArray array)
             {
-                var genericDef = targetType.GetGenericTypeDefinition();
-                if (genericDef == typeof(List<>) || genericDef == typeof(IList<>) || genericDef == typeof(IEnumerable<>) || genericDef == typeof(ICollection<>) || genericDef == typeof(IReadOnlyList<>) || genericDef == typeof(IReadOnlyCollection<>))
+                // T[] arrays
+                if (targetType.IsArray)
                 {
-                    var elementType = targetType.GetGenericArguments()[0];
-                    var listType = typeof(List<>).MakeGenericType(elementType);
-                    var list = (IList)Activator.CreateInstance(listType)!;
+                    var elementType = targetType.GetElementType()!;
+                    var converted = Array.CreateInstance(elementType, array.Count);
                     for (int i = 0; i < array.Count; i++)
                     {
                         var elementContext = new UnmarshalContext
@@ -424,53 +405,136 @@ internal sealed class AtsMarshaller
                             CapabilityId = context.CapabilityId,
                             ParameterName = $"{paramName}[{i}]"
                         };
-                        list.Add(UnmarshalFromJson(array[i], elementType, elementContext));
+                        converted.SetValue(UnmarshalFromJson(array[i], elementType, elementContext), i);
                     }
-                    return list;
+                    return converted;
                 }
-            }
-        }
 
-        // Handle JsonObject -> Dictionary<string, T> or DTO
-        if (node is JsonObject jsonObj)
-        {
-            // Dictionary<string, T> or IDictionary<string, T>
-            if (targetType.IsGenericType)
-            {
-                var genericDef = targetType.GetGenericTypeDefinition();
-                if (genericDef == typeof(Dictionary<,>) || genericDef == typeof(IDictionary<,>) || genericDef == typeof(IReadOnlyDictionary<,>))
+                // List<T> or IList<T>
+                if (targetType.IsGenericType)
                 {
-                    var genericArgs = targetType.GetGenericArguments();
-                    if (genericArgs[0] == typeof(string))
+                    var genericDef = targetType.GetGenericTypeDefinition();
+                    if (genericDef == typeof(List<>) || genericDef == typeof(IList<>) || genericDef == typeof(IEnumerable<>) || genericDef == typeof(ICollection<>) || genericDef == typeof(IReadOnlyList<>) || genericDef == typeof(IReadOnlyCollection<>))
                     {
-                        var valueType = genericArgs[1];
-                        var dictType = typeof(Dictionary<,>).MakeGenericType(typeof(string), valueType);
-                        var dict = (IDictionary)Activator.CreateInstance(dictType)!;
-                        foreach (var prop in jsonObj)
+                        var elementType = targetType.GetGenericArguments()[0];
+                        var listType = typeof(List<>).MakeGenericType(elementType);
+                        var list = (IList)Activator.CreateInstance(listType)!;
+                        for (int i = 0; i < array.Count; i++)
                         {
-                            var valueContext = new UnmarshalContext
+                            var elementContext = new UnmarshalContext
                             {
                                 CapabilityId = context.CapabilityId,
-                                ParameterName = $"{paramName}[{prop.Key}]"
+                                ParameterName = $"{paramName}[{i}]"
                             };
-                            dict[prop.Key] = UnmarshalFromJson(prop.Value, valueType, valueContext);
+                            list.Add(UnmarshalFromJson(array[i], elementType, elementContext));
                         }
-                        return dict;
+                        return list;
                     }
                 }
             }
 
-            // DTOs - must have [AspireDto] attribute
-            if (!AttributeDataReader.HasAspireDtoData(targetType))
+            // Handle JsonObject -> Dictionary<string, T> or DTO
+            if (node is JsonObject jsonObj)
             {
-                throw CapabilityException.InvalidArgument(
-                    capabilityId, paramName,
-                    $"Parameter type '{targetType.Name}' must have [AspireDto] attribute to be deserialized from JSON");
-            }
-            return JsonSerializer.Deserialize(jsonObj.ToJsonString(), targetType, s_jsonOptions);
-        }
+                // Dictionary<string, T> or IDictionary<string, T>
+                if (targetType.IsGenericType)
+                {
+                    var genericDef = targetType.GetGenericTypeDefinition();
+                    if (genericDef == typeof(Dictionary<,>) || genericDef == typeof(IDictionary<,>) || genericDef == typeof(IReadOnlyDictionary<,>))
+                    {
+                        var genericArgs = targetType.GetGenericArguments();
+                        if (genericArgs[0] == typeof(string))
+                        {
+                            var valueType = genericArgs[1];
+                            var dictType = typeof(Dictionary<,>).MakeGenericType(typeof(string), valueType);
+                            var dict = (IDictionary)Activator.CreateInstance(dictType)!;
+                            foreach (var prop in jsonObj)
+                            {
+                                var valueContext = new UnmarshalContext
+                                {
+                                    CapabilityId = context.CapabilityId,
+                                    ParameterName = $"{paramName}[{prop.Key}]"
+                                };
+                                dict[prop.Key] = UnmarshalFromJson(prop.Value, valueType, valueContext);
+                            }
+                            return dict;
+                        }
+                    }
+                }
 
-        return null;
+                // DTOs - must have [AspireDto] attribute
+                if (!AttributeDataReader.HasAspireDtoData(targetType))
+                {
+                    throw CapabilityException.InvalidArgument(
+                        capabilityId, paramName,
+                        $"Parameter type '{targetType.Name}' must have [AspireDto] attribute to be deserialized from JSON");
+                }
+                return JsonSerializer.Deserialize(jsonObj.ToJsonString(), targetType, s_jsonOptions);
+            }
+
+            return null;
+        }
+        catch (CapabilityException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (IsTypeMismatchException(ex))
+        {
+            throw CapabilityException.TypeMismatch(
+                capabilityId, paramName, DescribeType(targetType), DescribeJsonNode(node));
+        }
+        catch (JsonException ex)
+        {
+            throw CapabilityException.InvalidArgument(
+                capabilityId, paramName, $"Failed to deserialize '{paramName}' as {DescribeType(targetType)}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Checks if an exception indicates a type mismatch.
+    /// </summary>
+    private static bool IsTypeMismatchException(Exception ex)
+    {
+        // Check for common type mismatch patterns in exception messages
+        var message = ex.Message;
+        return message.Contains("cannot be converted") ||
+            message.Contains("could not be converted") ||
+            message.Contains("is not assignable") ||
+            message.Contains("type mismatch", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Describes a JSON node's type for error reporting.
+    /// </summary>
+    private static string DescribeJsonNode(JsonNode? node)
+    {
+        return node switch
+        {
+            null => "null",
+            JsonValue v when v.TryGetValue<string>(out _) => "string",
+            JsonValue v when v.TryGetValue<bool>(out _) => "bool",
+            JsonValue v when v.TryGetValue<long>(out _) => "number",
+            JsonValue v when v.TryGetValue<double>(out _) => "number",
+            JsonValue => "value",
+            JsonArray => "array",
+            JsonObject obj when obj.ContainsKey("$handle") => "handle",
+            JsonObject => "object",
+            _ => node.GetType().Name
+        };
+    }
+
+    /// <summary>
+    /// Describes a .NET type in a human-readable way for error messages.
+    /// Formats Nullable&lt;T&gt; as the underlying type.
+    /// </summary>
+    private static string DescribeType(Type type)
+    {
+        var underlying = Nullable.GetUnderlyingType(type);
+        if (underlying != null)
+        {
+            return underlying.ToString();
+        }
+        return type.ToString();
     }
 
     /// <summary>

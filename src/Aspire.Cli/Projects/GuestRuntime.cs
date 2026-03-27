@@ -51,6 +51,44 @@ internal sealed class GuestRuntime
     public string? ExtensionLaunchCapability => _spec.ExtensionLaunchCapability;
 
     /// <summary>
+    /// Initializes the project environment (e.g., creates a virtual environment and installs dependencies).
+    /// Runs each command in <see cref="RuntimeSpec.Initialize"/> sequentially.
+    /// </summary>
+    /// <param name="directory">The project directory.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The exit code from the first failing command, or 0 if all succeed.</returns>
+    public async Task<(int ExitCode, OutputCollector Output)> InitializeAsync(DirectoryInfo directory, CancellationToken cancellationToken)
+    {
+        var outputCollector = new OutputCollector();
+
+        if (_spec.Initialize is null or { Length: 0 })
+        {
+            _logger.LogDebug("No initialization configured for {Language}", _spec.Language);
+            return (0, outputCollector);
+        }
+
+        foreach (var commandSpec in _spec.Initialize)
+        {
+            var args = ReplacePlaceholders(commandSpec.Args, null, directory, null);
+            var environmentVariables = commandSpec.EnvironmentVariables ?? new Dictionary<string, string>();
+
+            var launcher = CreateDefaultLauncher();
+            var (exitCode, output) = await launcher.LaunchAsync(
+                commandSpec.Command,
+                args,
+                directory,
+                environmentVariables,
+                cancellationToken);
+            if (exitCode != 0)
+            {
+                return (exitCode, output ?? outputCollector);
+            }
+        }
+
+        return (0, outputCollector);
+    }
+
+    /// <summary>
     /// Installs dependencies for the guest language project.
     /// </summary>
     /// <param name="directory">The project directory.</param>

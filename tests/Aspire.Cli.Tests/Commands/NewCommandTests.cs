@@ -74,7 +74,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         var command = provider.GetRequiredService<NewCommand>();
         Assert.NotEmpty(command.Subcommands);
-        Assert.Contains(command.Subcommands, subcommand => subcommand.Name == KnownTemplateId.CSharpEmptyAppHost && subcommand.Description == "Empty (C# AppHost)");
+        Assert.Contains(command.Subcommands, subcommand => subcommand.Name == KnownTemplateId.CSharpEmptyAppHost && subcommand.Description == "Empty AppHost");
         Assert.Contains(command.Subcommands, subcommand => subcommand.Name == KnownTemplateId.TypeScriptEmptyAppHost && subcommand.Description == "Empty (TypeScript AppHost)");
         Assert.Contains(command.Subcommands, subcommand => subcommand.Name == KnownTemplateId.JavaEmptyAppHost && subcommand.Description == "Empty (Java AppHost)");
     }
@@ -931,7 +931,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, exitCode);
         Assert.Equal(KnownLanguageId.TypeScript, scaffoldedLanguageId);
         Assert.NotNull(promptedTemplates);
-        Assert.Contains((KnownTemplateId.CSharpEmptyAppHost, "Empty (C# AppHost)"), promptedTemplates);
+        Assert.Contains((KnownTemplateId.CSharpEmptyAppHost, "Empty AppHost"), promptedTemplates);
         Assert.Contains((KnownTemplateId.TypeScriptEmptyAppHost, "Empty (TypeScript AppHost)"), promptedTemplates);
         Assert.Contains((KnownTemplateId.TypeScriptStarter, "Starter App (Express/React)"), promptedTemplates);
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts")));
@@ -951,7 +951,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Contains(command.Subcommands, subcommand => subcommand.Name == "aspire-test");
         Assert.Contains(command.Subcommands, subcommand => subcommand.Name == KnownTemplateId.DotNetEmptyAppHost && subcommand.Description == "Empty (C# AppHost, dotnet template)");
-        Assert.Contains(command.Subcommands, subcommand => subcommand.Name == KnownTemplateId.CSharpEmptyAppHost && subcommand.Description == "Empty (C# AppHost)");
+        Assert.Contains(command.Subcommands, subcommand => subcommand.Name == KnownTemplateId.CSharpEmptyAppHost && subcommand.Description == "Empty AppHost");
         Assert.Contains(command.Subcommands, subcommand => subcommand.Name == KnownTemplateId.TypeScriptEmptyAppHost && subcommand.Description == "Empty (TypeScript AppHost)");
     }
 
@@ -1004,7 +1004,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(0, exitCode);
         Assert.NotNull(promptedTemplateDescriptions);
-        Assert.Contains("Empty (C# AppHost)", promptedTemplateDescriptions);
+        Assert.Contains("Empty AppHost", promptedTemplateDescriptions);
         Assert.Contains("Empty (TypeScript AppHost)", promptedTemplateDescriptions);
     }
 

@@ -216,7 +216,7 @@ If no `Partition` traits are found, the infrastructure automatically falls back 
 
 ## Controlling OS Compatibility
 
-By default, tests run on all three platforms. To restrict a project to specific OSes:
+By default, tests run on Linux and Windows. macOS is **disabled by default** — only tests that explicitly opt in will run on macOS. To configure which OSes a project runs on:
 
 ```xml
 <PropertyGroup>
@@ -224,6 +224,15 @@ By default, tests run on all three platforms. To restrict a project to specific 
   <RunOnGithubActionsWindows>false</RunOnGithubActionsWindows>
   <RunOnGithubActionsLinux>true</RunOnGithubActionsLinux>
   <RunOnGithubActionsMacOS>false</RunOnGithubActionsMacOS>
+</PropertyGroup>
+```
+
+To opt a project into macOS runs (e.g., only on push/merge, not on pull requests):
+
+```xml
+<PropertyGroup>
+  <!-- Run on macOS in GitHub Actions, but only outside of pull requests -->
+  <RunOnGithubActionsMacOS Condition=" '$(IsGitHubActionsRunner)' == 'true' and '$(IsGithubPullRequest)' != 'true' ">true</RunOnGithubActionsMacOS>
 </PropertyGroup>
 ```
 

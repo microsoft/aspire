@@ -229,7 +229,7 @@ await container.withPipelineConfiguration(async (configContext) => {
     await allSteps[0].dependsOn("build");
 });
 
-await container.withPipelineConfigurationAsync(async (configContext) => {
+await container.withPipelineConfiguration(async (configContext) => {
     const _configServices = await configContext.services.get();
     const _configModel = await configContext.model.get();
     const _resourceSteps = await configContext.steps.get();

@@ -1,4 +1,4 @@
-﻿{
+{
   "author": "Microsoft",
   "name": "Aspire の空のアプリ",
   "description": "空の Aspire アプリを作成するためのプロジェクト テンプレート。",
@@ -12,11 +12,9 @@
   "symbols/AspireVersion/choices/!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!/description": "Aspire !!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!! を選択します",
   "symbols/appHostHttpPort/description": "AppHost プロジェクトの launchSettings.json の HTTP エンドポイントに使用するポート番号。",
   "symbols/appHostOtlpHttpPort/description": "AppHost プロジェクトの launchSettings.json で OTLP HTTP エンドポイントに使用するポート番号。",
-  "symbols/appHostMcpHttpPort/description": "AppHost プロジェクトの launchSettings.json で MCP HTTP エンドポイント向けに使用するポート番号。",
   "symbols/appHostResourceHttpPort/description": "AppHost プロジェクトの launchSettings.json のリソース サービス HTTP エンドポイントに使用するポート番号。",
   "symbols/appHostHttpsPort/description": "AppHost プロジェクトの launchSettings.json の HTTPS エンドポイントに使用するポート番号。このオプションは、パラメーター no-https を使用しない場合にのみ適用されます。",
   "symbols/appHostOtlpHttpsPort/description": "AppHost プロジェクトの launchSettings.json で OTLP HTTPS エンドポイントに使用するポート番号。",
-  "symbols/appHostMcpHttpsPort/description": "AppHost プロジェクトの launchSettings.json で MCP HTTPS エンドポイント向けに使用するポート番号。",
   "symbols/appHostResourceHttpsPort/description": "AppHost プロジェクトの launchSettings.json のリソース サービス HTTPS エンドポイントに使用するポート番号。",
   "symbols/skipRestore/description": "指定した場合、作成時にプロジェクトの自動復元がスキップされます。",
   "symbols/NoHttps/description": "HTTPS をオフにするかどうか。",

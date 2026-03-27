@@ -146,8 +146,11 @@ internal sealed class TestInteractionService : IInteractionService
         DisplayedErrors.Add(errorMessage);
     }
 
+    public List<(KnownEmoji Emoji, string Message)> DisplayedMessages { get; } = [];
+
     public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false)
     {
+        DisplayedMessages.Add((emoji, message));
     }
 
     public void DisplaySuccess(string message, bool allowMarkup = false)

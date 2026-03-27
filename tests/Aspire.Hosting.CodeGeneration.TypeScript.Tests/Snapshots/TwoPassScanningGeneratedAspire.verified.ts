@@ -648,6 +648,16 @@ export interface WithMcpServerOptions {
     endpointName?: string;
 }
 
+export interface WithMergeLoggingOptions {
+    enableConsole?: boolean;
+    maxFiles?: number;
+}
+
+export interface WithMergeLoggingPathOptions {
+    enableConsole?: boolean;
+    maxFiles?: number;
+}
+
 export interface WithOptionalCallbackOptions {
     callback?: (arg: TestCallbackContext) => Promise<void>;
 }
@@ -4654,26 +4664,6 @@ export class ConnectionStringResource extends ResourceBuilderBase<ConnectionStri
     }
 
     /** @internal */
-    private async _withUrlsCallbackAsyncInternal(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): Promise<ConnectionStringResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as ResourceUrlsCallbackContextHandle;
-            const arg = new ResourceUrlsCallbackContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<ConnectionStringResourceHandle>(
-            'Aspire.Hosting/withUrlsCallbackAsync',
-            rpcArgs
-        );
-        return new ConnectionStringResource(result, this._client);
-    }
-
-    /** Customizes displayed URLs via async callback */
-    withUrlsCallbackAsync(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): ConnectionStringResourcePromise {
-        return new ConnectionStringResourcePromise(this._withUrlsCallbackAsyncInternal(callback));
-    }
-
-    /** @internal */
     private async _withUrlInternal(url: string, displayText?: string): Promise<ConnectionStringResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, url };
         if (displayText !== undefined) rpcArgs.displayText = displayText;
@@ -4958,26 +4948,6 @@ export class ConnectionStringResource extends ResourceBuilderBase<ConnectionStri
         const tags = options?.tags;
         const description = options?.description;
         return new ConnectionStringResourcePromise(this._withPipelineStepFactoryInternal(stepName, callback, dependsOn, requiredBy, tags, description));
-    }
-
-    /** @internal */
-    private async _withPipelineConfigurationAsyncInternal(callback: (arg: PipelineConfigurationContext) => Promise<void>): Promise<ConnectionStringResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as PipelineConfigurationContextHandle;
-            const arg = new PipelineConfigurationContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<ConnectionStringResourceHandle>(
-            'Aspire.Hosting/withPipelineConfigurationAsync',
-            rpcArgs
-        );
-        return new ConnectionStringResource(result, this._client);
-    }
-
-    /** Configures pipeline step dependencies via an async callback */
-    withPipelineConfigurationAsync(callback: (arg: PipelineConfigurationContext) => Promise<void>): ConnectionStringResourcePromise {
-        return new ConnectionStringResourcePromise(this._withPipelineConfigurationAsyncInternal(callback));
     }
 
     /** @internal */
@@ -5354,6 +5324,134 @@ export class ConnectionStringResource extends ResourceBuilderBase<ConnectionStri
         return new ConnectionStringResourcePromise(this._withCancellableOperationInternal(operation));
     }
 
+    /** @internal */
+    private async _withMergeLabelInternal(label: string): Promise<ConnectionStringResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label };
+        const result = await this._client.invokeCapability<ConnectionStringResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabel',
+            rpcArgs
+        );
+        return new ConnectionStringResource(result, this._client);
+    }
+
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): ConnectionStringResourcePromise {
+        return new ConnectionStringResourcePromise(this._withMergeLabelInternal(label));
+    }
+
+    /** @internal */
+    private async _withMergeLabelCategorizedInternal(label: string, category: string): Promise<ConnectionStringResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label, category };
+        const result = await this._client.invokeCapability<ConnectionStringResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabelCategorized',
+            rpcArgs
+        );
+        return new ConnectionStringResource(result, this._client);
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): ConnectionStringResourcePromise {
+        return new ConnectionStringResourcePromise(this._withMergeLabelCategorizedInternal(label, category));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointInternal(endpointName: string, port: number): Promise<ConnectionStringResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port };
+        const result = await this._client.invokeCapability<ConnectionStringResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpoint',
+            rpcArgs
+        );
+        return new ConnectionStringResource(result, this._client);
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): ConnectionStringResourcePromise {
+        return new ConnectionStringResourcePromise(this._withMergeEndpointInternal(endpointName, port));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointSchemeInternal(endpointName: string, port: number, scheme: string): Promise<ConnectionStringResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port, scheme };
+        const result = await this._client.invokeCapability<ConnectionStringResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpointScheme',
+            rpcArgs
+        );
+        return new ConnectionStringResource(result, this._client);
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ConnectionStringResourcePromise {
+        return new ConnectionStringResourcePromise(this._withMergeEndpointSchemeInternal(endpointName, port, scheme));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<ConnectionStringResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<ConnectionStringResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLogging',
+            rpcArgs
+        );
+        return new ConnectionStringResource(result, this._client);
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): ConnectionStringResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new ConnectionStringResourcePromise(this._withMergeLoggingInternal(logLevel, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<ConnectionStringResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<ConnectionStringResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLoggingPath',
+            rpcArgs
+        );
+        return new ConnectionStringResource(result, this._client);
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): ConnectionStringResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new ConnectionStringResourcePromise(this._withMergeLoggingPathInternal(logLevel, logPath, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeRouteInternal(path: string, method: string, handler: string, priority: number): Promise<ConnectionStringResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority };
+        const result = await this._client.invokeCapability<ConnectionStringResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRoute',
+            rpcArgs
+        );
+        return new ConnectionStringResource(result, this._client);
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ConnectionStringResourcePromise {
+        return new ConnectionStringResourcePromise(this._withMergeRouteInternal(path, method, handler, priority));
+    }
+
+    /** @internal */
+    private async _withMergeRouteMiddlewareInternal(path: string, method: string, handler: string, priority: number, middleware: string): Promise<ConnectionStringResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority, middleware };
+        const result = await this._client.invokeCapability<ConnectionStringResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRouteMiddleware',
+            rpcArgs
+        );
+        return new ConnectionStringResource(result, this._client);
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ConnectionStringResourcePromise {
+        return new ConnectionStringResourcePromise(this._withMergeRouteMiddlewareInternal(path, method, handler, priority, middleware));
+    }
+
 }
 
 /**
@@ -5399,11 +5497,6 @@ export class ConnectionStringResourcePromise implements PromiseLike<ConnectionSt
     /** Customizes displayed URLs via callback */
     withUrlsCallback(callback: (obj: ResourceUrlsCallbackContext) => Promise<void>): ConnectionStringResourcePromise {
         return new ConnectionStringResourcePromise(this._promise.then(obj => obj.withUrlsCallback(callback)));
-    }
-
-    /** Customizes displayed URLs via async callback */
-    withUrlsCallbackAsync(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): ConnectionStringResourcePromise {
-        return new ConnectionStringResourcePromise(this._promise.then(obj => obj.withUrlsCallbackAsync(callback)));
     }
 
     /** Adds or modifies displayed URLs */
@@ -5489,11 +5582,6 @@ export class ConnectionStringResourcePromise implements PromiseLike<ConnectionSt
     /** Adds a pipeline step to the resource */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ConnectionStringResourcePromise {
         return new ConnectionStringResourcePromise(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)));
-    }
-
-    /** Configures pipeline step dependencies via an async callback */
-    withPipelineConfigurationAsync(callback: (arg: PipelineConfigurationContext) => Promise<void>): ConnectionStringResourcePromise {
-        return new ConnectionStringResourcePromise(this._promise.then(obj => obj.withPipelineConfigurationAsync(callback)));
     }
 
     /** Configures pipeline step dependencies via a callback */
@@ -5606,6 +5694,46 @@ export class ConnectionStringResourcePromise implements PromiseLike<ConnectionSt
         return new ConnectionStringResourcePromise(this._promise.then(obj => obj.withCancellableOperation(operation)));
     }
 
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): ConnectionStringResourcePromise {
+        return new ConnectionStringResourcePromise(this._promise.then(obj => obj.withMergeLabel(label)));
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): ConnectionStringResourcePromise {
+        return new ConnectionStringResourcePromise(this._promise.then(obj => obj.withMergeLabelCategorized(label, category)));
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): ConnectionStringResourcePromise {
+        return new ConnectionStringResourcePromise(this._promise.then(obj => obj.withMergeEndpoint(endpointName, port)));
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ConnectionStringResourcePromise {
+        return new ConnectionStringResourcePromise(this._promise.then(obj => obj.withMergeEndpointScheme(endpointName, port, scheme)));
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): ConnectionStringResourcePromise {
+        return new ConnectionStringResourcePromise(this._promise.then(obj => obj.withMergeLogging(logLevel, options)));
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): ConnectionStringResourcePromise {
+        return new ConnectionStringResourcePromise(this._promise.then(obj => obj.withMergeLoggingPath(logLevel, logPath, options)));
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ConnectionStringResourcePromise {
+        return new ConnectionStringResourcePromise(this._promise.then(obj => obj.withMergeRoute(path, method, handler, priority)));
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ConnectionStringResourcePromise {
+        return new ConnectionStringResourcePromise(this._promise.then(obj => obj.withMergeRouteMiddleware(path, method, handler, priority, middleware)));
+    }
+
 }
 
 // ============================================================================
@@ -5686,26 +5814,6 @@ export class ContainerRegistryResource extends ResourceBuilderBase<ContainerRegi
     /** Customizes displayed URLs via callback */
     withUrlsCallback(callback: (obj: ResourceUrlsCallbackContext) => Promise<void>): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromise(this._withUrlsCallbackInternal(callback));
-    }
-
-    /** @internal */
-    private async _withUrlsCallbackAsyncInternal(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): Promise<ContainerRegistryResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as ResourceUrlsCallbackContextHandle;
-            const arg = new ResourceUrlsCallbackContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
-            'Aspire.Hosting/withUrlsCallbackAsync',
-            rpcArgs
-        );
-        return new ContainerRegistryResource(result, this._client);
-    }
-
-    /** Customizes displayed URLs via async callback */
-    withUrlsCallbackAsync(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): ContainerRegistryResourcePromise {
-        return new ContainerRegistryResourcePromise(this._withUrlsCallbackAsyncInternal(callback));
     }
 
     /** @internal */
@@ -5916,26 +6024,6 @@ export class ContainerRegistryResource extends ResourceBuilderBase<ContainerRegi
         const tags = options?.tags;
         const description = options?.description;
         return new ContainerRegistryResourcePromise(this._withPipelineStepFactoryInternal(stepName, callback, dependsOn, requiredBy, tags, description));
-    }
-
-    /** @internal */
-    private async _withPipelineConfigurationAsyncInternal(callback: (arg: PipelineConfigurationContext) => Promise<void>): Promise<ContainerRegistryResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as PipelineConfigurationContextHandle;
-            const arg = new PipelineConfigurationContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
-            'Aspire.Hosting/withPipelineConfigurationAsync',
-            rpcArgs
-        );
-        return new ContainerRegistryResource(result, this._client);
-    }
-
-    /** Configures pipeline step dependencies via an async callback */
-    withPipelineConfigurationAsync(callback: (arg: PipelineConfigurationContext) => Promise<void>): ContainerRegistryResourcePromise {
-        return new ContainerRegistryResourcePromise(this._withPipelineConfigurationAsyncInternal(callback));
     }
 
     /** @internal */
@@ -6262,6 +6350,134 @@ export class ContainerRegistryResource extends ResourceBuilderBase<ContainerRegi
         return new ContainerRegistryResourcePromise(this._withCancellableOperationInternal(operation));
     }
 
+    /** @internal */
+    private async _withMergeLabelInternal(label: string): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label };
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabel',
+            rpcArgs
+        );
+        return new ContainerRegistryResource(result, this._client);
+    }
+
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromise(this._withMergeLabelInternal(label));
+    }
+
+    /** @internal */
+    private async _withMergeLabelCategorizedInternal(label: string, category: string): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label, category };
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabelCategorized',
+            rpcArgs
+        );
+        return new ContainerRegistryResource(result, this._client);
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromise(this._withMergeLabelCategorizedInternal(label, category));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointInternal(endpointName: string, port: number): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port };
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpoint',
+            rpcArgs
+        );
+        return new ContainerRegistryResource(result, this._client);
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromise(this._withMergeEndpointInternal(endpointName, port));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointSchemeInternal(endpointName: string, port: number, scheme: string): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port, scheme };
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpointScheme',
+            rpcArgs
+        );
+        return new ContainerRegistryResource(result, this._client);
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromise(this._withMergeEndpointSchemeInternal(endpointName, port, scheme));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLogging',
+            rpcArgs
+        );
+        return new ContainerRegistryResource(result, this._client);
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): ContainerRegistryResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new ContainerRegistryResourcePromise(this._withMergeLoggingInternal(logLevel, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLoggingPath',
+            rpcArgs
+        );
+        return new ContainerRegistryResource(result, this._client);
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): ContainerRegistryResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new ContainerRegistryResourcePromise(this._withMergeLoggingPathInternal(logLevel, logPath, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeRouteInternal(path: string, method: string, handler: string, priority: number): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority };
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRoute',
+            rpcArgs
+        );
+        return new ContainerRegistryResource(result, this._client);
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromise(this._withMergeRouteInternal(path, method, handler, priority));
+    }
+
+    /** @internal */
+    private async _withMergeRouteMiddlewareInternal(path: string, method: string, handler: string, priority: number, middleware: string): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority, middleware };
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRouteMiddleware',
+            rpcArgs
+        );
+        return new ContainerRegistryResource(result, this._client);
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromise(this._withMergeRouteMiddlewareInternal(path, method, handler, priority, middleware));
+    }
+
 }
 
 /**
@@ -6297,11 +6513,6 @@ export class ContainerRegistryResourcePromise implements PromiseLike<ContainerRe
     /** Customizes displayed URLs via callback */
     withUrlsCallback(callback: (obj: ResourceUrlsCallbackContext) => Promise<void>): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromise(this._promise.then(obj => obj.withUrlsCallback(callback)));
-    }
-
-    /** Customizes displayed URLs via async callback */
-    withUrlsCallbackAsync(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): ContainerRegistryResourcePromise {
-        return new ContainerRegistryResourcePromise(this._promise.then(obj => obj.withUrlsCallbackAsync(callback)));
     }
 
     /** Adds or modifies displayed URLs */
@@ -6362,11 +6573,6 @@ export class ContainerRegistryResourcePromise implements PromiseLike<ContainerRe
     /** Adds a pipeline step to the resource */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromise(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)));
-    }
-
-    /** Configures pipeline step dependencies via an async callback */
-    withPipelineConfigurationAsync(callback: (arg: PipelineConfigurationContext) => Promise<void>): ContainerRegistryResourcePromise {
-        return new ContainerRegistryResourcePromise(this._promise.then(obj => obj.withPipelineConfigurationAsync(callback)));
     }
 
     /** Configures pipeline step dependencies via a callback */
@@ -6462,6 +6668,46 @@ export class ContainerRegistryResourcePromise implements PromiseLike<ContainerRe
     /** Performs a cancellable operation */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromise(this._promise.then(obj => obj.withCancellableOperation(operation)));
+    }
+
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromise(this._promise.then(obj => obj.withMergeLabel(label)));
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromise(this._promise.then(obj => obj.withMergeLabelCategorized(label, category)));
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromise(this._promise.then(obj => obj.withMergeEndpoint(endpointName, port)));
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromise(this._promise.then(obj => obj.withMergeEndpointScheme(endpointName, port, scheme)));
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromise(this._promise.then(obj => obj.withMergeLogging(logLevel, options)));
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromise(this._promise.then(obj => obj.withMergeLoggingPath(logLevel, logPath, options)));
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromise(this._promise.then(obj => obj.withMergeRoute(path, method, handler, priority)));
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromise(this._promise.then(obj => obj.withMergeRouteMiddleware(path, method, handler, priority, middleware)));
     }
 
 }
@@ -6889,26 +7135,6 @@ export class ContainerResource extends ResourceBuilderBase<ContainerResourceHand
     }
 
     /** @internal */
-    private async _withEnvironmentCallbackAsyncInternal(callback: (arg: EnvironmentCallbackContext) => Promise<void>): Promise<ContainerResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as EnvironmentCallbackContextHandle;
-            const arg = new EnvironmentCallbackContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<ContainerResourceHandle>(
-            'Aspire.Hosting/withEnvironmentCallbackAsync',
-            rpcArgs
-        );
-        return new ContainerResource(result, this._client);
-    }
-
-    /** Sets environment variables via async callback */
-    withEnvironmentCallbackAsync(callback: (arg: EnvironmentCallbackContext) => Promise<void>): ContainerResourcePromise {
-        return new ContainerResourcePromise(this._withEnvironmentCallbackAsyncInternal(callback));
-    }
-
-    /** @internal */
     private async _withEnvironmentEndpointInternal(name: string, endpointReference: EndpointReference): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, endpointReference };
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
@@ -6986,26 +7212,6 @@ export class ContainerResource extends ResourceBuilderBase<ContainerResourceHand
     /** Sets command-line arguments via callback */
     withArgsCallback(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): ContainerResourcePromise {
         return new ContainerResourcePromise(this._withArgsCallbackInternal(callback));
-    }
-
-    /** @internal */
-    private async _withArgsCallbackAsyncInternal(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): Promise<ContainerResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as CommandLineArgsCallbackContextHandle;
-            const arg = new CommandLineArgsCallbackContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<ContainerResourceHandle>(
-            'Aspire.Hosting/withArgsCallbackAsync',
-            rpcArgs
-        );
-        return new ContainerResource(result, this._client);
-    }
-
-    /** Sets command-line arguments via async callback */
-    withArgsCallbackAsync(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): ContainerResourcePromise {
-        return new ContainerResourcePromise(this._withArgsCallbackAsyncInternal(callback));
     }
 
     /** @internal */
@@ -7212,26 +7418,6 @@ export class ContainerResource extends ResourceBuilderBase<ContainerResourceHand
     /** Customizes displayed URLs via callback */
     withUrlsCallback(callback: (obj: ResourceUrlsCallbackContext) => Promise<void>): ContainerResourcePromise {
         return new ContainerResourcePromise(this._withUrlsCallbackInternal(callback));
-    }
-
-    /** @internal */
-    private async _withUrlsCallbackAsyncInternal(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): Promise<ContainerResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as ResourceUrlsCallbackContextHandle;
-            const arg = new ResourceUrlsCallbackContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<ContainerResourceHandle>(
-            'Aspire.Hosting/withUrlsCallbackAsync',
-            rpcArgs
-        );
-        return new ContainerResource(result, this._client);
-    }
-
-    /** Customizes displayed URLs via async callback */
-    withUrlsCallbackAsync(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): ContainerResourcePromise {
-        return new ContainerResourcePromise(this._withUrlsCallbackAsyncInternal(callback));
     }
 
     /** @internal */
@@ -7684,26 +7870,6 @@ export class ContainerResource extends ResourceBuilderBase<ContainerResourceHand
     }
 
     /** @internal */
-    private async _withPipelineConfigurationAsyncInternal(callback: (arg: PipelineConfigurationContext) => Promise<void>): Promise<ContainerResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as PipelineConfigurationContextHandle;
-            const arg = new PipelineConfigurationContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<ContainerResourceHandle>(
-            'Aspire.Hosting/withPipelineConfigurationAsync',
-            rpcArgs
-        );
-        return new ContainerResource(result, this._client);
-    }
-
-    /** Configures pipeline step dependencies via an async callback */
-    withPipelineConfigurationAsync(callback: (arg: PipelineConfigurationContext) => Promise<void>): ContainerResourcePromise {
-        return new ContainerResourcePromise(this._withPipelineConfigurationAsyncInternal(callback));
-    }
-
-    /** @internal */
     private async _withPipelineConfigurationInternal(callback: (obj: PipelineConfigurationContext) => Promise<void>): Promise<ContainerResource> {
         const callbackId = registerCallback(async (objData: unknown) => {
             const objHandle = wrapIfHandle(objData) as PipelineConfigurationContextHandle;
@@ -8101,6 +8267,134 @@ export class ContainerResource extends ResourceBuilderBase<ContainerResourceHand
         return new ContainerResourcePromise(this._withCancellableOperationInternal(operation));
     }
 
+    /** @internal */
+    private async _withMergeLabelInternal(label: string): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabel',
+            rpcArgs
+        );
+        return new ContainerResource(result, this._client);
+    }
+
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): ContainerResourcePromise {
+        return new ContainerResourcePromise(this._withMergeLabelInternal(label));
+    }
+
+    /** @internal */
+    private async _withMergeLabelCategorizedInternal(label: string, category: string): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label, category };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabelCategorized',
+            rpcArgs
+        );
+        return new ContainerResource(result, this._client);
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): ContainerResourcePromise {
+        return new ContainerResourcePromise(this._withMergeLabelCategorizedInternal(label, category));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointInternal(endpointName: string, port: number): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpoint',
+            rpcArgs
+        );
+        return new ContainerResource(result, this._client);
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): ContainerResourcePromise {
+        return new ContainerResourcePromise(this._withMergeEndpointInternal(endpointName, port));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointSchemeInternal(endpointName: string, port: number, scheme: string): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port, scheme };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpointScheme',
+            rpcArgs
+        );
+        return new ContainerResource(result, this._client);
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ContainerResourcePromise {
+        return new ContainerResourcePromise(this._withMergeEndpointSchemeInternal(endpointName, port, scheme));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLogging',
+            rpcArgs
+        );
+        return new ContainerResource(result, this._client);
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): ContainerResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new ContainerResourcePromise(this._withMergeLoggingInternal(logLevel, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLoggingPath',
+            rpcArgs
+        );
+        return new ContainerResource(result, this._client);
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): ContainerResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new ContainerResourcePromise(this._withMergeLoggingPathInternal(logLevel, logPath, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeRouteInternal(path: string, method: string, handler: string, priority: number): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRoute',
+            rpcArgs
+        );
+        return new ContainerResource(result, this._client);
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ContainerResourcePromise {
+        return new ContainerResourcePromise(this._withMergeRouteInternal(path, method, handler, priority));
+    }
+
+    /** @internal */
+    private async _withMergeRouteMiddlewareInternal(path: string, method: string, handler: string, priority: number, middleware: string): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority, middleware };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRouteMiddleware',
+            rpcArgs
+        );
+        return new ContainerResource(result, this._client);
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ContainerResourcePromise {
+        return new ContainerResourcePromise(this._withMergeRouteMiddlewareInternal(path, method, handler, priority, middleware));
+    }
+
 }
 
 /**
@@ -8248,11 +8542,6 @@ export class ContainerResourcePromise implements PromiseLike<ContainerResource> 
         return new ContainerResourcePromise(this._promise.then(obj => obj.withEnvironmentCallback(callback)));
     }
 
-    /** Sets environment variables via async callback */
-    withEnvironmentCallbackAsync(callback: (arg: EnvironmentCallbackContext) => Promise<void>): ContainerResourcePromise {
-        return new ContainerResourcePromise(this._promise.then(obj => obj.withEnvironmentCallbackAsync(callback)));
-    }
-
     /** Sets an environment variable from an endpoint reference */
     withEnvironmentEndpoint(name: string, endpointReference: EndpointReference): ContainerResourcePromise {
         return new ContainerResourcePromise(this._promise.then(obj => obj.withEnvironmentEndpoint(name, endpointReference)));
@@ -8276,11 +8565,6 @@ export class ContainerResourcePromise implements PromiseLike<ContainerResource> 
     /** Sets command-line arguments via callback */
     withArgsCallback(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): ContainerResourcePromise {
         return new ContainerResourcePromise(this._promise.then(obj => obj.withArgsCallback(callback)));
-    }
-
-    /** Sets command-line arguments via async callback */
-    withArgsCallbackAsync(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): ContainerResourcePromise {
-        return new ContainerResourcePromise(this._promise.then(obj => obj.withArgsCallbackAsync(callback)));
     }
 
     /** Adds a reference to another resource */
@@ -8336,11 +8620,6 @@ export class ContainerResourcePromise implements PromiseLike<ContainerResource> 
     /** Customizes displayed URLs via callback */
     withUrlsCallback(callback: (obj: ResourceUrlsCallbackContext) => Promise<void>): ContainerResourcePromise {
         return new ContainerResourcePromise(this._promise.then(obj => obj.withUrlsCallback(callback)));
-    }
-
-    /** Customizes displayed URLs via async callback */
-    withUrlsCallbackAsync(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): ContainerResourcePromise {
-        return new ContainerResourcePromise(this._promise.then(obj => obj.withUrlsCallbackAsync(callback)));
     }
 
     /** Adds or modifies displayed URLs */
@@ -8473,11 +8752,6 @@ export class ContainerResourcePromise implements PromiseLike<ContainerResource> 
         return new ContainerResourcePromise(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)));
     }
 
-    /** Configures pipeline step dependencies via an async callback */
-    withPipelineConfigurationAsync(callback: (arg: PipelineConfigurationContext) => Promise<void>): ContainerResourcePromise {
-        return new ContainerResourcePromise(this._promise.then(obj => obj.withPipelineConfigurationAsync(callback)));
-    }
-
     /** Configures pipeline step dependencies via a callback */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ContainerResourcePromise {
         return new ContainerResourcePromise(this._promise.then(obj => obj.withPipelineConfiguration(callback)));
@@ -8591,6 +8865,46 @@ export class ContainerResourcePromise implements PromiseLike<ContainerResource> 
     /** Performs a cancellable operation */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ContainerResourcePromise {
         return new ContainerResourcePromise(this._promise.then(obj => obj.withCancellableOperation(operation)));
+    }
+
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): ContainerResourcePromise {
+        return new ContainerResourcePromise(this._promise.then(obj => obj.withMergeLabel(label)));
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): ContainerResourcePromise {
+        return new ContainerResourcePromise(this._promise.then(obj => obj.withMergeLabelCategorized(label, category)));
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): ContainerResourcePromise {
+        return new ContainerResourcePromise(this._promise.then(obj => obj.withMergeEndpoint(endpointName, port)));
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ContainerResourcePromise {
+        return new ContainerResourcePromise(this._promise.then(obj => obj.withMergeEndpointScheme(endpointName, port, scheme)));
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): ContainerResourcePromise {
+        return new ContainerResourcePromise(this._promise.then(obj => obj.withMergeLogging(logLevel, options)));
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): ContainerResourcePromise {
+        return new ContainerResourcePromise(this._promise.then(obj => obj.withMergeLoggingPath(logLevel, logPath, options)));
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ContainerResourcePromise {
+        return new ContainerResourcePromise(this._promise.then(obj => obj.withMergeRoute(path, method, handler, priority)));
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ContainerResourcePromise {
+        return new ContainerResourcePromise(this._promise.then(obj => obj.withMergeRouteMiddleware(path, method, handler, priority, middleware)));
     }
 
 }
@@ -8807,26 +9121,6 @@ export class CSharpAppResource extends ResourceBuilderBase<CSharpAppResourceHand
     }
 
     /** @internal */
-    private async _withEnvironmentCallbackAsyncInternal(callback: (arg: EnvironmentCallbackContext) => Promise<void>): Promise<CSharpAppResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as EnvironmentCallbackContextHandle;
-            const arg = new EnvironmentCallbackContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
-            'Aspire.Hosting/withEnvironmentCallbackAsync',
-            rpcArgs
-        );
-        return new CSharpAppResource(result, this._client);
-    }
-
-    /** Sets environment variables via async callback */
-    withEnvironmentCallbackAsync(callback: (arg: EnvironmentCallbackContext) => Promise<void>): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromise(this._withEnvironmentCallbackAsyncInternal(callback));
-    }
-
-    /** @internal */
     private async _withEnvironmentEndpointInternal(name: string, endpointReference: EndpointReference): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, endpointReference };
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
@@ -8904,26 +9198,6 @@ export class CSharpAppResource extends ResourceBuilderBase<CSharpAppResourceHand
     /** Sets command-line arguments via callback */
     withArgsCallback(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): CSharpAppResourcePromise {
         return new CSharpAppResourcePromise(this._withArgsCallbackInternal(callback));
-    }
-
-    /** @internal */
-    private async _withArgsCallbackAsyncInternal(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): Promise<CSharpAppResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as CommandLineArgsCallbackContextHandle;
-            const arg = new CommandLineArgsCallbackContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
-            'Aspire.Hosting/withArgsCallbackAsync',
-            rpcArgs
-        );
-        return new CSharpAppResource(result, this._client);
-    }
-
-    /** Sets command-line arguments via async callback */
-    withArgsCallbackAsync(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromise(this._withArgsCallbackAsyncInternal(callback));
     }
 
     /** @internal */
@@ -9130,26 +9404,6 @@ export class CSharpAppResource extends ResourceBuilderBase<CSharpAppResourceHand
     /** Customizes displayed URLs via callback */
     withUrlsCallback(callback: (obj: ResourceUrlsCallbackContext) => Promise<void>): CSharpAppResourcePromise {
         return new CSharpAppResourcePromise(this._withUrlsCallbackInternal(callback));
-    }
-
-    /** @internal */
-    private async _withUrlsCallbackAsyncInternal(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): Promise<CSharpAppResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as ResourceUrlsCallbackContextHandle;
-            const arg = new ResourceUrlsCallbackContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
-            'Aspire.Hosting/withUrlsCallbackAsync',
-            rpcArgs
-        );
-        return new CSharpAppResource(result, this._client);
-    }
-
-    /** Customizes displayed URLs via async callback */
-    withUrlsCallbackAsync(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromise(this._withUrlsCallbackAsyncInternal(callback));
     }
 
     /** @internal */
@@ -9617,26 +9871,6 @@ export class CSharpAppResource extends ResourceBuilderBase<CSharpAppResourceHand
     }
 
     /** @internal */
-    private async _withPipelineConfigurationAsyncInternal(callback: (arg: PipelineConfigurationContext) => Promise<void>): Promise<CSharpAppResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as PipelineConfigurationContextHandle;
-            const arg = new PipelineConfigurationContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
-            'Aspire.Hosting/withPipelineConfigurationAsync',
-            rpcArgs
-        );
-        return new CSharpAppResource(result, this._client);
-    }
-
-    /** Configures pipeline step dependencies via an async callback */
-    withPipelineConfigurationAsync(callback: (arg: PipelineConfigurationContext) => Promise<void>): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromise(this._withPipelineConfigurationAsyncInternal(callback));
-    }
-
-    /** @internal */
     private async _withPipelineConfigurationInternal(callback: (obj: PipelineConfigurationContext) => Promise<void>): Promise<CSharpAppResource> {
         const callbackId = registerCallback(async (objData: unknown) => {
             const objHandle = wrapIfHandle(objData) as PipelineConfigurationContextHandle;
@@ -10015,6 +10249,134 @@ export class CSharpAppResource extends ResourceBuilderBase<CSharpAppResourceHand
         return new CSharpAppResourcePromise(this._withCancellableOperationInternal(operation));
     }
 
+    /** @internal */
+    private async _withMergeLabelInternal(label: string): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabel',
+            rpcArgs
+        );
+        return new CSharpAppResource(result, this._client);
+    }
+
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromise(this._withMergeLabelInternal(label));
+    }
+
+    /** @internal */
+    private async _withMergeLabelCategorizedInternal(label: string, category: string): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label, category };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabelCategorized',
+            rpcArgs
+        );
+        return new CSharpAppResource(result, this._client);
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromise(this._withMergeLabelCategorizedInternal(label, category));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointInternal(endpointName: string, port: number): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpoint',
+            rpcArgs
+        );
+        return new CSharpAppResource(result, this._client);
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromise(this._withMergeEndpointInternal(endpointName, port));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointSchemeInternal(endpointName: string, port: number, scheme: string): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port, scheme };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpointScheme',
+            rpcArgs
+        );
+        return new CSharpAppResource(result, this._client);
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromise(this._withMergeEndpointSchemeInternal(endpointName, port, scheme));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLogging',
+            rpcArgs
+        );
+        return new CSharpAppResource(result, this._client);
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): CSharpAppResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new CSharpAppResourcePromise(this._withMergeLoggingInternal(logLevel, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLoggingPath',
+            rpcArgs
+        );
+        return new CSharpAppResource(result, this._client);
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): CSharpAppResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new CSharpAppResourcePromise(this._withMergeLoggingPathInternal(logLevel, logPath, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeRouteInternal(path: string, method: string, handler: string, priority: number): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRoute',
+            rpcArgs
+        );
+        return new CSharpAppResource(result, this._client);
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromise(this._withMergeRouteInternal(path, method, handler, priority));
+    }
+
+    /** @internal */
+    private async _withMergeRouteMiddlewareInternal(path: string, method: string, handler: string, priority: number, middleware: string): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority, middleware };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRouteMiddleware',
+            rpcArgs
+        );
+        return new CSharpAppResource(result, this._client);
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromise(this._withMergeRouteMiddlewareInternal(path, method, handler, priority, middleware));
+    }
+
 }
 
 /**
@@ -10092,11 +10454,6 @@ export class CSharpAppResourcePromise implements PromiseLike<CSharpAppResource> 
         return new CSharpAppResourcePromise(this._promise.then(obj => obj.withEnvironmentCallback(callback)));
     }
 
-    /** Sets environment variables via async callback */
-    withEnvironmentCallbackAsync(callback: (arg: EnvironmentCallbackContext) => Promise<void>): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromise(this._promise.then(obj => obj.withEnvironmentCallbackAsync(callback)));
-    }
-
     /** Sets an environment variable from an endpoint reference */
     withEnvironmentEndpoint(name: string, endpointReference: EndpointReference): CSharpAppResourcePromise {
         return new CSharpAppResourcePromise(this._promise.then(obj => obj.withEnvironmentEndpoint(name, endpointReference)));
@@ -10120,11 +10477,6 @@ export class CSharpAppResourcePromise implements PromiseLike<CSharpAppResource> 
     /** Sets command-line arguments via callback */
     withArgsCallback(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): CSharpAppResourcePromise {
         return new CSharpAppResourcePromise(this._promise.then(obj => obj.withArgsCallback(callback)));
-    }
-
-    /** Sets command-line arguments via async callback */
-    withArgsCallbackAsync(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromise(this._promise.then(obj => obj.withArgsCallbackAsync(callback)));
     }
 
     /** Adds a reference to another resource */
@@ -10180,11 +10532,6 @@ export class CSharpAppResourcePromise implements PromiseLike<CSharpAppResource> 
     /** Customizes displayed URLs via callback */
     withUrlsCallback(callback: (obj: ResourceUrlsCallbackContext) => Promise<void>): CSharpAppResourcePromise {
         return new CSharpAppResourcePromise(this._promise.then(obj => obj.withUrlsCallback(callback)));
-    }
-
-    /** Customizes displayed URLs via async callback */
-    withUrlsCallbackAsync(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromise(this._promise.then(obj => obj.withUrlsCallbackAsync(callback)));
     }
 
     /** Adds or modifies displayed URLs */
@@ -10322,11 +10669,6 @@ export class CSharpAppResourcePromise implements PromiseLike<CSharpAppResource> 
         return new CSharpAppResourcePromise(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)));
     }
 
-    /** Configures pipeline step dependencies via an async callback */
-    withPipelineConfigurationAsync(callback: (arg: PipelineConfigurationContext) => Promise<void>): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromise(this._promise.then(obj => obj.withPipelineConfigurationAsync(callback)));
-    }
-
     /** Configures pipeline step dependencies via a callback */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): CSharpAppResourcePromise {
         return new CSharpAppResourcePromise(this._promise.then(obj => obj.withPipelineConfiguration(callback)));
@@ -10435,6 +10777,46 @@ export class CSharpAppResourcePromise implements PromiseLike<CSharpAppResource> 
     /** Performs a cancellable operation */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): CSharpAppResourcePromise {
         return new CSharpAppResourcePromise(this._promise.then(obj => obj.withCancellableOperation(operation)));
+    }
+
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromise(this._promise.then(obj => obj.withMergeLabel(label)));
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromise(this._promise.then(obj => obj.withMergeLabelCategorized(label, category)));
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromise(this._promise.then(obj => obj.withMergeEndpoint(endpointName, port)));
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromise(this._promise.then(obj => obj.withMergeEndpointScheme(endpointName, port, scheme)));
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromise(this._promise.then(obj => obj.withMergeLogging(logLevel, options)));
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromise(this._promise.then(obj => obj.withMergeLoggingPath(logLevel, logPath, options)));
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromise(this._promise.then(obj => obj.withMergeRoute(path, method, handler, priority)));
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromise(this._promise.then(obj => obj.withMergeRouteMiddleware(path, method, handler, priority, middleware)));
     }
 
 }
@@ -10754,26 +11136,6 @@ export class DotnetToolResource extends ResourceBuilderBase<DotnetToolResourceHa
     }
 
     /** @internal */
-    private async _withEnvironmentCallbackAsyncInternal(callback: (arg: EnvironmentCallbackContext) => Promise<void>): Promise<DotnetToolResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as EnvironmentCallbackContextHandle;
-            const arg = new EnvironmentCallbackContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
-            'Aspire.Hosting/withEnvironmentCallbackAsync',
-            rpcArgs
-        );
-        return new DotnetToolResource(result, this._client);
-    }
-
-    /** Sets environment variables via async callback */
-    withEnvironmentCallbackAsync(callback: (arg: EnvironmentCallbackContext) => Promise<void>): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromise(this._withEnvironmentCallbackAsyncInternal(callback));
-    }
-
-    /** @internal */
     private async _withEnvironmentEndpointInternal(name: string, endpointReference: EndpointReference): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, endpointReference };
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
@@ -10851,26 +11213,6 @@ export class DotnetToolResource extends ResourceBuilderBase<DotnetToolResourceHa
     /** Sets command-line arguments via callback */
     withArgsCallback(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): DotnetToolResourcePromise {
         return new DotnetToolResourcePromise(this._withArgsCallbackInternal(callback));
-    }
-
-    /** @internal */
-    private async _withArgsCallbackAsyncInternal(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): Promise<DotnetToolResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as CommandLineArgsCallbackContextHandle;
-            const arg = new CommandLineArgsCallbackContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
-            'Aspire.Hosting/withArgsCallbackAsync',
-            rpcArgs
-        );
-        return new DotnetToolResource(result, this._client);
-    }
-
-    /** Sets command-line arguments via async callback */
-    withArgsCallbackAsync(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromise(this._withArgsCallbackAsyncInternal(callback));
     }
 
     /** @internal */
@@ -11077,26 +11419,6 @@ export class DotnetToolResource extends ResourceBuilderBase<DotnetToolResourceHa
     /** Customizes displayed URLs via callback */
     withUrlsCallback(callback: (obj: ResourceUrlsCallbackContext) => Promise<void>): DotnetToolResourcePromise {
         return new DotnetToolResourcePromise(this._withUrlsCallbackInternal(callback));
-    }
-
-    /** @internal */
-    private async _withUrlsCallbackAsyncInternal(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): Promise<DotnetToolResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as ResourceUrlsCallbackContextHandle;
-            const arg = new ResourceUrlsCallbackContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
-            'Aspire.Hosting/withUrlsCallbackAsync',
-            rpcArgs
-        );
-        return new DotnetToolResource(result, this._client);
-    }
-
-    /** Customizes displayed URLs via async callback */
-    withUrlsCallbackAsync(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromise(this._withUrlsCallbackAsyncInternal(callback));
     }
 
     /** @internal */
@@ -11549,26 +11871,6 @@ export class DotnetToolResource extends ResourceBuilderBase<DotnetToolResourceHa
     }
 
     /** @internal */
-    private async _withPipelineConfigurationAsyncInternal(callback: (arg: PipelineConfigurationContext) => Promise<void>): Promise<DotnetToolResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as PipelineConfigurationContextHandle;
-            const arg = new PipelineConfigurationContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
-            'Aspire.Hosting/withPipelineConfigurationAsync',
-            rpcArgs
-        );
-        return new DotnetToolResource(result, this._client);
-    }
-
-    /** Configures pipeline step dependencies via an async callback */
-    withPipelineConfigurationAsync(callback: (arg: PipelineConfigurationContext) => Promise<void>): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromise(this._withPipelineConfigurationAsyncInternal(callback));
-    }
-
-    /** @internal */
     private async _withPipelineConfigurationInternal(callback: (obj: PipelineConfigurationContext) => Promise<void>): Promise<DotnetToolResource> {
         const callbackId = registerCallback(async (objData: unknown) => {
             const objHandle = wrapIfHandle(objData) as PipelineConfigurationContextHandle;
@@ -11947,6 +12249,134 @@ export class DotnetToolResource extends ResourceBuilderBase<DotnetToolResourceHa
         return new DotnetToolResourcePromise(this._withCancellableOperationInternal(operation));
     }
 
+    /** @internal */
+    private async _withMergeLabelInternal(label: string): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabel',
+            rpcArgs
+        );
+        return new DotnetToolResource(result, this._client);
+    }
+
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromise(this._withMergeLabelInternal(label));
+    }
+
+    /** @internal */
+    private async _withMergeLabelCategorizedInternal(label: string, category: string): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label, category };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabelCategorized',
+            rpcArgs
+        );
+        return new DotnetToolResource(result, this._client);
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromise(this._withMergeLabelCategorizedInternal(label, category));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointInternal(endpointName: string, port: number): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpoint',
+            rpcArgs
+        );
+        return new DotnetToolResource(result, this._client);
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromise(this._withMergeEndpointInternal(endpointName, port));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointSchemeInternal(endpointName: string, port: number, scheme: string): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port, scheme };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpointScheme',
+            rpcArgs
+        );
+        return new DotnetToolResource(result, this._client);
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromise(this._withMergeEndpointSchemeInternal(endpointName, port, scheme));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLogging',
+            rpcArgs
+        );
+        return new DotnetToolResource(result, this._client);
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): DotnetToolResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new DotnetToolResourcePromise(this._withMergeLoggingInternal(logLevel, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLoggingPath',
+            rpcArgs
+        );
+        return new DotnetToolResource(result, this._client);
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): DotnetToolResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new DotnetToolResourcePromise(this._withMergeLoggingPathInternal(logLevel, logPath, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeRouteInternal(path: string, method: string, handler: string, priority: number): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRoute',
+            rpcArgs
+        );
+        return new DotnetToolResource(result, this._client);
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromise(this._withMergeRouteInternal(path, method, handler, priority));
+    }
+
+    /** @internal */
+    private async _withMergeRouteMiddlewareInternal(path: string, method: string, handler: string, priority: number, middleware: string): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority, middleware };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRouteMiddleware',
+            rpcArgs
+        );
+        return new DotnetToolResource(result, this._client);
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromise(this._withMergeRouteMiddlewareInternal(path, method, handler, priority, middleware));
+    }
+
 }
 
 /**
@@ -12059,11 +12489,6 @@ export class DotnetToolResourcePromise implements PromiseLike<DotnetToolResource
         return new DotnetToolResourcePromise(this._promise.then(obj => obj.withEnvironmentCallback(callback)));
     }
 
-    /** Sets environment variables via async callback */
-    withEnvironmentCallbackAsync(callback: (arg: EnvironmentCallbackContext) => Promise<void>): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromise(this._promise.then(obj => obj.withEnvironmentCallbackAsync(callback)));
-    }
-
     /** Sets an environment variable from an endpoint reference */
     withEnvironmentEndpoint(name: string, endpointReference: EndpointReference): DotnetToolResourcePromise {
         return new DotnetToolResourcePromise(this._promise.then(obj => obj.withEnvironmentEndpoint(name, endpointReference)));
@@ -12087,11 +12512,6 @@ export class DotnetToolResourcePromise implements PromiseLike<DotnetToolResource
     /** Sets command-line arguments via callback */
     withArgsCallback(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): DotnetToolResourcePromise {
         return new DotnetToolResourcePromise(this._promise.then(obj => obj.withArgsCallback(callback)));
-    }
-
-    /** Sets command-line arguments via async callback */
-    withArgsCallbackAsync(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromise(this._promise.then(obj => obj.withArgsCallbackAsync(callback)));
     }
 
     /** Adds a reference to another resource */
@@ -12147,11 +12567,6 @@ export class DotnetToolResourcePromise implements PromiseLike<DotnetToolResource
     /** Customizes displayed URLs via callback */
     withUrlsCallback(callback: (obj: ResourceUrlsCallbackContext) => Promise<void>): DotnetToolResourcePromise {
         return new DotnetToolResourcePromise(this._promise.then(obj => obj.withUrlsCallback(callback)));
-    }
-
-    /** Customizes displayed URLs via async callback */
-    withUrlsCallbackAsync(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromise(this._promise.then(obj => obj.withUrlsCallbackAsync(callback)));
     }
 
     /** Adds or modifies displayed URLs */
@@ -12284,11 +12699,6 @@ export class DotnetToolResourcePromise implements PromiseLike<DotnetToolResource
         return new DotnetToolResourcePromise(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)));
     }
 
-    /** Configures pipeline step dependencies via an async callback */
-    withPipelineConfigurationAsync(callback: (arg: PipelineConfigurationContext) => Promise<void>): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromise(this._promise.then(obj => obj.withPipelineConfigurationAsync(callback)));
-    }
-
     /** Configures pipeline step dependencies via a callback */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): DotnetToolResourcePromise {
         return new DotnetToolResourcePromise(this._promise.then(obj => obj.withPipelineConfiguration(callback)));
@@ -12397,6 +12807,46 @@ export class DotnetToolResourcePromise implements PromiseLike<DotnetToolResource
     /** Performs a cancellable operation */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): DotnetToolResourcePromise {
         return new DotnetToolResourcePromise(this._promise.then(obj => obj.withCancellableOperation(operation)));
+    }
+
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromise(this._promise.then(obj => obj.withMergeLabel(label)));
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromise(this._promise.then(obj => obj.withMergeLabelCategorized(label, category)));
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromise(this._promise.then(obj => obj.withMergeEndpoint(endpointName, port)));
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromise(this._promise.then(obj => obj.withMergeEndpointScheme(endpointName, port, scheme)));
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromise(this._promise.then(obj => obj.withMergeLogging(logLevel, options)));
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromise(this._promise.then(obj => obj.withMergeLoggingPath(logLevel, logPath, options)));
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromise(this._promise.then(obj => obj.withMergeRoute(path, method, handler, priority)));
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromise(this._promise.then(obj => obj.withMergeRouteMiddleware(path, method, handler, priority, middleware)));
     }
 
 }
@@ -12626,26 +13076,6 @@ export class ExecutableResource extends ResourceBuilderBase<ExecutableResourceHa
     }
 
     /** @internal */
-    private async _withEnvironmentCallbackAsyncInternal(callback: (arg: EnvironmentCallbackContext) => Promise<void>): Promise<ExecutableResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as EnvironmentCallbackContextHandle;
-            const arg = new EnvironmentCallbackContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
-            'Aspire.Hosting/withEnvironmentCallbackAsync',
-            rpcArgs
-        );
-        return new ExecutableResource(result, this._client);
-    }
-
-    /** Sets environment variables via async callback */
-    withEnvironmentCallbackAsync(callback: (arg: EnvironmentCallbackContext) => Promise<void>): ExecutableResourcePromise {
-        return new ExecutableResourcePromise(this._withEnvironmentCallbackAsyncInternal(callback));
-    }
-
-    /** @internal */
     private async _withEnvironmentEndpointInternal(name: string, endpointReference: EndpointReference): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, endpointReference };
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
@@ -12723,26 +13153,6 @@ export class ExecutableResource extends ResourceBuilderBase<ExecutableResourceHa
     /** Sets command-line arguments via callback */
     withArgsCallback(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): ExecutableResourcePromise {
         return new ExecutableResourcePromise(this._withArgsCallbackInternal(callback));
-    }
-
-    /** @internal */
-    private async _withArgsCallbackAsyncInternal(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): Promise<ExecutableResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as CommandLineArgsCallbackContextHandle;
-            const arg = new CommandLineArgsCallbackContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
-            'Aspire.Hosting/withArgsCallbackAsync',
-            rpcArgs
-        );
-        return new ExecutableResource(result, this._client);
-    }
-
-    /** Sets command-line arguments via async callback */
-    withArgsCallbackAsync(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): ExecutableResourcePromise {
-        return new ExecutableResourcePromise(this._withArgsCallbackAsyncInternal(callback));
     }
 
     /** @internal */
@@ -12949,26 +13359,6 @@ export class ExecutableResource extends ResourceBuilderBase<ExecutableResourceHa
     /** Customizes displayed URLs via callback */
     withUrlsCallback(callback: (obj: ResourceUrlsCallbackContext) => Promise<void>): ExecutableResourcePromise {
         return new ExecutableResourcePromise(this._withUrlsCallbackInternal(callback));
-    }
-
-    /** @internal */
-    private async _withUrlsCallbackAsyncInternal(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): Promise<ExecutableResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as ResourceUrlsCallbackContextHandle;
-            const arg = new ResourceUrlsCallbackContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
-            'Aspire.Hosting/withUrlsCallbackAsync',
-            rpcArgs
-        );
-        return new ExecutableResource(result, this._client);
-    }
-
-    /** Customizes displayed URLs via async callback */
-    withUrlsCallbackAsync(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): ExecutableResourcePromise {
-        return new ExecutableResourcePromise(this._withUrlsCallbackAsyncInternal(callback));
     }
 
     /** @internal */
@@ -13421,26 +13811,6 @@ export class ExecutableResource extends ResourceBuilderBase<ExecutableResourceHa
     }
 
     /** @internal */
-    private async _withPipelineConfigurationAsyncInternal(callback: (arg: PipelineConfigurationContext) => Promise<void>): Promise<ExecutableResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as PipelineConfigurationContextHandle;
-            const arg = new PipelineConfigurationContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
-            'Aspire.Hosting/withPipelineConfigurationAsync',
-            rpcArgs
-        );
-        return new ExecutableResource(result, this._client);
-    }
-
-    /** Configures pipeline step dependencies via an async callback */
-    withPipelineConfigurationAsync(callback: (arg: PipelineConfigurationContext) => Promise<void>): ExecutableResourcePromise {
-        return new ExecutableResourcePromise(this._withPipelineConfigurationAsyncInternal(callback));
-    }
-
-    /** @internal */
     private async _withPipelineConfigurationInternal(callback: (obj: PipelineConfigurationContext) => Promise<void>): Promise<ExecutableResource> {
         const callbackId = registerCallback(async (objData: unknown) => {
             const objHandle = wrapIfHandle(objData) as PipelineConfigurationContextHandle;
@@ -13819,6 +14189,134 @@ export class ExecutableResource extends ResourceBuilderBase<ExecutableResourceHa
         return new ExecutableResourcePromise(this._withCancellableOperationInternal(operation));
     }
 
+    /** @internal */
+    private async _withMergeLabelInternal(label: string): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabel',
+            rpcArgs
+        );
+        return new ExecutableResource(result, this._client);
+    }
+
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): ExecutableResourcePromise {
+        return new ExecutableResourcePromise(this._withMergeLabelInternal(label));
+    }
+
+    /** @internal */
+    private async _withMergeLabelCategorizedInternal(label: string, category: string): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label, category };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabelCategorized',
+            rpcArgs
+        );
+        return new ExecutableResource(result, this._client);
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): ExecutableResourcePromise {
+        return new ExecutableResourcePromise(this._withMergeLabelCategorizedInternal(label, category));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointInternal(endpointName: string, port: number): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpoint',
+            rpcArgs
+        );
+        return new ExecutableResource(result, this._client);
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): ExecutableResourcePromise {
+        return new ExecutableResourcePromise(this._withMergeEndpointInternal(endpointName, port));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointSchemeInternal(endpointName: string, port: number, scheme: string): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port, scheme };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpointScheme',
+            rpcArgs
+        );
+        return new ExecutableResource(result, this._client);
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ExecutableResourcePromise {
+        return new ExecutableResourcePromise(this._withMergeEndpointSchemeInternal(endpointName, port, scheme));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLogging',
+            rpcArgs
+        );
+        return new ExecutableResource(result, this._client);
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): ExecutableResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new ExecutableResourcePromise(this._withMergeLoggingInternal(logLevel, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLoggingPath',
+            rpcArgs
+        );
+        return new ExecutableResource(result, this._client);
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): ExecutableResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new ExecutableResourcePromise(this._withMergeLoggingPathInternal(logLevel, logPath, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeRouteInternal(path: string, method: string, handler: string, priority: number): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRoute',
+            rpcArgs
+        );
+        return new ExecutableResource(result, this._client);
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ExecutableResourcePromise {
+        return new ExecutableResourcePromise(this._withMergeRouteInternal(path, method, handler, priority));
+    }
+
+    /** @internal */
+    private async _withMergeRouteMiddlewareInternal(path: string, method: string, handler: string, priority: number, middleware: string): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority, middleware };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRouteMiddleware',
+            rpcArgs
+        );
+        return new ExecutableResource(result, this._client);
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ExecutableResourcePromise {
+        return new ExecutableResourcePromise(this._withMergeRouteMiddlewareInternal(path, method, handler, priority, middleware));
+    }
+
 }
 
 /**
@@ -13901,11 +14399,6 @@ export class ExecutableResourcePromise implements PromiseLike<ExecutableResource
         return new ExecutableResourcePromise(this._promise.then(obj => obj.withEnvironmentCallback(callback)));
     }
 
-    /** Sets environment variables via async callback */
-    withEnvironmentCallbackAsync(callback: (arg: EnvironmentCallbackContext) => Promise<void>): ExecutableResourcePromise {
-        return new ExecutableResourcePromise(this._promise.then(obj => obj.withEnvironmentCallbackAsync(callback)));
-    }
-
     /** Sets an environment variable from an endpoint reference */
     withEnvironmentEndpoint(name: string, endpointReference: EndpointReference): ExecutableResourcePromise {
         return new ExecutableResourcePromise(this._promise.then(obj => obj.withEnvironmentEndpoint(name, endpointReference)));
@@ -13929,11 +14422,6 @@ export class ExecutableResourcePromise implements PromiseLike<ExecutableResource
     /** Sets command-line arguments via callback */
     withArgsCallback(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): ExecutableResourcePromise {
         return new ExecutableResourcePromise(this._promise.then(obj => obj.withArgsCallback(callback)));
-    }
-
-    /** Sets command-line arguments via async callback */
-    withArgsCallbackAsync(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): ExecutableResourcePromise {
-        return new ExecutableResourcePromise(this._promise.then(obj => obj.withArgsCallbackAsync(callback)));
     }
 
     /** Adds a reference to another resource */
@@ -13989,11 +14477,6 @@ export class ExecutableResourcePromise implements PromiseLike<ExecutableResource
     /** Customizes displayed URLs via callback */
     withUrlsCallback(callback: (obj: ResourceUrlsCallbackContext) => Promise<void>): ExecutableResourcePromise {
         return new ExecutableResourcePromise(this._promise.then(obj => obj.withUrlsCallback(callback)));
-    }
-
-    /** Customizes displayed URLs via async callback */
-    withUrlsCallbackAsync(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): ExecutableResourcePromise {
-        return new ExecutableResourcePromise(this._promise.then(obj => obj.withUrlsCallbackAsync(callback)));
     }
 
     /** Adds or modifies displayed URLs */
@@ -14126,11 +14609,6 @@ export class ExecutableResourcePromise implements PromiseLike<ExecutableResource
         return new ExecutableResourcePromise(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)));
     }
 
-    /** Configures pipeline step dependencies via an async callback */
-    withPipelineConfigurationAsync(callback: (arg: PipelineConfigurationContext) => Promise<void>): ExecutableResourcePromise {
-        return new ExecutableResourcePromise(this._promise.then(obj => obj.withPipelineConfigurationAsync(callback)));
-    }
-
     /** Configures pipeline step dependencies via a callback */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ExecutableResourcePromise {
         return new ExecutableResourcePromise(this._promise.then(obj => obj.withPipelineConfiguration(callback)));
@@ -14241,6 +14719,46 @@ export class ExecutableResourcePromise implements PromiseLike<ExecutableResource
         return new ExecutableResourcePromise(this._promise.then(obj => obj.withCancellableOperation(operation)));
     }
 
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): ExecutableResourcePromise {
+        return new ExecutableResourcePromise(this._promise.then(obj => obj.withMergeLabel(label)));
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): ExecutableResourcePromise {
+        return new ExecutableResourcePromise(this._promise.then(obj => obj.withMergeLabelCategorized(label, category)));
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): ExecutableResourcePromise {
+        return new ExecutableResourcePromise(this._promise.then(obj => obj.withMergeEndpoint(endpointName, port)));
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ExecutableResourcePromise {
+        return new ExecutableResourcePromise(this._promise.then(obj => obj.withMergeEndpointScheme(endpointName, port, scheme)));
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): ExecutableResourcePromise {
+        return new ExecutableResourcePromise(this._promise.then(obj => obj.withMergeLogging(logLevel, options)));
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): ExecutableResourcePromise {
+        return new ExecutableResourcePromise(this._promise.then(obj => obj.withMergeLoggingPath(logLevel, logPath, options)));
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ExecutableResourcePromise {
+        return new ExecutableResourcePromise(this._promise.then(obj => obj.withMergeRoute(path, method, handler, priority)));
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ExecutableResourcePromise {
+        return new ExecutableResourcePromise(this._promise.then(obj => obj.withMergeRouteMiddleware(path, method, handler, priority, middleware)));
+    }
+
 }
 
 // ============================================================================
@@ -14340,26 +14858,6 @@ export class ExternalServiceResource extends ResourceBuilderBase<ExternalService
     /** Customizes displayed URLs via callback */
     withUrlsCallback(callback: (obj: ResourceUrlsCallbackContext) => Promise<void>): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromise(this._withUrlsCallbackInternal(callback));
-    }
-
-    /** @internal */
-    private async _withUrlsCallbackAsyncInternal(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): Promise<ExternalServiceResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as ResourceUrlsCallbackContextHandle;
-            const arg = new ResourceUrlsCallbackContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
-            'Aspire.Hosting/withUrlsCallbackAsync',
-            rpcArgs
-        );
-        return new ExternalServiceResource(result, this._client);
-    }
-
-    /** Customizes displayed URLs via async callback */
-    withUrlsCallbackAsync(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): ExternalServiceResourcePromise {
-        return new ExternalServiceResourcePromise(this._withUrlsCallbackAsyncInternal(callback));
     }
 
     /** @internal */
@@ -14570,26 +15068,6 @@ export class ExternalServiceResource extends ResourceBuilderBase<ExternalService
         const tags = options?.tags;
         const description = options?.description;
         return new ExternalServiceResourcePromise(this._withPipelineStepFactoryInternal(stepName, callback, dependsOn, requiredBy, tags, description));
-    }
-
-    /** @internal */
-    private async _withPipelineConfigurationAsyncInternal(callback: (arg: PipelineConfigurationContext) => Promise<void>): Promise<ExternalServiceResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as PipelineConfigurationContextHandle;
-            const arg = new PipelineConfigurationContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
-            'Aspire.Hosting/withPipelineConfigurationAsync',
-            rpcArgs
-        );
-        return new ExternalServiceResource(result, this._client);
-    }
-
-    /** Configures pipeline step dependencies via an async callback */
-    withPipelineConfigurationAsync(callback: (arg: PipelineConfigurationContext) => Promise<void>): ExternalServiceResourcePromise {
-        return new ExternalServiceResourcePromise(this._withPipelineConfigurationAsyncInternal(callback));
     }
 
     /** @internal */
@@ -14916,6 +15394,134 @@ export class ExternalServiceResource extends ResourceBuilderBase<ExternalService
         return new ExternalServiceResourcePromise(this._withCancellableOperationInternal(operation));
     }
 
+    /** @internal */
+    private async _withMergeLabelInternal(label: string): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label };
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabel',
+            rpcArgs
+        );
+        return new ExternalServiceResource(result, this._client);
+    }
+
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromise(this._withMergeLabelInternal(label));
+    }
+
+    /** @internal */
+    private async _withMergeLabelCategorizedInternal(label: string, category: string): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label, category };
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabelCategorized',
+            rpcArgs
+        );
+        return new ExternalServiceResource(result, this._client);
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromise(this._withMergeLabelCategorizedInternal(label, category));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointInternal(endpointName: string, port: number): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port };
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpoint',
+            rpcArgs
+        );
+        return new ExternalServiceResource(result, this._client);
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromise(this._withMergeEndpointInternal(endpointName, port));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointSchemeInternal(endpointName: string, port: number, scheme: string): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port, scheme };
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpointScheme',
+            rpcArgs
+        );
+        return new ExternalServiceResource(result, this._client);
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromise(this._withMergeEndpointSchemeInternal(endpointName, port, scheme));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLogging',
+            rpcArgs
+        );
+        return new ExternalServiceResource(result, this._client);
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): ExternalServiceResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new ExternalServiceResourcePromise(this._withMergeLoggingInternal(logLevel, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLoggingPath',
+            rpcArgs
+        );
+        return new ExternalServiceResource(result, this._client);
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): ExternalServiceResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new ExternalServiceResourcePromise(this._withMergeLoggingPathInternal(logLevel, logPath, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeRouteInternal(path: string, method: string, handler: string, priority: number): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority };
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRoute',
+            rpcArgs
+        );
+        return new ExternalServiceResource(result, this._client);
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromise(this._withMergeRouteInternal(path, method, handler, priority));
+    }
+
+    /** @internal */
+    private async _withMergeRouteMiddlewareInternal(path: string, method: string, handler: string, priority: number, middleware: string): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority, middleware };
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRouteMiddleware',
+            rpcArgs
+        );
+        return new ExternalServiceResource(result, this._client);
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromise(this._withMergeRouteMiddlewareInternal(path, method, handler, priority, middleware));
+    }
+
 }
 
 /**
@@ -14956,11 +15562,6 @@ export class ExternalServiceResourcePromise implements PromiseLike<ExternalServi
     /** Customizes displayed URLs via callback */
     withUrlsCallback(callback: (obj: ResourceUrlsCallbackContext) => Promise<void>): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromise(this._promise.then(obj => obj.withUrlsCallback(callback)));
-    }
-
-    /** Customizes displayed URLs via async callback */
-    withUrlsCallbackAsync(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): ExternalServiceResourcePromise {
-        return new ExternalServiceResourcePromise(this._promise.then(obj => obj.withUrlsCallbackAsync(callback)));
     }
 
     /** Adds or modifies displayed URLs */
@@ -15021,11 +15622,6 @@ export class ExternalServiceResourcePromise implements PromiseLike<ExternalServi
     /** Adds a pipeline step to the resource */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromise(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)));
-    }
-
-    /** Configures pipeline step dependencies via an async callback */
-    withPipelineConfigurationAsync(callback: (arg: PipelineConfigurationContext) => Promise<void>): ExternalServiceResourcePromise {
-        return new ExternalServiceResourcePromise(this._promise.then(obj => obj.withPipelineConfigurationAsync(callback)));
     }
 
     /** Configures pipeline step dependencies via a callback */
@@ -15121,6 +15717,46 @@ export class ExternalServiceResourcePromise implements PromiseLike<ExternalServi
     /** Performs a cancellable operation */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromise(this._promise.then(obj => obj.withCancellableOperation(operation)));
+    }
+
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromise(this._promise.then(obj => obj.withMergeLabel(label)));
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromise(this._promise.then(obj => obj.withMergeLabelCategorized(label, category)));
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromise(this._promise.then(obj => obj.withMergeEndpoint(endpointName, port)));
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromise(this._promise.then(obj => obj.withMergeEndpointScheme(endpointName, port, scheme)));
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromise(this._promise.then(obj => obj.withMergeLogging(logLevel, options)));
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromise(this._promise.then(obj => obj.withMergeLoggingPath(logLevel, logPath, options)));
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromise(this._promise.then(obj => obj.withMergeRoute(path, method, handler, priority)));
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromise(this._promise.then(obj => obj.withMergeRouteMiddleware(path, method, handler, priority, middleware)));
     }
 
 }
@@ -15220,26 +15856,6 @@ export class ParameterResource extends ResourceBuilderBase<ParameterResourceHand
     /** Customizes displayed URLs via callback */
     withUrlsCallback(callback: (obj: ResourceUrlsCallbackContext) => Promise<void>): ParameterResourcePromise {
         return new ParameterResourcePromise(this._withUrlsCallbackInternal(callback));
-    }
-
-    /** @internal */
-    private async _withUrlsCallbackAsyncInternal(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): Promise<ParameterResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as ResourceUrlsCallbackContextHandle;
-            const arg = new ResourceUrlsCallbackContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<ParameterResourceHandle>(
-            'Aspire.Hosting/withUrlsCallbackAsync',
-            rpcArgs
-        );
-        return new ParameterResource(result, this._client);
-    }
-
-    /** Customizes displayed URLs via async callback */
-    withUrlsCallbackAsync(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): ParameterResourcePromise {
-        return new ParameterResourcePromise(this._withUrlsCallbackAsyncInternal(callback));
     }
 
     /** @internal */
@@ -15450,26 +16066,6 @@ export class ParameterResource extends ResourceBuilderBase<ParameterResourceHand
         const tags = options?.tags;
         const description = options?.description;
         return new ParameterResourcePromise(this._withPipelineStepFactoryInternal(stepName, callback, dependsOn, requiredBy, tags, description));
-    }
-
-    /** @internal */
-    private async _withPipelineConfigurationAsyncInternal(callback: (arg: PipelineConfigurationContext) => Promise<void>): Promise<ParameterResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as PipelineConfigurationContextHandle;
-            const arg = new PipelineConfigurationContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<ParameterResourceHandle>(
-            'Aspire.Hosting/withPipelineConfigurationAsync',
-            rpcArgs
-        );
-        return new ParameterResource(result, this._client);
-    }
-
-    /** Configures pipeline step dependencies via an async callback */
-    withPipelineConfigurationAsync(callback: (arg: PipelineConfigurationContext) => Promise<void>): ParameterResourcePromise {
-        return new ParameterResourcePromise(this._withPipelineConfigurationAsyncInternal(callback));
     }
 
     /** @internal */
@@ -15796,6 +16392,134 @@ export class ParameterResource extends ResourceBuilderBase<ParameterResourceHand
         return new ParameterResourcePromise(this._withCancellableOperationInternal(operation));
     }
 
+    /** @internal */
+    private async _withMergeLabelInternal(label: string): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabel',
+            rpcArgs
+        );
+        return new ParameterResource(result, this._client);
+    }
+
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): ParameterResourcePromise {
+        return new ParameterResourcePromise(this._withMergeLabelInternal(label));
+    }
+
+    /** @internal */
+    private async _withMergeLabelCategorizedInternal(label: string, category: string): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label, category };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabelCategorized',
+            rpcArgs
+        );
+        return new ParameterResource(result, this._client);
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): ParameterResourcePromise {
+        return new ParameterResourcePromise(this._withMergeLabelCategorizedInternal(label, category));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointInternal(endpointName: string, port: number): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpoint',
+            rpcArgs
+        );
+        return new ParameterResource(result, this._client);
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): ParameterResourcePromise {
+        return new ParameterResourcePromise(this._withMergeEndpointInternal(endpointName, port));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointSchemeInternal(endpointName: string, port: number, scheme: string): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port, scheme };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpointScheme',
+            rpcArgs
+        );
+        return new ParameterResource(result, this._client);
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ParameterResourcePromise {
+        return new ParameterResourcePromise(this._withMergeEndpointSchemeInternal(endpointName, port, scheme));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLogging',
+            rpcArgs
+        );
+        return new ParameterResource(result, this._client);
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): ParameterResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new ParameterResourcePromise(this._withMergeLoggingInternal(logLevel, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLoggingPath',
+            rpcArgs
+        );
+        return new ParameterResource(result, this._client);
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): ParameterResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new ParameterResourcePromise(this._withMergeLoggingPathInternal(logLevel, logPath, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeRouteInternal(path: string, method: string, handler: string, priority: number): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRoute',
+            rpcArgs
+        );
+        return new ParameterResource(result, this._client);
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ParameterResourcePromise {
+        return new ParameterResourcePromise(this._withMergeRouteInternal(path, method, handler, priority));
+    }
+
+    /** @internal */
+    private async _withMergeRouteMiddlewareInternal(path: string, method: string, handler: string, priority: number, middleware: string): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority, middleware };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRouteMiddleware',
+            rpcArgs
+        );
+        return new ParameterResource(result, this._client);
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ParameterResourcePromise {
+        return new ParameterResourcePromise(this._withMergeRouteMiddlewareInternal(path, method, handler, priority, middleware));
+    }
+
 }
 
 /**
@@ -15836,11 +16560,6 @@ export class ParameterResourcePromise implements PromiseLike<ParameterResource> 
     /** Customizes displayed URLs via callback */
     withUrlsCallback(callback: (obj: ResourceUrlsCallbackContext) => Promise<void>): ParameterResourcePromise {
         return new ParameterResourcePromise(this._promise.then(obj => obj.withUrlsCallback(callback)));
-    }
-
-    /** Customizes displayed URLs via async callback */
-    withUrlsCallbackAsync(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): ParameterResourcePromise {
-        return new ParameterResourcePromise(this._promise.then(obj => obj.withUrlsCallbackAsync(callback)));
     }
 
     /** Adds or modifies displayed URLs */
@@ -15901,11 +16620,6 @@ export class ParameterResourcePromise implements PromiseLike<ParameterResource> 
     /** Adds a pipeline step to the resource */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ParameterResourcePromise {
         return new ParameterResourcePromise(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)));
-    }
-
-    /** Configures pipeline step dependencies via an async callback */
-    withPipelineConfigurationAsync(callback: (arg: PipelineConfigurationContext) => Promise<void>): ParameterResourcePromise {
-        return new ParameterResourcePromise(this._promise.then(obj => obj.withPipelineConfigurationAsync(callback)));
     }
 
     /** Configures pipeline step dependencies via a callback */
@@ -16001,6 +16715,46 @@ export class ParameterResourcePromise implements PromiseLike<ParameterResource> 
     /** Performs a cancellable operation */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ParameterResourcePromise {
         return new ParameterResourcePromise(this._promise.then(obj => obj.withCancellableOperation(operation)));
+    }
+
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): ParameterResourcePromise {
+        return new ParameterResourcePromise(this._promise.then(obj => obj.withMergeLabel(label)));
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): ParameterResourcePromise {
+        return new ParameterResourcePromise(this._promise.then(obj => obj.withMergeLabelCategorized(label, category)));
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): ParameterResourcePromise {
+        return new ParameterResourcePromise(this._promise.then(obj => obj.withMergeEndpoint(endpointName, port)));
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ParameterResourcePromise {
+        return new ParameterResourcePromise(this._promise.then(obj => obj.withMergeEndpointScheme(endpointName, port, scheme)));
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): ParameterResourcePromise {
+        return new ParameterResourcePromise(this._promise.then(obj => obj.withMergeLogging(logLevel, options)));
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): ParameterResourcePromise {
+        return new ParameterResourcePromise(this._promise.then(obj => obj.withMergeLoggingPath(logLevel, logPath, options)));
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ParameterResourcePromise {
+        return new ParameterResourcePromise(this._promise.then(obj => obj.withMergeRoute(path, method, handler, priority)));
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ParameterResourcePromise {
+        return new ParameterResourcePromise(this._promise.then(obj => obj.withMergeRouteMiddleware(path, method, handler, priority, middleware)));
     }
 
 }
@@ -16217,26 +16971,6 @@ export class ProjectResource extends ResourceBuilderBase<ProjectResourceHandle> 
     }
 
     /** @internal */
-    private async _withEnvironmentCallbackAsyncInternal(callback: (arg: EnvironmentCallbackContext) => Promise<void>): Promise<ProjectResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as EnvironmentCallbackContextHandle;
-            const arg = new EnvironmentCallbackContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<ProjectResourceHandle>(
-            'Aspire.Hosting/withEnvironmentCallbackAsync',
-            rpcArgs
-        );
-        return new ProjectResource(result, this._client);
-    }
-
-    /** Sets environment variables via async callback */
-    withEnvironmentCallbackAsync(callback: (arg: EnvironmentCallbackContext) => Promise<void>): ProjectResourcePromise {
-        return new ProjectResourcePromise(this._withEnvironmentCallbackAsyncInternal(callback));
-    }
-
-    /** @internal */
     private async _withEnvironmentEndpointInternal(name: string, endpointReference: EndpointReference): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, endpointReference };
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
@@ -16314,26 +17048,6 @@ export class ProjectResource extends ResourceBuilderBase<ProjectResourceHandle> 
     /** Sets command-line arguments via callback */
     withArgsCallback(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): ProjectResourcePromise {
         return new ProjectResourcePromise(this._withArgsCallbackInternal(callback));
-    }
-
-    /** @internal */
-    private async _withArgsCallbackAsyncInternal(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): Promise<ProjectResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as CommandLineArgsCallbackContextHandle;
-            const arg = new CommandLineArgsCallbackContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<ProjectResourceHandle>(
-            'Aspire.Hosting/withArgsCallbackAsync',
-            rpcArgs
-        );
-        return new ProjectResource(result, this._client);
-    }
-
-    /** Sets command-line arguments via async callback */
-    withArgsCallbackAsync(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): ProjectResourcePromise {
-        return new ProjectResourcePromise(this._withArgsCallbackAsyncInternal(callback));
     }
 
     /** @internal */
@@ -16540,26 +17254,6 @@ export class ProjectResource extends ResourceBuilderBase<ProjectResourceHandle> 
     /** Customizes displayed URLs via callback */
     withUrlsCallback(callback: (obj: ResourceUrlsCallbackContext) => Promise<void>): ProjectResourcePromise {
         return new ProjectResourcePromise(this._withUrlsCallbackInternal(callback));
-    }
-
-    /** @internal */
-    private async _withUrlsCallbackAsyncInternal(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): Promise<ProjectResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as ResourceUrlsCallbackContextHandle;
-            const arg = new ResourceUrlsCallbackContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<ProjectResourceHandle>(
-            'Aspire.Hosting/withUrlsCallbackAsync',
-            rpcArgs
-        );
-        return new ProjectResource(result, this._client);
-    }
-
-    /** Customizes displayed URLs via async callback */
-    withUrlsCallbackAsync(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): ProjectResourcePromise {
-        return new ProjectResourcePromise(this._withUrlsCallbackAsyncInternal(callback));
     }
 
     /** @internal */
@@ -17027,26 +17721,6 @@ export class ProjectResource extends ResourceBuilderBase<ProjectResourceHandle> 
     }
 
     /** @internal */
-    private async _withPipelineConfigurationAsyncInternal(callback: (arg: PipelineConfigurationContext) => Promise<void>): Promise<ProjectResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as PipelineConfigurationContextHandle;
-            const arg = new PipelineConfigurationContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<ProjectResourceHandle>(
-            'Aspire.Hosting/withPipelineConfigurationAsync',
-            rpcArgs
-        );
-        return new ProjectResource(result, this._client);
-    }
-
-    /** Configures pipeline step dependencies via an async callback */
-    withPipelineConfigurationAsync(callback: (arg: PipelineConfigurationContext) => Promise<void>): ProjectResourcePromise {
-        return new ProjectResourcePromise(this._withPipelineConfigurationAsyncInternal(callback));
-    }
-
-    /** @internal */
     private async _withPipelineConfigurationInternal(callback: (obj: PipelineConfigurationContext) => Promise<void>): Promise<ProjectResource> {
         const callbackId = registerCallback(async (objData: unknown) => {
             const objHandle = wrapIfHandle(objData) as PipelineConfigurationContextHandle;
@@ -17425,6 +18099,134 @@ export class ProjectResource extends ResourceBuilderBase<ProjectResourceHandle> 
         return new ProjectResourcePromise(this._withCancellableOperationInternal(operation));
     }
 
+    /** @internal */
+    private async _withMergeLabelInternal(label: string): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabel',
+            rpcArgs
+        );
+        return new ProjectResource(result, this._client);
+    }
+
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): ProjectResourcePromise {
+        return new ProjectResourcePromise(this._withMergeLabelInternal(label));
+    }
+
+    /** @internal */
+    private async _withMergeLabelCategorizedInternal(label: string, category: string): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label, category };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabelCategorized',
+            rpcArgs
+        );
+        return new ProjectResource(result, this._client);
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): ProjectResourcePromise {
+        return new ProjectResourcePromise(this._withMergeLabelCategorizedInternal(label, category));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointInternal(endpointName: string, port: number): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpoint',
+            rpcArgs
+        );
+        return new ProjectResource(result, this._client);
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): ProjectResourcePromise {
+        return new ProjectResourcePromise(this._withMergeEndpointInternal(endpointName, port));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointSchemeInternal(endpointName: string, port: number, scheme: string): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port, scheme };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpointScheme',
+            rpcArgs
+        );
+        return new ProjectResource(result, this._client);
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ProjectResourcePromise {
+        return new ProjectResourcePromise(this._withMergeEndpointSchemeInternal(endpointName, port, scheme));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLogging',
+            rpcArgs
+        );
+        return new ProjectResource(result, this._client);
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): ProjectResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new ProjectResourcePromise(this._withMergeLoggingInternal(logLevel, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLoggingPath',
+            rpcArgs
+        );
+        return new ProjectResource(result, this._client);
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): ProjectResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new ProjectResourcePromise(this._withMergeLoggingPathInternal(logLevel, logPath, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeRouteInternal(path: string, method: string, handler: string, priority: number): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRoute',
+            rpcArgs
+        );
+        return new ProjectResource(result, this._client);
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ProjectResourcePromise {
+        return new ProjectResourcePromise(this._withMergeRouteInternal(path, method, handler, priority));
+    }
+
+    /** @internal */
+    private async _withMergeRouteMiddlewareInternal(path: string, method: string, handler: string, priority: number, middleware: string): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority, middleware };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRouteMiddleware',
+            rpcArgs
+        );
+        return new ProjectResource(result, this._client);
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ProjectResourcePromise {
+        return new ProjectResourcePromise(this._withMergeRouteMiddlewareInternal(path, method, handler, priority, middleware));
+    }
+
 }
 
 /**
@@ -17502,11 +18304,6 @@ export class ProjectResourcePromise implements PromiseLike<ProjectResource> {
         return new ProjectResourcePromise(this._promise.then(obj => obj.withEnvironmentCallback(callback)));
     }
 
-    /** Sets environment variables via async callback */
-    withEnvironmentCallbackAsync(callback: (arg: EnvironmentCallbackContext) => Promise<void>): ProjectResourcePromise {
-        return new ProjectResourcePromise(this._promise.then(obj => obj.withEnvironmentCallbackAsync(callback)));
-    }
-
     /** Sets an environment variable from an endpoint reference */
     withEnvironmentEndpoint(name: string, endpointReference: EndpointReference): ProjectResourcePromise {
         return new ProjectResourcePromise(this._promise.then(obj => obj.withEnvironmentEndpoint(name, endpointReference)));
@@ -17530,11 +18327,6 @@ export class ProjectResourcePromise implements PromiseLike<ProjectResource> {
     /** Sets command-line arguments via callback */
     withArgsCallback(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): ProjectResourcePromise {
         return new ProjectResourcePromise(this._promise.then(obj => obj.withArgsCallback(callback)));
-    }
-
-    /** Sets command-line arguments via async callback */
-    withArgsCallbackAsync(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): ProjectResourcePromise {
-        return new ProjectResourcePromise(this._promise.then(obj => obj.withArgsCallbackAsync(callback)));
     }
 
     /** Adds a reference to another resource */
@@ -17590,11 +18382,6 @@ export class ProjectResourcePromise implements PromiseLike<ProjectResource> {
     /** Customizes displayed URLs via callback */
     withUrlsCallback(callback: (obj: ResourceUrlsCallbackContext) => Promise<void>): ProjectResourcePromise {
         return new ProjectResourcePromise(this._promise.then(obj => obj.withUrlsCallback(callback)));
-    }
-
-    /** Customizes displayed URLs via async callback */
-    withUrlsCallbackAsync(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): ProjectResourcePromise {
-        return new ProjectResourcePromise(this._promise.then(obj => obj.withUrlsCallbackAsync(callback)));
     }
 
     /** Adds or modifies displayed URLs */
@@ -17732,11 +18519,6 @@ export class ProjectResourcePromise implements PromiseLike<ProjectResource> {
         return new ProjectResourcePromise(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)));
     }
 
-    /** Configures pipeline step dependencies via an async callback */
-    withPipelineConfigurationAsync(callback: (arg: PipelineConfigurationContext) => Promise<void>): ProjectResourcePromise {
-        return new ProjectResourcePromise(this._promise.then(obj => obj.withPipelineConfigurationAsync(callback)));
-    }
-
     /** Configures pipeline step dependencies via a callback */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ProjectResourcePromise {
         return new ProjectResourcePromise(this._promise.then(obj => obj.withPipelineConfiguration(callback)));
@@ -17845,6 +18627,46 @@ export class ProjectResourcePromise implements PromiseLike<ProjectResource> {
     /** Performs a cancellable operation */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ProjectResourcePromise {
         return new ProjectResourcePromise(this._promise.then(obj => obj.withCancellableOperation(operation)));
+    }
+
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): ProjectResourcePromise {
+        return new ProjectResourcePromise(this._promise.then(obj => obj.withMergeLabel(label)));
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): ProjectResourcePromise {
+        return new ProjectResourcePromise(this._promise.then(obj => obj.withMergeLabelCategorized(label, category)));
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): ProjectResourcePromise {
+        return new ProjectResourcePromise(this._promise.then(obj => obj.withMergeEndpoint(endpointName, port)));
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ProjectResourcePromise {
+        return new ProjectResourcePromise(this._promise.then(obj => obj.withMergeEndpointScheme(endpointName, port, scheme)));
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): ProjectResourcePromise {
+        return new ProjectResourcePromise(this._promise.then(obj => obj.withMergeLogging(logLevel, options)));
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): ProjectResourcePromise {
+        return new ProjectResourcePromise(this._promise.then(obj => obj.withMergeLoggingPath(logLevel, logPath, options)));
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ProjectResourcePromise {
+        return new ProjectResourcePromise(this._promise.then(obj => obj.withMergeRoute(path, method, handler, priority)));
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ProjectResourcePromise {
+        return new ProjectResourcePromise(this._promise.then(obj => obj.withMergeRouteMiddleware(path, method, handler, priority, middleware)));
     }
 
 }
@@ -18272,26 +19094,6 @@ export class TestDatabaseResource extends ResourceBuilderBase<TestDatabaseResour
     }
 
     /** @internal */
-    private async _withEnvironmentCallbackAsyncInternal(callback: (arg: EnvironmentCallbackContext) => Promise<void>): Promise<TestDatabaseResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as EnvironmentCallbackContextHandle;
-            const arg = new EnvironmentCallbackContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
-            'Aspire.Hosting/withEnvironmentCallbackAsync',
-            rpcArgs
-        );
-        return new TestDatabaseResource(result, this._client);
-    }
-
-    /** Sets environment variables via async callback */
-    withEnvironmentCallbackAsync(callback: (arg: EnvironmentCallbackContext) => Promise<void>): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromise(this._withEnvironmentCallbackAsyncInternal(callback));
-    }
-
-    /** @internal */
     private async _withEnvironmentEndpointInternal(name: string, endpointReference: EndpointReference): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, endpointReference };
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
@@ -18369,26 +19171,6 @@ export class TestDatabaseResource extends ResourceBuilderBase<TestDatabaseResour
     /** Sets command-line arguments via callback */
     withArgsCallback(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromise(this._withArgsCallbackInternal(callback));
-    }
-
-    /** @internal */
-    private async _withArgsCallbackAsyncInternal(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): Promise<TestDatabaseResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as CommandLineArgsCallbackContextHandle;
-            const arg = new CommandLineArgsCallbackContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
-            'Aspire.Hosting/withArgsCallbackAsync',
-            rpcArgs
-        );
-        return new TestDatabaseResource(result, this._client);
-    }
-
-    /** Sets command-line arguments via async callback */
-    withArgsCallbackAsync(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromise(this._withArgsCallbackAsyncInternal(callback));
     }
 
     /** @internal */
@@ -18595,26 +19377,6 @@ export class TestDatabaseResource extends ResourceBuilderBase<TestDatabaseResour
     /** Customizes displayed URLs via callback */
     withUrlsCallback(callback: (obj: ResourceUrlsCallbackContext) => Promise<void>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromise(this._withUrlsCallbackInternal(callback));
-    }
-
-    /** @internal */
-    private async _withUrlsCallbackAsyncInternal(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): Promise<TestDatabaseResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as ResourceUrlsCallbackContextHandle;
-            const arg = new ResourceUrlsCallbackContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
-            'Aspire.Hosting/withUrlsCallbackAsync',
-            rpcArgs
-        );
-        return new TestDatabaseResource(result, this._client);
-    }
-
-    /** Customizes displayed URLs via async callback */
-    withUrlsCallbackAsync(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromise(this._withUrlsCallbackAsyncInternal(callback));
     }
 
     /** @internal */
@@ -19067,26 +19829,6 @@ export class TestDatabaseResource extends ResourceBuilderBase<TestDatabaseResour
     }
 
     /** @internal */
-    private async _withPipelineConfigurationAsyncInternal(callback: (arg: PipelineConfigurationContext) => Promise<void>): Promise<TestDatabaseResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as PipelineConfigurationContextHandle;
-            const arg = new PipelineConfigurationContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
-            'Aspire.Hosting/withPipelineConfigurationAsync',
-            rpcArgs
-        );
-        return new TestDatabaseResource(result, this._client);
-    }
-
-    /** Configures pipeline step dependencies via an async callback */
-    withPipelineConfigurationAsync(callback: (arg: PipelineConfigurationContext) => Promise<void>): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromise(this._withPipelineConfigurationAsyncInternal(callback));
-    }
-
-    /** @internal */
     private async _withPipelineConfigurationInternal(callback: (obj: PipelineConfigurationContext) => Promise<void>): Promise<TestDatabaseResource> {
         const callbackId = registerCallback(async (objData: unknown) => {
             const objHandle = wrapIfHandle(objData) as PipelineConfigurationContextHandle;
@@ -19484,6 +20226,134 @@ export class TestDatabaseResource extends ResourceBuilderBase<TestDatabaseResour
         return new TestDatabaseResourcePromise(this._withCancellableOperationInternal(operation));
     }
 
+    /** @internal */
+    private async _withMergeLabelInternal(label: string): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabel',
+            rpcArgs
+        );
+        return new TestDatabaseResource(result, this._client);
+    }
+
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromise(this._withMergeLabelInternal(label));
+    }
+
+    /** @internal */
+    private async _withMergeLabelCategorizedInternal(label: string, category: string): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label, category };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabelCategorized',
+            rpcArgs
+        );
+        return new TestDatabaseResource(result, this._client);
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromise(this._withMergeLabelCategorizedInternal(label, category));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointInternal(endpointName: string, port: number): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpoint',
+            rpcArgs
+        );
+        return new TestDatabaseResource(result, this._client);
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromise(this._withMergeEndpointInternal(endpointName, port));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointSchemeInternal(endpointName: string, port: number, scheme: string): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port, scheme };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpointScheme',
+            rpcArgs
+        );
+        return new TestDatabaseResource(result, this._client);
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromise(this._withMergeEndpointSchemeInternal(endpointName, port, scheme));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLogging',
+            rpcArgs
+        );
+        return new TestDatabaseResource(result, this._client);
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestDatabaseResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new TestDatabaseResourcePromise(this._withMergeLoggingInternal(logLevel, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLoggingPath',
+            rpcArgs
+        );
+        return new TestDatabaseResource(result, this._client);
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestDatabaseResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new TestDatabaseResourcePromise(this._withMergeLoggingPathInternal(logLevel, logPath, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeRouteInternal(path: string, method: string, handler: string, priority: number): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRoute',
+            rpcArgs
+        );
+        return new TestDatabaseResource(result, this._client);
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromise(this._withMergeRouteInternal(path, method, handler, priority));
+    }
+
+    /** @internal */
+    private async _withMergeRouteMiddlewareInternal(path: string, method: string, handler: string, priority: number, middleware: string): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority, middleware };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRouteMiddleware',
+            rpcArgs
+        );
+        return new TestDatabaseResource(result, this._client);
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromise(this._withMergeRouteMiddlewareInternal(path, method, handler, priority, middleware));
+    }
+
 }
 
 /**
@@ -19631,11 +20501,6 @@ export class TestDatabaseResourcePromise implements PromiseLike<TestDatabaseReso
         return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withEnvironmentCallback(callback)));
     }
 
-    /** Sets environment variables via async callback */
-    withEnvironmentCallbackAsync(callback: (arg: EnvironmentCallbackContext) => Promise<void>): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withEnvironmentCallbackAsync(callback)));
-    }
-
     /** Sets an environment variable from an endpoint reference */
     withEnvironmentEndpoint(name: string, endpointReference: EndpointReference): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withEnvironmentEndpoint(name, endpointReference)));
@@ -19659,11 +20524,6 @@ export class TestDatabaseResourcePromise implements PromiseLike<TestDatabaseReso
     /** Sets command-line arguments via callback */
     withArgsCallback(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withArgsCallback(callback)));
-    }
-
-    /** Sets command-line arguments via async callback */
-    withArgsCallbackAsync(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withArgsCallbackAsync(callback)));
     }
 
     /** Adds a reference to another resource */
@@ -19719,11 +20579,6 @@ export class TestDatabaseResourcePromise implements PromiseLike<TestDatabaseReso
     /** Customizes displayed URLs via callback */
     withUrlsCallback(callback: (obj: ResourceUrlsCallbackContext) => Promise<void>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withUrlsCallback(callback)));
-    }
-
-    /** Customizes displayed URLs via async callback */
-    withUrlsCallbackAsync(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withUrlsCallbackAsync(callback)));
     }
 
     /** Adds or modifies displayed URLs */
@@ -19856,11 +20711,6 @@ export class TestDatabaseResourcePromise implements PromiseLike<TestDatabaseReso
         return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)));
     }
 
-    /** Configures pipeline step dependencies via an async callback */
-    withPipelineConfigurationAsync(callback: (arg: PipelineConfigurationContext) => Promise<void>): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withPipelineConfigurationAsync(callback)));
-    }
-
     /** Configures pipeline step dependencies via a callback */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withPipelineConfiguration(callback)));
@@ -19974,6 +20824,46 @@ export class TestDatabaseResourcePromise implements PromiseLike<TestDatabaseReso
     /** Performs a cancellable operation */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withCancellableOperation(operation)));
+    }
+
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withMergeLabel(label)));
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withMergeLabelCategorized(label, category)));
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withMergeEndpoint(endpointName, port)));
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withMergeEndpointScheme(endpointName, port, scheme)));
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withMergeLogging(logLevel, options)));
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withMergeLoggingPath(logLevel, logPath, options)));
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withMergeRoute(path, method, handler, priority)));
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withMergeRouteMiddleware(path, method, handler, priority, middleware)));
     }
 
 }
@@ -20401,26 +21291,6 @@ export class TestRedisResource extends ResourceBuilderBase<TestRedisResourceHand
     }
 
     /** @internal */
-    private async _withEnvironmentCallbackAsyncInternal(callback: (arg: EnvironmentCallbackContext) => Promise<void>): Promise<TestRedisResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as EnvironmentCallbackContextHandle;
-            const arg = new EnvironmentCallbackContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
-            'Aspire.Hosting/withEnvironmentCallbackAsync',
-            rpcArgs
-        );
-        return new TestRedisResource(result, this._client);
-    }
-
-    /** Sets environment variables via async callback */
-    withEnvironmentCallbackAsync(callback: (arg: EnvironmentCallbackContext) => Promise<void>): TestRedisResourcePromise {
-        return new TestRedisResourcePromise(this._withEnvironmentCallbackAsyncInternal(callback));
-    }
-
-    /** @internal */
     private async _withEnvironmentEndpointInternal(name: string, endpointReference: EndpointReference): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, endpointReference };
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
@@ -20528,26 +21398,6 @@ export class TestRedisResource extends ResourceBuilderBase<TestRedisResourceHand
     /** Sets command-line arguments via callback */
     withArgsCallback(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._withArgsCallbackInternal(callback));
-    }
-
-    /** @internal */
-    private async _withArgsCallbackAsyncInternal(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): Promise<TestRedisResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as CommandLineArgsCallbackContextHandle;
-            const arg = new CommandLineArgsCallbackContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
-            'Aspire.Hosting/withArgsCallbackAsync',
-            rpcArgs
-        );
-        return new TestRedisResource(result, this._client);
-    }
-
-    /** Sets command-line arguments via async callback */
-    withArgsCallbackAsync(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): TestRedisResourcePromise {
-        return new TestRedisResourcePromise(this._withArgsCallbackAsyncInternal(callback));
     }
 
     /** @internal */
@@ -20754,26 +21604,6 @@ export class TestRedisResource extends ResourceBuilderBase<TestRedisResourceHand
     /** Customizes displayed URLs via callback */
     withUrlsCallback(callback: (obj: ResourceUrlsCallbackContext) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._withUrlsCallbackInternal(callback));
-    }
-
-    /** @internal */
-    private async _withUrlsCallbackAsyncInternal(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): Promise<TestRedisResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as ResourceUrlsCallbackContextHandle;
-            const arg = new ResourceUrlsCallbackContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
-            'Aspire.Hosting/withUrlsCallbackAsync',
-            rpcArgs
-        );
-        return new TestRedisResource(result, this._client);
-    }
-
-    /** Customizes displayed URLs via async callback */
-    withUrlsCallbackAsync(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): TestRedisResourcePromise {
-        return new TestRedisResourcePromise(this._withUrlsCallbackAsyncInternal(callback));
     }
 
     /** @internal */
@@ -21223,26 +22053,6 @@ export class TestRedisResource extends ResourceBuilderBase<TestRedisResourceHand
         const tags = options?.tags;
         const description = options?.description;
         return new TestRedisResourcePromise(this._withPipelineStepFactoryInternal(stepName, callback, dependsOn, requiredBy, tags, description));
-    }
-
-    /** @internal */
-    private async _withPipelineConfigurationAsyncInternal(callback: (arg: PipelineConfigurationContext) => Promise<void>): Promise<TestRedisResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as PipelineConfigurationContextHandle;
-            const arg = new PipelineConfigurationContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
-            'Aspire.Hosting/withPipelineConfigurationAsync',
-            rpcArgs
-        );
-        return new TestRedisResource(result, this._client);
-    }
-
-    /** Configures pipeline step dependencies via an async callback */
-    withPipelineConfigurationAsync(callback: (arg: PipelineConfigurationContext) => Promise<void>): TestRedisResourcePromise {
-        return new TestRedisResourcePromise(this._withPipelineConfigurationAsyncInternal(callback));
     }
 
     /** @internal */
@@ -21832,6 +22642,134 @@ export class TestRedisResource extends ResourceBuilderBase<TestRedisResourceHand
         return new TestRedisResourcePromise(this._withDataVolumeInternal(name, isReadOnly));
     }
 
+    /** @internal */
+    private async _withMergeLabelInternal(label: string): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabel',
+            rpcArgs
+        );
+        return new TestRedisResource(result, this._client);
+    }
+
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): TestRedisResourcePromise {
+        return new TestRedisResourcePromise(this._withMergeLabelInternal(label));
+    }
+
+    /** @internal */
+    private async _withMergeLabelCategorizedInternal(label: string, category: string): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label, category };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabelCategorized',
+            rpcArgs
+        );
+        return new TestRedisResource(result, this._client);
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): TestRedisResourcePromise {
+        return new TestRedisResourcePromise(this._withMergeLabelCategorizedInternal(label, category));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointInternal(endpointName: string, port: number): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpoint',
+            rpcArgs
+        );
+        return new TestRedisResource(result, this._client);
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): TestRedisResourcePromise {
+        return new TestRedisResourcePromise(this._withMergeEndpointInternal(endpointName, port));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointSchemeInternal(endpointName: string, port: number, scheme: string): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port, scheme };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpointScheme',
+            rpcArgs
+        );
+        return new TestRedisResource(result, this._client);
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestRedisResourcePromise {
+        return new TestRedisResourcePromise(this._withMergeEndpointSchemeInternal(endpointName, port, scheme));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLogging',
+            rpcArgs
+        );
+        return new TestRedisResource(result, this._client);
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestRedisResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new TestRedisResourcePromise(this._withMergeLoggingInternal(logLevel, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLoggingPath',
+            rpcArgs
+        );
+        return new TestRedisResource(result, this._client);
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestRedisResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new TestRedisResourcePromise(this._withMergeLoggingPathInternal(logLevel, logPath, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeRouteInternal(path: string, method: string, handler: string, priority: number): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRoute',
+            rpcArgs
+        );
+        return new TestRedisResource(result, this._client);
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): TestRedisResourcePromise {
+        return new TestRedisResourcePromise(this._withMergeRouteInternal(path, method, handler, priority));
+    }
+
+    /** @internal */
+    private async _withMergeRouteMiddlewareInternal(path: string, method: string, handler: string, priority: number, middleware: string): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority, middleware };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRouteMiddleware',
+            rpcArgs
+        );
+        return new TestRedisResource(result, this._client);
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestRedisResourcePromise {
+        return new TestRedisResourcePromise(this._withMergeRouteMiddlewareInternal(path, method, handler, priority, middleware));
+    }
+
 }
 
 /**
@@ -21979,11 +22917,6 @@ export class TestRedisResourcePromise implements PromiseLike<TestRedisResource> 
         return new TestRedisResourcePromise(this._promise.then(obj => obj.withEnvironmentCallback(callback)));
     }
 
-    /** Sets environment variables via async callback */
-    withEnvironmentCallbackAsync(callback: (arg: EnvironmentCallbackContext) => Promise<void>): TestRedisResourcePromise {
-        return new TestRedisResourcePromise(this._promise.then(obj => obj.withEnvironmentCallbackAsync(callback)));
-    }
-
     /** Sets an environment variable from an endpoint reference */
     withEnvironmentEndpoint(name: string, endpointReference: EndpointReference): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._promise.then(obj => obj.withEnvironmentEndpoint(name, endpointReference)));
@@ -22017,11 +22950,6 @@ export class TestRedisResourcePromise implements PromiseLike<TestRedisResource> 
     /** Sets command-line arguments via callback */
     withArgsCallback(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._promise.then(obj => obj.withArgsCallback(callback)));
-    }
-
-    /** Sets command-line arguments via async callback */
-    withArgsCallbackAsync(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): TestRedisResourcePromise {
-        return new TestRedisResourcePromise(this._promise.then(obj => obj.withArgsCallbackAsync(callback)));
     }
 
     /** Adds a reference to another resource */
@@ -22077,11 +23005,6 @@ export class TestRedisResourcePromise implements PromiseLike<TestRedisResource> 
     /** Customizes displayed URLs via callback */
     withUrlsCallback(callback: (obj: ResourceUrlsCallbackContext) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._promise.then(obj => obj.withUrlsCallback(callback)));
-    }
-
-    /** Customizes displayed URLs via async callback */
-    withUrlsCallbackAsync(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): TestRedisResourcePromise {
-        return new TestRedisResourcePromise(this._promise.then(obj => obj.withUrlsCallbackAsync(callback)));
     }
 
     /** Adds or modifies displayed URLs */
@@ -22212,11 +23135,6 @@ export class TestRedisResourcePromise implements PromiseLike<TestRedisResource> 
     /** Adds a pipeline step to the resource */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)));
-    }
-
-    /** Configures pipeline step dependencies via an async callback */
-    withPipelineConfigurationAsync(callback: (arg: PipelineConfigurationContext) => Promise<void>): TestRedisResourcePromise {
-        return new TestRedisResourcePromise(this._promise.then(obj => obj.withPipelineConfigurationAsync(callback)));
     }
 
     /** Configures pipeline step dependencies via a callback */
@@ -22397,6 +23315,46 @@ export class TestRedisResourcePromise implements PromiseLike<TestRedisResource> 
     /** Adds a data volume with persistence */
     withDataVolume(options?: WithDataVolumeOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._promise.then(obj => obj.withDataVolume(options)));
+    }
+
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): TestRedisResourcePromise {
+        return new TestRedisResourcePromise(this._promise.then(obj => obj.withMergeLabel(label)));
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): TestRedisResourcePromise {
+        return new TestRedisResourcePromise(this._promise.then(obj => obj.withMergeLabelCategorized(label, category)));
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): TestRedisResourcePromise {
+        return new TestRedisResourcePromise(this._promise.then(obj => obj.withMergeEndpoint(endpointName, port)));
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestRedisResourcePromise {
+        return new TestRedisResourcePromise(this._promise.then(obj => obj.withMergeEndpointScheme(endpointName, port, scheme)));
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestRedisResourcePromise {
+        return new TestRedisResourcePromise(this._promise.then(obj => obj.withMergeLogging(logLevel, options)));
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestRedisResourcePromise {
+        return new TestRedisResourcePromise(this._promise.then(obj => obj.withMergeLoggingPath(logLevel, logPath, options)));
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): TestRedisResourcePromise {
+        return new TestRedisResourcePromise(this._promise.then(obj => obj.withMergeRoute(path, method, handler, priority)));
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestRedisResourcePromise {
+        return new TestRedisResourcePromise(this._promise.then(obj => obj.withMergeRouteMiddleware(path, method, handler, priority, middleware)));
     }
 
 }
@@ -22824,26 +23782,6 @@ export class TestVaultResource extends ResourceBuilderBase<TestVaultResourceHand
     }
 
     /** @internal */
-    private async _withEnvironmentCallbackAsyncInternal(callback: (arg: EnvironmentCallbackContext) => Promise<void>): Promise<TestVaultResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as EnvironmentCallbackContextHandle;
-            const arg = new EnvironmentCallbackContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
-            'Aspire.Hosting/withEnvironmentCallbackAsync',
-            rpcArgs
-        );
-        return new TestVaultResource(result, this._client);
-    }
-
-    /** Sets environment variables via async callback */
-    withEnvironmentCallbackAsync(callback: (arg: EnvironmentCallbackContext) => Promise<void>): TestVaultResourcePromise {
-        return new TestVaultResourcePromise(this._withEnvironmentCallbackAsyncInternal(callback));
-    }
-
-    /** @internal */
     private async _withEnvironmentEndpointInternal(name: string, endpointReference: EndpointReference): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, endpointReference };
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
@@ -22921,26 +23859,6 @@ export class TestVaultResource extends ResourceBuilderBase<TestVaultResourceHand
     /** Sets command-line arguments via callback */
     withArgsCallback(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): TestVaultResourcePromise {
         return new TestVaultResourcePromise(this._withArgsCallbackInternal(callback));
-    }
-
-    /** @internal */
-    private async _withArgsCallbackAsyncInternal(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): Promise<TestVaultResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as CommandLineArgsCallbackContextHandle;
-            const arg = new CommandLineArgsCallbackContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
-            'Aspire.Hosting/withArgsCallbackAsync',
-            rpcArgs
-        );
-        return new TestVaultResource(result, this._client);
-    }
-
-    /** Sets command-line arguments via async callback */
-    withArgsCallbackAsync(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): TestVaultResourcePromise {
-        return new TestVaultResourcePromise(this._withArgsCallbackAsyncInternal(callback));
     }
 
     /** @internal */
@@ -23147,26 +24065,6 @@ export class TestVaultResource extends ResourceBuilderBase<TestVaultResourceHand
     /** Customizes displayed URLs via callback */
     withUrlsCallback(callback: (obj: ResourceUrlsCallbackContext) => Promise<void>): TestVaultResourcePromise {
         return new TestVaultResourcePromise(this._withUrlsCallbackInternal(callback));
-    }
-
-    /** @internal */
-    private async _withUrlsCallbackAsyncInternal(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): Promise<TestVaultResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as ResourceUrlsCallbackContextHandle;
-            const arg = new ResourceUrlsCallbackContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
-            'Aspire.Hosting/withUrlsCallbackAsync',
-            rpcArgs
-        );
-        return new TestVaultResource(result, this._client);
-    }
-
-    /** Customizes displayed URLs via async callback */
-    withUrlsCallbackAsync(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): TestVaultResourcePromise {
-        return new TestVaultResourcePromise(this._withUrlsCallbackAsyncInternal(callback));
     }
 
     /** @internal */
@@ -23619,26 +24517,6 @@ export class TestVaultResource extends ResourceBuilderBase<TestVaultResourceHand
     }
 
     /** @internal */
-    private async _withPipelineConfigurationAsyncInternal(callback: (arg: PipelineConfigurationContext) => Promise<void>): Promise<TestVaultResource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as PipelineConfigurationContextHandle;
-            const arg = new PipelineConfigurationContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
-            'Aspire.Hosting/withPipelineConfigurationAsync',
-            rpcArgs
-        );
-        return new TestVaultResource(result, this._client);
-    }
-
-    /** Configures pipeline step dependencies via an async callback */
-    withPipelineConfigurationAsync(callback: (arg: PipelineConfigurationContext) => Promise<void>): TestVaultResourcePromise {
-        return new TestVaultResourcePromise(this._withPipelineConfigurationAsyncInternal(callback));
-    }
-
-    /** @internal */
     private async _withPipelineConfigurationInternal(callback: (obj: PipelineConfigurationContext) => Promise<void>): Promise<TestVaultResource> {
         const callbackId = registerCallback(async (objData: unknown) => {
             const objHandle = wrapIfHandle(objData) as PipelineConfigurationContextHandle;
@@ -24051,6 +24929,134 @@ export class TestVaultResource extends ResourceBuilderBase<TestVaultResourceHand
         return new TestVaultResourcePromise(this._withVaultDirectInternal(option));
     }
 
+    /** @internal */
+    private async _withMergeLabelInternal(label: string): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabel',
+            rpcArgs
+        );
+        return new TestVaultResource(result, this._client);
+    }
+
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): TestVaultResourcePromise {
+        return new TestVaultResourcePromise(this._withMergeLabelInternal(label));
+    }
+
+    /** @internal */
+    private async _withMergeLabelCategorizedInternal(label: string, category: string): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label, category };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabelCategorized',
+            rpcArgs
+        );
+        return new TestVaultResource(result, this._client);
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): TestVaultResourcePromise {
+        return new TestVaultResourcePromise(this._withMergeLabelCategorizedInternal(label, category));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointInternal(endpointName: string, port: number): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpoint',
+            rpcArgs
+        );
+        return new TestVaultResource(result, this._client);
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): TestVaultResourcePromise {
+        return new TestVaultResourcePromise(this._withMergeEndpointInternal(endpointName, port));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointSchemeInternal(endpointName: string, port: number, scheme: string): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port, scheme };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpointScheme',
+            rpcArgs
+        );
+        return new TestVaultResource(result, this._client);
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestVaultResourcePromise {
+        return new TestVaultResourcePromise(this._withMergeEndpointSchemeInternal(endpointName, port, scheme));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLogging',
+            rpcArgs
+        );
+        return new TestVaultResource(result, this._client);
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestVaultResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new TestVaultResourcePromise(this._withMergeLoggingInternal(logLevel, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLoggingPath',
+            rpcArgs
+        );
+        return new TestVaultResource(result, this._client);
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestVaultResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new TestVaultResourcePromise(this._withMergeLoggingPathInternal(logLevel, logPath, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeRouteInternal(path: string, method: string, handler: string, priority: number): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRoute',
+            rpcArgs
+        );
+        return new TestVaultResource(result, this._client);
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): TestVaultResourcePromise {
+        return new TestVaultResourcePromise(this._withMergeRouteInternal(path, method, handler, priority));
+    }
+
+    /** @internal */
+    private async _withMergeRouteMiddlewareInternal(path: string, method: string, handler: string, priority: number, middleware: string): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority, middleware };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRouteMiddleware',
+            rpcArgs
+        );
+        return new TestVaultResource(result, this._client);
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestVaultResourcePromise {
+        return new TestVaultResourcePromise(this._withMergeRouteMiddlewareInternal(path, method, handler, priority, middleware));
+    }
+
 }
 
 /**
@@ -24198,11 +25204,6 @@ export class TestVaultResourcePromise implements PromiseLike<TestVaultResource> 
         return new TestVaultResourcePromise(this._promise.then(obj => obj.withEnvironmentCallback(callback)));
     }
 
-    /** Sets environment variables via async callback */
-    withEnvironmentCallbackAsync(callback: (arg: EnvironmentCallbackContext) => Promise<void>): TestVaultResourcePromise {
-        return new TestVaultResourcePromise(this._promise.then(obj => obj.withEnvironmentCallbackAsync(callback)));
-    }
-
     /** Sets an environment variable from an endpoint reference */
     withEnvironmentEndpoint(name: string, endpointReference: EndpointReference): TestVaultResourcePromise {
         return new TestVaultResourcePromise(this._promise.then(obj => obj.withEnvironmentEndpoint(name, endpointReference)));
@@ -24226,11 +25227,6 @@ export class TestVaultResourcePromise implements PromiseLike<TestVaultResource> 
     /** Sets command-line arguments via callback */
     withArgsCallback(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): TestVaultResourcePromise {
         return new TestVaultResourcePromise(this._promise.then(obj => obj.withArgsCallback(callback)));
-    }
-
-    /** Sets command-line arguments via async callback */
-    withArgsCallbackAsync(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): TestVaultResourcePromise {
-        return new TestVaultResourcePromise(this._promise.then(obj => obj.withArgsCallbackAsync(callback)));
     }
 
     /** Adds a reference to another resource */
@@ -24286,11 +25282,6 @@ export class TestVaultResourcePromise implements PromiseLike<TestVaultResource> 
     /** Customizes displayed URLs via callback */
     withUrlsCallback(callback: (obj: ResourceUrlsCallbackContext) => Promise<void>): TestVaultResourcePromise {
         return new TestVaultResourcePromise(this._promise.then(obj => obj.withUrlsCallback(callback)));
-    }
-
-    /** Customizes displayed URLs via async callback */
-    withUrlsCallbackAsync(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): TestVaultResourcePromise {
-        return new TestVaultResourcePromise(this._promise.then(obj => obj.withUrlsCallbackAsync(callback)));
     }
 
     /** Adds or modifies displayed URLs */
@@ -24423,11 +25414,6 @@ export class TestVaultResourcePromise implements PromiseLike<TestVaultResource> 
         return new TestVaultResourcePromise(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)));
     }
 
-    /** Configures pipeline step dependencies via an async callback */
-    withPipelineConfigurationAsync(callback: (arg: PipelineConfigurationContext) => Promise<void>): TestVaultResourcePromise {
-        return new TestVaultResourcePromise(this._promise.then(obj => obj.withPipelineConfigurationAsync(callback)));
-    }
-
     /** Configures pipeline step dependencies via a callback */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestVaultResourcePromise {
         return new TestVaultResourcePromise(this._promise.then(obj => obj.withPipelineConfiguration(callback)));
@@ -24546,6 +25532,46 @@ export class TestVaultResourcePromise implements PromiseLike<TestVaultResource> 
     /** Configures vault using direct interface target */
     withVaultDirect(option: string): TestVaultResourcePromise {
         return new TestVaultResourcePromise(this._promise.then(obj => obj.withVaultDirect(option)));
+    }
+
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): TestVaultResourcePromise {
+        return new TestVaultResourcePromise(this._promise.then(obj => obj.withMergeLabel(label)));
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): TestVaultResourcePromise {
+        return new TestVaultResourcePromise(this._promise.then(obj => obj.withMergeLabelCategorized(label, category)));
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): TestVaultResourcePromise {
+        return new TestVaultResourcePromise(this._promise.then(obj => obj.withMergeEndpoint(endpointName, port)));
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestVaultResourcePromise {
+        return new TestVaultResourcePromise(this._promise.then(obj => obj.withMergeEndpointScheme(endpointName, port, scheme)));
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestVaultResourcePromise {
+        return new TestVaultResourcePromise(this._promise.then(obj => obj.withMergeLogging(logLevel, options)));
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestVaultResourcePromise {
+        return new TestVaultResourcePromise(this._promise.then(obj => obj.withMergeLoggingPath(logLevel, logPath, options)));
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): TestVaultResourcePromise {
+        return new TestVaultResourcePromise(this._promise.then(obj => obj.withMergeRoute(path, method, handler, priority)));
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestVaultResourcePromise {
+        return new TestVaultResourcePromise(this._promise.then(obj => obj.withMergeRouteMiddleware(path, method, handler, priority, middleware)));
     }
 
 }
@@ -24744,26 +25770,6 @@ export class Resource extends ResourceBuilderBase<IResourceHandle> {
     /** Customizes displayed URLs via callback */
     withUrlsCallback(callback: (obj: ResourceUrlsCallbackContext) => Promise<void>): ResourcePromise {
         return new ResourcePromise(this._withUrlsCallbackInternal(callback));
-    }
-
-    /** @internal */
-    private async _withUrlsCallbackAsyncInternal(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): Promise<Resource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as ResourceUrlsCallbackContextHandle;
-            const arg = new ResourceUrlsCallbackContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<IResourceHandle>(
-            'Aspire.Hosting/withUrlsCallbackAsync',
-            rpcArgs
-        );
-        return new Resource(result, this._client);
-    }
-
-    /** Customizes displayed URLs via async callback */
-    withUrlsCallbackAsync(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): ResourcePromise {
-        return new ResourcePromise(this._withUrlsCallbackAsyncInternal(callback));
     }
 
     /** @internal */
@@ -24974,26 +25980,6 @@ export class Resource extends ResourceBuilderBase<IResourceHandle> {
         const tags = options?.tags;
         const description = options?.description;
         return new ResourcePromise(this._withPipelineStepFactoryInternal(stepName, callback, dependsOn, requiredBy, tags, description));
-    }
-
-    /** @internal */
-    private async _withPipelineConfigurationAsyncInternal(callback: (arg: PipelineConfigurationContext) => Promise<void>): Promise<Resource> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as PipelineConfigurationContextHandle;
-            const arg = new PipelineConfigurationContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<IResourceHandle>(
-            'Aspire.Hosting/withPipelineConfigurationAsync',
-            rpcArgs
-        );
-        return new Resource(result, this._client);
-    }
-
-    /** Configures pipeline step dependencies via an async callback */
-    withPipelineConfigurationAsync(callback: (arg: PipelineConfigurationContext) => Promise<void>): ResourcePromise {
-        return new ResourcePromise(this._withPipelineConfigurationAsyncInternal(callback));
     }
 
     /** @internal */
@@ -25320,6 +26306,134 @@ export class Resource extends ResourceBuilderBase<IResourceHandle> {
         return new ResourcePromise(this._withCancellableOperationInternal(operation));
     }
 
+    /** @internal */
+    private async _withMergeLabelInternal(label: string): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabel',
+            rpcArgs
+        );
+        return new Resource(result, this._client);
+    }
+
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): ResourcePromise {
+        return new ResourcePromise(this._withMergeLabelInternal(label));
+    }
+
+    /** @internal */
+    private async _withMergeLabelCategorizedInternal(label: string, category: string): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label, category };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabelCategorized',
+            rpcArgs
+        );
+        return new Resource(result, this._client);
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): ResourcePromise {
+        return new ResourcePromise(this._withMergeLabelCategorizedInternal(label, category));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointInternal(endpointName: string, port: number): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpoint',
+            rpcArgs
+        );
+        return new Resource(result, this._client);
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): ResourcePromise {
+        return new ResourcePromise(this._withMergeEndpointInternal(endpointName, port));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointSchemeInternal(endpointName: string, port: number, scheme: string): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port, scheme };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpointScheme',
+            rpcArgs
+        );
+        return new Resource(result, this._client);
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ResourcePromise {
+        return new ResourcePromise(this._withMergeEndpointSchemeInternal(endpointName, port, scheme));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLogging',
+            rpcArgs
+        );
+        return new Resource(result, this._client);
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): ResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new ResourcePromise(this._withMergeLoggingInternal(logLevel, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLoggingPath',
+            rpcArgs
+        );
+        return new Resource(result, this._client);
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): ResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new ResourcePromise(this._withMergeLoggingPathInternal(logLevel, logPath, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeRouteInternal(path: string, method: string, handler: string, priority: number): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRoute',
+            rpcArgs
+        );
+        return new Resource(result, this._client);
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ResourcePromise {
+        return new ResourcePromise(this._withMergeRouteInternal(path, method, handler, priority));
+    }
+
+    /** @internal */
+    private async _withMergeRouteMiddlewareInternal(path: string, method: string, handler: string, priority: number, middleware: string): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority, middleware };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRouteMiddleware',
+            rpcArgs
+        );
+        return new Resource(result, this._client);
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ResourcePromise {
+        return new ResourcePromise(this._withMergeRouteMiddlewareInternal(path, method, handler, priority, middleware));
+    }
+
 }
 
 /**
@@ -25355,11 +26469,6 @@ export class ResourcePromise implements PromiseLike<Resource> {
     /** Customizes displayed URLs via callback */
     withUrlsCallback(callback: (obj: ResourceUrlsCallbackContext) => Promise<void>): ResourcePromise {
         return new ResourcePromise(this._promise.then(obj => obj.withUrlsCallback(callback)));
-    }
-
-    /** Customizes displayed URLs via async callback */
-    withUrlsCallbackAsync(callback: (arg: ResourceUrlsCallbackContext) => Promise<void>): ResourcePromise {
-        return new ResourcePromise(this._promise.then(obj => obj.withUrlsCallbackAsync(callback)));
     }
 
     /** Adds or modifies displayed URLs */
@@ -25420,11 +26529,6 @@ export class ResourcePromise implements PromiseLike<Resource> {
     /** Adds a pipeline step to the resource */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ResourcePromise {
         return new ResourcePromise(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)));
-    }
-
-    /** Configures pipeline step dependencies via an async callback */
-    withPipelineConfigurationAsync(callback: (arg: PipelineConfigurationContext) => Promise<void>): ResourcePromise {
-        return new ResourcePromise(this._promise.then(obj => obj.withPipelineConfigurationAsync(callback)));
     }
 
     /** Configures pipeline step dependencies via a callback */
@@ -25522,6 +26626,46 @@ export class ResourcePromise implements PromiseLike<Resource> {
         return new ResourcePromise(this._promise.then(obj => obj.withCancellableOperation(operation)));
     }
 
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): ResourcePromise {
+        return new ResourcePromise(this._promise.then(obj => obj.withMergeLabel(label)));
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): ResourcePromise {
+        return new ResourcePromise(this._promise.then(obj => obj.withMergeLabelCategorized(label, category)));
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): ResourcePromise {
+        return new ResourcePromise(this._promise.then(obj => obj.withMergeEndpoint(endpointName, port)));
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ResourcePromise {
+        return new ResourcePromise(this._promise.then(obj => obj.withMergeEndpointScheme(endpointName, port, scheme)));
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): ResourcePromise {
+        return new ResourcePromise(this._promise.then(obj => obj.withMergeLogging(logLevel, options)));
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): ResourcePromise {
+        return new ResourcePromise(this._promise.then(obj => obj.withMergeLoggingPath(logLevel, logPath, options)));
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ResourcePromise {
+        return new ResourcePromise(this._promise.then(obj => obj.withMergeRoute(path, method, handler, priority)));
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ResourcePromise {
+        return new ResourcePromise(this._promise.then(obj => obj.withMergeRouteMiddleware(path, method, handler, priority, middleware)));
+    }
+
 }
 
 // ============================================================================
@@ -25568,26 +26712,6 @@ export class ResourceWithArgs extends ResourceBuilderBase<IResourceWithArgsHandl
         return new ResourceWithArgsPromise(this._withArgsCallbackInternal(callback));
     }
 
-    /** @internal */
-    private async _withArgsCallbackAsyncInternal(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): Promise<ResourceWithArgs> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as CommandLineArgsCallbackContextHandle;
-            const arg = new CommandLineArgsCallbackContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<IResourceWithArgsHandle>(
-            'Aspire.Hosting/withArgsCallbackAsync',
-            rpcArgs
-        );
-        return new ResourceWithArgs(result, this._client);
-    }
-
-    /** Sets command-line arguments via async callback */
-    withArgsCallbackAsync(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): ResourceWithArgsPromise {
-        return new ResourceWithArgsPromise(this._withArgsCallbackAsyncInternal(callback));
-    }
-
 }
 
 /**
@@ -25613,11 +26737,6 @@ export class ResourceWithArgsPromise implements PromiseLike<ResourceWithArgs> {
     /** Sets command-line arguments via callback */
     withArgsCallback(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): ResourceWithArgsPromise {
         return new ResourceWithArgsPromise(this._promise.then(obj => obj.withArgsCallback(callback)));
-    }
-
-    /** Sets command-line arguments via async callback */
-    withArgsCallbackAsync(callback: (arg: CommandLineArgsCallbackContext) => Promise<void>): ResourceWithArgsPromise {
-        return new ResourceWithArgsPromise(this._promise.then(obj => obj.withArgsCallbackAsync(callback)));
     }
 
 }
@@ -26225,26 +27344,6 @@ export class ResourceWithEnvironment extends ResourceBuilderBase<IResourceWithEn
     }
 
     /** @internal */
-    private async _withEnvironmentCallbackAsyncInternal(callback: (arg: EnvironmentCallbackContext) => Promise<void>): Promise<ResourceWithEnvironment> {
-        const callbackId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as EnvironmentCallbackContextHandle;
-            const arg = new EnvironmentCallbackContext(argHandle, this._client);
-            await callback(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
-        const result = await this._client.invokeCapability<IResourceWithEnvironmentHandle>(
-            'Aspire.Hosting/withEnvironmentCallbackAsync',
-            rpcArgs
-        );
-        return new ResourceWithEnvironment(result, this._client);
-    }
-
-    /** Sets environment variables via async callback */
-    withEnvironmentCallbackAsync(callback: (arg: EnvironmentCallbackContext) => Promise<void>): ResourceWithEnvironmentPromise {
-        return new ResourceWithEnvironmentPromise(this._withEnvironmentCallbackAsyncInternal(callback));
-    }
-
-    /** @internal */
     private async _withEnvironmentEndpointInternal(name: string, endpointReference: EndpointReference): Promise<ResourceWithEnvironment> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, endpointReference };
         const result = await this._client.invokeCapability<IResourceWithEnvironmentHandle>(
@@ -26492,11 +27591,6 @@ export class ResourceWithEnvironmentPromise implements PromiseLike<ResourceWithE
     /** Sets environment variables via callback */
     withEnvironmentCallback(callback: (obj: EnvironmentCallbackContext) => Promise<void>): ResourceWithEnvironmentPromise {
         return new ResourceWithEnvironmentPromise(this._promise.then(obj => obj.withEnvironmentCallback(callback)));
-    }
-
-    /** Sets environment variables via async callback */
-    withEnvironmentCallbackAsync(callback: (arg: EnvironmentCallbackContext) => Promise<void>): ResourceWithEnvironmentPromise {
-        return new ResourceWithEnvironmentPromise(this._promise.then(obj => obj.withEnvironmentCallbackAsync(callback)));
     }
 
     /** Sets an environment variable from an endpoint reference */

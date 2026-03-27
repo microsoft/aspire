@@ -33,14 +33,6 @@
                           Title="@Loc[nameof(Layout.MainLayoutAspireDashboardHelpLink)]" aria-label="@Loc[nameof(Layout.MainLayoutAspireDashboardHelpLink)]">
                 <FluentIcon Value="@(new Icons.Regular.Size24.QuestionCircle())" Color="Color.Neutral"/>
             </FluentButton>
-            @if (Options.CurrentValue.Mcp.GetEndpointAddress() != null && !Options.CurrentValue.Mcp.Disabled.GetValueOrDefault())
-            {
-                <FluentButton Class="header-button"
-                              Appearance="Appearance.Stealth" OnClick="@LaunchMcpAsync"
-                              Title="MCP Server" aria-label="MCP Server">
-                    <FluentIcon Value="@(new AspireIcons.Size24.McpIcon())" Color="Color.Neutral" />
-                </FluentButton>
-            }
             @if (AIContextProvider.Enabled)
             {
                 <FluentButton Class="@("header-button" + ((AIContextProvider.AssistantChatViewModel is {} vm && AIContextProvider.ShowAssistantSidebarDialog) ? " header-button-selected" : ""))"

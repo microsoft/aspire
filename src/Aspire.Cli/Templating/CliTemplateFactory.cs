@@ -99,12 +99,17 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
 
             new CallbackTemplate(
                 KnownTemplateId.CSharpEmptyAppHost,
-                "Empty (C# AppHost)",
+                "Empty AppHost",
                 projectName => $"./{projectName}",
                 cmd => AddOptionIfMissing(cmd, _localhostTldOption),
                 ApplyEmptyAppHostTemplateAsync,
                 runtime: TemplateRuntime.Cli,
-                languageId: KnownLanguageId.CSharp,
+                supportsLanguageCallback: static languageId =>
+                    languageId.Equals(KnownLanguageId.CSharp, StringComparison.OrdinalIgnoreCase) ||
+                    languageId.Equals(KnownLanguageId.TypeScript, StringComparison.OrdinalIgnoreCase) ||
+                    languageId.Equals(KnownLanguageId.TypeScriptAlias, StringComparison.OrdinalIgnoreCase) ||
+                    languageId.Equals(KnownLanguageId.Python, StringComparison.OrdinalIgnoreCase),
+                selectableAppHostLanguages: [KnownLanguageId.CSharp, KnownLanguageId.TypeScript, KnownLanguageId.Python],
                 isEmpty: true),
 
             new CallbackTemplate(
@@ -152,8 +157,6 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
             .Replace("{{httpsPort}}", ports.HttpsPort.ToString(CultureInfo.InvariantCulture))
             .Replace("{{otlpHttpPort}}", ports.OtlpHttpPort.ToString(CultureInfo.InvariantCulture))
             .Replace("{{otlpHttpsPort}}", ports.OtlpHttpsPort.ToString(CultureInfo.InvariantCulture))
-            .Replace("{{mcpHttpPort}}", ports.McpHttpPort.ToString(CultureInfo.InvariantCulture))
-            .Replace("{{mcpHttpsPort}}", ports.McpHttpsPort.ToString(CultureInfo.InvariantCulture))
             .Replace("{{resourceHttpPort}}", ports.ResourceHttpPort.ToString(CultureInfo.InvariantCulture))
             .Replace("{{resourceHttpsPort}}", ports.ResourceHttpsPort.ToString(CultureInfo.InvariantCulture));
     }
@@ -165,8 +168,6 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
             HttpsPort: Random.Shared.Next(17000, 17300),
             OtlpHttpPort: Random.Shared.Next(19000, 19300),
             OtlpHttpsPort: Random.Shared.Next(21000, 21300),
-            McpHttpPort: Random.Shared.Next(18000, 18300),
-            McpHttpsPort: Random.Shared.Next(23000, 23300),
             ResourceHttpPort: Random.Shared.Next(20000, 20300),
             ResourceHttpsPort: Random.Shared.Next(22000, 22300));
     }
@@ -174,7 +175,6 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
     private sealed record TemplatePorts(
         int HttpPort, int HttpsPort,
         int OtlpHttpPort, int OtlpHttpsPort,
-        int McpHttpPort, int McpHttpsPort,
         int ResourceHttpPort, int ResourceHttpsPort);
 
     private static void AddOptionIfMissing(System.CommandLine.Command command, System.CommandLine.Option option)

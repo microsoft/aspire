@@ -5,6 +5,7 @@
   },
   "packages": {
     "Aspire.Hosting.Azure.Sql": "",
-    "Aspire.Hosting.Azure.Storage": ""
+    "Aspire.Hosting.Azure.Storage": "",
+    "Aspire.Hosting.Azure.Network": ""
   }
 }

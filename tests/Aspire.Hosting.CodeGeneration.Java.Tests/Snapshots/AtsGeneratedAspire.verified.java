@@ -1,4 +1,4 @@
-// ===== Aspire.java =====
+﻿// ===== Aspire.java =====
 // Aspire.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
@@ -1749,6 +1749,124 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a label to the resource */
+    public TestDatabaseResource withMergeLabel(String label) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("label", AspireClient.serializeValue(label));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLabel", reqArgs);
+        return this;
+    }
+
+    /** Adds a categorized label to the resource */
+    public TestDatabaseResource withMergeLabelCategorized(String label, String category) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("label", AspireClient.serializeValue(label));
+        reqArgs.put("category", AspireClient.serializeValue(category));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLabelCategorized", reqArgs);
+        return this;
+    }
+
+    /** Configures a named endpoint */
+    public TestDatabaseResource withMergeEndpoint(String endpointName, double port) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeEndpoint", reqArgs);
+        return this;
+    }
+
+    /** Configures a named endpoint with scheme */
+    public TestDatabaseResource withMergeEndpointScheme(String endpointName, double port, String scheme) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        reqArgs.put("scheme", AspireClient.serializeValue(scheme));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeEndpointScheme", reqArgs);
+        return this;
+    }
+
+    /** Configures resource logging */
+    public TestDatabaseResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
+        var enableConsole = options == null ? null : options.getEnableConsole();
+        var maxFiles = options == null ? null : options.getMaxFiles();
+        return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
+    }
+
+    public TestDatabaseResource withMergeLogging(String logLevel) {
+        return withMergeLogging(logLevel, null);
+    }
+
+    /** Configures resource logging */
+    private TestDatabaseResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
+        if (enableConsole != null) {
+            reqArgs.put("enableConsole", AspireClient.serializeValue(enableConsole));
+        }
+        if (maxFiles != null) {
+            reqArgs.put("maxFiles", AspireClient.serializeValue(maxFiles));
+        }
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLogging", reqArgs);
+        return this;
+    }
+
+    /** Configures resource logging with file path */
+    public TestDatabaseResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
+        var enableConsole = options == null ? null : options.getEnableConsole();
+        var maxFiles = options == null ? null : options.getMaxFiles();
+        return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
+    }
+
+    public TestDatabaseResource withMergeLoggingPath(String logLevel, String logPath) {
+        return withMergeLoggingPath(logLevel, logPath, null);
+    }
+
+    /** Configures resource logging with file path */
+    private TestDatabaseResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
+        reqArgs.put("logPath", AspireClient.serializeValue(logPath));
+        if (enableConsole != null) {
+            reqArgs.put("enableConsole", AspireClient.serializeValue(enableConsole));
+        }
+        if (maxFiles != null) {
+            reqArgs.put("maxFiles", AspireClient.serializeValue(maxFiles));
+        }
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLoggingPath", reqArgs);
+        return this;
+    }
+
+    /** Configures a route */
+    public TestDatabaseResource withMergeRoute(String path, String method, String handler, double priority) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("method", AspireClient.serializeValue(method));
+        reqArgs.put("handler", AspireClient.serializeValue(handler));
+        reqArgs.put("priority", AspireClient.serializeValue(priority));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRoute", reqArgs);
+        return this;
+    }
+
+    /** Configures a route with middleware */
+    public TestDatabaseResource withMergeRouteMiddleware(String path, String method, String handler, double priority, String middleware) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("method", AspireClient.serializeValue(method));
+        reqArgs.put("handler", AspireClient.serializeValue(handler));
+        reqArgs.put("priority", AspireClient.serializeValue(priority));
+        reqArgs.put("middleware", AspireClient.serializeValue(middleware));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRouteMiddleware", reqArgs);
+        return this;
+    }
+
 }
 
 // ===== TestDeeplyNestedDto.java =====
@@ -2259,6 +2377,124 @@ public class TestRedisResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a label to the resource */
+    public TestRedisResource withMergeLabel(String label) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("label", AspireClient.serializeValue(label));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLabel", reqArgs);
+        return this;
+    }
+
+    /** Adds a categorized label to the resource */
+    public TestRedisResource withMergeLabelCategorized(String label, String category) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("label", AspireClient.serializeValue(label));
+        reqArgs.put("category", AspireClient.serializeValue(category));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLabelCategorized", reqArgs);
+        return this;
+    }
+
+    /** Configures a named endpoint */
+    public TestRedisResource withMergeEndpoint(String endpointName, double port) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeEndpoint", reqArgs);
+        return this;
+    }
+
+    /** Configures a named endpoint with scheme */
+    public TestRedisResource withMergeEndpointScheme(String endpointName, double port, String scheme) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        reqArgs.put("scheme", AspireClient.serializeValue(scheme));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeEndpointScheme", reqArgs);
+        return this;
+    }
+
+    /** Configures resource logging */
+    public TestRedisResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
+        var enableConsole = options == null ? null : options.getEnableConsole();
+        var maxFiles = options == null ? null : options.getMaxFiles();
+        return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
+    }
+
+    public TestRedisResource withMergeLogging(String logLevel) {
+        return withMergeLogging(logLevel, null);
+    }
+
+    /** Configures resource logging */
+    private TestRedisResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
+        if (enableConsole != null) {
+            reqArgs.put("enableConsole", AspireClient.serializeValue(enableConsole));
+        }
+        if (maxFiles != null) {
+            reqArgs.put("maxFiles", AspireClient.serializeValue(maxFiles));
+        }
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLogging", reqArgs);
+        return this;
+    }
+
+    /** Configures resource logging with file path */
+    public TestRedisResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
+        var enableConsole = options == null ? null : options.getEnableConsole();
+        var maxFiles = options == null ? null : options.getMaxFiles();
+        return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
+    }
+
+    public TestRedisResource withMergeLoggingPath(String logLevel, String logPath) {
+        return withMergeLoggingPath(logLevel, logPath, null);
+    }
+
+    /** Configures resource logging with file path */
+    private TestRedisResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
+        reqArgs.put("logPath", AspireClient.serializeValue(logPath));
+        if (enableConsole != null) {
+            reqArgs.put("enableConsole", AspireClient.serializeValue(enableConsole));
+        }
+        if (maxFiles != null) {
+            reqArgs.put("maxFiles", AspireClient.serializeValue(maxFiles));
+        }
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLoggingPath", reqArgs);
+        return this;
+    }
+
+    /** Configures a route */
+    public TestRedisResource withMergeRoute(String path, String method, String handler, double priority) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("method", AspireClient.serializeValue(method));
+        reqArgs.put("handler", AspireClient.serializeValue(handler));
+        reqArgs.put("priority", AspireClient.serializeValue(priority));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRoute", reqArgs);
+        return this;
+    }
+
+    /** Configures a route with middleware */
+    public TestRedisResource withMergeRouteMiddleware(String path, String method, String handler, double priority, String middleware) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("method", AspireClient.serializeValue(method));
+        reqArgs.put("handler", AspireClient.serializeValue(handler));
+        reqArgs.put("priority", AspireClient.serializeValue(priority));
+        reqArgs.put("middleware", AspireClient.serializeValue(middleware));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRouteMiddleware", reqArgs);
+        return this;
+    }
+
 }
 
 // ===== TestResourceContext.java =====
@@ -2573,6 +2809,124 @@ public class TestVaultResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a label to the resource */
+    public TestVaultResource withMergeLabel(String label) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("label", AspireClient.serializeValue(label));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLabel", reqArgs);
+        return this;
+    }
+
+    /** Adds a categorized label to the resource */
+    public TestVaultResource withMergeLabelCategorized(String label, String category) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("label", AspireClient.serializeValue(label));
+        reqArgs.put("category", AspireClient.serializeValue(category));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLabelCategorized", reqArgs);
+        return this;
+    }
+
+    /** Configures a named endpoint */
+    public TestVaultResource withMergeEndpoint(String endpointName, double port) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeEndpoint", reqArgs);
+        return this;
+    }
+
+    /** Configures a named endpoint with scheme */
+    public TestVaultResource withMergeEndpointScheme(String endpointName, double port, String scheme) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        reqArgs.put("scheme", AspireClient.serializeValue(scheme));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeEndpointScheme", reqArgs);
+        return this;
+    }
+
+    /** Configures resource logging */
+    public TestVaultResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
+        var enableConsole = options == null ? null : options.getEnableConsole();
+        var maxFiles = options == null ? null : options.getMaxFiles();
+        return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
+    }
+
+    public TestVaultResource withMergeLogging(String logLevel) {
+        return withMergeLogging(logLevel, null);
+    }
+
+    /** Configures resource logging */
+    private TestVaultResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
+        if (enableConsole != null) {
+            reqArgs.put("enableConsole", AspireClient.serializeValue(enableConsole));
+        }
+        if (maxFiles != null) {
+            reqArgs.put("maxFiles", AspireClient.serializeValue(maxFiles));
+        }
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLogging", reqArgs);
+        return this;
+    }
+
+    /** Configures resource logging with file path */
+    public TestVaultResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
+        var enableConsole = options == null ? null : options.getEnableConsole();
+        var maxFiles = options == null ? null : options.getMaxFiles();
+        return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
+    }
+
+    public TestVaultResource withMergeLoggingPath(String logLevel, String logPath) {
+        return withMergeLoggingPath(logLevel, logPath, null);
+    }
+
+    /** Configures resource logging with file path */
+    private TestVaultResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
+        reqArgs.put("logPath", AspireClient.serializeValue(logPath));
+        if (enableConsole != null) {
+            reqArgs.put("enableConsole", AspireClient.serializeValue(enableConsole));
+        }
+        if (maxFiles != null) {
+            reqArgs.put("maxFiles", AspireClient.serializeValue(maxFiles));
+        }
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLoggingPath", reqArgs);
+        return this;
+    }
+
+    /** Configures a route */
+    public TestVaultResource withMergeRoute(String path, String method, String handler, double priority) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("method", AspireClient.serializeValue(method));
+        reqArgs.put("handler", AspireClient.serializeValue(handler));
+        reqArgs.put("priority", AspireClient.serializeValue(priority));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRoute", reqArgs);
+        return this;
+    }
+
+    /** Configures a route with middleware */
+    public TestVaultResource withMergeRouteMiddleware(String path, String method, String handler, double priority, String middleware) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("method", AspireClient.serializeValue(method));
+        reqArgs.put("handler", AspireClient.serializeValue(handler));
+        reqArgs.put("priority", AspireClient.serializeValue(priority));
+        reqArgs.put("middleware", AspireClient.serializeValue(middleware));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRouteMiddleware", reqArgs);
+        return this;
+    }
+
 }
 
 // ===== WireValueEnum.java =====
@@ -2611,6 +2965,60 @@ public final class WithDataVolumeOptions {
     public Boolean isReadOnly() { return isReadOnly; }
     public WithDataVolumeOptions isReadOnly(Boolean value) {
         this.isReadOnly = value;
+        return this;
+    }
+
+}
+
+// ===== WithMergeLoggingOptions.java =====
+// WithMergeLoggingOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Options for WithMergeLogging. */
+public final class WithMergeLoggingOptions {
+    private Boolean enableConsole;
+    private Double maxFiles;
+
+    public Boolean getEnableConsole() { return enableConsole; }
+    public WithMergeLoggingOptions enableConsole(Boolean value) {
+        this.enableConsole = value;
+        return this;
+    }
+
+    public Double getMaxFiles() { return maxFiles; }
+    public WithMergeLoggingOptions maxFiles(Double value) {
+        this.maxFiles = value;
+        return this;
+    }
+
+}
+
+// ===== WithMergeLoggingPathOptions.java =====
+// WithMergeLoggingPathOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Options for WithMergeLoggingPath. */
+public final class WithMergeLoggingPathOptions {
+    private Boolean enableConsole;
+    private Double maxFiles;
+
+    public Boolean getEnableConsole() { return enableConsole; }
+    public WithMergeLoggingPathOptions enableConsole(Boolean value) {
+        this.enableConsole = value;
+        return this;
+    }
+
+    public Double getMaxFiles() { return maxFiles; }
+    public WithMergeLoggingPathOptions maxFiles(Double value) {
+        this.maxFiles = value;
         return this;
     }
 
@@ -2686,4 +3094,6 @@ public final class WithOptionalStringOptions {
 .modules/TestVaultResource.java
 .modules/WireValueEnum.java
 .modules/WithDataVolumeOptions.java
+.modules/WithMergeLoggingOptions.java
+.modules/WithMergeLoggingPathOptions.java
 .modules/WithOptionalStringOptions.java

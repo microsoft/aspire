@@ -1,4 +1,4 @@
-// ===== AddDockerfileOptions.java =====
+﻿// ===== AddDockerfileOptions.java =====
 // AddDockerfileOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
@@ -1400,22 +1400,6 @@ public class CSharpAppResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Sets environment variables via async callback */
-    public CSharpAppResource withEnvironmentCallbackAsync(AspireAction1<EnvironmentCallbackContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (EnvironmentCallbackContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallbackAsync", reqArgs);
-        return this;
-    }
-
     /** Sets an environment variable from an endpoint reference */
     public CSharpAppResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -1472,22 +1456,6 @@ public class CSharpAppResource extends ResourceBuilderBase {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withArgsCallback", reqArgs);
-        return this;
-    }
-
-    /** Sets command-line arguments via async callback */
-    public CSharpAppResource withArgsCallbackAsync(AspireAction1<CommandLineArgsCallbackContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (CommandLineArgsCallbackContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withArgsCallbackAsync", reqArgs);
         return this;
     }
 
@@ -1717,22 +1685,6 @@ public class CSharpAppResource extends ResourceBuilderBase {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withUrlsCallback", reqArgs);
-        return this;
-    }
-
-    /** Customizes displayed URLs via async callback */
-    public CSharpAppResource withUrlsCallbackAsync(AspireAction1<ResourceUrlsCallbackContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (ResourceUrlsCallbackContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withUrlsCallbackAsync", reqArgs);
         return this;
     }
 
@@ -2168,22 +2120,6 @@ public class CSharpAppResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Configures pipeline step dependencies via an async callback */
-    public CSharpAppResource withPipelineConfigurationAsync(AspireAction1<PipelineConfigurationContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (PipelineConfigurationContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withPipelineConfigurationAsync", reqArgs);
-        return this;
-    }
-
     /** Configures pipeline step dependencies via a callback */
     public CSharpAppResource withPipelineConfiguration(AspireAction1<PipelineConfigurationContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -2474,6 +2410,124 @@ public class CSharpAppResource extends ResourceBuilderBase {
             reqArgs.put("operation", operationId);
         }
         getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withCancellableOperation", reqArgs);
+        return this;
+    }
+
+    /** Adds a label to the resource */
+    public CSharpAppResource withMergeLabel(String label) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("label", AspireClient.serializeValue(label));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLabel", reqArgs);
+        return this;
+    }
+
+    /** Adds a categorized label to the resource */
+    public CSharpAppResource withMergeLabelCategorized(String label, String category) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("label", AspireClient.serializeValue(label));
+        reqArgs.put("category", AspireClient.serializeValue(category));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLabelCategorized", reqArgs);
+        return this;
+    }
+
+    /** Configures a named endpoint */
+    public CSharpAppResource withMergeEndpoint(String endpointName, double port) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeEndpoint", reqArgs);
+        return this;
+    }
+
+    /** Configures a named endpoint with scheme */
+    public CSharpAppResource withMergeEndpointScheme(String endpointName, double port, String scheme) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        reqArgs.put("scheme", AspireClient.serializeValue(scheme));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeEndpointScheme", reqArgs);
+        return this;
+    }
+
+    /** Configures resource logging */
+    public CSharpAppResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
+        var enableConsole = options == null ? null : options.getEnableConsole();
+        var maxFiles = options == null ? null : options.getMaxFiles();
+        return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
+    }
+
+    public CSharpAppResource withMergeLogging(String logLevel) {
+        return withMergeLogging(logLevel, null);
+    }
+
+    /** Configures resource logging */
+    private CSharpAppResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
+        if (enableConsole != null) {
+            reqArgs.put("enableConsole", AspireClient.serializeValue(enableConsole));
+        }
+        if (maxFiles != null) {
+            reqArgs.put("maxFiles", AspireClient.serializeValue(maxFiles));
+        }
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLogging", reqArgs);
+        return this;
+    }
+
+    /** Configures resource logging with file path */
+    public CSharpAppResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
+        var enableConsole = options == null ? null : options.getEnableConsole();
+        var maxFiles = options == null ? null : options.getMaxFiles();
+        return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
+    }
+
+    public CSharpAppResource withMergeLoggingPath(String logLevel, String logPath) {
+        return withMergeLoggingPath(logLevel, logPath, null);
+    }
+
+    /** Configures resource logging with file path */
+    private CSharpAppResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
+        reqArgs.put("logPath", AspireClient.serializeValue(logPath));
+        if (enableConsole != null) {
+            reqArgs.put("enableConsole", AspireClient.serializeValue(enableConsole));
+        }
+        if (maxFiles != null) {
+            reqArgs.put("maxFiles", AspireClient.serializeValue(maxFiles));
+        }
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLoggingPath", reqArgs);
+        return this;
+    }
+
+    /** Configures a route */
+    public CSharpAppResource withMergeRoute(String path, String method, String handler, double priority) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("method", AspireClient.serializeValue(method));
+        reqArgs.put("handler", AspireClient.serializeValue(handler));
+        reqArgs.put("priority", AspireClient.serializeValue(priority));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRoute", reqArgs);
+        return this;
+    }
+
+    /** Configures a route with middleware */
+    public CSharpAppResource withMergeRouteMiddleware(String path, String method, String handler, double priority, String middleware) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("method", AspireClient.serializeValue(method));
+        reqArgs.put("handler", AspireClient.serializeValue(handler));
+        reqArgs.put("priority", AspireClient.serializeValue(priority));
+        reqArgs.put("middleware", AspireClient.serializeValue(middleware));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRouteMiddleware", reqArgs);
         return this;
     }
 
@@ -2945,22 +2999,6 @@ public class ConnectionStringResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Customizes displayed URLs via async callback */
-    public ConnectionStringResource withUrlsCallbackAsync(AspireAction1<ResourceUrlsCallbackContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (ResourceUrlsCallbackContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withUrlsCallbackAsync", reqArgs);
-        return this;
-    }
-
     public ConnectionStringResource withUrl(String url) {
         return withUrl(url, null);
     }
@@ -3226,22 +3264,6 @@ public class ConnectionStringResource extends ResourceBuilderBase {
             reqArgs.put("description", AspireClient.serializeValue(description));
         }
         getClient().invokeCapability("Aspire.Hosting/withPipelineStepFactory", reqArgs);
-        return this;
-    }
-
-    /** Configures pipeline step dependencies via an async callback */
-    public ConnectionStringResource withPipelineConfigurationAsync(AspireAction1<PipelineConfigurationContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (PipelineConfigurationContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withPipelineConfigurationAsync", reqArgs);
         return this;
     }
 
@@ -3531,6 +3553,124 @@ public class ConnectionStringResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a label to the resource */
+    public ConnectionStringResource withMergeLabel(String label) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("label", AspireClient.serializeValue(label));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLabel", reqArgs);
+        return this;
+    }
+
+    /** Adds a categorized label to the resource */
+    public ConnectionStringResource withMergeLabelCategorized(String label, String category) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("label", AspireClient.serializeValue(label));
+        reqArgs.put("category", AspireClient.serializeValue(category));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLabelCategorized", reqArgs);
+        return this;
+    }
+
+    /** Configures a named endpoint */
+    public ConnectionStringResource withMergeEndpoint(String endpointName, double port) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeEndpoint", reqArgs);
+        return this;
+    }
+
+    /** Configures a named endpoint with scheme */
+    public ConnectionStringResource withMergeEndpointScheme(String endpointName, double port, String scheme) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        reqArgs.put("scheme", AspireClient.serializeValue(scheme));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeEndpointScheme", reqArgs);
+        return this;
+    }
+
+    /** Configures resource logging */
+    public ConnectionStringResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
+        var enableConsole = options == null ? null : options.getEnableConsole();
+        var maxFiles = options == null ? null : options.getMaxFiles();
+        return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
+    }
+
+    public ConnectionStringResource withMergeLogging(String logLevel) {
+        return withMergeLogging(logLevel, null);
+    }
+
+    /** Configures resource logging */
+    private ConnectionStringResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
+        if (enableConsole != null) {
+            reqArgs.put("enableConsole", AspireClient.serializeValue(enableConsole));
+        }
+        if (maxFiles != null) {
+            reqArgs.put("maxFiles", AspireClient.serializeValue(maxFiles));
+        }
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLogging", reqArgs);
+        return this;
+    }
+
+    /** Configures resource logging with file path */
+    public ConnectionStringResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
+        var enableConsole = options == null ? null : options.getEnableConsole();
+        var maxFiles = options == null ? null : options.getMaxFiles();
+        return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
+    }
+
+    public ConnectionStringResource withMergeLoggingPath(String logLevel, String logPath) {
+        return withMergeLoggingPath(logLevel, logPath, null);
+    }
+
+    /** Configures resource logging with file path */
+    private ConnectionStringResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
+        reqArgs.put("logPath", AspireClient.serializeValue(logPath));
+        if (enableConsole != null) {
+            reqArgs.put("enableConsole", AspireClient.serializeValue(enableConsole));
+        }
+        if (maxFiles != null) {
+            reqArgs.put("maxFiles", AspireClient.serializeValue(maxFiles));
+        }
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLoggingPath", reqArgs);
+        return this;
+    }
+
+    /** Configures a route */
+    public ConnectionStringResource withMergeRoute(String path, String method, String handler, double priority) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("method", AspireClient.serializeValue(method));
+        reqArgs.put("handler", AspireClient.serializeValue(handler));
+        reqArgs.put("priority", AspireClient.serializeValue(priority));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRoute", reqArgs);
+        return this;
+    }
+
+    /** Configures a route with middleware */
+    public ConnectionStringResource withMergeRouteMiddleware(String path, String method, String handler, double priority, String middleware) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("method", AspireClient.serializeValue(method));
+        reqArgs.put("handler", AspireClient.serializeValue(handler));
+        reqArgs.put("priority", AspireClient.serializeValue(priority));
+        reqArgs.put("middleware", AspireClient.serializeValue(middleware));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRouteMiddleware", reqArgs);
+        return this;
+    }
+
 }
 
 // ===== ContainerLifetime.java =====
@@ -3643,22 +3783,6 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withUrlsCallback", reqArgs);
-        return this;
-    }
-
-    /** Customizes displayed URLs via async callback */
-    public ContainerRegistryResource withUrlsCallbackAsync(AspireAction1<ResourceUrlsCallbackContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (ResourceUrlsCallbackContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withUrlsCallbackAsync", reqArgs);
         return this;
     }
 
@@ -3849,22 +3973,6 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
             reqArgs.put("description", AspireClient.serializeValue(description));
         }
         getClient().invokeCapability("Aspire.Hosting/withPipelineStepFactory", reqArgs);
-        return this;
-    }
-
-    /** Configures pipeline step dependencies via an async callback */
-    public ContainerRegistryResource withPipelineConfigurationAsync(AspireAction1<PipelineConfigurationContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (PipelineConfigurationContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withPipelineConfigurationAsync", reqArgs);
         return this;
     }
 
@@ -4117,6 +4225,124 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
             reqArgs.put("operation", operationId);
         }
         getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withCancellableOperation", reqArgs);
+        return this;
+    }
+
+    /** Adds a label to the resource */
+    public ContainerRegistryResource withMergeLabel(String label) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("label", AspireClient.serializeValue(label));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLabel", reqArgs);
+        return this;
+    }
+
+    /** Adds a categorized label to the resource */
+    public ContainerRegistryResource withMergeLabelCategorized(String label, String category) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("label", AspireClient.serializeValue(label));
+        reqArgs.put("category", AspireClient.serializeValue(category));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLabelCategorized", reqArgs);
+        return this;
+    }
+
+    /** Configures a named endpoint */
+    public ContainerRegistryResource withMergeEndpoint(String endpointName, double port) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeEndpoint", reqArgs);
+        return this;
+    }
+
+    /** Configures a named endpoint with scheme */
+    public ContainerRegistryResource withMergeEndpointScheme(String endpointName, double port, String scheme) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        reqArgs.put("scheme", AspireClient.serializeValue(scheme));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeEndpointScheme", reqArgs);
+        return this;
+    }
+
+    /** Configures resource logging */
+    public ContainerRegistryResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
+        var enableConsole = options == null ? null : options.getEnableConsole();
+        var maxFiles = options == null ? null : options.getMaxFiles();
+        return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
+    }
+
+    public ContainerRegistryResource withMergeLogging(String logLevel) {
+        return withMergeLogging(logLevel, null);
+    }
+
+    /** Configures resource logging */
+    private ContainerRegistryResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
+        if (enableConsole != null) {
+            reqArgs.put("enableConsole", AspireClient.serializeValue(enableConsole));
+        }
+        if (maxFiles != null) {
+            reqArgs.put("maxFiles", AspireClient.serializeValue(maxFiles));
+        }
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLogging", reqArgs);
+        return this;
+    }
+
+    /** Configures resource logging with file path */
+    public ContainerRegistryResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
+        var enableConsole = options == null ? null : options.getEnableConsole();
+        var maxFiles = options == null ? null : options.getMaxFiles();
+        return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
+    }
+
+    public ContainerRegistryResource withMergeLoggingPath(String logLevel, String logPath) {
+        return withMergeLoggingPath(logLevel, logPath, null);
+    }
+
+    /** Configures resource logging with file path */
+    private ContainerRegistryResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
+        reqArgs.put("logPath", AspireClient.serializeValue(logPath));
+        if (enableConsole != null) {
+            reqArgs.put("enableConsole", AspireClient.serializeValue(enableConsole));
+        }
+        if (maxFiles != null) {
+            reqArgs.put("maxFiles", AspireClient.serializeValue(maxFiles));
+        }
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLoggingPath", reqArgs);
+        return this;
+    }
+
+    /** Configures a route */
+    public ContainerRegistryResource withMergeRoute(String path, String method, String handler, double priority) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("method", AspireClient.serializeValue(method));
+        reqArgs.put("handler", AspireClient.serializeValue(handler));
+        reqArgs.put("priority", AspireClient.serializeValue(priority));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRoute", reqArgs);
+        return this;
+    }
+
+    /** Configures a route with middleware */
+    public ContainerRegistryResource withMergeRouteMiddleware(String path, String method, String handler, double priority, String middleware) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("method", AspireClient.serializeValue(method));
+        reqArgs.put("handler", AspireClient.serializeValue(handler));
+        reqArgs.put("priority", AspireClient.serializeValue(priority));
+        reqArgs.put("middleware", AspireClient.serializeValue(middleware));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRouteMiddleware", reqArgs);
         return this;
     }
 
@@ -4453,22 +4679,6 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Sets environment variables via async callback */
-    public ContainerResource withEnvironmentCallbackAsync(AspireAction1<EnvironmentCallbackContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (EnvironmentCallbackContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallbackAsync", reqArgs);
-        return this;
-    }
-
     /** Sets an environment variable from an endpoint reference */
     public ContainerResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -4525,22 +4735,6 @@ public class ContainerResource extends ResourceBuilderBase {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withArgsCallback", reqArgs);
-        return this;
-    }
-
-    /** Sets command-line arguments via async callback */
-    public ContainerResource withArgsCallbackAsync(AspireAction1<CommandLineArgsCallbackContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (CommandLineArgsCallbackContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withArgsCallbackAsync", reqArgs);
         return this;
     }
 
@@ -4770,22 +4964,6 @@ public class ContainerResource extends ResourceBuilderBase {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withUrlsCallback", reqArgs);
-        return this;
-    }
-
-    /** Customizes displayed URLs via async callback */
-    public ContainerResource withUrlsCallbackAsync(AspireAction1<ResourceUrlsCallbackContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (ResourceUrlsCallbackContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withUrlsCallbackAsync", reqArgs);
         return this;
     }
 
@@ -5207,22 +5385,6 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Configures pipeline step dependencies via an async callback */
-    public ContainerResource withPipelineConfigurationAsync(AspireAction1<PipelineConfigurationContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (PipelineConfigurationContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withPipelineConfigurationAsync", reqArgs);
-        return this;
-    }
-
     /** Configures pipeline step dependencies via a callback */
     public ContainerResource withPipelineConfiguration(AspireAction1<PipelineConfigurationContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -5539,6 +5701,124 @@ public class ContainerResource extends ResourceBuilderBase {
             reqArgs.put("operation", operationId);
         }
         getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withCancellableOperation", reqArgs);
+        return this;
+    }
+
+    /** Adds a label to the resource */
+    public ContainerResource withMergeLabel(String label) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("label", AspireClient.serializeValue(label));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLabel", reqArgs);
+        return this;
+    }
+
+    /** Adds a categorized label to the resource */
+    public ContainerResource withMergeLabelCategorized(String label, String category) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("label", AspireClient.serializeValue(label));
+        reqArgs.put("category", AspireClient.serializeValue(category));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLabelCategorized", reqArgs);
+        return this;
+    }
+
+    /** Configures a named endpoint */
+    public ContainerResource withMergeEndpoint(String endpointName, double port) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeEndpoint", reqArgs);
+        return this;
+    }
+
+    /** Configures a named endpoint with scheme */
+    public ContainerResource withMergeEndpointScheme(String endpointName, double port, String scheme) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        reqArgs.put("scheme", AspireClient.serializeValue(scheme));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeEndpointScheme", reqArgs);
+        return this;
+    }
+
+    /** Configures resource logging */
+    public ContainerResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
+        var enableConsole = options == null ? null : options.getEnableConsole();
+        var maxFiles = options == null ? null : options.getMaxFiles();
+        return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
+    }
+
+    public ContainerResource withMergeLogging(String logLevel) {
+        return withMergeLogging(logLevel, null);
+    }
+
+    /** Configures resource logging */
+    private ContainerResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
+        if (enableConsole != null) {
+            reqArgs.put("enableConsole", AspireClient.serializeValue(enableConsole));
+        }
+        if (maxFiles != null) {
+            reqArgs.put("maxFiles", AspireClient.serializeValue(maxFiles));
+        }
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLogging", reqArgs);
+        return this;
+    }
+
+    /** Configures resource logging with file path */
+    public ContainerResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
+        var enableConsole = options == null ? null : options.getEnableConsole();
+        var maxFiles = options == null ? null : options.getMaxFiles();
+        return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
+    }
+
+    public ContainerResource withMergeLoggingPath(String logLevel, String logPath) {
+        return withMergeLoggingPath(logLevel, logPath, null);
+    }
+
+    /** Configures resource logging with file path */
+    private ContainerResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
+        reqArgs.put("logPath", AspireClient.serializeValue(logPath));
+        if (enableConsole != null) {
+            reqArgs.put("enableConsole", AspireClient.serializeValue(enableConsole));
+        }
+        if (maxFiles != null) {
+            reqArgs.put("maxFiles", AspireClient.serializeValue(maxFiles));
+        }
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLoggingPath", reqArgs);
+        return this;
+    }
+
+    /** Configures a route */
+    public ContainerResource withMergeRoute(String path, String method, String handler, double priority) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("method", AspireClient.serializeValue(method));
+        reqArgs.put("handler", AspireClient.serializeValue(handler));
+        reqArgs.put("priority", AspireClient.serializeValue(priority));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRoute", reqArgs);
+        return this;
+    }
+
+    /** Configures a route with middleware */
+    public ContainerResource withMergeRouteMiddleware(String path, String method, String handler, double priority, String middleware) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("method", AspireClient.serializeValue(method));
+        reqArgs.put("handler", AspireClient.serializeValue(handler));
+        reqArgs.put("priority", AspireClient.serializeValue(priority));
+        reqArgs.put("middleware", AspireClient.serializeValue(middleware));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRouteMiddleware", reqArgs);
         return this;
     }
 
@@ -6049,22 +6329,6 @@ public class DotnetToolResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Sets environment variables via async callback */
-    public DotnetToolResource withEnvironmentCallbackAsync(AspireAction1<EnvironmentCallbackContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (EnvironmentCallbackContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallbackAsync", reqArgs);
-        return this;
-    }
-
     /** Sets an environment variable from an endpoint reference */
     public DotnetToolResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -6121,22 +6385,6 @@ public class DotnetToolResource extends ResourceBuilderBase {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withArgsCallback", reqArgs);
-        return this;
-    }
-
-    /** Sets command-line arguments via async callback */
-    public DotnetToolResource withArgsCallbackAsync(AspireAction1<CommandLineArgsCallbackContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (CommandLineArgsCallbackContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withArgsCallbackAsync", reqArgs);
         return this;
     }
 
@@ -6366,22 +6614,6 @@ public class DotnetToolResource extends ResourceBuilderBase {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withUrlsCallback", reqArgs);
-        return this;
-    }
-
-    /** Customizes displayed URLs via async callback */
-    public DotnetToolResource withUrlsCallbackAsync(AspireAction1<ResourceUrlsCallbackContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (ResourceUrlsCallbackContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withUrlsCallbackAsync", reqArgs);
         return this;
     }
 
@@ -6803,22 +7035,6 @@ public class DotnetToolResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Configures pipeline step dependencies via an async callback */
-    public DotnetToolResource withPipelineConfigurationAsync(AspireAction1<PipelineConfigurationContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (PipelineConfigurationContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withPipelineConfigurationAsync", reqArgs);
-        return this;
-    }
-
     /** Configures pipeline step dependencies via a callback */
     public DotnetToolResource withPipelineConfiguration(AspireAction1<PipelineConfigurationContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -7109,6 +7325,124 @@ public class DotnetToolResource extends ResourceBuilderBase {
             reqArgs.put("operation", operationId);
         }
         getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withCancellableOperation", reqArgs);
+        return this;
+    }
+
+    /** Adds a label to the resource */
+    public DotnetToolResource withMergeLabel(String label) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("label", AspireClient.serializeValue(label));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLabel", reqArgs);
+        return this;
+    }
+
+    /** Adds a categorized label to the resource */
+    public DotnetToolResource withMergeLabelCategorized(String label, String category) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("label", AspireClient.serializeValue(label));
+        reqArgs.put("category", AspireClient.serializeValue(category));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLabelCategorized", reqArgs);
+        return this;
+    }
+
+    /** Configures a named endpoint */
+    public DotnetToolResource withMergeEndpoint(String endpointName, double port) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeEndpoint", reqArgs);
+        return this;
+    }
+
+    /** Configures a named endpoint with scheme */
+    public DotnetToolResource withMergeEndpointScheme(String endpointName, double port, String scheme) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        reqArgs.put("scheme", AspireClient.serializeValue(scheme));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeEndpointScheme", reqArgs);
+        return this;
+    }
+
+    /** Configures resource logging */
+    public DotnetToolResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
+        var enableConsole = options == null ? null : options.getEnableConsole();
+        var maxFiles = options == null ? null : options.getMaxFiles();
+        return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
+    }
+
+    public DotnetToolResource withMergeLogging(String logLevel) {
+        return withMergeLogging(logLevel, null);
+    }
+
+    /** Configures resource logging */
+    private DotnetToolResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
+        if (enableConsole != null) {
+            reqArgs.put("enableConsole", AspireClient.serializeValue(enableConsole));
+        }
+        if (maxFiles != null) {
+            reqArgs.put("maxFiles", AspireClient.serializeValue(maxFiles));
+        }
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLogging", reqArgs);
+        return this;
+    }
+
+    /** Configures resource logging with file path */
+    public DotnetToolResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
+        var enableConsole = options == null ? null : options.getEnableConsole();
+        var maxFiles = options == null ? null : options.getMaxFiles();
+        return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
+    }
+
+    public DotnetToolResource withMergeLoggingPath(String logLevel, String logPath) {
+        return withMergeLoggingPath(logLevel, logPath, null);
+    }
+
+    /** Configures resource logging with file path */
+    private DotnetToolResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
+        reqArgs.put("logPath", AspireClient.serializeValue(logPath));
+        if (enableConsole != null) {
+            reqArgs.put("enableConsole", AspireClient.serializeValue(enableConsole));
+        }
+        if (maxFiles != null) {
+            reqArgs.put("maxFiles", AspireClient.serializeValue(maxFiles));
+        }
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLoggingPath", reqArgs);
+        return this;
+    }
+
+    /** Configures a route */
+    public DotnetToolResource withMergeRoute(String path, String method, String handler, double priority) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("method", AspireClient.serializeValue(method));
+        reqArgs.put("handler", AspireClient.serializeValue(handler));
+        reqArgs.put("priority", AspireClient.serializeValue(priority));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRoute", reqArgs);
+        return this;
+    }
+
+    /** Configures a route with middleware */
+    public DotnetToolResource withMergeRouteMiddleware(String path, String method, String handler, double priority, String middleware) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("method", AspireClient.serializeValue(method));
+        reqArgs.put("handler", AspireClient.serializeValue(handler));
+        reqArgs.put("priority", AspireClient.serializeValue(priority));
+        reqArgs.put("middleware", AspireClient.serializeValue(middleware));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRouteMiddleware", reqArgs);
         return this;
     }
 
@@ -7584,22 +7918,6 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Sets environment variables via async callback */
-    public ExecutableResource withEnvironmentCallbackAsync(AspireAction1<EnvironmentCallbackContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (EnvironmentCallbackContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallbackAsync", reqArgs);
-        return this;
-    }
-
     /** Sets an environment variable from an endpoint reference */
     public ExecutableResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -7656,22 +7974,6 @@ public class ExecutableResource extends ResourceBuilderBase {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withArgsCallback", reqArgs);
-        return this;
-    }
-
-    /** Sets command-line arguments via async callback */
-    public ExecutableResource withArgsCallbackAsync(AspireAction1<CommandLineArgsCallbackContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (CommandLineArgsCallbackContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withArgsCallbackAsync", reqArgs);
         return this;
     }
 
@@ -7901,22 +8203,6 @@ public class ExecutableResource extends ResourceBuilderBase {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withUrlsCallback", reqArgs);
-        return this;
-    }
-
-    /** Customizes displayed URLs via async callback */
-    public ExecutableResource withUrlsCallbackAsync(AspireAction1<ResourceUrlsCallbackContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (ResourceUrlsCallbackContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withUrlsCallbackAsync", reqArgs);
         return this;
     }
 
@@ -8338,22 +8624,6 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Configures pipeline step dependencies via an async callback */
-    public ExecutableResource withPipelineConfigurationAsync(AspireAction1<PipelineConfigurationContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (PipelineConfigurationContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withPipelineConfigurationAsync", reqArgs);
-        return this;
-    }
-
     /** Configures pipeline step dependencies via a callback */
     public ExecutableResource withPipelineConfiguration(AspireAction1<PipelineConfigurationContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -8647,6 +8917,124 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a label to the resource */
+    public ExecutableResource withMergeLabel(String label) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("label", AspireClient.serializeValue(label));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLabel", reqArgs);
+        return this;
+    }
+
+    /** Adds a categorized label to the resource */
+    public ExecutableResource withMergeLabelCategorized(String label, String category) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("label", AspireClient.serializeValue(label));
+        reqArgs.put("category", AspireClient.serializeValue(category));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLabelCategorized", reqArgs);
+        return this;
+    }
+
+    /** Configures a named endpoint */
+    public ExecutableResource withMergeEndpoint(String endpointName, double port) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeEndpoint", reqArgs);
+        return this;
+    }
+
+    /** Configures a named endpoint with scheme */
+    public ExecutableResource withMergeEndpointScheme(String endpointName, double port, String scheme) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        reqArgs.put("scheme", AspireClient.serializeValue(scheme));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeEndpointScheme", reqArgs);
+        return this;
+    }
+
+    /** Configures resource logging */
+    public ExecutableResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
+        var enableConsole = options == null ? null : options.getEnableConsole();
+        var maxFiles = options == null ? null : options.getMaxFiles();
+        return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
+    }
+
+    public ExecutableResource withMergeLogging(String logLevel) {
+        return withMergeLogging(logLevel, null);
+    }
+
+    /** Configures resource logging */
+    private ExecutableResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
+        if (enableConsole != null) {
+            reqArgs.put("enableConsole", AspireClient.serializeValue(enableConsole));
+        }
+        if (maxFiles != null) {
+            reqArgs.put("maxFiles", AspireClient.serializeValue(maxFiles));
+        }
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLogging", reqArgs);
+        return this;
+    }
+
+    /** Configures resource logging with file path */
+    public ExecutableResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
+        var enableConsole = options == null ? null : options.getEnableConsole();
+        var maxFiles = options == null ? null : options.getMaxFiles();
+        return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
+    }
+
+    public ExecutableResource withMergeLoggingPath(String logLevel, String logPath) {
+        return withMergeLoggingPath(logLevel, logPath, null);
+    }
+
+    /** Configures resource logging with file path */
+    private ExecutableResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
+        reqArgs.put("logPath", AspireClient.serializeValue(logPath));
+        if (enableConsole != null) {
+            reqArgs.put("enableConsole", AspireClient.serializeValue(enableConsole));
+        }
+        if (maxFiles != null) {
+            reqArgs.put("maxFiles", AspireClient.serializeValue(maxFiles));
+        }
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLoggingPath", reqArgs);
+        return this;
+    }
+
+    /** Configures a route */
+    public ExecutableResource withMergeRoute(String path, String method, String handler, double priority) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("method", AspireClient.serializeValue(method));
+        reqArgs.put("handler", AspireClient.serializeValue(handler));
+        reqArgs.put("priority", AspireClient.serializeValue(priority));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRoute", reqArgs);
+        return this;
+    }
+
+    /** Configures a route with middleware */
+    public ExecutableResource withMergeRouteMiddleware(String path, String method, String handler, double priority, String middleware) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("method", AspireClient.serializeValue(method));
+        reqArgs.put("handler", AspireClient.serializeValue(handler));
+        reqArgs.put("priority", AspireClient.serializeValue(priority));
+        reqArgs.put("middleware", AspireClient.serializeValue(middleware));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRouteMiddleware", reqArgs);
+        return this;
+    }
+
 }
 
 // ===== ExecuteCommandContext.java =====
@@ -8855,22 +9243,6 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Customizes displayed URLs via async callback */
-    public ExternalServiceResource withUrlsCallbackAsync(AspireAction1<ResourceUrlsCallbackContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (ResourceUrlsCallbackContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withUrlsCallbackAsync", reqArgs);
-        return this;
-    }
-
     public ExternalServiceResource withUrl(String url) {
         return withUrl(url, null);
     }
@@ -9058,22 +9430,6 @@ public class ExternalServiceResource extends ResourceBuilderBase {
             reqArgs.put("description", AspireClient.serializeValue(description));
         }
         getClient().invokeCapability("Aspire.Hosting/withPipelineStepFactory", reqArgs);
-        return this;
-    }
-
-    /** Configures pipeline step dependencies via an async callback */
-    public ExternalServiceResource withPipelineConfigurationAsync(AspireAction1<PipelineConfigurationContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (PipelineConfigurationContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withPipelineConfigurationAsync", reqArgs);
         return this;
     }
 
@@ -9326,6 +9682,124 @@ public class ExternalServiceResource extends ResourceBuilderBase {
             reqArgs.put("operation", operationId);
         }
         getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withCancellableOperation", reqArgs);
+        return this;
+    }
+
+    /** Adds a label to the resource */
+    public ExternalServiceResource withMergeLabel(String label) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("label", AspireClient.serializeValue(label));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLabel", reqArgs);
+        return this;
+    }
+
+    /** Adds a categorized label to the resource */
+    public ExternalServiceResource withMergeLabelCategorized(String label, String category) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("label", AspireClient.serializeValue(label));
+        reqArgs.put("category", AspireClient.serializeValue(category));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLabelCategorized", reqArgs);
+        return this;
+    }
+
+    /** Configures a named endpoint */
+    public ExternalServiceResource withMergeEndpoint(String endpointName, double port) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeEndpoint", reqArgs);
+        return this;
+    }
+
+    /** Configures a named endpoint with scheme */
+    public ExternalServiceResource withMergeEndpointScheme(String endpointName, double port, String scheme) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        reqArgs.put("scheme", AspireClient.serializeValue(scheme));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeEndpointScheme", reqArgs);
+        return this;
+    }
+
+    /** Configures resource logging */
+    public ExternalServiceResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
+        var enableConsole = options == null ? null : options.getEnableConsole();
+        var maxFiles = options == null ? null : options.getMaxFiles();
+        return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
+    }
+
+    public ExternalServiceResource withMergeLogging(String logLevel) {
+        return withMergeLogging(logLevel, null);
+    }
+
+    /** Configures resource logging */
+    private ExternalServiceResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
+        if (enableConsole != null) {
+            reqArgs.put("enableConsole", AspireClient.serializeValue(enableConsole));
+        }
+        if (maxFiles != null) {
+            reqArgs.put("maxFiles", AspireClient.serializeValue(maxFiles));
+        }
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLogging", reqArgs);
+        return this;
+    }
+
+    /** Configures resource logging with file path */
+    public ExternalServiceResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
+        var enableConsole = options == null ? null : options.getEnableConsole();
+        var maxFiles = options == null ? null : options.getMaxFiles();
+        return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
+    }
+
+    public ExternalServiceResource withMergeLoggingPath(String logLevel, String logPath) {
+        return withMergeLoggingPath(logLevel, logPath, null);
+    }
+
+    /** Configures resource logging with file path */
+    private ExternalServiceResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
+        reqArgs.put("logPath", AspireClient.serializeValue(logPath));
+        if (enableConsole != null) {
+            reqArgs.put("enableConsole", AspireClient.serializeValue(enableConsole));
+        }
+        if (maxFiles != null) {
+            reqArgs.put("maxFiles", AspireClient.serializeValue(maxFiles));
+        }
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLoggingPath", reqArgs);
+        return this;
+    }
+
+    /** Configures a route */
+    public ExternalServiceResource withMergeRoute(String path, String method, String handler, double priority) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("method", AspireClient.serializeValue(method));
+        reqArgs.put("handler", AspireClient.serializeValue(handler));
+        reqArgs.put("priority", AspireClient.serializeValue(priority));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRoute", reqArgs);
+        return this;
+    }
+
+    /** Configures a route with middleware */
+    public ExternalServiceResource withMergeRouteMiddleware(String path, String method, String handler, double priority, String middleware) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("method", AspireClient.serializeValue(method));
+        reqArgs.put("handler", AspireClient.serializeValue(handler));
+        reqArgs.put("priority", AspireClient.serializeValue(priority));
+        reqArgs.put("middleware", AspireClient.serializeValue(middleware));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRouteMiddleware", reqArgs);
         return this;
     }
 
@@ -10808,22 +11282,6 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Customizes displayed URLs via async callback */
-    public ParameterResource withUrlsCallbackAsync(AspireAction1<ResourceUrlsCallbackContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (ResourceUrlsCallbackContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withUrlsCallbackAsync", reqArgs);
-        return this;
-    }
-
     public ParameterResource withUrl(String url) {
         return withUrl(url, null);
     }
@@ -11011,22 +11469,6 @@ public class ParameterResource extends ResourceBuilderBase {
             reqArgs.put("description", AspireClient.serializeValue(description));
         }
         getClient().invokeCapability("Aspire.Hosting/withPipelineStepFactory", reqArgs);
-        return this;
-    }
-
-    /** Configures pipeline step dependencies via an async callback */
-    public ParameterResource withPipelineConfigurationAsync(AspireAction1<PipelineConfigurationContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (PipelineConfigurationContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withPipelineConfigurationAsync", reqArgs);
         return this;
     }
 
@@ -11279,6 +11721,124 @@ public class ParameterResource extends ResourceBuilderBase {
             reqArgs.put("operation", operationId);
         }
         getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withCancellableOperation", reqArgs);
+        return this;
+    }
+
+    /** Adds a label to the resource */
+    public ParameterResource withMergeLabel(String label) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("label", AspireClient.serializeValue(label));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLabel", reqArgs);
+        return this;
+    }
+
+    /** Adds a categorized label to the resource */
+    public ParameterResource withMergeLabelCategorized(String label, String category) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("label", AspireClient.serializeValue(label));
+        reqArgs.put("category", AspireClient.serializeValue(category));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLabelCategorized", reqArgs);
+        return this;
+    }
+
+    /** Configures a named endpoint */
+    public ParameterResource withMergeEndpoint(String endpointName, double port) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeEndpoint", reqArgs);
+        return this;
+    }
+
+    /** Configures a named endpoint with scheme */
+    public ParameterResource withMergeEndpointScheme(String endpointName, double port, String scheme) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        reqArgs.put("scheme", AspireClient.serializeValue(scheme));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeEndpointScheme", reqArgs);
+        return this;
+    }
+
+    /** Configures resource logging */
+    public ParameterResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
+        var enableConsole = options == null ? null : options.getEnableConsole();
+        var maxFiles = options == null ? null : options.getMaxFiles();
+        return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
+    }
+
+    public ParameterResource withMergeLogging(String logLevel) {
+        return withMergeLogging(logLevel, null);
+    }
+
+    /** Configures resource logging */
+    private ParameterResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
+        if (enableConsole != null) {
+            reqArgs.put("enableConsole", AspireClient.serializeValue(enableConsole));
+        }
+        if (maxFiles != null) {
+            reqArgs.put("maxFiles", AspireClient.serializeValue(maxFiles));
+        }
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLogging", reqArgs);
+        return this;
+    }
+
+    /** Configures resource logging with file path */
+    public ParameterResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
+        var enableConsole = options == null ? null : options.getEnableConsole();
+        var maxFiles = options == null ? null : options.getMaxFiles();
+        return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
+    }
+
+    public ParameterResource withMergeLoggingPath(String logLevel, String logPath) {
+        return withMergeLoggingPath(logLevel, logPath, null);
+    }
+
+    /** Configures resource logging with file path */
+    private ParameterResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
+        reqArgs.put("logPath", AspireClient.serializeValue(logPath));
+        if (enableConsole != null) {
+            reqArgs.put("enableConsole", AspireClient.serializeValue(enableConsole));
+        }
+        if (maxFiles != null) {
+            reqArgs.put("maxFiles", AspireClient.serializeValue(maxFiles));
+        }
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLoggingPath", reqArgs);
+        return this;
+    }
+
+    /** Configures a route */
+    public ParameterResource withMergeRoute(String path, String method, String handler, double priority) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("method", AspireClient.serializeValue(method));
+        reqArgs.put("handler", AspireClient.serializeValue(handler));
+        reqArgs.put("priority", AspireClient.serializeValue(priority));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRoute", reqArgs);
+        return this;
+    }
+
+    /** Configures a route with middleware */
+    public ParameterResource withMergeRouteMiddleware(String path, String method, String handler, double priority, String middleware) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("method", AspireClient.serializeValue(method));
+        reqArgs.put("handler", AspireClient.serializeValue(handler));
+        reqArgs.put("priority", AspireClient.serializeValue(priority));
+        reqArgs.put("middleware", AspireClient.serializeValue(middleware));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRouteMiddleware", reqArgs);
         return this;
     }
 
@@ -11946,22 +12506,6 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Sets environment variables via async callback */
-    public ProjectResource withEnvironmentCallbackAsync(AspireAction1<EnvironmentCallbackContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (EnvironmentCallbackContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallbackAsync", reqArgs);
-        return this;
-    }
-
     /** Sets an environment variable from an endpoint reference */
     public ProjectResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -12018,22 +12562,6 @@ public class ProjectResource extends ResourceBuilderBase {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withArgsCallback", reqArgs);
-        return this;
-    }
-
-    /** Sets command-line arguments via async callback */
-    public ProjectResource withArgsCallbackAsync(AspireAction1<CommandLineArgsCallbackContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (CommandLineArgsCallbackContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withArgsCallbackAsync", reqArgs);
         return this;
     }
 
@@ -12263,22 +12791,6 @@ public class ProjectResource extends ResourceBuilderBase {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withUrlsCallback", reqArgs);
-        return this;
-    }
-
-    /** Customizes displayed URLs via async callback */
-    public ProjectResource withUrlsCallbackAsync(AspireAction1<ResourceUrlsCallbackContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (ResourceUrlsCallbackContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withUrlsCallbackAsync", reqArgs);
         return this;
     }
 
@@ -12714,22 +13226,6 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Configures pipeline step dependencies via an async callback */
-    public ProjectResource withPipelineConfigurationAsync(AspireAction1<PipelineConfigurationContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (PipelineConfigurationContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withPipelineConfigurationAsync", reqArgs);
-        return this;
-    }
-
     /** Configures pipeline step dependencies via a callback */
     public ProjectResource withPipelineConfiguration(AspireAction1<PipelineConfigurationContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -13020,6 +13516,124 @@ public class ProjectResource extends ResourceBuilderBase {
             reqArgs.put("operation", operationId);
         }
         getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withCancellableOperation", reqArgs);
+        return this;
+    }
+
+    /** Adds a label to the resource */
+    public ProjectResource withMergeLabel(String label) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("label", AspireClient.serializeValue(label));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLabel", reqArgs);
+        return this;
+    }
+
+    /** Adds a categorized label to the resource */
+    public ProjectResource withMergeLabelCategorized(String label, String category) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("label", AspireClient.serializeValue(label));
+        reqArgs.put("category", AspireClient.serializeValue(category));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLabelCategorized", reqArgs);
+        return this;
+    }
+
+    /** Configures a named endpoint */
+    public ProjectResource withMergeEndpoint(String endpointName, double port) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeEndpoint", reqArgs);
+        return this;
+    }
+
+    /** Configures a named endpoint with scheme */
+    public ProjectResource withMergeEndpointScheme(String endpointName, double port, String scheme) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        reqArgs.put("scheme", AspireClient.serializeValue(scheme));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeEndpointScheme", reqArgs);
+        return this;
+    }
+
+    /** Configures resource logging */
+    public ProjectResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
+        var enableConsole = options == null ? null : options.getEnableConsole();
+        var maxFiles = options == null ? null : options.getMaxFiles();
+        return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
+    }
+
+    public ProjectResource withMergeLogging(String logLevel) {
+        return withMergeLogging(logLevel, null);
+    }
+
+    /** Configures resource logging */
+    private ProjectResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
+        if (enableConsole != null) {
+            reqArgs.put("enableConsole", AspireClient.serializeValue(enableConsole));
+        }
+        if (maxFiles != null) {
+            reqArgs.put("maxFiles", AspireClient.serializeValue(maxFiles));
+        }
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLogging", reqArgs);
+        return this;
+    }
+
+    /** Configures resource logging with file path */
+    public ProjectResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
+        var enableConsole = options == null ? null : options.getEnableConsole();
+        var maxFiles = options == null ? null : options.getMaxFiles();
+        return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
+    }
+
+    public ProjectResource withMergeLoggingPath(String logLevel, String logPath) {
+        return withMergeLoggingPath(logLevel, logPath, null);
+    }
+
+    /** Configures resource logging with file path */
+    private ProjectResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
+        reqArgs.put("logPath", AspireClient.serializeValue(logPath));
+        if (enableConsole != null) {
+            reqArgs.put("enableConsole", AspireClient.serializeValue(enableConsole));
+        }
+        if (maxFiles != null) {
+            reqArgs.put("maxFiles", AspireClient.serializeValue(maxFiles));
+        }
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLoggingPath", reqArgs);
+        return this;
+    }
+
+    /** Configures a route */
+    public ProjectResource withMergeRoute(String path, String method, String handler, double priority) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("method", AspireClient.serializeValue(method));
+        reqArgs.put("handler", AspireClient.serializeValue(handler));
+        reqArgs.put("priority", AspireClient.serializeValue(priority));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRoute", reqArgs);
+        return this;
+    }
+
+    /** Configures a route with middleware */
+    public ProjectResource withMergeRouteMiddleware(String path, String method, String handler, double priority, String middleware) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("method", AspireClient.serializeValue(method));
+        reqArgs.put("handler", AspireClient.serializeValue(handler));
+        reqArgs.put("priority", AspireClient.serializeValue(priority));
+        reqArgs.put("middleware", AspireClient.serializeValue(middleware));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRouteMiddleware", reqArgs);
         return this;
     }
 
@@ -14207,22 +14821,6 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Sets environment variables via async callback */
-    public TestDatabaseResource withEnvironmentCallbackAsync(AspireAction1<EnvironmentCallbackContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (EnvironmentCallbackContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallbackAsync", reqArgs);
-        return this;
-    }
-
     /** Sets an environment variable from an endpoint reference */
     public TestDatabaseResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -14279,22 +14877,6 @@ public class TestDatabaseResource extends ResourceBuilderBase {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withArgsCallback", reqArgs);
-        return this;
-    }
-
-    /** Sets command-line arguments via async callback */
-    public TestDatabaseResource withArgsCallbackAsync(AspireAction1<CommandLineArgsCallbackContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (CommandLineArgsCallbackContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withArgsCallbackAsync", reqArgs);
         return this;
     }
 
@@ -14524,22 +15106,6 @@ public class TestDatabaseResource extends ResourceBuilderBase {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withUrlsCallback", reqArgs);
-        return this;
-    }
-
-    /** Customizes displayed URLs via async callback */
-    public TestDatabaseResource withUrlsCallbackAsync(AspireAction1<ResourceUrlsCallbackContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (ResourceUrlsCallbackContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withUrlsCallbackAsync", reqArgs);
         return this;
     }
 
@@ -14961,22 +15527,6 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Configures pipeline step dependencies via an async callback */
-    public TestDatabaseResource withPipelineConfigurationAsync(AspireAction1<PipelineConfigurationContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (PipelineConfigurationContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withPipelineConfigurationAsync", reqArgs);
-        return this;
-    }
-
     /** Configures pipeline step dependencies via a callback */
     public TestDatabaseResource withPipelineConfiguration(AspireAction1<PipelineConfigurationContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -15293,6 +15843,124 @@ public class TestDatabaseResource extends ResourceBuilderBase {
             reqArgs.put("operation", operationId);
         }
         getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withCancellableOperation", reqArgs);
+        return this;
+    }
+
+    /** Adds a label to the resource */
+    public TestDatabaseResource withMergeLabel(String label) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("label", AspireClient.serializeValue(label));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLabel", reqArgs);
+        return this;
+    }
+
+    /** Adds a categorized label to the resource */
+    public TestDatabaseResource withMergeLabelCategorized(String label, String category) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("label", AspireClient.serializeValue(label));
+        reqArgs.put("category", AspireClient.serializeValue(category));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLabelCategorized", reqArgs);
+        return this;
+    }
+
+    /** Configures a named endpoint */
+    public TestDatabaseResource withMergeEndpoint(String endpointName, double port) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeEndpoint", reqArgs);
+        return this;
+    }
+
+    /** Configures a named endpoint with scheme */
+    public TestDatabaseResource withMergeEndpointScheme(String endpointName, double port, String scheme) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        reqArgs.put("scheme", AspireClient.serializeValue(scheme));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeEndpointScheme", reqArgs);
+        return this;
+    }
+
+    /** Configures resource logging */
+    public TestDatabaseResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
+        var enableConsole = options == null ? null : options.getEnableConsole();
+        var maxFiles = options == null ? null : options.getMaxFiles();
+        return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
+    }
+
+    public TestDatabaseResource withMergeLogging(String logLevel) {
+        return withMergeLogging(logLevel, null);
+    }
+
+    /** Configures resource logging */
+    private TestDatabaseResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
+        if (enableConsole != null) {
+            reqArgs.put("enableConsole", AspireClient.serializeValue(enableConsole));
+        }
+        if (maxFiles != null) {
+            reqArgs.put("maxFiles", AspireClient.serializeValue(maxFiles));
+        }
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLogging", reqArgs);
+        return this;
+    }
+
+    /** Configures resource logging with file path */
+    public TestDatabaseResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
+        var enableConsole = options == null ? null : options.getEnableConsole();
+        var maxFiles = options == null ? null : options.getMaxFiles();
+        return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
+    }
+
+    public TestDatabaseResource withMergeLoggingPath(String logLevel, String logPath) {
+        return withMergeLoggingPath(logLevel, logPath, null);
+    }
+
+    /** Configures resource logging with file path */
+    private TestDatabaseResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
+        reqArgs.put("logPath", AspireClient.serializeValue(logPath));
+        if (enableConsole != null) {
+            reqArgs.put("enableConsole", AspireClient.serializeValue(enableConsole));
+        }
+        if (maxFiles != null) {
+            reqArgs.put("maxFiles", AspireClient.serializeValue(maxFiles));
+        }
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLoggingPath", reqArgs);
+        return this;
+    }
+
+    /** Configures a route */
+    public TestDatabaseResource withMergeRoute(String path, String method, String handler, double priority) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("method", AspireClient.serializeValue(method));
+        reqArgs.put("handler", AspireClient.serializeValue(handler));
+        reqArgs.put("priority", AspireClient.serializeValue(priority));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRoute", reqArgs);
+        return this;
+    }
+
+    /** Configures a route with middleware */
+    public TestDatabaseResource withMergeRouteMiddleware(String path, String method, String handler, double priority, String middleware) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("method", AspireClient.serializeValue(method));
+        reqArgs.put("handler", AspireClient.serializeValue(handler));
+        reqArgs.put("priority", AspireClient.serializeValue(priority));
+        reqArgs.put("middleware", AspireClient.serializeValue(middleware));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRouteMiddleware", reqArgs);
         return this;
     }
 
@@ -15780,22 +16448,6 @@ public class TestRedisResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Sets environment variables via async callback */
-    public TestRedisResource withEnvironmentCallbackAsync(AspireAction1<EnvironmentCallbackContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (EnvironmentCallbackContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallbackAsync", reqArgs);
-        return this;
-    }
-
     /** Sets an environment variable from an endpoint reference */
     public TestRedisResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -15872,22 +16524,6 @@ public class TestRedisResource extends ResourceBuilderBase {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withArgsCallback", reqArgs);
-        return this;
-    }
-
-    /** Sets command-line arguments via async callback */
-    public TestRedisResource withArgsCallbackAsync(AspireAction1<CommandLineArgsCallbackContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (CommandLineArgsCallbackContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withArgsCallbackAsync", reqArgs);
         return this;
     }
 
@@ -16117,22 +16753,6 @@ public class TestRedisResource extends ResourceBuilderBase {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withUrlsCallback", reqArgs);
-        return this;
-    }
-
-    /** Customizes displayed URLs via async callback */
-    public TestRedisResource withUrlsCallbackAsync(AspireAction1<ResourceUrlsCallbackContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (ResourceUrlsCallbackContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withUrlsCallbackAsync", reqArgs);
         return this;
     }
 
@@ -16551,22 +17171,6 @@ public class TestRedisResource extends ResourceBuilderBase {
             reqArgs.put("description", AspireClient.serializeValue(description));
         }
         getClient().invokeCapability("Aspire.Hosting/withPipelineStepFactory", reqArgs);
-        return this;
-    }
-
-    /** Configures pipeline step dependencies via an async callback */
-    public TestRedisResource withPipelineConfigurationAsync(AspireAction1<PipelineConfigurationContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (PipelineConfigurationContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withPipelineConfigurationAsync", reqArgs);
         return this;
     }
 
@@ -17058,6 +17662,124 @@ public class TestRedisResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a label to the resource */
+    public TestRedisResource withMergeLabel(String label) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("label", AspireClient.serializeValue(label));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLabel", reqArgs);
+        return this;
+    }
+
+    /** Adds a categorized label to the resource */
+    public TestRedisResource withMergeLabelCategorized(String label, String category) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("label", AspireClient.serializeValue(label));
+        reqArgs.put("category", AspireClient.serializeValue(category));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLabelCategorized", reqArgs);
+        return this;
+    }
+
+    /** Configures a named endpoint */
+    public TestRedisResource withMergeEndpoint(String endpointName, double port) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeEndpoint", reqArgs);
+        return this;
+    }
+
+    /** Configures a named endpoint with scheme */
+    public TestRedisResource withMergeEndpointScheme(String endpointName, double port, String scheme) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        reqArgs.put("scheme", AspireClient.serializeValue(scheme));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeEndpointScheme", reqArgs);
+        return this;
+    }
+
+    /** Configures resource logging */
+    public TestRedisResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
+        var enableConsole = options == null ? null : options.getEnableConsole();
+        var maxFiles = options == null ? null : options.getMaxFiles();
+        return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
+    }
+
+    public TestRedisResource withMergeLogging(String logLevel) {
+        return withMergeLogging(logLevel, null);
+    }
+
+    /** Configures resource logging */
+    private TestRedisResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
+        if (enableConsole != null) {
+            reqArgs.put("enableConsole", AspireClient.serializeValue(enableConsole));
+        }
+        if (maxFiles != null) {
+            reqArgs.put("maxFiles", AspireClient.serializeValue(maxFiles));
+        }
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLogging", reqArgs);
+        return this;
+    }
+
+    /** Configures resource logging with file path */
+    public TestRedisResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
+        var enableConsole = options == null ? null : options.getEnableConsole();
+        var maxFiles = options == null ? null : options.getMaxFiles();
+        return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
+    }
+
+    public TestRedisResource withMergeLoggingPath(String logLevel, String logPath) {
+        return withMergeLoggingPath(logLevel, logPath, null);
+    }
+
+    /** Configures resource logging with file path */
+    private TestRedisResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
+        reqArgs.put("logPath", AspireClient.serializeValue(logPath));
+        if (enableConsole != null) {
+            reqArgs.put("enableConsole", AspireClient.serializeValue(enableConsole));
+        }
+        if (maxFiles != null) {
+            reqArgs.put("maxFiles", AspireClient.serializeValue(maxFiles));
+        }
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLoggingPath", reqArgs);
+        return this;
+    }
+
+    /** Configures a route */
+    public TestRedisResource withMergeRoute(String path, String method, String handler, double priority) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("method", AspireClient.serializeValue(method));
+        reqArgs.put("handler", AspireClient.serializeValue(handler));
+        reqArgs.put("priority", AspireClient.serializeValue(priority));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRoute", reqArgs);
+        return this;
+    }
+
+    /** Configures a route with middleware */
+    public TestRedisResource withMergeRouteMiddleware(String path, String method, String handler, double priority, String middleware) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("method", AspireClient.serializeValue(method));
+        reqArgs.put("handler", AspireClient.serializeValue(handler));
+        reqArgs.put("priority", AspireClient.serializeValue(priority));
+        reqArgs.put("middleware", AspireClient.serializeValue(middleware));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRouteMiddleware", reqArgs);
+        return this;
+    }
+
 }
 
 // ===== TestResourceContext.java =====
@@ -17490,22 +18212,6 @@ public class TestVaultResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Sets environment variables via async callback */
-    public TestVaultResource withEnvironmentCallbackAsync(AspireAction1<EnvironmentCallbackContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (EnvironmentCallbackContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallbackAsync", reqArgs);
-        return this;
-    }
-
     /** Sets an environment variable from an endpoint reference */
     public TestVaultResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -17562,22 +18268,6 @@ public class TestVaultResource extends ResourceBuilderBase {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withArgsCallback", reqArgs);
-        return this;
-    }
-
-    /** Sets command-line arguments via async callback */
-    public TestVaultResource withArgsCallbackAsync(AspireAction1<CommandLineArgsCallbackContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (CommandLineArgsCallbackContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withArgsCallbackAsync", reqArgs);
         return this;
     }
 
@@ -17807,22 +18497,6 @@ public class TestVaultResource extends ResourceBuilderBase {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withUrlsCallback", reqArgs);
-        return this;
-    }
-
-    /** Customizes displayed URLs via async callback */
-    public TestVaultResource withUrlsCallbackAsync(AspireAction1<ResourceUrlsCallbackContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (ResourceUrlsCallbackContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withUrlsCallbackAsync", reqArgs);
         return this;
     }
 
@@ -18244,22 +18918,6 @@ public class TestVaultResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Configures pipeline step dependencies via an async callback */
-    public TestVaultResource withPipelineConfigurationAsync(AspireAction1<PipelineConfigurationContext> callback) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        var callbackId = getClient().registerCallback(args -> {
-            var arg = (PipelineConfigurationContext) args[0];
-            callback.invoke(arg);
-            return null;
-        });
-        if (callbackId != null) {
-            reqArgs.put("callback", callbackId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/withPipelineConfigurationAsync", reqArgs);
-        return this;
-    }
-
     /** Configures pipeline step dependencies via a callback */
     public TestVaultResource withPipelineConfiguration(AspireAction1<PipelineConfigurationContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -18585,6 +19243,124 @@ public class TestVaultResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("option", AspireClient.serializeValue(option));
         getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withVaultDirect", reqArgs);
+        return this;
+    }
+
+    /** Adds a label to the resource */
+    public TestVaultResource withMergeLabel(String label) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("label", AspireClient.serializeValue(label));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLabel", reqArgs);
+        return this;
+    }
+
+    /** Adds a categorized label to the resource */
+    public TestVaultResource withMergeLabelCategorized(String label, String category) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("label", AspireClient.serializeValue(label));
+        reqArgs.put("category", AspireClient.serializeValue(category));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLabelCategorized", reqArgs);
+        return this;
+    }
+
+    /** Configures a named endpoint */
+    public TestVaultResource withMergeEndpoint(String endpointName, double port) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeEndpoint", reqArgs);
+        return this;
+    }
+
+    /** Configures a named endpoint with scheme */
+    public TestVaultResource withMergeEndpointScheme(String endpointName, double port, String scheme) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        reqArgs.put("scheme", AspireClient.serializeValue(scheme));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeEndpointScheme", reqArgs);
+        return this;
+    }
+
+    /** Configures resource logging */
+    public TestVaultResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
+        var enableConsole = options == null ? null : options.getEnableConsole();
+        var maxFiles = options == null ? null : options.getMaxFiles();
+        return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
+    }
+
+    public TestVaultResource withMergeLogging(String logLevel) {
+        return withMergeLogging(logLevel, null);
+    }
+
+    /** Configures resource logging */
+    private TestVaultResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
+        if (enableConsole != null) {
+            reqArgs.put("enableConsole", AspireClient.serializeValue(enableConsole));
+        }
+        if (maxFiles != null) {
+            reqArgs.put("maxFiles", AspireClient.serializeValue(maxFiles));
+        }
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLogging", reqArgs);
+        return this;
+    }
+
+    /** Configures resource logging with file path */
+    public TestVaultResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
+        var enableConsole = options == null ? null : options.getEnableConsole();
+        var maxFiles = options == null ? null : options.getMaxFiles();
+        return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
+    }
+
+    public TestVaultResource withMergeLoggingPath(String logLevel, String logPath) {
+        return withMergeLoggingPath(logLevel, logPath, null);
+    }
+
+    /** Configures resource logging with file path */
+    private TestVaultResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
+        reqArgs.put("logPath", AspireClient.serializeValue(logPath));
+        if (enableConsole != null) {
+            reqArgs.put("enableConsole", AspireClient.serializeValue(enableConsole));
+        }
+        if (maxFiles != null) {
+            reqArgs.put("maxFiles", AspireClient.serializeValue(maxFiles));
+        }
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeLoggingPath", reqArgs);
+        return this;
+    }
+
+    /** Configures a route */
+    public TestVaultResource withMergeRoute(String path, String method, String handler, double priority) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("method", AspireClient.serializeValue(method));
+        reqArgs.put("handler", AspireClient.serializeValue(handler));
+        reqArgs.put("priority", AspireClient.serializeValue(priority));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRoute", reqArgs);
+        return this;
+    }
+
+    /** Configures a route with middleware */
+    public TestVaultResource withMergeRouteMiddleware(String path, String method, String handler, double priority, String middleware) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("method", AspireClient.serializeValue(method));
+        reqArgs.put("handler", AspireClient.serializeValue(handler));
+        reqArgs.put("priority", AspireClient.serializeValue(priority));
+        reqArgs.put("middleware", AspireClient.serializeValue(middleware));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRouteMiddleware", reqArgs);
         return this;
     }
 
@@ -19093,6 +19869,60 @@ public final class WithMcpServerOptions {
 
 }
 
+// ===== WithMergeLoggingOptions.java =====
+// WithMergeLoggingOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Options for WithMergeLogging. */
+public final class WithMergeLoggingOptions {
+    private Boolean enableConsole;
+    private Double maxFiles;
+
+    public Boolean getEnableConsole() { return enableConsole; }
+    public WithMergeLoggingOptions enableConsole(Boolean value) {
+        this.enableConsole = value;
+        return this;
+    }
+
+    public Double getMaxFiles() { return maxFiles; }
+    public WithMergeLoggingOptions maxFiles(Double value) {
+        this.maxFiles = value;
+        return this;
+    }
+
+}
+
+// ===== WithMergeLoggingPathOptions.java =====
+// WithMergeLoggingPathOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Options for WithMergeLoggingPath. */
+public final class WithMergeLoggingPathOptions {
+    private Boolean enableConsole;
+    private Double maxFiles;
+
+    public Boolean getEnableConsole() { return enableConsole; }
+    public WithMergeLoggingPathOptions enableConsole(Boolean value) {
+        this.enableConsole = value;
+        return this;
+    }
+
+    public Double getMaxFiles() { return maxFiles; }
+    public WithMergeLoggingPathOptions maxFiles(Double value) {
+        this.maxFiles = value;
+        return this;
+    }
+
+}
+
 // ===== WithOptionalStringOptions.java =====
 // WithOptionalStringOptions.java - GENERATED CODE - DO NOT EDIT
 
@@ -19356,6 +20186,8 @@ public final class WithVolumeOptions {
 .modules/WithHttpProbeOptions.java
 .modules/WithHttpsEndpointOptions.java
 .modules/WithMcpServerOptions.java
+.modules/WithMergeLoggingOptions.java
+.modules/WithMergeLoggingPathOptions.java
 .modules/WithOptionalStringOptions.java
 .modules/WithPipelineStepFactoryOptions.java
 .modules/WithReferenceOptions.java
