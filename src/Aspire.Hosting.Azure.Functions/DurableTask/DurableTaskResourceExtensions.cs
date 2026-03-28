@@ -12,8 +12,6 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class DurableTaskResourceExtensions
 {
-    private const string AtsExportIgnoreReason = "Durable Task Scheduler resources are not yet exposed through ATS.";
-
     /// <summary>
     /// Adds a Durable Task scheduler resource to the distributed application.
     /// </summary>
@@ -27,8 +25,8 @@ public static class DurableTaskResourceExtensions
     /// var scheduler = builder.AddDurableTaskScheduler("scheduler");
     /// </code>
     /// </example>
-    [AspireExportIgnore(Reason = AtsExportIgnoreReason)]
-    public static IResourceBuilder<DurableTaskSchedulerResource> AddDurableTaskScheduler(this IDistributedApplicationBuilder builder, string name)
+    [AspireExport("addDurableTaskScheduler", Description = "Adds a Durable Task scheduler resource to the distributed application.")]
+    public static IResourceBuilder<DurableTaskSchedulerResource> AddDurableTaskScheduler(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         var scheduler = new DurableTaskSchedulerResource(name);
 
@@ -55,7 +53,7 @@ public static class DurableTaskResourceExtensions
     ///     .RunAsExisting("Endpoint=https://example;...;");
     /// </code>
     /// </example>
-    [AspireExportIgnore(Reason = AtsExportIgnoreReason)]
+    [AspireExport("runAsExisting", Description = "Configures the Durable Task scheduler to use an existing scheduler instance from a connection string.")]
     public static IResourceBuilder<DurableTaskSchedulerResource> RunAsExisting(this IResourceBuilder<DurableTaskSchedulerResource> builder, string connectionString)
     {
         if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
@@ -86,7 +84,7 @@ public static class DurableTaskResourceExtensions
     ///     .RunAsExisting(schedulerConnectionString);
     /// </code>
     /// </example>
-    [AspireExportIgnore(Reason = AtsExportIgnoreReason)]
+    [AspireExport("runAsExistingFromParameter", Description = "Configures the Durable Task scheduler to use an existing scheduler instance from a parameterized connection string.")]
     public static IResourceBuilder<DurableTaskSchedulerResource> RunAsExisting(this IResourceBuilder<DurableTaskSchedulerResource> builder, IResourceBuilder<ParameterResource> connectionString)
     {
         if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
@@ -111,7 +109,7 @@ public static class DurableTaskResourceExtensions
     ///     .RunAsEmulator();
     /// </code>
     /// </example>
-    [AspireExportIgnore(Reason = AtsExportIgnoreReason)]
+    [AspireExport("runAsEmulator", Description = "Configures the Durable Task scheduler to run using the local emulator.", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<DurableTaskSchedulerResource> RunAsEmulator(this IResourceBuilder<DurableTaskSchedulerResource> builder, Action<IResourceBuilder<DurableTaskSchedulerEmulatorResource>>? configureContainer = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -189,8 +187,8 @@ public static class DurableTaskResourceExtensions
     ///     .WithTaskHubName("MyTaskHub");
     /// </code>
     /// </example>
-    [AspireExportIgnore(Reason = AtsExportIgnoreReason)]
-    public static IResourceBuilder<DurableTaskHubResource> AddTaskHub(this IResourceBuilder<DurableTaskSchedulerResource> builder, string name)
+    [AspireExport("addTaskHub", Description = "Adds a Durable Task hub resource associated with the scheduler.")]
+    public static IResourceBuilder<DurableTaskHubResource> AddTaskHub(this IResourceBuilder<DurableTaskSchedulerResource> builder, [ResourceName] string name)
     {
         var hub = new DurableTaskHubResource(name, builder.Resource);
 
@@ -233,7 +231,7 @@ public static class DurableTaskResourceExtensions
     /// var hub = scheduler.AddTaskHub("hub").WithTaskHubName("MyTaskHub");
     /// </code>
     /// </example>
-    [AspireExportIgnore(Reason = AtsExportIgnoreReason)]
+    [AspireExport("withTaskHubName", Description = "Sets the Durable Task hub name.")]
     public static IResourceBuilder<DurableTaskHubResource> WithTaskHubName(this IResourceBuilder<DurableTaskHubResource> builder, string taskHubName)
     {
         return builder.WithAnnotation(new DurableTaskHubNameAnnotation(taskHubName));
@@ -255,7 +253,7 @@ public static class DurableTaskResourceExtensions
     /// var hub = scheduler.AddTaskHub("hub").WithTaskHubName(taskHubName);
     /// </code>
     /// </example>
-    [AspireExportIgnore(Reason = AtsExportIgnoreReason)]
+    [AspireExport("withTaskHubNameFromParameter", Description = "Sets the Durable Task hub name from a parameter resource.")]
     public static IResourceBuilder<DurableTaskHubResource> WithTaskHubName(this IResourceBuilder<DurableTaskHubResource> builder, IResourceBuilder<ParameterResource> taskHubName)
     {
         return builder.WithAnnotation(new DurableTaskHubNameAnnotation(taskHubName.Resource));
