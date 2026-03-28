@@ -1323,6 +1323,17 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             return;
         }
 
+        // Detect the repository root directory
+        var repoRoot = await DetectRepositoryRootAsync(context).ConfigureAwait(false);
+
+        if (repoRoot is null)
+        {
+            context.Logger.LogError("Could not determine the repository root directory. Pipeline init cannot continue.");
+            return;
+        }
+
+        context.Logger.LogInformation("Using repository root: {RepoRoot}", repoRoot);
+
         foreach (var env in environments)
         {
             var resource = (IResource)env;
@@ -1342,6 +1353,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                 StepContext = context,
                 Environment = env,
                 Steps = _steps,
+                RepositoryRootDirectory = repoRoot,
             };
 
             foreach (var generator in generators)
@@ -1349,5 +1361,137 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                 await generator.GenerateAsync(generationContext).ConfigureAwait(false);
             }
         }
+    }
+
+    /// <summary>
+    /// Detects the repository root directory by trying git, then aspire.config.json,
+    /// and confirms the result with the user via the interaction service.
+    /// </summary>
+    private static async Task<string?> DetectRepositoryRootAsync(PipelineStepContext context)
+    {
+        var ct = context.CancellationToken;
+        var logger = context.Logger;
+
+        // Strategy 1: Try git rev-parse --show-toplevel
+        var gitRoot = await TryGetGitRootAsync(logger, ct).ConfigureAwait(false);
+
+        // Strategy 2: Walk up directories looking for aspire.config.json
+        var configRoot = TryGetAspireConfigRoot(logger);
+
+        // Determine the best candidate
+        string? detectedRoot = gitRoot ?? configRoot;
+
+        if (detectedRoot is null)
+        {
+            logger.LogWarning("Could not auto-detect repository root via git or aspire.config.json.");
+        }
+
+        // Confirm with the user via interaction service, allowing override
+        var interactionService = context.Services.GetService<IInteractionService>();
+
+        if (interactionService is null)
+        {
+            // No interaction service available (e.g., non-interactive mode) — use what we detected
+            return detectedRoot;
+        }
+
+        var prompt = detectedRoot is not null
+            ? $"Detected repository root: {detectedRoot}"
+            : "Could not auto-detect the repository root.";
+
+        var result = await interactionService.PromptInputAsync(
+            "Repository Root",
+            prompt + " Enter the path or press OK to confirm.",
+            new InteractionInput
+            {
+                Name = "repoRoot",
+                Label = "Repository root directory",
+                InputType = InputType.Text,
+                Value = detectedRoot ?? Directory.GetCurrentDirectory(),
+                Required = true,
+            },
+            cancellationToken: ct).ConfigureAwait(false);
+
+        if (result.Canceled)
+        {
+            logger.LogWarning("User cancelled repository root selection.");
+            return null;
+        }
+
+        var selectedPath = result.Data?.Value;
+        if (string.IsNullOrWhiteSpace(selectedPath))
+        {
+            return detectedRoot;
+        }
+
+        var fullPath = Path.GetFullPath(selectedPath);
+        if (!Directory.Exists(fullPath))
+        {
+            logger.LogError("The specified repository root does not exist: {Path}", fullPath);
+            return null;
+        }
+
+        return fullPath;
+    }
+
+    private static async Task<string?> TryGetGitRootAsync(ILogger logger, CancellationToken ct)
+    {
+        try
+        {
+            var startInfo = new ProcessStartInfo("git", "rev-parse --show-toplevel")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+
+            using var process = new Process { StartInfo = startInfo };
+            process.Start();
+
+            var outputTask = process.StandardOutput.ReadToEndAsync(ct);
+            await process.WaitForExitAsync(ct).ConfigureAwait(false);
+
+            if (process.ExitCode != 0)
+            {
+                logger.LogDebug("git rev-parse returned non-zero exit code {ExitCode}.", process.ExitCode);
+                return null;
+            }
+
+            var output = (await outputTask.ConfigureAwait(false)).Trim();
+            if (!string.IsNullOrEmpty(output) && Directory.Exists(output))
+            {
+                logger.LogDebug("Detected git repository root: {GitRoot}", output);
+                return Path.GetFullPath(output);
+            }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            logger.LogDebug(ex, "Git is not installed or not accessible.");
+        }
+
+        return null;
+    }
+
+    private static string? TryGetAspireConfigRoot(ILogger logger)
+    {
+        const string configFileName = "aspire.config.json";
+
+        var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
+
+        while (directory is not null)
+        {
+            var configPath = Path.Combine(directory.FullName, configFileName);
+            if (File.Exists(configPath))
+            {
+                logger.LogDebug("Found {ConfigFile} at: {Directory}", configFileName, directory.FullName);
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        logger.LogDebug("Could not find {ConfigFile} walking up from current directory.", configFileName);
+        return null;
     }
 }

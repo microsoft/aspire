@@ -52,9 +52,15 @@ public sealed class PipelineWorkflowGenerationContext
     public required IReadOnlyList<PipelineStep> Steps { get; init; }
 
     /// <summary>
-    /// Gets or sets the output directory for generated files. Defaults to the current directory.
+    /// Gets the root directory of the repository. This is used as the base path for
+    /// writing generated workflow files (e.g., <c>.github/workflows/</c>).
     /// </summary>
-    public string OutputDirectory { get; set; } = Directory.GetCurrentDirectory();
+    /// <remarks>
+    /// The directory is resolved during <c>aspire pipeline init</c> by detecting the git
+    /// repository root, falling back to the location of <c>aspire.config.json</c>, and
+    /// confirmed by the user via the interaction service.
+    /// </remarks>
+    public required string RepositoryRootDirectory { get; init; }
 
     /// <summary>
     /// Gets the cancellation token.

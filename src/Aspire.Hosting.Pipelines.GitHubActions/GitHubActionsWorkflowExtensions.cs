@@ -53,8 +53,8 @@ public static class GitHubActionsWorkflowExtensions
             // Serialize to YAML string
             var yamlContent = WorkflowYamlSerializer.Serialize(yamlModel);
 
-            // Write to .github/workflows/{name}.yml
-            var outputDir = Path.Combine(context.OutputDirectory, ".github", "workflows");
+            // Write to .github/workflows/{name}.yml relative to the repo root
+            var outputDir = Path.Combine(context.RepositoryRootDirectory, ".github", "workflows");
             Directory.CreateDirectory(outputDir);
 
             var outputPath = Path.Combine(outputDir, workflow.WorkflowFileName);
