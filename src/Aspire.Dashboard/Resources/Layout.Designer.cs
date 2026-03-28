@@ -142,15 +142,6 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Untrusted apps can access sensitive information about the running services..
-        /// </summary>
-        public static string MessageUnsecuredEndpointMcpBody {
-            get {
-                return ResourceManager.GetString("MessageUnsecuredEndpointMcpBody", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Untrusted apps can access telemetry data via the API..
         /// </summary>
         public static string MessageUnsecuredEndpointApiBody {

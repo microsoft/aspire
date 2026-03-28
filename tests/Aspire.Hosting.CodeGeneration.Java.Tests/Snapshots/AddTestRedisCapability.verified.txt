@@ -43,7 +43,409 @@
     IsReadOnly: false,
     IsResourceBuilder: true,
     IsDistributedApplicationBuilder: false,
-    IsDistributedApplication: false
+    IsDistributedApplication: false,
+    ImplementedInterfaces: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+        ClrType: IResource,
+        Category: Handle,
+        IsInterface: true,
+        IsReadOnly: false,
+        IsResourceBuilder: true,
+        IsDistributedApplicationBuilder: false,
+        IsDistributedApplication: false
+      },
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment,
+        ClrType: IResourceWithEnvironment,
+        Category: Handle,
+        IsInterface: true,
+        IsReadOnly: false,
+        IsResourceBuilder: true,
+        IsDistributedApplicationBuilder: false,
+        IsDistributedApplication: false,
+        ImplementedInterfaces: [
+          {
+            TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+            ClrType: IResource,
+            Category: Handle,
+            IsInterface: true,
+            IsReadOnly: false,
+            IsResourceBuilder: true,
+            IsDistributedApplicationBuilder: false,
+            IsDistributedApplication: false
+          }
+        ]
+      },
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithArgs,
+        ClrType: IResourceWithArgs,
+        Category: Handle,
+        IsInterface: true,
+        IsReadOnly: false,
+        IsResourceBuilder: true,
+        IsDistributedApplicationBuilder: false,
+        IsDistributedApplication: false,
+        ImplementedInterfaces: [
+          {
+            TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+            ClrType: IResource,
+            Category: Handle,
+            IsInterface: true,
+            IsReadOnly: false,
+            IsResourceBuilder: true,
+            IsDistributedApplicationBuilder: false,
+            IsDistributedApplication: false
+          }
+        ]
+      },
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints,
+        ClrType: IResourceWithEndpoints,
+        Category: Handle,
+        IsInterface: true,
+        IsReadOnly: false,
+        IsResourceBuilder: true,
+        IsDistributedApplicationBuilder: false,
+        IsDistributedApplication: false,
+        ImplementedInterfaces: [
+          {
+            TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+            ClrType: IResource,
+            Category: Handle,
+            IsInterface: true,
+            IsReadOnly: false,
+            IsResourceBuilder: true,
+            IsDistributedApplicationBuilder: false,
+            IsDistributedApplication: false
+          }
+        ]
+      },
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithWaitSupport,
+        ClrType: IResourceWithWaitSupport,
+        Category: Handle,
+        IsInterface: true,
+        IsReadOnly: false,
+        IsResourceBuilder: true,
+        IsDistributedApplicationBuilder: false,
+        IsDistributedApplication: false,
+        ImplementedInterfaces: [
+          {
+            TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+            ClrType: IResource,
+            Category: Handle,
+            IsInterface: true,
+            IsReadOnly: false,
+            IsResourceBuilder: true,
+            IsDistributedApplicationBuilder: false,
+            IsDistributedApplication: false
+          }
+        ]
+      },
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithProbes,
+        ClrType: IResourceWithProbes,
+        Category: Handle,
+        IsInterface: true,
+        IsReadOnly: false,
+        IsResourceBuilder: true,
+        IsDistributedApplicationBuilder: false,
+        IsDistributedApplication: false,
+        ImplementedInterfaces: [
+          {
+            TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+            ClrType: IResource,
+            Category: Handle,
+            IsInterface: true,
+            IsReadOnly: false,
+            IsResourceBuilder: true,
+            IsDistributedApplicationBuilder: false,
+            IsDistributedApplication: false
+          }
+        ]
+      },
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource,
+        ClrType: IComputeResource,
+        Category: Handle,
+        IsInterface: true,
+        IsReadOnly: false,
+        IsResourceBuilder: true,
+        IsDistributedApplicationBuilder: false,
+        IsDistributedApplication: false,
+        ImplementedInterfaces: [
+          {
+            TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+            ClrType: IResource,
+            Category: Handle,
+            IsInterface: true,
+            IsReadOnly: false,
+            IsResourceBuilder: true,
+            IsDistributedApplicationBuilder: false,
+            IsDistributedApplication: false
+          }
+        ]
+      },
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString,
+        ClrType: IResourceWithConnectionString,
+        Category: Handle,
+        IsInterface: true,
+        IsReadOnly: false,
+        IsResourceBuilder: true,
+        IsDistributedApplicationBuilder: false,
+        IsDistributedApplication: false,
+        ImplementedInterfaces: [
+          {
+            TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+            ClrType: IResource,
+            Category: Handle,
+            IsInterface: true,
+            IsReadOnly: false,
+            IsResourceBuilder: true,
+            IsDistributedApplicationBuilder: false,
+            IsDistributedApplication: false
+          },
+          {
+            TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IManifestExpressionProvider,
+            ClrType: IManifestExpressionProvider,
+            Category: Handle,
+            IsInterface: true,
+            IsReadOnly: false,
+            IsResourceBuilder: false,
+            IsDistributedApplicationBuilder: false,
+            IsDistributedApplication: false
+          },
+          {
+            TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IValueProvider,
+            ClrType: IValueProvider,
+            Category: Handle,
+            IsInterface: true,
+            IsReadOnly: false,
+            IsResourceBuilder: false,
+            IsDistributedApplicationBuilder: false,
+            IsDistributedApplication: false
+          },
+          {
+            TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IValueWithReferences,
+            ClrType: IValueWithReferences,
+            Category: Handle,
+            IsInterface: true,
+            IsReadOnly: false,
+            IsResourceBuilder: false,
+            IsDistributedApplicationBuilder: false,
+            IsDistributedApplication: false
+          }
+        ]
+      },
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IManifestExpressionProvider,
+        ClrType: IManifestExpressionProvider,
+        Category: Handle,
+        IsInterface: true,
+        IsReadOnly: false,
+        IsResourceBuilder: false,
+        IsDistributedApplicationBuilder: false,
+        IsDistributedApplication: false
+      },
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IValueProvider,
+        ClrType: IValueProvider,
+        Category: Handle,
+        IsInterface: true,
+        IsReadOnly: false,
+        IsResourceBuilder: false,
+        IsDistributedApplicationBuilder: false,
+        IsDistributedApplication: false
+      },
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IValueWithReferences,
+        ClrType: IValueWithReferences,
+        Category: Handle,
+        IsInterface: true,
+        IsReadOnly: false,
+        IsResourceBuilder: false,
+        IsDistributedApplicationBuilder: false,
+        IsDistributedApplication: false
+      }
+    ],
+    BaseType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+      ClrType: ContainerResource,
+      Category: Handle,
+      IsInterface: false,
+      IsReadOnly: false,
+      IsResourceBuilder: true,
+      IsDistributedApplicationBuilder: false,
+      IsDistributedApplication: false,
+      ImplementedInterfaces: [
+        {
+          TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+          ClrType: IResource,
+          Category: Handle,
+          IsInterface: true,
+          IsReadOnly: false,
+          IsResourceBuilder: true,
+          IsDistributedApplicationBuilder: false,
+          IsDistributedApplication: false
+        },
+        {
+          TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment,
+          ClrType: IResourceWithEnvironment,
+          Category: Handle,
+          IsInterface: true,
+          IsReadOnly: false,
+          IsResourceBuilder: true,
+          IsDistributedApplicationBuilder: false,
+          IsDistributedApplication: false,
+          ImplementedInterfaces: [
+            {
+              TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+              ClrType: IResource,
+              Category: Handle,
+              IsInterface: true,
+              IsReadOnly: false,
+              IsResourceBuilder: true,
+              IsDistributedApplicationBuilder: false,
+              IsDistributedApplication: false
+            }
+          ]
+        },
+        {
+          TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithArgs,
+          ClrType: IResourceWithArgs,
+          Category: Handle,
+          IsInterface: true,
+          IsReadOnly: false,
+          IsResourceBuilder: true,
+          IsDistributedApplicationBuilder: false,
+          IsDistributedApplication: false,
+          ImplementedInterfaces: [
+            {
+              TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+              ClrType: IResource,
+              Category: Handle,
+              IsInterface: true,
+              IsReadOnly: false,
+              IsResourceBuilder: true,
+              IsDistributedApplicationBuilder: false,
+              IsDistributedApplication: false
+            }
+          ]
+        },
+        {
+          TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints,
+          ClrType: IResourceWithEndpoints,
+          Category: Handle,
+          IsInterface: true,
+          IsReadOnly: false,
+          IsResourceBuilder: true,
+          IsDistributedApplicationBuilder: false,
+          IsDistributedApplication: false,
+          ImplementedInterfaces: [
+            {
+              TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+              ClrType: IResource,
+              Category: Handle,
+              IsInterface: true,
+              IsReadOnly: false,
+              IsResourceBuilder: true,
+              IsDistributedApplicationBuilder: false,
+              IsDistributedApplication: false
+            }
+          ]
+        },
+        {
+          TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithWaitSupport,
+          ClrType: IResourceWithWaitSupport,
+          Category: Handle,
+          IsInterface: true,
+          IsReadOnly: false,
+          IsResourceBuilder: true,
+          IsDistributedApplicationBuilder: false,
+          IsDistributedApplication: false,
+          ImplementedInterfaces: [
+            {
+              TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+              ClrType: IResource,
+              Category: Handle,
+              IsInterface: true,
+              IsReadOnly: false,
+              IsResourceBuilder: true,
+              IsDistributedApplicationBuilder: false,
+              IsDistributedApplication: false
+            }
+          ]
+        },
+        {
+          TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithProbes,
+          ClrType: IResourceWithProbes,
+          Category: Handle,
+          IsInterface: true,
+          IsReadOnly: false,
+          IsResourceBuilder: true,
+          IsDistributedApplicationBuilder: false,
+          IsDistributedApplication: false,
+          ImplementedInterfaces: [
+            {
+              TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+              ClrType: IResource,
+              Category: Handle,
+              IsInterface: true,
+              IsReadOnly: false,
+              IsResourceBuilder: true,
+              IsDistributedApplicationBuilder: false,
+              IsDistributedApplication: false
+            }
+          ]
+        },
+        {
+          TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource,
+          ClrType: IComputeResource,
+          Category: Handle,
+          IsInterface: true,
+          IsReadOnly: false,
+          IsResourceBuilder: true,
+          IsDistributedApplicationBuilder: false,
+          IsDistributedApplication: false,
+          ImplementedInterfaces: [
+            {
+              TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+              ClrType: IResource,
+              Category: Handle,
+              IsInterface: true,
+              IsReadOnly: false,
+              IsResourceBuilder: true,
+              IsDistributedApplicationBuilder: false,
+              IsDistributedApplication: false
+            }
+          ]
+        }
+      ],
+      BaseType: {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.Resource,
+        ClrType: Resource,
+        Category: Handle,
+        IsInterface: false,
+        IsReadOnly: false,
+        IsResourceBuilder: true,
+        IsDistributedApplicationBuilder: false,
+        IsDistributedApplication: false,
+        ImplementedInterfaces: [
+          {
+            TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+            ClrType: IResource,
+            Category: Handle,
+            IsInterface: true,
+            IsReadOnly: false,
+            IsResourceBuilder: true,
+            IsDistributedApplicationBuilder: false,
+            IsDistributedApplication: false
+          }
+        ]
+      }
+    }
   },
   TargetTypeId: Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder,
   TargetType: {

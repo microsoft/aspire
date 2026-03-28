@@ -12,7 +12,7 @@
       Project requirements:
         - RunOnGithubActions:          indicates whether tests should run on GitHub Actions (either Windows or Linux or macOS); computed.
         - RunOnGithubActionsWindows:   indicates whether tests should run on Windows in GitHub Actions; default is true; overridable.
-        - RunOnGithubActionsMacOS:     indicates whether tests should run on MacOS in GitHub Actions; default is false on pull requests and true otherwise; overridable.
+        - RunOnGithubActionsMacOS:     indicates whether tests should run on MacOS in GitHub Actions; default is false; overridable.
         - RunOnGithubActionsLinux:     indicates whether tests should run on Linux in GitHub Actions; default is true; overridable.
         - RunOnAzdoCI:                 indicates whether tests should run on Azure DevOps (either Windows or Linux); always false, if RunOnAzdoHelix=true; computed.
         - RunOnAzdoCIWindows:          indicates whether tests should run on Windows in Azure DevOps; default is true; overridable.
@@ -49,8 +49,9 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <RunOnGithubActionsMacOS Condition=" '$(RunOnGithubActionsMacOS)' == '' and '$(IsGithubPullRequest)' == 'true' ">false</RunOnGithubActionsMacOS>
-    <RunOnGithubActionsMacOS Condition=" '$(RunOnGithubActionsMacOS)' == '' ">true</RunOnGithubActionsMacOS>
+    <!-- See https://github.com/microsoft/aspire/issues/15615 -->
+    <!-- <RunOnGithubActionsMacOS Condition=" '$(RunOnGithubActionsMacOS)' == '' and '$(IsGithubPullRequest)' == 'true' ">false</RunOnGithubActionsMacOS> -->
+    <RunOnGithubActionsMacOS Condition=" '$(RunOnGithubActionsMacOS)' == '' ">false</RunOnGithubActionsMacOS>
 
     <RunOnGithubActions>false</RunOnGithubActions>
     <RunOnGithubActions Condition=" '$(RunOnGithubActionsWindows)' == 'true' or '$(RunOnGithubActionsLinux)' == 'true' or '$(RunOnGithubActionsMacOS)' == 'true' ">true</RunOnGithubActions>

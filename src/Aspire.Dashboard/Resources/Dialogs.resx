@@ -444,89 +444,8 @@
   <data name="GenAIUnexpectedOrTruncatedContent" xml:space="preserve">
     <value>Unexpected or truncated message content.</value>
   </data>
-  <data name="McpServerDialogIntroduction" xml:space="preserve">
-    <value>Aspire MCP connects AI assistants to Aspire app data. AI can use Aspire MCP to get information about app resources, health checks, commands, console logs and real-time telemetry.</value>
-  </data>
-  <data name="McpServerDialogLearnMoreLink" xml:space="preserve">
-    <value>Use Aspire MCP with AI</value>
-  </data>
-  <data name="McpServerDialogVisualStudioTab" xml:space="preserve">
-    <value>Visual Studio</value>
-  </data>
-  <data name="McpServerDialogVSCodeTab" xml:space="preserve">
-    <value>VS Code</value>
-  </data>
-  <data name="McpServerDialogOtherTab" xml:space="preserve">
-    <value>Other</value>
-  </data>
-  <data name="McpServerDialogQuicklyAddVisualStudio" xml:space="preserve">
-    <value>Quickly add Aspire MCP to Visual Studio using a browser install button:</value>
-  </data>
-  <data name="McpServerDialogQuicklyAddVSCode" xml:space="preserve">
-    <value>Quickly add Aspire MCP to VS Code using a browser install button:</value>
-  </data>
-  <data name="McpServerDialogInstallButtonAriaLabelVisualStudio" xml:space="preserve">
-    <value>Visual Studio: Install Aspire MCP Server</value>
-  </data>
-  <data name="McpServerDialogInstallButtonAriaLabelVSCode" xml:space="preserve">
-    <value>VS Code: Install Aspire MCP Server</value>
-  </data>
-  <data name="McpServerDialogInstallButtonAriaLabelVSCodeInsiders" xml:space="preserve">
-    <value>VS Code Insiders: Install Aspire MCP Server</value>
-  </data>
-  <data name="McpServerDialogOtherOptionsVisualStudio" xml:space="preserve">
-    <value>For other options, such as updating &lt;code&gt;mcp.json&lt;/code&gt;, see &lt;a href="{0}" target="_blank"&gt;Add an MCP server to Visual Studio&lt;/a&gt;.</value>
-    <comment>{0} is a URL to documentation</comment>
-  </data>
-  <data name="McpServerDialogOtherOptionsVSCode" xml:space="preserve">
-    <value>For other options, such as updating &lt;code&gt;mcp.json&lt;/code&gt;, see &lt;a href="{0}" target="_blank"&gt;Add an MCP server to VS Code&lt;/a&gt;.</value>
-    <comment>{0} is a URL to documentation</comment>
-  </data>
-  <data name="McpServerDialogVSCodeWarningTitle" xml:space="preserve">
-    <value>VS Code limitation</value>
-  </data>
-  <data name="McpServerDialogVSCodeWarningMessage" xml:space="preserve">
-    <value>As of October 2025, VS Code does not support using Aspire MCP over HTTPS.</value>
-  </data>
-  <data name="McpServerDialogVSCodeWarningInstructions" xml:space="preserve">
-    <value>To use VS Code with Aspire MCP, configure the MCP endpoint to use HTTP instead of HTTPS. Note that this will remove transport security from Aspire MCP communication and could allow data to be read by a third party.</value>
-  </data>
-  <data name="McpServerDialogVSCodeWarningMoreInfo" xml:space="preserve">
-    <value>More information</value>
-  </data>
-  <data name="McpServerDialogOtherDescription" xml:space="preserve">
-    <value>Aspire MCP can be used with any AI tooling that supports streamable HTTP MCP servers.</value>
-  </data>
-  <data name="McpServerDialogOtherInstructions" xml:space="preserve">
-    <value>Important details for configuring Aspire MCP are below. Please refer to your AI client's documentation for how to add an MCP server.</value>
-  </data>
-  <data name="McpServerDialogConfigurationHeading" xml:space="preserve">
-    <value>Aspire MCP configuration</value>
-  </data>
-  <data name="McpServerDialogVSCodeApiKeyInstructions" xml:space="preserve">
-    <value>The first time Aspire MCP starts, you'll be prompted by VS Code for the API key. Enter the API key below in the VS Code input text box.</value>
-  </data>
-  <data name="McpServerDialogApiKeyLabel" xml:space="preserve">
-    <value>Aspire MCP API key</value>
-  </data>
-  <data name="McpServerDialogCopyButton" xml:space="preserve">
-    <value>Copy</value>
-  </data>
-  <data name="McpServerDialogManuallyUpdatingAccordionHeading" xml:space="preserve">
-    <value>Manually updating &lt;code&gt;mcp.json&lt;/code&gt;</value>
-  </data>
-  <data name="McpServerDialogVisualStudioApiKeyInstructions" xml:space="preserve">
-    <value>You need to add the API key to Aspire MCP before you can use it. In GitHub Copilot Chat, select the Tools button, then the Aspire MCP server. Enter the API key below in the text box.</value>
-  </data>
   <data name="GenAIMessageCategoryToolResponse" xml:space="preserve">
     <value>Tool response</value>
-  </data>
-  <data name="McpServerDialogCliInstructionsAbove" xml:space="preserve">
-    <value>The fastest way to get started is to &lt;a href="{0}" target="_blank"&gt;configure the Aspire MCP using the CLI&lt;/a&gt;</value>
-    <comment>{0} is a URL</comment>
-  </data>
-  <data name="McpServerDialogCliInstructionsBelow" xml:space="preserve">
-    <value>The &lt;code&gt;aspire mcp init&lt;/code&gt; command writes MCP JSON to your local workspace. Alternatively, configure your local AI development tools using instructions below.</value>
   </data>
   <data name="ManageDataDialogTitle" xml:space="preserve">
     <value>Manage logs and telemetry</value>

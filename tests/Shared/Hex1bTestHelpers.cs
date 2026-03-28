@@ -23,45 +23,50 @@ internal sealed class SequenceCounter
 
 /// <summary>
 /// Represents the available Aspire project templates for <c>aspire new</c>.
-/// The enum values correspond to the order in the template selection list.
 /// </summary>
 internal enum AspireTemplate
 {
     /// <summary>
-    /// Starter App (ASP.NET Core/Blazor) — the 1st option (default).
+    /// Starter App (ASP.NET Core/Blazor).
     /// Prompts: template, project name, output path, URLs, Redis, test project.
     /// </summary>
     Starter,
 
     /// <summary>
-    /// Starter App (ASP.NET Core/React) — 2nd option.
+    /// Starter App (ASP.NET Core/React).
     /// Prompts: template, project name, output path, URLs, Redis. No test project prompt.
     /// </summary>
     JsReact,
 
     /// <summary>
-    /// Starter App (Express/React) — 3rd option.
+    /// Starter App (Express/React).
     /// Prompts: template, project name, output path, URLs. No Redis or test project prompt.
     /// </summary>
     ExpressReact,
 
     /// <summary>
-    /// Starter App (FastAPI/React) — 4th option.
+    /// Starter App (FastAPI/React).
     /// Prompts: template, project name, output path, URLs, Redis. No test project prompt.
     /// </summary>
     PythonReact,
 
     /// <summary>
-    /// Empty (C# AppHost) — 5th option.
+    /// Empty (TypeScript AppHost).
     /// Prompts: template, project name, output path, URLs. No language, Redis, or test project prompt.
+    /// </summary>
+    TypeScriptEmptyAppHost,
+
+    /// <summary>
+    /// Empty AppHost.
+    /// Prompts: template, language, project name, output path, URLs. No Redis or test project prompt.
     /// </summary>
     EmptyAppHost,
 
     /// <summary>
-    /// Empty (TypeScript AppHost) — 6th option.
-    /// Prompts: template, project name, output path, URLs. No language, Redis, or test project prompt.
+    /// Empty (Java AppHost) — visible only when experimental Java support is enabled.
+    /// Prompts: template, project name, output path, URLs. No Redis or test project prompt.
     /// </summary>
-    TypeScriptEmptyAppHost,
+    JavaEmptyAppHost,
 }
 
 /// <summary>
@@ -406,6 +411,9 @@ internal static class Hex1bTestHelpers
         var waitingForOutputPathPrompt = new CellPatternSearcher()
             .Find("Enter the output path");
 
+        var waitingForAppHostLanguagePrompt = new CellPatternSearcher()
+            .Find("Which language would you like to use?");
+
         var waitingForUrlsPrompt = new CellPatternSearcher()
             .Find("Use *.dev.localhost URLs");
 
@@ -449,15 +457,26 @@ internal static class Hex1bTestHelpers
                 break;
 
             case AspireTemplate.EmptyAppHost:
-                var emptyAppHostSelected = new CellPatternSearcher()
-                    .Find("> Empty AppHost");
-                builder.Key(Hex1bKey.DownArrow)
-                    .Key(Hex1bKey.DownArrow)
-                    .Key(Hex1bKey.DownArrow)
-                    .Key(Hex1bKey.DownArrow)
-                    .WaitUntil(s => emptyAppHostSelected.Search(s).Count > 0, TimeSpan.FromSeconds(5))
+                builder.Type("Empty AppHost")
                     .Enter()
+                    .WaitUntil(s => waitingForAppHostLanguagePrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
                     .Enter(); // Select C# language
+                break;
+
+            case AspireTemplate.TypeScriptEmptyAppHost:
+                var typeScriptEmptyAppHostSelected = new CellPatternSearcher()
+                    .Find("> Empty (TypeScript AppHost)");
+                builder.Type("TypeScript")
+                    .WaitUntil(s => typeScriptEmptyAppHostSelected.Search(s).Count > 0, TimeSpan.FromSeconds(5))
+                    .Enter();
+                break;
+
+            case AspireTemplate.JavaEmptyAppHost:
+                var javaEmptyAppHostSelected = new CellPatternSearcher()
+                    .Find("> Empty (Java AppHost)");
+                builder.Type("Empty (Java AppHost)")
+                    .WaitUntil(s => javaEmptyAppHostSelected.Search(s).Count > 0, TimeSpan.FromSeconds(5))
+                    .Enter();
                 break;
         }
 

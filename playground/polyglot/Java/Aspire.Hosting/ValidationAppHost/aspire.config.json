@@ -1,0 +1,24 @@
+{
+  "appHost": {
+    "path": "AppHost.java",
+    "language": "java"
+  },
+  "features": {
+    "experimentalPolyglot:java": true
+  },
+  "packages": {
+    "Aspire.Hosting": "",
+    "Aspire.Hosting.Testing": "",
+    "Aspire.Hosting.Yarp": "",
+    "Aspire.Hosting.Redis": ""
+  },
+  "profiles": {
+    "https": {
+      "applicationUrl": "https://localhost:29750;http://localhost:28931",
+      "environmentVariables": {
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:10975",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:13319"
+      }
+    }
+  }
+}

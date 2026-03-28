@@ -406,14 +406,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
                     // of persistent containers (as a new key would be a spec change).
                     _userSecretsManager.GetOrSetSecret(_innerBuilder.Configuration, "AppHost:OtlpApiKey", TokenGenerator.GenerateToken);
 
-                    // Set a random API key for the MCP Server if one isn't already present in configuration.
-                    // If a key is generated, it's stored in the user secrets store so that it will be auto-loaded
-                    // on subsequent runs and not recreated. This is important to ensure it doesn't change the state
-                    // of MCP clients.
-                    _userSecretsManager.GetOrSetSecret(_innerBuilder.Configuration, "AppHost:McpApiKey", TokenGenerator.GenerateToken);
-
                     // Set a random API key for the Dashboard Telemetry API if one isn't already present in configuration.
-                    // This is the canonical API key; it also falls back to McpApiKey for MCP if not set.
                     _userSecretsManager.GetOrSetSecret(_innerBuilder.Configuration, "AppHost:DashboardApiKey", TokenGenerator.GenerateToken);
 
                     // Determine the frontend browser token.

@@ -439,8 +439,6 @@ internal sealed class AuxiliaryBackchannelMonitor(
                     "AppHost Path: {AppHostPath}, " +
                     "AppHost PID: {AppHostPid}, " +
                     "CLI PID: {CliPid}, " +
-                    "Dashboard URL: {DashboardUrl}, " +
-                    "Dashboard Token: {DashboardToken}, " +
                     "In Scope: {InScope}, " +
                     "Supports V2: {SupportsV2}",
                     socketPath,
@@ -448,8 +446,6 @@ internal sealed class AuxiliaryBackchannelMonitor(
                     connection.AppHostInfo?.AppHostPath ?? "N/A",
                     connection.AppHostInfo?.ProcessId.ToString(CultureInfo.InvariantCulture) ?? "N/A",
                     connection.AppHostInfo?.CliProcessId?.ToString(CultureInfo.InvariantCulture) ?? "N/A",
-                    connection.McpInfo?.EndpointUrl ?? "N/A",
-                    connection.McpInfo?.ApiToken is not null ? "***" + connection.McpInfo.ApiToken[^4..] : "N/A",
                     connection.IsInScope,
                     connection.SupportsV2);
             }

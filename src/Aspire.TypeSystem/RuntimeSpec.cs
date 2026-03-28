@@ -29,6 +29,12 @@ public sealed class RuntimeSpec
     public required string[] DetectionPatterns { get; init; }
 
     /// <summary>
+    /// Gets the commands to initialize the project environment (e.g., create a virtual environment
+    /// and install dependencies). Runs once during scaffolding. Null if no initialization is needed.
+    /// </summary>
+    public CommandSpec[]? Initialize { get; init; }
+
+    /// <summary>
     /// Gets the command to install dependencies. Null if no dependencies to install.
     /// </summary>
     public CommandSpec? InstallDependencies { get; init; }

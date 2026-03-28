@@ -30,7 +30,6 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         string hash,
         string socketPath,
         JsonRpc rpc,
-        DashboardMcpConnectionInfo? mcpInfo,
         AppHostInformation? appHostInfo,
         bool isInScope,
         ImmutableHashSet<string> capabilities,
@@ -39,7 +38,6 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         Hash = hash;
         SocketPath = socketPath;
         _rpc = rpc;
-        McpInfo = mcpInfo;
         AppHostInfo = appHostInfo;
         IsInScope = isInScope;
         _capabilities = capabilities;
@@ -54,10 +52,9 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         string hash,
         string socketPath,
         JsonRpc rpc,
-        DashboardMcpConnectionInfo? mcpInfo,
         AppHostInformation? appHostInfo,
         bool isInScope)
-        : this(hash, socketPath, rpc, mcpInfo, appHostInfo, isInScope, ImmutableHashSet<string>.Empty, null)
+        : this(hash, socketPath, rpc, appHostInfo, isInScope, ImmutableHashSet<string>.Empty, null)
     {
     }
 
@@ -66,9 +63,6 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
     /// <inheritdoc />
     public string SocketPath { get; }
-
-    /// <inheritdoc />
-    public DashboardMcpConnectionInfo? McpInfo { get; private set; }
 
     /// <inheritdoc />
     public AppHostInformation? AppHostInfo { get; private set; }
@@ -157,12 +151,11 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         // Fetch all connection info
         var appHostInfo = await rpc.InvokeAsync<AppHostInformation?>("GetAppHostInformationAsync").ConfigureAwait(false);
-        var mcpInfo = await rpc.InvokeAsync<DashboardMcpConnectionInfo?>("GetDashboardMcpConnectionInfoAsync").ConfigureAwait(false);
         var capabilities = await FetchCapabilitiesAsync(rpc, logger).ConfigureAwait(false);
 
         var capabilitiesSet = capabilities?.ToImmutableHashSet() ?? ImmutableHashSet.Create(AuxiliaryBackchannelCapabilities.V1);
 
-        return new AppHostAuxiliaryBackchannel(hash, socketPath, rpc, mcpInfo, appHostInfo, isInScope, capabilitiesSet, logger);
+        return new AppHostAuxiliaryBackchannel(hash, socketPath, rpc, appHostInfo, isInScope, capabilitiesSet, logger);
     }
 
     /// <summary>
@@ -236,25 +229,6 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
             _logger?.LogDebug(ex, "StopAppHostAsync RPC method not available on the remote AppHost. The AppHost may be running an older version.");
             return false;
         }
-    }
-
-    /// <summary>
-    /// Gets the Dashboard MCP connection information.
-    /// </summary>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The MCP connection information, or null if unavailable.</returns>
-    public async Task<DashboardMcpConnectionInfo?> GetDashboardMcpConnectionInfoAsync(CancellationToken cancellationToken = default)
-    {
-        var rpc = EnsureConnected();
-
-        _logger?.LogDebug("Requesting Dashboard MCP connection info");
-
-        var mcpInfo = await rpc.InvokeWithCancellationAsync<DashboardMcpConnectionInfo?>(
-            "GetDashboardMcpConnectionInfoAsync",
-            [],
-            cancellationToken).ConfigureAwait(false);
-
-        return mcpInfo;
     }
 
     /// <inheritdoc />
@@ -446,7 +420,6 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         if (!SupportsV2)
         {
             // Fall back to v1 - ApiBaseUrl and ApiToken are only available in v2
-            var mcpInfo = await GetDashboardMcpConnectionInfoAsync(cancellationToken).ConfigureAwait(false);
             var urlsState = await GetDashboardUrlsAsync(cancellationToken).ConfigureAwait(false);
 
             var urls = new List<string>();
@@ -461,8 +434,6 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
             return new GetDashboardInfoResponse
             {
-                McpBaseUrl = mcpInfo?.EndpointUrl,
-                McpApiToken = mcpInfo?.ApiToken,
                 ApiBaseUrl = null, // Not available in v1
                 ApiToken = null,   // Not available in v1
                 DashboardUrls = urls.ToArray(),

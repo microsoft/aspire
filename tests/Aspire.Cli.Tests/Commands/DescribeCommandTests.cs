@@ -331,11 +331,71 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("[redis] Stopping", resourceLines[1]);
     }
 
+    [Fact]
+    public async Task DescribeCommand_JsonFormat_StripsLoginPathFromDashboardUrl()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var provider = CreateDescribeTestServices(workspace, outputWriter, [
+            new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
+        ], dashboardUrlsState: new DashboardUrlsState
+        {
+            BaseUrlWithLoginToken = "http://localhost:18888/login?t=abcd1234"
+        });
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("describe --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var jsonOutput = string.Join("", outputWriter.Logs);
+        var deserialized = JsonSerializer.Deserialize(jsonOutput, ResourcesCommandJsonContext.RelaxedEscaping.ResourcesOutput);
+
+        Assert.NotNull(deserialized);
+        Assert.Single(deserialized.Resources);
+
+        Assert.Equal("http://localhost:18888/?resource=redis", deserialized.Resources[0].DashboardUrl);
+    }
+
+    [Fact]
+    public async Task DescribeCommand_Follow_JsonFormat_StripsLoginPathFromDashboardUrl()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var provider = CreateDescribeTestServices(workspace, outputWriter, [
+            new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
+        ], dashboardUrlsState: new DashboardUrlsState
+        {
+            BaseUrlWithLoginToken = "http://localhost:18888/login?t=abcd1234"
+        });
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("describe --follow --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var jsonLines = outputWriter.Logs
+            .Where(l => l.TrimStart().StartsWith("{", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.NotEmpty(jsonLines);
+
+        var resource = JsonSerializer.Deserialize(jsonLines[0], ResourcesCommandJsonContext.Ndjson.ResourceJson);
+        Assert.NotNull(resource);
+
+        Assert.Equal("http://localhost:18888/?resource=redis", resource.DashboardUrl);
+    }
+
     private ServiceProvider CreateDescribeTestServices(
         TemporaryWorkspace workspace,
         TestOutputTextWriter outputWriter,
         List<ResourceSnapshot> resourceSnapshots,
-        bool disableAnsi = false)
+        bool disableAnsi = false,
+        DashboardUrlsState? dashboardUrlsState = null)
     {
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var connection = new TestAppHostAuxiliaryBackchannel
@@ -346,7 +406,8 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
                 AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "TestAppHost", "TestAppHost.csproj"),
                 ProcessId = 1234
             },
-            ResourceSnapshots = resourceSnapshots
+            ResourceSnapshots = resourceSnapshots,
+            DashboardUrlsState = dashboardUrlsState
         };
         monitor.AddConnection("hash1", "socket.hash1", connection);
 

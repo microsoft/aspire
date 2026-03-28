@@ -167,16 +167,7 @@ internal sealed class TelemetryApiService(
     /// </summary>
     public TelemetryApiResponse? GetTrace(string traceId)
     {
-        var result = telemetryRepository.GetTraces(new GetTracesRequest
-        {
-            ResourceKey = null,
-            StartIndex = 0,
-            Count = MaxQueryCount,
-            Filters = [],
-            FilterText = string.Empty
-        });
-
-        var trace = result.PagedResult.Items.FirstOrDefault(t => OtlpHelpers.MatchTelemetryId(t.TraceId, traceId));
+        var trace = telemetryRepository.GetTrace(traceId);
         if (trace is null)
         {
             return null;

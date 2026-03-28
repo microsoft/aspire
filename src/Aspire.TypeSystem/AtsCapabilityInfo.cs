@@ -73,6 +73,28 @@ public sealed class AtsTypeRef
     /// When Category = Union, this contains the alternative types.
     /// </summary>
     public IReadOnlyList<AtsTypeRef>? UnionTypes { get; init; }
+
+    /// <summary>
+    /// Gets or sets the interfaces this type implements.
+    /// </summary>
+    /// <remarks>
+    /// Pre-computed during type scanning so generators can consume interface information from the shared ATS model
+    /// without performing additional reflection.
+    /// Currently used by Python code generation for interface inheritance and capability placement.
+    /// Only meaningful for Handle category types.
+    /// </remarks>
+    public IReadOnlyList<AtsTypeRef> ImplementedInterfaces { get; init; } = [];
+
+    /// <summary>
+    /// Gets or sets the immediate base type of this type.
+    /// </summary>
+    /// <remarks>
+    /// Pre-computed during type scanning so generators can traverse the type hierarchy from the shared ATS model
+    /// without performing additional reflection.
+    /// Currently used by Python code generation when mapping inherited members.
+    /// Returns <see langword="null"/> for interface types or for types with no relevant base class.
+    /// </remarks>
+    public AtsTypeRef? BaseType { get; init; }
 }
 
 /// <summary>

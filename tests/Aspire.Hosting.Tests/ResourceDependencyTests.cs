@@ -759,7 +759,10 @@ public class ResourceDependencyTests
 
         var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
         var dependencies = await ResourceExtensions.GetDependenciesAsync(
-            [a.Resource, d.Resource], executionContext, ResourceDependencyDiscoveryMode.DirectOnly);
+            [a.Resource, d.Resource], executionContext, new ResourceDependencyDiscoveryOptions
+            {
+                DiscoveryMode = ResourceDependencyDiscoveryMode.DirectOnly
+            });
 
         // DirectOnly should only include B and E (direct deps), not C and F
         Assert.Contains(b.Resource, dependencies);

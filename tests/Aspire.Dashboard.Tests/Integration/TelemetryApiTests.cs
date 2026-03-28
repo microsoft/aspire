@@ -42,46 +42,6 @@ public class TelemetryApiTests
         Assert.Equal(ApiAuthMode.Unsecured, options.Api.AuthMode);
     }
 
-    [Fact]
-    public async Task Configuration_ApiKeyFromApi_CopiedToMcp()
-    {
-        // Arrange - only set API key (canonical config)
-        var apiKey = "ApiKey123!";
-        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(_testOutputHelper, config =>
-        {
-            config[DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = FrontendAuthMode.Unsecured.ToString();
-            config[DashboardConfigNames.DashboardApiAuthModeName.ConfigKey] = ApiAuthMode.ApiKey.ToString();
-            config[DashboardConfigNames.DashboardApiPrimaryApiKeyName.ConfigKey] = apiKey;
-        });
-        await app.StartAsync().DefaultTimeout();
-
-        // Assert - verify Mcp gets Api key (Api -> Mcp fallback)
-        var options = app.Services.GetRequiredService<IOptionsMonitor<DashboardOptions>>().CurrentValue;
-        Assert.NotNull(options.Mcp.GetPrimaryApiKeyBytesOrNull());
-        Assert.Equal(apiKey.Length, options.Mcp.GetPrimaryApiKeyBytesOrNull()!.Length);
-    }
-
-    [Fact]
-    public async Task Configuration_ApiKeyExplicit_OverridesMcp()
-    {
-        // Arrange - set both MCP and API keys (API should take precedence)
-        var mcpKey = "McpKey123!";
-        var apiKey = "ApiKey456!";
-        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(_testOutputHelper, config =>
-        {
-            config[DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = FrontendAuthMode.Unsecured.ToString();
-            config[DashboardConfigNames.DashboardMcpPrimaryApiKeyName.ConfigKey] = mcpKey;
-            config[DashboardConfigNames.DashboardApiAuthModeName.ConfigKey] = ApiAuthMode.ApiKey.ToString();
-            config[DashboardConfigNames.DashboardApiPrimaryApiKeyName.ConfigKey] = apiKey;
-        });
-        await app.StartAsync().DefaultTimeout();
-
-        // Assert - Api should use its own key, not MCP's
-        var options = app.Services.GetRequiredService<IOptionsMonitor<DashboardOptions>>().CurrentValue;
-        Assert.NotNull(options.Api.GetPrimaryApiKeyBytesOrNull());
-        Assert.Equal(apiKey.Length, options.Api.GetPrimaryApiKeyBytesOrNull()!.Length);
-    }
-
     #endregion
 
     [Fact]
@@ -372,30 +332,6 @@ public class TelemetryApiTests
         var response = await httpClient.GetAsync("/api/telemetry/spans").DefaultTimeout();
 
         // Assert - secondary key should work
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task GetSpans_McpKeyFallback_Returns200()
-    {
-        // Arrange - using legacy MCP key config (backward compatibility)
-        var apiKey = "LegacyMcpKey123!";
-        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(_testOutputHelper, config =>
-        {
-            config[DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = FrontendAuthMode.BrowserToken.ToString();
-            // Use legacy MCP config instead of new Api config
-            config[DashboardConfigNames.DashboardMcpAuthModeName.ConfigKey] = McpAuthMode.ApiKey.ToString();
-            config[DashboardConfigNames.DashboardMcpPrimaryApiKeyName.ConfigKey] = apiKey;
-        });
-        await app.StartAsync().DefaultTimeout();
-
-        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
-        httpClient.DefaultRequestHeaders.TryAddWithoutValidation(ApiAuthenticationHandler.ApiKeyHeaderName, apiKey);
-
-        // Act
-        var response = await httpClient.GetAsync("/api/telemetry/spans").DefaultTimeout();
-
-        // Assert - MCP key should work via fallback
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 

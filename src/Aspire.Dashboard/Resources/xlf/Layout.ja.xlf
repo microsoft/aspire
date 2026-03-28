@@ -52,11 +52,6 @@
         <target state="translated">詳細情報</target>
         <note />
       </trans-unit>
-      <trans-unit id="MessageUnsecuredEndpointMcpBody">
-        <source>Untrusted apps can access sensitive information about the running services.</source>
-        <target state="translated">信頼されていないアプリが実行中のサービスに関する機密情報にアクセス可能です。</target>
-        <note />
-      </trans-unit>
       <trans-unit id="MessageUnsecuredEndpointTelemetryBody">
         <source>Untrusted apps can send telemetry to the dashboard.</source>
         <target state="translated">信頼されていないアプリは、テレメトリをダッシュボードに送信できます。</target>

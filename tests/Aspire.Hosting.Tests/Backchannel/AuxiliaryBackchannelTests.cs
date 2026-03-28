@@ -109,7 +109,6 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
     public async Task CanInvokeRpcMethodOnAuxiliaryBackchannel()
     {
         // This test verifies that RPC methods can be invoked
-        // When the Dashboard is not part of the app model, null should be returned
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(outputHelper);
 
         using var app = builder.Build();
@@ -129,14 +128,14 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
         using var stream = new NetworkStream(socket, ownsSocket: true);
         using var rpc = JsonRpc.Attach(stream);
 
-        // Invoke the GetDashboardMcpConnectionInfoAsync RPC method
-        var connectionInfo = await rpc.InvokeAsync<DashboardMcpConnectionInfo?>(
-            "GetDashboardMcpConnectionInfoAsync",
+        // Invoke the GetAppHostInformationAsync RPC method
+        var appHostInfo = await rpc.InvokeAsync<AppHostInformation>(
+            "GetAppHostInformationAsync",
             Array.Empty<object>()
         ).DefaultTimeout();
 
-        // Since the dashboard is not part of the app model, it should return null
-        Assert.Null(connectionInfo);
+        Assert.NotNull(appHostInfo);
+        Assert.True(appHostInfo.ProcessId > 0);
 
         await app.StopAsync().DefaultTimeout();
     }
@@ -207,20 +206,20 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
             using var stream = new NetworkStream(socket, ownsSocket: true);
             using var rpc = JsonRpc.Attach(stream);
 
-            var connectionInfo = await rpc.InvokeAsync<DashboardMcpConnectionInfo?>(
-                "GetDashboardMcpConnectionInfoAsync",
+            var appHostInfo = await rpc.InvokeAsync<AppHostInformation>(
+                "GetAppHostInformationAsync",
                 Array.Empty<object>()
             );
 
-            // Since the dashboard is not part of the app model, it should return null
-            Assert.Null(connectionInfo);
+            Assert.NotNull(appHostInfo);
+            Assert.True(appHostInfo.ProcessId > 0);
 
-            return connectionInfo;
+            return appHostInfo;
         });
 
         var results = await Task.WhenAll(tasks).DefaultTimeout();
         Assert.Equal(5, results.Length);
-        Assert.All(results, Assert.Null);
+        Assert.All(results, Assert.NotNull);
 
         await app.StopAsync().DefaultTimeout();
     }

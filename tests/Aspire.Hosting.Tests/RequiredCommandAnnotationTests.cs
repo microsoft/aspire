@@ -318,15 +318,48 @@ public class RequiredCommandAnnotationTests
         var command = OperatingSystem.IsWindows() ? "cmd" : "sh";
         var callbackCount = 0;
 
+        Task<RequiredCommandValidationResult> callback(RequiredCommandValidationContext _)
+        {
+            Interlocked.Increment(ref callbackCount);
+            return Task.FromResult(RequiredCommandValidationResult.Success());
+        }
+
         builder.AddContainer("test1", "image")
-            .WithRequiredCommand(command, ctx =>
+            .WithRequiredCommand(command, callback);
+
+        builder.AddContainer("test2", "image")
+            .WithRequiredCommand(command, callback);
+
+        await using var app = builder.Build();
+        await SubscribeHooksAsync(app);
+
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var resource1 = appModel.Resources.Single(r => r.Name == "test1");
+        var resource2 = appModel.Resources.Single(r => r.Name == "test2");
+        var eventing = app.Services.GetRequiredService<IDistributedApplicationEventing>();
+
+        await eventing.PublishAsync(new BeforeResourceStartedEvent(resource1, app.Services));
+        await eventing.PublishAsync(new BeforeResourceStartedEvent(resource2, app.Services));
+
+        Assert.Equal(1, callbackCount);
+    }
+
+    [Fact]
+    public async Task RequiredCommandValidationLifecycleHook_DoesNotCacheAcrossDifferentValidationCallbacks()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var command = OperatingSystem.IsWindows() ? "cmd" : "sh";
+        var callbackCount = 0;
+
+        builder.AddContainer("test1", "image")
+            .WithRequiredCommand(command, _ =>
             {
                 Interlocked.Increment(ref callbackCount);
                 return Task.FromResult(RequiredCommandValidationResult.Success());
             });
 
         builder.AddContainer("test2", "image")
-            .WithRequiredCommand(command, ctx =>
+            .WithRequiredCommand(command, _ =>
             {
                 Interlocked.Increment(ref callbackCount);
                 return Task.FromResult(RequiredCommandValidationResult.Success());
@@ -343,7 +376,7 @@ public class RequiredCommandAnnotationTests
         await eventing.PublishAsync(new BeforeResourceStartedEvent(resource1, app.Services));
         await eventing.PublishAsync(new BeforeResourceStartedEvent(resource2, app.Services));
 
-        Assert.Equal(1, callbackCount);
+        Assert.Equal(2, callbackCount);
     }
 
     [Fact]

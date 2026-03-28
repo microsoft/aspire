@@ -258,6 +258,7 @@ public static class AzureEventHubsExtensions
         builder
             .WithEndpoint(name: "emulator", targetPort: 5672)
             .WithHttpEndpoint(name: EmulatorHealthEndpointName, targetPort: 5300)
+            .WithEndpoint(EmulatorHealthEndpointName, e => e.ExcludeReferenceEndpoint = true)
             .WithHttpHealthCheck(endpointName: EmulatorHealthEndpointName, path: "/health")
             .WithAnnotation(new ContainerImageAnnotation
             {

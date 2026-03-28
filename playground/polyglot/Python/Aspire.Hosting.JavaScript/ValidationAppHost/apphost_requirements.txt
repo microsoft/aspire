@@ -1,0 +1,3 @@
+# Aspire Python AppHost requirements
+# This file is used when uv is not available and pip is used instead.
+-e .modules

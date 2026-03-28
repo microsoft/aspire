@@ -37,6 +37,11 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
         Description = TemplatingStrings.UseLocalhostTld_Description
     };
 
+    private readonly Option<bool?> _useRedisCacheOption = new("--use-redis-cache")
+    {
+        Description = TemplatingStrings.UseRedisCache_Description
+    };
+
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly IAppHostProjectFactory _projectFactory;
     private readonly IScaffoldingService _scaffoldingService;
@@ -81,12 +86,12 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
 
     public Task<IEnumerable<ITemplate>> GetInitTemplatesAsync(CancellationToken cancellationToken = default)
     {
-        return Task.FromResult<IEnumerable<ITemplate>>([]);
+        return Task.FromResult<IEnumerable<ITemplate>>(Array.Empty<ITemplate>());
     }
 
     private IEnumerable<ITemplate> GetTemplateDefinitions()
     {
-        return
+        ITemplate[] templates =
         [
             new CallbackTemplate(
                 KnownTemplateId.TypeScriptStarter,
@@ -99,12 +104,17 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
 
             new CallbackTemplate(
                 KnownTemplateId.CSharpEmptyAppHost,
-                "Empty (C# AppHost)",
+                "Empty AppHost",
                 projectName => $"./{projectName}",
                 cmd => AddOptionIfMissing(cmd, _localhostTldOption),
                 ApplyEmptyAppHostTemplateAsync,
                 runtime: TemplateRuntime.Cli,
-                languageId: KnownLanguageId.CSharp,
+                supportsLanguageCallback: static languageId =>
+                    languageId.Equals(KnownLanguageId.CSharp, StringComparison.OrdinalIgnoreCase) ||
+                    languageId.Equals(KnownLanguageId.TypeScript, StringComparison.OrdinalIgnoreCase) ||
+                    languageId.Equals(KnownLanguageId.TypeScriptAlias, StringComparison.OrdinalIgnoreCase) ||
+                    languageId.Equals(KnownLanguageId.Python, StringComparison.OrdinalIgnoreCase),
+                selectableAppHostLanguages: [KnownLanguageId.CSharp, KnownLanguageId.TypeScript, KnownLanguageId.Python],
                 isEmpty: true),
 
             new CallbackTemplate(
@@ -115,8 +125,43 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
                 ApplyEmptyAppHostTemplateAsync,
                 runtime: TemplateRuntime.Cli,
                 languageId: KnownLanguageId.TypeScript,
-                isEmpty: true)
+                isEmpty: true),
+
+            new CallbackTemplate(
+                KnownTemplateId.JavaEmptyAppHost,
+                "Empty (Java AppHost)",
+                projectName => $"./{projectName}",
+                cmd => AddOptionIfMissing(cmd, _localhostTldOption),
+                ApplyEmptyAppHostTemplateAsync,
+                runtime: TemplateRuntime.Cli,
+                languageId: KnownLanguageId.Java,
+                isEmpty: true),
+
+            new CallbackTemplate(
+                KnownTemplateId.PythonStarter,
+                "Starter App (FastAPI/React)",
+                projectName => $"./{projectName}",
+                cmd =>
+                {
+                    AddOptionIfMissing(cmd, _localhostTldOption);
+                    AddOptionIfMissing(cmd, _useRedisCacheOption);
+                },
+                ApplyPythonStarterTemplateAsync,
+                runtime: TemplateRuntime.Cli,
+                languageId: KnownLanguageId.TypeScript)
         ];
+
+        return templates.Where(IsTemplateAvailable);
+    }
+
+    private bool IsTemplateAvailable(ITemplate template)
+    {
+        if (string.IsNullOrWhiteSpace(template.LanguageId))
+        {
+            return true;
+        }
+
+        return _languageDiscovery.GetLanguageById(new LanguageId(template.LanguageId)) is not null;
     }
 
     private static string ApplyTokens(string content, string projectName, string projectNameLower, string aspireVersion, TemplatePorts ports, string hostName = "localhost")
@@ -130,8 +175,6 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
             .Replace("{{httpsPort}}", ports.HttpsPort.ToString(CultureInfo.InvariantCulture))
             .Replace("{{otlpHttpPort}}", ports.OtlpHttpPort.ToString(CultureInfo.InvariantCulture))
             .Replace("{{otlpHttpsPort}}", ports.OtlpHttpsPort.ToString(CultureInfo.InvariantCulture))
-            .Replace("{{mcpHttpPort}}", ports.McpHttpPort.ToString(CultureInfo.InvariantCulture))
-            .Replace("{{mcpHttpsPort}}", ports.McpHttpsPort.ToString(CultureInfo.InvariantCulture))
             .Replace("{{resourceHttpPort}}", ports.ResourceHttpPort.ToString(CultureInfo.InvariantCulture))
             .Replace("{{resourceHttpsPort}}", ports.ResourceHttpsPort.ToString(CultureInfo.InvariantCulture));
     }
@@ -143,8 +186,6 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
             HttpsPort: Random.Shared.Next(17000, 17300),
             OtlpHttpPort: Random.Shared.Next(19000, 19300),
             OtlpHttpsPort: Random.Shared.Next(21000, 21300),
-            McpHttpPort: Random.Shared.Next(18000, 18300),
-            McpHttpsPort: Random.Shared.Next(23000, 23300),
             ResourceHttpPort: Random.Shared.Next(20000, 20300),
             ResourceHttpsPort: Random.Shared.Next(22000, 22300));
     }
@@ -152,7 +193,6 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
     private sealed record TemplatePorts(
         int HttpPort, int HttpsPort,
         int OtlpHttpPort, int OtlpHttpsPort,
-        int McpHttpPort, int McpHttpsPort,
         int ResourceHttpPort, int ResourceHttpsPort);
 
     private static void AddOptionIfMissing(System.CommandLine.Command command, System.CommandLine.Option option)
