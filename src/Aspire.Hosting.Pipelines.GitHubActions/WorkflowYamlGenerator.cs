@@ -51,7 +51,7 @@ internal static class WorkflowYamlGenerator
         return workflowYaml;
     }
 
-    private static JobYaml GenerateJob(GitHubActionsJob job, SchedulingResult scheduling)
+    private static JobYaml GenerateJob(GitHubActionsJobResource job, SchedulingResult scheduling)
     {
         var steps = new List<StepYaml>();
 

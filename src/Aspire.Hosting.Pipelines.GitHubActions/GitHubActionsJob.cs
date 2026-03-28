@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREPIPELINES001
 
 using System.Diagnostics.CodeAnalysis;
+using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.Pipelines.GitHubActions;
 
@@ -11,11 +12,12 @@ namespace Aspire.Hosting.Pipelines.GitHubActions;
 /// Represents a job within a GitHub Actions workflow.
 /// </summary>
 [Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-public class GitHubActionsJob : IPipelineStepTarget
+public class GitHubActionsJobResource : Resource, IPipelineStepTarget
 {
     private readonly List<string> _dependsOnJobs = [];
 
-    internal GitHubActionsJob(string id, GitHubActionsWorkflowResource workflow)
+    internal GitHubActionsJobResource(string id, GitHubActionsWorkflowResource workflow)
+        : base(id)
     {
         ArgumentException.ThrowIfNullOrEmpty(id);
         ArgumentNullException.ThrowIfNull(workflow);
@@ -66,7 +68,7 @@ public class GitHubActionsJob : IPipelineStepTarget
     /// Declares that this job depends on another job.
     /// </summary>
     /// <param name="job">The job this job depends on.</param>
-    public void DependsOn(GitHubActionsJob job)
+    public void DependsOn(GitHubActionsJobResource job)
     {
         ArgumentNullException.ThrowIfNull(job);
         _dependsOnJobs.Add(job.Id);

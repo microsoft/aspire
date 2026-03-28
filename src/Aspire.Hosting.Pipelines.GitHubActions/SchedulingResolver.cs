@@ -28,11 +28,11 @@ internal static class SchedulingResolver
         var defaultJob = GetOrCreateDefaultJob(workflow);
 
         // Build step-to-job mapping
-        var stepToJob = new Dictionary<string, GitHubActionsJob>(StringComparer.Ordinal);
+        var stepToJob = new Dictionary<string, GitHubActionsJobResource>(StringComparer.Ordinal);
 
         foreach (var step in steps)
         {
-            if (step.ScheduledBy is GitHubActionsJob job)
+            if (step.ScheduledBy is GitHubActionsJobResource job)
             {
                 if (job.Workflow != workflow)
                 {
@@ -46,7 +46,7 @@ internal static class SchedulingResolver
             {
                 throw new SchedulingValidationException(
                     $"Step '{step.Name}' has a ScheduledBy target of type '{step.ScheduledBy.GetType().Name}' " +
-                    $"which is not a GitHubActionsJob.");
+                    $"which is not a GitHubActionsJobResource.");
             }
             else
             {
@@ -138,7 +138,7 @@ internal static class SchedulingResolver
         };
     }
 
-    private static GitHubActionsJob GetOrCreateDefaultJob(GitHubActionsWorkflowResource workflow)
+    private static GitHubActionsJobResource GetOrCreateDefaultJob(GitHubActionsWorkflowResource workflow)
     {
         // If the workflow has no jobs, create a default one
         if (workflow.Jobs.Count == 0)
@@ -243,7 +243,7 @@ internal sealed class SchedulingResult
     /// <summary>
     /// Gets the mapping of step names to their assigned jobs.
     /// </summary>
-    public required Dictionary<string, GitHubActionsJob> StepToJob { get; init; }
+    public required Dictionary<string, GitHubActionsJobResource> StepToJob { get; init; }
 
     /// <summary>
     /// Gets the computed job dependency graph (job ID → set of job IDs it depends on).
@@ -258,5 +258,5 @@ internal sealed class SchedulingResult
     /// <summary>
     /// Gets the default job used for unscheduled steps.
     /// </summary>
-    public required GitHubActionsJob DefaultJob { get; init; }
+    public required GitHubActionsJobResource DefaultJob { get; init; }
 }
