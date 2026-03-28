@@ -3,10 +3,10 @@
 
 using System.Diagnostics;
 using System.Net.Http.Headers;
-using AspireWithBlazorStandalone.ClientServiceDefaults.Telemetry.Serializer;
+using AspireWithBlazorHosted.ClientServiceDefaults.Telemetry.Serializer;
 using OpenTelemetry;
 
-namespace AspireWithBlazorStandalone.ClientServiceDefaults.Telemetry;
+namespace AspireWithBlazorHosted.ClientServiceDefaults.Telemetry;
 
 public sealed class WebAssemblyOtlpTraceExporter : BaseExporter<Activity>
 {

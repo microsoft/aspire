@@ -3,7 +3,7 @@
 
 using System.Diagnostics;
 
-namespace AspireWithBlazorStandalone.ClientServiceDefaults.Telemetry.Serializer;
+namespace AspireWithBlazorHosted.ClientServiceDefaults.Telemetry.Serializer;
 
 internal static class OtlpTraceSerializer
 {

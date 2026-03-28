@@ -35,19 +35,8 @@ public static class BlazorClientExtensions
         return builder;
     }
 
-    private const string OtlpHttpClientName = "OtlpExporter";
-
     private static WebAssemblyHostBuilder ConfigureBlazorClientOpenTelemetry(this WebAssemblyHostBuilder builder, string serviceName)
     {
-        // Register a named HttpClient for OTLP exporters and suppress only its logs.
-        // This avoids a blanket filter on all System.Net.Http.HttpClient logs, so user
-        // app HttpClient logs remain visible while the noisy OTLP export "End processing
-        // HTTP request after ..." entries are suppressed.
-        builder.Services.AddHttpClient(OtlpHttpClientName)
-            .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(30));
-        builder.Logging.AddFilter($"System.Net.Http.HttpClient.{OtlpHttpClientName}.LogicalHandler", LogLevel.Warning);
-        builder.Logging.AddFilter($"System.Net.Http.HttpClient.{OtlpHttpClientName}.ClientHandler", LogLevel.Warning);
-
         builder.Logging.AddOpenTelemetry(logging =>
         {
             logging.IncludeFormattedMessage = true;
@@ -113,23 +102,21 @@ public static class BlazorClientExtensions
                 endpoint = new Uri(otlpEndpoint);
             }
 
-            // Configure tracing with WebAssembly-compatible exporter
-            // The custom exporter uses truly async HTTP calls without blocking,
-            // which is required because WebAssembly is single-threaded and the
-            // standard OtlpTraceExporter uses blocking patterns that cause deadlock.
+            // Configure tracing with WebAssembly-compatible exporter.
+            // We create HttpClient directly instead of using IHttpClientFactory to avoid
+            // Lazy<T> reentrancy: TracerProvider (Lazy) → AddProcessor factory → IHttpClientFactory
+            // → CreateClient → HTTP instrumentation handler → resolves TracerProvider → crash.
+            var traceHttpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
             builder.Services.AddOpenTelemetry()
                 .WithTracing(tracing =>
                 {
                     tracing.AddProcessor(sp =>
                     {
-                        var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
-                        var httpClient = httpClientFactory.CreateClient(OtlpHttpClientName);
-
                         var exporter = new WebAssemblyOtlpTraceExporter(
                             new Uri(endpoint, "v1/traces"),
                             serviceName,
                             headers,
-                            httpClient);
+                            traceHttpClient);
 
                         return new TaskBasedBatchExportProcessor<Activity>(
                             exporter,
@@ -140,40 +127,31 @@ public static class BlazorClientExtensions
                     });
                 });
 
-            // Configure metrics with WebAssembly-compatible exporter
-            // The standard OpenTelemetry MeterProvider doesn't work in WebAssembly
-            // because it requires threading primitives not available in the browser.
-            // Our custom exporter uses MeterListener (a .NET runtime feature) instead,
+            // Configure metrics with WebAssembly-compatible exporter.
+            // Uses MeterListener (a .NET runtime feature) instead of MeterProvider,
             // which works in the single-threaded WebAssembly environment.
+            var metricsHttpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
             builder.Services.AddSingleton(sp =>
             {
-                var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
-                var httpClient = httpClientFactory.CreateClient(OtlpHttpClientName);
-
                 return new WebAssemblyOtlpMetricExporter(
                     new Uri(endpoint, "v1/metrics"),
                     serviceName,
                     headers,
-                    httpClient: httpClient);
+                    httpClient: metricsHttpClient);
             });
 
-            // Configure logging with WebAssembly-compatible exporter
-            // The custom exporter uses truly async HTTP calls without blocking,
-            // which is required because WebAssembly is single-threaded and the
-            // standard OtlpLogExporter uses blocking patterns that cause deadlock.
+            // Configure logging with WebAssembly-compatible exporter.
+            var logsHttpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
             builder.Services.AddOpenTelemetry()
                 .WithLogging(logging =>
                 {
                     logging.AddProcessor(sp =>
                     {
-                        var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
-                        var httpClient = httpClientFactory.CreateClient(OtlpHttpClientName);
-
                         var exporter = new WebAssemblyOtlpLogExporter(
                             new Uri(endpoint, "v1/logs"),
                             serviceName,
                             headers,
-                            httpClient);
+                            logsHttpClient);
 
                         return new TaskBasedBatchExportProcessor<LogRecord>(
                             exporter,
