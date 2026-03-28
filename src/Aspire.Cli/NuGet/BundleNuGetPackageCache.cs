@@ -220,7 +220,7 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
             // Apply deprecated package filter unless the user wants to show deprecated packages
             if (isOfficialPackage && !_features.IsFeatureEnabled(KnownFeatures.ShowDeprecatedPackages, defaultValue: false))
             {
-                return !DeprecatedPackages.All.Contains(p.Id);
+                return !DeprecatedPackages.IsDeprecated(p.Id);
             }
 
             return isOfficialPackage;
