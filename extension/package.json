@@ -71,12 +71,12 @@
       {
         "view": "aspire-vscode.runningAppHosts",
         "contents": "%views.runningAppHosts.welcome%",
-        "when": "aspire.noRunningAppHosts && !aspire.fetchAppHostsError && !aspire.loading && aspire.viewMode != global"
+        "when": "aspire.noRunningAppHosts && !aspire.fetchAppHostsError && !aspire.loading && aspire.viewMode != 'global'"
       },
       {
         "view": "aspire-vscode.runningAppHosts",
         "contents": "%views.runningAppHosts.globalWelcome%",
-        "when": "aspire.noRunningAppHosts && !aspire.fetchAppHostsError && !aspire.loading && aspire.viewMode == global"
+        "when": "aspire.noRunningAppHosts && !aspire.fetchAppHostsError && !aspire.loading && aspire.viewMode == 'global'"
       },
       {
         "view": "aspire-vscode.runningAppHosts",
@@ -498,12 +498,12 @@
       "view/title": [
         {
           "command": "aspire-vscode.switchToGlobalView",
-          "when": "view == aspire-vscode.runningAppHosts && aspire.viewMode != global",
+          "when": "view == aspire-vscode.runningAppHosts && aspire.viewMode != 'global'",
           "group": "navigation"
         },
         {
           "command": "aspire-vscode.switchToWorkspaceView",
-          "when": "view == aspire-vscode.runningAppHosts && aspire.viewMode == global",
+          "when": "view == aspire-vscode.runningAppHosts && aspire.viewMode == 'global'",
           "group": "navigation"
         },
         {
