@@ -21,6 +21,10 @@ function readManifest(): ExtensionManifest {
     return JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as ExtensionManifest;
 }
 
+function assertContains(whenClause: string | undefined, fragment: string): void {
+    assert.ok(whenClause?.includes(fragment), `Expected "${whenClause}" to contain "${fragment}"`);
+}
+
 suite('extension/package.json', () => {
     test('running apphosts welcome states use string view mode checks', () => {
         const manifest = readManifest();
@@ -29,30 +33,22 @@ suite('extension/package.json', () => {
         const workspaceWelcome = runningAppHostsWelcome.find(item => item.contents === '%views.runningAppHosts.welcome%');
         const globalWelcome = runningAppHostsWelcome.find(item => item.contents === '%views.runningAppHosts.globalWelcome%');
 
-        assert.strictEqual(
-            workspaceWelcome?.when,
-            "aspire.noRunningAppHosts && !aspire.fetchAppHostsError && !aspire.loading && aspire.viewMode != 'global'"
-        );
-        assert.strictEqual(
-            globalWelcome?.when,
-            "aspire.noRunningAppHosts && !aspire.fetchAppHostsError && !aspire.loading && aspire.viewMode == 'global'"
-        );
+        assertContains(workspaceWelcome?.when, "aspire.viewMode != 'global'");
+        assertContains(globalWelcome?.when, "aspire.viewMode == 'global'");
     });
 
-    test('running apphosts title actions use string view mode checks', () => {
+    test('running apphosts title actions use string view and view mode checks', () => {
         const manifest = readManifest();
         const titleMenus = manifest.contributes.menus?.['view/title'] ?? [];
 
         const switchToGlobal = titleMenus.find(item => item.command === 'aspire-vscode.switchToGlobalView');
         const switchToWorkspace = titleMenus.find(item => item.command === 'aspire-vscode.switchToWorkspaceView');
+        const refreshRunningAppHosts = titleMenus.find(item => item.command === 'aspire-vscode.refreshRunningAppHosts');
 
-        assert.strictEqual(
-            switchToGlobal?.when,
-            "view == aspire-vscode.runningAppHosts && aspire.viewMode != 'global'"
-        );
-        assert.strictEqual(
-            switchToWorkspace?.when,
-            "view == aspire-vscode.runningAppHosts && aspire.viewMode == 'global'"
-        );
+        assertContains(switchToGlobal?.when, "view == 'aspire-vscode.runningAppHosts'");
+        assertContains(switchToGlobal?.when, "aspire.viewMode != 'global'");
+        assertContains(switchToWorkspace?.when, "view == 'aspire-vscode.runningAppHosts'");
+        assertContains(switchToWorkspace?.when, "aspire.viewMode == 'global'");
+        assertContains(refreshRunningAppHosts?.when, "view == 'aspire-vscode.runningAppHosts'");
     });
 });

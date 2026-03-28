@@ -498,17 +498,17 @@
       "view/title": [
         {
           "command": "aspire-vscode.switchToGlobalView",
-          "when": "view == aspire-vscode.runningAppHosts && aspire.viewMode != 'global'",
+          "when": "view == 'aspire-vscode.runningAppHosts' && aspire.viewMode != 'global'",
           "group": "navigation"
         },
         {
           "command": "aspire-vscode.switchToWorkspaceView",
-          "when": "view == aspire-vscode.runningAppHosts && aspire.viewMode == 'global'",
+          "when": "view == 'aspire-vscode.runningAppHosts' && aspire.viewMode == 'global'",
           "group": "navigation"
         },
         {
           "command": "aspire-vscode.refreshRunningAppHosts",
-          "when": "view == aspire-vscode.runningAppHosts",
+          "when": "view == 'aspire-vscode.runningAppHosts'",
           "group": "navigation"
         }
       ],
