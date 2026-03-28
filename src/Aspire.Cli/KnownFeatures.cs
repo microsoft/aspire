@@ -1,6 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Configuration;
+using Aspire.Cli.Packaging;
+using Microsoft.Extensions.Configuration;
+
 namespace Aspire.Cli;
 
 /// <summary>
@@ -101,5 +105,20 @@ internal static class KnownFeatures
     public static IEnumerable<string> GetAllFeatureNames()
     {
         return s_featureMetadata.Keys.OrderBy(name => name);
+    }
+
+    /// <summary>
+    /// Determines whether the staging channel is enabled by checking both the feature flag
+    /// and the configured channel. The staging channel is considered enabled if either the
+    /// <see cref="StagingChannelEnabled"/> feature flag is <c>true</c>, or the configured
+    /// channel is set to <c>"staging"</c>.
+    /// </summary>
+    /// <param name="features">The feature flags service.</param>
+    /// <param name="configuration">The configuration to check for the channel setting.</param>
+    /// <returns><c>true</c> if the staging channel should be available; otherwise, <c>false</c>.</returns>
+    public static bool IsStagingChannelEnabled(IFeatures features, IConfiguration configuration)
+    {
+        return features.IsFeatureEnabled(StagingChannelEnabled, false)
+            || string.Equals(configuration["channel"], PackageChannelNames.Staging, StringComparison.OrdinalIgnoreCase);
     }
 }

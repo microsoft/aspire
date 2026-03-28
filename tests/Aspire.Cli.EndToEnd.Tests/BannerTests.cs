@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Xunit;
@@ -46,7 +47,7 @@ public sealed class BannerTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire cache clear");
         await auto.EnterAsync();
         await auto.WaitUntilAsync(
-            s => s.ContainsText("Welcome to the") && s.ContainsText("Telemetry"),
+            s => s.ContainsText(RootCommandStrings.BannerWelcomeText) && s.ContainsText("Telemetry"),
             timeout: TimeSpan.FromSeconds(30), description: "waiting for banner and telemetry notice on first run");
         await auto.WaitForSuccessPromptAsync(counter);
         await auto.TypeAsync("exit");
@@ -78,7 +79,7 @@ public sealed class BannerTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire --banner");
         await auto.EnterAsync();
         await auto.WaitUntilAsync(
-            s => s.ContainsText("Welcome to the") && s.ContainsText("CLI"),
+            s => s.ContainsText(RootCommandStrings.BannerWelcomeText) && s.ContainsText("CLI"),
             timeout: TimeSpan.FromSeconds(30), description: "waiting for banner with version info");
         await auto.WaitForSuccessPromptAsync(counter);
         await auto.TypeAsync("exit");
@@ -88,7 +89,6 @@ public sealed class BannerTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/14307")]
     public async Task Banner_NotDisplayedWithNoLogoFlag()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -114,23 +114,21 @@ public sealed class BannerTests(ITestOutputHelper output)
         await auto.ClearScreenAsync(counter);
         await auto.TypeAsync("aspire --nologo --help");
         await auto.EnterAsync();
+        // Wait for the help hint that appears at the very end of help output.
+        // This ensures the full help text has been rendered to the visible console
+        // before we check for the absence of the banner.
         await auto.WaitUntilAsync(s =>
         {
-            // Wait for help output to confirm command completed
-            if (!s.ContainsText("Commands:"))
-            {
-                return false;
-            }
-
             // Verify the banner does NOT appear
-            if (s.ContainsText("Welcome to the"))
+            if (s.ContainsText(RootCommandStrings.BannerWelcomeText))
             {
                 throw new InvalidOperationException(
                     "Unexpected banner displayed when --nologo flag was used!");
             }
 
-            return true;
-        }, timeout: TimeSpan.FromSeconds(30), description: "waiting for help output without banner");
+            // Only return true once the help hint is visible at the end of the output
+            return s.ContainsText(HelpGroupStrings.HelpHint);
+        }, timeout: TimeSpan.FromSeconds(30), description: "waiting for help output to complete");
         await auto.WaitForSuccessPromptAsync(counter);
         await auto.TypeAsync("exit");
         await auto.EnterAsync();

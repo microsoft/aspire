@@ -23,12 +23,6 @@
       "appHostOtlpHttpsPort": {
         "isHidden": true
       },
-      "appHostMcpHttpPort": {
-        "isHidden": true
-      },
-      "appHostMcpHttpsPort": {
-        "isHidden": true
-      },
       "appHostResourceHttpPort": {
         "isHidden": true
       },

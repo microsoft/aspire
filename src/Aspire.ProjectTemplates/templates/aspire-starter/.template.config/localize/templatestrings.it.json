@@ -1,4 +1,4 @@
-﻿{
+{
   "author": "Microsoft",
   "name": "App Starter Aspire (ASP.NET Core/Blazor)",
   "description": "Modello di progetto per la creazione di un'app Aspire con front-end Web Blazor e servizio back-end API Web, con cache Redis opzionale.",
@@ -24,11 +24,9 @@
   "symbols/XUnitVersion/choices/v3mtp/description": "Sceglie xUnit.net v3 con Microsoft Test Platform",
   "symbols/appHostHttpPort/description": "Numero di porta da usare per l'endpoint HTTP in launchSettings.json. del progetto AppHost.",
   "symbols/appHostOtlpHttpPort/description": "Numero di porta da usare per l'endpoint OTLP HTTP in launchSettings.json. del progetto AppHost.",
-  "symbols/appHostMcpHttpPort/description": "Numero di porta da usare per l'endpoint MCP HTTP in launchSettings.json. del progetto AppHost.",
   "symbols/appHostResourceHttpPort/description": "Numero di porta da usare per l'endpoint HTTP del servizio risorse in launchSettings.json del progetto AppHost.",
   "symbols/appHostHttpsPort/description": "Numero di porta da usare per l'endpoint HTTPS in launchSettings.json. del progetto AppHost. Questa opzione è applicabile solo quando il parametro no-https non viene usato.",
   "symbols/appHostOtlpHttpsPort/description": "Numero di porta da usare per l'endpoint OTLP HTTPS in launchSettings.json. del progetto AppHost.",
-  "symbols/appHostMcpHttpsPort/description": "Numero di porta da usare per l'endpoint MCP HTTPS in launchSettings.json. del progetto AppHost.",
   "symbols/appHostResourceHttpsPort/description": "Numero di porta da usare per l'endpoint HTTPS del servizio risorse in launchSettings.json del progetto AppHost.",
   "symbols/webHttpPort/description": "Numero di porta da usare per l'endpoint HTTP in launchSettings.json. del progetto Web.",
   "symbols/webHttpsPort/description": "Numero di porta da usare per l'endpoint HTTPS in launchSettings.json del progetto Web. Questa opzione è applicabile solo quando il parametro no-https non viene usato.",

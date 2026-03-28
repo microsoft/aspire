@@ -59,6 +59,9 @@ internal static class ResourceCommandHelper
     {
         logger.LogDebug("Executing command '{CommandName}' on resource '{ResourceName}'", commandName, resourceName);
 
+        // Route status messages to stderr so command results in stdout remain pipeable (e.g., | jq)
+        interactionService.Console = ConsoleOutput.Error;
+
         var response = await interactionService.ShowStatusAsync(
             $"Executing command '{commandName}' on resource '{resourceName}'...",
             async () => await connection.ExecuteResourceCommandAsync(resourceName, commandName, cancellationToken));
@@ -66,7 +69,6 @@ internal static class ResourceCommandHelper
         if (response.Success)
         {
             interactionService.DisplaySuccess($"Command '{commandName}' executed successfully on resource '{resourceName}'.");
-            return ExitCodeConstants.Success;
         }
         else if (response.Canceled)
         {
@@ -77,8 +79,14 @@ internal static class ResourceCommandHelper
         {
             var errorMessage = GetFriendlyErrorMessage(response.ErrorMessage);
             interactionService.DisplayError($"Failed to execute command '{commandName}' on resource '{resourceName}': {errorMessage}");
-            return ExitCodeConstants.FailedToExecuteResourceCommand;
         }
+
+        if (response.Result is not null)
+        {
+            interactionService.DisplayRawText(response.Result, ConsoleOutput.Standard);
+        }
+
+        return response.Success ? ExitCodeConstants.Success : ExitCodeConstants.FailedToExecuteResourceCommand;
     }
 
     private static int HandleResponse(
@@ -92,7 +100,6 @@ internal static class ResourceCommandHelper
         if (response.Success)
         {
             interactionService.DisplaySuccess($"Resource '{resourceName}' {pastTenseVerb} successfully.");
-            return ExitCodeConstants.Success;
         }
         else if (response.Canceled)
         {
@@ -103,8 +110,14 @@ internal static class ResourceCommandHelper
         {
             var errorMessage = GetFriendlyErrorMessage(response.ErrorMessage);
             interactionService.DisplayError($"Failed to {baseVerb} resource '{resourceName}': {errorMessage}");
-            return ExitCodeConstants.FailedToExecuteResourceCommand;
         }
+
+        if (response.Result is not null)
+        {
+            interactionService.DisplayRawText(response.Result, ConsoleOutput.Standard);
+        }
+
+        return response.Success ? ExitCodeConstants.Success : ExitCodeConstants.FailedToExecuteResourceCommand;
     }
 
     private static string GetFriendlyErrorMessage(string? errorMessage)

@@ -13,6 +13,7 @@ namespace Aspire.Cli.Tests.TestServices;
 internal sealed class TestCertificateToolRunner : ICertificateToolRunner
 {
     public Func<CertificateTrustResult>? CheckHttpCertificateCallback { get; set; }
+    public Func<EnsureCertificateResult>? EnsureHttpCertificateExistsCallback { get; set; }
     public Func<EnsureCertificateResult>? TrustHttpCertificateCallback { get; set; }
     public Func<CertificateCleanResult>? CleanHttpCertificateCallback { get; set; }
 
@@ -37,6 +38,13 @@ internal sealed class TestCertificateToolRunner : ICertificateToolRunner
         return TrustHttpCertificateCallback is not null
             ? TrustHttpCertificateCallback()
             : EnsureCertificateResult.ExistingHttpsCertificateTrusted;
+    }
+
+    public EnsureCertificateResult EnsureHttpCertificateExists()
+    {
+        return EnsureHttpCertificateExistsCallback is not null
+            ? EnsureHttpCertificateExistsCallback()
+            : EnsureCertificateResult.ValidCertificatePresent;
     }
 
     public CertificateCleanResult CleanHttpCertificate()

@@ -17,6 +17,11 @@
         <target state="translated">AppHost a výchozí nastavení služby</target>
         <note />
       </trans-unit>
+      <trans-unit id="AspireJavaStarter_Description">
+        <source>Starter App (Java AppHost/Express/React)</source>
+        <target state="new">Starter App (Java AppHost/Express/React)</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AspireJsFrontendStarter_Description">
         <source>Starter App (ASP.NET Core/React)</source>
         <target state="translated">Úvodní aplikace (ASP.NET Core/React)</target>

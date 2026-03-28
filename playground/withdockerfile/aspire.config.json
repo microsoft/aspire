@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "WithDockerfile.AppHost/WithDockerfile.AppHost.csproj"
+  }
+}

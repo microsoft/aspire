@@ -38,9 +38,9 @@
     <PackageVersion Include="Microsoft.Extensions.Azure" Version="1.13.1" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.AzureAppConfiguration" Version="8.4.0" />
     <!-- Azure Management SDK for .NET dependencies -->
-    <PackageVersion Include="Azure.Provisioning" Version="1.4.0" />
+    <PackageVersion Include="Azure.Provisioning" Version="1.5.0" />
     <PackageVersion Include="Azure.Provisioning.AppConfiguration" Version="1.1.0" />
-    <PackageVersion Include="Azure.Provisioning.AppContainers" Version="1.1.0" />
+    <PackageVersion Include="Azure.Provisioning.AppContainers" Version="1.2.0" />
     <PackageVersion Include="Azure.Provisioning.AppService" Version="1.3.1" />
     <PackageVersion Include="Azure.Provisioning.ApplicationInsights" Version="1.1.0" />
     <PackageVersion Include="Azure.Provisioning.ContainerRegistry" Version="1.1.0" />
@@ -110,7 +110,6 @@
     <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components.Icons" Version="4.14.0" />
     <PackageVersion Include="Milvus.Client" Version="2.3.0-preview.1" /> <!-- No stable release available -->
     <PackageVersion Include="ModelContextProtocol" Version="1.0.0" />
-    <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="1.0.0" />
     <PackageVersion Include="MongoDB.Driver" Version="3.6.0" />
     <PackageVersion Include="MongoDB.Driver.Core.Extensions.DiagnosticSources" Version="3.0.0" />
     <PackageVersion Include="MySqlConnector.DependencyInjection" Version="2.5.0" />

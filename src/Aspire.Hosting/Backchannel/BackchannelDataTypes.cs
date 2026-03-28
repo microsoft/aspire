@@ -111,16 +111,6 @@ internal sealed class GetDashboardInfoRequest { }
 internal sealed class GetDashboardInfoResponse
 {
     /// <summary>
-    /// Gets the base URL of the Dashboard MCP endpoint.
-    /// </summary>
-    public string? McpBaseUrl { get; init; }
-
-    /// <summary>
-    /// Gets the Dashboard MCP API token.
-    /// </summary>
-    public string? McpApiToken { get; init; }
-
-    /// <summary>
     /// Gets the base URL of the Dashboard API (without login token).
     /// Use this for API calls like /api/telemetry/*.
     /// </summary>
@@ -295,6 +285,16 @@ internal sealed class ExecuteResourceCommandResponse
     /// Gets the error message if the command failed.
     /// </summary>
     public string? ErrorMessage { get; init; }
+
+    /// <summary>
+    /// Gets the result data produced by the command.
+    /// </summary>
+    public string? Result { get; init; }
+
+    /// <summary>
+    /// Gets the format of the result data (e.g. "none", "text", "json").
+    /// </summary>
+    public string? ResultFormat { get; init; }
 }
 
 #endregion

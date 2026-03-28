@@ -70,6 +70,7 @@ public static class KeycloakResourceBuilderExtensions
             .WithImageTag(KeycloakContainerImageTags.Tag)
             .WithHttpEndpoint(port: port, targetPort: DefaultContainerPort)
             .WithHttpEndpoint(targetPort: ManagementInterfaceContainerPort, name: ManagementEndpointName)
+            .WithEndpoint(ManagementEndpointName, e => e.ExcludeReferenceEndpoint = true)
             .WithHttpHealthCheck(endpointName: ManagementEndpointName, path: "/health/ready")
             .WithOtlpExporter()
             .WithEnvironment(context =>

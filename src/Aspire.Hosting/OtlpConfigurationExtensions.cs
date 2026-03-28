@@ -14,11 +14,6 @@ namespace Aspire.Hosting;
 public static class OtlpConfigurationExtensions
 {
     /// <summary>
-    /// The name of the environment variable for configuring the OTLP exporter ingestion URL. This is used by OpenTelemetry SDKs to determine where to send telemetry data.
-    /// </summary>
-    public static readonly string OtlpEndpointEnvironmentVariableName = KnownOtelConfigNames.ExporterOtlpEndpoint;
-
-    /// <summary>
     /// Configures OpenTelemetry in projects using environment variables.
     /// </summary>
     /// <param name="resource">The resource to add annotations to.</param>
@@ -74,7 +69,7 @@ public static class OtlpConfigurationExtensions
             }
 
             var (url, protocol) = OtlpEndpointResolver.ResolveOtlpEndpoint(configuration, otlpExporterAnnotation.RequiredProtocol);
-            context.EnvironmentVariables[OtlpEndpointEnvironmentVariableName] = new HostUrl(url);
+            context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpEndpoint] = new HostUrl(url);
             context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpProtocol] = protocol;
 
             // Set the service name and instance id to the resource name and UID. Values are injected by DCP.

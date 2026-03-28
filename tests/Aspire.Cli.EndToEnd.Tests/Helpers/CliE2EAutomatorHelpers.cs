@@ -46,6 +46,11 @@ internal static class CliE2EAutomatorHelpers
             await auto.TypeAsync($"cd /workspace/{workspace.WorkspaceRoot.Name}");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
+
+            // Set up EXIT trap to copy .aspire diagnostics to workspace for CI capture
+            await auto.TypeAsync($"trap 'cp -r ~/.aspire/logs /workspace/{workspace.WorkspaceRoot.Name}/.aspire-logs 2>/dev/null; cp -r ~/.aspire/packages /workspace/{workspace.WorkspaceRoot.Name}/.aspire-packages 2>/dev/null' EXIT");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
         }
     }
 
@@ -220,6 +225,18 @@ internal static class CliE2EAutomatorHelpers
     }
 
     /// <summary>
+    /// Enables experimental Java polyglot support for CLI tests.
+    /// </summary>
+    internal static async Task EnableExperimentalJavaSupportAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter)
+    {
+        await auto.TypeAsync("aspire config set features:experimentalPolyglot:java true --global --non-interactive");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    /// <summary>
     /// Installs a specific GA version of the Aspire CLI using the install script.
     /// </summary>
     internal static async Task InstallAspireCliVersionAsync(
@@ -288,11 +305,26 @@ internal static class CliE2EAutomatorHelpers
             throw new InvalidOperationException("aspire start failed. Check terminal output for CLI logs.");
         }
 
-        // Extract dashboard URL and verify it's reachable
+        // Extract dashboard URL and verify it's reachable.
+        // First check if the apphost crashed (aspire start exits 0 but prints error).
         await auto.TypeAsync(
             $"DASHBOARD_URL=$(sed -n " +
-            "'s/.*\"dashboardUrl\"[[:space:]]*:[[:space:]]*\"\\(https:\\/\\/localhost:[0-9]*\\).*/\\1/p' " +
+            "'s/.*\"dashboardUrl\"[[:space:]]*:[[:space:]]*\"\\(https\\?:\\/\\/localhost:[0-9]*\\).*/\\1/p' " +
             $"{jsonFile} | head -1)");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        // If DASHBOARD_URL is empty, the apphost likely crashed — dump logs for diagnostics
+        await auto.TypeAsync(
+            "if [ -z \"$DASHBOARD_URL\" ]; then " +
+            "echo 'dashboard-url-empty'; " +
+            "echo '=== ASPIRE START JSON ==='; cat " + jsonFile + "; echo '=== END JSON ==='; " +
+            "echo '=== ALL LOGS ==='; ls -lt ~/.aspire/logs/ 2>/dev/null; echo '=== END LIST ==='; " +
+            "DETACH_LOG=$(ls -t ~/.aspire/logs/cli_*detach*.log 2>/dev/null | head -1); " +
+            "echo \"=== DETACH LOG: $DETACH_LOG ===\"; [ -n \"$DETACH_LOG\" ] && tail -200 \"$DETACH_LOG\"; echo '=== END DETACH ==='; " +
+            "CLI_LOG=$(ls -t ~/.aspire/logs/cli_*.log 2>/dev/null | head -1); " +
+            "echo \"=== CLI LOG: $CLI_LOG ===\"; [ -n \"$CLI_LOG\" ] && tail -100 \"$CLI_LOG\"; echo '=== END CLI ==='; " +
+            "fi");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
@@ -312,6 +344,26 @@ internal static class CliE2EAutomatorHelpers
         SequenceCounter counter)
     {
         await auto.TypeAsync("aspire stop");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    /// <summary>
+    /// Copies interesting diagnostic directories from <c>~/.aspire</c> to the mounted workspace
+    /// so they are captured by <see cref="CaptureWorkspaceOnFailureAttribute"/>. Call this before
+    /// exiting the container. Copies logs and NuGet restore output (libs directories).
+    /// </summary>
+    internal static async Task CaptureAspireDiagnosticsAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        TemporaryWorkspace workspace)
+    {
+        var containerWorkspace = $"/workspace/{workspace.WorkspaceRoot.Name}";
+
+        // Copy CLI logs
+        await auto.TypeAsync($"cp -r ~/.aspire/logs {containerWorkspace}/.aspire-logs 2>/dev/null; " +
+                             $"cp -r ~/.aspire/packages {containerWorkspace}/.aspire-packages 2>/dev/null; " +
+                             "echo done");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
     }

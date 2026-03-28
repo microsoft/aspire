@@ -126,8 +126,14 @@ public sealed class DescribeCommandTests(ITestOutputHelper output)
         var content = File.ReadAllText(appHostFilePath);
 
         // Add .WithReplicas(2) to the first .WithHttpHealthCheck("/health"); occurrence (apiservice)
+        // and clear the fixed target ports so DCP can assign unique ports to each replica.
         var originalPattern = ".WithHttpHealthCheck(\"/health\");";
-        var replacement = ".WithHttpHealthCheck(\"/health\").WithReplicas(2);";
+        var replacement = """
+            .WithHttpHealthCheck("/health")
+            .WithReplicas(2)
+            .WithEndpoint("http", e => e.TargetPort = null, createIfNotExists: false)
+            .WithEndpoint("https", e => e.TargetPort = null, createIfNotExists: false);
+            """;
 
         // Only replace the first occurrence (apiservice), not the second (webfrontend)
         var index = content.IndexOf(originalPattern);
@@ -138,7 +144,7 @@ public sealed class DescribeCommandTests(ITestOutputHelper output)
 
         File.WriteAllText(appHostFilePath, content);
 
-        output.WriteLine($"Modified AppHost.cs to add .WithReplicas(2) to apiservice");
+        output.WriteLine("Modified AppHost.cs to add .WithReplicas(2) to apiservice and clear fixed endpoint target ports");
 
         // Start the AppHost in the background using aspire start
         await auto.TypeAsync("aspire start");

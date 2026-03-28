@@ -20,7 +20,7 @@ jobs:
       tests_matrix_requires_nugets_macos: ${{ steps.split_matrix.outputs.tests_matrix_requires_nugets_macos }}
       tests_matrix_requires_cli_archive: ${{ steps.split_matrix.outputs.tests_matrix_requires_cli_archive }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - uses: ./.github/actions/enumerate-tests
         id: generate_tests_matrix
@@ -57,6 +57,14 @@ jobs:
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       targets: '[{"os": "windows-latest", "runner": "windows-latest", "rids": "win-x64"}]'
+
+  build_cli_archive_windows_arm:
+    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' }}
+    name: Build native CLI archive (Windows ARM64)
+    uses: ./.github/workflows/build-cli-native-archives.yml
+    with:
+      versionOverrideArg: ${{ inputs.versionOverrideArg }}
+      targets: '[{"os": "windows-11-arm", "runner": "windows-11-arm", "rids": "win-arm64"}]'
 
   build_cli_archive_macos:
     name: Build native CLI archive (macOS)
@@ -189,6 +197,86 @@ jobs:
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
 
+  cli_starter_validation_windows:
+    name: Aspire CLI Starter Validation (${{ matrix.os.name }})
+    runs-on: ${{ matrix.os.runner }}
+    timeout-minutes: 15
+    needs: [build_packages, build_cli_archive_windows, build_cli_archive_windows_arm]
+    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: Windows
+            runner: windows-latest
+            artifact_suffix: windows-x64
+            max_startup_seconds: 120
+            resource_ready_timeout_seconds: 120
+          - name: Windows ARM64
+            runner: windows-11-arm
+            artifact_suffix: windows-arm64
+            max_startup_seconds: 120
+            resource_ready_timeout_seconds: 300
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          global-json-file: global.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+
+      - name: Install Aspire CLI from PR dogfood script
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $scriptPath = Join-Path $env:GITHUB_WORKSPACE "eng/scripts/get-aspire-cli-pr.ps1"
+          & $scriptPath ${{ github.event.pull_request.number }} -WorkflowRunId ${{ github.run_id }} -SkipExtension
+
+          aspire --version
+
+      - name: Create starter app and validate startup
+        timeout-minutes: 12
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          & "$env:GITHUB_WORKSPACE/eng/scripts/cli-starter-validation.ps1" `
+            -PRNumber ${{ github.event.pull_request.number }} `
+            -MaxStartupSeconds ${{ matrix.os.max_startup_seconds }} `
+            -ResourceReadyTimeoutSeconds ${{ matrix.os.resource_ready_timeout_seconds }}
+
+      - name: Collect CLI logs
+        if: always()
+        shell: pwsh
+        run: |
+          $validationRoot = Join-Path $env:RUNNER_TEMP 'aspire-cli-starter-validation'
+          $cliLogsDir = Join-Path $HOME '.aspire\logs'
+          $sharedLogsDir = Join-Path $validationRoot 'cli-logs'
+
+          if (Test-Path $cliLogsDir) {
+            New-Item -ItemType Directory -Path $validationRoot -Force | Out-Null
+            Copy-Item -Path $cliLogsDir -Destination $sharedLogsDir -Recurse -Force
+          }
+
+      - name: Upload starter validation diagnostics
+        if: always()
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        with:
+          name: cli-starter-validation-${{ matrix.os.artifact_suffix }}
+          path: ${{ runner.temp }}/aspire-cli-starter-validation
+          if-no-files-found: ignore
+
   extension_tests_win:
     name: Run VS Code extension tests (Windows)
     runs-on: windows-latest
@@ -197,9 +285,9 @@ jobs:
         working-directory: ./extension
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Setup Node.js environment
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: '20.x'
       - name: Install dependencies
@@ -209,7 +297,7 @@ jobs:
       - name: Package VSIX
         run: npm exec @vscode/vsce -- package --pre-release -o out/aspire-extension.vsix
       - name: Upload VSIX
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: aspire-extension
           path: extension/out/aspire-extension.vsix
@@ -217,6 +305,14 @@ jobs:
   typescript_sdk_tests:
     name: TypeScript SDK Unit Tests
     uses: ./.github/workflows/typescript-sdk-tests.yml
+
+  java_sdk_tests:
+    name: Java SDK Unit Tests
+    uses: ./.github/workflows/run-tests.yml
+    with:
+      testShortName: Java SDK
+      testProjectPath: tests/Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.Java.Tests.csproj
+      extraTestArgs: --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
 
   results:
     if: ${{ always() && github.repository_owner == 'microsoft' }}
@@ -229,7 +325,9 @@ jobs:
       build_cli_archive_windows,
       build_cli_archive_macos,
       extension_tests_win,
+      cli_starter_validation_windows,
       typescript_sdk_tests,
+      java_sdk_tests,
       tests_no_nugets,
       tests_no_nugets_overflow,
       tests_requires_nugets_linux,
@@ -240,21 +338,21 @@ jobs:
     ]
     steps:
       - name: Checkout code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: logs-*-ubuntu-latest
           merge-multiple: true
           path: ${{ github.workspace }}/testresults/ubuntu-latest
 
-      - uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: logs-*-windows-latest
           merge-multiple: true
           path: ${{ github.workspace }}/testresults/windows-latest
 
-      - uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: logs-*-macos-latest
           merge-multiple: true
@@ -262,7 +360,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: All-TestResults
           path: ${{ github.workspace }}/testresults/**/*.trx
@@ -287,6 +385,8 @@ jobs:
         #   primary no-nugets matrix exceeds the overflow threshold.
         # - tests_requires_nugets_macos: some runs intentionally produce no macOS requires-nugets
         #   tests, so an empty matrix and 'skipped' result are expected.
+        # - cli_starter_validation_windows: this job only runs for pull requests and is expected to
+        #   be skipped for other workflow events.
         # All other jobs in this gate are required, and a 'skipped' result is treated as a failure.
         if: >-
           ${{ always() &&
@@ -294,9 +394,11 @@ jobs:
                 contains(needs.*.result, 'cancelled') ||
                 (github.event_name == 'pull_request' &&
                  (needs.extension_tests_win.result == 'skipped' ||
-                   needs.typescript_sdk_tests.result == 'skipped' ||
-                   needs.tests_no_nugets.result == 'skipped' ||
-                   needs.tests_requires_nugets_linux.result == 'skipped' ||
+                    needs.cli_starter_validation_windows.result == 'skipped' ||
+                    needs.typescript_sdk_tests.result == 'skipped' ||
+                    needs.java_sdk_tests.result == 'skipped' ||
+                    needs.tests_no_nugets.result == 'skipped' ||
+                    needs.tests_requires_nugets_linux.result == 'skipped' ||
                    needs.tests_requires_nugets_windows.result == 'skipped' ||
                    (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null &&
                     needs.tests_requires_nugets_macos.result == 'skipped') ||
@@ -304,8 +406,9 @@ jobs:
                   needs.polyglot_validation.result == 'skipped')) ||
                 (github.event_name != 'pull_request' &&
                  (needs.extension_tests_win.result == 'skipped' ||
-                   needs.typescript_sdk_tests.result == 'skipped' ||
-                   needs.tests_no_nugets.result == 'skipped' ||
+                    needs.typescript_sdk_tests.result == 'skipped' ||
+                    needs.java_sdk_tests.result == 'skipped' ||
+                    needs.tests_no_nugets.result == 'skipped' ||
                    needs.tests_requires_nugets_linux.result == 'skipped' ||
                    needs.tests_requires_nugets_windows.result == 'skipped' ||
                    (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null &&

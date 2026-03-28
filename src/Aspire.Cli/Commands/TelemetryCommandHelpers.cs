@@ -136,7 +136,7 @@ internal static class TelemetryCommandHelpers
     /// <summary>
     /// Extracts the base URL from a dashboard URL (removes /login?t=... path).
     /// </summary>
-    private static string? ExtractDashboardBaseUrl(string? dashboardUrlWithToken)
+    internal static string? ExtractDashboardBaseUrl(string? dashboardUrlWithToken)
     {
         if (string.IsNullOrEmpty(dashboardUrlWithToken))
         {

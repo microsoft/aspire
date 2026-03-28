@@ -96,7 +96,6 @@ public sealed class TypeScriptLanguageSupport : ILanguageSupport
               languageOptions: {
                 parserOptions: {
                   projectService: true,
-                  tsconfigRootDir: import.meta.dirname,
                 },
               },
               rules: {

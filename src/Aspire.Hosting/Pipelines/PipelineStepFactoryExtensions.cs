@@ -134,7 +134,6 @@ public static class PipelineStepFactoryExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="callback">The callback function to execute during the configuration phase.</param>
     /// <returns>The resource builder for chaining.</returns>
-    [AspireExport("withPipelineConfigurationAsync", Description = "Configures pipeline step dependencies via an async callback")]
     public static IResourceBuilder<T> WithPipelineConfiguration<T>(
         this IResourceBuilder<T> builder,
         Func<PipelineConfigurationContext, Task> callback) where T : IResource

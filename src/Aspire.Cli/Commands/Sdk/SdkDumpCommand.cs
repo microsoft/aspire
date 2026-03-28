@@ -219,7 +219,7 @@ internal sealed class SdkDumpCommand : BaseCommand
                 else
                 {
                     // Output to stdout
-                    Console.WriteLine(output);
+                    InteractionService.DisplayRawText(output, consoleOverride: ConsoleOutput.Standard);
                 }
 
                 // Return error code if there are errors in diagnostics

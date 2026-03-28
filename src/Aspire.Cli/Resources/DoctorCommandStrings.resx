@@ -80,7 +80,8 @@
     <value>Summary: {0} passed, {1} warnings, {2} failed</value>
   </data>
   <data name="DetailedPrerequisitesLink" xml:space="preserve">
-    <value>For detailed prerequisites: https://aka.ms/aspire-prerequisites</value>
+    <value>For detailed prerequisites: {0}</value>
+    <comment>{0} is a clickable URL</comment>
   </data>
   <data name="CheckingPrerequisites" xml:space="preserve">
     <value>Checking Aspire environment...</value>

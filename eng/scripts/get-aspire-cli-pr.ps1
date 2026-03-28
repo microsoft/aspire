@@ -382,9 +382,9 @@ function Get-CliExecutablePath {
     return Join-Path $DestinationPath $exeName
 }
 
-# Function to backup existing CLI executable before overwriting
-# This allows installation to proceed even when the CLI is running
-# The running process still has a handle to the old file, but the file can be renamed
+# Function to back up an existing CLI executable before overwriting it.
+# This matches self-update semantics by deleting stale *.old.* backups first.
+# On Windows, a running process can still block the rename.
 function Backup-ExistingCliExecutable {
     [CmdletBinding(SupportsShouldProcess)]
     [OutputType([string])]
@@ -399,9 +399,16 @@ function Backup-ExistingCliExecutable {
         
         if ($PSCmdlet.ShouldProcess($TargetExePath, "Backup to $backupPath")) {
             Write-Message "Backing up existing CLI: $TargetExePath -> $backupPath" -Level Verbose
-            
+
+            Remove-OldCliBackupFiles -TargetExePath $TargetExePath
+
             # Rename existing executable to .old.[timestamp]
-            Move-Item -Path $TargetExePath -Destination $backupPath -Force
+            try {
+                Move-Item -Path $TargetExePath -Destination $backupPath -Force -ErrorAction Stop
+            }
+            catch {
+                throw "Failed to back up existing CLI at '$TargetExePath'. The file may be in use by another process. Please close any running Aspire CLI instances and try again. Error: $($_.Exception.Message)"
+            }
             return $backupPath
         }
     }
@@ -427,7 +434,7 @@ function Restore-CliExecutableFromBackup {
             Remove-Item -Path $TargetExePath -Force -ErrorAction SilentlyContinue
         }
         
-        Move-Item -Path $BackupPath -Destination $TargetExePath -Force
+        Move-Item -Path $BackupPath -Destination $TargetExePath -Force -ErrorAction Stop
     }
 }
 
@@ -451,7 +458,7 @@ function Remove-OldCliBackupFiles {
     foreach ($backupFile in $oldBackupFiles) {
         if ($PSCmdlet.ShouldProcess($backupFile.FullName, "Delete old backup")) {
             try {
-                Remove-Item -Path $backupFile.FullName -Force
+                Remove-Item -Path $backupFile.FullName -Force -ErrorAction Stop
                 Write-Message "Deleted old backup file: $($backupFile.FullName)" -Level Verbose
             }
             catch {
@@ -482,11 +489,11 @@ function Expand-AspireCliArchive {
         # Create destination directory if it doesn't exist
         if (-not (Test-Path $DestinationPath)) {
             Write-Message "Creating destination directory: $DestinationPath" -Level Verbose
-            New-Item -ItemType Directory -Path $DestinationPath -Force | Out-Null
+            New-Item -ItemType Directory -Path $DestinationPath -Force -ErrorAction Stop | Out-Null
         }
         else {
-            # Backup existing executable before extraction
-            # This allows installation to proceed even when the CLI is running
+            # Back up the existing executable before extraction.
+            # On Windows, this can still fail if the file is locked by a running process.
             $backupPath = Backup-ExistingCliExecutable -TargetExePath $targetExePath
         }
 
@@ -498,7 +505,7 @@ function Expand-AspireCliArchive {
                 throw "Expand-Archive cmdlet not found. Please use PowerShell 5.0 or later to extract ZIP files."
             }
 
-            Expand-Archive -Path $ArchiveFile -DestinationPath $DestinationPath -Force
+            Expand-Archive -Path $ArchiveFile -DestinationPath $DestinationPath -Force -ErrorAction Stop
         }
         elseif ($ArchiveFile -match "\.tar\.gz$") {
             # Use tar for tar.gz files
@@ -509,9 +516,14 @@ function Expand-AspireCliArchive {
             $currentLocation = Get-Location
             try {
                 Set-Location $DestinationPath
-                & tar -xzf $ArchiveFile
+                $tarOutput = & tar -xzf $ArchiveFile 2>&1
                 if ($LASTEXITCODE -ne 0) {
-                    throw "Failed to extract tar.gz archive: $ArchiveFile. tar command returned exit code $LASTEXITCODE"
+                    $tarMessage = ($tarOutput | ForEach-Object { $_.ToString() } | Out-String).Trim()
+                    if ([string]::IsNullOrWhiteSpace($tarMessage)) {
+                        throw "Failed to extract tar.gz archive: $ArchiveFile. tar command returned exit code $LASTEXITCODE"
+                    }
+
+                    throw "Failed to extract tar.gz archive: $ArchiveFile. tar command returned exit code $LASTEXITCODE`: $tarMessage"
                 }
             }
             finally {
@@ -523,18 +535,26 @@ function Expand-AspireCliArchive {
         }
 
         # Clean up old backup files on successful extraction
-        if ($backupPath -and (Test-Path $targetExePath)) {
+        if (Test-Path $targetExePath) {
             Remove-OldCliBackupFiles -TargetExePath $targetExePath
         }
 
         Write-Message "Successfully unpacked archive" -Level Verbose
     }
     catch {
+        $unpackErrorMessage = $_.Exception.Message
+
         # If anything goes wrong and we have a backup, restore it
         if ($backupPath -and (Test-Path $backupPath)) {
-            Restore-CliExecutableFromBackup -BackupPath $backupPath -TargetExePath $targetExePath
+            try {
+                Restore-CliExecutableFromBackup -BackupPath $backupPath -TargetExePath $targetExePath
+            }
+            catch {
+                throw "Failed to unpack archive: $unpackErrorMessage. Restore from backup also failed: $($_.Exception.Message)"
+            }
         }
-        throw "Failed to unpack archive: $($_.Exception.Message)"
+
+        throw "Failed to unpack archive: $unpackErrorMessage"
     }
 }
 
@@ -657,7 +677,7 @@ function New-TempDirectory {
 
         Write-Message "Creating temporary directory: $tempDir" -Level Verbose
         try {
-            New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+            New-Item -ItemType Directory -Path $tempDir -Force -ErrorAction Stop | Out-Null
             return $tempDir
         }
         catch {
@@ -683,7 +703,7 @@ function Remove-TempDirectory {
             Write-Message "Cleaning up temporary files..." -Level Verbose
             try {
                 if ($PSCmdlet.ShouldProcess($TempDir, "Remove temporary directory")) {
-                    Remove-Item $TempDir -Recurse -Force
+                    Remove-Item $TempDir -Recurse -Force -ErrorAction Stop
                 }
             }
             catch {
@@ -1057,12 +1077,12 @@ function Install-BuiltNugets {
     if (Test-Path $NugetHiveDir) {
         Write-Message "Removing existing nuget directory: $NugetHiveDir" -Level Verbose
         if ($PSCmdlet.ShouldProcess($NugetHiveDir, "Remove existing directory")) {
-            Remove-Item $NugetHiveDir -Recurse -Force
+            Remove-Item $NugetHiveDir -Recurse -Force -ErrorAction Stop
         }
     }
 
     if ($PSCmdlet.ShouldProcess($NugetHiveDir, "Create directory")) {
-        New-Item -ItemType Directory -Path $NugetHiveDir -Force | Out-Null
+        New-Item -ItemType Directory -Path $NugetHiveDir -Force -ErrorAction Stop | Out-Null
     }
 
     Write-Message "Copying nugets from $DownloadDir to $NugetHiveDir" -Level Verbose
@@ -1078,7 +1098,7 @@ function Install-BuiltNugets {
 
         foreach ($file in $nupkgFiles) {
             if ($PSCmdlet.ShouldProcess($file.FullName, "Copy to $NugetHiveDir")) {
-                Copy-Item $file.FullName -Destination $NugetHiveDir
+                Copy-Item $file.FullName -Destination $NugetHiveDir -ErrorAction Stop
             }
         }
 

@@ -25,12 +25,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: '24'
 
@@ -96,7 +96,7 @@ jobs:
 
           cat .github/prompts/docs-audit-prompt.md > prompt.txt
           echo "" >> prompt.txt
-          echo "PR #${{ steps.pr.outputs.number }}: ${{ steps.pr_details.outputs.title }}" >> prompt.txt
+          echo "PR #${PR_NUMBER}: ${PR_TITLE}" >> prompt.txt
           echo "" >> prompt.txt
           echo "PR Diff:" >> prompt.txt
           cat pr-diff.txt >> prompt.txt
@@ -116,6 +116,8 @@ jobs:
           cat analysis.txt
         env:
           COPILOT_GITHUB_TOKEN: ${{ secrets.DOCS_COPILOT_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          PR_TITLE: ${{ steps.pr_details.outputs.title }}
 
       - name: Check if docs needed
         id: docs_check
@@ -134,13 +136,13 @@ jobs:
           fi
 
           echo "============================================"
-          echo "Documentation Analysis for PR #${{ steps.pr.outputs.number }}"
-          echo "PR Title: ${{ steps.pr_details.outputs.title }}"
-          echo "PR Author: ${{ steps.pr_details.outputs.author }}"
+          echo "Documentation Analysis for PR #${PR_NUMBER}"
+          echo "PR Title: ${PR_TITLE}"
+          echo "PR Author: ${PR_AUTHOR}"
           echo "============================================"
           echo ""
 
-          if [ "${{ steps.docs_check.outputs.docs_needed }}" == "false" ]; then
+          if [ "${DOCS_NEEDED}" == "false" ]; then
             echo "✅ No documentation updates required"
           else
             echo "📝 Documentation updates recommended:"
@@ -150,57 +152,74 @@ jobs:
 
           echo ""
           echo "============================================"
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          PR_TITLE: ${{ steps.pr_details.outputs.title }}
+          PR_AUTHOR: ${{ steps.pr_details.outputs.author }}
+          DOCS_NEEDED: ${{ steps.docs_check.outputs.docs_needed }}
 
       - name: Create issue on aspire.dev repo
         if: steps.docs_check.outputs.docs_needed == 'true'
         id: create_issue
         run: |
-          ISSUE_BODY="## Documentation Update Required
-
-          This issue was automatically created based on changes from microsoft/aspire PR #${{ steps.pr.outputs.number }}.
-
-          **PR Title:** ${{ steps.pr_details.outputs.title }}
-          **PR Author:** @${{ steps.pr_details.outputs.author }}
-          **PR Link:** https://github.com/${{ github.repository }}/pull/${{ steps.pr.outputs.number }}
-
-          ## Recommended Documentation Updates
-
-          $(cat analysis.txt)
-          "
+          {
+            echo "## Documentation Update Required"
+            echo ""
+            echo "This issue was automatically created based on changes from microsoft/aspire PR #${PR_NUMBER}."
+            echo ""
+            echo "**PR Title:** ${PR_TITLE}"
+            echo "**PR Author:** @${PR_AUTHOR}"
+            echo "**PR Link:** https://github.com/${{ github.repository }}/pull/${PR_NUMBER}"
+            echo ""
+            echo "## Recommended Documentation Updates"
+            echo ""
+            cat analysis.txt
+          } > issue-body.md
 
           ISSUE_URL=$(gh issue create \
             --repo microsoft/aspire.dev \
-            --title "Docs update for microsoft/aspire#${{ steps.pr.outputs.number }}: ${{ steps.pr_details.outputs.title }}" \
-            --body "$ISSUE_BODY" \
+            --title "Docs update for microsoft/aspire#${PR_NUMBER}: ${PR_TITLE}" \
+            --body-file issue-body.md \
             --label "docs-from-code")
-          
+
           echo "issue_url=$ISSUE_URL" >> $GITHUB_OUTPUT
         env:
           GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          PR_TITLE: ${{ steps.pr_details.outputs.title }}
+          PR_AUTHOR: ${{ steps.pr_details.outputs.author }}
 
       - name: Comment on PR
         run: |
-          if [ "${{ steps.docs_check.outputs.docs_needed }}" == "true" ]; then
-            COMMENT="## 📝 Documentation Update Needed
-
-          Hey @${{ steps.pr_details.outputs.author }}! This PR requires documentation updates.
-
-          An issue has been created to track the documentation work: ${{ steps.create_issue.outputs.issue_url }}
-
-          <details>
-          <summary>Recommended Updates</summary>
-
-          $(cat analysis.txt)
-
-          </details>"
+          if [ "${DOCS_NEEDED}" == "true" ]; then
+            {
+              echo "## 📝 Documentation Update Needed"
+              echo ""
+              echo "Hey @${PR_AUTHOR}! This PR requires documentation updates."
+              echo ""
+              echo "An issue has been created to track the documentation work: ${ISSUE_URL}"
+              echo ""
+              echo "<details>"
+              echo "<summary>Recommended Updates</summary>"
+              echo ""
+              cat analysis.txt
+              echo ""
+              echo "</details>"
+            } > comment-body.md
           else
-            COMMENT="## ✅ No Documentation Updates Needed
-
-          Hey @${{ steps.pr_details.outputs.author }}! This PR does not require documentation updates.
-
-          For more details, check the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
+            {
+              echo "## ✅ No Documentation Updates Needed"
+              echo ""
+              echo "Hey @${PR_AUTHOR}! This PR does not require documentation updates."
+              echo ""
+              echo "For more details, check the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
+            } > comment-body.md
           fi
 
-          gh pr comment ${{ steps.pr.outputs.number }} --body "$COMMENT"
+          gh pr comment "${PR_NUMBER}" --body-file comment-body.md
         env:
           GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          PR_AUTHOR: ${{ steps.pr_details.outputs.author }}
+          DOCS_NEEDED: ${{ steps.docs_check.outputs.docs_needed }}
+          ISSUE_URL: ${{ steps.create_issue.outputs.issue_url }}

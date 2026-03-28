@@ -61,8 +61,6 @@
     <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" />
     <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components.Icons" />
     <PackageReference Include="Microsoft.OpenApi" />
-    <PackageReference Include="ModelContextProtocol" />
-    <PackageReference Include="ModelContextProtocol.AspNetCore" />
   </ItemGroup>
 
   <!-- The following package references need to be lifted because MEAI depends on older versions -->
@@ -292,6 +290,7 @@
     <Compile Include="$(SharedDir)KnownResourceNames.cs" Link="Utils\KnownResourceNames.cs" />
     <Compile Include="$(SharedDir)KnownFormats.cs" Link="Utils\KnownFormats.cs" />
     <Compile Include="$(SharedDir)StringComparers.cs" Link="Utils\StringComparers.cs" />
+    <Compile Include="$(SharedDir)KnownUnsupportedUrlSchemes.cs" Link="Utils\KnownUnsupportedUrlSchemes.cs" />
     <Compile Include="$(SharedDir)TaskHelpers.cs" Link="Utils\TaskHelpers.cs" />
     <Compile Include="$(SharedDir)Model\KnownProperties.cs" Link="Utils\KnownProperties.cs" />
     <Compile Include="$(SharedDir)Model\KnownResourceTypes.cs" Link="Utils\KnownResourceTypes.cs" />
@@ -314,7 +313,6 @@
     <Compile Include="$(SharedDir)ConsoleLogs\UrlParser.cs" Link="Utils\ConsoleLogs\UrlParser.cs" />
     <Compile Include="$(SharedDir)KnownUrls.cs" Link="Utils\KnownUrls.cs" />
     <Compile Include="$(SharedDir)InteractionHelpers.cs" Link="Utils\InteractionHelpers.cs" />
-    <Compile Include="$(SharedDir)Mcp\McpIconHelper.cs" Link="Mcp\McpIconHelper.cs" />
     <Compile Include="$(SharedDir)Model\Serialization\ResourceJson.cs" Link="Model\Serialization\ResourceJson.cs" />
     <Compile Include="$(SharedDir)DashboardUrls.cs" Link="Utils\DashboardUrls.cs" />
     <Compile Include="$(SharedDir)Otlp\OtlpHelpers.cs" Link="Otlp\Model\OtlpHelpersShared.cs" />
@@ -333,11 +331,6 @@
 
   <ItemGroup>
     <Content Remove="wwwroot\js\README.md" />
-    <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-16.png" Link="Mcp\Resources\aspire-16.png" />
-    <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-256.png" Link="Mcp\Resources\aspire-256.png" />
-    <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-32.png" Link="Mcp\Resources\aspire-32.png" />
-    <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-48.png" Link="Mcp\Resources\aspire-48.png" />
-    <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-64.png" Link="Mcp\Resources\aspire-64.png" />
     <None Include="wwwroot\js\README.md" />
   </ItemGroup>
 </Project>

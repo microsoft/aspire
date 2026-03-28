@@ -45,12 +45,11 @@ public class ContainerTunnelTests(ITestOutputHelper testOutputHelper)
 
     [Fact]
     [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/15358")]
     public async Task ProxylessEndpointWorksWithContainerTunnel()
     {
         var port = await Helpers.Network.GetAvailablePortAsync();
 
-        const string testName = "proxyless-endpoint-works-with-container-tunnel";
+        const string testName = "proxyless-endpoint-container-tunnel";
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         builder.Configuration[KnownConfigNames.EnableContainerTunnel] = "true";
 

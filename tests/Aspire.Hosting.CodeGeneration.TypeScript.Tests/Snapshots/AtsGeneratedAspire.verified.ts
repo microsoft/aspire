@@ -1,4 +1,4 @@
-// aspire.ts - Capability-based Aspire SDK
+﻿// aspire.ts - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -135,6 +135,16 @@ export interface WaitForReadyAsyncOptions {
 export interface WithDataVolumeOptions {
     name?: string;
     isReadOnly?: boolean;
+}
+
+export interface WithMergeLoggingOptions {
+    enableConsole?: boolean;
+    maxFiles?: number;
+}
+
+export interface WithMergeLoggingPathOptions {
+    enableConsole?: boolean;
+    maxFiles?: number;
 }
 
 export interface WithOptionalCallbackOptions {
@@ -778,6 +788,134 @@ export class TestDatabaseResource extends ResourceBuilderBase<TestDatabaseResour
         return new TestDatabaseResourcePromise(this._withDataVolumeInternal(name));
     }
 
+    /** @internal */
+    private async _withMergeLabelInternal(label: string): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabel',
+            rpcArgs
+        );
+        return new TestDatabaseResource(result, this._client);
+    }
+
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromise(this._withMergeLabelInternal(label));
+    }
+
+    /** @internal */
+    private async _withMergeLabelCategorizedInternal(label: string, category: string): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label, category };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabelCategorized',
+            rpcArgs
+        );
+        return new TestDatabaseResource(result, this._client);
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromise(this._withMergeLabelCategorizedInternal(label, category));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointInternal(endpointName: string, port: number): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpoint',
+            rpcArgs
+        );
+        return new TestDatabaseResource(result, this._client);
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromise(this._withMergeEndpointInternal(endpointName, port));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointSchemeInternal(endpointName: string, port: number, scheme: string): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port, scheme };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpointScheme',
+            rpcArgs
+        );
+        return new TestDatabaseResource(result, this._client);
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromise(this._withMergeEndpointSchemeInternal(endpointName, port, scheme));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLogging',
+            rpcArgs
+        );
+        return new TestDatabaseResource(result, this._client);
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestDatabaseResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new TestDatabaseResourcePromise(this._withMergeLoggingInternal(logLevel, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLoggingPath',
+            rpcArgs
+        );
+        return new TestDatabaseResource(result, this._client);
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestDatabaseResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new TestDatabaseResourcePromise(this._withMergeLoggingPathInternal(logLevel, logPath, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeRouteInternal(path: string, method: string, handler: string, priority: number): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRoute',
+            rpcArgs
+        );
+        return new TestDatabaseResource(result, this._client);
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromise(this._withMergeRouteInternal(path, method, handler, priority));
+    }
+
+    /** @internal */
+    private async _withMergeRouteMiddlewareInternal(path: string, method: string, handler: string, priority: number, middleware: string): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority, middleware };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRouteMiddleware',
+            rpcArgs
+        );
+        return new TestDatabaseResource(result, this._client);
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromise(this._withMergeRouteMiddlewareInternal(path, method, handler, priority, middleware));
+    }
+
 }
 
 /**
@@ -873,6 +1011,46 @@ export class TestDatabaseResourcePromise implements PromiseLike<TestDatabaseReso
     /** Adds a data volume */
     withDataVolume(options?: WithDataVolumeOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withDataVolume(options)));
+    }
+
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withMergeLabel(label)));
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withMergeLabelCategorized(label, category)));
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withMergeEndpoint(endpointName, port)));
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withMergeEndpointScheme(endpointName, port, scheme)));
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withMergeLogging(logLevel, options)));
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withMergeLoggingPath(logLevel, logPath, options)));
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withMergeRoute(path, method, handler, priority)));
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withMergeRouteMiddleware(path, method, handler, priority, middleware)));
     }
 
 }
@@ -1305,6 +1483,134 @@ export class TestRedisResource extends ResourceBuilderBase<TestRedisResourceHand
         return new TestRedisResourcePromise(this._withDataVolumeInternal(name, isReadOnly));
     }
 
+    /** @internal */
+    private async _withMergeLabelInternal(label: string): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabel',
+            rpcArgs
+        );
+        return new TestRedisResource(result, this._client);
+    }
+
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): TestRedisResourcePromise {
+        return new TestRedisResourcePromise(this._withMergeLabelInternal(label));
+    }
+
+    /** @internal */
+    private async _withMergeLabelCategorizedInternal(label: string, category: string): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label, category };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabelCategorized',
+            rpcArgs
+        );
+        return new TestRedisResource(result, this._client);
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): TestRedisResourcePromise {
+        return new TestRedisResourcePromise(this._withMergeLabelCategorizedInternal(label, category));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointInternal(endpointName: string, port: number): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpoint',
+            rpcArgs
+        );
+        return new TestRedisResource(result, this._client);
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): TestRedisResourcePromise {
+        return new TestRedisResourcePromise(this._withMergeEndpointInternal(endpointName, port));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointSchemeInternal(endpointName: string, port: number, scheme: string): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port, scheme };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpointScheme',
+            rpcArgs
+        );
+        return new TestRedisResource(result, this._client);
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestRedisResourcePromise {
+        return new TestRedisResourcePromise(this._withMergeEndpointSchemeInternal(endpointName, port, scheme));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLogging',
+            rpcArgs
+        );
+        return new TestRedisResource(result, this._client);
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestRedisResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new TestRedisResourcePromise(this._withMergeLoggingInternal(logLevel, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLoggingPath',
+            rpcArgs
+        );
+        return new TestRedisResource(result, this._client);
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestRedisResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new TestRedisResourcePromise(this._withMergeLoggingPathInternal(logLevel, logPath, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeRouteInternal(path: string, method: string, handler: string, priority: number): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRoute',
+            rpcArgs
+        );
+        return new TestRedisResource(result, this._client);
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): TestRedisResourcePromise {
+        return new TestRedisResourcePromise(this._withMergeRouteInternal(path, method, handler, priority));
+    }
+
+    /** @internal */
+    private async _withMergeRouteMiddlewareInternal(path: string, method: string, handler: string, priority: number, middleware: string): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority, middleware };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRouteMiddleware',
+            rpcArgs
+        );
+        return new TestRedisResource(result, this._client);
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestRedisResourcePromise {
+        return new TestRedisResourcePromise(this._withMergeRouteMiddlewareInternal(path, method, handler, priority, middleware));
+    }
+
 }
 
 /**
@@ -1455,6 +1761,46 @@ export class TestRedisResourcePromise implements PromiseLike<TestRedisResource> 
     /** Adds a data volume with persistence */
     withDataVolume(options?: WithDataVolumeOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._promise.then(obj => obj.withDataVolume(options)));
+    }
+
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): TestRedisResourcePromise {
+        return new TestRedisResourcePromise(this._promise.then(obj => obj.withMergeLabel(label)));
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): TestRedisResourcePromise {
+        return new TestRedisResourcePromise(this._promise.then(obj => obj.withMergeLabelCategorized(label, category)));
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): TestRedisResourcePromise {
+        return new TestRedisResourcePromise(this._promise.then(obj => obj.withMergeEndpoint(endpointName, port)));
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestRedisResourcePromise {
+        return new TestRedisResourcePromise(this._promise.then(obj => obj.withMergeEndpointScheme(endpointName, port, scheme)));
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestRedisResourcePromise {
+        return new TestRedisResourcePromise(this._promise.then(obj => obj.withMergeLogging(logLevel, options)));
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestRedisResourcePromise {
+        return new TestRedisResourcePromise(this._promise.then(obj => obj.withMergeLoggingPath(logLevel, logPath, options)));
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): TestRedisResourcePromise {
+        return new TestRedisResourcePromise(this._promise.then(obj => obj.withMergeRoute(path, method, handler, priority)));
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestRedisResourcePromise {
+        return new TestRedisResourcePromise(this._promise.then(obj => obj.withMergeRouteMiddleware(path, method, handler, priority, middleware)));
     }
 
 }
@@ -1733,6 +2079,134 @@ export class TestVaultResource extends ResourceBuilderBase<TestVaultResourceHand
         return new TestVaultResourcePromise(this._withVaultDirectInternal(option));
     }
 
+    /** @internal */
+    private async _withMergeLabelInternal(label: string): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabel',
+            rpcArgs
+        );
+        return new TestVaultResource(result, this._client);
+    }
+
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): TestVaultResourcePromise {
+        return new TestVaultResourcePromise(this._withMergeLabelInternal(label));
+    }
+
+    /** @internal */
+    private async _withMergeLabelCategorizedInternal(label: string, category: string): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label, category };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabelCategorized',
+            rpcArgs
+        );
+        return new TestVaultResource(result, this._client);
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): TestVaultResourcePromise {
+        return new TestVaultResourcePromise(this._withMergeLabelCategorizedInternal(label, category));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointInternal(endpointName: string, port: number): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpoint',
+            rpcArgs
+        );
+        return new TestVaultResource(result, this._client);
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): TestVaultResourcePromise {
+        return new TestVaultResourcePromise(this._withMergeEndpointInternal(endpointName, port));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointSchemeInternal(endpointName: string, port: number, scheme: string): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port, scheme };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpointScheme',
+            rpcArgs
+        );
+        return new TestVaultResource(result, this._client);
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestVaultResourcePromise {
+        return new TestVaultResourcePromise(this._withMergeEndpointSchemeInternal(endpointName, port, scheme));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLogging',
+            rpcArgs
+        );
+        return new TestVaultResource(result, this._client);
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestVaultResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new TestVaultResourcePromise(this._withMergeLoggingInternal(logLevel, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLoggingPath',
+            rpcArgs
+        );
+        return new TestVaultResource(result, this._client);
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestVaultResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new TestVaultResourcePromise(this._withMergeLoggingPathInternal(logLevel, logPath, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeRouteInternal(path: string, method: string, handler: string, priority: number): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRoute',
+            rpcArgs
+        );
+        return new TestVaultResource(result, this._client);
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): TestVaultResourcePromise {
+        return new TestVaultResourcePromise(this._withMergeRouteInternal(path, method, handler, priority));
+    }
+
+    /** @internal */
+    private async _withMergeRouteMiddlewareInternal(path: string, method: string, handler: string, priority: number, middleware: string): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority, middleware };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRouteMiddleware',
+            rpcArgs
+        );
+        return new TestVaultResource(result, this._client);
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestVaultResourcePromise {
+        return new TestVaultResourcePromise(this._withMergeRouteMiddlewareInternal(path, method, handler, priority, middleware));
+    }
+
 }
 
 /**
@@ -1828,6 +2302,46 @@ export class TestVaultResourcePromise implements PromiseLike<TestVaultResource> 
     /** Configures vault using direct interface target */
     withVaultDirect(option: string): TestVaultResourcePromise {
         return new TestVaultResourcePromise(this._promise.then(obj => obj.withVaultDirect(option)));
+    }
+
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): TestVaultResourcePromise {
+        return new TestVaultResourcePromise(this._promise.then(obj => obj.withMergeLabel(label)));
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): TestVaultResourcePromise {
+        return new TestVaultResourcePromise(this._promise.then(obj => obj.withMergeLabelCategorized(label, category)));
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): TestVaultResourcePromise {
+        return new TestVaultResourcePromise(this._promise.then(obj => obj.withMergeEndpoint(endpointName, port)));
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestVaultResourcePromise {
+        return new TestVaultResourcePromise(this._promise.then(obj => obj.withMergeEndpointScheme(endpointName, port, scheme)));
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestVaultResourcePromise {
+        return new TestVaultResourcePromise(this._promise.then(obj => obj.withMergeLogging(logLevel, options)));
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestVaultResourcePromise {
+        return new TestVaultResourcePromise(this._promise.then(obj => obj.withMergeLoggingPath(logLevel, logPath, options)));
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): TestVaultResourcePromise {
+        return new TestVaultResourcePromise(this._promise.then(obj => obj.withMergeRoute(path, method, handler, priority)));
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestVaultResourcePromise {
+        return new TestVaultResourcePromise(this._promise.then(obj => obj.withMergeRouteMiddleware(path, method, handler, priority, middleware)));
     }
 
 }
@@ -2056,6 +2570,134 @@ export class Resource extends ResourceBuilderBase<IResourceHandle> {
         return new ResourcePromise(this._withCancellableOperationInternal(operation));
     }
 
+    /** @internal */
+    private async _withMergeLabelInternal(label: string): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabel',
+            rpcArgs
+        );
+        return new Resource(result, this._client);
+    }
+
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): ResourcePromise {
+        return new ResourcePromise(this._withMergeLabelInternal(label));
+    }
+
+    /** @internal */
+    private async _withMergeLabelCategorizedInternal(label: string, category: string): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, label, category };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLabelCategorized',
+            rpcArgs
+        );
+        return new Resource(result, this._client);
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): ResourcePromise {
+        return new ResourcePromise(this._withMergeLabelCategorizedInternal(label, category));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointInternal(endpointName: string, port: number): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpoint',
+            rpcArgs
+        );
+        return new Resource(result, this._client);
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): ResourcePromise {
+        return new ResourcePromise(this._withMergeEndpointInternal(endpointName, port));
+    }
+
+    /** @internal */
+    private async _withMergeEndpointSchemeInternal(endpointName: string, port: number, scheme: string): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, endpointName, port, scheme };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeEndpointScheme',
+            rpcArgs
+        );
+        return new Resource(result, this._client);
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ResourcePromise {
+        return new ResourcePromise(this._withMergeEndpointSchemeInternal(endpointName, port, scheme));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLogging',
+            rpcArgs
+        );
+        return new Resource(result, this._client);
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): ResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new ResourcePromise(this._withMergeLoggingInternal(logLevel, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
+        if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
+        if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLoggingPath',
+            rpcArgs
+        );
+        return new Resource(result, this._client);
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): ResourcePromise {
+        const enableConsole = options?.enableConsole;
+        const maxFiles = options?.maxFiles;
+        return new ResourcePromise(this._withMergeLoggingPathInternal(logLevel, logPath, enableConsole, maxFiles));
+    }
+
+    /** @internal */
+    private async _withMergeRouteInternal(path: string, method: string, handler: string, priority: number): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRoute',
+            rpcArgs
+        );
+        return new Resource(result, this._client);
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ResourcePromise {
+        return new ResourcePromise(this._withMergeRouteInternal(path, method, handler, priority));
+    }
+
+    /** @internal */
+    private async _withMergeRouteMiddlewareInternal(path: string, method: string, handler: string, priority: number, middleware: string): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, path, method, handler, priority, middleware };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeRouteMiddleware',
+            rpcArgs
+        );
+        return new Resource(result, this._client);
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ResourcePromise {
+        return new ResourcePromise(this._withMergeRouteMiddlewareInternal(path, method, handler, priority, middleware));
+    }
+
 }
 
 /**
@@ -2136,6 +2778,46 @@ export class ResourcePromise implements PromiseLike<Resource> {
     /** Performs a cancellable operation */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ResourcePromise {
         return new ResourcePromise(this._promise.then(obj => obj.withCancellableOperation(operation)));
+    }
+
+    /** Adds a label to the resource */
+    withMergeLabel(label: string): ResourcePromise {
+        return new ResourcePromise(this._promise.then(obj => obj.withMergeLabel(label)));
+    }
+
+    /** Adds a categorized label to the resource */
+    withMergeLabelCategorized(label: string, category: string): ResourcePromise {
+        return new ResourcePromise(this._promise.then(obj => obj.withMergeLabelCategorized(label, category)));
+    }
+
+    /** Configures a named endpoint */
+    withMergeEndpoint(endpointName: string, port: number): ResourcePromise {
+        return new ResourcePromise(this._promise.then(obj => obj.withMergeEndpoint(endpointName, port)));
+    }
+
+    /** Configures a named endpoint with scheme */
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ResourcePromise {
+        return new ResourcePromise(this._promise.then(obj => obj.withMergeEndpointScheme(endpointName, port, scheme)));
+    }
+
+    /** Configures resource logging */
+    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): ResourcePromise {
+        return new ResourcePromise(this._promise.then(obj => obj.withMergeLogging(logLevel, options)));
+    }
+
+    /** Configures resource logging with file path */
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): ResourcePromise {
+        return new ResourcePromise(this._promise.then(obj => obj.withMergeLoggingPath(logLevel, logPath, options)));
+    }
+
+    /** Configures a route */
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ResourcePromise {
+        return new ResourcePromise(this._promise.then(obj => obj.withMergeRoute(path, method, handler, priority)));
+    }
+
+    /** Configures a route with middleware */
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ResourcePromise {
+        return new ResourcePromise(this._promise.then(obj => obj.withMergeRouteMiddleware(path, method, handler, priority, middleware)));
     }
 
 }

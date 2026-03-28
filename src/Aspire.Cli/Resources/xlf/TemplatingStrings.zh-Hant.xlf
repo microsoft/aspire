@@ -17,6 +17,11 @@
         <target state="translated">AppHost 和服務預設值</target>
         <note />
       </trans-unit>
+      <trans-unit id="AspireJavaStarter_Description">
+        <source>Starter App (Java AppHost/Express/React)</source>
+        <target state="new">Starter App (Java AppHost/Express/React)</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AspireJsFrontendStarter_Description">
         <source>Starter App (ASP.NET Core/React)</source>
         <target state="translated">入門應用程式 (ASP.NET Core/React)</target>

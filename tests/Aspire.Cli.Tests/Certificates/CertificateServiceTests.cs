@@ -3,7 +3,10 @@
 
 using System.Runtime.InteropServices;
 using Aspire.Cli.Certificates;
+using Aspire.Cli.Interaction;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Microsoft.AspNetCore.Certificates.Generation;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -83,6 +86,13 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                         return EnsureCertificateResult.ExistingHttpsCertificateTrusted;
                     }
                 };
+            };
+            options.CertificateServiceFactory = serviceProvider =>
+            {
+                var certificateToolRunner = serviceProvider.GetRequiredService<ICertificateToolRunner>();
+                var interactiveService = serviceProvider.GetRequiredService<IInteractionService>();
+                var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
+                return new CertificateService(certificateToolRunner, interactiveService, telemetry, new TestCliHostEnvironment(supportsInteractiveInput: true), isWindows: () => true);
             };
         });
 
@@ -175,6 +185,13 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                     }
                 };
             };
+            options.CertificateServiceFactory = serviceProvider =>
+            {
+                var certificateToolRunner = serviceProvider.GetRequiredService<ICertificateToolRunner>();
+                var interactiveService = serviceProvider.GetRequiredService<IInteractionService>();
+                var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
+                return new CertificateService(certificateToolRunner, interactiveService, telemetry, new TestCliHostEnvironment(supportsInteractiveInput: true), isWindows: () => true);
+            };
         });
 
         var sp = services.BuildServiceProvider();
@@ -221,9 +238,116 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
         Assert.NotNull(result);
     }
 
+    [Fact]
+    public async Task EnsureCertificatesTrustedAsync_OnWindowsCi_WithNotTrustedCert_SkipsTrustOperation()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var trustCalled = false;
+        var ensureCalled = false;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CertificateToolRunnerFactory = sp =>
+            {
+                return new TestCertificateToolRunner
+                {
+                    CheckHttpCertificateCallback = () =>
+                    {
+                        return new CertificateTrustResult
+                        {
+                            HasCertificates = true,
+                            TrustLevel = CertificateManager.TrustLevel.None,
+                            Certificates = [new DevCertInfo { Version = 5, TrustLevel = CertificateManager.TrustLevel.None, IsHttpsDevelopmentCertificate = true, ValidityNotBefore = DateTimeOffset.Now.AddDays(-1), ValidityNotAfter = DateTimeOffset.Now.AddDays(365) }]
+                        };
+                    },
+                    TrustHttpCertificateCallback = () =>
+                    {
+                        trustCalled = true;
+                        return EnsureCertificateResult.ExistingHttpsCertificateTrusted;
+                    },
+                    EnsureHttpCertificateExistsCallback = () =>
+                    {
+                        ensureCalled = true;
+                        return EnsureCertificateResult.ValidCertificatePresent;
+                    }
+                };
+            };
+            options.CertificateServiceFactory = serviceProvider =>
+            {
+                var certificateToolRunner = serviceProvider.GetRequiredService<ICertificateToolRunner>();
+                var interactiveService = serviceProvider.GetRequiredService<IInteractionService>();
+                var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
+                return new CertificateService(certificateToolRunner, interactiveService, telemetry, new TestCliHostEnvironment(), isWindows: () => true);
+            };
+        });
+
+        var sp = services.BuildServiceProvider();
+        var cs = sp.GetRequiredService<ICertificateService>();
+
+        var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.NotNull(result);
+        Assert.False(trustCalled);
+        Assert.False(ensureCalled);
+    }
+
+    [Fact]
+    public async Task EnsureCertificatesTrustedAsync_OnWindowsCi_WithNoCertificates_EnsuresCertificateExistsWithoutTrust()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var trustCalled = false;
+        var ensureCalled = false;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CertificateToolRunnerFactory = sp =>
+            {
+                return new TestCertificateToolRunner
+                {
+                    CheckHttpCertificateCallback = () =>
+                    {
+                        return new CertificateTrustResult
+                        {
+                            HasCertificates = false,
+                            TrustLevel = null,
+                            Certificates = []
+                        };
+                    },
+                    TrustHttpCertificateCallback = () =>
+                    {
+                        trustCalled = true;
+                        return EnsureCertificateResult.NewHttpsCertificateTrusted;
+                    },
+                    EnsureHttpCertificateExistsCallback = () =>
+                    {
+                        ensureCalled = true;
+                        return EnsureCertificateResult.Succeeded;
+                    }
+                };
+            };
+            options.CertificateServiceFactory = serviceProvider =>
+            {
+                var certificateToolRunner = serviceProvider.GetRequiredService<ICertificateToolRunner>();
+                var interactiveService = serviceProvider.GetRequiredService<IInteractionService>();
+                var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
+                return new CertificateService(certificateToolRunner, interactiveService, telemetry, new TestCliHostEnvironment(), isWindows: () => true);
+            };
+        });
+
+        var sp = services.BuildServiceProvider();
+        var cs = sp.GetRequiredService<ICertificateService>();
+
+        var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.NotNull(result);
+        Assert.False(trustCalled);
+        Assert.True(ensureCalled);
+    }
+
     private sealed class TestCertificateToolRunner : ICertificateToolRunner
     {
         public Func<CertificateTrustResult>? CheckHttpCertificateCallback { get; set; }
+        public Func<EnsureCertificateResult>? EnsureHttpCertificateExistsCallback { get; set; }
         public Func<EnsureCertificateResult>? TrustHttpCertificateCallback { get; set; }
 
         public CertificateTrustResult CheckHttpCertificate()
@@ -249,7 +373,23 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 : EnsureCertificateResult.ExistingHttpsCertificateTrusted;
         }
 
+        public EnsureCertificateResult EnsureHttpCertificateExists()
+        {
+            return EnsureHttpCertificateExistsCallback is not null
+                ? EnsureHttpCertificateExistsCallback()
+                : EnsureCertificateResult.ValidCertificatePresent;
+        }
+
         public CertificateCleanResult CleanHttpCertificate()
             => new CertificateCleanResult { Success = true };
+    }
+
+    private sealed class TestCliHostEnvironment(bool supportsInteractiveInput = false, bool supportsInteractiveOutput = false, bool supportsAnsi = true) : ICliHostEnvironment
+    {
+        public bool SupportsInteractiveInput => supportsInteractiveInput;
+
+        public bool SupportsInteractiveOutput => supportsInteractiveOutput;
+
+        public bool SupportsAnsi => supportsAnsi;
     }
 }

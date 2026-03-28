@@ -25,6 +25,9 @@
     <RunOnAzdoCIWindows>false</RunOnAzdoCIWindows>
     <RunOnAzdoCILinux>false</RunOnAzdoCILinux>
 
+    <!-- run on macOS in GitHub Actions, but only outside of pull requests -->
+    <RunOnGithubActionsMacOS Condition=" '$(IsGitHubActionsRunner)' == 'true' and '$(IsGithubPullRequest)' != 'true' ">true</RunOnGithubActionsMacOS>
+
     <!-- Timeout configuration -->
     <TestSessionTimeout>20m</TestSessionTimeout>
     <TestHangTimeout>15m</TestHangTimeout>

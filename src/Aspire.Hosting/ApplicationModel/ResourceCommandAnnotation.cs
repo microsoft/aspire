@@ -115,6 +115,22 @@ public enum IconVariant
 }
 
 /// <summary>
+/// Specifies the format of a command result.
+/// </summary>
+public enum CommandResultFormat
+{
+    /// <summary>
+    /// Plain text result.
+    /// </summary>
+    Text,
+
+    /// <summary>
+    /// JSON result.
+    /// </summary>
+    Json
+}
+
+/// <summary>
 /// A factory for <see cref="ExecuteCommandResult"/>.
 /// </summary>
 public static class CommandResults
@@ -125,10 +141,25 @@ public static class CommandResults
     public static ExecuteCommandResult Success() => new() { Success = true };
 
     /// <summary>
+    /// Produces a success result with result data.
+    /// </summary>
+    /// <param name="result">The result data.</param>
+    /// <param name="resultFormat">The format of the result data. Defaults to <see cref="CommandResultFormat.Text"/>.</param>
+    public static ExecuteCommandResult Success(string result, CommandResultFormat resultFormat = CommandResultFormat.Text) => new() { Success = true, Result = result, ResultFormat = resultFormat };
+
+    /// <summary>
     /// Produces an unsuccessful result with an error message.
     /// </summary>
     /// <param name="errorMessage">An optional error message.</param>
     public static ExecuteCommandResult Failure(string? errorMessage = null) => new() { Success = false, ErrorMessage = errorMessage };
+
+    /// <summary>
+    /// Produces an unsuccessful result with an error message and result data.
+    /// </summary>
+    /// <param name="errorMessage">The error message.</param>
+    /// <param name="result">The result data.</param>
+    /// <param name="resultFormat">The format of the result data. Defaults to <see cref="CommandResultFormat.Text"/>.</param>
+    public static ExecuteCommandResult Failure(string errorMessage, string result, CommandResultFormat resultFormat = CommandResultFormat.Text) => new() { Success = false, ErrorMessage = errorMessage, Result = result, ResultFormat = resultFormat };
 
     /// <summary>
     /// Produces a canceled result.
@@ -162,6 +193,16 @@ public sealed class ExecuteCommandResult
     /// An optional error message that can be set when the command is unsuccessful.
     /// </summary>
     public string? ErrorMessage { get; init; }
+
+    /// <summary>
+    /// An optional result value produced by the command.
+    /// </summary>
+    public string? Result { get; init; }
+
+    /// <summary>
+    /// The format of the <see cref="Result"/> value.
+    /// </summary>
+    public CommandResultFormat? ResultFormat { get; init; }
 }
 
 /// <summary>

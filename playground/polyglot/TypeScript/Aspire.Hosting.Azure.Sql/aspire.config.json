@@ -1,0 +1,11 @@
+{
+  "appHost": {
+    "path": "ValidationAppHost/apphost.ts",
+    "language": "typescript/nodejs"
+  },
+  "packages": {
+    "Aspire.Hosting.Azure.Sql": "",
+    "Aspire.Hosting.Azure.Storage": "",
+    "Aspire.Hosting.Azure.Network": ""
+  }
+}
