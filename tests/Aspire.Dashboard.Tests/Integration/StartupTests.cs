@@ -359,86 +359,6 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task Configuration_BrowserAndOtlpGrpcAndMcpEndpointSame_Https_EndPointPortsAssigned()
-    {
-        // Arrange
-        DashboardWebApplication? app = null;
-        try
-        {
-            await ServerRetryHelper.BindPortWithRetry(async port =>
-            {
-                app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
-                    additionalConfiguration: initialData =>
-                    {
-                        initialData[DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = $"https://127.0.0.1:{port}";
-                        initialData[DashboardConfigNames.DashboardOtlpGrpcUrlName.ConfigKey] = $"https://127.0.0.1:{port}";
-                        initialData[DashboardConfigNames.DashboardOtlpHttpUrlName.ConfigKey] = $"https://127.0.0.1:{port}";
-                        initialData[DashboardConfigNames.DashboardMcpUrlName.ConfigKey] = $"https://127.0.0.1:{port}";
-                    });
-
-                // Act
-                await app.StartAsync().DefaultTimeout();
-            }, NullLogger.Instance);
-
-            // Assert
-            Assert.NotNull(app);
-            Assert.Equal(app.FrontendSingleEndPointAccessor().EndPoint.Port, app.OtlpServiceGrpcEndPointAccessor().EndPoint.Port);
-
-            // Check browser access
-            using var browserHttpClient = new HttpClient(new HttpClientHandler
-            {
-                ServerCertificateCustomValidationCallback = (message, cert, chain, errors) =>
-                {
-                    return true;
-                }
-            })
-            {
-                BaseAddress = new Uri($"https://{app.FrontendSingleEndPointAccessor().EndPoint}")
-            };
-            var request = new HttpRequestMessage(HttpMethod.Get, "/");
-            var response = await browserHttpClient.SendAsync(request).DefaultTimeout();
-            response.EnsureSuccessStatusCode();
-
-            // Check OTLP service
-            using var channel = IntegrationTestHelpers.CreateGrpcChannel($"https://{app.FrontendSingleEndPointAccessor().EndPoint}", testOutputHelper);
-            var client = new LogsService.LogsServiceClient(channel);
-            var serviceResponse = await client.ExportAsync(new ExportLogsServiceRequest()).ResponseAsync.DefaultTimeout();
-            Assert.Equal(0, serviceResponse.PartialSuccess.RejectedLogRecords);
-
-            // Check MCP service
-            using var mcpHttpClient = new HttpClient(new HttpClientHandler
-            {
-                ServerCertificateCustomValidationCallback = (message, cert, chain, errors) =>
-                {
-                    return true;
-                }
-            })
-            {
-                BaseAddress = new Uri($"https://{app.McpEndPointAccessor().EndPoint}")
-            };
-            var mcpSessionId = await McpServiceTests.InitializeSessionAsync(mcpHttpClient);
-            var mcpRequest = McpServiceTests.CreateListToolsRequest(mcpSessionId);
-
-            var responseMessage = await mcpHttpClient.SendAsync(mcpRequest).DefaultTimeout(TestConstants.LongTimeoutDuration);
-            responseMessage.EnsureSuccessStatusCode();
-
-            var responseData = await McpServiceTests.GetDataFromSseResponseAsync(responseMessage);
-
-            var jsonResponse = JsonNode.Parse(responseData!)!;
-            var tools = jsonResponse["result"]!["tools"]!.AsArray();
-
-            Assert.NotEmpty(tools);
-        }
-        finally
-        {
-            if (app is not null)
-            {
-                await app.DisposeAsync().DefaultTimeout();
-            }
-        }
-    }
-
-    [Fact]
     public async Task Configuration_BrowserAndOtlpGrpcEndpointSame_NoHttps_Error()
     {
         // Arrange
@@ -711,19 +631,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
             },
             w =>
             {
-                Assert.Equal("MCP listening on: {McpEndpointUri}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
-
-                var uri = new Uri((string)LogTestHelpers.GetValue(w, "McpEndpointUri")!);
-                Assert.NotEqual(0, uri.Port);
-            },
-            w =>
-            {
                 Assert.Equal("OTLP server is unsecured. Untrusted apps can send telemetry to the dashboard. For more information, visit https://go.microsoft.com/fwlink/?linkid=2267030", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
-                Assert.Equal(LogLevel.Warning, w.LogLevel);
-            },
-            w =>
-            {
-                Assert.Equal("MCP server is unsecured. Untrusted apps can access sensitive information.", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
                 Assert.Equal(LogLevel.Warning, w.LogLevel);
             },
             w =>
@@ -752,7 +660,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         // Assert
         var l = testSink.Writes.Where(w => w.LoggerName == typeof(DashboardWebApplication).FullName && w.LogLevel >= LogLevel.Information).ToList();
         
-        // Should have version, frontend, MCP, and MCP warning logs, but no OTLP logs
+        // Should have version, frontend, and API warning logs, but no OTLP logs
         Assert.Collection(l,
             w =>
             {
@@ -764,40 +672,9 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
             },
             w =>
             {
-                Assert.Equal("MCP listening on: {McpEndpointUri}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
-            },
-            w =>
-            {
-                Assert.Equal("MCP server is unsecured. Untrusted apps can access sensitive information.", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
-                Assert.Equal(LogLevel.Warning, w.LogLevel);
-            },
-            w =>
-            {
                 Assert.Equal("Dashboard API is unsecured. Untrusted apps can access sensitive telemetry data.", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
                 Assert.Equal(LogLevel.Warning, w.LogLevel);
             });
-    }
-
-    [Fact]
-    public async Task LogOutput_McpDisabled_NoMcpWarningLog()
-    {
-        // Arrange
-        var testSink = new TestSink();
-        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
-            additionalConfiguration: data =>
-            {
-                data[DashboardConfigNames.DashboardMcpDisableName.ConfigKey] = "true";
-            },
-            testSink: testSink);
-
-        // Act
-        await app.StartAsync().DefaultTimeout();
-
-        // Assert
-        var l = testSink.Writes.Where(w => w.LoggerName == typeof(DashboardWebApplication).FullName && w.LogLevel >= LogLevel.Warning).ToList();
-
-        // Should have no MCP unsecured warning when MCP is disabled
-        Assert.DoesNotContain(l, w => LogTestHelpers.GetValue(w, "{OriginalFormat}")?.ToString()?.Contains("MCP server is unsecured") == true);
     }
 
     [Theory]
@@ -881,7 +758,6 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
                         data[DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = $"https://localhost:{frontendPort1};http://localhost:{frontendPort2}";
                         data[DashboardConfigNames.DashboardOtlpGrpcUrlName.ConfigKey] = $"http://localhost:{otlpGrpcPort}";
                         data[DashboardConfigNames.DashboardOtlpHttpUrlName.ConfigKey] = $"http://localhost:{otlpHttpPort}";
-                        data[DashboardConfigNames.DashboardMcpUrlName.ConfigKey] = "http://127.0.0.1:0"; // Test that a dynamic port has a set value in logs.
                     });
 
                 // Act
@@ -928,19 +804,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
             },
             w =>
             {
-                Assert.Equal("MCP listening on: {McpEndpointUri}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
-
-                var uri = new Uri((string)LogTestHelpers.GetValue(w, "McpEndpointUri")!);
-                Assert.NotEqual(0, uri.Port); // Check that allocated port is in log message
-            },
-            w =>
-            {
                 Assert.Equal("OTLP server is unsecured. Untrusted apps can send telemetry to the dashboard. For more information, visit https://go.microsoft.com/fwlink/?linkid=2267030", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
-                Assert.Equal(LogLevel.Warning, w.LogLevel);
-            },
-            w =>
-            {
-                Assert.Equal("MCP server is unsecured. Untrusted apps can access sensitive information.", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
                 Assert.Equal(LogLevel.Warning, w.LogLevel);
             },
             w =>

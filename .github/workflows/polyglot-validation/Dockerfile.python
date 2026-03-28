@@ -34,7 +34,8 @@ WORKDIR /workspace
 
 COPY setup-local-cli.sh /scripts/setup-local-cli.sh
 COPY test-python.sh /scripts/test-python.sh
-RUN chmod +x /scripts/setup-local-cli.sh /scripts/test-python.sh
+COPY test-python-playground.sh /scripts/test-python-playground.sh
+RUN chmod +x /scripts/setup-local-cli.sh /scripts/test-python.sh /scripts/test-python-playground.sh
 
 # Entrypoint: Set up Aspire CLI and run validation
 # Bundle extraction happens lazily on first command that needs the layout
@@ -44,5 +45,6 @@ ENTRYPOINT ["/bin/bash", "-c", "\
     aspire --nologo config set features:experimentalPolyglot:python true --global && \
     echo '' && \
     echo '=== Running validation ===' && \
-    /scripts/test-python.sh \
+    /scripts/test-python.sh && \
+    /scripts/test-python-playground.sh \
 "]

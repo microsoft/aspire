@@ -41,6 +41,18 @@ internal interface ITemplate
     string? LanguageId { get; }
 
     /// <summary>
+    /// Determines whether this template is available for the selected language.
+    /// </summary>
+    /// <param name="languageId">The selected language identifier.</param>
+    /// <returns><see langword="true"/> if the template is available; otherwise <see langword="false"/>.</returns>
+    bool SupportsLanguage(string languageId);
+
+    /// <summary>
+    /// Gets the AppHost languages that this template can prompt for.
+    /// </summary>
+    IReadOnlyList<string> SelectableAppHostLanguages { get; }
+
+    /// <summary>
     /// Applies template-specific command options.
     /// </summary>
     /// <param name="command">The command to configure.</param>

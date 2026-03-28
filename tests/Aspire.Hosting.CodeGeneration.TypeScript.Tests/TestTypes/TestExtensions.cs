@@ -701,6 +701,120 @@ public static class TestExtensions
     {
         return builder;
     }
+
+    // ===== SourceLocation Merge Tests =====
+    // These test pairs share the same C# method name (SourceLocation) but differ by
+    // a single required parameter. The codegen should merge them into one method with
+    // that parameter made optional, and dispatch to the correct capability ID.
+
+    /// <summary>
+    /// Scenario 1: Single-param merge — one overload has name only, the other adds tag.
+    /// Tests merge where the option variation is: single type vs tuple(type, type).
+    /// </summary>
+    [AspireExport("withMergeLabel", Description = "Adds a label to the resource")]
+    public static IResourceBuilder<T> WithMergeLabel<T>(
+        this IResourceBuilder<T> builder,
+        string label) where T : IResource
+    {
+        return builder;
+    }
+
+    /// <summary>
+    /// Scenario 1b: Overload adds a category param — merge should make category optional.
+    /// </summary>
+    [AspireExport("withMergeLabelCategorized", Description = "Adds a categorized label to the resource")]
+    public static IResourceBuilder<T> WithMergeLabel<T>(
+        this IResourceBuilder<T> builder,
+        string label,
+        string category) where T : IResource
+    {
+        return builder;
+    }
+
+    /// <summary>
+    /// Scenario 2: Tuple-param merge — both have multiple required params, differ by one.
+    /// Tests merge where the option variation is: tuple(type, type) vs tuple(type, type, type).
+    /// </summary>
+    [AspireExport("withMergeEndpoint", Description = "Configures a named endpoint")]
+    public static IResourceBuilder<T> WithMergeEndpoint<T>(
+        this IResourceBuilder<T> builder,
+        string endpointName,
+        int port) where T : IResource
+    {
+        return builder;
+    }
+
+    /// <summary>
+    /// Scenario 2b: Overload adds a scheme param — merge should make scheme optional.
+    /// </summary>
+    [AspireExport("withMergeEndpointScheme", Description = "Configures a named endpoint with scheme")]
+    public static IResourceBuilder<T> WithMergeEndpoint<T>(
+        this IResourceBuilder<T> builder,
+        string endpointName,
+        int port,
+        string scheme) where T : IResource
+    {
+        return builder;
+    }
+
+    /// <summary>
+    /// Scenario 3: Dict/Parameters merge — both have required + optional params, differ by one.
+    /// Tests merge where the option variation involves Parameters dict.
+    /// </summary>
+    [AspireExport("withMergeLogging", Description = "Configures resource logging")]
+    public static IResourceBuilder<T> WithMergeLogging<T>(
+        this IResourceBuilder<T> builder,
+        string logLevel,
+        bool enableConsole = true,
+        int? maxFiles = null) where T : IResource
+    {
+        return builder;
+    }
+
+    /// <summary>
+    /// Scenario 3b: Overload adds a logPath param — merge should make logPath optional.
+    /// </summary>
+    [AspireExport("withMergeLoggingPath", Description = "Configures resource logging with file path")]
+    public static IResourceBuilder<T> WithMergeLogging<T>(
+        this IResourceBuilder<T> builder,
+        string logLevel,
+        string logPath,
+        bool enableConsole = true,
+        int? maxFiles = null) where T : IResource
+    {
+        return builder;
+    }
+
+    /// <summary>
+    /// Scenario 4: Both-dict merge — both overloads have 4+ required params so both use Parameters dicts.
+    /// The shorter overload has 4 required params, the longer has 5.
+    /// </summary>
+    [AspireExport("withMergeRoute", Description = "Configures a route")]
+    public static IResourceBuilder<T> WithMergeRoute<T>(
+        this IResourceBuilder<T> builder,
+        string path,
+        string method,
+        string handler,
+        int priority) where T : IResource
+    {
+        return builder;
+    }
+
+    /// <summary>
+    /// Scenario 4b: Overload adds a middleware param — merge should make middleware optional.
+    /// Both variations will use Parameters dicts since they have 4+ required params.
+    /// </summary>
+    [AspireExport("withMergeRouteMiddleware", Description = "Configures a route with middleware")]
+    public static IResourceBuilder<T> WithMergeRoute<T>(
+        this IResourceBuilder<T> builder,
+        string path,
+        string method,
+        string handler,
+        int priority,
+        string middleware) where T : IResource
+    {
+        return builder;
+    }
 }
 
 /// <summary>

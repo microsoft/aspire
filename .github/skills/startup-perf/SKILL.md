@@ -5,29 +5,44 @@ description: Measures Aspire application startup performance using dotnet-trace 
 
 # Aspire Startup Performance Measurement
 
-This skill provides patterns and practices for measuring .NET Aspire application startup performance using the `Measure-StartupPerformance.ps1` script and the companion `TraceAnalyzer` tool.
+This skill provides patterns and practices for measuring .NET Aspire application startup performance using the `Measure-StartupPerformance.ps1` (Windows/PowerShell) or `measure-startup-performance.sh` (macOS/Linux) script and the companion `TraceAnalyzer` tool.
 
 ## Overview
 
 The startup performance tooling collects `dotnet-trace` traces from an Aspire AppHost application and computes the startup duration from `AspireEventSource` events. Specifically, it measures the time between the `DcpModelCreationStart` (event ID 17) and `DcpModelCreationStop` (event ID 18) events emitted by the `Microsoft-Aspire-Hosting` EventSource provider.
 
-**Script Location**: `tools/perf/Measure-StartupPerformance.ps1`
+**PowerShell Script (Windows)**: `tools/perf/Measure-StartupPerformance.ps1`
+**Bash Script (macOS/Linux)**: `tools/perf/measure-startup-performance.sh`
 **TraceAnalyzer Location**: `tools/perf/TraceAnalyzer/`
 **Documentation**: `docs/getting-perf-traces.md`
 
 ## Prerequisites
 
+### Windows
+
 - PowerShell 7+
 - `dotnet-trace` global tool (`dotnet tool install -g dotnet-trace`)
 - .NET SDK (restored via `./restore.cmd` or `./restore.sh`)
+
+### macOS / Linux
+
+- Bash 4+
+- `dotnet-trace` global tool (`dotnet tool install -g dotnet-trace`)
+- `python3` (for parsing `launchSettings.json`)
+- .NET SDK (restored via `./restore.sh`)
 
 ## Quick Start
 
 ### Single Measurement
 
 ```powershell
-# From repository root — measures the default TestShop.AppHost
+# From repository root — measures the default TestShop.AppHost (Windows)
 .\tools\perf\Measure-StartupPerformance.ps1
+```
+
+```bash
+# From repository root — measures the default TestShop.AppHost (macOS/Linux)
+./tools/perf/measure-startup-performance.sh
 ```
 
 ### Multiple Iterations with Statistics
@@ -36,10 +51,18 @@ The startup performance tooling collects `dotnet-trace` traces from an Aspire Ap
 .\tools\perf\Measure-StartupPerformance.ps1 -Iterations 5
 ```
 
+```bash
+./tools/perf/measure-startup-performance.sh --iterations 5
+```
+
 ### Custom Project
 
 ```powershell
 .\tools\perf\Measure-StartupPerformance.ps1 -ProjectPath "path\to\MyApp.AppHost.csproj" -Iterations 3
+```
+
+```bash
+./tools/perf/measure-startup-performance.sh --project-path path/to/MyApp.AppHost.csproj --iterations 3
 ```
 
 ### Preserve Traces for Manual Analysis
@@ -48,24 +71,32 @@ The startup performance tooling collects `dotnet-trace` traces from an Aspire Ap
 .\tools\perf\Measure-StartupPerformance.ps1 -Iterations 3 -PreserveTraces -TraceOutputDirectory "C:\traces"
 ```
 
+```bash
+./tools/perf/measure-startup-performance.sh --iterations 3 --preserve-traces --trace-output-directory /tmp/traces
+```
+
 ### Verbose Output
 
 ```powershell
 .\tools\perf\Measure-StartupPerformance.ps1 -Verbose
 ```
 
+```bash
+./tools/perf/measure-startup-performance.sh --verbose
+```
+
 ## Parameters
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `ProjectPath` | TestShop.AppHost | Path to the AppHost `.csproj` to measure |
-| `Iterations` | 1 | Number of measurement runs (1–100) |
-| `PreserveTraces` | `$false` | Keep `.nettrace` files after analysis |
-| `TraceOutputDirectory` | temp folder | Directory for preserved trace files |
-| `SkipBuild` | `$false` | Skip `dotnet build` before running |
-| `TraceDurationSeconds` | 60 | Maximum trace collection time (1–86400) |
-| `PauseBetweenIterationsSeconds` | 45 | Pause between iterations (0–3600) |
-| `Verbose` | `$false` | Show detailed output |
+| PowerShell Parameter | Bash Parameter | Default | Description |
+|---------------------|----------------|---------|-------------|
+| `-ProjectPath` | `--project-path` | TestShop.AppHost | Path to the AppHost `.csproj` to measure |
+| `-Iterations` | `--iterations` | 1 | Number of measurement runs (1–100) |
+| `-PreserveTraces` | `--preserve-traces` | false | Keep `.nettrace` files after analysis |
+| `-TraceOutputDirectory` | `--trace-output-directory` | temp folder | Directory for preserved trace files |
+| `-SkipBuild` | `--skip-build` | false | Skip `dotnet build` before running |
+| `-TraceDurationSeconds` | `--trace-duration-seconds` | 60 | Maximum trace collection time (1–86400) |
+| `-PauseBetweenIterationsSeconds` | `--pause-between-iterations-seconds` | 45 | Pause between iterations (0–3600) |
+| `-Verbose` | `--verbose` | false | Show detailed output |
 
 ## How It Works
 
@@ -158,15 +189,27 @@ Statistics:
 To measure the impact of a code change:
 
 ```powershell
-# 1. Measure baseline (on main branch)
+# Windows: Measure baseline (on main branch)
 git checkout main
 .\tools\perf\Measure-StartupPerformance.ps1 -Iterations 5 -PreserveTraces -TraceOutputDirectory "C:\traces\baseline"
 
-# 2. Measure with changes
+# Windows: Measure with changes
 git checkout my-feature-branch
 .\tools\perf\Measure-StartupPerformance.ps1 -Iterations 5 -PreserveTraces -TraceOutputDirectory "C:\traces\feature"
 
-# 3. Compare the reported averages and std devs
+# Compare the reported averages and std devs
+```
+
+```bash
+# macOS/Linux: Measure baseline (on main branch)
+git checkout main
+./tools/perf/measure-startup-performance.sh --iterations 5 --preserve-traces --trace-output-directory /tmp/traces/baseline
+
+# macOS/Linux: Measure with changes
+git checkout my-feature-branch
+./tools/perf/measure-startup-performance.sh --iterations 5 --preserve-traces --trace-output-directory /tmp/traces/feature
+
+# Compare the reported averages and std devs
 ```
 
 Use enough iterations (5+) and a consistent pause between iterations for reliable comparisons.
@@ -177,6 +220,10 @@ If you need to inspect trace files manually (e.g., in PerfView or Visual Studio)
 
 ```powershell
 .\tools\perf\Measure-StartupPerformance.ps1 -PreserveTraces -TraceOutputDirectory "C:\my-traces"
+```
+
+```bash
+./tools/perf/measure-startup-performance.sh --preserve-traces --trace-output-directory /tmp/my-traces
 ```
 
 See `docs/getting-perf-traces.md` for guidance on analyzing traces with PerfView or `dotnet trace report`.

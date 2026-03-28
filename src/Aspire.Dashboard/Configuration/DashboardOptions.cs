@@ -13,7 +13,6 @@ public sealed class DashboardOptions
 {
     public string? ApplicationName { get; set; }
     public OtlpOptions Otlp { get; set; } = new();
-    public McpOptions Mcp { get; set; } = new();
     public ApiOptions Api { get; set; } = new();
     public FrontendOptions Frontend { get; set; } = new();
     public ResourceServiceClientOptions ResourceServiceClient { get; set; } = new();
@@ -140,7 +139,7 @@ public sealed class OtlpOptions
 }
 
 /// <summary>
-/// Options for Dashboard API authentication (shared by MCP and Telemetry API).
+/// Options for Dashboard API authentication.
 /// </summary>
 public sealed class ApiOptions
 {
@@ -183,79 +182,6 @@ public sealed class ApiOptions
     {
         _primaryApiKeyBytes = PrimaryApiKey != null ? Encoding.UTF8.GetBytes(PrimaryApiKey) : null;
         _secondaryApiKeyBytes = SecondaryApiKey != null ? Encoding.UTF8.GetBytes(SecondaryApiKey) : null;
-        errorMessage = null;
-        return true;
-    }
-}
-
-public class McpOptions
-{
-    private BindingAddress? _parsedEndpointAddress;
-    private byte[]? _primaryApiKeyBytes;
-    private byte[]? _secondaryApiKeyBytes;
-
-    public bool? Disabled { get; set; }
-
-    /// <summary>
-    /// Gets or sets the MCP-specific auth mode.
-    /// </summary>
-    public McpAuthMode? AuthMode { get; set; }
-
-    /// <summary>
-    /// Gets or sets the MCP-specific primary API key.
-    /// </summary>
-    public string? PrimaryApiKey { get; set; }
-
-    /// <summary>
-    /// Gets or sets the MCP-specific secondary API key.
-    /// </summary>
-    public string? SecondaryApiKey { get; set; }
-
-    public string? EndpointUrl { get; set; }
-
-    // Public URL could be different from the endpoint URL (e.g., when behind a proxy).
-    public string? PublicUrl { get; set; }
-
-    public bool SuppressUnsecuredMessage { get; set; }
-
-    /// <summary>
-    /// When true, the dashboard will show instructions for configuring the Aspire CLI MCP server
-    /// instead of the dashboard's HTTP-based MCP server.
-    /// </summary>
-    public bool? UseCliMcp { get; set; }
-
-    public BindingAddress? GetEndpointAddress()
-    {
-        return _parsedEndpointAddress;
-    }
-
-    public byte[] GetPrimaryApiKeyBytes()
-    {
-        Debug.Assert(_primaryApiKeyBytes is not null, "Should have been parsed during validation.");
-        return _primaryApiKeyBytes;
-    }
-
-    public byte[]? GetPrimaryApiKeyBytesOrNull()
-    {
-        return _primaryApiKeyBytes;
-    }
-
-    public byte[]? GetSecondaryApiKeyBytes()
-    {
-        return _secondaryApiKeyBytes;
-    }
-
-    internal bool TryParseOptions([NotNullWhen(false)] out string? errorMessage)
-    {
-        if (!string.IsNullOrEmpty(EndpointUrl) && !OptionsHelpers.TryParseBindingAddress(EndpointUrl, out _parsedEndpointAddress))
-        {
-            errorMessage = $"Failed to parse MCP endpoint URL '{EndpointUrl}'.";
-            return false;
-        }
-
-        _primaryApiKeyBytes = PrimaryApiKey != null ? Encoding.UTF8.GetBytes(PrimaryApiKey) : null;
-        _secondaryApiKeyBytes = SecondaryApiKey != null ? Encoding.UTF8.GetBytes(SecondaryApiKey) : null;
-
         errorMessage = null;
         return true;
     }

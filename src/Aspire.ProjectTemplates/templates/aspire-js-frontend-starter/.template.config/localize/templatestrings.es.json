@@ -1,4 +1,4 @@
-﻿{
+{
   "author": "Microsoft",
   "name": "Inicio rápido de React (Vite) y API mínima",
   "description": "Una plantilla de proyecto para crear una aplicación Dehesa con un front-end de React (Vite) y un servicio back-end de API mínima, opcionalmente mediante Redis para el almacenamiento en caché.",
@@ -10,11 +10,9 @@
   "symbols/UseRedisCache/description": "Configura si se va a configurar la aplicación para que use Redis para el almacenamiento en caché. Requiere un contenedor de runtime compatible para ejecutarse localmente. Consulte https://aka.ms/dotnet/aspire/containers para obtener más detalles.",
   "symbols/appHostHttpPort/description": "Número de puerto que se va a usar para el punto de conexión HTTP en launchSettings.json del proyecto AppHost.",
   "symbols/appHostOtlpHttpPort/description": "Número de puerto que se va a usar para el punto de conexión HTTP de OTLP en launchSettings.json del proyecto AppHost.",
-  "symbols/appHostMcpHttpPort/description": "Número de puerto que se va a usar para el punto de conexión MCP HTTP en launchSettings.json del proyecto AppHost.",
   "symbols/appHostResourceHttpPort/description": "Número de puerto que se va a usar para el punto de conexión HTTP del servicio de recursos en launchSettings.json del proyecto AppHost.",
   "symbols/appHostHttpsPort/description": "Número de puerto que se va a usar para el punto de conexión HTTPS en launchSettings.json del proyecto AppHost. Esta opción solo es aplicable cuando no se usa el parámetro no-https.",
   "symbols/appHostOtlpHttpsPort/description": "Número de puerto que se va a usar para el punto de conexión HTTPS de OTLP en launchSettings.json del proyecto AppHost.",
-  "symbols/appHostMcpHttpsPort/description": "Número de puerto que se va a usar para el punto de conexión MCP HTTPS en launchSettings.json del proyecto AppHost.",
   "symbols/appHostResourceHttpsPort/description": "Número de puerto a usar para el punto de conexión HTTPS del servicio de recursos en launchSettings.json del proyecto AppHost.",
   "symbols/serverHttpPort/description": "Número de puerto que se va a usar para el punto de conexión HTTP en launchSettings.json del proyecto de servidor.",
   "symbols/serverHttpsPort/description": "Número de puerto que se va a usar para el punto de conexión HTTPS en launchSettings.json del proyecto de servidor. Esta opción solo es aplicable cuando no se usa el parámetro no-https.",

@@ -4,7 +4,6 @@
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
-using Hex1b.Input;
 using Xunit;
 
 namespace Aspire.Cli.EndToEnd.Tests;
@@ -16,6 +15,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 public sealed class PythonReactTemplateTests(ITestOutputHelper output)
 {
     [Fact]
+    [CaptureWorkspaceOnFailure]
     public async Task CreateAndRunPythonReactProject()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -32,15 +32,19 @@ public sealed class PythonReactTemplateTests(ITestOutputHelper output)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliInDockerAsync(installMode, counter);
 
+        // Step 1: Create project using aspire new, selecting the FastAPI/React template
         await auto.AspireNewAsync("AspirePyReactApp", counter, template: AspireTemplate.PythonReact, useRedisCache: false);
 
-        // Run the project with aspire run
-        await auto.TypeAsync("aspire run");
+        // Step 2: Navigate into the project directory so config resolution finds the
+        // project-level aspire.config.json (which has the packages section).
+        // See https://github.com/microsoft/aspire/issues/15623
+        await auto.TypeAsync("cd AspirePyReactApp");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Press CTRL+C to stop the apphost and exit.", timeout: TimeSpan.FromMinutes(2));
-
-        await auto.Ctrl().KeyAsync(Hex1bKey.C);
         await auto.WaitForSuccessPromptAsync(counter);
+
+        // Step 3: Start and stop the project
+        await auto.AspireStartAsync(counter);
+        await auto.AspireStopAsync(counter);
 
         await auto.TypeAsync("exit");
         await auto.EnterAsync();

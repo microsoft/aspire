@@ -1,4 +1,4 @@
-﻿{
+{
   "author": "Microsoft",
   "name": "Úvodní aplikace Aspire (ASP.NET Core/Blazor)",
   "description": "Šablona projektu pro vytvoření aplikace Aspire s webovým front-endem Blazoru a back-endovou službou webového rozhraní API s volitelným ukládáním do mezipaměti Redis",
@@ -24,11 +24,9 @@
   "symbols/XUnitVersion/choices/v3mtp/description": "Zvolí xUnit.net v3 s Microsoft Test Platform",
   "symbols/appHostHttpPort/description": "Číslo portu, který se má použít pro koncový bod HTTP v launchSettings.json projektu AppHost.",
   "symbols/appHostOtlpHttpPort/description": "Číslo portu, který se má použít pro koncový bod HTTP OTLP v launchSettings.json projektu AppHost.",
-  "symbols/appHostMcpHttpPort/description": "Číslo portu, který se má použít pro koncový bod MCP HTTP v launchSettings.json projektu AppHost.",
   "symbols/appHostResourceHttpPort/description": "Číslo portu, který se má použít pro koncový bod HTTP služby prostředků v launchSettings.json projektu AppHost.",
   "symbols/appHostHttpsPort/description": "Číslo portu, který se má použít pro koncový bod HTTPS v launchSettings.json projektu AppHost. Tato možnost se dá použít jenom v případě, že se nepoužívá parametr no-https.",
   "symbols/appHostOtlpHttpsPort/description": "Číslo portu, který se má použít pro koncový bod HTTPS OTLP v launchSettings.json projektu AppHost.",
-  "symbols/appHostMcpHttpsPort/description": "Číslo portu, který se má použít pro koncový bod MCP HTTPS v launchSettings.json projektu AppHost.",
   "symbols/appHostResourceHttpsPort/description": "Číslo portu, který se má použít pro koncový bod HTTPS služby prostředků v launchSettings.json projektu AppHost.",
   "symbols/webHttpPort/description": "Číslo portu, který se má použít pro koncový bod HTTP v launchSettings.json webového projektu.",
   "symbols/webHttpsPort/description": "Číslo portu, který se má použít pro koncový bod HTTPS v launchSettings.json webového projektu. Tato možnost se dá použít jenom v případě, že se nepoužívá parametr no-https.",

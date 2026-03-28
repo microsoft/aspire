@@ -50,6 +50,7 @@ public static class DotnetToolResourceExtensions
             .WithIconName("Toolbox")
             .WithCommand("dotnet")
             .WithArgs(BuildToolExecArguments)
+            .WithRequiredCommand("dotnet", context => ValidateDotnetSdkVersionAsync(context, resource.WorkingDirectory))
             .OnBeforeResourceStarted(BeforeResourceStarted);
 
         void BuildToolExecArguments(CommandLineArgsCallbackContext x)
@@ -110,9 +111,6 @@ public static class DotnetToolResourceExtensions
                     new (KnownProperties.Resource.Source, resource.ToolConfiguration?.PackageId)
                     ])
             }).ConfigureAwait(false);
-
-            var version = await DotnetSdkUtils.TryGetVersionAsync(resource.WorkingDirectory).ConfigureAwait(false);
-            ValidateDotnetSdkVersion(version, resource.WorkingDirectory);
         }
 
     }
@@ -204,18 +202,15 @@ public static class DotnetToolResourceExtensions
         return builder;
     }
 
-    internal static void ValidateDotnetSdkVersion(Version? version, string workingDirectory)
+    internal static async Task<RequiredCommandValidationResult> ValidateDotnetSdkVersionAsync(RequiredCommandValidationContext _, string workingDirectory)
     {
-        if (version is null)
+        var version = await DotnetSdkUtils.TryGetVersionAsync(workingDirectory).ConfigureAwait(false);
+
+        if (version?.Major < 10)
         {
-            // This most likely means something is majorly wrong with the dotnet sdk
-            // Which will show up as an error once dcp runs `dotnet tool exec`
-            return;
+            return RequiredCommandValidationResult.Failure($"DotnetToolResource requires dotnet SDK 10 or higher to run. Detected version: {version}");
         }
 
-        if (version.Major < 10)
-        {
-            throw new DistributedApplicationException($"DotnetToolResource requires dotnet SDK 10 or higher to run. Detected version: {version} for working directory {workingDirectory}");
-        }
+        return RequiredCommandValidationResult.Success();
     }
 }

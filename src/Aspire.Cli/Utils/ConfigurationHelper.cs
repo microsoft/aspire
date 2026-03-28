@@ -154,13 +154,15 @@ internal static class ConfigurationHelper
             }
 
             // Find all colon-separated keys at root level
-            var colonKeys = new List<(string key, string? value)>();
+            var colonKeys = new List<(string key, JsonNode? value)>();
 
             foreach (var kvp in settings)
             {
                 if (kvp.Key.Contains(':'))
                 {
-                    colonKeys.Add((kvp.Key, kvp.Value?.ToString()));
+                    // DeepClone preserves the original JSON type (boolean, number, etc.)
+                    // instead of converting to string via ToString().
+                    colonKeys.Add((kvp.Key, kvp.Value?.DeepClone()));
                 }
             }
 

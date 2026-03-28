@@ -94,21 +94,21 @@ internal sealed class DashboardServiceData : IDisposable
         _cts.Dispose();
     }
 
-    internal async Task<(ExecuteCommandResultType result, string? errorMessage)> ExecuteCommandAsync(string resourceId, string type, CancellationToken cancellationToken)
+    internal async Task<(ExecuteCommandResultType result, string? errorMessage, string? commandResult, ApplicationModel.CommandResultFormat? resultFormat)> ExecuteCommandAsync(string resourceId, string type, CancellationToken cancellationToken)
     {
         try
         {
             var result = await _resourceCommandService.ExecuteCommandAsync(resourceId, type, cancellationToken).ConfigureAwait(false);
             if (result.Canceled)
             {
-                return (ExecuteCommandResultType.Canceled, result.ErrorMessage);
+                return (ExecuteCommandResultType.Canceled, result.ErrorMessage, null, null);
             }
-            return (result.Success ? ExecuteCommandResultType.Success : ExecuteCommandResultType.Failure, result.ErrorMessage);
+            return (result.Success ? ExecuteCommandResultType.Success : ExecuteCommandResultType.Failure, result.ErrorMessage, result.Result, result.ResultFormat);
         }
         catch
         {
             // Note: Exception is already logged in the command executor.
-            return (ExecuteCommandResultType.Failure, "Unhandled exception thrown while executing command.");
+            return (ExecuteCommandResultType.Failure, "Unhandled exception thrown while executing command.", null, null);
         }
     }
 

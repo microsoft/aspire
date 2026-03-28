@@ -19,6 +19,13 @@ internal sealed class DcpNameGenerator
     private readonly IConfiguration _configuration;
     private readonly IOptions<DcpOptions> _options;
 
+    // A map from (resource name, endpoint name, target network ID) => DCP service name. 
+    // Used for ensuring that we do not create duplicate DCP services for the same resource endpoint.
+    private readonly Dictionary<string, string> _networkServices = new();
+
+    // Helps ensure that service names are unique (service names do not use random suffixes).
+    private readonly HashSet<string> _allServiceNames = new();
+
     public DcpNameGenerator(IConfiguration configuration, IOptions<DcpOptions> options)
     {
         _configuration = configuration;
@@ -77,32 +84,40 @@ internal sealed class DcpNameGenerator
         return (GetObjectNameForResource(project, _options.Value, nameSuffix), nameSuffix);
     }
 
-    public string GetServiceName(IResource resource, EndpointAnnotation endpoint, bool hasMultipleEndpoints, HashSet<string> allServiceNames)
+    // Returns a DCP service name for the given resource/endpoint/network combination. 
+    // The returned boolean indicates whether a new service name was generated (true) or an existing one was returned (false).
+    public (string, bool) GetServiceName(IResource resource, EndpointAnnotation endpoint, NetworkIdentifier targetNetworkId)
     {
-        var candidateServiceName = !hasMultipleEndpoints
-            ? GetObjectNameForResource(resource, _options.Value)
-            : GetObjectNameForResource(resource, _options.Value, endpoint.Name);
+        var hasMultipleEndpoints = resource.Annotations.OfType<EndpointAnnotation>().Count() > 1;
+        var key = NetworkServiceKey(resource, endpoint, targetNetworkId);
 
-        return GenerateUniqueServiceName(allServiceNames, candidateServiceName);
-    }
-
-    private static string GenerateUniqueServiceName(HashSet<string> serviceNames, string candidateName)
-    {
-        int suffix = 1;
-        string uniqueName = candidateName;
-
-        while (!serviceNames.Add(uniqueName))
+        lock(_allServiceNames)
         {
-            uniqueName = $"{candidateName}-{suffix}";
-            suffix++;
-            if (suffix == 100)
+            if (_networkServices.TryGetValue(key, out var name))
             {
-                // Should never happen, but we do not want to ever get into a infinite loop situation either.
-                throw new ArgumentException($"Could not generate a unique name for service '{candidateName}'");
+                return (name, false);
             }
-        }
 
-        return uniqueName;
+            var candidateName = !hasMultipleEndpoints
+                ? GetObjectNameForResource(resource, _options.Value)
+                : GetObjectNameForResource(resource, _options.Value, endpoint.Name);
+
+            int suffix = 1;
+            string uniqueName = candidateName;
+
+            while (!_allServiceNames.Add(uniqueName))
+            {
+                uniqueName = $"{candidateName}-{suffix}";
+                suffix++;
+                if (suffix == 100)
+                {
+                    // Should never happen, but we do not want to ever get into a infinite loop situation either.
+                    throw new ArgumentException($"Could not generate a unique name for service '{candidateName}'");
+                }
+            }
+            _networkServices[key] = uniqueName;
+            return (uniqueName, true); 
+        }
     }
 
     public static string GetRandomNameSuffix()
@@ -137,4 +152,7 @@ internal sealed class DcpNameGenerator
             };
         return maybeWithSuffix(resource.Name, suffix, options.ResourceNameSuffix);
     }
+
+    private static string NetworkServiceKey(IResource resource, EndpointAnnotation endpoint, NetworkIdentifier targetNetworkId)
+        => $"{resource.Name}|{endpoint.Name}|{targetNetworkId.Value}";
 }

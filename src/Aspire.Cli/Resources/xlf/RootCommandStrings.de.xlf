@@ -43,19 +43,14 @@
 
 The Aspire CLI collects usage data. It is collected by Microsoft and is used to help us improve your experience. You can opt out of telemetry by setting the ASPIRE_CLI_TELEMETRY_OPTOUT environment variable to '1' or 'true' using your preferred shell.
 
-Read more about Aspire CLI telemetry: https://aka.ms/aspire/cli-telemetry</source>
-        <target state="translated">Telemetrie
+Read more about Aspire CLI telemetry: {0}</source>
+        <target state="new">Telemetry
 ---------
 
-Die Aspire-CLI sammelt Nutzungsdaten. Sie wird von Microsoft erfasst und verwendet, um uns bei der Verbesserung des Benutzererlebnisses zu unterstützen. Sie können das Erfassen von Telemetriedaten deaktivieren, indem Sie die Umgebungsvariable ASPIRE_CLI_TELEMETRY_OPTOUT in Ihrer bevorzugten Shell auf „1“ oder TRUE festlegen.
+The Aspire CLI collects usage data. It is collected by Microsoft and is used to help us improve your experience. You can opt out of telemetry by setting the ASPIRE_CLI_TELEMETRY_OPTOUT environment variable to '1' or 'true' using your preferred shell.
 
-Weitere Informationen zur Aspire-CLI-Telemetrie finden Sie unter: https://aka.ms/aspire/cli-telemetry</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FirstTimeUseWelcome">
-        <source>Welcome to Aspire! Learn more about Aspire at https://aspire.dev</source>
-        <target state="translated">Willkommen bei Aspire! Weitere Informationen zu Aspire finden Sie unter https://aspire.dev</target>
-        <note />
+Read more about Aspire CLI telemetry: {0}</target>
+        <note>{0} is a clickable URL</note>
       </trans-unit>
       <trans-unit id="NoLogoArgumentDescription">
         <source>Suppress the startup banner and telemetry notice</source>

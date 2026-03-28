@@ -389,7 +389,7 @@ public static class AzureSqlExtensions
     /// peSubnet.AddPrivateEndpoint(sql);
     /// </code>
     /// </example>
-    [AspireExportIgnore(Reason = "Azure subnet resources are not currently available to polyglot app hosts.")]
+    [AspireExport("withAdminDeploymentScriptSubnet", Description = "Configures the Azure SQL server to use a specific subnet for deployment scripts")]
     [Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/dotnet/aspire/diagnostics#{0}")]
     public static IResourceBuilder<AzureSqlServerResource> WithAdminDeploymentScriptSubnet(
         this IResourceBuilder<AzureSqlServerResource> builder,

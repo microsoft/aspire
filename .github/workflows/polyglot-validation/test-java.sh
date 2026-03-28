@@ -1,11 +1,11 @@
 #!/bin/bash
 # Polyglot SDK Validation - Java
-# This script validates the Java AppHost SDK with Redis integration
-set -e
+# Creates a Java AppHost via the CLI, adds Redis, and validates that
+# `aspire run` can launch a Redis-backed app non-interactively.
+set -euo pipefail
 
 echo "=== Java AppHost SDK Validation ==="
 
-# Verify aspire CLI is available
 if ! command -v aspire &> /dev/null; then
     echo "❌ Aspire CLI not found in PATH"
     exit 1
@@ -14,16 +14,24 @@ fi
 echo "Aspire CLI version:"
 aspire --version
 
-# Create project directory
-WORK_DIR=$(mktemp -d)
+WORK_DIR="$(mktemp -d)"
+ASPIRE_PID=""
+
+cleanup() {
+    if [ -n "${ASPIRE_PID:-}" ]; then
+        kill "$ASPIRE_PID" 2>/dev/null || true
+    fi
+    rm -rf "$WORK_DIR"
+}
+
+trap cleanup EXIT
+
 echo "Working directory: $WORK_DIR"
 cd "$WORK_DIR"
 
-# Initialize Java AppHost
 echo "Creating Java apphost project..."
 aspire init --language java --non-interactive -d
 
-# Add Redis integration
 echo "Adding Redis integration..."
 aspire add Aspire.Hosting.Redis --non-interactive -d 2>&1 || {
     echo "aspire add failed, manually updating settings.json..."
@@ -37,23 +45,20 @@ aspire add Aspire.Hosting.Redis --non-interactive -d 2>&1 || {
     fi
 }
 
-# Insert Redis code into AppHost.java
 echo "Configuring AppHost.java with Redis..."
-if grep -q "builder.build()" AppHost.java; then
-    sed -i '/builder.build()/i\            // Add Redis cache resource\n            builder.addRedis("cache", null, null).withImageRegistry("netaspireci.azurecr.io");' AppHost.java
+if grep -q "builder.build().run();" AppHost.java; then
+    sed -i '/builder.build().run();/i\        builder.addRedis("cache")\n            .withImageRegistry("netaspireci.azurecr.io");' AppHost.java
     echo "✅ Redis configuration added to AppHost.java"
 fi
 
 echo "=== AppHost.java ==="
 cat AppHost.java
 
-# Run the apphost in background
 echo "Starting apphost in background..."
-aspire run -d > aspire.log 2>&1 &
+aspire run -d --non-interactive > aspire.log 2>&1 &
 ASPIRE_PID=$!
 echo "Aspire PID: $ASPIRE_PID"
 
-# Poll for Redis container with retries
 echo "Polling for Redis container..."
 RESULT=1
 for i in {1..12}; do
@@ -68,7 +73,7 @@ for i in {1..12}; do
     sleep 10
 done
 
-if [ $RESULT -ne 0 ]; then
+if [ "$RESULT" -ne 0 ]; then
     echo "❌ FAILURE: Redis container not found after 2 minutes"
     echo "=== Docker containers ==="
     docker ps
@@ -76,9 +81,4 @@ if [ $RESULT -ne 0 ]; then
     cat aspire.log || true
 fi
 
-# Cleanup
-echo "Stopping apphost..."
-kill -9 $ASPIRE_PID 2>/dev/null || true
-rm -rf "$WORK_DIR"
-
-exit $RESULT
+exit "$RESULT"

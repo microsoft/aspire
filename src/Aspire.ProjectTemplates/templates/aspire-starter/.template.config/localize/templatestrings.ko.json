@@ -1,4 +1,4 @@
-﻿{
+{
   "author": "Microsoft",
   "name": "Aspire 시작 앱(ASP.NET Core/Blazor)",
   "description": "선택적 Redis 캐싱을 사용하여 Blazor 웹 프런트 엔드와 웹 API 백 엔드 서비스로 Aspire 앱을 만들기 위한 프로젝트 템플릿입니다.",
@@ -24,11 +24,9 @@
   "symbols/XUnitVersion/choices/v3mtp/description": "Microsoft 테스트 플랫폼이 포함된 xUnit.net v3 선택",
   "symbols/appHostHttpPort/description": "AppHost 프로젝트의 launchSettings.json HTTP 엔드포인트에 사용할 포트 번호입니다.",
   "symbols/appHostOtlpHttpPort/description": "AppHost 프로젝트의 launchSettings.json OTLP HTTP 엔드포인트에 사용할 포트 번호입니다.",
-  "symbols/appHostMcpHttpPort/description": "AppHost 프로젝트의 launchSettings.json에서 MCP HTTP 엔드포인트에 사용할 포트 번호입니다.",
   "symbols/appHostResourceHttpPort/description": "AppHost 프로젝트의 launchSettings.json 리소스 서비스 HTTP 엔드포인트에 사용할 포트 번호입니다.",
   "symbols/appHostHttpsPort/description": "AppHost 프로젝트의 launchSettings.json HTTPS 엔드포인트에 사용할 포트 번호입니다. 이 옵션은 no-https 매개 변수가 사용되지 않는 경우에만 적용됩니다.",
   "symbols/appHostOtlpHttpsPort/description": "AppHost 프로젝트의 launchSettings.json OTLP HTTPS 엔드포인트에 사용할 포트 번호입니다.",
-  "symbols/appHostMcpHttpsPort/description": "AppHost 프로젝트의 launchSettings.json에서 MCP HTTPS 엔드포인트에 사용할 포트 번호입니다.",
   "symbols/appHostResourceHttpsPort/description": "AppHost 프로젝트의 launchSettings.json 리소스 서비스 HTTPS 엔드포인트에 사용할 포트 번호입니다.",
   "symbols/webHttpPort/description": "웹 프로젝트의 launchSettings.json HTTP 엔드포인트에 사용할 포트 번호입니다.",
   "symbols/webHttpsPort/description": "웹 프로젝트의 launchSettings.json HTTPS 엔드포인트에 사용할 포트 번호입니다. 이 옵션은 no-https 매개 변수가 사용되지 않는 경우에만 적용됩니다.",
