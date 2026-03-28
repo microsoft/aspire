@@ -428,7 +428,19 @@ internal class ConsoleInteractionService : IInteractionService
         }
 
         MessageLogger.LogInformation("Confirm: {PromptText} (default: {DefaultValue})", promptText, defaultValue);
-        var result = await MessageConsole.ConfirmAsync(promptText, defaultValue, cancellationToken);
+
+        // Use [Y/n] or [y/N] convention where the capitalized letter indicates the default value.
+        var yesChoice = defaultValue ? "Y" : "y";
+        var noChoice = defaultValue ? "n" : "N";
+        var fullPromptText = $"{promptText} [{yesChoice}/{noChoice}]";
+
+        var prompt = new ConfirmationPrompt(fullPromptText)
+        {
+            ShowChoices = false,
+            ShowDefaultValue = false,
+        };
+
+        var result = await MessageConsole.PromptAsync(prompt, cancellationToken);
         MessageLogger.LogInformation("Confirm result: {Result}", result);
         return result;
     }
