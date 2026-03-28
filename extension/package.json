@@ -812,7 +812,7 @@
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.32.1",
     "wait-for-expect": "^4.0.0",
-    "webpack": "^5.98.0",
+    "webpack": "^5.105.4",
     "webpack-cli": "^6.0.1"
   },
   "dependencies": {
