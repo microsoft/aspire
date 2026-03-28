@@ -514,4 +514,3 @@ CLI command that:
 | `src/Aspire.Hosting/Pipelines/IDistributedApplicationPipeline.cs` | Added `scheduledBy` to `AddStep()`, added `GetEnvironmentAsync()` |
 | `src/Aspire.Hosting/Pipelines/DistributedApplicationPipeline.cs` | Constructor takes model, implements `GetEnvironmentAsync()`, `TryRestoreStepAsync` in executor |
 | `src/Aspire.Hosting/DistributedApplicationBuilder.cs` | Pipeline initialized with model |
-
