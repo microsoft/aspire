@@ -115,7 +115,7 @@ internal static class GatewayConfigurationBuilder
             var environment = new Dictionary<string, string>();
             foreach (var svc in serviceNames)
             {
-                environment[$"services:{svc}:https:0"] = $"{gatewayUrl}/{prefix}/_api/{svc}";
+                environment[$"services__{svc}__https__0"] = $"{gatewayUrl}/{prefix}/_api/{svc}";
             }
             environment["OTEL_EXPORTER_OTLP_ENDPOINT"] = $"{gatewayUrl}/{prefix}/_otlp/";
             environment["OTEL_EXPORTER_OTLP_PROTOCOL"] = "http/protobuf";

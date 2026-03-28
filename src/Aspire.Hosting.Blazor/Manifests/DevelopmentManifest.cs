@@ -26,10 +26,12 @@ internal class AssetNode
 
     public void OffsetContentRootIndices(int offset)
     {
+#pragma warning disable IDE0031 // Use null propagation - can't use ?. with +=
         if (Asset is not null)
         {
             Asset.ContentRootIndex += offset;
         }
+#pragma warning restore IDE0031
 
         if (Patterns is not null)
         {
