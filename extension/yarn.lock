@@ -309,18 +309,6 @@
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/@humanwhocodes/retry/-/retry-0.4.3.tgz"
   integrity sha1-wrnS43TuYsWG062+qHGZsdenpro=
 
-"@isaacs/balanced-match@^4.0.1":
-  version "4.0.1"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/@isaacs/balanced-match/-/balanced-match-4.0.1.tgz"
-  integrity sha1-MIHa28NGBmG3UedZHX+upd853Sk=
-
-"@isaacs/brace-expansion@^5.0.0":
-  version "5.0.0"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/@isaacs/brace-expansion/-/brace-expansion-5.0.0.tgz"
-  integrity sha1-Sz2rq32OdaQpQUqWvWe/TB0T4PM=
-  dependencies:
-    "@isaacs/balanced-match" "^4.0.1"
-
 "@isaacs/cliui@^8.0.2":
   version "8.0.2"
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/@isaacs/cliui/-/cliui-8.0.2.tgz"
@@ -1495,6 +1483,11 @@ balanced-match@^1.0.0:
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/balanced-match/-/balanced-match-1.0.2.tgz"
   integrity sha1-6D46fj8wCzTLnYf2FfoMvzV2kO4=
 
+balanced-match@^4.0.2:
+  version "4.0.4"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/balanced-match/-/balanced-match-4.0.4.tgz#bfb10662feed8196a2c62e7c68e17720c274179a"
+  integrity sha1-v7EGYv7tgZaixi58aOF3IMJ0F5o=
+
 bare-events@^2.2.0:
   version "2.6.1"
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/bare-events/-/bare-events-2.6.1.tgz"
@@ -1561,19 +1554,26 @@ boundary@^2.0.0:
   integrity sha1-FpyLHw1Ezywlk4lnoyjzfgpOXvw=
 
 brace-expansion@^1.1.7:
-  version "1.1.12"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/brace-expansion/-/brace-expansion-1.1.12.tgz"
-  integrity sha1-q5tFRGblqMw6GHvqrVgEEqnFuEM=
+  version "1.1.13"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/brace-expansion/-/brace-expansion-1.1.13.tgz#d37875c01dc9eff988dd49d112a57cb67b54efe6"
+  integrity sha1-03h1wB3J7/mI3UnREqV8tntU7+Y=
   dependencies:
     balanced-match "^1.0.0"
     concat-map "0.0.1"
 
-brace-expansion@^2.0.1:
-  version "2.0.2"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/brace-expansion/-/brace-expansion-2.0.2.tgz"
-  integrity sha1-VPxTI3phPYVMe9N0Y6rRffhyFOc=
+brace-expansion@^2.0.1, brace-expansion@^2.0.2:
+  version "2.0.3"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/brace-expansion/-/brace-expansion-2.0.3.tgz#0493338bdd58e319b1039c67cf7ee439892c01d9"
+  integrity sha1-BJMzi91Y4xmxA5xnz37kOYksAdk=
   dependencies:
     balanced-match "^1.0.0"
+
+brace-expansion@^5.0.2:
+  version "5.0.5"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/brace-expansion/-/brace-expansion-5.0.5.tgz#dcc3a37116b79f3e1b46db994ced5d570e930fdb"
+  integrity sha1-3MOjcRa3nz4bRtuZTO1dVw6TD9s=
+  dependencies:
+    balanced-match "^4.0.2"
 
 braces@^3.0.3, braces@~3.0.2:
   version "3.0.3"
@@ -2708,9 +2708,9 @@ flat@^5.0.2:
   integrity sha1-jKb+MyBp/6nTJMMnGYxZglnOskE=
 
 flatted@^3.2.9:
-  version "3.3.3"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/flatted/-/flatted-3.3.3.tgz"
-  integrity sha1-Z8j62VRUp8er6/dLt47nSkQCM1g=
+  version "3.4.2"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/flatted/-/flatted-3.4.2.tgz#f5c23c107f0f37de8dbdf24f13722b3b98d52726"
+  integrity sha1-9cI8EH8PN96NvfJPE3IrO5jVJyY=
 
 flush-write-stream@^1.0.2:
   version "1.1.1"
@@ -3948,32 +3948,32 @@ mimic-response@^3.1.0:
   integrity sha1-LR1Zr5wbEpgVrMwsRqAipc4fo8k=
 
 minimatch@^10.1.1:
-  version "10.1.1"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/minimatch/-/minimatch-10.1.1.tgz"
-  integrity sha1-5uYbmwwdyrEWtafRRY6LaunnOlU=
+  version "10.2.4"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/minimatch/-/minimatch-10.2.4.tgz#465b3accbd0218b8281f5301e27cedc697f96fde"
+  integrity sha1-Rls6zL0CGLgoH1MB4nztxpf5b94=
   dependencies:
-    "@isaacs/brace-expansion" "^5.0.0"
+    brace-expansion "^5.0.2"
 
 minimatch@^3.0.3, minimatch@^3.0.4, minimatch@^3.1.1, minimatch@^3.1.2:
-  version "3.1.2"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/minimatch/-/minimatch-3.1.2.tgz"
-  integrity sha1-Gc0ZS/0+Qo8EmnCBfAONiatL41s=
+  version "3.1.5"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/minimatch/-/minimatch-3.1.5.tgz#580c88f8d5445f2bd6aa8f3cadefa0de79fbd69e"
+  integrity sha1-WAyI+NVEXyvWqo88re+g3nn71p4=
   dependencies:
     brace-expansion "^1.1.7"
 
 minimatch@^5.0.1, minimatch@^5.1.6:
-  version "5.1.6"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/minimatch/-/minimatch-5.1.6.tgz"
-  integrity sha1-HPy4z1Ui6mmVLNKvla4JR38SKpY=
+  version "5.1.9"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/minimatch/-/minimatch-5.1.9.tgz#1293ef15db0098b394540e8f9f744f9fda8dee4b"
+  integrity sha1-EpPvFdsAmLOUVA6Pn3RPn9qN7ks=
   dependencies:
     brace-expansion "^2.0.1"
 
 minimatch@^9.0.3, minimatch@^9.0.4:
-  version "9.0.5"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/minimatch/-/minimatch-9.0.5.tgz"
-  integrity sha1-10+d1rV9g9jpjPuCEzsDl4vJKeU=
+  version "9.0.9"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/minimatch/-/minimatch-9.0.9.tgz#9b0cb9fcb78087f6fd7eababe2511c4d3d60574e"
+  integrity sha1-mwy5/LeAh/b9fqur4lEcTT1gV04=
   dependencies:
-    brace-expansion "^2.0.1"
+    brace-expansion "^2.0.2"
 
 minimist@^1.2.0, minimist@^1.2.3:
   version "1.2.8"
@@ -4089,10 +4089,10 @@ node-addon-api@^4.3.0:
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/node-addon-api/-/node-addon-api-4.3.0.tgz"
   integrity sha1-UqGgtHUZPgko6Y4EJqDRJUeCt38=
 
-node-forge@^1.3.1:
-  version "1.3.3"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/node-forge/-/node-forge-1.3.3.tgz"
-  integrity sha1-CtgPYzOzoARegnrCC39zX5NxZ1E=
+node-forge@^1.4.0:
+  version "1.4.0"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/node-forge/-/node-forge-1.4.0.tgz#1c7b7d8bdc2d078739f58287d589d903a11b2fc2"
+  integrity sha1-HHt9i9wtB4c59YKH1YnZA6EbL8I=
 
 node-html-markdown@^1.3.0:
   version "1.3.0"
@@ -4447,9 +4447,9 @@ path-scurry@^2.0.0:
     minipass "^7.1.2"
 
 path-to-regexp@^8.0.0:
-  version "8.2.0"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/path-to-regexp/-/path-to-regexp-8.2.0.tgz"
-  integrity sha1-c5kMwp5Xo/8qDZFAlRVt9dt56LQ=
+  version "8.4.0"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/path-to-regexp/-/path-to-regexp-8.4.0.tgz#8e98fcd94826aff01a90c544ef74ffbaca3a78ed"
+  integrity sha1-jpj82Ugmr/AakMVE73T/uso6eO0=
 
 path-type@^6.0.0:
   version "6.0.0"
@@ -4472,9 +4472,9 @@ picocolors@^1.1.1:
   integrity sha1-PTIa8+q5ObCDyPkpodEs2oHCa2s=
 
 picomatch@^2.0.4, picomatch@^2.2.1, picomatch@^2.3.1:
-  version "2.3.1"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/picomatch/-/picomatch-2.3.1.tgz"
-  integrity sha1-O6ODNzNkbZ0+SZWUbBNlpn+wekI=
+  version "2.3.2"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/picomatch/-/picomatch-2.3.2.tgz#5a942915e26b372dc0f0e6753149a16e6b1c5601"
+  integrity sha1-WpQpFeJrNy3A8OZ1MUmhbmscVgE=
 
 pkg-dir@^4.2.0:
   version "4.2.0"
