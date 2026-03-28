@@ -57,6 +57,11 @@ suite('resolveAppHostSourcePath', () => {
         assert.strictEqual(result, '/repo/MyApp/AppHost.cs');
     });
 
+    test('prefers lowercase apphost.cs for file-based csproj paths', () => {
+        const result = resolveAppHostSourcePath('/repo/MyApp/MyApp.AppHost.csproj', candidate => candidate === '/repo/MyApp/apphost.cs');
+        assert.strictEqual(result, '/repo/MyApp/apphost.cs');
+    });
+
     test('falls back to Program.cs for csproj paths', () => {
         const result = resolveAppHostSourcePath('/repo/MyApp/MyApp.AppHost.csproj', candidate => candidate === '/repo/MyApp/Program.cs');
         assert.strictEqual(result, '/repo/MyApp/Program.cs');

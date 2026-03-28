@@ -202,6 +202,11 @@ export function resolveAppHostSourcePath(appHostPath: string, fileExists: (candi
         return appHostCodePath;
     }
 
+    const fileBasedAppHostCodePath = path.join(projectDirectory, 'apphost.cs');
+    if (fileExists(fileBasedAppHostCodePath)) {
+        return fileBasedAppHostCodePath;
+    }
+
     // Older/simple AppHosts may still use Program.cs, so prefer that before
     // falling back to the .csproj when no source file can be resolved.
     const programCodePath = path.join(projectDirectory, 'Program.cs');
