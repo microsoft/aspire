@@ -174,6 +174,9 @@
     <PackageVersion Include="Microsoft.Azure.Functions.Worker.OpenTelemetry" Version="1.1.0-preview6" />
     <PackageVersion Include="Microsoft.Azure.Functions.Worker.Sdk" Version="2.0.5" />
     <PackageVersion Include="Microsoft.ApplicationInsights.WorkerService" Version="2.23.0" />
+    <!-- playground apps dependencies for AzureFunctionsWithDts -->
+    <PackageVersion Include="Microsoft.Azure.Functions.Worker.Extensions.DurableTask" Version="1.11.0" />
+    <PackageVersion Include="Microsoft.Azure.Functions.Worker.Extensions.DurableTask.AzureManaged" Version="1.0.1" />
     <!-- playground apps dependencies for javascript -->
     <PackageVersion Include="Swashbuckle.AspNetCore" Version="9.0.6" />
     <!-- Pinned versions for Component Governance - Remove when root dependencies are updated -->
