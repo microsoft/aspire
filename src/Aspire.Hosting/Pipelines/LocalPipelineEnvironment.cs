@@ -14,7 +14,7 @@ namespace Aspire.Hosting.Pipelines;
 /// This is the implicit fallback environment returned by
 /// <see cref="DistributedApplicationPipeline.GetEnvironmentAsync(CancellationToken)"/>
 /// when no declared <see cref="IPipelineEnvironment"/> resource passes its relevance check.
-/// It is not added to the application model.
+/// It is not added to the application model. 
 /// </remarks>
 internal sealed class LocalPipelineEnvironment() : Resource("local"), IPipelineEnvironment
 {
