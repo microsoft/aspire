@@ -130,6 +130,13 @@ public static class Extensions
     {
         endpoints.MapGet(path, (IConfiguration configuration) =>
         {
+            // If the hosting layer provided a pre-built config response, return it directly.
+            var preBuilt = configuration["Client:ConfigResponse"];
+            if (!string.IsNullOrEmpty(preBuilt))
+            {
+                return Results.Content(preBuilt, "application/json");
+            }
+
             var response = new JsonObject();
 
             foreach (var (sourceKey, targetPath) in mappings)

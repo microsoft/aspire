@@ -4,9 +4,9 @@
 using System.Diagnostics.Metrics;
 using System.Globalization;
 using System.Net.Http.Headers;
-using AspireWithBlazorStandalone.ClientServiceDefaults.Telemetry.Serializer;
+using AspireWithBlazorHosted.ClientServiceDefaults.Telemetry.Serializer;
 
-namespace AspireWithBlazorStandalone.ClientServiceDefaults.Telemetry;
+namespace AspireWithBlazorHosted.ClientServiceDefaults.Telemetry;
 
 public sealed class WebAssemblyOtlpMetricExporter : IDisposable
 {
