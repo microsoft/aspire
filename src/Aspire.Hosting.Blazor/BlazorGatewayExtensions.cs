@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 
 #pragma warning disable ASPIREDOCKERFILEBUILDER001 // DockerfileBuilder is experimental
 #pragma warning disable ASPIRECSHARPAPPS001 // AddCSharpApp is experimental
+#pragma warning disable ASPIREATS001 // AspireExportIgnore is experimental
 
 namespace Aspire.Hosting;
 
@@ -22,6 +23,7 @@ public static class BlazorGatewayExtensions
     /// The gateway is shipped as Gateway.cs alongside this library and launched
     /// via <c>AddCSharpApp</c>. No separate project is needed.
     /// </summary>
+    [AspireExportIgnore(Reason = "Blazor gateway APIs are not yet stable for ATS export.")]
     public static IResourceBuilder<ProjectResource> AddBlazorGateway(
         this IDistributedApplicationBuilder builder,
         string name)
@@ -66,6 +68,7 @@ public static class BlazorGatewayExtensions
     /// URL path prefix (e.g., "store" → served at /store/).
     /// Use WithReference() to declare service dependencies.
     /// </summary>
+    [AspireExportIgnore(Reason = "Open generic type parameter TProject is not ATS-compatible.")]
     public static IResourceBuilder<BlazorWasmAppResource> AddBlazorWasmProject<TProject>(
         this IDistributedApplicationBuilder builder,
         string name)
@@ -90,6 +93,7 @@ public static class BlazorGatewayExtensions
     /// Registers a Blazor WebAssembly project as a resource without launching it as a process.
     /// Prefer AddBlazorWasmProject&lt;TProject&gt; which uses IProjectMetadata for path discovery.
     /// </summary>
+    [AspireExportIgnore(Reason = "Blazor gateway APIs are not yet stable for ATS export.")]
     public static IResourceBuilder<BlazorWasmAppResource> AddBlazorWasmApp(
         this IDistributedApplicationBuilder builder,
         string name,
@@ -116,6 +120,7 @@ public static class BlazorGatewayExtensions
     /// Service references from the WASM app are automatically forwarded to the gateway
     /// so the gateway can resolve service endpoints for YARP proxying.
     /// </summary>
+    [AspireExportIgnore(Reason = "Blazor gateway APIs are not yet stable for ATS export.")]
     public static IResourceBuilder<ProjectResource> WithClient(
         this IResourceBuilder<ProjectResource> gateway,
         IResourceBuilder<BlazorWasmAppResource> wasmApp)
@@ -152,6 +157,7 @@ public static class BlazorGatewayExtensions
     /// transformed (AssetFile prefixed, runtime tree wrapped under prefix), then injected
     /// into the Gateway as environment variables.
     /// </summary>
+    [AspireExportIgnore(Reason = "Blazor gateway APIs are not yet stable for ATS export.")]
     public static IResourceBuilder<ProjectResource> WithBlazorApp(
         this IResourceBuilder<ProjectResource> gateway,
         IResourceBuilder<BlazorWasmAppResource> wasmApp,
