@@ -1,24 +1,29 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 var builder = DistributedApplication.CreateBuilder(args);
 
-var sql1 = builder.AddAzureSqlServer("sql1")
+var sqlLocal = builder.AddAzureSqlServer("sqlLocal")
     .RunAsContainer();
 
-var db1 = sql1.AddDatabase("db1");
+var dbLocal = sqlLocal.AddDatabase("dbLocal");
 
-var sql2 = builder.AddAzureSqlServer("sql2");
-var db2 = sql2.AddDatabase("db2");
+var sqlAzure = builder.AddAzureSqlServer("sqlAzure");
+var dbAzure = sqlAzure.AddDatabase("dbAzure");
+
+var sqlNoTls = builder.AddSqlServer("sqlNoTls")
+    .WithoutHttpsCertificate();
 
 var dbsetup = builder.AddProject<Projects.SqlServerEndToEnd_DbSetup>("dbsetup")
-                     .WithReference(db1).WaitFor(sql1)
-                     .WithReference(db2).WaitFor(sql2);
+                     .WithReference(dbLocal).WaitFor(sqlLocal)
+                     .WithReference(dbAzure).WaitFor(sqlAzure);
 
 builder.AddProject<Projects.SqlServerEndToEnd_ApiService>("api")
        .WithExternalHttpEndpoints()
-       .WithReference(db1).WaitFor(db1)
-       .WithReference(db2).WaitFor(db2)
+       .WithReference(dbLocal).WaitFor(dbLocal)
+       .WithReference(dbAzure).WaitFor(dbAzure)
        .WaitForCompletion(dbsetup);
 
 #if !SKIP_DASHBOARD_REFERENCE

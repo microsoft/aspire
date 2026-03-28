@@ -9,8 +9,11 @@ using Aspire.Hosting.ApplicationModel;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting;
+
+#pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 /// <summary>
 /// Provides extension methods for adding SQL Server resources to the application model.
@@ -49,7 +52,7 @@ public static partial class SqlServerBuilderExtensions
         var healthCheckKey = $"{name}_check";
         builder.Services.AddHealthChecks().AddSqlServer(sp => connectionString ?? throw new InvalidOperationException("Connection string is unavailable"), name: healthCheckKey);
 
-        return builder.AddResource(sqlServer)
+        var sqlBuilder = builder.AddResource(sqlServer)
                       .WithEndpoint(port: port, targetPort: 1433, name: SqlServerServerResource.PrimaryEndpointName)
                       .WithImage(SqlServerContainerImageTags.Image, SqlServerContainerImageTags.Tag)
                       .WithImageRegistry(SqlServerContainerImageTags.Registry)
@@ -89,6 +92,55 @@ public static partial class SqlServerBuilderExtensions
                               await CreateDatabaseAsync(sqlConnection, sqlDatabase, @event.Services, ct).ConfigureAwait(false);
                           }
                       });
+
+        return sqlBuilder
+            .SubscribeHttpsEndpointsUpdate(ctx => 
+            {
+                var executionContext = ctx.Services.GetRequiredService<DistributedApplicationExecutionContext>();
+
+                // Dev cert versions prior to 6 don't include "127.0.0.1" in the SAN, and so won't be trusted
+                // So only enable TLS if we have a custom cert, or a dev cert with version 6 or higher.
+                if (executionContext.IsRunMode)
+                {
+                    ctx.Resource.TryGetLastAnnotation<HttpsCertificateAnnotation>(out var certAnnotation);
+
+                    if (certAnnotation == null || certAnnotation.UseDeveloperCertificate == true)
+                    {
+                        var devCertService = ctx.Services.GetRequiredService<IDeveloperCertificateService>();
+                        var cert = devCertService.Certificates.First();
+                        if (cert.GetCertificateVersion() < 6)
+                        {
+                            return;
+                        }
+                    }
+                }
+
+                sqlBuilder.WithEndpoint(SqlServerServerResource.PrimaryEndpointName, x => x.TlsEnabled = true);
+            })
+            .WithContainerFiles("/var/opt/mssql/", async (ctx, ct) =>
+            {
+                var certContext = ctx.HttpsCertificateContext;
+
+                if (certContext is null)
+                {
+                    return [];
+                }
+
+                var config = $"""
+                    [network]
+                    tlscert = {await certContext.CertificatePath.GetValueAsync(ct).ConfigureAwait(false)}
+                    tlskey = {await certContext.KeyPath.GetValueAsync(ct).ConfigureAwait(false)}
+                    forceencryption = 1
+                    """;
+
+                return [
+                    new ContainerFile
+                    {
+                        Name = "mssql.conf",
+                        Contents = config
+                    }
+                ];
+            });
     }
 
     /// <summary>

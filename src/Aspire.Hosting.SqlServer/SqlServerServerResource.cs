@@ -45,9 +45,19 @@ public class SqlServerServerResource : ContainerResource, IResourceWithConnectio
     /// </summary>
     public ParameterResource PasswordParameter { get; private set; }
 
-    private ReferenceExpression ConnectionString =>
-        ReferenceExpression.Create(
-            $"Server={PrimaryEndpoint.Property(EndpointProperty.IPV4Host)},{PrimaryEndpoint.Property(EndpointProperty.Port)};User ID={DefaultUserName};Password={PasswordParameter};TrustServerCertificate=true");
+    private ReferenceExpression BuildConnectionString()
+    {
+        var builder = new ReferenceExpressionBuilder();
+
+        builder.Append($"Server={PrimaryEndpoint.Property(EndpointProperty.IPV4Host)},{PrimaryEndpoint.Property(EndpointProperty.Port)};");
+        builder.Append($";User ID={UserNameReference}");
+        builder.Append($";Password={PasswordParameter}");
+        builder.Append($"{PrimaryEndpoint.GetTlsValue(
+            enabledValue: ReferenceExpression.Empty,
+            disabledValue: ReferenceExpression.Create($";TrustServerCertificate=true"))}");
+
+        return builder.Build();
+    }
 
     /// <summary>
     /// Gets a reference to the user name for the SQL Server.
@@ -69,19 +79,17 @@ public class SqlServerServerResource : ContainerResource, IResourceWithConnectio
     internal ReferenceExpression BuildJdbcConnectionString(string? databaseName = null)
     {
         var builder = new ReferenceExpressionBuilder();
-        builder.AppendLiteral("jdbc:sqlserver://");
-        builder.Append($"{Host}");
-        builder.AppendLiteral(":");
-        builder.Append($"{Port}");
+
+        builder.Append($"jdbc:sqlserver://{Host}:{Port}");
 
         if (!string.IsNullOrEmpty(databaseName))
         {
-            var databaseNameReference = ReferenceExpression.Create($"{databaseName:uri}");
-            builder.AppendLiteral(";databaseName=");
-            builder.Append($"{databaseNameReference}");
+            builder.Append($";databaseName={databaseName:uri}");
         }
 
-        builder.AppendLiteral(";trustServerCertificate=true");
+        builder.Append($"{PrimaryEndpoint.GetTlsValue(
+            enabledValue: ReferenceExpression.Empty,
+            disabledValue: ReferenceExpression.Create($";trustServerCertificate=true"))}");
 
         return builder.Build();
     }
@@ -90,9 +98,9 @@ public class SqlServerServerResource : ContainerResource, IResourceWithConnectio
     /// Gets the JDBC connection string for the SQL Server.
     /// </summary>
     /// <remarks>
-    /// <para>Format: <c>jdbc:sqlserver://{host}:{port};trustServerCertificate=true</c>.</para>
-    /// <para>User and password credentials are not included in the JDBC connection string. Use the <c>Username</c> and <c>Password</c> connection properties to access credentials.</para>
-    /// </remarks>
+    /// <para>Format: <c>jdbc:sqlserver://{Host}:{Port}[;databaseName={Database}][;trustServerCertificate=true]</c>.</para>
+    /// <para>User and password credentials are not included in the JDBC connection string.
+    /// Use the <c>Username</c> and <c>Password</c> connection properties to access credentials.</para>    /// </remarks>
     public ReferenceExpression JdbcConnectionString => BuildJdbcConnectionString();
 
     /// <summary>
@@ -107,7 +115,7 @@ public class SqlServerServerResource : ContainerResource, IResourceWithConnectio
                 return connectionStringAnnotation.Resource.ConnectionStringExpression;
             }
 
-            return ConnectionString;
+            return BuildConnectionString();
         }
     }
 
@@ -115,15 +123,10 @@ public class SqlServerServerResource : ContainerResource, IResourceWithConnectio
     /// Gets the connection string for the SQL Server.
     /// </summary>
     /// <param name="cancellationToken"> A <see cref="CancellationToken"/> to observe while waiting for the task to complete.</param>
-    /// <returns>A connection string for the SQL Server in the form "Server=host,port;User ID=sa;Password=password;TrustServerCertificate=true".</returns>
+    /// <returns>A connection string for the SQL Server in the form "Server=host,port;User ID=sa;Password=password", with "TrustServerCertificate=true" appended when a certificate is not configured.</returns>
     public ValueTask<string?> GetConnectionStringAsync(CancellationToken cancellationToken = default)
     {
-        if (this.TryGetLastAnnotation<ConnectionStringRedirectAnnotation>(out var connectionStringAnnotation))
-        {
-            return connectionStringAnnotation.Resource.GetConnectionStringAsync(cancellationToken);
-        }
-
-        return ConnectionString.GetValueAsync(cancellationToken);
+        return ConnectionStringExpression.GetValueAsync(cancellationToken);
     }
 
     private readonly Dictionary<string, string> _databases = new(StringComparers.ResourceName);
