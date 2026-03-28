@@ -20,30 +20,16 @@ public interface IDistributedApplicationPipeline
     /// <param name="action">The action to execute for this step.</param>
     /// <param name="dependsOn">The name of the step this step depends on, or a list of step names.</param>
     /// <param name="requiredBy">The name of the step that requires this step, or a list of step names.</param>
-    /// <param name="scheduledBy">The pipeline step target to schedule this step onto (e.g., a CI/CD job).</param>
     void AddStep(string name,
                  Func<PipelineStepContext, Task> action,
                  object? dependsOn = null,
-                 object? requiredBy = null,
-                 IPipelineStepTarget? scheduledBy = null);
+                 object? requiredBy = null);
 
     /// <summary>
     /// Adds a deployment step to the pipeline.
     /// </summary>
     /// <param name="step">The pipeline step to add.</param>
     void AddStep(PipelineStep step);
-
-    /// <summary>
-    /// Schedules an existing pipeline step onto a specific target (e.g., a CI/CD job).
-    /// This is useful for scheduling built-in steps that are already registered by
-    /// integrations or the core platform.
-    /// </summary>
-    /// <param name="stepName">The name of the existing step to schedule.</param>
-    /// <param name="target">The pipeline step target to schedule the step onto.</param>
-    /// <exception cref="InvalidOperationException">
-    /// Thrown when no step with the specified name exists in the pipeline.
-    /// </exception>
-    void ScheduleStep(string stepName, IPipelineStepTarget target);
 
     /// <summary>
     /// Registers a callback to be executed during the pipeline configuration phase.
@@ -57,18 +43,4 @@ public interface IDistributedApplicationPipeline
     /// <param name="context">The pipeline context for the execution.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
     Task ExecuteAsync(PipelineContext context);
-
-    /// <summary>
-    /// Resolves the active pipeline environment for the current invocation.
-    /// </summary>
-    /// <param name="cancellationToken">A token to cancel the operation.</param>
-    /// <returns>
-    /// The active <see cref="IPipelineEnvironment"/>. Returns a <see cref="LocalPipelineEnvironment"/>
-    /// if no declared environment passes its relevance check. Throws if multiple environments
-    /// report as relevant.
-    /// </returns>
-    /// <exception cref="InvalidOperationException">
-    /// Thrown when multiple pipeline environments report as relevant for the current invocation.
-    /// </exception>
-    Task<IPipelineEnvironment> GetEnvironmentAsync(CancellationToken cancellationToken = default);
 }

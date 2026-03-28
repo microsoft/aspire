@@ -64,7 +64,7 @@ public class ScheduleStepTests
         var target1 = new TestStepTarget("job1");
         var target2 = new TestStepTarget("job2");
 
-        pipeline.AddStep("my-step", _ => Task.CompletedTask, scheduledBy: target1);
+        pipeline.AddStep("my-step", _ => Task.CompletedTask, dependsOn: null, requiredBy: null, scheduledBy: target1);
         pipeline.ScheduleStep("my-step", target2);
 
         var steps = GetSteps(pipeline);

@@ -282,8 +282,24 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
     public void AddStep(string name,
         Func<PipelineStepContext, Task> action,
         object? dependsOn = null,
-        object? requiredBy = null,
-        IPipelineStepTarget? scheduledBy = null)
+        object? requiredBy = null)
+    {
+        AddStep(name, action, dependsOn, requiredBy, scheduledBy: null);
+    }
+
+    /// <summary>
+    /// Adds a deployment step to the pipeline with an optional scheduling target.
+    /// </summary>
+    /// <param name="name">The unique name of the step.</param>
+    /// <param name="action">The action to execute for this step.</param>
+    /// <param name="dependsOn">The name of the step this step depends on, or a list of step names.</param>
+    /// <param name="requiredBy">The name of the step that requires this step, or a list of step names.</param>
+    /// <param name="scheduledBy">The pipeline step target to schedule this step onto (e.g., a CI/CD job).</param>
+    public void AddStep(string name,
+        Func<PipelineStepContext, Task> action,
+        object? dependsOn,
+        object? requiredBy,
+        IPipelineStepTarget? scheduledBy)
     {
         if (_steps.Any(s => s.Name == name))
         {
