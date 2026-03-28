@@ -33,7 +33,7 @@
     `AspireProjectOrPackageReference` - maps to projects in `src/` or `src/Components/`
   -->
 
-  <Import Project="Sdk.props" Sdk="Aspire.AppHost.Sdk" Version="$(PackageVersion)" Condition="'$(IsAspireHost)' == 'true' and '$(RepoRoot)' == '' and '$(TestsRunningOutsideOfRepo)' == 'true'" />
+  <Import Project="Sdk.props" Sdk="Aspire.AppHost.Sdk" Version="$(AspireAppHostSdkVersion)" Condition="'$(IsAspireHost)' == 'true' and '$(RepoRoot)' == '' and '$(TestsRunningOutsideOfRepo)' == 'true'" />
 
   <PropertyGroup>
     <!-- copy by default only when archiving tests, and for test projects that support running out of repo -->
@@ -107,7 +107,33 @@
 
   <!-- Generate before the build so the projects can use this in a <None ..> item -->
   <Target Name="_GeneratePackagesVersionsProps" BeforeTargets="BeforeBuild" Condition="'$(DeployOutsideOfRepoSupportFiles)' == 'true' and '$(IsTestUtilityProject)' != 'true'">
-    <!-- Duplicate all the @(PackageVersion) items with the evaluated versions -->
+    <!-- Enumerate all src projects to get their per-package versions (respects SuppressFinalPackageVersion, etc.) -->
+    <ItemGroup>
+      <_SrcProjectsForVersions Include="$(RepoRoot)src\**\*.csproj"
+                               Exclude="$(RepoRoot)src\Aspire.ProjectTemplates\templates\**\*.csproj" />
+    </ItemGroup>
+
+    <MSBuild Projects="@(_SrcProjectsForVersions)"
+             Targets="ReturnPackageVersion"
+             BuildInParallel="true">
+      <Output TaskParameter="TargetOutputs" ItemName="_AspirePackageVersions" />
+    </MSBuild>
+
+    <!-- Format Aspire package versions as XML PackageVersion entries -->
+    <ItemGroup>
+      <_AspirePackageVersionXml Include="@(_AspirePackageVersions -> '&lt;PackageVersion Include=&quot;%(Identity)&quot; Version=&quot;%(Version)&quot; /&gt;')" />
+    </ItemGroup>
+
+    <!-- Extract the Aspire.AppHost.Sdk version for SDK imports in Aspire.RepoTesting.targets -->
+    <FindInList List="@(_AspirePackageVersions)" ItemSpecToFind="Aspire.AppHost.Sdk">
+      <Output TaskParameter="ItemFound" ItemName="_AppHostSdkItem" />
+    </FindInList>
+
+    <PropertyGroup>
+      <_AspireAppHostSdkVersion>%(_AppHostSdkItem.Version)</_AspireAppHostSdkVersion>
+    </PropertyGroup>
+
+    <!-- Duplicate all the @(PackageVersion) items (3rd-party packages) with the evaluated versions -->
     <ItemGroup>
       <_PackageVersionEvaluated Include="@(PackageVersion -> '&lt;PackageVersion Include=&quot;%(Identity)&quot; Version=&quot;%(Version)&quot; /&gt;')" />
 
@@ -126,12 +152,18 @@
       <Project>
         <PropertyGroup>
           <PackageVersion>$(PackageVersion)</PackageVersion>
+          <AspireAppHostSdkVersion>$(_AspireAppHostSdkVersion)</AspireAppHostSdkVersion>
 
           <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
         </PropertyGroup>
 
-        <ItemGroup>
+        <ItemGroup Label="3rd-party packages">
             @(_PackageVersionEvaluated, '
+            ')
+        </ItemGroup>
+
+        <ItemGroup Label="Aspire packages (dynamically computed)">
+            @(_AspirePackageVersionXml, '
             ')
         </ItemGroup>
 
@@ -165,6 +197,6 @@
     <AspireHostingSDKVersion>$(MajorVersion).$(MinorVersion).$(PatchVersion)</AspireHostingSDKVersion>
   </PropertyGroup>
 
-  <Import Project="Sdk.targets" Sdk="Aspire.AppHost.Sdk" Version="$(PackageVersion)" Condition="'$(IsAspireHost)' == 'true' and '$(RepoRoot)' == '' and '$(TestsRunningOutsideOfRepo)' == 'true'" />
+  <Import Project="Sdk.targets" Sdk="Aspire.AppHost.Sdk" Version="$(AspireAppHostSdkVersion)" Condition="'$(IsAspireHost)' == 'true' and '$(RepoRoot)' == '' and '$(TestsRunningOutsideOfRepo)' == 'true'" />
 
 </Project>
