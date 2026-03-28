@@ -237,6 +237,12 @@
         "icon": "$(globe)"
       },
       {
+        "command": "aspire-vscode.openAppHostSource",
+        "title": "%command.openAppHostSource%",
+        "category": "Aspire",
+        "icon": "$(go-to-file)"
+      },
+      {
         "command": "aspire-vscode.stopAppHost",
         "title": "%command.stopAppHost%",
         "category": "Aspire",
@@ -417,6 +423,10 @@
           "when": "false"
         },
         {
+          "command": "aspire-vscode.openAppHostSource",
+          "when": "false"
+        },
+        {
           "command": "aspire-vscode.stopResource",
           "when": "false"
         },
@@ -507,6 +517,11 @@
           "command": "aspire-vscode.openDashboard",
           "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost|workspaceResources)$/",
           "group": "inline"
+        },
+        {
+          "command": "aspire-vscode.openAppHostSource",
+          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost|workspaceResources)$/",
+          "group": "1_open@1"
         },
         {
           "command": "aspire-vscode.stopAppHost",

@@ -98,6 +98,8 @@ export const cliFoundAtDefaultPath = (path: string) => vscode.l10n.t('Aspire CLI
 export const selectDirectoryTitle = vscode.l10n.t('Select directory');
 export const selectFileTitle = vscode.l10n.t('Select file');
 export const enterPipelineStep = vscode.l10n.t('Enter the pipeline step to execute');
+export const appHostSourceNotFound = vscode.l10n.t('Could not determine the AppHost source file to open.');
+export const appHostSourceOpenFailed = (path: string) => vscode.l10n.t('Failed to open AppHost source file: {0}', path);
 
 // CodeLens strings
 export const codeLensDebugPipelineStep = vscode.l10n.t('$(bug) Debug pipeline step');

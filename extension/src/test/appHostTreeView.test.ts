@@ -1,6 +1,6 @@
 import * as assert from 'assert';
 import { shortenPath } from '../views/AppHostDataRepository';
-import { getResourceContextValue, getResourceIcon } from '../views/AspireAppHostTreeProvider';
+import { getResourceContextValue, getResourceIcon, resolveAppHostSourcePath } from '../views/AspireAppHostTreeProvider';
 import type { ResourceJson } from '../views/AppHostDataRepository';
 import { ResourceState, HealthStatus, StateStyle } from '../editor/resourceConstants';
 
@@ -43,6 +43,28 @@ suite('shortenPath', () => {
 
     test('two segments returns parent/filename', () => {
         assert.strictEqual(shortenPath('MyApp/AppHost.cs'), 'MyApp/AppHost.cs');
+    });
+});
+
+suite('resolveAppHostSourcePath', () => {
+    test('returns source files unchanged', () => {
+        assert.strictEqual(resolveAppHostSourcePath('/repo/MyApp/apphost.ts'), '/repo/MyApp/apphost.ts');
+        assert.strictEqual(resolveAppHostSourcePath('/repo/MyApp/AppHost.cs'), '/repo/MyApp/AppHost.cs');
+    });
+
+    test('prefers AppHost.cs for csproj paths', () => {
+        const result = resolveAppHostSourcePath('/repo/MyApp/MyApp.AppHost.csproj', candidate => candidate === '/repo/MyApp/AppHost.cs');
+        assert.strictEqual(result, '/repo/MyApp/AppHost.cs');
+    });
+
+    test('falls back to Program.cs for csproj paths', () => {
+        const result = resolveAppHostSourcePath('/repo/MyApp/MyApp.AppHost.csproj', candidate => candidate === '/repo/MyApp/Program.cs');
+        assert.strictEqual(result, '/repo/MyApp/Program.cs');
+    });
+
+    test('falls back to csproj when no source file is present', () => {
+        const result = resolveAppHostSourcePath('/repo/MyApp/MyApp.AppHost.csproj', () => false);
+        assert.strictEqual(result, '/repo/MyApp/MyApp.AppHost.csproj');
     });
 });
 
