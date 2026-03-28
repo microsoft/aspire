@@ -121,6 +121,7 @@ internal sealed class RootCommand : BaseRootCommand
         PublishCommand publishCommand,
         DeployCommand deployCommand,
         DoCommand doCommand,
+        PipelineCommand pipelineCommand,
         ConfigCommand configCommand,
         CacheCommand cacheCommand,
         CertificatesCommand certificatesCommand,
@@ -215,6 +216,7 @@ internal sealed class RootCommand : BaseRootCommand
         Subcommands.Add(doctorCommand);
         Subcommands.Add(deployCommand);
         Subcommands.Add(doCommand);
+        Subcommands.Add(pipelineCommand);
         Subcommands.Add(updateCommand);
         Subcommands.Add(extensionInternalCommand);
         Subcommands.Add(mcpCommand);

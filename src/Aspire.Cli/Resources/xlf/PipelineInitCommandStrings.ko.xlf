@@ -1,0 +1,32 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="ko" original="../PipelineInitCommandStrings.resx">
+    <body>
+      <trans-unit id="Description">
+        <source>Generate CI/CD pipeline workflow files from the app model (Preview)</source>
+        <target state="new">Generate CI/CD pipeline workflow files from the app model (Preview)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationCanceled">
+        <source>Pipeline initialization was canceled.</source>
+        <target state="new">Pipeline initialization was canceled.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationCompletedPrefix">
+        <source>PIPELINE INIT COMPLETED</source>
+        <target state="new">PIPELINE INIT COMPLETED</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationFailedPrefix">
+        <source>PIPELINE INIT FAILED</source>
+        <target state="new">PIPELINE INIT FAILED</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OutputPathArgumentDescription">
+        <source>The optional output path for generated pipeline files</source>
+        <target state="new">The optional output path for generated pipeline files</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>
