@@ -487,7 +487,12 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         this._terminalProvider.sendAspireCommandToAspireTerminal(`stop --apphost "${element.appHost.appHostPath}"`);
     }
 
-    async openAppHostSource(element: AppHostItem | WorkspaceResourcesItem): Promise<void> {
+    async openAppHostSource(element?: AppHostItem | WorkspaceResourcesItem): Promise<void> {
+        if (!element || !(element instanceof AppHostItem || element instanceof WorkspaceResourcesItem)) {
+            vscode.window.showWarningMessage(appHostSourceNotFound);
+            return;
+        }
+
         const appHostPath = element instanceof AppHostItem
             ? element.appHost.appHostPath
             : element.appHostPath;

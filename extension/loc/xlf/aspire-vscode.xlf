@@ -316,14 +316,14 @@
     <trans-unit id="extension.description">
       <source xml:lang="en">Official Aspire extension for Visual Studio Code</source>
     </trans-unit>
+    <trans-unit id="command.openAppHostSource">
+      <source xml:lang="en">Open AppHost source</source>
+    </trans-unit>
     <trans-unit id="command.openDashboard">
       <source xml:lang="en">Open Aspire Dashboard</source>
     </trans-unit>
     <trans-unit id="command.openTerminal">
       <source xml:lang="en">Open Aspire terminal</source>
-    </trans-unit>
-    <trans-unit id="command.openAppHostSource">
-      <source xml:lang="en">Open apphost code</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.codespacesLink">
       <source xml:lang="en">Open codespaces URL</source>
