@@ -16,8 +16,7 @@ export async function onRuntimeConfigLoaded(config) {
                 config.environmentVariables ??= {};
 
                 for (const [key, value] of Object.entries(envVars)) {
-                    const envKey = key.replaceAll(':', '__');
-                    config.environmentVariables[envKey] = value;
+                    config.environmentVariables[key] = value;
                 }
             }
         }
