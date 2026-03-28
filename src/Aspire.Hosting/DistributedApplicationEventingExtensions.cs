@@ -19,7 +19,7 @@ public static class DistributedApplicationEventingExtensions
     /// <param name="callback">A callback to handle the event.</param>
     /// <returns>The <paramref name="builder"/> for chaining.</returns>
     /// <remarks>If you need to ensure you only subscribe to the event once, see <see cref="Lifecycle.IDistributedApplicationEventingSubscriber"/>.</remarks>
-    [AspireExport("onBeforeStart", Description = "Subscribes a callback to the BeforeStartEvent event within the AppHost.")]
+    [AspireExportIgnore(Reason = "Complex generic delegates with event/CancellationToken types — not ATS-compatible.")]
     public static T OnBeforeStart<T>(this T builder, Func<BeforeStartEvent, CancellationToken, Task> callback)
         where T : IDistributedApplicationBuilder
         => builder.OnApplicationEvent(callback);
@@ -31,7 +31,7 @@ public static class DistributedApplicationEventingExtensions
     /// <param name="callback">A callback to handle the event.</param>
     /// <returns>The <paramref name="builder"/> for chaining.</returns>
     /// <remarks>If you need to ensure you only subscribe to the event once, see <see cref="Lifecycle.IDistributedApplicationEventingSubscriber"/>.</remarks>
-    [AspireExport("onBeforePublish", Description = "Subscribes a callback to the BeforePublishEvent event within the AppHost.")]
+    [AspireExportIgnore(Reason = "Complex generic delegates with event/CancellationToken types — not ATS-compatible.")]
     public static T OnBeforePublish<T>(this T builder, Func<BeforePublishEvent, CancellationToken, Task> callback)
         where T : IDistributedApplicationBuilder
         => builder.OnApplicationEvent(callback);
@@ -43,7 +43,7 @@ public static class DistributedApplicationEventingExtensions
     /// <param name="callback">A callback to handle the event.</param>
     /// <returns>The <paramref name="builder"/> for chaining.</returns>
     /// <remarks>If you need to ensure you only subscribe to the event once, see <see cref="Lifecycle.IDistributedApplicationEventingSubscriber"/>.</remarks>
-    [AspireExport("onAfterPublish", Description = "Subscribes a callback to the AfterPublishEvent event within the AppHost.")]
+    [AspireExportIgnore(Reason = "Complex generic delegates with event/CancellationToken types — not ATS-compatible.")]
     public static T OnAfterPublish<T>(this T builder, Func<AfterPublishEvent, CancellationToken, Task> callback)
         where T : IDistributedApplicationBuilder
         => builder.OnApplicationEvent(callback);
