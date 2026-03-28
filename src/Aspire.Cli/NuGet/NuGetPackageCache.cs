@@ -19,16 +19,21 @@ internal interface INuGetPackageCache
     Task<IEnumerable<NuGetPackage>> GetPackagesAsync(DirectoryInfo workingDirectory, string packageId, Func<string, bool>? filter, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken);
 }
 
-internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache memoryCache, AspireCliTelemetry telemetry, IFeatures features) : INuGetPackageCache
+/// <summary>
+/// Packages that have been superseded and should be hidden from integration listings by default.
+/// </summary>
+internal static class DeprecatedPackages
 {
-    private const int SearchPageSize = 1000;
-    
-    // List of deprecated packages that should be filtered by default
-    private static readonly HashSet<string> s_deprecatedPackages = new(StringComparer.OrdinalIgnoreCase)
+    public static readonly HashSet<string> All = new(StringComparer.OrdinalIgnoreCase)
     {
         "Aspire.Hosting.Dapr",
         "Aspire.Hosting.NodeJs"
     };
+}
+
+internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache memoryCache, AspireCliTelemetry telemetry, IFeatures features) : INuGetPackageCache
+{
+    private const int SearchPageSize = 1000;
 
     public async Task<IEnumerable<NuGetPackage>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
     {
@@ -134,7 +139,7 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
             // Apply deprecated package filter unless the user wants to show deprecated packages
             if (isOfficialPackage && !features.IsFeatureEnabled(KnownFeatures.ShowDeprecatedPackages, defaultValue: false))
             {
-                return !s_deprecatedPackages.Contains(p.Id);
+                return !DeprecatedPackages.All.Contains(p.Id);
             }
 
             return isOfficialPackage;
