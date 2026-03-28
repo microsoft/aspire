@@ -53,7 +53,7 @@ public static class DurableTaskResourceExtensions
     ///     .RunAsExisting("Endpoint=https://example;...;");
     /// </code>
     /// </example>
-    [AspireExport("runAsExisting", Description = "Configures the Durable Task scheduler to use an existing scheduler instance from a connection string.")]
+    [AspireExportIgnore(Reason = "Polyglot export is via RunAsExistingCore which accepts both string and parameter resource inputs.")]
     public static IResourceBuilder<DurableTaskSchedulerResource> RunAsExisting(this IResourceBuilder<DurableTaskSchedulerResource> builder, string connectionString)
     {
         if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
@@ -84,7 +84,7 @@ public static class DurableTaskResourceExtensions
     ///     .RunAsExisting(schedulerConnectionString);
     /// </code>
     /// </example>
-    [AspireExport("runAsExistingFromParameter", Description = "Configures the Durable Task scheduler to use an existing scheduler instance from a parameterized connection string.")]
+    [AspireExportIgnore(Reason = "Polyglot export is via RunAsExistingCore which accepts both string and parameter resource inputs.")]
     public static IResourceBuilder<DurableTaskSchedulerResource> RunAsExisting(this IResourceBuilder<DurableTaskSchedulerResource> builder, IResourceBuilder<ParameterResource> connectionString)
     {
         if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
@@ -94,6 +94,17 @@ public static class DurableTaskResourceExtensions
 
         return builder;
     }
+
+    [AspireExport("runAsExisting", Description = "Configures the Durable Task scheduler to use an existing scheduler instance from a connection string or parameter resource.")]
+    internal static IResourceBuilder<DurableTaskSchedulerResource> RunAsExistingCore(
+        this IResourceBuilder<DurableTaskSchedulerResource> builder,
+        [AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object connectionString)
+        => connectionString switch
+        {
+            string value => builder.RunAsExisting(value),
+            IResourceBuilder<ParameterResource> parameter => builder.RunAsExisting(parameter),
+            _ => throw new ArgumentException($"Unexpected connection string type: {connectionString.GetType().Name}", nameof(connectionString))
+        };
 
     /// <summary>
     /// Configures the Durable Task scheduler to run using the local emulator (only in non-publish modes).
@@ -231,7 +242,7 @@ public static class DurableTaskResourceExtensions
     /// var hub = scheduler.AddTaskHub("hub").WithTaskHubName("MyTaskHub");
     /// </code>
     /// </example>
-    [AspireExport("withTaskHubName", Description = "Sets the Durable Task hub name.")]
+    [AspireExportIgnore(Reason = "Polyglot export is via WithTaskHubNameCore which accepts both string and parameter resource inputs.")]
     public static IResourceBuilder<DurableTaskHubResource> WithTaskHubName(this IResourceBuilder<DurableTaskHubResource> builder, string taskHubName)
     {
         return builder.WithAnnotation(new DurableTaskHubNameAnnotation(taskHubName));
@@ -253,9 +264,20 @@ public static class DurableTaskResourceExtensions
     /// var hub = scheduler.AddTaskHub("hub").WithTaskHubName(taskHubName);
     /// </code>
     /// </example>
-    [AspireExport("withTaskHubNameFromParameter", Description = "Sets the Durable Task hub name from a parameter resource.")]
+    [AspireExportIgnore(Reason = "Polyglot export is via WithTaskHubNameCore which accepts both string and parameter resource inputs.")]
     public static IResourceBuilder<DurableTaskHubResource> WithTaskHubName(this IResourceBuilder<DurableTaskHubResource> builder, IResourceBuilder<ParameterResource> taskHubName)
     {
         return builder.WithAnnotation(new DurableTaskHubNameAnnotation(taskHubName.Resource));
     }
+
+    [AspireExport("withTaskHubName", Description = "Sets the Durable Task hub name from a string or parameter resource.")]
+    internal static IResourceBuilder<DurableTaskHubResource> WithTaskHubNameCore(
+        this IResourceBuilder<DurableTaskHubResource> builder,
+        [AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object taskHubName)
+        => taskHubName switch
+        {
+            string value => builder.WithTaskHubName(value),
+            IResourceBuilder<ParameterResource> parameter => builder.WithTaskHubName(parameter),
+            _ => throw new ArgumentException($"Unexpected task hub name type: {taskHubName.GetType().Name}", nameof(taskHubName))
+        };
 }
