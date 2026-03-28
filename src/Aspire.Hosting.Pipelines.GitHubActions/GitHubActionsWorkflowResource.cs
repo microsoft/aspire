@@ -11,8 +11,13 @@ namespace Aspire.Hosting.Pipelines.GitHubActions;
 /// <summary>
 /// Represents a GitHub Actions workflow as a pipeline environment resource.
 /// </summary>
+/// <remarks>
+/// A workflow can itself be used as a scheduling target via <see cref="IPipelineStepTarget"/>.
+/// When a step is scheduled onto a workflow (rather than a specific job), the resolver
+/// automatically creates a default stage and job to host the step.
+/// </remarks>
 [Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-public class GitHubActionsWorkflowResource(string name) : Resource(name), IPipelineEnvironment
+public class GitHubActionsWorkflowResource(string name) : Resource(name), IPipelineEnvironment, IPipelineStepTarget
 {
     private readonly List<GitHubActionsJobResource> _jobs = [];
     private readonly List<GitHubActionsStageResource> _stages = [];
@@ -31,6 +36,12 @@ public class GitHubActionsWorkflowResource(string name) : Resource(name), IPipel
     /// Gets the stages declared in this workflow.
     /// </summary>
     public IReadOnlyList<GitHubActionsStageResource> Stages => _stages;
+
+    /// <inheritdoc />
+    string IPipelineStepTarget.Id => Name;
+
+    /// <inheritdoc />
+    IPipelineEnvironment IPipelineStepTarget.Environment => this;
 
     /// <summary>
     /// Adds a stage to this workflow. Stages are a logical grouping of jobs.
@@ -70,5 +81,32 @@ public class GitHubActionsWorkflowResource(string name) : Resource(name), IPipel
         var job = new GitHubActionsJobResource(id, this);
         _jobs.Add(job);
         return job;
+    }
+
+    /// <summary>
+    /// Gets or creates the default stage for this workflow.
+    /// </summary>
+    /// <returns>The default <see cref="GitHubActionsStageResource"/>.</returns>
+    internal GitHubActionsStageResource GetOrAddDefaultStage()
+    {
+        for (var i = 0; i < _stages.Count; i++)
+        {
+            if (_stages[i].Name == "default")
+            {
+                return _stages[i];
+            }
+        }
+
+        return AddStage("default");
+    }
+
+    /// <summary>
+    /// Gets or creates a default job for this workflow by delegating to the default stage.
+    /// </summary>
+    /// <returns>The default <see cref="GitHubActionsJobResource"/>.</returns>
+    internal GitHubActionsJobResource GetOrAddDefaultJob()
+    {
+        var stage = GetOrAddDefaultStage();
+        return stage.GetOrAddDefaultJob();
     }
 }

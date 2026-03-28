@@ -25,33 +25,12 @@ internal static class SchedulingResolver
         ArgumentNullException.ThrowIfNull(steps);
         ArgumentNullException.ThrowIfNull(workflow);
 
-        var defaultJob = GetOrCreateDefaultJob(workflow);
-
-        // Build step-to-job mapping
+        // Build step-to-job mapping, resolving workflow/stage targets to concrete jobs
         var stepToJob = new Dictionary<string, GitHubActionsJobResource>(StringComparer.Ordinal);
 
         foreach (var step in steps)
         {
-            if (step.ScheduledBy is GitHubActionsJobResource job)
-            {
-                if (job.Workflow != workflow)
-                {
-                    throw new SchedulingValidationException(
-                        $"Step '{step.Name}' is scheduled on job '{job.Id}' from a different workflow. " +
-                        $"Steps can only be scheduled on jobs within the same workflow.");
-                }
-                stepToJob[step.Name] = job;
-            }
-            else if (step.ScheduledBy is not null)
-            {
-                throw new SchedulingValidationException(
-                    $"Step '{step.Name}' has a ScheduledBy target of type '{step.ScheduledBy.GetType().Name}' " +
-                    $"which is not a GitHubActionsJobResource.");
-            }
-            else
-            {
-                stepToJob[step.Name] = defaultJob;
-            }
+            stepToJob[step.Name] = ResolveJobForStep(step, workflow);
         }
 
         // Build step lookup
@@ -93,11 +72,6 @@ internal static class SchedulingResolver
             }
         }
 
-        if (!jobDependencies.ContainsKey(defaultJob.Id))
-        {
-            jobDependencies[defaultJob.Id] = [];
-        }
-
         // Also include any explicitly declared job dependencies
         foreach (var job in workflow.Jobs)
         {
@@ -123,6 +97,18 @@ internal static class SchedulingResolver
             list.Add(step);
         }
 
+        // The default job is whatever was auto-created during resolution (if any)
+        GitHubActionsJobResource? defaultJob = null;
+        for (var i = 0; i < workflow.Jobs.Count; i++)
+        {
+            if (workflow.Jobs[i].Id == "default")
+            {
+                defaultJob = workflow.Jobs[i];
+                break;
+            }
+        }
+        defaultJob ??= workflow.Jobs.Count > 0 ? workflow.Jobs[0] : null;
+
         return new SchedulingResult
         {
             StepToJob = stepToJob,
@@ -138,29 +124,36 @@ internal static class SchedulingResolver
         };
     }
 
-    private static GitHubActionsJobResource GetOrCreateDefaultJob(GitHubActionsWorkflowResource workflow)
+    private static GitHubActionsJobResource ResolveJobForStep(PipelineStep step, GitHubActionsWorkflowResource workflow)
     {
-        // If the workflow has no jobs, create a default one
-        if (workflow.Jobs.Count == 0)
+        return step.ScheduledBy switch
         {
-            return workflow.AddJob("default");
-        }
+            GitHubActionsJobResource job when job.Workflow != workflow =>
+                throw new SchedulingValidationException(
+                    $"Step '{step.Name}' is scheduled on job '{job.Id}' from a different workflow. " +
+                    $"Steps can only be scheduled on jobs within the same workflow."),
 
-        // If there's exactly one job, use it as the default
-        if (workflow.Jobs.Count == 1)
-        {
-            return workflow.Jobs[0];
-        }
+            GitHubActionsJobResource job => job,
 
-        // If there are multiple jobs, check if a "default" job exists
-        var defaultJob = workflow.Jobs.FirstOrDefault(j => j.Id == "default");
-        if (defaultJob is not null)
-        {
-            return defaultJob;
-        }
+            GitHubActionsStageResource stage when stage.Workflow != workflow =>
+                throw new SchedulingValidationException(
+                    $"Step '{step.Name}' is scheduled on stage '{stage.Name}' from a different workflow. " +
+                    $"Steps can only be scheduled on stages within the same workflow."),
 
-        // Use the first job as the default
-        return workflow.Jobs[0];
+            GitHubActionsStageResource stage => stage.GetOrAddDefaultJob(),
+
+            GitHubActionsWorkflowResource w when w != workflow =>
+                throw new SchedulingValidationException(
+                    $"Step '{step.Name}' is scheduled on workflow '{w.Name}' but is being resolved against workflow '{workflow.Name}'."),
+
+            GitHubActionsWorkflowResource w => w.GetOrAddDefaultJob(),
+
+            null => workflow.GetOrAddDefaultJob(),
+
+            _ => throw new SchedulingValidationException(
+                    $"Step '{step.Name}' has a ScheduledBy target of type '{step.ScheduledBy.GetType().Name}' " +
+                    $"which is not a recognized GitHub Actions target (workflow, stage, or job).")
+        };
     }
 
     private static void ValidateNoCycles(Dictionary<string, HashSet<string>> jobDependencies)
@@ -256,7 +249,7 @@ internal sealed class SchedulingResult
     public required Dictionary<string, IReadOnlyList<PipelineStep>> StepsPerJob { get; init; }
 
     /// <summary>
-    /// Gets the default job used for unscheduled steps.
+    /// Gets the default job used for unscheduled steps, or <c>null</c> if all steps were explicitly scheduled.
     /// </summary>
-    public required GitHubActionsJobResource DefaultJob { get; init; }
+    public GitHubActionsJobResource? DefaultJob { get; init; }
 }

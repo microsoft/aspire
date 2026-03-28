@@ -117,16 +117,18 @@ public class SchedulingResolverTests
         var workflow = new GitHubActionsWorkflowResource("deploy");
         var buildJob = workflow.AddJob("build");
 
-        var step1 = CreateStep("step1"); // No scheduledBy — goes to default job
-        var step2 = CreateStep("step2"); // No scheduledBy — goes to default job
+        var step1 = CreateStep("step1"); // No scheduledBy — goes to auto-created default job
+        var step2 = CreateStep("step2"); // No scheduledBy — goes to auto-created default job
         var step3 = CreateStep("step3", scheduledBy: buildJob);
 
         var result = SchedulingResolver.Resolve([step1, step2, step3], workflow);
 
-        // step1 and step2 should be on the default job (first job = build)
-        Assert.Same(buildJob, result.StepToJob["step1"]);
-        Assert.Same(buildJob, result.StepToJob["step2"]);
+        // step1 and step2 should be on the auto-created default job, separate from buildJob
+        Assert.Same(result.DefaultJob!, result.StepToJob["step1"]);
+        Assert.Same(result.DefaultJob!, result.StepToJob["step2"]);
         Assert.Same(buildJob, result.StepToJob["step3"]);
+        Assert.NotSame(buildJob, result.DefaultJob!);
+        Assert.Equal("default", result.DefaultJob!.Id);
     }
 
     [Fact]
@@ -136,18 +138,20 @@ public class SchedulingResolverTests
         var publishJob = workflow.AddJob("publish");
         var deployJob = workflow.AddJob("deploy");
 
-        var buildStep = CreateStep("build"); // No scheduledBy → default (first job = publish)
+        var buildStep = CreateStep("build"); // No scheduledBy → auto-created default job
         var publishStep = CreateStep("publish", publishJob, "build");
         var deployStep = CreateStep("deploy", deployJob, "publish");
 
         var result = SchedulingResolver.Resolve([buildStep, publishStep, deployStep], workflow);
 
-        // build goes to default job (publish, the first job)
-        Assert.Same(publishJob, result.StepToJob["build"]);
+        // build goes to the auto-created default job
+        Assert.Same(result.DefaultJob!, result.StepToJob["build"]);
         Assert.Same(publishJob, result.StepToJob["publish"]);
         Assert.Same(deployJob, result.StepToJob["deploy"]);
 
-        // deploy depends on publish job (since deploy-step depends on publish-step which is on publish)
+        // publish depends on default job (build-step is on default, publish-step depends on build-step)
+        Assert.Contains(result.DefaultJob!.Id, result.JobDependencies["publish"]);
+        // deploy depends on publish job
         Assert.Contains("publish", result.JobDependencies["deploy"]);
     }
 
@@ -177,9 +181,9 @@ public class SchedulingResolverTests
 
         var result = SchedulingResolver.Resolve([step1, step2], workflow);
 
-        Assert.Equal("default", result.DefaultJob.Id);
-        Assert.Same(result.DefaultJob, result.StepToJob["step1"]);
-        Assert.Same(result.DefaultJob, result.StepToJob["step2"]);
+        Assert.Equal("default", result.DefaultJob!.Id);
+        Assert.Same(result.DefaultJob!, result.StepToJob["step1"]);
+        Assert.Same(result.DefaultJob!, result.StepToJob["step2"]);
     }
 
     [Fact]
@@ -253,6 +257,106 @@ public class SchedulingResolverTests
             () => SchedulingResolver.Resolve([stepA, stepB], workflow));
 
         Assert.Contains("circular dependency", ex.Message);
+    }
+
+    [Fact]
+    public void Resolve_ScheduledByWorkflow_AutoCreatesDefaultJob()
+    {
+        var workflow = new GitHubActionsWorkflowResource("deploy");
+
+        var step = CreateStep("build-step", scheduledBy: workflow);
+
+        var result = SchedulingResolver.Resolve([step], workflow);
+
+        // Should auto-create a default stage + default job
+        Assert.Equal("default", result.DefaultJob!.Id);
+        Assert.Same(result.DefaultJob!, result.StepToJob["build-step"]);
+        Assert.Single(workflow.Stages);
+        Assert.Equal("default", workflow.Stages[0].Name);
+    }
+
+    [Fact]
+    public void Resolve_ScheduledByStage_AutoCreatesDefaultJobOnStage()
+    {
+        var workflow = new GitHubActionsWorkflowResource("deploy");
+        var buildStage = workflow.AddStage("build");
+
+        var step = CreateStep("build-step", scheduledBy: buildStage);
+
+        var result = SchedulingResolver.Resolve([step], workflow);
+
+        // Should auto-create a default job within the build stage (named "build-default")
+        var autoJob = result.StepToJob["build-step"];
+        Assert.Equal("build-default", autoJob.Id);
+        Assert.Single(buildStage.Jobs);
+        Assert.Same(autoJob, buildStage.Jobs[0]);
+    }
+
+    [Fact]
+    public void Resolve_ScheduledByStageAndJob_MixedTargets()
+    {
+        var workflow = new GitHubActionsWorkflowResource("deploy");
+        var buildStage = workflow.AddStage("build");
+        var deployJob = workflow.AddJob("deploy");
+
+        var buildStep = CreateStep("build-step", scheduledBy: buildStage);
+        var deployStep = CreateStep("deploy-step", deployJob, "build-step");
+
+        var result = SchedulingResolver.Resolve([buildStep, deployStep], workflow);
+
+        // build-step should be on the stage's auto-created default job
+        Assert.Equal("build-default", result.StepToJob["build-step"].Id);
+        Assert.Same(deployJob, result.StepToJob["deploy-step"]);
+
+        // deploy job should depend on build-default job
+        Assert.Contains("build-default", result.JobDependencies["deploy"]);
+    }
+
+    [Fact]
+    public void Resolve_ScheduledByWorkflow_WithExplicitJobs_StillAutoCreates()
+    {
+        var workflow = new GitHubActionsWorkflowResource("deploy");
+        var explicitJob = workflow.AddJob("publish");
+
+        // Schedule one step to workflow (auto-default), one to explicit job
+        var step1 = CreateStep("setup", scheduledBy: workflow);
+        var step2 = CreateStep("publish", explicitJob, "setup");
+
+        var result = SchedulingResolver.Resolve([step1, step2], workflow);
+
+        Assert.Same(result.DefaultJob!, result.StepToJob["setup"]);
+        Assert.Same(explicitJob, result.StepToJob["publish"]);
+        Assert.NotSame(explicitJob, result.DefaultJob!);
+        Assert.Contains(result.DefaultJob!.Id, result.JobDependencies["publish"]);
+    }
+
+    [Fact]
+    public void Resolve_ScheduledByStageFromDifferentWorkflow_Throws()
+    {
+        var workflow1 = new GitHubActionsWorkflowResource("deploy");
+        var workflow2 = new GitHubActionsWorkflowResource("other");
+        var stage = workflow2.AddStage("build");
+
+        var step = CreateStep("step1", scheduledBy: stage);
+
+        var ex = Assert.Throws<SchedulingValidationException>(
+            () => SchedulingResolver.Resolve([step], workflow1));
+
+        Assert.Contains("different workflow", ex.Message);
+    }
+
+    [Fact]
+    public void Resolve_ScheduledByDifferentWorkflow_Throws()
+    {
+        var workflow1 = new GitHubActionsWorkflowResource("deploy");
+        var workflow2 = new GitHubActionsWorkflowResource("other");
+
+        var step = CreateStep("step1", scheduledBy: workflow2);
+
+        var ex = Assert.Throws<SchedulingValidationException>(
+            () => SchedulingResolver.Resolve([step], workflow1));
+
+        Assert.Contains("workflow", ex.Message);
     }
 
     // Helper methods
