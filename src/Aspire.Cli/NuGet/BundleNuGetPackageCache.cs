@@ -24,7 +24,8 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
     // List of deprecated packages that should be filtered by default
     private static readonly HashSet<string> s_deprecatedPackages = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Aspire.Hosting.Dapr"
+        "Aspire.Hosting.Dapr",
+        "Aspire.Hosting.NodeJs"
     };
 
     public BundleNuGetPackageCache(

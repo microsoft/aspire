@@ -26,7 +26,8 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
     // List of deprecated packages that should be filtered by default
     private static readonly HashSet<string> s_deprecatedPackages = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Aspire.Hosting.Dapr"
+        "Aspire.Hosting.Dapr",
+        "Aspire.Hosting.NodeJs"
     };
 
     public async Task<IEnumerable<NuGetPackage>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
