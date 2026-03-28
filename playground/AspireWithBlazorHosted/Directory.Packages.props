@@ -1,9 +1,15 @@
 <Project>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Packages.props', '$(MSBuildThisFileDirectory)../'))" />
 
-  <!-- WebAssembly packages needed for Blazor hosted client -->
+  <!-- Pin all packages to 8.x versions compatible with net8.0 shared framework.
+       The repo CPM uses 10.x versions, but these assemblies get loaded by the
+       hosted Blazor server which runs on net8.0 ASP.NET Core shared framework. -->
   <ItemGroup>
     <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly" Version="8.0.16" />
     <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="8.0.16" />
+    <PackageVersion Update="Microsoft.Extensions.Http" Version="8.0.1" />
+    <PackageVersion Update="Microsoft.Extensions.Http.Resilience" Version="8.10.0" />
+    <PackageVersion Update="Microsoft.Extensions.ServiceDiscovery" Version="8.2.2" />
+    <PackageVersion Update="Microsoft.Extensions.ServiceDiscovery.Yarp" Version="8.2.2" />
   </ItemGroup>
 </Project>

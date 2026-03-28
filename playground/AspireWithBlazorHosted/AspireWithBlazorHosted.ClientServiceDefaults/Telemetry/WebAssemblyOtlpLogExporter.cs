@@ -2,11 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net.Http.Headers;
-using AspireWithBlazorStandalone.ClientServiceDefaults.Telemetry.Serializer;
+using AspireWithBlazorHosted.ClientServiceDefaults.Telemetry.Serializer;
 using OpenTelemetry;
 using OpenTelemetry.Logs;
 
-namespace AspireWithBlazorStandalone.ClientServiceDefaults.Telemetry;
+namespace AspireWithBlazorHosted.ClientServiceDefaults.Telemetry;
 
 public sealed class WebAssemblyOtlpLogExporter : BaseExporter<LogRecord>
 {

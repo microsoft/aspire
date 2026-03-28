@@ -4,7 +4,7 @@
 using System.Diagnostics;
 using OpenTelemetry;
 
-namespace AspireWithBlazorStandalone.ClientServiceDefaults.Telemetry;
+namespace AspireWithBlazorHosted.ClientServiceDefaults.Telemetry;
 
 public sealed class TaskBasedBatchExportProcessor<T> : BaseExportProcessor<T> where T : class
 {

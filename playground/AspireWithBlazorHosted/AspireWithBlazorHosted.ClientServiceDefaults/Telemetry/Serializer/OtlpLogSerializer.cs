@@ -4,7 +4,7 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 
-namespace AspireWithBlazorStandalone.ClientServiceDefaults.Telemetry.Serializer;
+namespace AspireWithBlazorHosted.ClientServiceDefaults.Telemetry.Serializer;
 
 internal static class OtlpLogSerializer
 {

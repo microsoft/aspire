@@ -4,7 +4,7 @@
 using System.Runtime.CompilerServices;
 using System.Text;
 
-namespace AspireWithBlazorStandalone.ClientServiceDefaults.Telemetry.Serializer;
+namespace AspireWithBlazorHosted.ClientServiceDefaults.Telemetry.Serializer;
 
 internal static class ProtobufSerializer
 {

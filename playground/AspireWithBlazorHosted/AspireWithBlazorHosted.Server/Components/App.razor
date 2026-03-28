@@ -1,4 +1,5 @@
-﻿<!DOCTYPE html>
+﻿@inject IConfiguration Configuration
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -14,6 +15,14 @@
 
 <body>
     <Routes />
+    @{
+        var configResponse = Configuration["Client:ConfigResponse"];
+        if (!string.IsNullOrEmpty(configResponse))
+        {
+            var encoded = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(configResponse));
+            @((MarkupString)$"<!--Blazor-Client-Config:{encoded}-->")
+        }
+    }
     <script src="_framework/blazor.web.js"></script>
 </body>
 

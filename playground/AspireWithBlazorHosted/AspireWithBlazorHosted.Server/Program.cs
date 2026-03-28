@@ -12,6 +12,14 @@ builder.Services.AddReverseProxy()
     .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"))
     .AddServiceDiscoveryDestinationResolver();
 
+// Register the same named HttpClient used by the WASM client's Weather component.
+// During prerendering the component runs on the server, so the server needs
+// this registration to resolve "https+http://weatherapi" via service discovery.
+builder.Services.AddHttpClient("weatherapi", client =>
+{
+    client.BaseAddress = new Uri("https+http://weatherapi");
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -33,11 +41,6 @@ app.UseAntiforgery();
 
 app.UseStaticFiles();
 app.MapReverseProxy();
-
-// Configuration endpoint — return the pre-built JSON from the hosting layer
-app.MapGet(
-    app.Configuration["Client:ConfigEndpointPath"] ?? "/_blazor/_configuration",
-    (IConfiguration config) => Results.Content(config["Client:ConfigResponse"]!, "application/json"));
 
 app.MapRazorComponents<App>()
     .AddInteractiveWebAssemblyRenderMode()

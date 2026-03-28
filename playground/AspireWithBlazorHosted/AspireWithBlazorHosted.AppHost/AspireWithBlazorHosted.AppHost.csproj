@@ -17,6 +17,8 @@
     <AspireProjectOrPackageReference Include="Aspire.Hosting" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Blazor" />
+    <!-- AppHost runs on .NET 10; pin Http to 10.x to match Aspire.Hosting -->
+    <PackageReference Include="Microsoft.Extensions.Http" VersionOverride="$(MicrosoftExtensionsHttpPreviewVersion)" />
   </ItemGroup>
 
   <ItemGroup>

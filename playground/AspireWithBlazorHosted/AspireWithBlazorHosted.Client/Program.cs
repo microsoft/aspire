@@ -23,6 +23,7 @@ var host = builder.Build();
 
 // WebAssembly does not support IHostedService, so TelemetryHostedService is never started.
 // We must force initialization of MeterProvider and TracerProvider manually.
+// See: https://github.com/dotnet/aspire/issues/2816
 _ = host.Services.GetService<MeterProvider>();
 _ = host.Services.GetService<TracerProvider>();
 

@@ -16,6 +16,7 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi");
 
         builder.AddProject<TestProjectMetadata>("blazorapp")
+            .WithHttpsEndpoint()
             .ProxyService(weatherApi);
 
         var blazorApp = builder.Resources.Single(r => r.Name == "blazorapp");
@@ -35,13 +36,14 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi");
 
         builder.AddProject<TestProjectMetadata>("blazorapp")
+            .WithHttpsEndpoint()
             .ProxyService(weatherApi);
 
         var blazorApp = builder.Resources.Single(r => r.Name == "blazorapp");
         var env = await GetEnvironmentVariables(blazorApp, builder);
 
         Assert.True(env.ContainsKey("Client__ConfigResponse"));
-        var configJson = (string)env["Client__ConfigResponse"];
+        var configJson = ResolveManifestExpression(env["Client__ConfigResponse"]);
         Assert.Contains("services__weatherapi__https__0", configJson);
         Assert.Contains("/_api/weatherapi", configJson);
         Assert.Equal("/_blazor/_configuration", env["Client__ConfigEndpointPath"]);
@@ -53,6 +55,7 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         builder.AddProject<TestProjectMetadata>("blazorapp")
+            .WithHttpsEndpoint()
             .ProxyTelemetry();
 
         var blazorApp = builder.Resources.Single(r => r.Name == "blazorapp");
@@ -69,12 +72,13 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         builder.AddProject<TestProjectMetadata>("blazorapp")
+            .WithHttpsEndpoint()
             .ProxyTelemetry();
 
         var blazorApp = builder.Resources.Single(r => r.Name == "blazorapp");
         var env = await GetEnvironmentVariables(blazorApp, builder);
 
-        var configJson = (string)env["Client__ConfigResponse"];
+        var configJson = ResolveManifestExpression(env["Client__ConfigResponse"]);
         Assert.Contains("OTEL_SERVICE_NAME", configJson);
         Assert.Contains("blazorapp", configJson);
         Assert.Contains("OTEL_EXPORTER_OTLP_ENDPOINT", configJson);
@@ -89,6 +93,7 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi");
 
         builder.AddProject<TestProjectMetadata>("blazorapp")
+            .WithHttpsEndpoint()
             .ProxyService(weatherApi)
             .ProxyTelemetry();
 
@@ -102,7 +107,7 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         Assert.True(env.ContainsKey("ReverseProxy__Routes__route-otlp__ClusterId"));
 
         // Config response includes both service URLs and OTLP
-        var configJson = (string)env["Client__ConfigResponse"];
+        var configJson = ResolveManifestExpression(env["Client__ConfigResponse"]);
         Assert.Contains("services__weatherapi__https__0", configJson);
         Assert.Contains("OTEL_EXPORTER_OTLP_ENDPOINT", configJson);
         Assert.Contains("OTEL_SERVICE_NAME", configJson);
@@ -117,6 +122,7 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         var catalogApi = builder.AddProject<TestProjectMetadata>("catalogapi");
 
         builder.AddProject<TestProjectMetadata>("blazorapp")
+            .WithHttpsEndpoint()
             .ProxyService(weatherApi)
             .ProxyService(catalogApi);
 
@@ -128,7 +134,7 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         Assert.True(env.ContainsKey("ReverseProxy__Routes__route-catalogapi__ClusterId"));
 
         // Config response includes both services
-        var configJson = (string)env["Client__ConfigResponse"];
+        var configJson = ResolveManifestExpression(env["Client__ConfigResponse"]);
         Assert.Contains("services__weatherapi__https__0", configJson);
         Assert.Contains("services__catalogapi__https__0", configJson);
     }
@@ -141,13 +147,14 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi");
 
         builder.AddProject<TestProjectMetadata>("blazorapp")
+            .WithHttpsEndpoint()
             .ProxyService(weatherApi);
 
         var blazorApp = builder.Resources.Single(r => r.Name == "blazorapp");
         var env = await GetEnvironmentVariables(blazorApp, builder);
 
         // Hosted mode uses no path prefix — URLs are relative to root
-        var configJson = (string)env["Client__ConfigResponse"];
+        var configJson = ResolveManifestExpression(env["Client__ConfigResponse"]);
         Assert.Contains("/_api/weatherapi", configJson);
         Assert.DoesNotContain("/blazorapp/", configJson);
     }
@@ -160,6 +167,7 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi");
 
         builder.AddProject<TestProjectMetadata>("blazorapp")
+            .WithHttpsEndpoint()
             .ProxyService(weatherApi);
 
         var blazorApp = builder.Resources.Single(r => r.Name == "blazorapp");
@@ -168,7 +176,7 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         // Without ProxyTelemetry, no OTLP routes or config
         Assert.False(env.ContainsKey("ReverseProxy__Routes__route-otlp__ClusterId"));
 
-        var configJson = (string)env["Client__ConfigResponse"];
+        var configJson = ResolveManifestExpression(env["Client__ConfigResponse"]);
         Assert.DoesNotContain("OTEL_EXPORTER_OTLP_ENDPOINT", configJson);
     }
 
@@ -182,6 +190,15 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
             await callback.Callback(context).ConfigureAwait(false);
         }
         return env;
+    }
+
+    private static string ResolveManifestExpression(object value)
+    {
+        if (value is IManifestExpressionProvider provider)
+        {
+            return provider.ValueExpression;
+        }
+        return (string)value;
     }
 
     private sealed class TestProjectMetadata : IProjectMetadata
