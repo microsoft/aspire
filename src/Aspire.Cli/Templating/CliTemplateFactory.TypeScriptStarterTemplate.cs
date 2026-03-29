@@ -76,6 +76,10 @@ internal sealed partial class CliTemplateFactory
                     if (appHostProject is not IGuestAppHostSdkGenerator guestProject)
                     {
                         _interactionService.DisplayError("Automatic 'aspire restore' is unavailable for the new TypeScript starter project because no TypeScript AppHost SDK generator was found.");
+                        if (Directory.Exists(outputPath))
+                        {
+                            Directory.Delete(outputPath, true);
+                        }
                         return new TemplateResult(ExitCodeConstants.FailedToBuildArtifacts, outputPath);
                     }
 
