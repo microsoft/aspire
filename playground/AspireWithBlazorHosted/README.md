@@ -4,7 +4,7 @@ This sample demonstrates how to integrate a **hosted Blazor WebAssembly** applic
 
 ## Overview
 
-In the hosted model, a Blazor Server application hosts the WebAssembly client. The `Aspire.Hosting.Blazor` package provides `ProxyService()` and `ProxyTelemetry()` extension methods that configure the server to:
+In the hosted model, an ASP.NET Core application hosts the WebAssembly client. The `Aspire.Hosting.Blazor` package provides `ProxyService()` and `ProxyTelemetry()` extension methods that configure the server to:
 
 - Proxy API requests from the WASM client to backend services via YARP
 - Proxy OTLP telemetry from the WASM client to the Aspire dashboard
@@ -22,7 +22,7 @@ This enables:
 graph TB
     subgraph AppHost["Aspire AppHost"]
         Dashboard["Dashboard<br/>(OTLP + UI)"]
-        BlazorApp["blazorapp<br/>(Blazor Server + WASM host)"]
+        BlazorApp["blazorapp<br/>(Blazor App with client components)"]
         WeatherAPI["weatherapi<br/>(Web API)"]
     end
 

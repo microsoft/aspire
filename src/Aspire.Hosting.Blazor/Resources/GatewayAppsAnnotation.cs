@@ -18,7 +18,9 @@ internal class GatewayAppsAnnotation : IResourceAnnotation
 internal record GatewayAppRegistration(
     IResourceBuilder<BlazorWasmAppResource> AppBuilder,
     string PathPrefix,
-    string[] ServiceNames)
+    string[] ServiceNames,
+    string ApiPrefix = GatewayConfigurationBuilder.DefaultApiPrefix,
+    string OtlpPrefix = GatewayConfigurationBuilder.DefaultOtlpPrefix)
 {
     public BlazorWasmAppResource Resource => AppBuilder.Resource;
 }
