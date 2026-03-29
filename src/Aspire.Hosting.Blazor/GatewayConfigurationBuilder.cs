@@ -34,9 +34,11 @@ internal static class GatewayConfigurationBuilder
             // Per-app client config: use an IValueProvider that resolves the gateway URL
             // at startup and builds the final JSON response.
             env[$"{envPrefix}__ConfigResponse"] = new ClientConfigValueProvider(
-                gatewayEndpoint, prefix, reg.Resource.Name, reg.ServiceNames, proxyTelemetry: true, otlpHeaders);
+                gatewayEndpoint, prefix, reg.Resource.Name, reg.ServiceNames, proxyTelemetry: true, otlpHeaders,
+                reg.ApiPrefix, reg.OtlpPrefix);
 
-            EmitYarpRoutes(env, prefix, reg.Resource.Name, reg.ServiceNames, proxyTelemetry: true, addedClusters);
+            EmitYarpRoutes(env, prefix, reg.Resource.Name, reg.ServiceNames, proxyTelemetry: true, addedClusters,
+                reg.ApiPrefix, reg.OtlpPrefix);
         }
 
         EmitOtlpCluster(env);
@@ -52,16 +54,20 @@ internal static class GatewayConfigurationBuilder
         string resourceName,
         string[] serviceNames,
         bool proxyTelemetry,
-        string? httpOtlpEndpointUrl)
+        string? httpOtlpEndpointUrl,
+        string apiPrefix = DefaultApiPrefix,
+        string otlpPrefix = DefaultOtlpPrefix)
     {
         // Capture OTLP headers so the WASM client can send them directly
         env.TryGetValue("OTEL_EXPORTER_OTLP_HEADERS", out var otlpHeaders);
 
         env["Client__ConfigResponse"] = new ClientConfigValueProvider(
-            hostEndpoint, prefix: null, resourceName, serviceNames, proxyTelemetry, otlpHeaders);
+            hostEndpoint, prefix: null, resourceName, serviceNames, proxyTelemetry, otlpHeaders,
+            apiPrefix, otlpPrefix);
         env["Client__ConfigEndpointPath"] = "/_blazor/_configuration";
 
-        EmitYarpRoutes(env, prefix: null, resourceName, serviceNames, proxyTelemetry, addedClusters: null);
+        EmitYarpRoutes(env, prefix: null, resourceName, serviceNames, proxyTelemetry, addedClusters: null,
+            apiPrefix, otlpPrefix);
 
         if (proxyTelemetry)
         {
@@ -70,17 +76,24 @@ internal static class GatewayConfigurationBuilder
     }
 
     /// <summary>
-    /// Emits YARP route and cluster entries for service proxying and (optionally) OTLP proxying.
-    /// When <paramref name="prefix"/> is null, routes are emitted without a path prefix (hosted model).
-    /// When <paramref name="addedClusters"/> is provided, clusters are deduplicated across apps.
+    /// Default URL path segment for proxying API requests to backend services.
     /// </summary>
+    internal const string DefaultApiPrefix = "_api";
+
+    /// <summary>
+    /// Default URL path segment for proxying OTLP telemetry to the Aspire dashboard.
+    /// </summary>
+    internal const string DefaultOtlpPrefix = "_otlp";
+
     private static void EmitYarpRoutes(
         IDictionary<string, object> env,
         string? prefix,
         string resourceName,
         string[] serviceNames,
         bool proxyTelemetry,
-        HashSet<string>? addedClusters)
+        HashSet<string>? addedClusters,
+        string apiPrefix = DefaultApiPrefix,
+        string otlpPrefix = DefaultOtlpPrefix)
     {
         var pathBase = prefix != null ? $"/{prefix}" : "";
 
@@ -90,8 +103,8 @@ internal static class GatewayConfigurationBuilder
             var clusterId = $"cluster-{svc}";
 
             env[$"ReverseProxy__Routes__{routeId}__ClusterId"] = clusterId;
-            env[$"ReverseProxy__Routes__{routeId}__Match__Path"] = $"{pathBase}/_api/{svc}/{{**catch-all}}";
-            env[$"ReverseProxy__Routes__{routeId}__Transforms__0__PathRemovePrefix"] = $"{pathBase}/_api/{svc}";
+            env[$"ReverseProxy__Routes__{routeId}__Match__Path"] = $"{pathBase}/{apiPrefix}/{svc}/{{**catch-all}}";
+            env[$"ReverseProxy__Routes__{routeId}__Transforms__0__PathRemovePrefix"] = $"{pathBase}/{apiPrefix}/{svc}";
 
             if (addedClusters == null || addedClusters.Add(clusterId))
             {
@@ -103,8 +116,8 @@ internal static class GatewayConfigurationBuilder
         {
             var otlpRouteId = prefix != null ? $"route-otlp-{resourceName}" : "route-otlp";
             env[$"ReverseProxy__Routes__{otlpRouteId}__ClusterId"] = "cluster-otlp-dashboard";
-            env[$"ReverseProxy__Routes__{otlpRouteId}__Match__Path"] = $"{pathBase}/_otlp/{{**catch-all}}";
-            env[$"ReverseProxy__Routes__{otlpRouteId}__Transforms__0__PathRemovePrefix"] = $"{pathBase}/_otlp";
+            env[$"ReverseProxy__Routes__{otlpRouteId}__Match__Path"] = $"{pathBase}/{otlpPrefix}/{{**catch-all}}";
+            env[$"ReverseProxy__Routes__{otlpRouteId}__Transforms__0__PathRemovePrefix"] = $"{pathBase}/{otlpPrefix}";
 
             if (env.TryGetValue("OTEL_EXPORTER_OTLP_HEADERS", out var headersObj) && headersObj is string headersStr)
             {
@@ -153,7 +166,9 @@ internal static class GatewayConfigurationBuilder
         string resourceName,
         string[] serviceNames,
         bool proxyTelemetry,
-        object? otlpHeaders) : IValueProvider, IManifestExpressionProvider
+        object? otlpHeaders,
+        string apiPrefix = DefaultApiPrefix,
+        string otlpPrefix = DefaultOtlpPrefix) : IValueProvider, IManifestExpressionProvider
     {
         string IManifestExpressionProvider.ValueExpression =>
             BuildJson(((IManifestExpressionProvider)endpoint).ValueExpression, ResolveHeadersExpression());
@@ -196,11 +211,11 @@ internal static class GatewayConfigurationBuilder
             var environment = new Dictionary<string, string>();
             foreach (var svc in serviceNames)
             {
-                environment[$"services__{svc}__https__0"] = $"{baseUrl}{pathBase}/_api/{svc}";
+                environment[$"services__{svc}__https__0"] = $"{baseUrl}{pathBase}/{apiPrefix}/{svc}";
             }
             if (proxyTelemetry)
             {
-                environment["OTEL_EXPORTER_OTLP_ENDPOINT"] = $"{baseUrl}{pathBase}/_otlp/";
+                environment["OTEL_EXPORTER_OTLP_ENDPOINT"] = $"{baseUrl}{pathBase}/{otlpPrefix}/";
                 environment["OTEL_EXPORTER_OTLP_PROTOCOL"] = "http/protobuf";
                 environment["OTEL_SERVICE_NAME"] = resourceName;
                 if (!string.IsNullOrEmpty(resolvedHeaders))

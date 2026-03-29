@@ -123,7 +123,9 @@ public static class BlazorGatewayExtensions
     [AspireExportIgnore(Reason = "Blazor gateway APIs are not yet stable for ATS export.")]
     public static IResourceBuilder<ProjectResource> WithClient(
         this IResourceBuilder<ProjectResource> gateway,
-        IResourceBuilder<BlazorWasmAppResource> wasmApp)
+        IResourceBuilder<BlazorWasmAppResource> wasmApp,
+        string apiPrefix = GatewayConfigurationBuilder.DefaultApiPrefix,
+        string otlpPrefix = GatewayConfigurationBuilder.DefaultOtlpPrefix)
     {
         var pathPrefix = wasmApp.Resource.Name;
 
@@ -148,7 +150,7 @@ public static class BlazorGatewayExtensions
             }
         }
 
-        return gateway.WithBlazorApp(wasmApp, pathPrefix, serviceNames);
+        return gateway.WithBlazorApp(wasmApp, pathPrefix, serviceNames, apiPrefix, otlpPrefix);
     }
 
     /// <summary>
@@ -162,9 +164,11 @@ public static class BlazorGatewayExtensions
         this IResourceBuilder<ProjectResource> gateway,
         IResourceBuilder<BlazorWasmAppResource> wasmApp,
         string pathPrefix,
-        string[]? serviceNames = null)
+        string[]? serviceNames = null,
+        string apiPrefix = GatewayConfigurationBuilder.DefaultApiPrefix,
+        string otlpPrefix = GatewayConfigurationBuilder.DefaultOtlpPrefix)
     {
-        var registration = new GatewayAppRegistration(wasmApp, pathPrefix, serviceNames ?? []);
+        var registration = new GatewayAppRegistration(wasmApp, pathPrefix, serviceNames ?? [], apiPrefix, otlpPrefix);
 
         // Get or create the annotation on the gateway resource
         var annotation = GetOrAddGatewayAppsAnnotation(gateway.Resource);

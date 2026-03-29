@@ -15,19 +15,24 @@ public static class BlazorHostedExtensions
 {
     /// <summary>
     /// Configures the host to proxy requests from the WebAssembly client to the specified service.
-    /// The WASM client can reach this service via <c>/_api/{serviceName}/{path}</c>.
+    /// The WASM client can reach this service via <c>/{apiPrefix}/{serviceName}/{path}</c>.
     /// YARP routes and clusters are emitted as environment variables.
     /// A <c>/_blazor/_configuration</c> response is built so the WASM client gets the proxy URL.
     /// This is an explicit opt-in — <c>WithReference</c> makes the service available to the server,
     /// while <c>ProxyService</c> additionally makes it available to the WASM client.
     /// </summary>
+    /// <param name="host">The host resource builder.</param>
+    /// <param name="service">The service to proxy.</param>
+    /// <param name="apiPrefix">The URL path prefix for API proxy routes. Defaults to <c>"_api"</c>.</param>
     [AspireExportIgnore(Reason = "Blazor hosted APIs are not yet stable for ATS export.")]
     public static IResourceBuilder<ProjectResource> ProxyService(
         this IResourceBuilder<ProjectResource> host,
-        IResourceBuilder<IResourceWithServiceDiscovery> service)
+        IResourceBuilder<IResourceWithServiceDiscovery> service,
+        string apiPrefix = GatewayConfigurationBuilder.DefaultApiPrefix)
     {
         var annotation = GetOrAddHostedClientAnnotation(host.Resource);
         annotation.ServiceNames.Add(service.Resource.Name);
+        annotation.ApiPrefix = apiPrefix;
 
         // Forward the service reference to the host so YARP can resolve it via service discovery.
         var existingRefs = GetReferencedResourceNames(host.Resource);
@@ -43,16 +48,20 @@ public static class BlazorHostedExtensions
 
     /// <summary>
     /// Configures the host to proxy OpenTelemetry data from the WebAssembly client to the Aspire dashboard.
-    /// The WASM client sends OTLP data to <c>/_otlp/{path}</c> which gets forwarded to the dashboard.
+    /// The WASM client sends OTLP data to <c>/{otlpPrefix}/{path}</c> which gets forwarded to the dashboard.
     /// Also sets the <c>OTEL_SERVICE_NAME</c> in the client configuration so telemetry from the
     /// WASM client appears with the correct service name in the dashboard.
     /// </summary>
+    /// <param name="host">The host resource builder.</param>
+    /// <param name="otlpPrefix">The URL path prefix for OTLP proxy routes. Defaults to <c>"_otlp"</c>.</param>
     [AspireExportIgnore(Reason = "Blazor hosted APIs are not yet stable for ATS export.")]
     public static IResourceBuilder<ProjectResource> ProxyTelemetry(
-        this IResourceBuilder<ProjectResource> host)
+        this IResourceBuilder<ProjectResource> host,
+        string otlpPrefix = GatewayConfigurationBuilder.DefaultOtlpPrefix)
     {
         var annotation = GetOrAddHostedClientAnnotation(host.Resource);
         annotation.ProxyTelemetry = true;
+        annotation.OtlpPrefix = otlpPrefix;
 
         EnsureEnvironmentCallback(host, annotation);
 
@@ -85,7 +94,9 @@ public static class BlazorHostedExtensions
                 $"{host.Resource.Name} (client)",
                 annotation.ServiceNames.ToArray(),
                 annotation.ProxyTelemetry,
-                httpOtlpEndpointUrl);
+                httpOtlpEndpointUrl,
+                annotation.ApiPrefix,
+                annotation.OtlpPrefix);
         });
     }
 
@@ -126,4 +137,6 @@ internal class HostedClientAnnotation : IResourceAnnotation
     public List<string> ServiceNames { get; } = new();
     public bool ProxyTelemetry { get; set; }
     public bool IsInitialized { get; set; }
+    public string ApiPrefix { get; set; } = GatewayConfigurationBuilder.DefaultApiPrefix;
+    public string OtlpPrefix { get; set; } = GatewayConfigurationBuilder.DefaultOtlpPrefix;
 }
