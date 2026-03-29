@@ -27,7 +27,7 @@ public class WorkflowYamlGeneratorTests
         Assert.Contains(job.Steps, s => s.Name == "Checkout code");
         Assert.Contains(job.Steps, s => s.Name == "Setup .NET");
         Assert.Contains(job.Steps, s => s.Name == "Install Aspire CLI");
-        Assert.Contains(job.Steps, s => s.Run is not null && s.Run.Contains("aspire do build-app"));
+        Assert.Contains(job.Steps, s => s.Run is not null && s.Run.Contains("aspire do gha-deploy-default-stage-default-job"));
     }
 
     [Fact]
@@ -327,9 +327,8 @@ public class WorkflowYamlGeneratorTests
 
         var job = yaml.Jobs["default"];
         var installStep = Assert.Single(job.Steps, s => s.Name == "Install Aspire CLI");
-        // PR branch uses get-aspire-cli-pr.sh, else branch uses default install
-        Assert.Contains("get-aspire-cli-pr.sh", installStep.Run);
-        Assert.Contains("curl -sSL https://aspire.dev/install.sh | bash", installStep.Run);
+        // No config → default (stable) channel install
+        Assert.Equal("curl -sSL https://aspire.dev/install.sh | bash", installStep.Run);
     }
 
     [Fact]
@@ -346,9 +345,8 @@ public class WorkflowYamlGeneratorTests
 
         var job = yaml.Jobs["default"];
         var installStep = Assert.Single(job.Steps, s => s.Name == "Install Aspire CLI");
-        // "preview" is not a recognized channel — else branch uses default (stable) install
-        Assert.Contains("curl -sSL https://aspire.dev/install.sh | bash", installStep.Run);
-        Assert.DoesNotContain("-q ", installStep.Run!.Split('\n').First(l => l.Contains("aspire.dev")));
+        // "preview" is not a recognized channel — falls back to default (stable) install
+        Assert.Equal("curl -sSL https://aspire.dev/install.sh | bash", installStep.Run);
     }
 
     [Fact]
@@ -382,9 +380,8 @@ public class WorkflowYamlGeneratorTests
 
         var job = yaml.Jobs["default"];
         var installStep = Assert.Single(job.Steps, s => s.Name == "Install Aspire CLI");
-        // Stable channel: else branch uses default install (no -q flag)
-        Assert.Contains("curl -sSL https://aspire.dev/install.sh | bash", installStep.Run);
-        Assert.DoesNotContain("-q ", installStep.Run!.Split('\n').First(l => l.Contains("aspire.dev")));
+        // Stable channel: default install (no -q flag)
+        Assert.Equal("curl -sSL https://aspire.dev/install.sh | bash", installStep.Run);
     }
 
     [Fact]
@@ -402,6 +399,24 @@ public class WorkflowYamlGeneratorTests
         var job = yaml.Jobs["default"];
         var installStep = Assert.Single(job.Steps, s => s.Name == "Install Aspire CLI");
         Assert.Contains("-q staging", installStep.Run);
+    }
+
+    [Fact]
+    public void Generate_PrChannel_UsesPrInstallScript()
+    {
+        using var tempDir = new TempDirectory();
+        File.WriteAllText(Path.Combine(tempDir.Path, "aspire.config.json"), """{"channel": "pr-15643"}""");
+
+        var workflow = new GitHubActionsWorkflowResource("deploy");
+        var step = CreateStep("build-app");
+
+        var scheduling = SchedulingResolver.Resolve([step], workflow);
+        var yaml = WorkflowYamlGenerator.Generate(scheduling, workflow, tempDir.Path);
+
+        var job = yaml.Jobs["default"];
+        var installStep = Assert.Single(job.Steps, s => s.Name == "Install Aspire CLI");
+        Assert.Contains("get-aspire-cli-pr.sh", installStep.Run);
+        Assert.Contains("15643", installStep.Run);
     }
 
     // ConfigureWorkflow callback tests

@@ -443,7 +443,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
     public async Task ExecuteAsync(PipelineContext context)
     {
-        var annotationSteps = await CollectStepsFromAnnotationsAsync(context).ConfigureAwait(false);
+        var annotationSteps = await CollectStepsFromAnnotationsAsync(context, _steps).ConfigureAwait(false);
         var allSteps = _steps.Concat(annotationSteps).ToList();
 
         // Execute configuration callbacks even if there are no steps
@@ -628,10 +628,12 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         return result;
     }
 
-    private static async Task<List<PipelineStep>> CollectStepsFromAnnotationsAsync(PipelineContext context)
+    private static async Task<List<PipelineStep>> CollectStepsFromAnnotationsAsync(PipelineContext context, IReadOnlyList<PipelineStep> existingSteps)
     {
         var steps = new List<PipelineStep>();
+        var deferredAnnotations = new List<(IResource Resource, PipelineStepAnnotation Annotation)>();
 
+        // First pass: collect steps from non-pipeline-environment resources
         foreach (var resource in context.Model.Resources)
         {
             var annotations = resource.Annotations
@@ -639,10 +641,18 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
             foreach (var annotation in annotations)
             {
+                if (resource is IPipelineEnvironment)
+                {
+                    // Defer pipeline environment annotations — they need visibility of all collected steps
+                    deferredAnnotations.Add((resource, annotation));
+                    continue;
+                }
+
                 var factoryContext = new PipelineStepFactoryContext
                 {
                     PipelineContext = context,
-                    Resource = resource
+                    Resource = resource,
+                    ExistingSteps = existingSteps
                 };
 
                 var annotationSteps = await annotation.CreateStepsAsync(factoryContext).ConfigureAwait(false);
@@ -651,6 +661,26 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                     steps.Add(step);
                     step.Resource ??= resource;
                 }
+            }
+        }
+
+        // Second pass: pipeline environment annotations get full visibility of all collected steps.
+        // This enables workflow resources to run scheduling and create synthetic steps.
+        foreach (var (resource, annotation) in deferredAnnotations)
+        {
+            var allStepsSoFar = existingSteps.Concat(steps).ToList();
+            var factoryContext = new PipelineStepFactoryContext
+            {
+                PipelineContext = context,
+                Resource = resource,
+                ExistingSteps = allStepsSoFar
+            };
+
+            var annotationSteps = await annotation.CreateStepsAsync(factoryContext).ConfigureAwait(false);
+            foreach (var step in annotationSteps)
+            {
+                steps.Add(step);
+                step.Resource ??= resource;
             }
         }
 

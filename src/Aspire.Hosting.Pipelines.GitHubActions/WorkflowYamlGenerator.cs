@@ -51,14 +51,14 @@ internal static class WorkflowYamlGenerator
         // Generate a YAML job for each workflow job
         foreach (var job in workflow.Jobs)
         {
-            var jobYaml = GenerateJob(job, scheduling, channel);
+            var jobYaml = GenerateJob(job, scheduling, workflow, channel);
             workflowYaml.Jobs[job.Id] = jobYaml;
         }
 
         return workflowYaml;
     }
 
-    private static JobYaml GenerateJob(GitHubActionsJobResource job, SchedulingResult scheduling, string? channel)
+    private static JobYaml GenerateJob(GitHubActionsJobResource job, SchedulingResult scheduling, GitHubActionsWorkflowResource workflow, string? channel)
     {
         // Collect dependency tags from all pipeline steps assigned to this job
         var dependencyTags = new HashSet<string>(StringComparer.Ordinal);
@@ -155,19 +155,16 @@ internal static class WorkflowYamlGenerator
             }
         }
 
-        // Run aspire do — target the terminal step(s) for this job so all assigned steps execute
-        var terminalSteps = scheduling.TerminalStepsPerJob.GetValueOrDefault(job.Id);
-        var aspireDoCommand = terminalSteps switch
-        {
-            null or { Count: 0 } => "aspire do deploy",
-            { Count: 1 } => $"aspire do {terminalSteps[0]}",
-            _ => string.Join(" && ", terminalSteps.Select(s => $"aspire do {s}"))
-        };
+        // Run aspire do targeting the synthetic scheduling step for this job.
+        // The synthetic step depends on the terminal steps, so its transitive closure
+        // covers all steps assigned to this job.
+        var stageName = FindStageName(workflow, job);
+        var syntheticStepName = $"gha-{workflow.Name}-{stageName}-stage-{job.Id}-job";
 
         steps.Add(new StepYaml
         {
             Name = "Run pipeline steps",
-            Run = aspireDoCommand,
+            Run = $"aspire do {syntheticStepName}",
             Env = new Dictionary<string, string>
             {
                 ["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] = "1"
@@ -208,28 +205,28 @@ internal static class WorkflowYamlGenerator
 
     private static StepYaml GenerateAspireCliInstallStep(string? channel)
     {
-        // For PR builds, use the PR-specific install script that downloads artifacts from the CI run.
-        // For push/manual builds, use the standard install script with the appropriate quality channel.
-        //
-        // aspire.config.json channel values map to install script -q args:
-        //   "stable" / "default" / null → no -q (default = release/stable)
-        //   "staging"                   → -q staging
-        //   "daily"                     → -q dev
-        var channelInstallCommand = channel?.ToLowerInvariant() switch
+        // Check for PR channel: "pr-<number>" — use the PR-specific install script
+        if (channel is not null &&
+            channel.StartsWith("pr-", StringComparison.OrdinalIgnoreCase) &&
+            int.TryParse(channel.AsSpan(3), out var prNumber))
         {
-            "daily" => "curl -sSL " + InstallScriptUrl + " | bash -s -- -q dev",
-            "staging" => "curl -sSL " + InstallScriptUrl + " | bash -s -- -q staging",
-            _ => "curl -sSL " + InstallScriptUrl + " | bash"
-        };
+            return new StepYaml
+            {
+                Name = "Install Aspire CLI",
+                Run = $"curl -sSL {PrInstallScriptUrl} | bash -s -- {prNumber}"
+            };
+        }
 
-        // Use a conditional script: on pull_request events, install the PR build;
-        // otherwise install from the configured channel.
-        var installCommand =
-            "if [ \"${{ github.event_name }}\" = \"pull_request\" ]; then\n" +
-            "  curl -sSL " + PrInstallScriptUrl + " | bash -s -- ${{ github.event.pull_request.number }}\n" +
-            "else\n" +
-            "  " + channelInstallCommand + "\n" +
-            "fi";
+        // Standard channel install via aspire.dev/install.sh with quality flag:
+        //   "daily"   → -q dev
+        //   "staging" → -q staging
+        //   anything else (stable/default/null) → no flag
+        var installCommand = channel?.ToLowerInvariant() switch
+        {
+            "daily" => $"curl -sSL {InstallScriptUrl} | bash -s -- -q dev",
+            "staging" => $"curl -sSL {InstallScriptUrl} | bash -s -- -q staging",
+            _ => $"curl -sSL {InstallScriptUrl} | bash"
+        };
 
         return new StepYaml
         {
@@ -268,5 +265,21 @@ internal static class WorkflowYamlGenerator
         }
 
         return null;
+    }
+
+    private static string FindStageName(GitHubActionsWorkflowResource workflow, GitHubActionsJobResource job)
+    {
+        foreach (var stage in workflow.Stages)
+        {
+            for (var i = 0; i < stage.Jobs.Count; i++)
+            {
+                if (stage.Jobs[i].Id == job.Id)
+                {
+                    return stage.Name;
+                }
+            }
+        }
+
+        return "default";
     }
 }

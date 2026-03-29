@@ -57,19 +57,65 @@ public static class GitHubActionsWorkflowExtensions
             });
         }));
 
+        resource.Annotations.Add(new PipelineStepAnnotation(context =>
+        {
+            var workflow = (GitHubActionsWorkflowResource)context.Resource;
+            var existingSteps = context.ExistingSteps;
+
+            if (existingSteps.Count == 0)
+            {
+                return [];
+            }
+
+            // Run the scheduler to compute job assignments and terminal steps
+            var scheduling = SchedulingResolver.Resolve(existingSteps.ToList(), workflow);
+
+            // Register scope map so the executor can filter steps in continuation mode.
+            // This must happen here (not in the generator callback) so it's available
+            // during both `aspire pipeline init` and `aspire do` executions.
+            var scopeToSteps = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+
+            // Create a synthetic step per job that depends on the terminal steps for that job
+            var syntheticSteps = new List<PipelineStep>();
+            foreach (var job in workflow.Jobs)
+            {
+                var stageName = FindStageName(workflow, job);
+                var stepName = $"gha-{workflow.Name}-{stageName}-stage-{job.Id}-job";
+
+                var terminalSteps = scheduling.TerminalStepsPerJob.GetValueOrDefault(job.Id);
+
+                var syntheticStep = new PipelineStep
+                {
+                    Name = stepName,
+                    Description = $"Scheduling target for job '{job.Id}' in workflow '{workflow.Name}'",
+                    Action = _ => Task.CompletedTask,
+                    DependsOnSteps = terminalSteps?.ToList() ?? [],
+                    ScheduledBy = job
+                };
+
+                syntheticSteps.Add(syntheticStep);
+
+                // Build scope map entry: include all real steps + the synthetic step
+                var jobStepNames = scheduling.StepsPerJob.TryGetValue(job.Id, out var jobSteps)
+                    ? jobSteps.Select(s => s.Name).ToList()
+                    : [];
+                jobStepNames.Add(stepName);
+                scopeToSteps[job.Id] = jobStepNames;
+            }
+
+            workflow.Annotations.Add(new PipelineScopeMapAnnotation(scopeToSteps));
+
+            return syntheticSteps;
+        }));
+
         resource.Annotations.Add(new PipelineWorkflowGeneratorAnnotation(async context =>
         {
             var workflow = (GitHubActionsWorkflowResource)context.Environment;
             var logger = context.StepContext.Logger;
 
-            // Resolve scheduling (which steps run in which jobs)
+            // Resolve scheduling (which steps run in which jobs).
+            // Note: scope map is already registered by the PipelineStepAnnotation factory above.
             var scheduling = SchedulingResolver.Resolve(context.Steps.ToList(), workflow);
-
-            // Register scope map so the executor can filter steps in continuation mode
-            var scopeToSteps = scheduling.StepsPerJob.ToDictionary(
-                kvp => kvp.Key,
-                kvp => (IReadOnlyList<string>)kvp.Value.Select(s => s.Name).ToList());
-            workflow.Annotations.Add(new PipelineScopeMapAnnotation(scopeToSteps));
 
             // Generate the YAML model
             var yamlModel = WorkflowYamlGenerator.Generate(scheduling, workflow, context.RepositoryRootDirectory);
@@ -162,5 +208,25 @@ public static class GitHubActionsWorkflowExtensions
         ArgumentNullException.ThrowIfNull(configure);
 
         return builder.WithAnnotation(new WorkflowCustomizationAnnotation(configure));
+    }
+
+    /// <summary>
+    /// Finds the stage name that contains the specified job, or "default" if the job
+    /// is not part of any explicit stage.
+    /// </summary>
+    private static string FindStageName(GitHubActionsWorkflowResource workflow, GitHubActionsJobResource job)
+    {
+        foreach (var stage in workflow.Stages)
+        {
+            for (var i = 0; i < stage.Jobs.Count; i++)
+            {
+                if (stage.Jobs[i].Id == job.Id)
+                {
+                    return stage.Name;
+                }
+            }
+        }
+
+        return "default";
     }
 }

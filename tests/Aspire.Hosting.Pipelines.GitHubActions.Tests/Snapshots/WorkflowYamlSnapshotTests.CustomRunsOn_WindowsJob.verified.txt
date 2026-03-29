@@ -25,16 +25,11 @@ jobs:
         with:
           dotnet-version: 10.0.x
       - name: Install Aspire CLI
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            curl -sSL https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.sh | bash -s -- ${{ github.event.pull_request.number }}
-          else
-            curl -sSL https://aspire.dev/install.sh | bash
-          fi
+        run: curl -sSL https://aspire.dev/install.sh | bash
       - name: Run pipeline steps
         env:
           DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
-        run: aspire do build-app
+        run: aspire do gha-build-windows-default-stage-build-win-job
       - name: Upload state
         uses: actions/upload-artifact@v4
         with:
