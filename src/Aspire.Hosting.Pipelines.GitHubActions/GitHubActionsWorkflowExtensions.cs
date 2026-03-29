@@ -39,6 +39,24 @@ public static class GitHubActionsWorkflowExtensions
             return Task.FromResult(isGitHubActions);
         }));
 
+        resource.Annotations.Add(new PipelineScopeAnnotation(context =>
+        {
+            var runId = Environment.GetEnvironmentVariable("GITHUB_RUN_ID");
+            var runAttempt = Environment.GetEnvironmentVariable("GITHUB_RUN_ATTEMPT") ?? "1";
+            var jobId = Environment.GetEnvironmentVariable("GITHUB_JOB");
+
+            if (string.IsNullOrEmpty(runId) || string.IsNullOrEmpty(jobId))
+            {
+                return Task.FromResult<PipelineScopeResult?>(null);
+            }
+
+            return Task.FromResult<PipelineScopeResult?>(new PipelineScopeResult
+            {
+                RunId = $"{runId}-{runAttempt}",
+                JobId = jobId
+            });
+        }));
+
         resource.Annotations.Add(new PipelineWorkflowGeneratorAnnotation(async context =>
         {
             var workflow = (GitHubActionsWorkflowResource)context.Environment;
@@ -46,6 +64,12 @@ public static class GitHubActionsWorkflowExtensions
 
             // Resolve scheduling (which steps run in which jobs)
             var scheduling = SchedulingResolver.Resolve(context.Steps.ToList(), workflow);
+
+            // Register scope map so the executor can filter steps in continuation mode
+            var scopeToSteps = scheduling.StepsPerJob.ToDictionary(
+                kvp => kvp.Key,
+                kvp => (IReadOnlyList<string>)kvp.Value.Select(s => s.Name).ToList());
+            workflow.Annotations.Add(new PipelineScopeMapAnnotation(scopeToSteps));
 
             // Generate the YAML model
             var yamlModel = WorkflowYamlGenerator.Generate(scheduling, workflow);

@@ -27,7 +27,7 @@ public class WorkflowYamlGeneratorTests
         Assert.Contains(job.Steps, s => s.Name == "Checkout code");
         Assert.Contains(job.Steps, s => s.Name == "Setup .NET");
         Assert.Contains(job.Steps, s => s.Name == "Install Aspire CLI");
-        Assert.Contains(job.Steps, s => s.Run?.Contains("aspire do --continue --job default") == true);
+        Assert.Contains(job.Steps, s => s.Run == "aspire do");
     }
 
     [Fact]
@@ -180,8 +180,8 @@ public class WorkflowYamlGeneratorTests
         Assert.Contains("needs:", yamlString);
         Assert.Contains("actions/checkout@v4", yamlString);
         Assert.Contains("actions/setup-dotnet@v4", yamlString);
-        Assert.Contains("aspire do --continue --job build", yamlString);
-        Assert.Contains("aspire do --continue --job deploy", yamlString);
+        Assert.Contains("aspire do", yamlString);
+        Assert.DoesNotContain("--job", yamlString);
         Assert.Contains("actions/upload-artifact@v4", yamlString);
         Assert.Contains("actions/download-artifact@v4", yamlString);
         Assert.Contains("'Build & Publish'", yamlString); // Quoted because of &

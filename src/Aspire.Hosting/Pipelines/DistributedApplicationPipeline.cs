@@ -466,8 +466,13 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
         var (stepsToExecute, stepsByName) = FilterStepsForExecution(allSteps, context);
 
+        // Detect scope from the active pipeline environment. If we're running inside
+        // a CI job with a scope annotation, enter continuation mode: only in-scope steps
+        // execute, while out-of-scope steps are skipped (or have their TryRestoreStepAsync invoked).
+        var inScopeStepNames = await DetectScopeAsync(context).ConfigureAwait(false);
+
         // Build dependency graph and execute with readiness-based scheduler
-        await ExecuteStepsAsTaskDag(stepsToExecute, stepsByName, context).ConfigureAwait(false);
+        await ExecuteStepsAsTaskDag(stepsToExecute, stepsByName, context, inScopeStepNames).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -525,6 +530,69 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
         var filteredStepsByName = stepsToExecute.ToDictionary(s => s.Name, StringComparer.Ordinal);
         return (stepsToExecute, filteredStepsByName);
+    }
+
+    /// <summary>
+    /// Detects the current execution scope from the active pipeline environment.
+    /// Returns the set of in-scope step names, or null if not in continuation mode.
+    /// </summary>
+    private async Task<HashSet<string>?> DetectScopeAsync(PipelineContext context)
+    {
+        // Find the active pipeline environment
+        var environment = await GetEnvironmentAsync(context.CancellationToken).ConfigureAwait(false);
+
+        if (environment is not IResource environmentResource)
+        {
+            return null;
+        }
+
+        // Check for scope annotation
+        if (!environmentResource.TryGetAnnotationsOfType<PipelineScopeAnnotation>(out var scopeAnnotations))
+        {
+            return null;
+        }
+
+        var scopeAnnotation = scopeAnnotations.FirstOrDefault();
+        if (scopeAnnotation is null)
+        {
+            return null;
+        }
+
+        var scopeContext = new PipelineScopeContext { CancellationToken = context.CancellationToken };
+        var scopeResult = await scopeAnnotation.ResolveAsync(scopeContext).ConfigureAwait(false);
+
+        if (scopeResult is null)
+        {
+            return null;
+        }
+
+        // We have a scope — look up the scope map to find which steps are in this scope
+        if (!environmentResource.TryGetAnnotationsOfType<PipelineScopeMapAnnotation>(out var mapAnnotations))
+        {
+            context.Logger.LogWarning(
+                "Scope detected (RunId={RunId}, JobId={JobId}) but no PipelineScopeMapAnnotation found. " +
+                "All steps will execute.",
+                scopeResult.RunId,
+                scopeResult.JobId);
+            return null;
+        }
+
+        var scopeMap = mapAnnotations.FirstOrDefault();
+        if (scopeMap is null || !scopeMap.ScopeToSteps.TryGetValue(scopeResult.JobId, out var stepNames))
+        {
+            context.Logger.LogWarning(
+                "Scope '{JobId}' not found in scope map. All steps will execute.",
+                scopeResult.JobId);
+            return null;
+        }
+
+        context.Logger.LogInformation(
+            "Continuation mode: RunId={RunId}, JobId={JobId}, executing {Count} step(s)",
+            scopeResult.RunId,
+            scopeResult.JobId,
+            stepNames.Count);
+
+        return new HashSet<string>(stepNames, StringComparer.Ordinal);
     }
 
     private static List<PipelineStep> ComputeTransitiveDependencies(
@@ -667,7 +735,8 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
     private static async Task ExecuteStepsAsTaskDag(
         List<PipelineStep> steps,
         Dictionary<string, PipelineStep> stepsByName,
-        PipelineContext context)
+        PipelineContext context,
+        HashSet<string>? inScopeStepNames = null)
     {
         // Validate no cycles exist in the dependency graph
         ValidateDependencyGraph(steps, stepsByName);
@@ -739,7 +808,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                         {
                             PipelineLoggerProvider.CurrentStep = reportingStep;
 
-                            await ExecuteStepAsync(step, stepContext).ConfigureAwait(false);
+                            await ExecuteStepAsync(step, stepContext, inScopeStepNames).ConfigureAwait(false);
                         }
                         catch (Exception ex)
                         {
@@ -919,10 +988,13 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         }
     }
 
-    private static async Task ExecuteStepAsync(PipelineStep step, PipelineStepContext stepContext)
+    private static async Task ExecuteStepAsync(PipelineStep step, PipelineStepContext stepContext, HashSet<string>? inScopeStepNames = null)
     {
         try
         {
+            // In continuation mode, out-of-scope steps are either restored or skipped.
+            var isInScope = inScopeStepNames is null || inScopeStepNames.Contains(step.Name);
+
             // If the step has a restore callback, try it first. If it returns true,
             // the step is considered already complete (e.g., restored from CI/CD state
             // persisted by a previous job) and its Action is not invoked.
@@ -933,6 +1005,13 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                 {
                     return;
                 }
+            }
+
+            // Out-of-scope steps that couldn't restore are auto-skipped in continuation mode.
+            // Their dependencies are still satisfied so downstream in-scope steps can proceed.
+            if (!isInScope)
+            {
+                return;
             }
 
             await step.Action(stepContext).ConfigureAwait(false);

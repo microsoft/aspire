@@ -25,10 +25,10 @@ jobs:
       - name: Run pipeline steps
         env:
           DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
-        run: aspire do --continue --job default
+        run: aspire do
       - name: Upload state
         uses: actions/upload-artifact@v4
         with:
-          name: aspire-state-default
-          path: .aspire/state/
+          name: aspire-do-state-default
+          path: '.aspire/state/${{ github.run_id }}-${{ github.run_attempt }}/'
           if-no-files-found: ignore

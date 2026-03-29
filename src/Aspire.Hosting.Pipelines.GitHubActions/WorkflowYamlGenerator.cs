@@ -12,8 +12,8 @@ namespace Aspire.Hosting.Pipelines.GitHubActions;
 /// </summary>
 internal static class WorkflowYamlGenerator
 {
-    private const string StateArtifactPrefix = "aspire-state-";
-    private const string StatePath = ".aspire/state/";
+    private const string StateArtifactPrefix = "aspire-do-state-";
+    private const string StatePathExpression = ".aspire/state/${{ github.run_id }}-${{ github.run_attempt }}/";
 
     /// <summary>
     /// Generates a workflow YAML model from the scheduling result.
@@ -93,7 +93,7 @@ internal static class WorkflowYamlGenerator
                     With = new Dictionary<string, string>
                     {
                         ["name"] = $"{StateArtifactPrefix}{depJobId}",
-                        ["path"] = StatePath
+                        ["path"] = StatePathExpression
                     }
                 });
             }
@@ -102,11 +102,11 @@ internal static class WorkflowYamlGenerator
         // TODO: Auth/setup steps will be added here when PipelineSetupRequirementAnnotation is implemented.
         // For now, users should add cloud-specific authentication steps manually.
 
-        // Run aspire do for this job's steps
+        // Run aspire do — scope is auto-detected from GITHUB_JOB env var
         steps.Add(new StepYaml
         {
             Name = "Run pipeline steps",
-            Run = $"aspire do --continue --job {job.Id}",
+            Run = "aspire do",
             Env = new Dictionary<string, string>
             {
                 ["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] = "1"
@@ -121,7 +121,7 @@ internal static class WorkflowYamlGenerator
             With = new Dictionary<string, string>
             {
                 ["name"] = $"{StateArtifactPrefix}{job.Id}",
-                ["path"] = StatePath,
+                ["path"] = StatePathExpression,
                 ["if-no-files-found"] = "ignore"
             }
         });

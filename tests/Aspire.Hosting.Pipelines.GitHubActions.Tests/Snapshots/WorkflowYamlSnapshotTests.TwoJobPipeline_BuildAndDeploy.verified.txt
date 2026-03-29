@@ -26,12 +26,12 @@ jobs:
       - name: Run pipeline steps
         env:
           DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
-        run: aspire do --continue --job build
+        run: aspire do
       - name: Upload state
         uses: actions/upload-artifact@v4
         with:
-          name: aspire-state-build
-          path: .aspire/state/
+          name: aspire-do-state-build
+          path: '.aspire/state/${{ github.run_id }}-${{ github.run_attempt }}/'
           if-no-files-found: ignore
 
   deploy:
@@ -50,15 +50,15 @@ jobs:
       - name: Download state from build
         uses: actions/download-artifact@v4
         with:
-          name: aspire-state-build
-          path: .aspire/state/
+          name: aspire-do-state-build
+          path: '.aspire/state/${{ github.run_id }}-${{ github.run_attempt }}/'
       - name: Run pipeline steps
         env:
           DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
-        run: aspire do --continue --job deploy
+        run: aspire do
       - name: Upload state
         uses: actions/upload-artifact@v4
         with:
-          name: aspire-state-deploy
-          path: .aspire/state/
+          name: aspire-do-state-deploy
+          path: '.aspire/state/${{ github.run_id }}-${{ github.run_attempt }}/'
           if-no-files-found: ignore
