@@ -221,6 +221,32 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
         Assert.Contains("store", manifestExpression);
     }
 
+    [Fact]
+    public void EmitProxyConfiguration_UsesCustomPrefixes_WhenSpecified()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+            .WithHttpsEndpoint();
+
+        var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
+
+        var registration = new GatewayAppRegistration(wasmApp, "store", ["weatherapi"], ApiPrefix: "myapi", OtlpPrefix: "myotlp");
+        var apps = new List<GatewayAppRegistration> { registration };
+        var env = new Dictionary<string, object>();
+        var gatewayEndpoint = gateway.GetEndpoint("https");
+
+        GatewayConfigurationBuilder.EmitProxyConfiguration(env, apps, gatewayEndpoint);
+
+        // Verify custom API prefix in YARP route
+        Assert.Equal("/store/myapi/weatherapi/{**catch-all}", env["ReverseProxy__Routes__route-store-weatherapi__Match__Path"]);
+        Assert.Equal("/store/myapi/weatherapi", env["ReverseProxy__Routes__route-store-weatherapi__Transforms__0__PathRemovePrefix"]);
+
+        // Verify custom OTLP prefix in YARP route
+        Assert.Equal("/store/myotlp/{**catch-all}", env["ReverseProxy__Routes__route-otlp-store__Match__Path"]);
+        Assert.Equal("/store/myotlp", env["ReverseProxy__Routes__route-otlp-store__Transforms__0__PathRemovePrefix"]);
+    }
+
     private sealed class TestProjectMetadata : IProjectMetadata
     {
         public string ProjectPath => "TestProject/TestProject.csproj";
