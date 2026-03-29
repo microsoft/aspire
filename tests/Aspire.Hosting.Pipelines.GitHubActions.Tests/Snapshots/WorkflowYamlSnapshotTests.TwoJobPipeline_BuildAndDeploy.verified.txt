@@ -22,7 +22,7 @@ jobs:
         with:
           dotnet-version: 10.0.x
       - name: Install Aspire CLI
-        run: curl -sSL https://aka.ms/install-aspire.sh | bash
+        run: curl -sSL https://aspire.dev/install.sh | bash
       - name: Run pipeline steps
         env:
           DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
@@ -46,7 +46,7 @@ jobs:
         with:
           dotnet-version: 10.0.x
       - name: Install Aspire CLI
-        run: curl -sSL https://aka.ms/install-aspire.sh | bash
+        run: curl -sSL https://aspire.dev/install.sh | bash
       - name: Download state from build
         uses: actions/download-artifact@v4
         with:

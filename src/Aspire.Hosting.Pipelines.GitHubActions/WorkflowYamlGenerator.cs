@@ -191,16 +191,21 @@ internal static class WorkflowYamlGenerator
         };
     }
 
+    private const string InstallScriptUrl = "https://aspire.dev/install.sh";
+
     private static StepYaml GenerateAspireCliInstallStep(string? channel)
     {
-        // Determine install command based on channel
+        // aspire.config.json channel values map to install script -q args:
+        //   "stable" / "default" / null → no -q (default = release/stable)
+        //   "staging"                   → -q staging
+        //   "daily"                     → -q dev
+        // PR builds use a completely different script (get-aspire-cli-pr.sh)
         var installCommand = channel?.ToLowerInvariant() switch
         {
-            "preview" => "curl -sSL https://aka.ms/install-aspire.sh | bash -s -- --quality preview",
-            "dev" or "daily" => "curl -sSL https://aka.ms/install-aspire.sh | bash -s -- --quality daily",
-            "staging" => "curl -sSL https://aka.ms/install-aspire.sh | bash -s -- --quality staging",
-            // stable or unspecified — use the default install script which gets stable
-            _ => "curl -sSL https://aka.ms/install-aspire.sh | bash"
+            "daily" => $"curl -sSL {InstallScriptUrl} | bash -s -- -q dev",
+            "staging" => $"curl -sSL {InstallScriptUrl} | bash -s -- -q staging",
+            // stable, default, or unspecified — use default quality (release)
+            _ => $"curl -sSL {InstallScriptUrl} | bash"
         };
 
         return new StepYaml

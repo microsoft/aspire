@@ -327,11 +327,11 @@ public class WorkflowYamlGeneratorTests
 
         var job = yaml.Jobs["default"];
         var installStep = Assert.Single(job.Steps, s => s.Name == "Install Aspire CLI");
-        Assert.Equal("curl -sSL https://aka.ms/install-aspire.sh | bash", installStep.Run);
+        Assert.Equal("curl -sSL https://aspire.dev/install.sh | bash", installStep.Run);
     }
 
     [Fact]
-    public void Generate_PreviewChannel_UsesPreviewQuality()
+    public void Generate_UnknownChannel_FallsBackToDefault()
     {
         using var tempDir = new TempDirectory();
         File.WriteAllText(Path.Combine(tempDir.Path, "aspire.config.json"), """{"channel": "preview"}""");
@@ -344,7 +344,8 @@ public class WorkflowYamlGeneratorTests
 
         var job = yaml.Jobs["default"];
         var installStep = Assert.Single(job.Steps, s => s.Name == "Install Aspire CLI");
-        Assert.Contains("--quality preview", installStep.Run);
+        // "preview" is not a recognized channel — falls through to default (stable)
+        Assert.Equal("curl -sSL https://aspire.dev/install.sh | bash", installStep.Run);
     }
 
     [Fact]
@@ -361,7 +362,7 @@ public class WorkflowYamlGeneratorTests
 
         var job = yaml.Jobs["default"];
         var installStep = Assert.Single(job.Steps, s => s.Name == "Install Aspire CLI");
-        Assert.Contains("--quality daily", installStep.Run);
+        Assert.Contains("-q dev", installStep.Run);
     }
 
     [Fact]
@@ -378,7 +379,24 @@ public class WorkflowYamlGeneratorTests
 
         var job = yaml.Jobs["default"];
         var installStep = Assert.Single(job.Steps, s => s.Name == "Install Aspire CLI");
-        Assert.Equal("curl -sSL https://aka.ms/install-aspire.sh | bash", installStep.Run);
+        Assert.Equal("curl -sSL https://aspire.dev/install.sh | bash", installStep.Run);
+    }
+
+    [Fact]
+    public void Generate_StagingChannel_UsesStagingQuality()
+    {
+        using var tempDir = new TempDirectory();
+        File.WriteAllText(Path.Combine(tempDir.Path, "aspire.config.json"), """{"channel": "staging"}""");
+
+        var workflow = new GitHubActionsWorkflowResource("deploy");
+        var step = CreateStep("build-app");
+
+        var scheduling = SchedulingResolver.Resolve([step], workflow);
+        var yaml = WorkflowYamlGenerator.Generate(scheduling, workflow, tempDir.Path);
+
+        var job = yaml.Jobs["default"];
+        var installStep = Assert.Single(job.Steps, s => s.Name == "Install Aspire CLI");
+        Assert.Contains("-q staging", installStep.Run);
     }
 
     // ConfigureWorkflow callback tests
