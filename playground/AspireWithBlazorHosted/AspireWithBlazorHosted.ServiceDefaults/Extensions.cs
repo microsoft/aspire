@@ -1,9 +1,5 @@
-using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Routing;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
@@ -17,14 +13,6 @@ public static class Extensions
 {
     private const string HealthEndpointPath = "/health";
     private const string AlivenessEndpointPath = "/alive";
-    private const string DefaultConfigurationEndpointPath = "/_blazor/_configuration";
-
-    private static readonly Dictionary<string, string> s_defaultConfigurationMappings = new()
-    {
-        ["services"] = "webAssembly:environment",
-        ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "webAssembly:environment",
-        ["OTEL_EXPORTER_OTLP_HEADERS"] = "webAssembly:environment",
-    };
 
     public static TBuilder AddServiceDefaults<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
     {
@@ -115,71 +103,6 @@ public static class Extensions
             });
         }
 
-        // Map the configuration endpoint for WebAssembly clients
-        app.MapConfigurationEndpoint(DefaultConfigurationEndpointPath);
-
         return app;
-    }
-
-    public static IEndpointRouteBuilder MapConfigurationEndpoint(this IEndpointRouteBuilder endpoints, string path)
-    {
-        return MapConfigurationEndpoint(endpoints, path, s_defaultConfigurationMappings);
-    }
-
-    public static IEndpointRouteBuilder MapConfigurationEndpoint(this IEndpointRouteBuilder endpoints, string path, Dictionary<string, string> mappings)
-    {
-        endpoints.MapGet(path, (IConfiguration configuration) =>
-        {
-            // If the hosting layer provided a pre-built config response, return it directly.
-            var preBuilt = configuration["Client:ConfigResponse"];
-            if (!string.IsNullOrEmpty(preBuilt))
-            {
-                return Results.Content(preBuilt, "application/json");
-            }
-
-            var response = new JsonObject();
-
-            foreach (var (sourceKey, targetPath) in mappings)
-            {
-                var section = configuration.GetSection(sourceKey);
-
-                // Check if this is a section with children or a single value
-                var children = section.AsEnumerable().Where(kvp => !string.IsNullOrEmpty(kvp.Value)).ToList();
-
-                if (children.Count == 0)
-                {
-                    continue;
-                }
-
-                // Get or create the target JsonObject at the specified path
-                var target = GetOrCreatePath(response, targetPath);
-
-                foreach (var (key, value) in children)
-                {
-                    target[key] = value;
-                }
-            }
-
-            return Results.Json(response);
-        });
-
-        return endpoints;
-    }
-
-    private static JsonObject GetOrCreatePath(JsonObject root, string path)
-    {
-        var segments = path.Split(':');
-        var current = root;
-
-        foreach (var segment in segments)
-        {
-            if (!current.ContainsKey(segment))
-            {
-                current[segment] = new JsonObject();
-            }
-            current = (JsonObject)current[segment]!;
-        }
-
-        return current;
     }
 }
