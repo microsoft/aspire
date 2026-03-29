@@ -72,7 +72,13 @@ public static class GitHubActionsWorkflowExtensions
             workflow.Annotations.Add(new PipelineScopeMapAnnotation(scopeToSteps));
 
             // Generate the YAML model
-            var yamlModel = WorkflowYamlGenerator.Generate(scheduling, workflow);
+            var yamlModel = WorkflowYamlGenerator.Generate(scheduling, workflow, context.RepositoryRootDirectory);
+
+            // Apply user customization callbacks
+            foreach (var customization in workflow.Annotations.OfType<WorkflowCustomizationAnnotation>())
+            {
+                customization.Callback(yamlModel);
+            }
 
             // Serialize to YAML string
             var yamlContent = WorkflowYamlSerializer.Serialize(yamlModel);
@@ -124,5 +130,37 @@ public static class GitHubActionsWorkflowExtensions
         ArgumentException.ThrowIfNullOrEmpty(id);
 
         return builder.Resource.AddJob(id);
+    }
+
+    /// <summary>
+    /// Registers a callback to customize the generated <see cref="Yaml.WorkflowYaml"/> model
+    /// before it is serialized to disk. Multiple callbacks can be registered and will be
+    /// invoked in registration order.
+    /// </summary>
+    /// <param name="builder">The workflow resource builder.</param>
+    /// <param name="configure">A callback that receives the <see cref="Yaml.WorkflowYaml"/> model for mutation.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <example>
+    /// <code>
+    /// var workflow = builder.AddGitHubActionsWorkflow("deploy");
+    /// workflow.ConfigureWorkflow(yaml =&gt;
+    /// {
+    ///     foreach (var job in yaml.Jobs.Values)
+    ///     {
+    ///         job.Env ??= new();
+    ///         job.Env["MY_SECRET"] = "${{ secrets.MY_SECRET }}";
+    ///     }
+    /// });
+    /// </code>
+    /// </example>
+    [AspireExportIgnore(Reason = "Pipeline generation is not yet ATS-compatible")]
+    public static IResourceBuilder<GitHubActionsWorkflowResource> ConfigureWorkflow(
+        this IResourceBuilder<GitHubActionsWorkflowResource> builder,
+        Action<Yaml.WorkflowYaml> configure)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configure);
+
+        return builder.WithAnnotation(new WorkflowCustomizationAnnotation(configure));
     }
 }

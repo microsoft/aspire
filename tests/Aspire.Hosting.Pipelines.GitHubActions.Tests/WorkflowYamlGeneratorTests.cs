@@ -59,7 +59,7 @@ public class WorkflowYamlGeneratorTests
 
         var step1 = CreateStep("build-app", job1);
         var step2 = CreateStep("run-tests", job2);
-        var step3 = CreateStep("deploy-app", job3, ["build-app", "run-tests"]);
+        var step3 = CreateStep("deploy-app", job3, "build-app", "run-tests");
 
         var scheduling = SchedulingResolver.Resolve([step1, step2, step3], workflow);
         var yaml = WorkflowYamlGenerator.Generate(scheduling, workflow);
@@ -189,35 +189,327 @@ public class WorkflowYamlGeneratorTests
 
     // Helpers
 
-    private static PipelineStep CreateStep(string name, IPipelineStepTarget? scheduledBy = null)
+    private static PipelineStep CreateStep(string name, IPipelineStepTarget? scheduledBy = null, string[]? tags = null)
     {
         return new PipelineStep
         {
             Name = name,
             Action = _ => Task.CompletedTask,
+            ScheduledBy = scheduledBy,
+            Tags = tags is not null ? [.. tags] : []
+        };
+    }
+
+    // Heuristic step emission tests
+
+    [Fact]
+    public void Generate_StepWithDotNetTag_EmitsSetupDotNet()
+    {
+        var workflow = new GitHubActionsWorkflowResource("deploy");
+        var step = CreateStep("build-app", tags: [WellKnownDependencyTags.DotNet]);
+
+        var scheduling = SchedulingResolver.Resolve([step], workflow);
+        var yaml = WorkflowYamlGenerator.Generate(scheduling, workflow);
+
+        var job = yaml.Jobs["default"];
+        Assert.Contains(job.Steps, s => s.Name == "Setup .NET" && s.Uses == "actions/setup-dotnet@v4");
+    }
+
+    [Fact]
+    public void Generate_StepWithNodeJsTag_EmitsSetupNode()
+    {
+        var workflow = new GitHubActionsWorkflowResource("deploy");
+        var step = CreateStep("build-ts", tags: [WellKnownDependencyTags.NodeJs]);
+
+        var scheduling = SchedulingResolver.Resolve([step], workflow);
+        var yaml = WorkflowYamlGenerator.Generate(scheduling, workflow);
+
+        var job = yaml.Jobs["default"];
+        Assert.Contains(job.Steps, s => s.Name == "Setup Node.js" && s.Uses == "actions/setup-node@v4");
+    }
+
+    [Fact]
+    public void Generate_StepWithAzureCliTag_EmitsAzureLogin()
+    {
+        var workflow = new GitHubActionsWorkflowResource("deploy");
+        var step = CreateStep("provision-infra", tags: [WellKnownDependencyTags.AzureCli]);
+
+        var scheduling = SchedulingResolver.Resolve([step], workflow);
+        var yaml = WorkflowYamlGenerator.Generate(scheduling, workflow);
+
+        var job = yaml.Jobs["default"];
+        Assert.Contains(job.Steps, s => s.Name == "Azure login" && s.Uses == "azure/login@v2");
+    }
+
+    [Fact]
+    public void Generate_StepWithoutNodeJsTag_DoesNotEmitSetupNode()
+    {
+        var workflow = new GitHubActionsWorkflowResource("deploy");
+        var step = CreateStep("build-app", tags: [WellKnownDependencyTags.DotNet]);
+
+        var scheduling = SchedulingResolver.Resolve([step], workflow);
+        var yaml = WorkflowYamlGenerator.Generate(scheduling, workflow);
+
+        var job = yaml.Jobs["default"];
+        Assert.DoesNotContain(job.Steps, s => s.Name == "Setup Node.js");
+    }
+
+    [Fact]
+    public void Generate_StepWithoutAzureCliTag_DoesNotEmitAzureLogin()
+    {
+        var workflow = new GitHubActionsWorkflowResource("deploy");
+        var step = CreateStep("build-app", tags: [WellKnownDependencyTags.DotNet]);
+
+        var scheduling = SchedulingResolver.Resolve([step], workflow);
+        var yaml = WorkflowYamlGenerator.Generate(scheduling, workflow);
+
+        var job = yaml.Jobs["default"];
+        Assert.DoesNotContain(job.Steps, s => s.Name == "Azure login");
+    }
+
+    [Fact]
+    public void Generate_MultipleTagsOnStep_EmitsAllSetupSteps()
+    {
+        var workflow = new GitHubActionsWorkflowResource("deploy");
+        var step = CreateStep("deploy-all", tags: [WellKnownDependencyTags.DotNet, WellKnownDependencyTags.NodeJs, WellKnownDependencyTags.AzureCli]);
+
+        var scheduling = SchedulingResolver.Resolve([step], workflow);
+        var yaml = WorkflowYamlGenerator.Generate(scheduling, workflow);
+
+        var job = yaml.Jobs["default"];
+        Assert.Contains(job.Steps, s => s.Name == "Setup .NET");
+        Assert.Contains(job.Steps, s => s.Name == "Setup Node.js");
+        Assert.Contains(job.Steps, s => s.Name == "Azure login");
+        Assert.Contains(job.Steps, s => s.Name == "Install Aspire CLI");
+    }
+
+    [Fact]
+    public void Generate_TagsAcrossJobs_IndependentSetupSteps()
+    {
+        var workflow = new GitHubActionsWorkflowResource("deploy");
+        var buildJob = workflow.AddJob("build");
+        var deployJob = workflow.AddJob("deploy");
+
+        var buildStep = CreateStep("build-app", buildJob, tags: [WellKnownDependencyTags.DotNet, WellKnownDependencyTags.Docker]);
+        var deployStep = new PipelineStep
+        {
+            Name = "deploy-app",
+            Action = _ => Task.CompletedTask,
+            DependsOnSteps = ["build-app"],
+            ScheduledBy = deployJob,
+            Tags = [WellKnownDependencyTags.AzureCli]
+        };
+
+        var scheduling = SchedulingResolver.Resolve([buildStep, deployStep], workflow);
+        var yaml = WorkflowYamlGenerator.Generate(scheduling, workflow);
+
+        // Build job: has .NET setup but NOT Azure login
+        var buildJobYaml = yaml.Jobs["build"];
+        Assert.Contains(buildJobYaml.Steps, s => s.Name == "Setup .NET");
+        Assert.DoesNotContain(buildJobYaml.Steps, s => s.Name == "Azure login");
+
+        // Deploy job: has Azure login but does NOT need .NET for its own steps
+        // (it still gets .NET because aspire do needs it)
+        var deployJobYaml = yaml.Jobs["deploy"];
+        Assert.Contains(deployJobYaml.Steps, s => s.Name == "Azure login");
+    }
+
+    // Channel-aware CLI install tests
+
+    [Fact]
+    public void Generate_NoConfig_UsesDefaultInstallScript()
+    {
+        var workflow = new GitHubActionsWorkflowResource("deploy");
+        var step = CreateStep("build-app");
+
+        var scheduling = SchedulingResolver.Resolve([step], workflow);
+        var yaml = WorkflowYamlGenerator.Generate(scheduling, workflow, repositoryRootDirectory: null);
+
+        var job = yaml.Jobs["default"];
+        var installStep = Assert.Single(job.Steps, s => s.Name == "Install Aspire CLI");
+        Assert.Equal("curl -sSL https://aka.ms/install-aspire.sh | bash", installStep.Run);
+    }
+
+    [Fact]
+    public void Generate_PreviewChannel_UsesPreviewQuality()
+    {
+        using var tempDir = new TempDirectory();
+        File.WriteAllText(Path.Combine(tempDir.Path, "aspire.config.json"), """{"channel": "preview"}""");
+
+        var workflow = new GitHubActionsWorkflowResource("deploy");
+        var step = CreateStep("build-app");
+
+        var scheduling = SchedulingResolver.Resolve([step], workflow);
+        var yaml = WorkflowYamlGenerator.Generate(scheduling, workflow, tempDir.Path);
+
+        var job = yaml.Jobs["default"];
+        var installStep = Assert.Single(job.Steps, s => s.Name == "Install Aspire CLI");
+        Assert.Contains("--quality preview", installStep.Run);
+    }
+
+    [Fact]
+    public void Generate_DailyChannel_UsesDailyQuality()
+    {
+        using var tempDir = new TempDirectory();
+        File.WriteAllText(Path.Combine(tempDir.Path, "aspire.config.json"), """{"channel": "daily"}""");
+
+        var workflow = new GitHubActionsWorkflowResource("deploy");
+        var step = CreateStep("build-app");
+
+        var scheduling = SchedulingResolver.Resolve([step], workflow);
+        var yaml = WorkflowYamlGenerator.Generate(scheduling, workflow, tempDir.Path);
+
+        var job = yaml.Jobs["default"];
+        var installStep = Assert.Single(job.Steps, s => s.Name == "Install Aspire CLI");
+        Assert.Contains("--quality daily", installStep.Run);
+    }
+
+    [Fact]
+    public void Generate_StableChannel_UsesDefaultInstallScript()
+    {
+        using var tempDir = new TempDirectory();
+        File.WriteAllText(Path.Combine(tempDir.Path, "aspire.config.json"), """{"channel": "stable"}""");
+
+        var workflow = new GitHubActionsWorkflowResource("deploy");
+        var step = CreateStep("build-app");
+
+        var scheduling = SchedulingResolver.Resolve([step], workflow);
+        var yaml = WorkflowYamlGenerator.Generate(scheduling, workflow, tempDir.Path);
+
+        var job = yaml.Jobs["default"];
+        var installStep = Assert.Single(job.Steps, s => s.Name == "Install Aspire CLI");
+        Assert.Equal("curl -sSL https://aka.ms/install-aspire.sh | bash", installStep.Run);
+    }
+
+    // ConfigureWorkflow callback tests
+
+    [Fact]
+    public void ConfigureWorkflow_CallbackModifiesYaml()
+    {
+        var workflow = new GitHubActionsWorkflowResource("deploy");
+        workflow.Annotations.Add(new WorkflowCustomizationAnnotation(yaml =>
+        {
+            foreach (var job in yaml.Jobs.Values)
+            {
+                job.Steps.Insert(0, new StepYaml
+                {
+                    Name = "Custom step",
+                    Run = "echo 'hello'"
+                });
+            }
+        }));
+
+        var step = CreateStep("build-app");
+        var scheduling = SchedulingResolver.Resolve([step], workflow);
+        var yamlModel = WorkflowYamlGenerator.Generate(scheduling, workflow);
+
+        // Apply customization (simulating what the extension does)
+        foreach (var customization in workflow.Annotations.OfType<WorkflowCustomizationAnnotation>())
+        {
+            customization.Callback(yamlModel);
+        }
+
+        var job = yamlModel.Jobs["default"];
+        Assert.Equal("Custom step", job.Steps[0].Name);
+    }
+
+    [Fact]
+    public void ConfigureWorkflow_MultipleCallbacks_AppliedInOrder()
+    {
+        var workflow = new GitHubActionsWorkflowResource("deploy");
+        workflow.Annotations.Add(new WorkflowCustomizationAnnotation(yaml =>
+        {
+            foreach (var job in yaml.Jobs.Values)
+            {
+                job.Steps.Add(new StepYaml { Name = "First callback" });
+            }
+        }));
+        workflow.Annotations.Add(new WorkflowCustomizationAnnotation(yaml =>
+        {
+            foreach (var job in yaml.Jobs.Values)
+            {
+                job.Steps.Add(new StepYaml { Name = "Second callback" });
+            }
+        }));
+
+        var step = CreateStep("build-app");
+        var scheduling = SchedulingResolver.Resolve([step], workflow);
+        var yamlModel = WorkflowYamlGenerator.Generate(scheduling, workflow);
+
+        foreach (var customization in workflow.Annotations.OfType<WorkflowCustomizationAnnotation>())
+        {
+            customization.Callback(yamlModel);
+        }
+
+        var job = yamlModel.Jobs["default"];
+        var lastTwo = job.Steps.TakeLast(2).ToArray();
+        Assert.Equal("First callback", lastTwo[0].Name);
+        Assert.Equal("Second callback", lastTwo[1].Name);
+    }
+
+    [Fact]
+    public void ConfigureWorkflow_CanAddEnvVarsToAllJobs()
+    {
+        var workflow = new GitHubActionsWorkflowResource("deploy");
+        workflow.Annotations.Add(new WorkflowCustomizationAnnotation(yaml =>
+        {
+            foreach (var job in yaml.Jobs.Values)
+            {
+                job.Steps.Add(new StepYaml
+                {
+                    Name = "Secret step",
+                    Env = new Dictionary<string, string>
+                    {
+                        ["MY_SECRET"] = "${{ secrets.MY_SECRET }}"
+                    },
+                    Run = "echo $MY_SECRET"
+                });
+            }
+        }));
+
+        var step = CreateStep("build-app");
+        var scheduling = SchedulingResolver.Resolve([step], workflow);
+        var yamlModel = WorkflowYamlGenerator.Generate(scheduling, workflow);
+
+        foreach (var customization in workflow.Annotations.OfType<WorkflowCustomizationAnnotation>())
+        {
+            customization.Callback(yamlModel);
+        }
+
+        var job = yamlModel.Jobs["default"];
+        var secretStep = Assert.Single(job.Steps, s => s.Name == "Secret step");
+        Assert.Contains("MY_SECRET", secretStep.Env!.Keys);
+    }
+
+    // Helper for creating steps with tags and dependsOn
+    private static PipelineStep CreateStep(string name, IPipelineStepTarget? scheduledBy, string dependsOn, params string[] moreDependsOn)
+    {
+        var deps = new List<string> { dependsOn };
+        deps.AddRange(moreDependsOn);
+        return new PipelineStep
+        {
+            Name = name,
+            Action = _ => Task.CompletedTask,
+            DependsOnSteps = deps,
             ScheduledBy = scheduledBy
         };
     }
 
-    private static PipelineStep CreateStep(string name, IPipelineStepTarget? scheduledBy, string dependsOn)
+    private sealed class TempDirectory : IDisposable
     {
-        return new PipelineStep
-        {
-            Name = name,
-            Action = _ => Task.CompletedTask,
-            DependsOnSteps = [dependsOn],
-            ScheduledBy = scheduledBy
-        };
-    }
+        public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), System.IO.Path.GetRandomFileName());
 
-    private static PipelineStep CreateStep(string name, IPipelineStepTarget? scheduledBy, string[] dependsOn)
-    {
-        return new PipelineStep
+        public TempDirectory()
         {
-            Name = name,
-            Action = _ => Task.CompletedTask,
-            DependsOnSteps = [.. dependsOn],
-            ScheduledBy = scheduledBy
-        };
+            Directory.CreateDirectory(Path);
+        }
+
+        public void Dispose()
+        {
+            if (Directory.Exists(Path))
+            {
+                Directory.Delete(Path, recursive: true);
+            }
+        }
     }
 }

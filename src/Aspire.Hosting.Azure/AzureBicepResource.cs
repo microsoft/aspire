@@ -51,7 +51,7 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
                 Name = $"provision-{name}",
                 Description = $"Provisions the Azure Bicep resource {name} using Azure infrastructure.",
                 Action = async ctx => await ProvisionAzureBicepResourceAsync(ctx, this).ConfigureAwait(false),
-                Tags = [WellKnownPipelineTags.ProvisionInfrastructure]
+                Tags = [WellKnownPipelineTags.ProvisionInfrastructure, WellKnownDependencyTags.AzureCli]
             };
             provisionStep.RequiredBy(AzureEnvironmentResource.ProvisionInfrastructureStepName);
             provisionStep.DependsOn(AzureEnvironmentResource.CreateProvisioningContextStepName);

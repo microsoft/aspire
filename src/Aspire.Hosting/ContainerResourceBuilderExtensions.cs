@@ -49,7 +49,7 @@ public static class ContainerResourceBuilderExtensions
                             builder.Resource,
                             ctx.CancellationToken).ConfigureAwait(false);
                     },
-                    Tags = [WellKnownPipelineTags.BuildCompute],
+                    Tags = [WellKnownPipelineTags.BuildCompute, WellKnownDependencyTags.Docker],
                     RequiredBySteps = [WellKnownPipelineSteps.Build],
                     DependsOnSteps = [WellKnownPipelineSteps.BuildPrereq],
                     Resource = builder.Resource
@@ -63,7 +63,7 @@ public static class ContainerResourceBuilderExtensions
                 {
                     Name = $"push-{builder.Resource.Name}",
                     Action = ctx => PipelineStepHelpers.PushImageToRegistryAsync(builder.Resource, ctx),
-                    Tags = [WellKnownPipelineTags.PushContainerImage],
+                    Tags = [WellKnownPipelineTags.PushContainerImage, WellKnownDependencyTags.Docker],
                     RequiredBySteps = [WellKnownPipelineSteps.Push],
                     Resource = builder.Resource
                 };

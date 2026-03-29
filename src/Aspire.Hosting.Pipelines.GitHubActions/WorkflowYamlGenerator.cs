@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREPIPELINES001
 
+using System.Text.Json;
 using Aspire.Hosting.Pipelines.GitHubActions.Yaml;
 
 namespace Aspire.Hosting.Pipelines.GitHubActions;
@@ -18,10 +19,12 @@ internal static class WorkflowYamlGenerator
     /// <summary>
     /// Generates a workflow YAML model from the scheduling result.
     /// </summary>
-    public static WorkflowYaml Generate(SchedulingResult scheduling, GitHubActionsWorkflowResource workflow)
+    public static WorkflowYaml Generate(SchedulingResult scheduling, GitHubActionsWorkflowResource workflow, string? repositoryRootDirectory = null)
     {
         ArgumentNullException.ThrowIfNull(scheduling);
         ArgumentNullException.ThrowIfNull(workflow);
+
+        var channel = ReadChannelFromConfig(repositoryRootDirectory);
 
         var workflowYaml = new WorkflowYaml
         {
@@ -44,41 +47,90 @@ internal static class WorkflowYamlGenerator
         // Generate a YAML job for each workflow job
         foreach (var job in workflow.Jobs)
         {
-            var jobYaml = GenerateJob(job, scheduling);
+            var jobYaml = GenerateJob(job, scheduling, channel);
             workflowYaml.Jobs[job.Id] = jobYaml;
         }
 
         return workflowYaml;
     }
 
-    private static JobYaml GenerateJob(GitHubActionsJobResource job, SchedulingResult scheduling)
+    private static JobYaml GenerateJob(GitHubActionsJobResource job, SchedulingResult scheduling, string? channel)
     {
+        // Collect dependency tags from all pipeline steps assigned to this job
+        var dependencyTags = new HashSet<string>(StringComparer.Ordinal);
+        if (scheduling.StepsPerJob.TryGetValue(job.Id, out var pipelineSteps))
+        {
+            foreach (var step in pipelineSteps)
+            {
+                foreach (var tag in step.Tags)
+                {
+                    dependencyTags.Add(tag);
+                }
+            }
+        }
+
+        // Every job runs `aspire do`, which implicitly requires the Aspire CLI
+        dependencyTags.Add(WellKnownDependencyTags.AspireCli);
+
         var steps = new List<StepYaml>();
 
-        // Boilerplate: checkout
+        // Always: checkout
         steps.Add(new StepYaml
         {
             Name = "Checkout code",
             Uses = "actions/checkout@v4"
         });
 
-        // Boilerplate: setup .NET
-        steps.Add(new StepYaml
+        // Conditional: Setup .NET (when any step needs .NET or Aspire CLI, which is .NET-based)
+        if (dependencyTags.Contains(WellKnownDependencyTags.DotNet) ||
+            dependencyTags.Contains(WellKnownDependencyTags.AspireCli))
         {
-            Name = "Setup .NET",
-            Uses = "actions/setup-dotnet@v4",
-            With = new Dictionary<string, string>
+            steps.Add(new StepYaml
             {
-                ["dotnet-version"] = "10.0.x"
-            }
-        });
+                Name = "Setup .NET",
+                Uses = "actions/setup-dotnet@v4",
+                With = new Dictionary<string, string>
+                {
+                    ["dotnet-version"] = "10.0.x"
+                }
+            });
+        }
 
-        // Boilerplate: install Aspire CLI
-        steps.Add(new StepYaml
+        // Conditional: Setup Node.js (when any step needs Node.js)
+        if (dependencyTags.Contains(WellKnownDependencyTags.NodeJs))
         {
-            Name = "Install Aspire CLI",
-            Run = "dotnet tool install -g aspire"
-        });
+            steps.Add(new StepYaml
+            {
+                Name = "Setup Node.js",
+                Uses = "actions/setup-node@v4",
+                With = new Dictionary<string, string>
+                {
+                    ["node-version"] = "20"
+                }
+            });
+        }
+
+        // Conditional: Install Aspire CLI (when any step needs it — always true since aspire do runs)
+        if (dependencyTags.Contains(WellKnownDependencyTags.AspireCli))
+        {
+            steps.Add(GenerateAspireCliInstallStep(channel));
+        }
+
+        // Conditional: Azure login (when any step needs Azure CLI)
+        if (dependencyTags.Contains(WellKnownDependencyTags.AzureCli))
+        {
+            steps.Add(new StepYaml
+            {
+                Name = "Azure login",
+                Uses = "azure/login@v2",
+                With = new Dictionary<string, string>
+                {
+                    ["client-id"] = "${{ vars.AZURE_CLIENT_ID }}",
+                    ["tenant-id"] = "${{ vars.AZURE_TENANT_ID }}",
+                    ["subscription-id"] = "${{ vars.AZURE_SUBSCRIPTION_ID }}"
+                }
+            });
+        }
 
         // Download state artifacts from dependency jobs
         var jobDeps = scheduling.JobDependencies.GetValueOrDefault(job.Id);
@@ -98,9 +150,6 @@ internal static class WorkflowYamlGenerator
                 });
             }
         }
-
-        // TODO: Auth/setup steps will be added here when PipelineSetupRequirementAnnotation is implemented.
-        // For now, users should add cloud-specific authentication steps manually.
 
         // Run aspire do — scope is auto-detected from GITHUB_JOB env var
         steps.Add(new StepYaml
@@ -140,5 +189,56 @@ internal static class WorkflowYamlGenerator
             Needs = needs,
             Steps = steps
         };
+    }
+
+    private static StepYaml GenerateAspireCliInstallStep(string? channel)
+    {
+        // Determine install command based on channel
+        var installCommand = channel?.ToLowerInvariant() switch
+        {
+            "preview" => "curl -sSL https://aka.ms/install-aspire.sh | bash -s -- --quality preview",
+            "dev" or "daily" => "curl -sSL https://aka.ms/install-aspire.sh | bash -s -- --quality daily",
+            "staging" => "curl -sSL https://aka.ms/install-aspire.sh | bash -s -- --quality staging",
+            // stable or unspecified — use the default install script which gets stable
+            _ => "curl -sSL https://aka.ms/install-aspire.sh | bash"
+        };
+
+        return new StepYaml
+        {
+            Name = "Install Aspire CLI",
+            Run = installCommand
+        };
+    }
+
+    private static string? ReadChannelFromConfig(string? repositoryRootDirectory)
+    {
+        if (string.IsNullOrEmpty(repositoryRootDirectory))
+        {
+            return null;
+        }
+
+        var configPath = Path.Combine(repositoryRootDirectory, "aspire.config.json");
+        if (!File.Exists(configPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var stream = File.OpenRead(configPath);
+            using var doc = JsonDocument.Parse(stream);
+
+            if (doc.RootElement.TryGetProperty("channel", out var channelProp) &&
+                channelProp.ValueKind == JsonValueKind.String)
+            {
+                return channelProp.GetString();
+            }
+        }
+        catch (JsonException)
+        {
+            // Malformed config — fall back to default
+        }
+
+        return null;
     }
 }
