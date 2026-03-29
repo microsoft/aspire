@@ -35,6 +35,10 @@ internal static class WorkflowYamlGenerator
                 Push = new PushTrigger
                 {
                     Branches = ["main"]
+                },
+                PullRequest = new PullRequestTrigger
+                {
+                    Branches = ["main"]
                 }
             },
             Permissions = new Dictionary<string, string>
@@ -151,11 +155,19 @@ internal static class WorkflowYamlGenerator
             }
         }
 
-        // Run aspire do — scope is auto-detected from GITHUB_JOB env var
+        // Run aspire do — target the terminal step(s) for this job so all assigned steps execute
+        var terminalSteps = scheduling.TerminalStepsPerJob.GetValueOrDefault(job.Id);
+        var aspireDoCommand = terminalSteps switch
+        {
+            null or { Count: 0 } => "aspire do deploy",
+            { Count: 1 } => $"aspire do {terminalSteps[0]}",
+            _ => string.Join(" && ", terminalSteps.Select(s => $"aspire do {s}"))
+        };
+
         steps.Add(new StepYaml
         {
             Name = "Run pipeline steps",
-            Run = "aspire do",
+            Run = aspireDoCommand,
             Env = new Dictionary<string, string>
             {
                 ["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] = "1"
@@ -192,21 +204,32 @@ internal static class WorkflowYamlGenerator
     }
 
     private const string InstallScriptUrl = "https://aspire.dev/install.sh";
+    private const string PrInstallScriptUrl = "https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.sh";
 
     private static StepYaml GenerateAspireCliInstallStep(string? channel)
     {
+        // For PR builds, use the PR-specific install script that downloads artifacts from the CI run.
+        // For push/manual builds, use the standard install script with the appropriate quality channel.
+        //
         // aspire.config.json channel values map to install script -q args:
         //   "stable" / "default" / null → no -q (default = release/stable)
         //   "staging"                   → -q staging
         //   "daily"                     → -q dev
-        // PR builds use a completely different script (get-aspire-cli-pr.sh)
-        var installCommand = channel?.ToLowerInvariant() switch
+        var channelInstallCommand = channel?.ToLowerInvariant() switch
         {
-            "daily" => $"curl -sSL {InstallScriptUrl} | bash -s -- -q dev",
-            "staging" => $"curl -sSL {InstallScriptUrl} | bash -s -- -q staging",
-            // stable, default, or unspecified — use default quality (release)
-            _ => $"curl -sSL {InstallScriptUrl} | bash"
+            "daily" => "curl -sSL " + InstallScriptUrl + " | bash -s -- -q dev",
+            "staging" => "curl -sSL " + InstallScriptUrl + " | bash -s -- -q staging",
+            _ => "curl -sSL " + InstallScriptUrl + " | bash"
         };
+
+        // Use a conditional script: on pull_request events, install the PR build;
+        // otherwise install from the configured channel.
+        var installCommand =
+            "if [ \"${{ github.event_name }}\" = \"pull_request\" ]; then\n" +
+            "  curl -sSL " + PrInstallScriptUrl + " | bash -s -- ${{ github.event.pull_request.number }}\n" +
+            "else\n" +
+            "  " + channelInstallCommand + "\n" +
+            "fi";
 
         return new StepYaml
         {

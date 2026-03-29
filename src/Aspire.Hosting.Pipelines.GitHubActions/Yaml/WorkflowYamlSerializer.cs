@@ -71,6 +71,19 @@ internal static class WorkflowYamlSerializer
                 }
             }
         }
+
+        if (triggers.PullRequest is not null)
+        {
+            sb.AppendLine("  pull_request:");
+            if (triggers.PullRequest.Branches.Count > 0)
+            {
+                sb.AppendLine("    branches:");
+                foreach (var branch in triggers.PullRequest.Branches)
+                {
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"      - {branch}");
+                }
+            }
+        }
     }
 
     private static void WriteJob(StringBuilder sb, string jobId, JobYaml job)

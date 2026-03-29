@@ -189,6 +189,36 @@ internal static class SchedulingResolver
             list.Add(step);
         }
 
+        // Compute terminal steps per job: steps that no other step in the same job depends on.
+        // These are the "leaf" steps whose transitive closure covers all steps in the job.
+        var terminalStepsPerJob = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        foreach (var (jobId, jobSteps) in stepsPerJob)
+        {
+            var jobStepNames = new HashSet<string>(jobSteps.Select(s => s.Name), StringComparer.Ordinal);
+
+            // A step is a dependency within this job if any other step in the same job depends on it
+            var intraJobDependencies = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var step in jobSteps)
+            {
+                foreach (var dep in step.DependsOnSteps)
+                {
+                    if (jobStepNames.Contains(dep))
+                    {
+                        intraJobDependencies.Add(dep);
+                    }
+                }
+            }
+
+            // Terminal steps are those NOT depended on by any other step in the same job
+            var terminals = jobSteps
+                .Where(s => !intraJobDependencies.Contains(s.Name))
+                .Select(s => s.Name)
+                .OrderBy(n => n, StringComparer.Ordinal)
+                .ToList();
+
+            terminalStepsPerJob[jobId] = terminals.Count > 0 ? terminals : [jobSteps[^1].Name];
+        }
+
         // The default job is whatever was auto-created during resolution (if any)
         GitHubActionsJobResource? defaultJob = null;
         for (var i = 0; i < workflow.Jobs.Count; i++)
@@ -212,6 +242,7 @@ internal static class SchedulingResolver
                 kvp => kvp.Key,
                 kvp => (IReadOnlyList<PipelineStep>)kvp.Value,
                 StringComparer.Ordinal),
+            TerminalStepsPerJob = terminalStepsPerJob,
             DefaultJob = defaultJob
         };
     }
@@ -418,6 +449,12 @@ internal sealed class SchedulingResult
     /// Gets the steps grouped by their assigned job.
     /// </summary>
     public required Dictionary<string, IReadOnlyList<PipelineStep>> StepsPerJob { get; init; }
+
+    /// <summary>
+    /// Gets the terminal step names per job. Terminal steps are those not depended on by any other
+    /// step in the same job — executing them via <c>aspire do</c> covers all steps in the job.
+    /// </summary>
+    public required Dictionary<string, IReadOnlyList<string>> TerminalStepsPerJob { get; init; }
 
     /// <summary>
     /// Gets the default job used for unscheduled steps, or <c>null</c> if all steps were explicitly scheduled.

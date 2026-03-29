@@ -27,7 +27,7 @@ public class WorkflowYamlGeneratorTests
         Assert.Contains(job.Steps, s => s.Name == "Checkout code");
         Assert.Contains(job.Steps, s => s.Name == "Setup .NET");
         Assert.Contains(job.Steps, s => s.Name == "Install Aspire CLI");
-        Assert.Contains(job.Steps, s => s.Run == "aspire do");
+        Assert.Contains(job.Steps, s => s.Run is not null && s.Run.Contains("aspire do build-app"));
     }
 
     [Fact]
@@ -327,7 +327,9 @@ public class WorkflowYamlGeneratorTests
 
         var job = yaml.Jobs["default"];
         var installStep = Assert.Single(job.Steps, s => s.Name == "Install Aspire CLI");
-        Assert.Equal("curl -sSL https://aspire.dev/install.sh | bash", installStep.Run);
+        // PR branch uses get-aspire-cli-pr.sh, else branch uses default install
+        Assert.Contains("get-aspire-cli-pr.sh", installStep.Run);
+        Assert.Contains("curl -sSL https://aspire.dev/install.sh | bash", installStep.Run);
     }
 
     [Fact]
@@ -344,8 +346,9 @@ public class WorkflowYamlGeneratorTests
 
         var job = yaml.Jobs["default"];
         var installStep = Assert.Single(job.Steps, s => s.Name == "Install Aspire CLI");
-        // "preview" is not a recognized channel — falls through to default (stable)
-        Assert.Equal("curl -sSL https://aspire.dev/install.sh | bash", installStep.Run);
+        // "preview" is not a recognized channel — else branch uses default (stable) install
+        Assert.Contains("curl -sSL https://aspire.dev/install.sh | bash", installStep.Run);
+        Assert.DoesNotContain("-q ", installStep.Run!.Split('\n').First(l => l.Contains("aspire.dev")));
     }
 
     [Fact]
@@ -379,7 +382,9 @@ public class WorkflowYamlGeneratorTests
 
         var job = yaml.Jobs["default"];
         var installStep = Assert.Single(job.Steps, s => s.Name == "Install Aspire CLI");
-        Assert.Equal("curl -sSL https://aspire.dev/install.sh | bash", installStep.Run);
+        // Stable channel: else branch uses default install (no -q flag)
+        Assert.Contains("curl -sSL https://aspire.dev/install.sh | bash", installStep.Run);
+        Assert.DoesNotContain("-q ", installStep.Run!.Split('\n').First(l => l.Contains("aspire.dev")));
     }
 
     [Fact]

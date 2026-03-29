@@ -47,6 +47,11 @@ public sealed class WorkflowTriggers
     /// Gets the push trigger configuration.
     /// </summary>
     public PushTrigger? Push { get; init; }
+
+    /// <summary>
+    /// Gets the pull request trigger configuration.
+    /// </summary>
+    public PullRequestTrigger? PullRequest { get; init; }
 }
 
 /// <summary>
@@ -57,6 +62,18 @@ public sealed class PushTrigger
 {
     /// <summary>
     /// Gets the branch patterns that trigger the workflow on push.
+    /// </summary>
+    public List<string> Branches { get; init; } = [];
+}
+
+/// <summary>
+/// Represents the pull request trigger configuration.
+/// </summary>
+[Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+public sealed class PullRequestTrigger
+{
+    /// <summary>
+    /// Gets the branch patterns that trigger the workflow on pull request.
     /// </summary>
     public List<string> Branches { get; init; } = [];
 }
