@@ -732,8 +732,12 @@ function Expand-AspireCliArchive {
             if (-not (Get-Command Expand-Archive -ErrorAction SilentlyContinue)) {
                 throw "Expand-Archive cmdlet not found. Please use PowerShell 5.0 or later to extract ZIP files."
             }
-
-            Expand-Archive -Path $ArchiveFile -DestinationPath $DestinationPath -Force -ErrorAction Stop
+            
+            Invoke-WithPowerShellVersion -ModernAction {
+                Expand-Archive -Path $ArchiveFile -OutputPath $DestinationPath -Force -ErrorAction Stop
+            } -LegacyAction {
+                Expand-Archive -Path $ArchiveFile -DestinationPath $DestinationPath -Force -ErrorAction Stop
+            }
         }
         else {
             # Use tar for tar.gz files on Unix systems
