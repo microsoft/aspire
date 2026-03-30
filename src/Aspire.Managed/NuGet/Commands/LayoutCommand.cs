@@ -447,14 +447,18 @@ public static class LayoutCommand
         // Trimming RID segments above already adds OS-specific fallbacks such as
         // linux-x64 -> linux and osx-arm64 -> osx. Add the portable family aliases
         // that are commonly used by runtimeTargets but are not produced by truncation.
-        if (OperatingSystem.IsWindows())
+        if (fallbacks.Any(fallback => fallback.StartsWith(WindowsRuntimeAlias, StringComparison.OrdinalIgnoreCase)))
         {
             if (!fallbacks.Contains(WindowsRuntimeAlias, StringComparer.OrdinalIgnoreCase))
             {
                 fallbacks.Add(WindowsRuntimeAlias);
             }
         }
-        else if (!fallbacks.Contains(UnixRuntimeAlias, StringComparer.OrdinalIgnoreCase))
+        else if (fallbacks.Any(fallback =>
+                     fallback.StartsWith("linux", StringComparison.OrdinalIgnoreCase) ||
+                     fallback.StartsWith("osx", StringComparison.OrdinalIgnoreCase) ||
+                     fallback.StartsWith("unix", StringComparison.OrdinalIgnoreCase)) &&
+                 !fallbacks.Contains(UnixRuntimeAlias, StringComparer.OrdinalIgnoreCase))
         {
             fallbacks.Add(UnixRuntimeAlias);
         }
