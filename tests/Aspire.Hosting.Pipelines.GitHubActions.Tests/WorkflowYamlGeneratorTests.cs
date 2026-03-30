@@ -328,7 +328,8 @@ public class WorkflowYamlGeneratorTests
         var job = yaml.Jobs["default"];
         var installStep = Assert.Single(job.Steps, s => s.Name == "Install Aspire CLI");
         // No config → default (stable) channel install
-        Assert.Equal("curl -sSL https://aspire.dev/install.sh | bash", installStep.Run);
+        Assert.Contains("curl -sSL https://aspire.dev/install.sh | bash", installStep.Run);
+        Assert.Contains("""echo "$HOME/.aspire/bin" >> $GITHUB_PATH""", installStep.Run);
     }
 
     [Fact]
@@ -346,7 +347,8 @@ public class WorkflowYamlGeneratorTests
         var job = yaml.Jobs["default"];
         var installStep = Assert.Single(job.Steps, s => s.Name == "Install Aspire CLI");
         // "preview" is not a recognized channel — falls back to default (stable) install
-        Assert.Equal("curl -sSL https://aspire.dev/install.sh | bash", installStep.Run);
+        Assert.Contains("curl -sSL https://aspire.dev/install.sh | bash", installStep.Run);
+        Assert.Contains("""echo "$HOME/.aspire/bin" >> $GITHUB_PATH""", installStep.Run);
     }
 
     [Fact]
@@ -381,7 +383,8 @@ public class WorkflowYamlGeneratorTests
         var job = yaml.Jobs["default"];
         var installStep = Assert.Single(job.Steps, s => s.Name == "Install Aspire CLI");
         // Stable channel: default install (no -q flag)
-        Assert.Equal("curl -sSL https://aspire.dev/install.sh | bash", installStep.Run);
+        Assert.Contains("curl -sSL https://aspire.dev/install.sh | bash", installStep.Run);
+        Assert.Contains("""echo "$HOME/.aspire/bin" >> $GITHUB_PATH""", installStep.Run);
     }
 
     [Fact]
@@ -417,6 +420,7 @@ public class WorkflowYamlGeneratorTests
         var installStep = Assert.Single(job.Steps, s => s.Name == "Install Aspire CLI");
         Assert.Contains("get-aspire-cli-pr.sh", installStep.Run);
         Assert.Contains("15643", installStep.Run);
+        Assert.Contains("""echo "$HOME/.aspire/bin" >> $GITHUB_PATH""", installStep.Run);
         Assert.NotNull(installStep.Env);
         Assert.Equal("${{ github.token }}", installStep.Env["GH_TOKEN"]);
     }

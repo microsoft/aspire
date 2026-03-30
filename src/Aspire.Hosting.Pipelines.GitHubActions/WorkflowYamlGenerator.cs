@@ -205,6 +205,8 @@ internal static class WorkflowYamlGenerator
 
     private static StepYaml GenerateAspireCliInstallStep(string? channel)
     {
+        const string addToPath = """echo "$HOME/.aspire/bin" >> $GITHUB_PATH""";
+
         // Check for PR channel: "pr-<number>" — use the PR-specific install script
         if (channel is not null &&
             channel.StartsWith("pr-", StringComparison.OrdinalIgnoreCase) &&
@@ -213,7 +215,7 @@ internal static class WorkflowYamlGenerator
             return new StepYaml
             {
                 Name = "Install Aspire CLI",
-                Run = $"curl -sSL {PrInstallScriptUrl} | bash -s -- {prNumber}",
+                Run = $"curl -sSL {PrInstallScriptUrl} | bash -s -- {prNumber}\n{addToPath}",
                 Env = new Dictionary<string, string>
                 {
                     ["GH_TOKEN"] = "${{ github.token }}"
@@ -235,7 +237,7 @@ internal static class WorkflowYamlGenerator
         return new StepYaml
         {
             Name = "Install Aspire CLI",
-            Run = installCommand
+            Run = $"{installCommand}\n{addToPath}"
         };
     }
 
