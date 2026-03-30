@@ -19,15 +19,11 @@ public sealed class DurableTaskHubResource(string name, DurableTaskSchedulerReso
     /// <summary>
     /// Gets the connection string expression composed of the scheduler connection string and the TaskHub name.
     /// </summary>
-    /// <remarks>This property is not available in polyglot app hosts.</remarks>
-    [AspireExportIgnore]
     public ReferenceExpression ConnectionStringExpression => ReferenceExpression.Create($"{Parent.ConnectionStringExpression};TaskHub={TaskHubName}");
 
     /// <summary>
     /// Gets the parent durable task scheduler resource that provides the base connection string.
     /// </summary>
-    /// <remarks>This property is not available in polyglot app hosts.</remarks>
-    [AspireExportIgnore]
     public DurableTaskSchedulerResource Parent => scheduler;
 
     /// <summary>
