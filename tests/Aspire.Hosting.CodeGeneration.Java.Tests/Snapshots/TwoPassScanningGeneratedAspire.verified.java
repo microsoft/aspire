@@ -1407,6 +1407,16 @@ public class CSharpAppResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets an environment variable from a reference expression */
+    public CSharpAppResource withEnvironmentExpression(String name, ReferenceExpression value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentExpression", reqArgs);
+        return this;
+    }
+
     /** Sets environment variables via callback */
     public CSharpAppResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -1421,6 +1431,40 @@ public class CSharpAppResource extends ResourceBuilderBase {
         }
         getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs);
         return this;
+    }
+
+    /** Sets an environment variable from an endpoint reference */
+    public CSharpAppResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("endpointReference", AspireClient.serializeValue(endpointReference));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentEndpoint", reqArgs);
+        return this;
+    }
+
+    /** Sets an environment variable from a parameter resource */
+    public CSharpAppResource withEnvironmentParameter(String name, ParameterResource parameter) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("parameter", AspireClient.serializeValue(parameter));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentParameter", reqArgs);
+        return this;
+    }
+
+    /** Sets an environment variable from a connection string resource */
+    public CSharpAppResource withEnvironmentConnectionString(String envVarName, IResourceWithConnectionString resource) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("envVarName", AspireClient.serializeValue(envVarName));
+        reqArgs.put("resource", AspireClient.serializeValue(resource));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentConnectionString", reqArgs);
+        return this;
+    }
+
+    public CSharpAppResource withEnvironmentConnectionString(String envVarName, ResourceBuilderBase resource) {
+        return withEnvironmentConnectionString(envVarName, new IResourceWithConnectionString(resource.getHandle(), resource.getClient()));
     }
 
     /** Adds arguments */
@@ -4674,6 +4718,16 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets an environment variable from a reference expression */
+    public ContainerResource withEnvironmentExpression(String name, ReferenceExpression value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentExpression", reqArgs);
+        return this;
+    }
+
     /** Sets environment variables via callback */
     public ContainerResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -4688,6 +4742,40 @@ public class ContainerResource extends ResourceBuilderBase {
         }
         getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs);
         return this;
+    }
+
+    /** Sets an environment variable from an endpoint reference */
+    public ContainerResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("endpointReference", AspireClient.serializeValue(endpointReference));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentEndpoint", reqArgs);
+        return this;
+    }
+
+    /** Sets an environment variable from a parameter resource */
+    public ContainerResource withEnvironmentParameter(String name, ParameterResource parameter) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("parameter", AspireClient.serializeValue(parameter));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentParameter", reqArgs);
+        return this;
+    }
+
+    /** Sets an environment variable from a connection string resource */
+    public ContainerResource withEnvironmentConnectionString(String envVarName, IResourceWithConnectionString resource) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("envVarName", AspireClient.serializeValue(envVarName));
+        reqArgs.put("resource", AspireClient.serializeValue(resource));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentConnectionString", reqArgs);
+        return this;
+    }
+
+    public ContainerResource withEnvironmentConnectionString(String envVarName, ResourceBuilderBase resource) {
+        return withEnvironmentConnectionString(envVarName, new IResourceWithConnectionString(resource.getHandle(), resource.getClient()));
     }
 
     /** Adds arguments */
@@ -6312,6 +6400,16 @@ public class DotnetToolResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets an environment variable from a reference expression */
+    public DotnetToolResource withEnvironmentExpression(String name, ReferenceExpression value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentExpression", reqArgs);
+        return this;
+    }
+
     /** Sets environment variables via callback */
     public DotnetToolResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -6326,6 +6424,40 @@ public class DotnetToolResource extends ResourceBuilderBase {
         }
         getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs);
         return this;
+    }
+
+    /** Sets an environment variable from an endpoint reference */
+    public DotnetToolResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("endpointReference", AspireClient.serializeValue(endpointReference));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentEndpoint", reqArgs);
+        return this;
+    }
+
+    /** Sets an environment variable from a parameter resource */
+    public DotnetToolResource withEnvironmentParameter(String name, ParameterResource parameter) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("parameter", AspireClient.serializeValue(parameter));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentParameter", reqArgs);
+        return this;
+    }
+
+    /** Sets an environment variable from a connection string resource */
+    public DotnetToolResource withEnvironmentConnectionString(String envVarName, IResourceWithConnectionString resource) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("envVarName", AspireClient.serializeValue(envVarName));
+        reqArgs.put("resource", AspireClient.serializeValue(resource));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentConnectionString", reqArgs);
+        return this;
+    }
+
+    public DotnetToolResource withEnvironmentConnectionString(String envVarName, ResourceBuilderBase resource) {
+        return withEnvironmentConnectionString(envVarName, new IResourceWithConnectionString(resource.getHandle(), resource.getClient()));
     }
 
     /** Adds arguments */
@@ -7889,6 +8021,16 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets an environment variable from a reference expression */
+    public ExecutableResource withEnvironmentExpression(String name, ReferenceExpression value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentExpression", reqArgs);
+        return this;
+    }
+
     /** Sets environment variables via callback */
     public ExecutableResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -7903,6 +8045,40 @@ public class ExecutableResource extends ResourceBuilderBase {
         }
         getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs);
         return this;
+    }
+
+    /** Sets an environment variable from an endpoint reference */
+    public ExecutableResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("endpointReference", AspireClient.serializeValue(endpointReference));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentEndpoint", reqArgs);
+        return this;
+    }
+
+    /** Sets an environment variable from a parameter resource */
+    public ExecutableResource withEnvironmentParameter(String name, ParameterResource parameter) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("parameter", AspireClient.serializeValue(parameter));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentParameter", reqArgs);
+        return this;
+    }
+
+    /** Sets an environment variable from a connection string resource */
+    public ExecutableResource withEnvironmentConnectionString(String envVarName, IResourceWithConnectionString resource) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("envVarName", AspireClient.serializeValue(envVarName));
+        reqArgs.put("resource", AspireClient.serializeValue(resource));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentConnectionString", reqArgs);
+        return this;
+    }
+
+    public ExecutableResource withEnvironmentConnectionString(String envVarName, ResourceBuilderBase resource) {
+        return withEnvironmentConnectionString(envVarName, new IResourceWithConnectionString(resource.getHandle(), resource.getClient()));
     }
 
     /** Adds arguments */
@@ -12481,6 +12657,16 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets an environment variable from a reference expression */
+    public ProjectResource withEnvironmentExpression(String name, ReferenceExpression value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentExpression", reqArgs);
+        return this;
+    }
+
     /** Sets environment variables via callback */
     public ProjectResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -12495,6 +12681,40 @@ public class ProjectResource extends ResourceBuilderBase {
         }
         getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs);
         return this;
+    }
+
+    /** Sets an environment variable from an endpoint reference */
+    public ProjectResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("endpointReference", AspireClient.serializeValue(endpointReference));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentEndpoint", reqArgs);
+        return this;
+    }
+
+    /** Sets an environment variable from a parameter resource */
+    public ProjectResource withEnvironmentParameter(String name, ParameterResource parameter) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("parameter", AspireClient.serializeValue(parameter));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentParameter", reqArgs);
+        return this;
+    }
+
+    /** Sets an environment variable from a connection string resource */
+    public ProjectResource withEnvironmentConnectionString(String envVarName, IResourceWithConnectionString resource) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("envVarName", AspireClient.serializeValue(envVarName));
+        reqArgs.put("resource", AspireClient.serializeValue(resource));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentConnectionString", reqArgs);
+        return this;
+    }
+
+    public ProjectResource withEnvironmentConnectionString(String envVarName, ResourceBuilderBase resource) {
+        return withEnvironmentConnectionString(envVarName, new IResourceWithConnectionString(resource.getHandle(), resource.getClient()));
     }
 
     /** Adds arguments */
@@ -14784,6 +15004,16 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets an environment variable from a reference expression */
+    public TestDatabaseResource withEnvironmentExpression(String name, ReferenceExpression value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentExpression", reqArgs);
+        return this;
+    }
+
     /** Sets environment variables via callback */
     public TestDatabaseResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -14798,6 +15028,40 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         }
         getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs);
         return this;
+    }
+
+    /** Sets an environment variable from an endpoint reference */
+    public TestDatabaseResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("endpointReference", AspireClient.serializeValue(endpointReference));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentEndpoint", reqArgs);
+        return this;
+    }
+
+    /** Sets an environment variable from a parameter resource */
+    public TestDatabaseResource withEnvironmentParameter(String name, ParameterResource parameter) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("parameter", AspireClient.serializeValue(parameter));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentParameter", reqArgs);
+        return this;
+    }
+
+    /** Sets an environment variable from a connection string resource */
+    public TestDatabaseResource withEnvironmentConnectionString(String envVarName, IResourceWithConnectionString resource) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("envVarName", AspireClient.serializeValue(envVarName));
+        reqArgs.put("resource", AspireClient.serializeValue(resource));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentConnectionString", reqArgs);
+        return this;
+    }
+
+    public TestDatabaseResource withEnvironmentConnectionString(String envVarName, ResourceBuilderBase resource) {
+        return withEnvironmentConnectionString(envVarName, new IResourceWithConnectionString(resource.getHandle(), resource.getClient()));
     }
 
     /** Adds arguments */
@@ -16399,6 +16663,16 @@ public class TestRedisResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets an environment variable from a reference expression */
+    public TestRedisResource withEnvironmentExpression(String name, ReferenceExpression value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentExpression", reqArgs);
+        return this;
+    }
+
     /** Sets environment variables via callback */
     public TestRedisResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -16413,6 +16687,40 @@ public class TestRedisResource extends ResourceBuilderBase {
         }
         getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs);
         return this;
+    }
+
+    /** Sets an environment variable from an endpoint reference */
+    public TestRedisResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("endpointReference", AspireClient.serializeValue(endpointReference));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentEndpoint", reqArgs);
+        return this;
+    }
+
+    /** Sets an environment variable from a parameter resource */
+    public TestRedisResource withEnvironmentParameter(String name, ParameterResource parameter) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("parameter", AspireClient.serializeValue(parameter));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentParameter", reqArgs);
+        return this;
+    }
+
+    /** Sets an environment variable from a connection string resource */
+    public TestRedisResource withEnvironmentConnectionString(String envVarName, IResourceWithConnectionString resource) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("envVarName", AspireClient.serializeValue(envVarName));
+        reqArgs.put("resource", AspireClient.serializeValue(resource));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentConnectionString", reqArgs);
+        return this;
+    }
+
+    public TestRedisResource withEnvironmentConnectionString(String envVarName, ResourceBuilderBase resource) {
+        return withEnvironmentConnectionString(envVarName, new IResourceWithConnectionString(resource.getHandle(), resource.getClient()));
     }
 
     /** Adds a connection property with a reference expression */
@@ -18151,6 +18459,16 @@ public class TestVaultResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets an environment variable from a reference expression */
+    public TestVaultResource withEnvironmentExpression(String name, ReferenceExpression value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentExpression", reqArgs);
+        return this;
+    }
+
     /** Sets environment variables via callback */
     public TestVaultResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -18165,6 +18483,40 @@ public class TestVaultResource extends ResourceBuilderBase {
         }
         getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs);
         return this;
+    }
+
+    /** Sets an environment variable from an endpoint reference */
+    public TestVaultResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("endpointReference", AspireClient.serializeValue(endpointReference));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentEndpoint", reqArgs);
+        return this;
+    }
+
+    /** Sets an environment variable from a parameter resource */
+    public TestVaultResource withEnvironmentParameter(String name, ParameterResource parameter) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("parameter", AspireClient.serializeValue(parameter));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentParameter", reqArgs);
+        return this;
+    }
+
+    /** Sets an environment variable from a connection string resource */
+    public TestVaultResource withEnvironmentConnectionString(String envVarName, IResourceWithConnectionString resource) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("envVarName", AspireClient.serializeValue(envVarName));
+        reqArgs.put("resource", AspireClient.serializeValue(resource));
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentConnectionString", reqArgs);
+        return this;
+    }
+
+    public TestVaultResource withEnvironmentConnectionString(String envVarName, ResourceBuilderBase resource) {
+        return withEnvironmentConnectionString(envVarName, new IResourceWithConnectionString(resource.getHandle(), resource.getClient()));
     }
 
     /** Adds arguments */
