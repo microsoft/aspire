@@ -1,10 +1,10 @@
-<configuration>
+﻿<configuration>
   <packageSources>
     <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
-    <add key="{PR_HIVE}/packages" value="{PR_HIVE}/packages" />
+    <add key="aspire-hive-pr-1234" value="%HOME%/.aspire/hives/pr-1234/packages" />
   </packageSources>
   <packageSourceMapping>
-    <packageSource key="{PR_HIVE}/packages">
+    <packageSource key="aspire-hive-pr-1234">
       <package pattern="Aspire*" />
     </packageSource>
     <packageSource key="nuget.org">

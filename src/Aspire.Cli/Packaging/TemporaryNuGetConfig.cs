@@ -38,10 +38,23 @@ internal sealed class TemporaryNuGetConfig : IDisposable
 
     private static async Task GenerateNuGetConfigAsync(PackageMapping[] mappings, FileInfo configFile)
     {
-        var distinctSources = mappings
-            .Select(m => m.Source)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select((source, index) => new { Source = source, Key = source })
+        // Build distinct sources with their preferred key names.
+        // If any mapping for a source specifies a Key, use that; otherwise fall back to the source URL.
+        var sourceKeyLookup = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var m in mappings)
+        {
+            if (!sourceKeyLookup.ContainsKey(m.Source))
+            {
+                sourceKeyLookup[m.Source] = m.Key ?? m.Source;
+            }
+            else if (m.Key is not null)
+            {
+                sourceKeyLookup[m.Source] = m.Key;
+            }
+        }
+
+        var distinctSources = sourceKeyLookup
+            .Select(kvp => new { Source = kvp.Key, Key = kvp.Value })
             .ToArray();
 
         await using var fileStream = configFile.Create();
