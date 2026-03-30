@@ -72,7 +72,7 @@ class ReferenceExpressionImpl implements ReferenceExpression {
         if (typeof handleOrFormatOrCondition === 'string') {
             this._format = handleOrFormatOrCondition;
             this._valueProviders = clientOrValueProvidersOrMatchValue as unknown[];
-        } else if (handleOrFormatOrCondition instanceof Handle) {
+        } else if (isHandleLike(handleOrFormatOrCondition)) {
             this._handle = handleOrFormatOrCondition;
             this._client = clientOrValueProvidersOrMatchValue as AspireClient;
         } else {
@@ -233,7 +233,7 @@ function extractHandleForExpr(value: unknown): unknown {
     }
 
     // Handle objects - get their JSON representation
-    if (value instanceof Handle) {
+    if (isHandleLike(value)) {
         return value.toJSON();
     }
 
@@ -253,6 +253,19 @@ function extractHandleForExpr(value: unknown): unknown {
     throw new Error(
         `Cannot use value of type ${typeof value} in reference expression. ` +
         `Expected a Handle, string, or number.`
+    );
+}
+
+function isHandleLike(value: unknown): value is Handle {
+    return (
+        value !== null &&
+        typeof value === 'object' &&
+        '$handle' in value &&
+        typeof (value as { $handle?: unknown }).$handle === 'string' &&
+        '$type' in value &&
+        typeof (value as { $type?: unknown }).$type === 'string' &&
+        'toJSON' in value &&
+        typeof (value as { toJSON?: unknown }).toJSON === 'function'
     );
 }
 
@@ -312,7 +325,18 @@ export class ResourceBuilderBase<THandle extends Handle = Handle> implements Han
  * await items.add(newItem);
  * ```
  */
-export class AspireList<T> {
+export type AspireList<T> = {
+    count(): Promise<number>;
+    get(index: number): Promise<T>;
+    add(item: T): Promise<void>;
+    removeAt(index: number): Promise<void>;
+    clear(): Promise<void>;
+    toArray(): Promise<T[]>;
+    toTransportValue(): Promise<MarshalledHandle>;
+    toJSON(): MarshalledHandle;
+};
+
+class AspireListImpl<T> implements AspireList<T> {
     private _resolvedHandle?: Handle;
     private _resolvePromise?: Promise<Handle>;
 
@@ -429,6 +453,8 @@ export class AspireList<T> {
     }
 }
 
+export const AspireList = AspireListImpl;
+
 // ============================================================================
 // AspireDict<K, V> - Mutable Dictionary Wrapper
 // ============================================================================
@@ -445,7 +471,21 @@ export class AspireList<T> {
  * const hasKey = await config.containsKey("key");
  * ```
  */
-export class AspireDict<K, V> {
+export type AspireDict<K, V> = {
+    count(): Promise<number>;
+    get(key: K): Promise<V>;
+    set(key: K, value: V): Promise<void>;
+    containsKey(key: K): Promise<boolean>;
+    remove(key: K): Promise<boolean>;
+    clear(): Promise<void>;
+    keys(): Promise<K[]>;
+    values(): Promise<V[]>;
+    toObject(): Promise<Record<string, V>>;
+    toTransportValue(): Promise<MarshalledHandle>;
+    toJSON(): MarshalledHandle;
+};
+
+class AspireDictImpl<K, V> implements AspireDict<K, V> {
     private _resolvedHandle?: Handle;
     private _resolvePromise?: Promise<Handle>;
 
@@ -596,3 +636,5 @@ export class AspireDict<K, V> {
         return this._resolvedHandle.toJSON();
     }
 }
+
+export const AspireDict = AspireDictImpl;

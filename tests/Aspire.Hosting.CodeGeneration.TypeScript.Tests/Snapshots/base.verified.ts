@@ -72,7 +72,7 @@ class ReferenceExpressionImpl implements ReferenceExpression {
         if (typeof handleOrFormatOrCondition === 'string') {
             this._format = handleOrFormatOrCondition;
             this._valueProviders = clientOrValueProvidersOrMatchValue as unknown[];
-        } else if (handleOrFormatOrCondition instanceof Handle) {
+        } else if (isHandleLike(handleOrFormatOrCondition)) {
             this._handle = handleOrFormatOrCondition;
             this._client = clientOrValueProvidersOrMatchValue as AspireClient;
         } else {
@@ -233,7 +233,7 @@ function extractHandleForExpr(value: unknown): unknown {
     }
 
     // Handle objects - get their JSON representation
-    if (value instanceof Handle) {
+    if (isHandleLike(value)) {
         return value.toJSON();
     }
 
@@ -253,6 +253,19 @@ function extractHandleForExpr(value: unknown): unknown {
     throw new Error(
         `Cannot use value of type ${typeof value} in reference expression. ` +
         `Expected a Handle, string, or number.`
+    );
+}
+
+function isHandleLike(value: unknown): value is Handle {
+    return (
+        value !== null &&
+        typeof value === 'object' &&
+        '$handle' in value &&
+        typeof (value as { $handle?: unknown }).$handle === 'string' &&
+        '$type' in value &&
+        typeof (value as { $type?: unknown }).$type === 'string' &&
+        'toJSON' in value &&
+        typeof (value as { toJSON?: unknown }).toJSON === 'function'
     );
 }
 

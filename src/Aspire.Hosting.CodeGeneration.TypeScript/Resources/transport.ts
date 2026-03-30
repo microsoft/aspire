@@ -157,35 +157,25 @@ function createCircularReferenceError(capabilityId: string, path: string): AppHo
  * @typeParam T - The ATS type ID (e.g., "Aspire.Hosting/IDistributedApplicationBuilder")
  */
 export class Handle<T extends string = string> {
-    private readonly _handleId: string;
-    private readonly _typeId: T;
+    readonly $handle: string;
+    readonly $type: T;
 
     constructor(marshalled: MarshalledHandle) {
-        this._handleId = marshalled.$handle;
-        this._typeId = marshalled.$type as T;
-    }
-
-    /** The handle ID (instance number) */
-    get $handle(): string {
-        return this._handleId;
-    }
-
-    /** The ATS type ID */
-    get $type(): T {
-        return this._typeId;
+        this.$handle = marshalled.$handle;
+        this.$type = marshalled.$type as T;
     }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle {
         return {
-            $handle: this._handleId,
-            $type: this._typeId
+            $handle: this.$handle,
+            $type: this.$type
         };
     }
 
     /** String representation for debugging */
     toString(): string {
-        return `Handle<${this._typeId}>(${this._handleId})`;
+        return `Handle<${this.$type}>(${this.$handle})`;
     }
 }
 
