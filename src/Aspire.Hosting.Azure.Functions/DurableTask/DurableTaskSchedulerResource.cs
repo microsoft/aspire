@@ -31,7 +31,7 @@ public sealed class DurableTaskSchedulerResource(string name) : Resource(name), 
         {
             var grpcEndpoint = new EndpointReference(this, "grpc");
 
-            return ReferenceExpression.Create($"Endpoint=http://{grpcEndpoint.Property(EndpointProperty.Host)}:{grpcEndpoint.Property(EndpointProperty.Port)};Authentication=None");
+            return ReferenceExpression.Create($"Endpoint={grpcEndpoint.Property(EndpointProperty.Scheme)}://{grpcEndpoint.Property(EndpointProperty.Host)}:{grpcEndpoint.Property(EndpointProperty.Port)};Authentication=None");
         }
 
         if (this.TryGetLastAnnotation<DurableTaskSchedulerConnectionStringAnnotation>(out var connectionStringAnnotation))
@@ -53,9 +53,9 @@ public sealed class DurableTaskSchedulerResource(string name) : Resource(name), 
         {
             var dashboardEndpoint = new EndpointReference(this, "dashboard");
 
-            return ReferenceExpression.Create($"http://{dashboardEndpoint.Property(EndpointProperty.Host)}:{dashboardEndpoint.Property(EndpointProperty.Port)}");
+            return ReferenceExpression.Create($"{dashboardEndpoint.Property(EndpointProperty.Scheme)}://{dashboardEndpoint.Property(EndpointProperty.Host)}:{dashboardEndpoint.Property(EndpointProperty.Port)}");
         }
 
-        throw new NotImplementedException();
+        throw new InvalidOperationException("Dashboard endpoint is only available when running as an emulator.");
     }
 }
