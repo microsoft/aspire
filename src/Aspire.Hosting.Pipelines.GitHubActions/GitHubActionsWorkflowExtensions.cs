@@ -131,7 +131,7 @@ public static class GitHubActionsWorkflowExtensions
             var scheduling = SchedulingResolver.Resolve(connectedSteps, workflow);
 
             // Generate the YAML model
-            var yamlModel = WorkflowYamlGenerator.Generate(scheduling, workflow, context.RepositoryRootDirectory);
+            var yamlModel = WorkflowYamlGenerator.Generate(scheduling, workflow);
 
             // Apply user customization callbacks
             foreach (var customization in workflow.Annotations.OfType<WorkflowCustomizationAnnotation>())

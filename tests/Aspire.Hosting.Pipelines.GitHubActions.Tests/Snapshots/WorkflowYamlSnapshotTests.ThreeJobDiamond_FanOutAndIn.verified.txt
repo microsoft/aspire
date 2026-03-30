@@ -26,7 +26,7 @@ jobs:
           dotnet-version: 10.0.x
       - name: Install Aspire CLI
         run: |
-          curl -sSL https://aspire.dev/install.sh | bash
+          curl -sSL https://aspire.dev/install.sh | bash -s -- -q dev
           echo "$HOME/.aspire/bin" >> $GITHUB_PATH
       - name: Run pipeline steps
         env:
@@ -52,7 +52,7 @@ jobs:
           dotnet-version: 10.0.x
       - name: Install Aspire CLI
         run: |
-          curl -sSL https://aspire.dev/install.sh | bash
+          curl -sSL https://aspire.dev/install.sh | bash -s -- -q dev
           echo "$HOME/.aspire/bin" >> $GITHUB_PATH
       - name: Download state from build
         uses: actions/download-artifact@v4
@@ -83,7 +83,7 @@ jobs:
           dotnet-version: 10.0.x
       - name: Install Aspire CLI
         run: |
-          curl -sSL https://aspire.dev/install.sh | bash
+          curl -sSL https://aspire.dev/install.sh | bash -s -- -q dev
           echo "$HOME/.aspire/bin" >> $GITHUB_PATH
       - name: Download state from build
         uses: actions/download-artifact@v4

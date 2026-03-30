@@ -3,7 +3,7 @@
 
 #pragma warning disable ASPIREPIPELINES001
 
-using System.Text.Json;
+using System.Reflection;
 using Aspire.Hosting.Pipelines.GitHubActions.Yaml;
 
 namespace Aspire.Hosting.Pipelines.GitHubActions;
@@ -19,12 +19,12 @@ internal static class WorkflowYamlGenerator
     /// <summary>
     /// Generates a workflow YAML model from the scheduling result.
     /// </summary>
-    public static WorkflowYaml Generate(SchedulingResult scheduling, GitHubActionsWorkflowResource workflow, string? repositoryRootDirectory = null)
+    public static WorkflowYaml Generate(SchedulingResult scheduling, GitHubActionsWorkflowResource workflow)
     {
         ArgumentNullException.ThrowIfNull(scheduling);
         ArgumentNullException.ThrowIfNull(workflow);
 
-        var channel = ReadChannelFromConfig(repositoryRootDirectory);
+        var buildChannel = DetectBuildChannel();
 
         var workflowYaml = new WorkflowYaml
         {
@@ -51,14 +51,14 @@ internal static class WorkflowYamlGenerator
         // Generate a YAML job for each workflow job
         foreach (var job in workflow.Jobs)
         {
-            var jobYaml = GenerateJob(job, scheduling, workflow, channel);
+            var jobYaml = GenerateJob(job, scheduling, workflow, buildChannel);
             workflowYaml.Jobs[job.Id] = jobYaml;
         }
 
         return workflowYaml;
     }
 
-    private static JobYaml GenerateJob(GitHubActionsJobResource job, SchedulingResult scheduling, GitHubActionsWorkflowResource workflow, string? channel)
+    private static JobYaml GenerateJob(GitHubActionsJobResource job, SchedulingResult scheduling, GitHubActionsWorkflowResource workflow, BuildChannel buildChannel)
     {
         // Collect dependency tags from all pipeline steps assigned to this job
         var dependencyTags = new HashSet<string>(StringComparer.Ordinal);
@@ -117,7 +117,7 @@ internal static class WorkflowYamlGenerator
         // Conditional: Install Aspire CLI (when any step needs it — always true since aspire do runs)
         if (dependencyTags.Contains(WellKnownDependencyTags.AspireCli))
         {
-            steps.Add(GenerateAspireCliInstallStep(channel));
+            steps.Add(GenerateAspireCliInstallStep(buildChannel));
         }
 
         // Conditional: Azure login (when any step needs Azure CLI)
@@ -203,14 +203,12 @@ internal static class WorkflowYamlGenerator
     private const string InstallScriptUrl = "https://aspire.dev/install.sh";
     private const string PrInstallScriptUrl = "https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.sh";
 
-    private static StepYaml GenerateAspireCliInstallStep(string? channel)
+    private static StepYaml GenerateAspireCliInstallStep(BuildChannel buildChannel)
     {
         const string addToPath = """echo "$HOME/.aspire/bin" >> $GITHUB_PATH""";
 
-        // Check for PR channel: "pr-<number>" — use the PR-specific install script
-        if (channel is not null &&
-            channel.StartsWith("pr-", StringComparison.OrdinalIgnoreCase) &&
-            int.TryParse(channel.AsSpan(3), out var prNumber))
+        // PR build: use the PR-specific install script with GH_TOKEN for artifact download
+        if (buildChannel.PrNumber is { } prNumber)
         {
             return new StepYaml
             {
@@ -223,16 +221,12 @@ internal static class WorkflowYamlGenerator
             };
         }
 
-        // Standard channel install via aspire.dev/install.sh with quality flag:
-        //   "daily"   → -q dev
-        //   "staging" → -q staging
-        //   anything else (stable/default/null) → no flag
-        var installCommand = channel?.ToLowerInvariant() switch
-        {
-            "daily" => $"curl -sSL {InstallScriptUrl} | bash -s -- -q dev",
-            "staging" => $"curl -sSL {InstallScriptUrl} | bash -s -- -q staging",
-            _ => $"curl -sSL {InstallScriptUrl} | bash"
-        };
+        // Non-PR build: use aspire.dev/install.sh with quality flag based on prerelease status
+        //   prerelease (e.g. preview/dev build) → -q dev
+        //   stable (no prerelease suffix) → no flag
+        var installCommand = buildChannel.IsPrerelease
+            ? $"curl -sSL {InstallScriptUrl} | bash -s -- -q dev"
+            : $"curl -sSL {InstallScriptUrl} | bash";
 
         return new StepYaml
         {
@@ -241,37 +235,56 @@ internal static class WorkflowYamlGenerator
         };
     }
 
-    private static string? ReadChannelFromConfig(string? repositoryRootDirectory)
+    /// <summary>
+    /// Detects the build channel by inspecting the assembly's informational version.
+    /// PR builds contain <c>-pr.{number}</c> in the version suffix (e.g. <c>13.3.0-pr.15643.g8a1b2c3d</c>).
+    /// </summary>
+    internal static BuildChannel DetectBuildChannel()
     {
-        if (string.IsNullOrEmpty(repositoryRootDirectory))
+        var version = typeof(WorkflowYamlGenerator).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+
+        return ParseBuildChannel(version);
+    }
+
+    /// <summary>
+    /// Parses a build channel from a version string.
+    /// </summary>
+    internal static BuildChannel ParseBuildChannel(string? version)
+    {
+        if (string.IsNullOrEmpty(version))
         {
-            return null;
+            return new BuildChannel(PrNumber: null, IsPrerelease: false);
         }
 
-        var configPath = Path.Combine(repositoryRootDirectory, "aspire.config.json");
-        if (!File.Exists(configPath))
-        {
-            return null;
-        }
+        // Strip the +commit suffix (e.g. "+8a1b2c3d...")
+        var plusIdx = version.IndexOf('+');
+        var versionCore = plusIdx >= 0 ? version[..plusIdx] : version;
 
-        try
+        // Check for PR pattern: "-pr.{digits}" in the version string
+        const string prMarker = "-pr.";
+        var prIdx = versionCore.IndexOf(prMarker, StringComparison.OrdinalIgnoreCase);
+        if (prIdx >= 0)
         {
-            using var stream = File.OpenRead(configPath);
-            using var doc = JsonDocument.Parse(stream);
-
-            if (doc.RootElement.TryGetProperty("channel", out var channelProp) &&
-                channelProp.ValueKind == JsonValueKind.String)
+            var afterMarker = versionCore.AsSpan(prIdx + prMarker.Length);
+            // Take digits until next '.' or end of string
+            var dotIdx = afterMarker.IndexOf('.');
+            var numberSpan = dotIdx >= 0 ? afterMarker[..dotIdx] : afterMarker;
+            if (int.TryParse(numberSpan, out var prNumber))
             {
-                return channelProp.GetString();
+                return new BuildChannel(PrNumber: prNumber, IsPrerelease: true);
             }
         }
-        catch (JsonException)
-        {
-            // Malformed config — fall back to default
-        }
 
-        return null;
+        // Any prerelease suffix (contains '-') means it's a dev/preview build
+        var isPrerelease = versionCore.Contains('-');
+        return new BuildChannel(PrNumber: null, IsPrerelease: isPrerelease);
     }
+
+    /// <summary>
+    /// Represents the detected build channel from assembly version metadata.
+    /// </summary>
+    internal readonly record struct BuildChannel(int? PrNumber, bool IsPrerelease);
 
     private static string FindStageName(GitHubActionsWorkflowResource workflow, GitHubActionsJobResource job)
     {

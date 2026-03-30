@@ -314,115 +314,41 @@ public class WorkflowYamlGeneratorTests
         Assert.Contains(deployJobYaml.Steps, s => s.Name == "Azure login");
     }
 
-    // Channel-aware CLI install tests
+    // Build channel detection tests (version-based)
+
+    [Theory]
+    [InlineData(null, null, false)]
+    [InlineData("", null, false)]
+    [InlineData("13.3.0", null, false)]
+    [InlineData("13.3.0+abc123", null, false)]
+    [InlineData("13.3.0-preview.1.25608.1", null, true)]
+    [InlineData("13.3.0-preview.1.25608.1+abc123", null, true)]
+    [InlineData("13.3.0-dev.25180.1", null, true)]
+    [InlineData("13.3.0-pr.15643.g8a1b2c3d", 15643, true)]
+    [InlineData("13.3.0-pr.15643.g8a1b2c3d+abc123def456", 15643, true)]
+    [InlineData("13.3.0-pr.999", 999, true)]
+    public void ParseBuildChannel_DetectsCorrectly(string? version, int? expectedPr, bool expectedPrerelease)
+    {
+        var channel = WorkflowYamlGenerator.ParseBuildChannel(version);
+
+        Assert.Equal(expectedPr, channel.PrNumber);
+        Assert.Equal(expectedPrerelease, channel.IsPrerelease);
+    }
 
     [Fact]
-    public void Generate_NoConfig_UsesDefaultInstallScript()
+    public void GenerateInstallStep_StableBuild_UsesDefaultInstallScript()
     {
         var workflow = new GitHubActionsWorkflowResource("deploy");
         var step = CreateStep("build-app");
 
         var scheduling = SchedulingResolver.Resolve([step], workflow);
-        var yaml = WorkflowYamlGenerator.Generate(scheduling, workflow, repositoryRootDirectory: null);
+        var yaml = WorkflowYamlGenerator.Generate(scheduling, workflow);
 
         var job = yaml.Jobs["default"];
         var installStep = Assert.Single(job.Steps, s => s.Name == "Install Aspire CLI");
-        // No config → default (stable) channel install
+        // Running in tests → local dev build → stable install (no -q flag)
         Assert.Contains("curl -sSL https://aspire.dev/install.sh | bash", installStep.Run);
         Assert.Contains("""echo "$HOME/.aspire/bin" >> $GITHUB_PATH""", installStep.Run);
-    }
-
-    [Fact]
-    public void Generate_UnknownChannel_FallsBackToDefault()
-    {
-        using var tempDir = new TempDirectory();
-        File.WriteAllText(Path.Combine(tempDir.Path, "aspire.config.json"), """{"channel": "preview"}""");
-
-        var workflow = new GitHubActionsWorkflowResource("deploy");
-        var step = CreateStep("build-app");
-
-        var scheduling = SchedulingResolver.Resolve([step], workflow);
-        var yaml = WorkflowYamlGenerator.Generate(scheduling, workflow, tempDir.Path);
-
-        var job = yaml.Jobs["default"];
-        var installStep = Assert.Single(job.Steps, s => s.Name == "Install Aspire CLI");
-        // "preview" is not a recognized channel — falls back to default (stable) install
-        Assert.Contains("curl -sSL https://aspire.dev/install.sh | bash", installStep.Run);
-        Assert.Contains("""echo "$HOME/.aspire/bin" >> $GITHUB_PATH""", installStep.Run);
-    }
-
-    [Fact]
-    public void Generate_DailyChannel_UsesDailyQuality()
-    {
-        using var tempDir = new TempDirectory();
-        File.WriteAllText(Path.Combine(tempDir.Path, "aspire.config.json"), """{"channel": "daily"}""");
-
-        var workflow = new GitHubActionsWorkflowResource("deploy");
-        var step = CreateStep("build-app");
-
-        var scheduling = SchedulingResolver.Resolve([step], workflow);
-        var yaml = WorkflowYamlGenerator.Generate(scheduling, workflow, tempDir.Path);
-
-        var job = yaml.Jobs["default"];
-        var installStep = Assert.Single(job.Steps, s => s.Name == "Install Aspire CLI");
-        Assert.Contains("-q dev", installStep.Run);
-    }
-
-    [Fact]
-    public void Generate_StableChannel_UsesDefaultInstallScript()
-    {
-        using var tempDir = new TempDirectory();
-        File.WriteAllText(Path.Combine(tempDir.Path, "aspire.config.json"), """{"channel": "stable"}""");
-
-        var workflow = new GitHubActionsWorkflowResource("deploy");
-        var step = CreateStep("build-app");
-
-        var scheduling = SchedulingResolver.Resolve([step], workflow);
-        var yaml = WorkflowYamlGenerator.Generate(scheduling, workflow, tempDir.Path);
-
-        var job = yaml.Jobs["default"];
-        var installStep = Assert.Single(job.Steps, s => s.Name == "Install Aspire CLI");
-        // Stable channel: default install (no -q flag)
-        Assert.Contains("curl -sSL https://aspire.dev/install.sh | bash", installStep.Run);
-        Assert.Contains("""echo "$HOME/.aspire/bin" >> $GITHUB_PATH""", installStep.Run);
-    }
-
-    [Fact]
-    public void Generate_StagingChannel_UsesStagingQuality()
-    {
-        using var tempDir = new TempDirectory();
-        File.WriteAllText(Path.Combine(tempDir.Path, "aspire.config.json"), """{"channel": "staging"}""");
-
-        var workflow = new GitHubActionsWorkflowResource("deploy");
-        var step = CreateStep("build-app");
-
-        var scheduling = SchedulingResolver.Resolve([step], workflow);
-        var yaml = WorkflowYamlGenerator.Generate(scheduling, workflow, tempDir.Path);
-
-        var job = yaml.Jobs["default"];
-        var installStep = Assert.Single(job.Steps, s => s.Name == "Install Aspire CLI");
-        Assert.Contains("-q staging", installStep.Run);
-    }
-
-    [Fact]
-    public void Generate_PrChannel_UsesPrInstallScript()
-    {
-        using var tempDir = new TempDirectory();
-        File.WriteAllText(Path.Combine(tempDir.Path, "aspire.config.json"), """{"channel": "pr-15643"}""");
-
-        var workflow = new GitHubActionsWorkflowResource("deploy");
-        var step = CreateStep("build-app");
-
-        var scheduling = SchedulingResolver.Resolve([step], workflow);
-        var yaml = WorkflowYamlGenerator.Generate(scheduling, workflow, tempDir.Path);
-
-        var job = yaml.Jobs["default"];
-        var installStep = Assert.Single(job.Steps, s => s.Name == "Install Aspire CLI");
-        Assert.Contains("get-aspire-cli-pr.sh", installStep.Run);
-        Assert.Contains("15643", installStep.Run);
-        Assert.Contains("""echo "$HOME/.aspire/bin" >> $GITHUB_PATH""", installStep.Run);
-        Assert.NotNull(installStep.Env);
-        Assert.Equal("${{ github.token }}", installStep.Env["GH_TOKEN"]);
     }
 
     // ConfigureWorkflow callback tests
