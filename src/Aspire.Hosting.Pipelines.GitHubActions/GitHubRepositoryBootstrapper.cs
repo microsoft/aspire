@@ -17,77 +17,66 @@ internal static class GitHubRepositoryBootstrapper
     /// <summary>
     /// Bootstraps the Git repo and GitHub remote if needed, returning the repository root directory.
     /// </summary>
+    /// <remarks>
+    /// All user prompts use <see cref="IInteractionService.PromptInputAsync(string, string?, InteractionInput, InputsDialogInteractionOptions?, CancellationToken)"/>
+    /// rather than <c>PromptConfirmationAsync</c> because the CLI-to-AppHost backchannel only
+    /// proxies <c>InputsInteractionInfo</c> prompts (not <c>MessageBoxInteractionInfo</c>).
+    /// </remarks>
     public static async Task<string?> BootstrapAsync(PipelineWorkflowGenerationContext context)
     {
         var logger = context.StepContext.Logger;
         var ct = context.CancellationToken;
         var interactionService = context.StepContext.Services.GetService<IInteractionService>();
 
-        // Determine working directory from the execution context
-        var cwd = Directory.GetCurrentDirectory();
+        // Use the repo root already detected by the central pipeline if available.
+        var repoRoot = context.RepositoryRootDirectory;
 
-        // Step 1: Check if we're already in a Git repo
-        var isGitRepo = await GitHelper.IsGitRepoAsync(cwd, logger, ct).ConfigureAwait(false);
-
-        string repoRoot;
-
-        if (isGitRepo)
+        if (repoRoot is not null)
         {
-            repoRoot = await GitHelper.GetRepoRootAsync(cwd, logger, ct).ConfigureAwait(false) ?? cwd;
-            logger.LogInformation("Git repository detected at: {RepoRoot}", repoRoot);
+            var isGitRepo = await GitHelper.IsGitRepoAsync(repoRoot, logger, ct).ConfigureAwait(false);
+
+            if (!isGitRepo)
+            {
+                // Repo root was detected (e.g. via aspire.config.json) but it's not a git repo yet.
+                if (!await PromptBooleanAsync(interactionService,
+                    "Initialize Git Repository",
+                    "No Git repository found. Would you like to initialize one?",
+                    ct).ConfigureAwait(false))
+                {
+                    return repoRoot;
+                }
+
+                await InitGitRepoAsync(repoRoot, interactionService, context, logger, ct).ConfigureAwait(false);
+            }
         }
         else
         {
-            // Offer to initialize a Git repo
-            if (interactionService is not null)
+            // No repo root from central detection — try to detect ourselves.
+            var cwd = Directory.GetCurrentDirectory();
+            var isGitRepo = await GitHelper.IsGitRepoAsync(cwd, logger, ct).ConfigureAwait(false);
+
+            if (isGitRepo)
             {
-                var initResult = await interactionService.PromptConfirmationAsync(
+                repoRoot = await GitHelper.GetRepoRootAsync(cwd, logger, ct).ConfigureAwait(false) ?? cwd;
+                logger.LogInformation("Git repository detected at: {RepoRoot}", repoRoot);
+            }
+            else
+            {
+                if (!await PromptBooleanAsync(interactionService,
                     "Initialize Git Repository",
                     "No Git repository found in the current directory. Would you like to initialize one?",
-                    cancellationToken: ct).ConfigureAwait(false);
-
-                if (initResult.Canceled || !initResult.Data)
+                    ct).ConfigureAwait(false))
                 {
                     logger.LogInformation("Skipping Git initialization. Using current directory as root.");
                     return cwd;
                 }
-            }
-            else
-            {
-                logger.LogWarning("No Git repository found and no interaction service available. Using current directory.");
-                return cwd;
-            }
 
-            // Initialize Git repo
-            logger.LogInformation("Initializing Git repository in {Directory}...", cwd);
-            if (!await GitHelper.InitAsync(cwd, logger, ct).ConfigureAwait(false))
-            {
-                logger.LogError("Failed to initialize Git repository.");
-                return cwd;
-            }
-
-            repoRoot = cwd;
-            logger.LogInformation("Git repository initialized.");
-
-            // Offer to create .gitignore
-            var gitignorePath = Path.Combine(repoRoot, ".gitignore");
-            if (!File.Exists(gitignorePath))
-            {
-                var createGitignore = await interactionService.PromptConfirmationAsync(
-                    "Create .gitignore",
-                    "Would you like to create a .gitignore file with sensible defaults for .NET/Aspire projects?",
-                    cancellationToken: ct).ConfigureAwait(false);
-
-                if (!createGitignore.Canceled && createGitignore.Data)
-                {
-                    await File.WriteAllTextAsync(gitignorePath, GitIgnoreTemplate.Content, ct).ConfigureAwait(false);
-                    logger.LogInformation("Created .gitignore");
-                    context.StepContext.Summary.Add("📄 .gitignore", gitignorePath);
-                }
+                repoRoot = cwd;
+                await InitGitRepoAsync(repoRoot, interactionService, context, logger, ct).ConfigureAwait(false);
             }
         }
 
-        // Step 2: Check for existing GitHub remote
+        // Check for existing GitHub remote
         var remoteUrl = await GitHelper.GetRemoteUrlAsync(repoRoot, logger, ct: ct).ConfigureAwait(false);
 
         if (IsGitHubUrl(remoteUrl))
@@ -96,33 +85,57 @@ internal static class GitHubRepositoryBootstrapper
             return repoRoot;
         }
 
-        // Step 3: Offer to create a GitHub repository
-        if (interactionService is null)
-        {
-            logger.LogInformation("No interaction service available. Skipping GitHub repository setup.");
-            return repoRoot;
-        }
+        // Offer to create a GitHub repository
+        var pushMessage = remoteUrl is null
+            ? "No Git remote configured. Would you like to create a GitHub repository and push?"
+            : "The current remote is not a GitHub URL. Would you like to create a GitHub repository?";
 
-        var pushToGitHub = await interactionService.PromptConfirmationAsync(
-            "Push to GitHub",
-            remoteUrl is null
-                ? "No Git remote configured. Would you like to create a GitHub repository and push?"
-                : "The current remote is not a GitHub URL. Would you like to create a GitHub repository?",
-            cancellationToken: ct).ConfigureAwait(false);
-
-        if (pushToGitHub.Canceled || !pushToGitHub.Data)
+        if (!await PromptBooleanAsync(interactionService, "Push to GitHub", pushMessage, ct).ConfigureAwait(false))
         {
             return repoRoot;
         }
 
-        // Step 4: Set up GitHub repo
-        var cloneUrl = await SetupGitHubRepoAsync(repoRoot, interactionService, logger, ct).ConfigureAwait(false);
+        // Set up GitHub repo
+        var cloneUrl = await SetupGitHubRepoAsync(repoRoot, interactionService!, logger, ct).ConfigureAwait(false);
         if (cloneUrl is not null)
         {
             context.StepContext.Summary.Add("🔗 GitHub", cloneUrl);
         }
 
         return repoRoot;
+    }
+
+    private static async Task InitGitRepoAsync(
+        string directory,
+        IInteractionService? interactionService,
+        PipelineWorkflowGenerationContext context,
+        ILogger logger,
+        CancellationToken ct)
+    {
+        logger.LogInformation("Initializing Git repository in {Directory}...", directory);
+
+        if (!await GitHelper.InitAsync(directory, logger, ct).ConfigureAwait(false))
+        {
+            logger.LogError("Failed to initialize Git repository.");
+            return;
+        }
+
+        logger.LogInformation("Git repository initialized.");
+
+        // Offer to create .gitignore
+        var gitignorePath = Path.Combine(directory, ".gitignore");
+        if (!File.Exists(gitignorePath))
+        {
+            if (await PromptBooleanAsync(interactionService,
+                "Create .gitignore",
+                "Would you like to create a .gitignore file with sensible defaults for .NET/Aspire projects?",
+                ct).ConfigureAwait(false))
+            {
+                await File.WriteAllTextAsync(gitignorePath, GitIgnoreTemplate.Content, ct).ConfigureAwait(false);
+                logger.LogInformation("Created .gitignore");
+                context.StepContext.Summary.Add("📄 .gitignore", gitignorePath);
+            }
+        }
     }
 
     /// <summary>
@@ -134,11 +147,6 @@ internal static class GitHubRepositoryBootstrapper
         var ct = stepContext.CancellationToken;
         var interactionService = stepContext.Services.GetService<IInteractionService>();
 
-        if (interactionService is null)
-        {
-            return;
-        }
-
         // Check if there's a remote to push to
         var remoteUrl = await GitHelper.GetRemoteUrlAsync(repoRoot, logger, ct: ct).ConfigureAwait(false);
         if (remoteUrl is null)
@@ -146,12 +154,10 @@ internal static class GitHubRepositoryBootstrapper
             return;
         }
 
-        var commitResult = await interactionService.PromptConfirmationAsync(
+        if (!await PromptBooleanAsync(interactionService,
             "Commit & Push",
             "Would you like to commit the generated workflow files and push to GitHub?",
-            cancellationToken: ct).ConfigureAwait(false);
-
-        if (commitResult.Canceled || !commitResult.Data)
+            ct).ConfigureAwait(false))
         {
             return;
         }
@@ -174,6 +180,43 @@ internal static class GitHubRepositoryBootstrapper
 
         logger.LogInformation("Pushed to {Remote} on branch {Branch}", remoteUrl, branch);
         stepContext.Summary.Add("🚀 Pushed", $"{branch} → {remoteUrl}");
+    }
+
+    /// <summary>
+    /// Prompts a yes/no question via <see cref="IInteractionService.PromptInputAsync(string, string?, InteractionInput, InputsDialogInteractionOptions?, CancellationToken)"/>
+    /// using <see cref="InputType.Boolean"/>, which is supported by the CLI backchannel.
+    /// Returns <c>false</c> if the interaction service is unavailable or the user declines/cancels.
+    /// </summary>
+    private static async Task<bool> PromptBooleanAsync(
+        IInteractionService? interactionService,
+        string title,
+        string message,
+        CancellationToken ct)
+    {
+        if (interactionService is null)
+        {
+            return false;
+        }
+
+        var result = await interactionService.PromptInputAsync(
+            title,
+            message,
+            new InteractionInput
+            {
+                Name = "confirm",
+                Label = title,
+                InputType = InputType.Boolean,
+                Value = "true",
+                Required = true
+            },
+            cancellationToken: ct).ConfigureAwait(false);
+
+        if (result.Canceled || result.Data?.Value is null)
+        {
+            return false;
+        }
+
+        return string.Equals(result.Data.Value, "true", StringComparison.OrdinalIgnoreCase);
     }
 
     private static async Task<string?> SetupGitHubRepoAsync(
