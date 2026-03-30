@@ -52,15 +52,20 @@ public sealed class PipelineWorkflowGenerationContext
     public required IReadOnlyList<PipelineStep> Steps { get; init; }
 
     /// <summary>
-    /// Gets the root directory of the repository. This is used as the base path for
+    /// Gets or sets the root directory of the repository. This is used as the base path for
     /// writing generated workflow files (e.g., <c>.github/workflows/</c>).
     /// </summary>
     /// <remarks>
-    /// The directory is resolved during <c>aspire pipeline init</c> by detecting the git
-    /// repository root, falling back to the location of <c>aspire.config.json</c>, and
-    /// confirmed by the user via the interaction service.
+    /// <para>
+    /// When set by the pipeline infrastructure, this is resolved by detecting the git
+    /// repository root or the location of <c>aspire.config.json</c>.
+    /// </para>
+    /// <para>
+    /// Pipeline environment extensions (e.g., GitHub Actions) may override this value
+    /// during bootstrapping — for example, after initializing a new Git repository.
+    /// </para>
     /// </remarks>
-    public required string RepositoryRootDirectory { get; init; }
+    public string? RepositoryRootDirectory { get; set; }
 
     /// <summary>
     /// Gets the cancellation token.

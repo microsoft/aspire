@@ -123,6 +123,22 @@ public static class GitHubActionsWorkflowExtensions
             var workflow = (GitHubActionsWorkflowResource)context.Environment;
             var logger = context.StepContext.Logger;
 
+            // Bootstrap Git repo and GitHub remote if needed.
+            // This may initialize a Git repo, create .gitignore, create a GitHub repo,
+            // and set the RepositoryRootDirectory on the context.
+            var repoRoot = await GitHubRepositoryBootstrapper.BootstrapAsync(context).ConfigureAwait(false);
+
+            if (repoRoot is not null)
+            {
+                context.RepositoryRootDirectory = repoRoot;
+            }
+
+            if (context.RepositoryRootDirectory is null)
+            {
+                logger.LogError("Could not determine the repository root directory. Workflow generation cannot continue.");
+                return;
+            }
+
             // Resolve scheduling (which steps run in which jobs).
             // Filter out orphaned steps (same as the annotation factory) so the YAML
             // generator only includes steps that are part of the deployment graph.
@@ -151,6 +167,10 @@ public static class GitHubActionsWorkflowExtensions
 
             logger.LogInformation("Generated GitHub Actions workflow: {Path}", outputPath);
             context.StepContext.Summary.Add("📄 Workflow", outputPath);
+
+            // Offer to commit and push the generated files
+            await GitHubRepositoryBootstrapper.OfferCommitAndPushAsync(
+                context.RepositoryRootDirectory, context.StepContext).ConfigureAwait(false);
         }));
 
         return builder.AddResource(resource)

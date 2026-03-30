@@ -1432,16 +1432,13 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             return;
         }
 
-        // Detect the repository root directory
+        // Detect the repository root directory (best-effort default — extensions may override)
         var repoRoot = await DetectRepositoryRootAsync(context).ConfigureAwait(false);
 
-        if (repoRoot is null)
+        if (repoRoot is not null)
         {
-            context.Logger.LogError("Could not determine the repository root directory. Pipeline init cannot continue.");
-            return;
+            context.Logger.LogInformation("Using repository root: {RepoRoot}", repoRoot);
         }
-
-        context.Logger.LogInformation("Using repository root: {RepoRoot}", repoRoot);
 
         foreach (var env in environments)
         {
