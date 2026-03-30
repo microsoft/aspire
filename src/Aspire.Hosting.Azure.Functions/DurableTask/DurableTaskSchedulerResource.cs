@@ -53,7 +53,7 @@ public sealed class DurableTaskSchedulerResource(string name) : Resource(name), 
         {
             var dashboardEndpoint = new EndpointReference(this, "dashboard");
 
-            return ReferenceExpression.Create($"{dashboardEndpoint.Property(EndpointProperty.Scheme)}://{dashboardEndpoint.Property(EndpointProperty.Host)}:{dashboardEndpoint.Property(EndpointProperty.Port)}");
+            return ReferenceExpression.Create($"{dashboardEndpoint.Property(EndpointProperty.Url)}");
         }
 
         throw new InvalidOperationException("Dashboard endpoint is only available when running as an emulator.");
