@@ -65,7 +65,9 @@ public static class AzureProvisionerExtensions
         }
         else
         {
-            builder.Services.AddSingleton<IProvisioningContextProvider, RunModeProvisioningContextProvider>();
+            builder.Services.AddSingleton<RunModeProvisioningContextProvider>();
+            builder.Services.AddSingleton<IProvisioningContextProvider>(sp => sp.GetRequiredService<RunModeProvisioningContextProvider>());
+            builder.Services.AddSingleton<IAzureProvisioningOptionsManager>(sp => sp.GetRequiredService<RunModeProvisioningContextProvider>());
         }
         builder.Services.TryAddSingleton<IProcessRunner, DefaultProcessRunner>();
 

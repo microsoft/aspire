@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Azure;
 using Azure.Core;
 using Azure.ResourceManager;
 using Azure.ResourceManager.Resources;
@@ -119,6 +120,26 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
             }
 
             return resourceGroups.OrderBy(rg => rg.Name);
+        }
+
+        public async Task<bool> ResourceExistsAsync(string resourceId, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var resource = armClient.GetGenericResource(new ResourceIdentifier(resourceId));
+                await resource.GetAsync(cancellationToken).ConfigureAwait(false);
+                return true;
+            }
+            catch (RequestFailedException ex) when (ex.Status == 404)
+            {
+                return false;
+            }
+        }
+
+        public async Task DeleteResourceAsync(string resourceId, CancellationToken cancellationToken = default)
+        {
+            var resource = armClient.GetGenericResource(new ResourceIdentifier(resourceId));
+            await resource.DeleteAsync(WaitUntil.Completed, cancellationToken).ConfigureAwait(false);
         }
 
         private sealed class DefaultTenantResource(TenantResource tenantResource) : ITenantResource

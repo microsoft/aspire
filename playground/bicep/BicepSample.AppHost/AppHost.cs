@@ -26,8 +26,8 @@ temp00 = bicep0.Resource;
 
 var kv = builder.AddAzureKeyVault("kv3");
 var appConfig = builder.AddAzureAppConfiguration("appConfig").WithParameter("sku", "standard");
-var storage = builder.AddAzureStorage("storage");
-                    // .RunAsEmulator();
+var storage = builder.AddAzureStorage("storage")
+                    .RunAsEmulator();
 
 var blobs = storage.AddBlobs("blob");
 var tables = storage.AddTables("table");

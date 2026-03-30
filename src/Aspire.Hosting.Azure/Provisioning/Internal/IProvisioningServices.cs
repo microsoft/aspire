@@ -62,6 +62,26 @@ internal interface IProvisioningContextProvider
 }
 
 /// <summary>
+/// Provides interactive management of Azure provisioning options in run mode.
+/// </summary>
+internal interface IAzureProvisioningOptionsManager
+{
+    /// <summary>
+    /// Ensures Azure provisioning options are available, optionally forcing the user to re-enter them.
+    /// </summary>
+    /// <param name="forcePrompt">Whether to force re-prompting even when options already exist.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns><c>true</c> when options are available; otherwise, <c>false</c> if the interaction was canceled.</returns>
+    Task<bool> EnsureProvisioningOptionsAsync(bool forcePrompt, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Persists the current provisioning options to deployment state without creating a provisioning context.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    Task PersistProvisioningOptionsAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>
 /// Abstraction for Azure ArmClient.
 /// </summary>
 internal interface IArmClient
@@ -95,6 +115,16 @@ internal interface IArmClient
     /// Gets detailed information about available resource groups including their locations.
     /// </summary>
     Task<IEnumerable<(string Name, string Location)>> GetAvailableResourceGroupsWithLocationAsync(string subscriptionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Determines whether the specified Azure resource currently exists.
+    /// </summary>
+    Task<bool> ResourceExistsAsync(string resourceId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes the specified Azure resource.
+    /// </summary>
+    Task DeleteResourceAsync(string resourceId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -163,6 +193,11 @@ internal interface IResourceGroupResource
     /// Gets ARM deployments collection.
     /// </summary>
     IArmDeploymentCollection GetArmDeployments();
+
+    /// <summary>
+    /// Deletes the resource group.
+    /// </summary>
+    Task<ArmOperation> DeleteAsync(WaitUntil waitUntil, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

@@ -1,10 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPIPELINES002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using System.IO.Hashing;
 using System.Text;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Pipelines;
 using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Hosting.Azure.Provisioning;
@@ -138,6 +141,44 @@ internal static class BicepUtilities
         catch
         {
             // Unable to parse the JSON, to treat it as not existing
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Gets the current checksum for a Bicep resource from deployment state.
+    /// </summary>
+    public static async ValueTask<string?> GetCurrentChecksumAsync(AzureBicepResource resource, DeploymentStateSection section, CancellationToken cancellationToken = default)
+    {
+        if (section.Data["Parameters"]?.GetValue<string>() is not { Length: > 0 } jsonString)
+        {
+            return null;
+        }
+
+        try
+        {
+            var parameters = JsonNode.Parse(jsonString)?.AsObject();
+            var scope = section.Data["Scope"]?.GetValue<string>() is { Length: > 0 } scopeString
+                ? JsonNode.Parse(scopeString)?.AsObject()
+                : null;
+
+            if (parameters is null)
+            {
+                return null;
+            }
+
+            _ = resource.GetBicepTemplateString();
+
+            await SetParametersAsync(parameters, resource, skipKnownValues: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+            if (scope is not null)
+            {
+                await SetScopeAsync(scope, resource, cancellationToken).ConfigureAwait(false);
+            }
+
+            return GetChecksum(resource, parameters, scope);
+        }
+        catch
+        {
             return null;
         }
     }

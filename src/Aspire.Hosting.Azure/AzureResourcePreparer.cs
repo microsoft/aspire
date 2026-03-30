@@ -9,6 +9,7 @@ using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
 using Azure.Provisioning;
 using Azure.Provisioning.Authorization;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Azure;
@@ -39,6 +40,11 @@ internal sealed class AzureResourcePreparer(
 
         await BuildRoleAssignmentAnnotations(@event.Model, azureResources, cancellationToken).ConfigureAwait(false);
 
+        if (executionContext.IsRunMode)
+        {
+            AddPerResourceCommands(azureResources);
+        }
+
         // set the ProvisioningBuildOptions on the resource, if necessary
         foreach (var r in azureResources)
         {
@@ -47,6 +53,62 @@ internal sealed class AzureResourcePreparer(
                 provisioningResource.ProvisioningBuildOptions = options.Value.ProvisioningBuildOptions;
             }
         }
+    }
+
+    private static void AddPerResourceCommands(List<(IResource Resource, IAzureResource AzureResource)> azureResources)
+    {
+        foreach (var resource in azureResources)
+        {
+            if (resource.AzureResource is not AzureBicepResource bicepResource ||
+                bicepResource.IsContainer() ||
+                bicepResource.IsEmulator())
+            {
+                continue;
+            }
+
+            foreach (var command in AzureProvisioningController.ResourceCommandDefinitions)
+            {
+                AddOrReplaceCommand(
+                    resource.Resource,
+                    command.Name,
+                    command.DisplayName,
+                    executeCommand: context => context.ServiceProvider.GetRequiredService<AzureProvisioningController>().ExecuteResourceCommandAsync(command.Command, resource.Resource.Name, context),
+                    new CommandOptions
+                    {
+                        Description = command.Description,
+                        ConfirmationMessage = command.ConfirmationMessage,
+                        IconName = command.IconName,
+                        IconVariant = command.IconVariant,
+                        IsHighlighted = command.IsHighlighted,
+                        UpdateState = context => context.ServiceProvider.GetRequiredService<AzureProvisioningController>().GetResourceCommandState(resource.Resource.Name)
+                    });
+            }
+        }
+    }
+
+    private static void AddOrReplaceCommand(
+        IResource resource,
+        string name,
+        string displayName,
+        Func<ExecuteCommandContext, Task<ExecuteCommandResult>> executeCommand,
+        CommandOptions commandOptions)
+    {
+        if (resource.Annotations.OfType<ResourceCommandAnnotation>().SingleOrDefault(annotation => annotation.Name == name) is { } existingAnnotation)
+        {
+            resource.Annotations.Remove(existingAnnotation);
+        }
+
+        resource.Annotations.Add(new ResourceCommandAnnotation(
+            name,
+            displayName,
+            commandOptions.UpdateState ?? (_ => ResourceCommandState.Enabled),
+            executeCommand,
+            commandOptions.Description,
+            commandOptions.Parameter,
+            commandOptions.ConfirmationMessage,
+            commandOptions.IconName,
+            commandOptions.IconVariant,
+            commandOptions.IsHighlighted));
     }
 
     internal static List<(IResource Resource, IAzureResource AzureResource)> GetAzureResourcesFromAppModel(DistributedApplicationModel appModel)
@@ -392,6 +454,7 @@ internal sealed class AzureResourcePreparer(
         {
             var roleAssignmentResource = CreateGlobalRoleAssignmentsResource(azureResource, roles);
             appModel.Resources.Add(roleAssignmentResource);
+            roleAssignmentResource.References.Add(azureResource);
 
             azureResource.Annotations.Add(new RoleAssignmentResourceAnnotation(roleAssignmentResource));
 
