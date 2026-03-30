@@ -52,7 +52,6 @@ Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepContext [ExposeProperties]
 Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions [ExposeProperties]
 Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfiguration [interface]
 Microsoft.Extensions.Hosting.Abstractions/Microsoft.Extensions.Hosting.IHostEnvironment [interface]
-Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILogger [interface]
 System.ComponentModel/System.IServiceProvider [interface]
 System.Private.CoreLib/System.Threading.CancellationToken
 
@@ -134,10 +133,8 @@ Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.cancellationToken(con
 Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.environmentVariables(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext) -> Aspire.Hosting/Dict<string,string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression>
 Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.executionContext(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext) -> Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext
 Aspire.Hosting.ApplicationModel/ExecuteCommandContext.cancellationToken(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext) -> cancellationToken
-Aspire.Hosting.ApplicationModel/ExecuteCommandContext.logger(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext) -> Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILogger
 Aspire.Hosting.ApplicationModel/ExecuteCommandContext.resourceName(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext) -> string
 Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setCancellationToken(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext, value: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext
-Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setLogger(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext, value: Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILogger) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext
 Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setResourceName(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext, value: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext
 Aspire.Hosting.ApplicationModel/getValueAsync(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference, cancellationToken?: cancellationToken) -> string
 Aspire.Hosting.ApplicationModel/ReferenceExpressionBuilder.isEmpty(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpressionBuilder) -> boolean
