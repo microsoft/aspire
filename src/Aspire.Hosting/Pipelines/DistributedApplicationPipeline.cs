@@ -443,12 +443,18 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
     public async Task ExecuteAsync(PipelineContext context)
     {
-        var annotationSteps = await CollectStepsFromAnnotationsAsync(context, _steps).ConfigureAwait(false);
-        var allSteps = _steps.Concat(annotationSteps).ToList();
+        var (resourceSteps, deferredAnnotations) = await CollectResourceStepsAsync(context, _steps).ConfigureAwait(false);
+        var allStepsSoFar = _steps.Concat(resourceSteps).ToList();
 
-        // Execute configuration callbacks even if there are no steps
-        // This allows callbacks to run validation or other logic
-        await ExecuteConfigurationCallbacksAsync(context, allSteps).ConfigureAwait(false);
+        // Execute configuration callbacks before the deferred (pipeline environment) pass.
+        // Config callbacks wire up cross-step dependencies (e.g., push-X.DependsOn(build-X))
+        // that the scheduling resolver needs to see for correct job assignments.
+        await ExecuteConfigurationCallbacksAsync(context, allStepsSoFar).ConfigureAwait(false);
+
+        // Deferred pass: pipeline environment annotations (e.g., GHA workflow) run
+        // scheduling over the fully-wired step graph, including config callback edges.
+        var environmentSteps = await CollectEnvironmentStepsAsync(context, deferredAnnotations, allStepsSoFar).ConfigureAwait(false);
+        var allSteps = allStepsSoFar.Concat(environmentSteps).ToList();
 
         if (allSteps.Count == 0)
         {
@@ -628,12 +634,15 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         return result;
     }
 
-    private static async Task<List<PipelineStep>> CollectStepsFromAnnotationsAsync(PipelineContext context, IReadOnlyList<PipelineStep> existingSteps)
+    /// <summary>
+    /// First pass: collects steps from non-pipeline-environment resource annotations.
+    /// Returns the collected steps and any deferred (pipeline environment) annotations for the second pass.
+    /// </summary>
+    private static async Task<(List<PipelineStep> Steps, List<(IResource Resource, PipelineStepAnnotation Annotation)> DeferredAnnotations)> CollectResourceStepsAsync(PipelineContext context, IReadOnlyList<PipelineStep> existingSteps)
     {
         var steps = new List<PipelineStep>();
         var deferredAnnotations = new List<(IResource Resource, PipelineStepAnnotation Annotation)>();
 
-        // First pass: collect steps from non-pipeline-environment resources
         foreach (var resource in context.Model.Resources)
         {
             var annotations = resource.Annotations
@@ -664,11 +673,23 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             }
         }
 
-        // Second pass: pipeline environment annotations get full visibility of all collected steps.
-        // This enables workflow resources to run scheduling and create synthetic steps.
+        return (steps, deferredAnnotations);
+    }
+
+    /// <summary>
+    /// Second pass: collects steps from deferred pipeline environment annotations.
+    /// These annotations run scheduling over the fully-wired step graph (including
+    /// configuration callback edges) so that job assignments are correct.
+    /// </summary>
+    private static async Task<List<PipelineStep>> CollectEnvironmentStepsAsync(
+        PipelineContext context,
+        List<(IResource Resource, PipelineStepAnnotation Annotation)> deferredAnnotations,
+        List<PipelineStep> allStepsSoFar)
+    {
+        var steps = new List<PipelineStep>();
+
         foreach (var (resource, annotation) in deferredAnnotations)
         {
-            var allStepsSoFar = existingSteps.Concat(steps).ToList();
             var factoryContext = new PipelineStepFactoryContext
             {
                 PipelineContext = context,
