@@ -12,8 +12,7 @@ public class LayoutCommandTests
     [Fact]
     public async Task LayoutCommand_PrefersRuntimeTargetForCurrentRuntime_AndPreservesStructuredAssets()
     {
-        var workspaceRoot = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        Directory.CreateDirectory(workspaceRoot);
+        var workspaceRoot = Directory.CreateTempSubdirectory("aspire-layout-tests").FullName;
 
         try
         {
@@ -69,8 +68,7 @@ public class LayoutCommandTests
     [Fact]
     public async Task LayoutCommand_PrefersRuntimeSpecificTargetWhenMultipleTargetsExist()
     {
-        var workspaceRoot = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        Directory.CreateDirectory(workspaceRoot);
+        var workspaceRoot = Directory.CreateTempSubdirectory("aspire-layout-tests").FullName;
 
         try
         {
@@ -258,23 +256,29 @@ public class LayoutCommandTests
             """;
     }
 
-    [Fact]
-    public async Task LayoutCommand_UsesRequestedRuntimeIdentifierForPortableAliasFallbacks()
+    [Theory]
+    [InlineData("osx-arm64", "unix", "runtimes/unix/lib/net10.0/Test.Package.dll", "unix")]
+    [InlineData("linux-musl-x64", "linux-x64", "runtimes/linux-x64/lib/net10.0/Test.Package.dll", "linux-x64")]
+    [InlineData("win10-x64", "win-x64", "runtimes/win-x64/lib/net10.0/Test.Package.dll", "win-x64")]
+    public async Task LayoutCommand_UsesRuntimeGraphFallbacks(
+        string requestedRuntimeIdentifier,
+        string runtimeTargetRid,
+        string runtimeTargetPath,
+        string expectedContent)
     {
-        var workspaceRoot = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        Directory.CreateDirectory(workspaceRoot);
+        var workspaceRoot = Directory.CreateTempSubdirectory("aspire-layout-tests").FullName;
 
         try
         {
             var packageRoot = Path.Combine(workspaceRoot, "packages", "test.package", "1.0.0");
             Directory.CreateDirectory(Path.Combine(packageRoot, "lib", "net10.0"));
-            Directory.CreateDirectory(Path.Combine(packageRoot, "runtimes", "unix", "lib", "net10.0"));
+            Directory.CreateDirectory(Path.Combine(packageRoot, Path.GetDirectoryName(runtimeTargetPath.Replace('/', Path.DirectorySeparatorChar))!));
 
             await File.WriteAllTextAsync(Path.Combine(packageRoot, "lib", "net10.0", "Test.Package.dll"), "base");
-            await File.WriteAllTextAsync(Path.Combine(packageRoot, "runtimes", "unix", "lib", "net10.0", "Test.Package.dll"), "unix");
+            await File.WriteAllTextAsync(Path.Combine(packageRoot, runtimeTargetPath.Replace('/', Path.DirectorySeparatorChar)), expectedContent);
 
             var assetsPath = Path.Combine(workspaceRoot, "project.assets.json");
-            await File.WriteAllTextAsync(assetsPath, CreateAssetsJsonWithRuntimeTargetOnly(workspaceRoot));
+            await File.WriteAllTextAsync(assetsPath, CreateAssetsJsonWithRuntimeTargetOnly(workspaceRoot, runtimeTargetRid, runtimeTargetPath));
 
             var outputPath = Path.Combine(workspaceRoot, "out");
             var command = LayoutCommand.Create();
@@ -282,13 +286,13 @@ public class LayoutCommandTests
                 "--assets", assetsPath,
                 "--output", outputPath,
                 "--framework", "net10.0",
-                "--runtime-identifier", "osx-arm64"
+                "--runtime-identifier", requestedRuntimeIdentifier
             ]);
 
             var exitCode = await parseResult.InvokeAsync();
 
             Assert.Equal(0, exitCode);
-            Assert.Equal("unix", await File.ReadAllTextAsync(Path.Combine(outputPath, "Test.Package.dll")));
+            Assert.Equal(expectedContent, await File.ReadAllTextAsync(Path.Combine(outputPath, "Test.Package.dll")));
         }
         finally
         {
@@ -299,7 +303,7 @@ public class LayoutCommandTests
         }
     }
 
-    private static string CreateAssetsJsonWithRuntimeTargetOnly(string rootPath)
+    private static string CreateAssetsJsonWithRuntimeTargetOnly(string rootPath, string runtimeTargetRid, string runtimeTargetPath)
     {
         var packagesPath = Path.Combine(rootPath, "packages") + Path.DirectorySeparatorChar;
         var escapedPackagesPath = packagesPath.Replace("\\", "\\\\");
@@ -317,7 +321,7 @@ public class LayoutCommandTests
                       "lib/net10.0/Test.Package.dll": {}
                     },
                     "runtimeTargets": {
-                      "runtimes/unix/lib/net10.0/Test.Package.dll": { "rid": "unix", "assetType": "runtime" }
+                      "{{runtimeTargetPath}}": { "rid": "{{runtimeTargetRid}}", "assetType": "runtime" }
                     }
                   }
                 }
@@ -328,7 +332,7 @@ public class LayoutCommandTests
                   "path": "test.package/1.0.0",
                   "files": [
                     "lib/net10.0/Test.Package.dll",
-                    "runtimes/unix/lib/net10.0/Test.Package.dll"
+                    "{{runtimeTargetPath}}"
                   ]
                 }
               },

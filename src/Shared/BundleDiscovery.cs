@@ -277,6 +277,11 @@ internal static class BundleDiscovery
     /// </summary>
     public static string GetCurrentRuntimeIdentifier()
     {
+        if (!string.IsNullOrWhiteSpace(RuntimeInformation.RuntimeIdentifier))
+        {
+            return RuntimeInformation.RuntimeIdentifier;
+        }
+
         var arch = RuntimeInformation.OSArchitecture switch
         {
             Architecture.X64 => "x64",

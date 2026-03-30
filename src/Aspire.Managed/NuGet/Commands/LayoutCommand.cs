@@ -5,6 +5,7 @@ using System.CommandLine;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using NuGet.ProjectModel;
+using NuGet.RuntimeModel;
 
 namespace Aspire.Managed.NuGet.Commands;
 
@@ -14,8 +15,9 @@ namespace Aspire.Managed.NuGet.Commands;
 /// </summary>
 public static class LayoutCommand
 {
-    private const string UnixRuntimeAlias = "unix";
-    private const string WindowsRuntimeAlias = "win";
+    private const string RuntimeIdentifierGraphResourceName = "Aspire.Managed.RuntimeIdentifierGraph.json";
+    // Match the SDK's RID expansion semantics instead of maintaining a local fallback heuristic here.
+    private static readonly Lazy<RuntimeGraph> s_runtimeGraph = new(LoadRuntimeGraph);
 
     /// <summary>
     /// Creates the layout command.
@@ -427,43 +429,15 @@ public static class LayoutCommand
 
     private static List<string> GetRuntimeFallbacks(string? runtimeIdentifier)
     {
-        var fallbacks = new List<string>();
-
-        if (!string.IsNullOrEmpty(runtimeIdentifier))
+        if (string.IsNullOrEmpty(runtimeIdentifier))
         {
-            var current = runtimeIdentifier;
-            while (!string.IsNullOrEmpty(current))
-            {
-                if (!fallbacks.Contains(current, StringComparer.OrdinalIgnoreCase))
-                {
-                    fallbacks.Add(current);
-                }
-
-                var separatorIndex = current.LastIndexOf('-');
-                current = separatorIndex > 0 ? current[..separatorIndex] : string.Empty;
-            }
+            return [];
         }
 
-        // Trimming RID segments above already adds OS-specific fallbacks such as
-        // linux-x64 -> linux and osx-arm64 -> osx. Add the portable family aliases
-        // that are commonly used by runtimeTargets but are not produced by truncation.
-        if (fallbacks.Any(fallback => fallback.StartsWith(WindowsRuntimeAlias, StringComparison.OrdinalIgnoreCase)))
-        {
-            if (!fallbacks.Contains(WindowsRuntimeAlias, StringComparer.OrdinalIgnoreCase))
-            {
-                fallbacks.Add(WindowsRuntimeAlias);
-            }
-        }
-        else if (fallbacks.Any(fallback =>
-                     fallback.StartsWith("linux", StringComparison.OrdinalIgnoreCase) ||
-                     fallback.StartsWith("osx", StringComparison.OrdinalIgnoreCase) ||
-                     fallback.StartsWith("unix", StringComparison.OrdinalIgnoreCase)) &&
-                 !fallbacks.Contains(UnixRuntimeAlias, StringComparer.OrdinalIgnoreCase))
-        {
-            fallbacks.Add(UnixRuntimeAlias);
-        }
-
-        return fallbacks;
+        return s_runtimeGraph.Value
+            .ExpandRuntime(runtimeIdentifier)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     private static int GetRuntimeMatchScore(string? runtimeIdentifier, IReadOnlyList<string> runtimeFallbacks)
@@ -482,5 +456,13 @@ public static class LayoutCommand
         }
 
         return int.MaxValue;
+    }
+
+    private static RuntimeGraph LoadRuntimeGraph()
+    {
+        using var stream = typeof(LayoutCommand).Assembly.GetManifestResourceStream(RuntimeIdentifierGraphResourceName)
+            ?? throw new InvalidOperationException($"Embedded runtime identifier graph '{RuntimeIdentifierGraphResourceName}' was not found.");
+
+        return JsonRuntimeFormat.ReadRuntimeGraph(stream);
     }
 }
