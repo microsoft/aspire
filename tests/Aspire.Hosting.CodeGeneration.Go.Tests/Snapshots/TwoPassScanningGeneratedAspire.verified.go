@@ -9240,14 +9240,14 @@ func NewIDistributedApplicationResourceEvent(handle *Handle, client *AspireClien
 	}
 }
 
-// IEnvironmentValue wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IEnvironmentValue.
-type IEnvironmentValue struct {
+// IExpressionValue wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExpressionValue.
+type IExpressionValue struct {
 	HandleWrapperBase
 }
 
-// NewIEnvironmentValue creates a new IEnvironmentValue.
-func NewIEnvironmentValue(handle *Handle, client *AspireClient) *IEnvironmentValue {
-	return &IEnvironmentValue{
+// NewIExpressionValue creates a new IExpressionValue.
+func NewIExpressionValue(handle *Handle, client *AspireClient) *IExpressionValue {
+	return &IExpressionValue{
 		HandleWrapperBase: NewHandleWrapperBase(handle, client),
 	}
 }
@@ -18031,8 +18031,8 @@ func init() {
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext", func(h *Handle, c *AspireClient) any {
 		return NewEnvironmentCallbackContext(h, c)
 	})
-	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IEnvironmentValue", func(h *Handle, c *AspireClient) any {
-		return NewIEnvironmentValue(h, c)
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExpressionValue", func(h *Handle, c *AspireClient) any {
+		return NewIExpressionValue(h, c)
 	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent", func(h *Handle, c *AspireClient) any {
 		return NewInitializeResourceEvent(h, c)

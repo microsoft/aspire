@@ -8072,19 +8072,19 @@ impl IDistributedApplicationResourceEvent {
     }
 }
 
-/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IEnvironmentValue
-pub struct IEnvironmentValue {
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExpressionValue
+pub struct IExpressionValue {
     handle: Handle,
     client: Arc<AspireClient>,
 }
 
-impl HasHandle for IEnvironmentValue {
+impl HasHandle for IExpressionValue {
     fn handle(&self) -> &Handle {
         &self.handle
     }
 }
 
-impl IEnvironmentValue {
+impl IExpressionValue {
     pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
         Self { handle, client }
     }

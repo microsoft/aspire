@@ -9,7 +9,7 @@ namespace Aspire.Hosting.Azure;
 /// Represents a reference to a secret in an Azure Key Vault resource.
 /// </summary>
 [AspireExport]
-public interface IAzureKeyVaultSecretReference : IEnvironmentValue, IValueWithReferences
+public interface IAzureKeyVaultSecretReference : IExpressionValue, IValueWithReferences
 {
     /// <summary>
     /// Gets the name of the secret.

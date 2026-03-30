@@ -10,7 +10,7 @@ namespace Aspire.Hosting.Azure;
 /// </summary>
 /// <param name="secretName">The name of the secret.</param>
 /// <param name="azureKeyVaultResource">The Azure Key Vault resource.</param>
-internal sealed class AzureKeyVaultSecretReference(string secretName, AzureKeyVaultResource azureKeyVaultResource) : IAzureKeyVaultSecretReference, IValueProvider, IManifestExpressionProvider, IValueWithCustomWithEnvironment<AzureKeyVaultSecretReference>
+internal sealed class AzureKeyVaultSecretReference(string secretName, AzureKeyVaultResource azureKeyVaultResource) : IAzureKeyVaultSecretReference
 {
     /// <summary>
     /// Gets the name of the secret.
@@ -37,13 +37,5 @@ internal sealed class AzureKeyVaultSecretReference(string secretName, AzureKeyVa
         }
 
         throw new InvalidOperationException($"Secret '{secretName}' not found in Key Vault '{azureKeyVaultResource.Name}'.");
-    }
-
-    static IResourceBuilder<TDestination>? IValueWithCustomWithEnvironment<AzureKeyVaultSecretReference>.TryWithEnvironment<TDestination>(
-        IResourceBuilder<TDestination> builder,
-        string name,
-        AzureKeyVaultSecretReference value)
-    {
-        return ResourceBuilderExtensions.WithEnvironment<TDestination, AzureKeyVaultSecretReference>(builder, name, value);
     }
 }

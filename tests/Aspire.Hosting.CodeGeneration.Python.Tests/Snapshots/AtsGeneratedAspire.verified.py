@@ -1610,11 +1610,14 @@ class DistributedApplicationBuilder:
         return typing.cast(TestVaultResource, result)
 
 
+class AbstractValueProvider(abc.ABC):
+    """Abstract base class for AbstractValueProvider."""
+
 class AbstractManifestExpressionProvider(abc.ABC):
     """Abstract base class for AbstractManifestExpressionProvider."""
 
-class AbstractValueProvider(abc.ABC):
-    """Abstract base class for AbstractValueProvider."""
+class AbstractExpressionValue(abc.ABC):
+    """Abstract base class for AbstractExpressionValue."""
 
 class AbstractValueWithReferences(abc.ABC):
     """Abstract base class for AbstractValueWithReferences."""
@@ -1939,7 +1942,7 @@ class AbstractResourceWithArgs(AbstractResource):
     """Abstract base class for AbstractResourceWithArgs interface."""
 
 
-class AbstractResourceWithConnectionString(AbstractResource, AbstractManifestExpressionProvider, AbstractValueProvider, AbstractValueWithReferences):
+class AbstractResourceWithConnectionString(AbstractResource, AbstractExpressionValue, AbstractValueWithReferences):
     """Abstract base class for AbstractResourceWithConnectionString interface."""
 
     @abc.abstractmethod

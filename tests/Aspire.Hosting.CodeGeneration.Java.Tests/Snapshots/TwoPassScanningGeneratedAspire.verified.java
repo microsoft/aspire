@@ -1049,7 +1049,7 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DistributedApplicationModel", (h, c) -> new DistributedApplicationModel(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression", (h, c) -> new EndpointReferenceExpression(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext", (h, c) -> new EnvironmentCallbackContext(h, c));
-        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IEnvironmentValue", (h, c) -> new IEnvironmentValue(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExpressionValue", (h, c) -> new IExpressionValue(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent", (h, c) -> new InitializeResourceEvent(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpressionBuilder", (h, c) -> new ReferenceExpressionBuilder(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext", (h, c) -> new UpdateCommandStateContext(h, c));
@@ -1389,12 +1389,12 @@ public class CSharpAppResource extends ResourceBuilderBase {
         return withEnvironment(name, new IResourceWithConnectionString(value.getHandle(), value.getClient()));
     }
 
-    public CSharpAppResource withEnvironment(String name, IEnvironmentValue value) {
+    public CSharpAppResource withEnvironment(String name, IExpressionValue value) {
         return withEnvironment(name, AspireUnion.of(value));
     }
 
     public CSharpAppResource withEnvironment(String name, HandleWrapperBase value) {
-        return withEnvironment(name, new IEnvironmentValue(value.getHandle(), value.getClient()));
+        return withEnvironment(name, new IExpressionValue(value.getHandle(), value.getClient()));
     }
 
     /** Sets an environment variable */
@@ -4656,12 +4656,12 @@ public class ContainerResource extends ResourceBuilderBase {
         return withEnvironment(name, new IResourceWithConnectionString(value.getHandle(), value.getClient()));
     }
 
-    public ContainerResource withEnvironment(String name, IEnvironmentValue value) {
+    public ContainerResource withEnvironment(String name, IExpressionValue value) {
         return withEnvironment(name, AspireUnion.of(value));
     }
 
     public ContainerResource withEnvironment(String name, HandleWrapperBase value) {
-        return withEnvironment(name, new IEnvironmentValue(value.getHandle(), value.getClient()));
+        return withEnvironment(name, new IExpressionValue(value.getHandle(), value.getClient()));
     }
 
     /** Sets an environment variable */
@@ -6294,12 +6294,12 @@ public class DotnetToolResource extends ResourceBuilderBase {
         return withEnvironment(name, new IResourceWithConnectionString(value.getHandle(), value.getClient()));
     }
 
-    public DotnetToolResource withEnvironment(String name, IEnvironmentValue value) {
+    public DotnetToolResource withEnvironment(String name, IExpressionValue value) {
         return withEnvironment(name, AspireUnion.of(value));
     }
 
     public DotnetToolResource withEnvironment(String name, HandleWrapperBase value) {
-        return withEnvironment(name, new IEnvironmentValue(value.getHandle(), value.getClient()));
+        return withEnvironment(name, new IExpressionValue(value.getHandle(), value.getClient()));
     }
 
     /** Sets an environment variable */
@@ -7871,12 +7871,12 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withEnvironment(name, new IResourceWithConnectionString(value.getHandle(), value.getClient()));
     }
 
-    public ExecutableResource withEnvironment(String name, IEnvironmentValue value) {
+    public ExecutableResource withEnvironment(String name, IExpressionValue value) {
         return withEnvironment(name, AspireUnion.of(value));
     }
 
     public ExecutableResource withEnvironment(String name, HandleWrapperBase value) {
-        return withEnvironment(name, new IEnvironmentValue(value.getHandle(), value.getClient()));
+        return withEnvironment(name, new IExpressionValue(value.getHandle(), value.getClient()));
     }
 
     /** Sets an environment variable */
@@ -10368,17 +10368,17 @@ public class IDistributedApplicationResourceEvent extends HandleWrapperBase {
 
 }
 
-// ===== IEnvironmentValue.java =====
-// IEnvironmentValue.java - GENERATED CODE - DO NOT EDIT
+// ===== IExpressionValue.java =====
+// IExpressionValue.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
 import java.util.*;
 import java.util.function.*;
 
-/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IEnvironmentValue. */
-public class IEnvironmentValue extends HandleWrapperBase {
-    IEnvironmentValue(Handle handle, AspireClient client) {
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExpressionValue. */
+public class IExpressionValue extends HandleWrapperBase {
+    IExpressionValue(Handle handle, AspireClient client) {
         super(handle, client);
     }
 
@@ -12463,12 +12463,12 @@ public class ProjectResource extends ResourceBuilderBase {
         return withEnvironment(name, new IResourceWithConnectionString(value.getHandle(), value.getClient()));
     }
 
-    public ProjectResource withEnvironment(String name, IEnvironmentValue value) {
+    public ProjectResource withEnvironment(String name, IExpressionValue value) {
         return withEnvironment(name, AspireUnion.of(value));
     }
 
     public ProjectResource withEnvironment(String name, HandleWrapperBase value) {
-        return withEnvironment(name, new IEnvironmentValue(value.getHandle(), value.getClient()));
+        return withEnvironment(name, new IExpressionValue(value.getHandle(), value.getClient()));
     }
 
     /** Sets an environment variable */
@@ -14766,12 +14766,12 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return withEnvironment(name, new IResourceWithConnectionString(value.getHandle(), value.getClient()));
     }
 
-    public TestDatabaseResource withEnvironment(String name, IEnvironmentValue value) {
+    public TestDatabaseResource withEnvironment(String name, IExpressionValue value) {
         return withEnvironment(name, AspireUnion.of(value));
     }
 
     public TestDatabaseResource withEnvironment(String name, HandleWrapperBase value) {
-        return withEnvironment(name, new IEnvironmentValue(value.getHandle(), value.getClient()));
+        return withEnvironment(name, new IExpressionValue(value.getHandle(), value.getClient()));
     }
 
     /** Sets an environment variable */
@@ -16381,12 +16381,12 @@ public class TestRedisResource extends ResourceBuilderBase {
         return withEnvironment(name, new IResourceWithConnectionString(value.getHandle(), value.getClient()));
     }
 
-    public TestRedisResource withEnvironment(String name, IEnvironmentValue value) {
+    public TestRedisResource withEnvironment(String name, IExpressionValue value) {
         return withEnvironment(name, AspireUnion.of(value));
     }
 
     public TestRedisResource withEnvironment(String name, HandleWrapperBase value) {
-        return withEnvironment(name, new IEnvironmentValue(value.getHandle(), value.getClient()));
+        return withEnvironment(name, new IExpressionValue(value.getHandle(), value.getClient()));
     }
 
     /** Sets an environment variable */
@@ -18133,12 +18133,12 @@ public class TestVaultResource extends ResourceBuilderBase {
         return withEnvironment(name, new IResourceWithConnectionString(value.getHandle(), value.getClient()));
     }
 
-    public TestVaultResource withEnvironment(String name, IEnvironmentValue value) {
+    public TestVaultResource withEnvironment(String name, IExpressionValue value) {
         return withEnvironment(name, AspireUnion.of(value));
     }
 
     public TestVaultResource withEnvironment(String name, HandleWrapperBase value) {
-        return withEnvironment(name, new IEnvironmentValue(value.getHandle(), value.getClient()));
+        return withEnvironment(name, new IExpressionValue(value.getHandle(), value.getClient()));
     }
 
     /** Sets an environment variable */
@@ -20038,7 +20038,7 @@ public final class WithVolumeOptions {
 .modules/IDistributedApplicationEvent.java
 .modules/IDistributedApplicationEventing.java
 .modules/IDistributedApplicationResourceEvent.java
-.modules/IEnvironmentValue.java
+.modules/IExpressionValue.java
 .modules/IHostEnvironment.java
 .modules/ILogger.java
 .modules/ILoggerFactory.java

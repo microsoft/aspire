@@ -6,7 +6,6 @@ using System.Net.Sockets;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography.X509Certificates;
-using System.Collections.Concurrent;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Publishing;
@@ -23,8 +22,6 @@ namespace Aspire.Hosting;
 public static class ResourceBuilderExtensions
 {
     private const string ConnectionStringEnvironmentName = "ConnectionStrings__";
-    private static readonly ConcurrentDictionary<(Type DestinationType, Type CustomType), MethodInfo?> s_customWithEnvironmentDispatchMethods = new();
-    private static readonly MethodInfo s_dispatchCustomWithEnvironmentMethod = typeof(ResourceBuilderExtensions).GetMethod(nameof(DispatchCustomWithEnvironment), BindingFlags.NonPublic | BindingFlags.Static)!;
     private static readonly MethodInfo s_dispatchCustomWithReferenceMethod = typeof(ResourceBuilderExtensions).GetMethod(nameof(DispatchCustomWithReference), BindingFlags.NonPublic | BindingFlags.Static)!;
 
     /// <summary>
@@ -54,18 +51,13 @@ public static class ResourceBuilderExtensions
             typeof(EndpointReference),
             typeof(IResourceBuilder<ParameterResource>),
             typeof(IResourceBuilder<IResourceWithConnectionString>),
-            typeof(IEnvironmentValue))]
+            typeof(IExpressionValue))]
         object value)
         where T : IResourceWithEnvironment
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(value);
-
-        if (TryDispatchCustomWithEnvironment(builder, name, value, out var dispatchedBuilder))
-        {
-            return dispatchedBuilder;
-        }
 
         return value switch
         {
@@ -74,7 +66,7 @@ public static class ResourceBuilderExtensions
             EndpointReference endpointReference => builder.WithEnvironment(name, endpointReference),
             IResourceBuilder<ParameterResource> parameter => builder.WithEnvironment(name, parameter),
             IResourceBuilder<IResourceWithConnectionString> connectionStringResource => builder.WithEnvironment(name, connectionStringResource),
-            IEnvironmentValue environmentValue => builder.WithEnvironmentValue(name, environmentValue),
+            IExpressionValue expressionValue => builder.WithEnvironment(name, expressionValue),
             _ => throw new InvalidOperationException(
                 $"The value '{value.GetType().FullName}' can't be used with withEnvironment because it doesn't provide a supported environment value.")
         };
@@ -312,10 +304,29 @@ public static class ResourceBuilderExtensions
         });
     }
 
-    private static IResourceBuilder<T> WithEnvironmentValue<T>(
+    /// <summary>
+    /// Adds an environment variable to the resource with a value that provides both a runtime value and a manifest expression.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="name">The name of the environment variable.</param>
+    /// <param name="value">The value that provides both runtime values and manifest expressions.</param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>This method is not available in polyglot app hosts. Use the unified <c>withEnvironment</c> overload instead.</remarks>
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
+    public static IResourceBuilder<T> WithEnvironment<T>(
         this IResourceBuilder<T> builder,
         string name,
-        IEnvironmentValue value)
+        IExpressionValue value)
+        where T : IResourceWithEnvironment
+    {
+        return builder.WithEnvironmentExpressionValue(name, value);
+    }
+
+    private static IResourceBuilder<T> WithEnvironmentExpressionValue<T>(
+        this IResourceBuilder<T> builder,
+        string name,
+        IExpressionValue value)
         where T : IResourceWithEnvironment
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -362,47 +373,6 @@ public static class ResourceBuilderExtensions
         {
             context.EnvironmentVariables[name] = value;
         });
-    }
-
-    private static bool TryDispatchCustomWithEnvironment<TDestination>(
-        IResourceBuilder<TDestination> builder,
-        string name,
-        object value,
-        [NotNullWhen(true)] out IResourceBuilder<TDestination>? dispatchedBuilder)
-        where TDestination : IResourceWithEnvironment
-    {
-        var customType = value.GetType();
-        var destinationType = typeof(TDestination);
-        var dispatchMethod = s_customWithEnvironmentDispatchMethods.GetOrAdd((destinationType, customType), key =>
-        {
-            var customWithEnvironmentInterface = key.CustomType.GetInterfaces()
-                .FirstOrDefault(i => i.IsGenericType
-                    && i.GetGenericTypeDefinition() == typeof(IValueWithCustomWithEnvironment<>)
-                    && i.GetGenericArguments()[0] == key.CustomType);
-
-            return customWithEnvironmentInterface is null
-                ? null
-                : s_dispatchCustomWithEnvironmentMethod.MakeGenericMethod(key.DestinationType, key.CustomType);
-        });
-
-        if (dispatchMethod is null)
-        {
-            dispatchedBuilder = null;
-            return false;
-        }
-
-        dispatchedBuilder = (IResourceBuilder<TDestination>?)dispatchMethod.Invoke(null, [builder, name, value]);
-        return dispatchedBuilder is not null;
-    }
-
-    private static IResourceBuilder<TDestination>? DispatchCustomWithEnvironment<TDestination, TCustom>(
-        IResourceBuilder<TDestination> builder,
-        string name,
-        TCustom value)
-        where TDestination : IResourceWithEnvironment
-        where TCustom : IEnvironmentValue, IValueWithCustomWithEnvironment<TCustom>
-    {
-        return TCustom.TryWithEnvironment(builder, name, value);
     }
 
     /// <summary>
