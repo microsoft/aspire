@@ -292,7 +292,7 @@ internal sealed class DcpHost
 
     }
 
-    private ProcessSpec CreateDcpProcessSpec(Locations locations)
+    public ProcessSpec CreateDcpProcessSpec(Locations locations)
     {
         var dcpExePath = _dcpOptions.CliPath;
         if (!File.Exists(dcpExePath))
