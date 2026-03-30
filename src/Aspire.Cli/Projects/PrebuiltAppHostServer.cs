@@ -174,6 +174,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         return await _nugetService.RestorePackagesAsync(
             packages,
             DotNetBasedAppHostServerProject.TargetFramework,
+            runtimeIdentifier: RuntimeIdentifierHelper.GetCurrent(),
             sources: sources,
             workingDirectory: _appDirectoryPath,
             ct: cancellationToken);

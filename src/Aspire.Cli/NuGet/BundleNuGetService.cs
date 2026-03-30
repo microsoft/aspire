@@ -17,6 +17,7 @@ public interface INuGetService
     /// </summary>
     /// <param name="packages">The packages to restore.</param>
     /// <param name="targetFramework">The target framework.</param>
+    /// <param name="runtimeIdentifier">The runtime identifier used to prefer runtime-specific assets in the generated layout.</param>
     /// <param name="sources">Additional NuGet sources.</param>
     /// <param name="workingDirectory">Working directory for nuget.config discovery.</param>
     /// <param name="ct">Cancellation token.</param>
@@ -24,6 +25,7 @@ public interface INuGetService
     Task<string> RestorePackagesAsync(
         IEnumerable<(string Id, string Version)> packages,
         string targetFramework = "net10.0",
+        string? runtimeIdentifier = null,
         IEnumerable<string>? sources = null,
         string? workingDirectory = null,
         CancellationToken ct = default);
@@ -50,6 +52,7 @@ public sealed class BundleNuGetService : INuGetService
     public async Task<string> RestorePackagesAsync(
         IEnumerable<(string Id, string Version)> packages,
         string targetFramework = "net10.0",
+        string? runtimeIdentifier = null,
         IEnumerable<string>? sources = null,
         string? workingDirectory = null,
         CancellationToken ct = default)
@@ -73,7 +76,7 @@ public sealed class BundleNuGetService : INuGetService
         }
 
         // Compute a hash for the package set to create a unique restore location
-        var packageHash = ComputePackageHash(packageList, targetFramework);
+        var packageHash = ComputePackageHash(packageList, targetFramework, runtimeIdentifier);
         var restoreDir = Path.Combine(_cacheDirectory, "restore", packageHash);
         var objDir = Path.Combine(restoreDir, "obj");
         var libsDir = Path.Combine(restoreDir, "libs");
@@ -160,6 +163,12 @@ public sealed class BundleNuGetService : INuGetService
             "--framework", targetFramework
         };
 
+        if (!string.IsNullOrEmpty(runtimeIdentifier))
+        {
+            layoutArgs.Add("--runtime-identifier");
+            layoutArgs.Add(runtimeIdentifier);
+        }
+
         // Enable verbose output for debugging
         if (_logger.IsEnabled(LogLevel.Debug))
         {
@@ -192,10 +201,11 @@ public sealed class BundleNuGetService : INuGetService
         return libsDir;
     }
 
-    private static string ComputePackageHash(List<(string Id, string Version)> packages, string tfm)
+    private static string ComputePackageHash(List<(string Id, string Version)> packages, string tfm, string? runtimeIdentifier)
     {
         var content = string.Join(";", packages.OrderBy(p => p.Id).Select(p => $"{p.Id}:{p.Version}"));
         content += $";tfm:{tfm}";
+        content += $";rid:{runtimeIdentifier ?? "<none>"}";
 
         // Use SHA256 for stable hash across processes/runtimes
         var hashBytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(content));
@@ -208,4 +218,3 @@ public sealed class BundleNuGetService : INuGetService
         return Path.Combine(home, ".aspire", "packages");
     }
 }
-

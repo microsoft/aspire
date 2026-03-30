@@ -3,6 +3,7 @@
 
 using System.CommandLine;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using NuGet.ProjectModel;
 
 namespace Aspire.Managed.NuGet.Commands;
@@ -13,6 +14,9 @@ namespace Aspire.Managed.NuGet.Commands;
 /// </summary>
 public static class LayoutCommand
 {
+    private const string UnixRuntimeAlias = "unix";
+    private const string WindowsRuntimeAlias = "win";
+
     /// <summary>
     /// Creates the layout command.
     /// </summary>
@@ -41,6 +45,12 @@ public static class LayoutCommand
         };
         command.Options.Add(frameworkOption);
 
+        var runtimeIdentifierOption = new Option<string?>("--runtime-identifier", "--rid")
+        {
+            Description = "Runtime identifier used to prefer runtime-specific assets (defaults to the current runtime)"
+        };
+        command.Options.Add(runtimeIdentifierOption);
+
         var verboseOption = new Option<bool>("--verbose", "-v")
         {
             Description = "Enable verbose output"
@@ -52,9 +62,10 @@ public static class LayoutCommand
             var assetsPath = parseResult.GetValue(assetsOption)!;
             var outputPath = parseResult.GetValue(outputOption)!;
             var framework = parseResult.GetValue(frameworkOption)!;
+            var runtimeIdentifier = parseResult.GetValue(runtimeIdentifierOption);
             var verbose = parseResult.GetValue(verboseOption);
 
-            return Task.FromResult(ExecuteLayout(assetsPath, outputPath, framework, verbose));
+            return Task.FromResult(ExecuteLayout(assetsPath, outputPath, framework, runtimeIdentifier, verbose));
         });
 
         return command;
@@ -64,6 +75,7 @@ public static class LayoutCommand
         string assetsPath,
         string outputPath,
         string framework,
+        string? runtimeIdentifier,
         bool verbose)
     {
         if (!File.Exists(assetsPath))
@@ -84,10 +96,18 @@ public static class LayoutCommand
                 return 1;
             }
 
-            // Find the target for our framework
-            var target = lockFile.Targets.FirstOrDefault(t =>
-                t.TargetFramework.GetShortFolderName().Equals(framework, StringComparison.OrdinalIgnoreCase) ||
-                t.TargetFramework.ToString().Equals(framework, StringComparison.OrdinalIgnoreCase));
+            var effectiveRuntimeIdentifier = string.IsNullOrWhiteSpace(runtimeIdentifier)
+                ? RuntimeInformation.RuntimeIdentifier
+                : runtimeIdentifier;
+            var runtimeFallbacks = GetRuntimeFallbacks(effectiveRuntimeIdentifier);
+
+            // Find the target for our framework and prefer the runtime-specific target when present.
+            var target = lockFile.Targets
+                .Where(t =>
+                    t.TargetFramework.GetShortFolderName().Equals(framework, StringComparison.OrdinalIgnoreCase) ||
+                    t.TargetFramework.ToString().Equals(framework, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(t => GetRuntimeMatchScore(t.RuntimeIdentifier, runtimeFallbacks))
+                .FirstOrDefault();
 
             if (target == null)
             {
@@ -115,6 +135,7 @@ public static class LayoutCommand
             {
                 Console.WriteLine($"Using packages path: {packagesPath}");
                 Console.WriteLine($"Target framework: {target.TargetFramework.GetShortFolderName()}");
+                Console.WriteLine($"Runtime identifier: {effectiveRuntimeIdentifier}");
                 Console.WriteLine(string.Format(CultureInfo.InvariantCulture, "Libraries: {0}", target.Libraries.Count));
             }
 
@@ -142,7 +163,40 @@ public static class LayoutCommand
                     continue;
                 }
 
-                // Copy runtime assemblies
+                var runtimeTargetsByFileName = library.RuntimeTargets
+                    .Where(runtimeTarget =>
+                        string.Equals(runtimeTarget.AssetType, "runtime", StringComparison.OrdinalIgnoreCase) &&
+                        !runtimeTarget.Path.EndsWith("_._", StringComparison.OrdinalIgnoreCase))
+                    .Select(runtimeTarget => new
+                    {
+                        RuntimeTarget = runtimeTarget,
+                        Score = GetRuntimeMatchScore(runtimeTarget.Runtime, runtimeFallbacks)
+                    })
+                    .Where(runtimeTarget => runtimeTarget.Score != int.MaxValue)
+                    .GroupBy(runtimeTarget => Path.GetFileName(runtimeTarget.RuntimeTarget.Path), StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(
+                        group => group.Key,
+                        group => group.OrderBy(runtimeTarget => runtimeTarget.Score).First().RuntimeTarget,
+                        StringComparer.OrdinalIgnoreCase);
+
+                var nativeRuntimeTargetsByFileName = library.RuntimeTargets
+                    .Where(runtimeTarget =>
+                        string.Equals(runtimeTarget.AssetType, "native", StringComparison.OrdinalIgnoreCase) &&
+                        !runtimeTarget.Path.EndsWith("_._", StringComparison.OrdinalIgnoreCase))
+                    .Select(runtimeTarget => new
+                    {
+                        RuntimeTarget = runtimeTarget,
+                        Score = GetRuntimeMatchScore(runtimeTarget.Runtime, runtimeFallbacks)
+                    })
+                    .Where(runtimeTarget => runtimeTarget.Score != int.MaxValue)
+                    .GroupBy(runtimeTarget => Path.GetFileName(runtimeTarget.RuntimeTarget.Path), StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(
+                        group => group.Key,
+                        group => group.OrderBy(runtimeTarget => runtimeTarget.Score).First().RuntimeTarget,
+                        StringComparer.OrdinalIgnoreCase);
+
+                // Copy runtime assemblies to the output root. Prefer runtime-specific targets for the current platform
+                // so probing-only assembly load contexts resolve the correct implementation.
                 foreach (var runtimeAssembly in library.RuntimeAssemblies)
                 {
                     // Skip placeholder files
@@ -152,6 +206,12 @@ public static class LayoutCommand
                     }
 
                     var sourcePath = Path.Combine(packagePath, runtimeAssembly.Path.Replace('/', Path.DirectorySeparatorChar));
+                    var fileName = Path.GetFileName(sourcePath);
+
+                    if (runtimeTargetsByFileName.TryGetValue(fileName, out var runtimeTarget))
+                    {
+                        sourcePath = Path.Combine(packagePath, runtimeTarget.Path.Replace('/', Path.DirectorySeparatorChar));
+                    }
 
                     // Early exit if source doesn't exist
                     if (!File.Exists(sourcePath))
@@ -159,7 +219,6 @@ public static class LayoutCommand
                         continue;
                     }
 
-                    var fileName = Path.GetFileName(sourcePath);
                     var destPath = Path.Combine(outputPath, fileName);
 
                     // Only copy if newer or doesn't exist
@@ -194,7 +253,75 @@ public static class LayoutCommand
                     }
                 }
 
-                // Also copy native libraries if present
+                // Also copy runtime-specific assets preserving the runtimes/ subtree, matching dotnet build output.
+                foreach (var runtimeTarget in library.RuntimeTargets)
+                {
+                    if (runtimeTarget.Path.EndsWith("_._", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    var sourcePath = Path.Combine(packagePath, runtimeTarget.Path.Replace('/', Path.DirectorySeparatorChar));
+                    if (!File.Exists(sourcePath))
+                    {
+                        continue;
+                    }
+
+                    var destPath = Path.Combine(outputPath, runtimeTarget.Path.Replace('/', Path.DirectorySeparatorChar));
+
+                    if (!File.Exists(destPath) ||
+                        File.GetLastWriteTimeUtc(sourcePath) > File.GetLastWriteTimeUtc(destPath))
+                    {
+                        Directory.CreateDirectory(Path.GetDirectoryName(destPath)!);
+                        File.Copy(sourcePath, destPath, overwrite: true);
+                        copiedCount++;
+
+                        if (verbose)
+                        {
+                            Console.WriteLine($"  Copy ({runtimeTarget.AssetType} target): {sourcePath} -> {destPath}");
+                        }
+                    }
+                }
+
+                foreach (var resourceAssembly in library.ResourceAssemblies)
+                {
+                    if (resourceAssembly.Path.EndsWith("_._", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    var sourcePath = Path.Combine(packagePath, resourceAssembly.Path.Replace('/', Path.DirectorySeparatorChar));
+                    if (!File.Exists(sourcePath))
+                    {
+                        continue;
+                    }
+
+                    var locale = resourceAssembly.Properties.TryGetValue("locale", out var value)
+                        ? value
+                        : Path.GetFileName(Path.GetDirectoryName(resourceAssembly.Path));
+
+                    if (string.IsNullOrEmpty(locale))
+                    {
+                        continue;
+                    }
+
+                    var destPath = Path.Combine(outputPath, locale, Path.GetFileName(sourcePath));
+
+                    if (!File.Exists(destPath) ||
+                        File.GetLastWriteTimeUtc(sourcePath) > File.GetLastWriteTimeUtc(destPath))
+                    {
+                        Directory.CreateDirectory(Path.GetDirectoryName(destPath)!);
+                        File.Copy(sourcePath, destPath, overwrite: true);
+                        copiedCount++;
+
+                        if (verbose)
+                        {
+                            Console.WriteLine($"  Copy (resource): {sourcePath} -> {destPath}");
+                        }
+                    }
+                }
+
+                // Also copy native libraries to the output root and preserve any runtime-specific layout.
                 foreach (var nativeLib in library.NativeLibraries)
                 {
                     var sourcePath = Path.Combine(packagePath, nativeLib.Path.Replace('/', Path.DirectorySeparatorChar));
@@ -219,6 +346,42 @@ public static class LayoutCommand
                             Console.WriteLine($"  Copy (native): {sourcePath} -> {destPath}");
                         }
                     }
+
+                    var structuredDestPath = Path.Combine(outputPath, nativeLib.Path.Replace('/', Path.DirectorySeparatorChar));
+                    if (!File.Exists(structuredDestPath) ||
+                        File.GetLastWriteTimeUtc(sourcePath) > File.GetLastWriteTimeUtc(structuredDestPath))
+                    {
+                        Directory.CreateDirectory(Path.GetDirectoryName(structuredDestPath)!);
+                        File.Copy(sourcePath, structuredDestPath, overwrite: true);
+                        copiedCount++;
+
+                        if (verbose)
+                        {
+                            Console.WriteLine($"  Copy (native path): {sourcePath} -> {structuredDestPath}");
+                        }
+                    }
+                }
+
+                foreach (var nativeRuntimeTarget in nativeRuntimeTargetsByFileName.Values)
+                {
+                    var sourcePath = Path.Combine(packagePath, nativeRuntimeTarget.Path.Replace('/', Path.DirectorySeparatorChar));
+                    if (!File.Exists(sourcePath))
+                    {
+                        continue;
+                    }
+
+                    var destPath = Path.Combine(outputPath, Path.GetFileName(sourcePath));
+                    if (!File.Exists(destPath) ||
+                        File.GetLastWriteTimeUtc(sourcePath) > File.GetLastWriteTimeUtc(destPath))
+                    {
+                        File.Copy(sourcePath, destPath, overwrite: true);
+                        copiedCount++;
+
+                        if (verbose)
+                        {
+                            Console.WriteLine($"  Copy (native target): {sourcePath} -> {destPath}");
+                        }
+                    }
                 }
             }
 
@@ -240,5 +403,60 @@ public static class LayoutCommand
 
             return 1;
         }
+    }
+
+    private static List<string> GetRuntimeFallbacks(string? runtimeIdentifier)
+    {
+        var fallbacks = new List<string>();
+
+        if (!string.IsNullOrEmpty(runtimeIdentifier))
+        {
+            var current = runtimeIdentifier;
+            while (!string.IsNullOrEmpty(current))
+            {
+                if (!fallbacks.Contains(current, StringComparer.OrdinalIgnoreCase))
+                {
+                    fallbacks.Add(current);
+                }
+
+                var separatorIndex = current.LastIndexOf('-');
+                current = separatorIndex > 0 ? current[..separatorIndex] : string.Empty;
+            }
+        }
+
+        // Trimming RID segments above already adds OS-specific fallbacks such as
+        // linux-x64 -> linux and osx-arm64 -> osx. Add the portable family aliases
+        // that are commonly used by runtimeTargets but are not produced by truncation.
+        if (OperatingSystem.IsWindows())
+        {
+            if (!fallbacks.Contains(WindowsRuntimeAlias, StringComparer.OrdinalIgnoreCase))
+            {
+                fallbacks.Add(WindowsRuntimeAlias);
+            }
+        }
+        else if (!fallbacks.Contains(UnixRuntimeAlias, StringComparer.OrdinalIgnoreCase))
+        {
+            fallbacks.Add(UnixRuntimeAlias);
+        }
+
+        return fallbacks;
+    }
+
+    private static int GetRuntimeMatchScore(string? runtimeIdentifier, IReadOnlyList<string> runtimeFallbacks)
+    {
+        if (string.IsNullOrEmpty(runtimeIdentifier))
+        {
+            return runtimeFallbacks.Count;
+        }
+
+        for (var i = 0; i < runtimeFallbacks.Count; i++)
+        {
+            if (string.Equals(runtimeIdentifier, runtimeFallbacks[i], StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+
+        return int.MaxValue;
     }
 }
