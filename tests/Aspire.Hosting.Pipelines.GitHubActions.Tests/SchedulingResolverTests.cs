@@ -423,6 +423,66 @@ public class SchedulingResolverTests
         Assert.Same(job1, result.StepToJob["A"]);
     }
 
+    [Fact]
+    public void Resolve_RequiredByWithTwoStages_NoCycleAfterNormalization()
+    {
+        // Simulates the docker-compose scenario:
+        //   publish-env RequiredBy "publish" (scheduled to stage1)
+        //   prepare-env DependsOn "publish", DependsOn "build"
+        //   docker-compose-up-env DependsOn "prepare-env", RequiredBy "deploy" (scheduled to stage2)
+        //
+        // Before normalization, the RequiredBy edges are invisible to the scheduler,
+        // causing incorrect job assignments. After normalization, the scheduler should
+        // correctly see that "publish" depends on "publish-env" and "deploy" depends
+        // on "docker-compose-up-env".
+        var workflow = new GitHubActionsWorkflowResource("ci");
+        var stage1 = workflow.AddStage("build");
+        var stage2 = workflow.AddStage("deploy");
+
+        var publishEnv = CreateStepWithRequiredBy("publish-env", "publish");
+        var publish = CreateStep("publish", stage1);
+        var build = CreateStep("build", stage1);
+        var prepareEnv = CreateStep("prepare-env", scheduledBy: null, dependsOn: ["publish", "build"]);
+        var dockerComposeUp = CreateStepWithRequiredBy("docker-compose-up-env", "deploy");
+        dockerComposeUp.DependsOnSteps.Add("prepare-env");
+        var deploy = CreateStep("deploy", stage2);
+
+        var steps = new List<PipelineStep> { publishEnv, publish, build, prepareEnv, dockerComposeUp, deploy };
+
+        // Normalize RequiredBy→DependsOn (same as GitHubActionsWorkflowExtensions does)
+        var stepsByName = steps.ToDictionary(s => s.Name, StringComparer.Ordinal);
+        foreach (var step in steps)
+        {
+            foreach (var requiredByStepName in step.RequiredBySteps)
+            {
+                if (stepsByName.TryGetValue(requiredByStepName, out var requiredByStep) &&
+                    !requiredByStep.DependsOnSteps.Contains(step.Name))
+                {
+                    requiredByStep.DependsOnSteps.Add(step.Name);
+                }
+            }
+        }
+
+        // After normalization: publish depends on publish-env, deploy depends on docker-compose-up-env
+        Assert.Contains("publish-env", publish.DependsOnSteps);
+        Assert.Contains("docker-compose-up-env", deploy.DependsOnSteps);
+
+        // Should not throw SchedulingValidationException (no cycle)
+        var result = SchedulingResolver.Resolve(steps, workflow);
+
+        // publish and build are in stage1 (build-default job)
+        Assert.Equal("build-default", result.StepToJob["publish"].Id);
+        Assert.Equal("build-default", result.StepToJob["build"].Id);
+        Assert.Equal("build-default", result.StepToJob["publish-env"].Id);
+
+        // deploy is in stage2 (deploy-default job)
+        Assert.Equal("deploy-default", result.StepToJob["deploy"].Id);
+
+        // deploy-default should depend on build-default (not the other way around)
+        Assert.True(result.JobDependencies.TryGetValue("deploy-default", out var deployDeps));
+        Assert.Contains("build-default", deployDeps);
+    }
+
     // Helper methods
 
     private static PipelineStep CreateStep(string name, IPipelineStepTarget? scheduledBy = null)
@@ -455,5 +515,17 @@ public class SchedulingResolverTests
             DependsOnSteps = [.. dependsOn],
             ScheduledBy = scheduledBy
         };
+    }
+
+    private static PipelineStep CreateStepWithRequiredBy(string name, string requiredBy, IPipelineStepTarget? scheduledBy = null)
+    {
+        var step = new PipelineStep
+        {
+            Name = name,
+            Action = _ => Task.CompletedTask,
+            ScheduledBy = scheduledBy
+        };
+        step.RequiredBy(requiredBy);
+        return step;
     }
 }

@@ -79,6 +79,11 @@ public static class GitHubActionsWorkflowExtensions
                 return [];
             }
 
+            // Normalize RequiredBy→DependsOn before scheduling. The pipeline does this
+            // later in ExecuteAsync, but the scheduler needs the full dependency graph
+            // (including RequiredBy-derived edges) to compute correct job assignments.
+            NormalizeRequiredByToDependsOn(connectedSteps);
+
             // Run the scheduler to compute job assignments and terminal steps
             var scheduling = SchedulingResolver.Resolve(connectedSteps, workflow);
 
@@ -316,5 +321,26 @@ public static class GitHubActionsWorkflowExtensions
         }
 
         return connected;
+    }
+
+    /// <summary>
+    /// Converts RequiredBy relationships to their equivalent DependsOn relationships.
+    /// If step A is required by step B, this adds step A as a dependency of step B.
+    /// This must be done before scheduling so the resolver sees the full dependency graph.
+    /// </summary>
+    private static void NormalizeRequiredByToDependsOn(List<PipelineStep> steps)
+    {
+        var stepsByName = steps.ToDictionary(s => s.Name, StringComparer.Ordinal);
+        foreach (var step in steps)
+        {
+            foreach (var requiredByStepName in step.RequiredBySteps)
+            {
+                if (stepsByName.TryGetValue(requiredByStepName, out var requiredByStep) &&
+                    !requiredByStep.DependsOnSteps.Contains(step.Name))
+                {
+                    requiredByStep.DependsOnSteps.Add(step.Name);
+                }
+            }
+        }
     }
 }
