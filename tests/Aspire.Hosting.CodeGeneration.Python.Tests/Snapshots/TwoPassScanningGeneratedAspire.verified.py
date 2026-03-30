@@ -3343,6 +3343,23 @@ class ExecuteCommandContext:
         )
         token.cancel()
 
+    @_uncached_property
+    def logger(self) -> AbstractLogger:
+        """Gets the Logger property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.logger',
+            {'context': self._handle}
+        )
+        return typing.cast(AbstractLogger, result)
+
+    @logger.setter
+    def logger(self, value: AbstractLogger) -> None:
+        """Sets the Logger property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setLogger',
+            {'context': self._handle, 'value': value}
+        )
+
 
 class InitializeResourceEvent:
     """Type class for InitializeResourceEvent."""

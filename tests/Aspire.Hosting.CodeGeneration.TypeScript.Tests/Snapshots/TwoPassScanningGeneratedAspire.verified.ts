@@ -1501,6 +1501,17 @@ export class ExecuteCommandContext {
         }
     };
 
+    /** Gets the Logger property */
+    logger = {
+        get: async (): Promise<Logger> => {
+            const handle = await this._client.invokeCapability<ILoggerHandle>(
+                'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.logger',
+                { context: this._handle }
+            );
+            return new Logger(handle, this._client);
+        },
+    };
+
 }
 
 // ============================================================================

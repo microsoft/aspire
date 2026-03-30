@@ -8187,6 +8187,31 @@ func (s *ExecuteCommandContext) SetCancellationToken(value *CancellationToken) (
 	return result.(*ExecuteCommandContext), nil
 }
 
+// Logger gets the Logger property
+func (s *ExecuteCommandContext) Logger() (*ILogger, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.logger", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ILogger), nil
+}
+
+// SetLogger sets the Logger property
+func (s *ExecuteCommandContext) SetLogger(value *ILogger) (*ExecuteCommandContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setLogger", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ExecuteCommandContext), nil
+}
+
 // ExternalServiceResource wraps a handle for Aspire.Hosting/Aspire.Hosting.ExternalServiceResource.
 type ExternalServiceResource struct {
 	ResourceBuilderBase

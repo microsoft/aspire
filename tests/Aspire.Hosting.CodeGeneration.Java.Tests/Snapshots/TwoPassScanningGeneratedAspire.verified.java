@@ -9131,6 +9131,25 @@ public class ExecuteCommandContext extends HandleWrapperBase {
         return (ExecuteCommandContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setCancellationToken", reqArgs);
     }
 
+    /** Gets the Logger property */
+    public ILogger logger() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (ILogger) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.logger", reqArgs);
+    }
+
+    /** Sets the Logger property */
+    public ExecuteCommandContext setLogger(ILogger value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        return (ExecuteCommandContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setLogger", reqArgs);
+    }
+
+    public ExecuteCommandContext setLogger(HandleWrapperBase value) {
+        return setLogger(new ILogger(value.getHandle(), value.getClient()));
+    }
+
 }
 
 // ===== ExecuteCommandResult.java =====
