@@ -27,7 +27,7 @@ namespace Aspire.Hosting.Azure;
 /// Represents an Azure Sql Server resource.
 /// </summary>
 [AspireExport(ExposeProperties = true)]
-public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithConnectionString, IAzurePrivateEndpointTarget, IAzurePrivateEndpointTargetNotification
+public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithConnectionString, IAzurePrivateEndpointTarget, IAzurePrivateEndpointTargetNotification, IAzureNspAssociationTarget
 {
     private const string AciSubnetDelegationServiceId = "Microsoft.ContainerInstance/containerGroups";
 

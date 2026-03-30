@@ -49,7 +49,7 @@
     <PackageVersion Include="Azure.Provisioning.EventHubs" Version="1.1.0" />
     <PackageVersion Include="Azure.Provisioning.KeyVault" Version="1.1.0" />
     <PackageVersion Include="Azure.Provisioning.Kusto" Version="1.0.0-beta.1" />
-    <PackageVersion Include="Azure.Provisioning.Network" Version="1.0.0" />
+    <PackageVersion Include="Azure.Provisioning.Network" Version="1.1.0-beta.2" />
     <PackageVersion Include="Azure.Provisioning.OperationalInsights" Version="1.1.0" />
     <PackageVersion Include="Azure.Provisioning.PostgreSql" Version="1.1.1" />
     <PackageVersion Include="Azure.Provisioning.PrivateDns" Version="1.0.0" />
@@ -180,7 +180,7 @@
     <!-- playground apps dependencies for javascript -->
     <PackageVersion Include="Swashbuckle.AspNetCore" Version="9.0.6" />
     <!-- Pinned versions for Component Governance - Remove when root dependencies are updated -->
-    <PackageVersion Include="Azure.Core" Version="1.51.1" />
+    <PackageVersion Include="Azure.Core" Version="1.52.0" />
     <PackageVersion Include="Azure.Identity" Version="1.18.0" />
     <!-- https://github.com/Azure/azure-cosmos-dotnet-v3/pull/3313 -->
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
