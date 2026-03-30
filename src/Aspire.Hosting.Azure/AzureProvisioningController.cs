@@ -29,9 +29,41 @@ namespace Aspire.Hosting.Azure;
 /// Coordinates Azure run-mode provisioning, recovery, and drift detection through a single serialized control loop.
 /// </summary>
 /// <remarks>
-/// Startup provisioning and dashboard/resource commands both flow through this controller so run mode uses the same
-/// state transitions, deployment-state management, and error handling. The controller only orchestrates run-mode
-/// behavior; deployment and publish-time resource creation still flows through the shared provisioner implementations.
+/// <para>
+/// The controller uses a channel-based queue with a single reader to serialize all Azure operations. Every
+/// public method (provision, reprovision, reset, change-location, change-context, delete, drift-check) wraps
+/// a typed intent record and writes it to the channel. A background loop dequeues one intent at a time,
+/// executes it, and completes the caller's TaskCompletionSource with the result. This eliminates races between
+/// concurrent dashboard commands, CLI commands, and the periodic drift monitor.
+/// </para>
+/// <para>
+/// Within a provisioning pass, individual resources are fanned out concurrently but ordered by dependency.
+/// Each resource gets a per-resource ProvisioningTaskCompletionSource that downstream resources await before
+/// starting their own deployment. This TCS is completed by CompleteProvisioning/FailProvisioning — the only
+/// two completion paths — so dependent resources unblock as soon as their prerequisites finish, not when the
+/// entire batch completes.
+/// </para>
+/// <para>
+/// The controller tracks lightweight in-memory state (AzureControllerState) under a lock. This state drives
+/// command enablement in the dashboard (commands are disabled while an operation targeting the same resources
+/// is running) and provides the Azure identity properties shown on the AzureEnvironmentResource.
+/// </para>
+/// <para>
+/// Location overrides let a user deploy a single resource to a different Azure region. Overrides are persisted
+/// in the deployment state store and survive resets/reprovisioning. When a location change is requested, the
+/// controller deletes the existing Azure resource first (to avoid ARM InvalidResourceLocation conflicts), sets
+/// the override, and reprovisions.
+/// </para>
+/// <para>
+/// Drift detection runs on a periodic timer. It probes ARM to verify each running resource still exists and
+/// marks missing resources as "Missing in Azure" / the environment as "Drifted". The drift monitor queues at
+/// most one check at a time through the same serialized channel.
+/// </para>
+/// <para>
+/// The controller only orchestrates run-mode behavior. Deployment state persistence, Bicep compilation, and
+/// ARM deployment are delegated to BicepProvisioner. Publish-time resource creation flows through separate
+/// publishing contexts.
+/// </para>
 /// </remarks>
 internal sealed class AzureProvisioningController(
     IConfiguration configuration,
