@@ -8,7 +8,6 @@ var taskHub = scheduler.AddTaskHub("taskhub");
 
 builder.AddAzureFunctionsProject<Projects.AzureFunctionsWithDts_Functions>("funcapp")
     .WithHostStorage(storage)
-    .WithEnvironment("DURABLE_TASK_SCHEDULER_CONNECTION_STRING", scheduler)
-    .WithEnvironment("TASKHUB_NAME", taskHub.Resource.TaskHubName);
+    .WithReference(taskHub);
 
 builder.Build().Run();

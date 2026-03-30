@@ -14,7 +14,7 @@ namespace Aspire.Hosting.Azure.DurableTask;
 /// <param name="scheduler">The durable task scheduler resource whose connection string is the base for this hub.</param>
 [AspireExport(ExposeProperties = true)]
 public sealed class DurableTaskHubResource(string name, DurableTaskSchedulerResource scheduler)
-    : Resource(name), IResourceWithConnectionString, IResourceWithParent<DurableTaskSchedulerResource>
+    : Resource(name), IResourceWithConnectionString, IResourceWithParent<DurableTaskSchedulerResource>, IResourceWithAzureFunctionsConfig
 {
     /// <summary>
     /// Gets the connection string expression composed of the scheduler connection string and the TaskHub name.
@@ -30,6 +30,14 @@ public sealed class DurableTaskHubResource(string name, DurableTaskSchedulerReso
     /// Gets the name of the Task Hub. If not provided, the logical name of this resource is returned.
     /// </summary>
     public ReferenceExpression TaskHubName => GetTaskHubName();
+
+    /// <inheritdoc />
+    void IResourceWithAzureFunctionsConfig.ApplyAzureFunctionsConfiguration(IDictionary<string, object> target, string connectionName)
+    {
+        // Injected to support Azure Functions listener initialization via the DTS storage provider.
+        target["DURABLE_TASK_SCHEDULER_CONNECTION_STRING"] = Parent.ConnectionStringExpression;
+        target["TASKHUB_NAME"] = TaskHubName;
+    }
 
     private ReferenceExpression GetTaskHubName()
     {
