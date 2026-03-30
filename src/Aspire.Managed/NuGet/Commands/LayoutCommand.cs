@@ -321,6 +321,8 @@ public static class LayoutCommand
                     }
                 }
 
+                var handledNativeRuntimeTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
                 // Also copy native libraries to the output root and preserve any runtime-specific layout.
                 foreach (var nativeLib in library.NativeLibraries)
                 {
@@ -333,17 +335,29 @@ public static class LayoutCommand
                     }
 
                     var fileName = Path.GetFileName(sourcePath);
+                    var rootSourcePath = sourcePath;
+
+                    if (nativeRuntimeTargetsByFileName.TryGetValue(fileName, out var nativeRuntimeTarget))
+                    {
+                        var runtimeTargetPath = Path.Combine(packagePath, nativeRuntimeTarget.Path.Replace('/', Path.DirectorySeparatorChar));
+                        if (File.Exists(runtimeTargetPath))
+                        {
+                            rootSourcePath = runtimeTargetPath;
+                            handledNativeRuntimeTargets.Add(fileName);
+                        }
+                    }
+
                     var destPath = Path.Combine(outputPath, fileName);
 
                     if (!File.Exists(destPath) ||
-                        File.GetLastWriteTimeUtc(sourcePath) > File.GetLastWriteTimeUtc(destPath))
+                        File.GetLastWriteTimeUtc(rootSourcePath) > File.GetLastWriteTimeUtc(destPath))
                     {
-                        File.Copy(sourcePath, destPath, overwrite: true);
+                        File.Copy(rootSourcePath, destPath, overwrite: true);
                         copiedCount++;
 
                         if (verbose)
                         {
-                            Console.WriteLine($"  Copy (native): {sourcePath} -> {destPath}");
+                            Console.WriteLine($"  Copy (native): {rootSourcePath} -> {destPath}");
                         }
                     }
 
@@ -370,7 +384,13 @@ public static class LayoutCommand
                         continue;
                     }
 
-                    var destPath = Path.Combine(outputPath, Path.GetFileName(sourcePath));
+                    var fileName = Path.GetFileName(sourcePath);
+                    if (handledNativeRuntimeTargets.Contains(fileName))
+                    {
+                        continue;
+                    }
+
+                    var destPath = Path.Combine(outputPath, fileName);
                     if (!File.Exists(destPath) ||
                         File.GetLastWriteTimeUtc(sourcePath) > File.GetLastWriteTimeUtc(destPath))
                     {

@@ -27,7 +27,9 @@ public class LayoutCommandTests
             await File.WriteAllTextAsync(Path.Combine(packageRoot, "runtimes", "unix", "lib", "net10.0", "Test.Package.dll"), "unix");
             await File.WriteAllTextAsync(Path.Combine(packageRoot, "runtimes", "win", "lib", "net10.0", "Test.Package.dll"), "win");
             await File.WriteAllTextAsync(Path.Combine(packageRoot, "lib", "net10.0", "fr", "Test.Package.resources.dll"), "fr");
-            await File.WriteAllTextAsync(Path.Combine(packageRoot, "runtimes", GetCurrentRuntimeIdentifier(), "native", GetNativeFileName()), "native");
+            Directory.CreateDirectory(Path.Combine(packageRoot, "native"));
+            await File.WriteAllTextAsync(Path.Combine(packageRoot, "native", GetNativeFileName()), "generic-native");
+            await File.WriteAllTextAsync(Path.Combine(packageRoot, "runtimes", GetCurrentRuntimeIdentifier(), "native", GetNativeFileName()), "runtime-native");
 
             var assetsPath = Path.Combine(workspaceRoot, "project.assets.json");
             await File.WriteAllTextAsync(assetsPath, CreateAssetsJson(workspaceRoot, GetCurrentRuntimeIdentifier(), GetNativeFileName()));
@@ -46,12 +48,13 @@ public class LayoutCommandTests
             Assert.Equal(0, exitCode);
             Assert.Equal(GetExpectedRuntimeContent(), await File.ReadAllTextAsync(Path.Combine(outputPath, "Test.Package.dll")));
             Assert.Equal("fr", await File.ReadAllTextAsync(Path.Combine(outputPath, "fr", "Test.Package.resources.dll")));
-            Assert.Equal("native", await File.ReadAllTextAsync(Path.Combine(outputPath, GetNativeFileName())));
+            Assert.Equal("runtime-native", await File.ReadAllTextAsync(Path.Combine(outputPath, GetNativeFileName())));
+            Assert.Equal("generic-native", await File.ReadAllTextAsync(Path.Combine(outputPath, "native", GetNativeFileName())));
             Assert.Equal(
                 GetExpectedRuntimeContent(),
                 await File.ReadAllTextAsync(Path.Combine(outputPath, "runtimes", GetExpectedRuntimeAssetRid(), "lib", "net10.0", "Test.Package.dll")));
             Assert.Equal(
-                "native",
+                "runtime-native",
                 await File.ReadAllTextAsync(Path.Combine(outputPath, "runtimes", GetCurrentRuntimeIdentifier(), "native", GetNativeFileName())));
         }
         finally
@@ -79,6 +82,9 @@ public class LayoutCommandTests
                     "runtime": {
                       "lib/net10.0/Test.Package.dll": {}
                     },
+                    "native": {
+                      "native/{{nativeFileName}}": {}
+                    },
                     "runtimeTargets": {
                       "runtimes/unix/lib/net10.0/Test.Package.dll": { "rid": "unix", "assetType": "runtime" },
                       "runtimes/win/lib/net10.0/Test.Package.dll": { "rid": "win", "assetType": "runtime" },
@@ -96,6 +102,7 @@ public class LayoutCommandTests
                   "path": "test.package/1.0.0",
                   "files": [
                     "lib/net10.0/Test.Package.dll",
+                    "native/{{nativeFileName}}",
                     "runtimes/unix/lib/net10.0/Test.Package.dll",
                     "runtimes/win/lib/net10.0/Test.Package.dll",
                     "runtimes/{{runtimeIdentifier}}/native/{{nativeFileName}}",
