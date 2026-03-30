@@ -133,7 +133,7 @@ public static class DurableTaskResourceExtensions
         // Mark this resource as an emulator for consistent resource identification and tooling support
         builder.WithAnnotation(new EmulatorResourceAnnotation());
 
-        builder.WithEndpoint(name: "grpc", targetPort: 8080)
+        builder.WithHttpEndpoint(name: "grpc", targetPort: 8080)
                .WithEndpoint("grpc", endpoint => endpoint.Transport = "http2")
                .WithHttpEndpoint(name: "http", targetPort: 8081)
                .WithHttpEndpoint(name: "dashboard", targetPort: 8082)
