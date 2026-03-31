@@ -47,7 +47,7 @@ variables:
   - template: /eng/pipelines/common-variables.yml@self
   - template: /eng/common/templates-official/variables/pool-providers.yml@self
   # Variable group containing secrets (VscePublishToken for future use)
-  # Note: NuGet publishing uses service connection 'NuGet.org - microsoft/aspire' instead of API key
+  # Note: NuGet publishing uses service connection 'NuGet.org - dotnet/aspire' instead of API key
   - group: Aspire-Release-Secrets
   # Variable group containing aspire-winget-bot-pat and aspire-homebrew-bot-pat for WinGet and Homebrew publishing
   - group: Aspire-Secrets
@@ -385,7 +385,7 @@ extends:
                     packagesToPush: '$(Pipeline.Workspace)/packages/PackageArtifacts/*.nupkg'
                     packageParentPath: '$(Pipeline.Workspace)/packages/PackageArtifacts'
                     nuGetFeedType: external
-                    publishFeedCredentials: 'NuGet.org - microsoft/aspire'
+                    publishFeedCredentials: 'NuGet.org - dotnet/aspire'
 
               # Skip message when SkipNuGetPublish is true
               - ${{ if eq(parameters.SkipNuGetPublish, true) }}:
