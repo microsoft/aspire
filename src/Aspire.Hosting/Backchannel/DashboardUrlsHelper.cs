@@ -81,14 +81,18 @@ internal static class DashboardUrlsHelper
             }
         }
 
-        // Build login URLs
+        // Build dashboard URLs. When browser token auth is enabled, include the login token.
+        // When anonymous access is enabled, return the base URL directly.
         var codespacesUrlRewriter = serviceProvider.GetService<CodespacesUrlRewriter>();
         string? baseUrlWithLoginToken = null;
         string? codespacesUrlWithLoginToken = null;
 
-        if (!string.IsNullOrEmpty(apiBaseUrl) && !string.IsNullOrEmpty(dashboardOptions.DashboardToken))
+        if (!string.IsNullOrEmpty(apiBaseUrl))
         {
-            baseUrlWithLoginToken = $"{apiBaseUrl.TrimEnd('/')}/login?t={dashboardOptions.DashboardToken}";
+            baseUrlWithLoginToken = !string.IsNullOrEmpty(dashboardOptions.DashboardToken)
+                ? $"{apiBaseUrl.TrimEnd('/')}/login?t={dashboardOptions.DashboardToken}"
+                : apiBaseUrl;
+
             var rewrittenUrl = codespacesUrlRewriter?.RewriteUrl(baseUrlWithLoginToken);
             if (rewrittenUrl != baseUrlWithLoginToken)
             {
