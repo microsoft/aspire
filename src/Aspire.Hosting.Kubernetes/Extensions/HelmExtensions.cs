@@ -120,7 +120,7 @@ internal static partial class HelmExtensions
     internal static partial Regex HelmFlowControlPattern();
 
     [GeneratedRegex(@"\{\{[^}]*\|\s*(int|int64|float64)\s*\}\}")]
-    private static partial Regex EndWithNonStringTypePattern();
+    internal static partial Regex EndWithNonStringTypePattern();
 
     [GeneratedRegex(@"((?<=^\{\{\s*)(?:[^{}]+?)(?=(?:\}\}$)))")]
     internal static partial Regex ScalarExpressionPattern();

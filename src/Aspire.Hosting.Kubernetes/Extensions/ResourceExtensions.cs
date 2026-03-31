@@ -109,10 +109,18 @@ internal static class ResourceExtensions
 
         foreach (var kvp in context.EnvironmentVariables.Where(kvp => !processedKeys.Contains(kvp.Key)))
         {
-            configMap.Data[kvp.Key] = kvp.Value.ValueContainsHelmExpression
-                                     ? kvp.Value.ValueString! // If it contains an expression, its not null
-                                     : kvp.Value.Expression   // All configmap values are strings
-                                       ?? string.Empty;
+            var expression = kvp.Value.ValueContainsHelmExpression
+                             ? kvp.Value.ValueString! // If it contains an expression, its not null
+                             : kvp.Value.Expression   // All configmap values are strings
+                               ?? string.Empty;
+
+            // ConfigMap data values must be strings. Helm expressions with type
+            // conversion pipes (| int, | float64) render as numbers, which K8s
+            // rejects. Convert them to use | toString so the value stays a string.
+            configMap.Data[kvp.Key] = HelmExtensions.EndWithNonStringTypePattern().IsMatch(expression)
+                ? HelmExtensions.EndWithNonStringTypePattern().Replace(expression, m =>
+                    m.Value.Replace("| int", "| toString").Replace("| int64", "| toString").Replace("| float64", "| toString"))
+                : expression;
             processedKeys.Add(kvp.Key);
         }
 
