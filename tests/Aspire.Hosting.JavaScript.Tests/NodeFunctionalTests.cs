@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Hosting.JavaScript.Tests;
 
+[RequiresTools(["node", "npm"])]
 public class NodeFunctionalTests : IClassFixture<NodeAppFixture>
 {
     private readonly NodeAppFixture _nodeJsFixture;
@@ -17,7 +18,6 @@ public class NodeFunctionalTests : IClassFixture<NodeAppFixture>
     }
 
     [Fact]
-    [RequiresTools(["node"])]
     public async Task VerifyNodeAppWorks()
     {
         using var cts = new CancellationTokenSource(TestConstants.LongTimeoutDuration);
@@ -28,7 +28,6 @@ public class NodeFunctionalTests : IClassFixture<NodeAppFixture>
     }
 
     [Fact]
-    [RequiresTools(["npm"])]
     public async Task VerifyNpmAppWorks()
     {
         using var cts = new CancellationTokenSource(TestConstants.LongTimeoutDuration);
