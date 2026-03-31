@@ -18,13 +18,16 @@ internal static class WorkflowYamlGenerator
     // upload-artifact@v4 does NOT evaluate ${{ env.HOME }} or other env vars in
     // the `path` parameter, so we must use a workspace-relative path and copy
     // to/from the real state directory ($HOME/.aspire/deployments/) via run steps.
-    private const string StateStagingPath = ".aspire-state-staging";
+    // IMPORTANT: Do NOT prefix with '.' — upload-artifact@v4 with the default
+    // include-hidden-files: false skips directories whose names start with '.'.
+    private const string StateStagingPath = "aspire-state-staging";
     private const string StateRealPath = "$HOME/.aspire/deployments";
 
     // Workspace-relative output path for publish artifacts (docker-compose.yaml, .env, etc.).
     // This is passed to `aspire do --output-path` so both publish and deploy jobs use
     // the same workspace-relative path, enabling artifact transfer between jobs.
-    private const string OutputPath = ".aspire-output";
+    // IMPORTANT: Do NOT prefix with '.' — see StateStagingPath comment.
+    private const string OutputPath = "aspire-output";
 
     /// <summary>
     /// Generates a workflow YAML model from the scheduling result.
@@ -213,10 +216,12 @@ internal static class WorkflowYamlGenerator
                 $"if [ -d \"{OutputPath}\" ]; then",
                 $"  mkdir -p {StateStagingPath}/output",
                 $"  cp -r {OutputPath}/. {StateStagingPath}/output/",
-                "fi")
+                "fi",
+                $"echo \"Staged files:\" && find {StateStagingPath} -type f 2>/dev/null || echo \"No files staged\"")
         });
 
-        // Upload state artifacts for downstream jobs
+        // Upload state artifacts for downstream jobs.
+        // include-hidden-files is needed for .env files produced by docker-compose publish.
         steps.Add(new StepYaml
         {
             Name = "Upload state",
@@ -225,7 +230,8 @@ internal static class WorkflowYamlGenerator
             {
                 ["name"] = $"{StateArtifactPrefix}{job.Id}",
                 ["path"] = StateStagingPath,
-                ["if-no-files-found"] = "ignore"
+                ["if-no-files-found"] = "ignore",
+                ["include-hidden-files"] = "true"
             }
         });
 

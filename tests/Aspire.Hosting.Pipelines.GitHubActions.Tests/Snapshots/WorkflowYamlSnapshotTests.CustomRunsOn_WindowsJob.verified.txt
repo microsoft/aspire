@@ -31,21 +31,23 @@ jobs:
       - name: Run pipeline steps
         env:
           DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
-        run: aspire do gha-build-windows-default-stage-build-win-job --output-path .aspire-output
+        run: aspire do gha-build-windows-default-stage-build-win-job --output-path aspire-output
       - name: Stage pipeline state
         run: |
-          mkdir -p .aspire-state-staging
+          mkdir -p aspire-state-staging
           if [ -d "$HOME/.aspire/deployments" ]; then
-            mkdir -p .aspire-state-staging/deployments
-            cp -r $HOME/.aspire/deployments/. .aspire-state-staging/deployments/
+            mkdir -p aspire-state-staging/deployments
+            cp -r $HOME/.aspire/deployments/. aspire-state-staging/deployments/
           fi
-          if [ -d ".aspire-output" ]; then
-            mkdir -p .aspire-state-staging/output
-            cp -r .aspire-output/. .aspire-state-staging/output/
+          if [ -d "aspire-output" ]; then
+            mkdir -p aspire-state-staging/output
+            cp -r aspire-output/. aspire-state-staging/output/
           fi
+          echo "Staged files:" && find aspire-state-staging -type f 2>/dev/null || echo "No files staged"
       - name: Upload state
         uses: actions/upload-artifact@v4
         with:
           name: aspire-do-state-build-win
-          path: .aspire-state-staging
+          path: aspire-state-staging
           if-no-files-found: ignore
+          include-hidden-files: true

@@ -31,24 +31,26 @@ jobs:
       - name: Run pipeline steps
         env:
           DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
-        run: aspire do gha-ci-cd-default-stage-build-job --output-path .aspire-output
+        run: aspire do gha-ci-cd-default-stage-build-job --output-path aspire-output
       - name: Stage pipeline state
         run: |
-          mkdir -p .aspire-state-staging
+          mkdir -p aspire-state-staging
           if [ -d "$HOME/.aspire/deployments" ]; then
-            mkdir -p .aspire-state-staging/deployments
-            cp -r $HOME/.aspire/deployments/. .aspire-state-staging/deployments/
+            mkdir -p aspire-state-staging/deployments
+            cp -r $HOME/.aspire/deployments/. aspire-state-staging/deployments/
           fi
-          if [ -d ".aspire-output" ]; then
-            mkdir -p .aspire-state-staging/output
-            cp -r .aspire-output/. .aspire-state-staging/output/
+          if [ -d "aspire-output" ]; then
+            mkdir -p aspire-state-staging/output
+            cp -r aspire-output/. aspire-state-staging/output/
           fi
+          echo "Staged files:" && find aspire-state-staging -type f 2>/dev/null || echo "No files staged"
       - name: Upload state
         uses: actions/upload-artifact@v4
         with:
           name: aspire-do-state-build
-          path: .aspire-state-staging
+          path: aspire-state-staging
           if-no-files-found: ignore
+          include-hidden-files: true
 
   test:
     name: Run Tests
@@ -69,38 +71,40 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: aspire-do-state-build
-          path: .aspire-state-staging
+          path: aspire-state-staging
       - name: Restore pipeline state
         run: |
-          if [ -d ".aspire-state-staging/deployments" ]; then
+          if [ -d "aspire-state-staging/deployments" ]; then
             mkdir -p $HOME/.aspire/deployments
-            cp -r .aspire-state-staging/deployments/. $HOME/.aspire/deployments/
+            cp -r aspire-state-staging/deployments/. $HOME/.aspire/deployments/
           fi
-          if [ -d ".aspire-state-staging/output" ]; then
-            mkdir -p .aspire-output
-            cp -r .aspire-state-staging/output/. .aspire-output/
+          if [ -d "aspire-state-staging/output" ]; then
+            mkdir -p aspire-output
+            cp -r aspire-state-staging/output/. aspire-output/
           fi
       - name: Run pipeline steps
         env:
           DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
-        run: aspire do gha-ci-cd-default-stage-test-job --output-path .aspire-output
+        run: aspire do gha-ci-cd-default-stage-test-job --output-path aspire-output
       - name: Stage pipeline state
         run: |
-          mkdir -p .aspire-state-staging
+          mkdir -p aspire-state-staging
           if [ -d "$HOME/.aspire/deployments" ]; then
-            mkdir -p .aspire-state-staging/deployments
-            cp -r $HOME/.aspire/deployments/. .aspire-state-staging/deployments/
+            mkdir -p aspire-state-staging/deployments
+            cp -r $HOME/.aspire/deployments/. aspire-state-staging/deployments/
           fi
-          if [ -d ".aspire-output" ]; then
-            mkdir -p .aspire-state-staging/output
-            cp -r .aspire-output/. .aspire-state-staging/output/
+          if [ -d "aspire-output" ]; then
+            mkdir -p aspire-state-staging/output
+            cp -r aspire-output/. aspire-state-staging/output/
           fi
+          echo "Staged files:" && find aspire-state-staging -type f 2>/dev/null || echo "No files staged"
       - name: Upload state
         uses: actions/upload-artifact@v4
         with:
           name: aspire-do-state-test
-          path: .aspire-state-staging
+          path: aspire-state-staging
           if-no-files-found: ignore
+          include-hidden-files: true
 
   deploy:
     name: Deploy
@@ -121,40 +125,42 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: aspire-do-state-build
-          path: .aspire-state-staging
+          path: aspire-state-staging
       - name: Download state from test
         uses: actions/download-artifact@v4
         with:
           name: aspire-do-state-test
-          path: .aspire-state-staging
+          path: aspire-state-staging
       - name: Restore pipeline state
         run: |
-          if [ -d ".aspire-state-staging/deployments" ]; then
+          if [ -d "aspire-state-staging/deployments" ]; then
             mkdir -p $HOME/.aspire/deployments
-            cp -r .aspire-state-staging/deployments/. $HOME/.aspire/deployments/
+            cp -r aspire-state-staging/deployments/. $HOME/.aspire/deployments/
           fi
-          if [ -d ".aspire-state-staging/output" ]; then
-            mkdir -p .aspire-output
-            cp -r .aspire-state-staging/output/. .aspire-output/
+          if [ -d "aspire-state-staging/output" ]; then
+            mkdir -p aspire-output
+            cp -r aspire-state-staging/output/. aspire-output/
           fi
       - name: Run pipeline steps
         env:
           DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
-        run: aspire do gha-ci-cd-default-stage-deploy-job --output-path .aspire-output
+        run: aspire do gha-ci-cd-default-stage-deploy-job --output-path aspire-output
       - name: Stage pipeline state
         run: |
-          mkdir -p .aspire-state-staging
+          mkdir -p aspire-state-staging
           if [ -d "$HOME/.aspire/deployments" ]; then
-            mkdir -p .aspire-state-staging/deployments
-            cp -r $HOME/.aspire/deployments/. .aspire-state-staging/deployments/
+            mkdir -p aspire-state-staging/deployments
+            cp -r $HOME/.aspire/deployments/. aspire-state-staging/deployments/
           fi
-          if [ -d ".aspire-output" ]; then
-            mkdir -p .aspire-state-staging/output
-            cp -r .aspire-output/. .aspire-state-staging/output/
+          if [ -d "aspire-output" ]; then
+            mkdir -p aspire-state-staging/output
+            cp -r aspire-output/. aspire-state-staging/output/
           fi
+          echo "Staged files:" && find aspire-state-staging -type f 2>/dev/null || echo "No files staged"
       - name: Upload state
         uses: actions/upload-artifact@v4
         with:
           name: aspire-do-state-deploy
-          path: .aspire-state-staging
+          path: aspire-state-staging
           if-no-files-found: ignore
+          include-hidden-files: true
