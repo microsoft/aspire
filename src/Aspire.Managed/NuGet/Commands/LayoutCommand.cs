@@ -103,13 +103,7 @@ public static class LayoutCommand
                 : runtimeIdentifier;
             var runtimeFallbacks = GetRuntimeFallbacks(effectiveRuntimeIdentifier);
 
-            // Find the target for our framework and prefer the runtime-specific target when present.
-            var target = lockFile.Targets
-                .Where(t =>
-                    t.TargetFramework.GetShortFolderName().Equals(framework, StringComparison.OrdinalIgnoreCase) ||
-                    t.TargetFramework.ToString().Equals(framework, StringComparison.OrdinalIgnoreCase))
-                .OrderBy(t => GetRuntimeMatchScore(t.RuntimeIdentifier, runtimeFallbacks))
-                .FirstOrDefault();
+            var target = ResolveTarget(lockFile, framework, runtimeFallbacks);
 
             if (target == null)
             {
@@ -124,14 +118,7 @@ public static class LayoutCommand
             var copiedCount = 0;
             var skippedCount = 0;
 
-            // Get the packages path from the lock file
-            var packagesPath = lockFile.PackageFolders.FirstOrDefault()?.Path;
-            if (string.IsNullOrEmpty(packagesPath))
-            {
-                packagesPath = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                    ".nuget", "packages");
-            }
+            var packagesPath = GetPackagesPath(lockFile);
 
             if (verbose)
             {
@@ -144,240 +131,15 @@ public static class LayoutCommand
             // Process each library in the target
             foreach (var library in target.Libraries)
             {
-                if (library.Type != "package")
-                {
-                    continue;
-                }
+                var (libraryCopiedCount, librarySkippedCount) = ProcessLibrary(
+                    library,
+                    packagesPath,
+                    outputPath,
+                    runtimeFallbacks,
+                    verbose);
 
-                // Get the package folder
-                var libraryName = library.Name ?? string.Empty;
-                var libraryVersion = library.Version?.ToString() ?? string.Empty;
-                var packagePath = Path.Combine(packagesPath, libraryName.ToLowerInvariant(), libraryVersion);
-
-                if (!Directory.Exists(packagePath))
-                {
-                    if (verbose)
-                    {
-                        Console.WriteLine($"  Skip (not found): {libraryName}/{libraryVersion} at {packagePath}");
-                    }
-
-                    skippedCount++;
-                    continue;
-                }
-
-                var runtimeTargetsByFileName = BuildBestRuntimeTargetsByFileName(library.RuntimeTargets, "runtime", runtimeFallbacks);
-                var nativeRuntimeTargetsByFileName = BuildBestRuntimeTargetsByFileName(library.RuntimeTargets, "native", runtimeFallbacks);
-
-                // Copy runtime assemblies to the output root. Prefer runtime-specific targets for the current platform
-                // so probing-only assembly load contexts resolve the correct implementation.
-                foreach (var runtimeAssembly in library.RuntimeAssemblies)
-                {
-                    // Skip placeholder files
-                    if (runtimeAssembly.Path.EndsWith("_._", StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-
-                    var sourcePath = Path.Combine(packagePath, runtimeAssembly.Path.Replace('/', Path.DirectorySeparatorChar));
-                    var fileName = Path.GetFileName(sourcePath);
-
-                    if (runtimeTargetsByFileName.TryGetValue(fileName, out var runtimeTarget))
-                    {
-                        sourcePath = Path.Combine(packagePath, runtimeTarget.Path.Replace('/', Path.DirectorySeparatorChar));
-                    }
-
-                    // Packages that only ship runtime-specific native assets were already copied to their
-                    // structured runtimes/... paths in the runtime target loop above. This loop only handles
-                    // root promotion and preserving the generic native/... layout when that generic asset exists.
-                    if (!File.Exists(sourcePath))
-                    {
-                        continue;
-                    }
-
-                    var destPath = Path.Combine(outputPath, fileName);
-
-                    // Only copy if newer or doesn't exist
-                    if (!File.Exists(destPath) ||
-                        File.GetLastWriteTimeUtc(sourcePath) > File.GetLastWriteTimeUtc(destPath))
-                    {
-                        File.Copy(sourcePath, destPath, overwrite: true);
-                        copiedCount++;
-
-                        if (verbose)
-                        {
-                            Console.WriteLine($"  Copy: {sourcePath} -> {destPath}");
-                        }
-                    }
-
-                    // Also copy the XML documentation file if it exists alongside the assembly
-                    var xmlSourcePath = Path.ChangeExtension(sourcePath, ".xml");
-                    if (File.Exists(xmlSourcePath))
-                    {
-                        var xmlDestPath = Path.ChangeExtension(destPath, ".xml");
-                        if (!File.Exists(xmlDestPath) ||
-                            File.GetLastWriteTimeUtc(xmlSourcePath) > File.GetLastWriteTimeUtc(xmlDestPath))
-                        {
-                            File.Copy(xmlSourcePath, xmlDestPath, overwrite: true);
-                            copiedCount++;
-
-                            if (verbose)
-                            {
-                                Console.WriteLine($"  Copy (xml): {xmlSourcePath} -> {xmlDestPath}");
-                            }
-                        }
-                    }
-                }
-
-                // Also copy runtime-specific assets preserving the runtimes/ subtree, matching dotnet build output.
-                foreach (var runtimeTarget in library.RuntimeTargets)
-                {
-                    if (runtimeTarget.Path.EndsWith("_._", StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-
-                    var sourcePath = Path.Combine(packagePath, runtimeTarget.Path.Replace('/', Path.DirectorySeparatorChar));
-                    if (!File.Exists(sourcePath))
-                    {
-                        continue;
-                    }
-
-                    var destPath = Path.Combine(outputPath, runtimeTarget.Path.Replace('/', Path.DirectorySeparatorChar));
-
-                    if (!File.Exists(destPath) ||
-                        File.GetLastWriteTimeUtc(sourcePath) > File.GetLastWriteTimeUtc(destPath))
-                    {
-                        Directory.CreateDirectory(Path.GetDirectoryName(destPath)!);
-                        File.Copy(sourcePath, destPath, overwrite: true);
-                        copiedCount++;
-
-                        if (verbose)
-                        {
-                            Console.WriteLine($"  Copy ({runtimeTarget.AssetType} target): {sourcePath} -> {destPath}");
-                        }
-                    }
-                }
-
-                foreach (var resourceAssembly in library.ResourceAssemblies)
-                {
-                    if (resourceAssembly.Path.EndsWith("_._", StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-
-                    var sourcePath = Path.Combine(packagePath, resourceAssembly.Path.Replace('/', Path.DirectorySeparatorChar));
-                    if (!File.Exists(sourcePath))
-                    {
-                        continue;
-                    }
-
-                    var locale = resourceAssembly.Properties.TryGetValue("locale", out var value)
-                        ? value
-                        : Path.GetFileName(Path.GetDirectoryName(resourceAssembly.Path));
-
-                    if (string.IsNullOrEmpty(locale))
-                    {
-                        continue;
-                    }
-
-                    var destPath = Path.Combine(outputPath, locale, Path.GetFileName(sourcePath));
-
-                    if (!File.Exists(destPath) ||
-                        File.GetLastWriteTimeUtc(sourcePath) > File.GetLastWriteTimeUtc(destPath))
-                    {
-                        Directory.CreateDirectory(Path.GetDirectoryName(destPath)!);
-                        File.Copy(sourcePath, destPath, overwrite: true);
-                        copiedCount++;
-
-                        if (verbose)
-                        {
-                            Console.WriteLine($"  Copy (resource): {sourcePath} -> {destPath}");
-                        }
-                    }
-                }
-
-                var handledNativeRuntimeTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-                // Also copy native libraries to the output root and preserve any runtime-specific layout.
-                foreach (var nativeLib in library.NativeLibraries)
-                {
-                    var sourcePath = Path.Combine(packagePath, nativeLib.Path.Replace('/', Path.DirectorySeparatorChar));
-
-                    // Early exit if source doesn't exist
-                    if (!File.Exists(sourcePath))
-                    {
-                        continue;
-                    }
-
-                    var fileName = Path.GetFileName(sourcePath);
-                    var rootSourcePath = sourcePath;
-
-                    if (nativeRuntimeTargetsByFileName.TryGetValue(fileName, out var nativeRuntimeTarget))
-                    {
-                        var runtimeTargetPath = Path.Combine(packagePath, nativeRuntimeTarget.Path.Replace('/', Path.DirectorySeparatorChar));
-                        if (File.Exists(runtimeTargetPath))
-                        {
-                            rootSourcePath = runtimeTargetPath;
-                            handledNativeRuntimeTargets.Add(fileName);
-                        }
-                    }
-
-                    var destPath = Path.Combine(outputPath, fileName);
-
-                    if (!File.Exists(destPath) ||
-                        File.GetLastWriteTimeUtc(rootSourcePath) > File.GetLastWriteTimeUtc(destPath))
-                    {
-                        File.Copy(rootSourcePath, destPath, overwrite: true);
-                        copiedCount++;
-
-                        if (verbose)
-                        {
-                            Console.WriteLine($"  Copy (native): {rootSourcePath} -> {destPath}");
-                        }
-                    }
-
-                    var structuredDestPath = Path.Combine(outputPath, nativeLib.Path.Replace('/', Path.DirectorySeparatorChar));
-                    if (!File.Exists(structuredDestPath) ||
-                        File.GetLastWriteTimeUtc(sourcePath) > File.GetLastWriteTimeUtc(structuredDestPath))
-                    {
-                        Directory.CreateDirectory(Path.GetDirectoryName(structuredDestPath)!);
-                        File.Copy(sourcePath, structuredDestPath, overwrite: true);
-                        copiedCount++;
-
-                        if (verbose)
-                        {
-                            Console.WriteLine($"  Copy (native path): {sourcePath} -> {structuredDestPath}");
-                        }
-                    }
-                }
-
-                foreach (var nativeRuntimeTarget in nativeRuntimeTargetsByFileName.Values)
-                {
-                    var sourcePath = Path.Combine(packagePath, nativeRuntimeTarget.Path.Replace('/', Path.DirectorySeparatorChar));
-                    if (!File.Exists(sourcePath))
-                    {
-                        continue;
-                    }
-
-                    var fileName = Path.GetFileName(sourcePath);
-                    if (handledNativeRuntimeTargets.Contains(fileName))
-                    {
-                        continue;
-                    }
-
-                    var destPath = Path.Combine(outputPath, fileName);
-                    if (!File.Exists(destPath) ||
-                        File.GetLastWriteTimeUtc(sourcePath) > File.GetLastWriteTimeUtc(destPath))
-                    {
-                        File.Copy(sourcePath, destPath, overwrite: true);
-                        copiedCount++;
-
-                        if (verbose)
-                        {
-                            Console.WriteLine($"  Copy (native target): {sourcePath} -> {destPath}");
-                        }
-                    }
-                }
+                copiedCount += libraryCopiedCount;
+                skippedCount += librarySkippedCount;
             }
 
             Console.WriteLine(string.Format(CultureInfo.InvariantCulture, "Layout created: {0} files copied to {1}", copiedCount, outputPath));
@@ -398,6 +160,317 @@ public static class LayoutCommand
 
             return 1;
         }
+    }
+
+    private static LockFileTarget? ResolveTarget(LockFile lockFile, string framework, IReadOnlyList<string> runtimeFallbacks)
+    {
+        return lockFile.Targets
+            .Where(t =>
+                t.TargetFramework.GetShortFolderName().Equals(framework, StringComparison.OrdinalIgnoreCase) ||
+                t.TargetFramework.ToString().Equals(framework, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(t => GetRuntimeMatchScore(t.RuntimeIdentifier, runtimeFallbacks))
+            .FirstOrDefault();
+    }
+
+    private static string GetPackagesPath(LockFile lockFile)
+    {
+        var packagesPath = lockFile.PackageFolders.FirstOrDefault()?.Path;
+        if (!string.IsNullOrEmpty(packagesPath))
+        {
+            return packagesPath;
+        }
+
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".nuget",
+            "packages");
+    }
+
+    private static (int CopiedCount, int SkippedCount) ProcessLibrary(
+        LockFileTargetLibrary library,
+        string packagesPath,
+        string outputPath,
+        IReadOnlyList<string> runtimeFallbacks,
+        bool verbose)
+    {
+        if (library.Type != "package")
+        {
+            return (0, 0);
+        }
+
+        var libraryName = library.Name ?? string.Empty;
+        var libraryVersion = library.Version?.ToString() ?? string.Empty;
+        var packagePath = Path.Combine(packagesPath, libraryName.ToLowerInvariant(), libraryVersion);
+
+        if (!Directory.Exists(packagePath))
+        {
+            if (verbose)
+            {
+                Console.WriteLine($"  Skip (not found): {libraryName}/{libraryVersion} at {packagePath}");
+            }
+
+            return (0, 1);
+        }
+
+        var copiedCount = 0;
+        var runtimeTargetsByFileName = BuildBestRuntimeTargetsByFileName(library.RuntimeTargets, "runtime", runtimeFallbacks);
+        var nativeRuntimeTargetsByFileName = BuildBestRuntimeTargetsByFileName(library.RuntimeTargets, "native", runtimeFallbacks);
+
+        copiedCount += CopyRuntimeAssemblies(library, packagePath, outputPath, runtimeTargetsByFileName, verbose);
+        copiedCount += CopyRuntimeTargets(library, packagePath, outputPath, verbose);
+        copiedCount += CopyResourceAssemblies(library, packagePath, outputPath, verbose);
+        copiedCount += CopyNativeLibraries(library, packagePath, outputPath, nativeRuntimeTargetsByFileName, verbose);
+
+        return (copiedCount, 0);
+    }
+
+    private static int CopyRuntimeAssemblies(
+        LockFileTargetLibrary library,
+        string packagePath,
+        string outputPath,
+        IReadOnlyDictionary<string, LockFileRuntimeTarget> runtimeTargetsByFileName,
+        bool verbose)
+    {
+        var copiedCount = 0;
+
+        foreach (var runtimeAssembly in library.RuntimeAssemblies)
+        {
+            if (IsPlaceholderPath(runtimeAssembly.Path))
+            {
+                continue;
+            }
+
+            var sourcePath = Path.Combine(packagePath, runtimeAssembly.Path.Replace('/', Path.DirectorySeparatorChar));
+            var fileName = Path.GetFileName(sourcePath);
+
+            if (runtimeTargetsByFileName.TryGetValue(fileName, out var runtimeTarget))
+            {
+                sourcePath = Path.Combine(packagePath, runtimeTarget.Path.Replace('/', Path.DirectorySeparatorChar));
+            }
+
+            if (!File.Exists(sourcePath))
+            {
+                continue;
+            }
+
+            var destPath = Path.Combine(outputPath, fileName);
+            if (CopyIfNewer(sourcePath, destPath, createDirectory: false))
+            {
+                copiedCount++;
+
+                if (verbose)
+                {
+                    Console.WriteLine($"  Copy: {sourcePath} -> {destPath}");
+                }
+            }
+
+            var xmlSourcePath = Path.ChangeExtension(sourcePath, ".xml");
+            var xmlDestPath = Path.ChangeExtension(destPath, ".xml");
+            if (File.Exists(xmlSourcePath) && CopyIfNewer(xmlSourcePath, xmlDestPath, createDirectory: false))
+            {
+                copiedCount++;
+
+                if (verbose)
+                {
+                    Console.WriteLine($"  Copy (xml): {xmlSourcePath} -> {xmlDestPath}");
+                }
+            }
+        }
+
+        return copiedCount;
+    }
+
+    private static int CopyRuntimeTargets(
+        LockFileTargetLibrary library,
+        string packagePath,
+        string outputPath,
+        bool verbose)
+    {
+        var copiedCount = 0;
+
+        foreach (var runtimeTarget in library.RuntimeTargets)
+        {
+            if (IsPlaceholderPath(runtimeTarget.Path))
+            {
+                continue;
+            }
+
+            var sourcePath = Path.Combine(packagePath, runtimeTarget.Path.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(sourcePath))
+            {
+                continue;
+            }
+
+            var destPath = Path.Combine(outputPath, runtimeTarget.Path.Replace('/', Path.DirectorySeparatorChar));
+            if (CopyIfNewer(sourcePath, destPath, createDirectory: true))
+            {
+                copiedCount++;
+
+                if (verbose)
+                {
+                    Console.WriteLine($"  Copy ({runtimeTarget.AssetType} target): {sourcePath} -> {destPath}");
+                }
+            }
+        }
+
+        return copiedCount;
+    }
+
+    private static int CopyResourceAssemblies(
+        LockFileTargetLibrary library,
+        string packagePath,
+        string outputPath,
+        bool verbose)
+    {
+        var copiedCount = 0;
+
+        foreach (var resourceAssembly in library.ResourceAssemblies)
+        {
+            if (IsPlaceholderPath(resourceAssembly.Path))
+            {
+                continue;
+            }
+
+            var sourcePath = Path.Combine(packagePath, resourceAssembly.Path.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(sourcePath))
+            {
+                continue;
+            }
+
+            var locale = resourceAssembly.Properties.TryGetValue("locale", out var value)
+                ? value
+                : Path.GetFileName(Path.GetDirectoryName(resourceAssembly.Path));
+
+            if (string.IsNullOrEmpty(locale))
+            {
+                continue;
+            }
+
+            var destPath = Path.Combine(outputPath, locale, Path.GetFileName(sourcePath));
+            if (CopyIfNewer(sourcePath, destPath, createDirectory: true))
+            {
+                copiedCount++;
+
+                if (verbose)
+                {
+                    Console.WriteLine($"  Copy (resource): {sourcePath} -> {destPath}");
+                }
+            }
+        }
+
+        return copiedCount;
+    }
+
+    private static int CopyNativeLibraries(
+        LockFileTargetLibrary library,
+        string packagePath,
+        string outputPath,
+        IReadOnlyDictionary<string, LockFileRuntimeTarget> nativeRuntimeTargetsByFileName,
+        bool verbose)
+    {
+        var copiedCount = 0;
+        var handledNativeRuntimeTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var nativeLib in library.NativeLibraries)
+        {
+            if (IsPlaceholderPath(nativeLib.Path))
+            {
+                continue;
+            }
+
+            var sourcePath = Path.Combine(packagePath, nativeLib.Path.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(sourcePath))
+            {
+                continue;
+            }
+
+            var fileName = Path.GetFileName(sourcePath);
+            var rootSourcePath = sourcePath;
+
+            if (nativeRuntimeTargetsByFileName.TryGetValue(fileName, out var nativeRuntimeTarget))
+            {
+                var runtimeTargetPath = Path.Combine(packagePath, nativeRuntimeTarget.Path.Replace('/', Path.DirectorySeparatorChar));
+                if (File.Exists(runtimeTargetPath))
+                {
+                    rootSourcePath = runtimeTargetPath;
+                    handledNativeRuntimeTargets.Add(fileName);
+                }
+            }
+
+            var destPath = Path.Combine(outputPath, fileName);
+            if (CopyIfNewer(rootSourcePath, destPath, createDirectory: false))
+            {
+                copiedCount++;
+
+                if (verbose)
+                {
+                    Console.WriteLine($"  Copy (native): {rootSourcePath} -> {destPath}");
+                }
+            }
+
+            // Packages that only ship runtime-specific native assets are handled by the runtime target copy
+            // loop above. This structured copy only applies when the package also carries a generic native path.
+            var structuredDestPath = Path.Combine(outputPath, nativeLib.Path.Replace('/', Path.DirectorySeparatorChar));
+            if (CopyIfNewer(sourcePath, structuredDestPath, createDirectory: true))
+            {
+                copiedCount++;
+
+                if (verbose)
+                {
+                    Console.WriteLine($"  Copy (native path): {sourcePath} -> {structuredDestPath}");
+                }
+            }
+        }
+
+        foreach (var nativeRuntimeTarget in nativeRuntimeTargetsByFileName.Values)
+        {
+            var sourcePath = Path.Combine(packagePath, nativeRuntimeTarget.Path.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(sourcePath))
+            {
+                continue;
+            }
+
+            var fileName = Path.GetFileName(sourcePath);
+            if (handledNativeRuntimeTargets.Contains(fileName))
+            {
+                continue;
+            }
+
+            var destPath = Path.Combine(outputPath, fileName);
+            if (CopyIfNewer(sourcePath, destPath, createDirectory: false))
+            {
+                copiedCount++;
+
+                if (verbose)
+                {
+                    Console.WriteLine($"  Copy (native target): {sourcePath} -> {destPath}");
+                }
+            }
+        }
+
+        return copiedCount;
+    }
+
+    private static bool CopyIfNewer(string sourcePath, string destPath, bool createDirectory)
+    {
+        if (File.Exists(destPath) &&
+            File.GetLastWriteTimeUtc(sourcePath) <= File.GetLastWriteTimeUtc(destPath))
+        {
+            return false;
+        }
+
+        if (createDirectory)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(destPath)!);
+        }
+
+        File.Copy(sourcePath, destPath, overwrite: true);
+        return true;
+    }
+
+    private static bool IsPlaceholderPath(string path)
+    {
+        return string.Equals(Path.GetFileName(path), "_._", StringComparison.OrdinalIgnoreCase);
     }
 
     private static List<string> GetRuntimeFallbacks(string? runtimeIdentifier)
@@ -439,7 +512,7 @@ public static class LayoutCommand
         return runtimeTargets
             .Where(runtimeTarget =>
                 string.Equals(runtimeTarget.AssetType, assetType, StringComparison.OrdinalIgnoreCase) &&
-                !runtimeTarget.Path.EndsWith("_._", StringComparison.OrdinalIgnoreCase))
+                !IsPlaceholderPath(runtimeTarget.Path))
             .Select(runtimeTarget => new
             {
                 RuntimeTarget = runtimeTarget,
