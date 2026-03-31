@@ -13,7 +13,7 @@ import * as rpc from 'vscode-jsonrpc/node.js';
 export interface AspireClientRpc {
     readonly connected: boolean;
     invokeCapability<TResult = unknown>(capabilityId: string, args?: Record<string, unknown>): Promise<TResult>;
-    cancelToken(cancellationId: string): Promise<void>;
+    cancelToken(cancellationId: string): Promise<boolean>;
 }
 
 /**

@@ -403,7 +403,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             // GENERATED CODE - DO NOT EDIT
 
             import {
-                AspireClient as AspireClientRpc,
+                AspireClient,
                 Handle,
                 MarshalledHandle,
                 AppHostUsageError,
@@ -413,6 +413,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 wrapIfHandle,
                 registerHandleWrapper
             } from './transport.js';
+            import type { AspireClientRpc } from './transport.js';
 
             import type { HandleReference } from './base.js';
 
@@ -1828,7 +1829,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                     );
                 }
 
-                const client = new AspireClientRpc(socketPath);
+                const client = new AspireClient(socketPath);
                 await client.connect();
 
                 // Exit the process if the server connection is lost
