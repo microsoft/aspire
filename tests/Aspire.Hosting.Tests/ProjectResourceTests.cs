@@ -58,12 +58,11 @@ public class ProjectResourceTests
                                         }
                                         """;
 
-            var projectDirectoryPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+            var projectDirectoryPath = Directory.CreateTempSubdirectory().FullName;
             var projectFilePath = Path.Combine(projectDirectoryPath, "Project.csproj");
             var propertiesDirectoryPath = Path.Combine(projectDirectoryPath, "Properties");
             var launchSettingsFilePath = Path.Combine(propertiesDirectoryPath, "launchSettings.json");
 
-            Directory.CreateDirectory(projectDirectoryPath);
             await File.WriteAllTextAsync(projectFilePath, csProjContent).DefaultTimeout();
 
             Directory.CreateDirectory(propertiesDirectoryPath);
@@ -99,12 +98,11 @@ public class ProjectResourceTests
                                         this { is } { mal formed! >
                                         """;
 
-            var projectDirectoryPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+            var projectDirectoryPath = Directory.CreateTempSubdirectory().FullName;
             var projectFilePath = Path.Combine(projectDirectoryPath, "Project.csproj");
             var propertiesDirectoryPath = Path.Combine(projectDirectoryPath, "Properties");
             var launchSettingsFilePath = Path.Combine(propertiesDirectoryPath, "launchSettings.json");
 
-            Directory.CreateDirectory(projectDirectoryPath);
             await File.WriteAllTextAsync(projectFilePath, csProjContent).DefaultTimeout();
 
             Directory.CreateDirectory(propertiesDirectoryPath);

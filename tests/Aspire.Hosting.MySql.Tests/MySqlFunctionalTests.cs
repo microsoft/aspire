@@ -306,9 +306,7 @@ public class MySqlFunctionalTests(ITestOutputHelper testOutputHelper)
             .AddRetry(new() { MaxRetryAttempts = 10, BackoffType = DelayBackoffType.Linear, Delay = TimeSpan.FromSeconds(2), ShouldHandle = new PredicateBuilder().Handle<MySqlException>() })
             .Build();
 
-        var bindMountPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-
-        Directory.CreateDirectory(bindMountPath);
+        var bindMountPath = Directory.CreateTempSubdirectory().FullName;
 
         try
         {
@@ -393,9 +391,7 @@ public class MySqlFunctionalTests(ITestOutputHelper testOutputHelper)
             .AddRetry(new() { MaxRetryAttempts = 10, BackoffType = DelayBackoffType.Linear, Delay = TimeSpan.FromSeconds(2), ShouldHandle = new PredicateBuilder().Handle<MySqlException>() })
             .Build();
 
-        var initFilesPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-
-        Directory.CreateDirectory(initFilesPath);
+        var initFilesPath = Directory.CreateTempSubdirectory().FullName;
 
         try
         {

@@ -93,7 +93,7 @@ public class SeqFunctionalTests(ITestOutputHelper testOutputHelper)
             }
             else
             {
-                bindMountPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+                bindMountPath = Directory.CreateTempSubdirectory().FullName;
                 seq1.WithDataBindMount(bindMountPath);
             }
 

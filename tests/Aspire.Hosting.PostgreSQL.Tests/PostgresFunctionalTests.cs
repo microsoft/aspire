@@ -221,7 +221,7 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
             }
             else
             {
-                bindMountPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+                bindMountPath = Directory.CreateTempSubdirectory().FullName;
 
                 postgres1.WithDataBindMount(bindMountPath);
             }
@@ -366,9 +366,7 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
             .AddRetry(new() { MaxRetryAttempts = 3, Delay = TimeSpan.FromSeconds(2) })
             .Build();
 
-        var bindMountPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-
-        Directory.CreateDirectory(bindMountPath);
+        var bindMountPath = Directory.CreateTempSubdirectory().FullName;
 
         try
         {
@@ -454,9 +452,7 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
             .AddRetry(new() { MaxRetryAttempts = 3, Delay = TimeSpan.FromSeconds(2) })
             .Build();
 
-        var initFilesPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-
-        Directory.CreateDirectory(initFilesPath);
+        var initFilesPath = Directory.CreateTempSubdirectory().FullName;
 
         try
         {

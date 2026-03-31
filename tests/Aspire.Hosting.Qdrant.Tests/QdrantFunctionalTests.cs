@@ -113,7 +113,7 @@ public class QdrantFunctionalTests(ITestOutputHelper testOutputHelper)
             }
             else
             {
-                bindMountPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+                bindMountPath = Directory.CreateTempSubdirectory().FullName;
 
                 qdrant1.WithDataBindMount(bindMountPath);
             }

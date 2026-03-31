@@ -37,8 +37,7 @@ public static class DockerfileUtils
 
     public static async Task<(string ContextPath, string DockerfilePath)> CreateTemporaryDockerfileAsync(string dockerfileName = "Dockerfile", bool createDockerfile = true, bool includeSecrets = false)
     {
-        var tempContextPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        Directory.CreateDirectory(tempContextPath);
+        var tempContextPath = Directory.CreateTempSubdirectory().FullName;
 
         var tempDockerfilePath = Path.Combine(tempContextPath, dockerfileName);
 

@@ -82,7 +82,7 @@ public class ValkeyFunctionalTests(ITestOutputHelper testOutputHelper)
             }
             else
             {
-                bindMountPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+                bindMountPath = Directory.CreateTempSubdirectory().FullName;
 
                 valkey1.WithDataBindMount(bindMountPath);
             }

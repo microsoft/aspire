@@ -134,8 +134,7 @@ public class MongoDbFunctionalTests(ITestOutputHelper testOutputHelper)
             }
             else
             {
-                // MongoDB container runs as root and will create the directory.
-                bindMountPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+                bindMountPath = Directory.CreateTempSubdirectory().FullName;
 
                 mongodb1.WithDataBindMount(bindMountPath);
             }
@@ -259,8 +258,7 @@ public class MongoDbFunctionalTests(ITestOutputHelper testOutputHelper)
             .AddRetry(new() { MaxRetryAttempts = 10, BackoffType = DelayBackoffType.Linear, Delay = TimeSpan.FromSeconds(2) })
             .Build();
 
-        var bindMountPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        Directory.CreateDirectory(bindMountPath);
+        var bindMountPath = Directory.CreateTempSubdirectory().FullName;
 
         try
         {
@@ -357,8 +355,7 @@ public class MongoDbFunctionalTests(ITestOutputHelper testOutputHelper)
             .AddRetry(new() { MaxRetryAttempts = 10, BackoffType = DelayBackoffType.Linear, Delay = TimeSpan.FromSeconds(2) })
             .Build();
 
-        var initFilesPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        Directory.CreateDirectory(initFilesPath);
+        var initFilesPath = Directory.CreateTempSubdirectory().FullName;
 
         try
         {

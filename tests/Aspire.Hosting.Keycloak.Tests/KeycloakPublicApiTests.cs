@@ -151,8 +151,7 @@ public class KeycloakPublicApiTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
-        var tempDirectory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        Directory.CreateDirectory(tempDirectory);
+        var tempDirectory = Directory.CreateTempSubdirectory().FullName;
 
         var resourceName = "keycloak";
         var keycloak = builder.AddKeycloak(resourceName);
@@ -174,8 +173,7 @@ public class KeycloakPublicApiTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
-        var tempDirectory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        Directory.CreateDirectory(tempDirectory);
+        var tempDirectory = Directory.CreateTempSubdirectory().FullName;
 
         var file = "realm.json";
         var filePath = Path.Combine(tempDirectory, file);
