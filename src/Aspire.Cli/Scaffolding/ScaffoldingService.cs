@@ -199,6 +199,12 @@ internal sealed class ScaffoldingService : IScaffoldingService
         if (result != 0)
         {
             var lines = output.GetLines().ToArray();
+            if (AutomaticNpmInstallWarning.IsMatch(lines))
+            {
+                _interactionService.DisplayMessage(KnownEmojis.Warning, AutomaticNpmInstallWarning.Message);
+                return 0;
+            }
+
             if (lines.Length > 0)
             {
                 _interactionService.DisplayLines(lines);

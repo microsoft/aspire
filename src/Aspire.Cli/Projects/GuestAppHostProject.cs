@@ -274,7 +274,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 cancellationToken);
 
             // Step 5: Install dependencies using GuestRuntime (best effort - don't block code generation)
-            await InstallDependenciesAsync(directory, rpcClient, cancellationToken);
+            await InstallDependenciesAsync(directory, rpcClient, treatMissingNodeToolAsWarning: true, cancellationToken);
             return true;
         }
         finally
@@ -460,7 +460,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
             // Step 7: Install dependencies (using GuestRuntime)
             // The GuestRuntime will skip if the RuntimeSpec doesn't have InstallDependencies configured
-            var installResult = await InstallDependenciesAsync(directory, rpcClient, cancellationToken);
+            var installResult = await InstallDependenciesAsync(directory, rpcClient, cancellationToken: cancellationToken);
             if (installResult != 0)
             {
                 context.BackchannelCompletionSource?.TrySetException(
@@ -833,7 +833,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
             // Step 5: Install dependencies if needed (using GuestRuntime)
             // The GuestRuntime will skip if the RuntimeSpec doesn't have InstallDependencies configured
-            var installResult = await InstallDependenciesAsync(directory, rpcClient, cancellationToken);
+            var installResult = await InstallDependenciesAsync(directory, rpcClient, cancellationToken: cancellationToken);
             if (installResult != 0)
             {
                 context.BackchannelCompletionSource?.TrySetException(
@@ -1309,7 +1309,8 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     private async Task<int> InstallDependenciesAsync(
         DirectoryInfo directory,
         IAppHostRpcClient rpcClient,
-        CancellationToken cancellationToken)
+        bool treatMissingNodeToolAsWarning = false,
+        CancellationToken cancellationToken = default)
     {
         await EnsureRuntimeCreatedAsync(rpcClient, cancellationToken);
 
@@ -1338,6 +1339,12 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         if (result != 0)
         {
             var lines = output.GetLines().ToArray();
+            if (treatMissingNodeToolAsWarning && AutomaticNpmInstallWarning.IsMatch(lines))
+            {
+                _interactionService.DisplayMessage(KnownEmojis.Warning, AutomaticNpmInstallWarning.Message);
+                return 0;
+            }
+
             if (lines.Length > 0)
             {
                 _interactionService.DisplayLines(lines);
