@@ -163,15 +163,17 @@ internal static partial class HelmDeploymentEngine
     }
 
     /// <summary>
-    /// Resolves captured parameter/secret values and cross-resource references from the publish step,
-    /// then writes an environment-specific values override file for use during helm upgrade --install.
+    /// Resolves captured parameter/secret values, cross-resource references, and container image references
+    /// from the publish step, then writes an environment-specific values override file for use during helm upgrade --install.
     /// </summary>
     internal static async Task ResolveAndWriteDeployValuesAsync(
         string outputPath,
         KubernetesEnvironmentResource environment,
         CancellationToken cancellationToken)
     {
-        if (environment.CapturedHelmValues.Count == 0 && environment.CapturedHelmCrossReferences.Count == 0)
+        if (environment.CapturedHelmValues.Count == 0
+            && environment.CapturedHelmCrossReferences.Count == 0
+            && environment.CapturedHelmImageReferences.Count == 0)
         {
             return;
         }
@@ -201,6 +203,20 @@ internal static partial class HelmDeploymentEngine
         {
             var resolvedValue = ResolveHelmExpressions(crossRef.TemplateValue, resolvedLookup);
             SetOverrideValue(overrideValues, crossRef.Section, crossRef.ResourceKey, crossRef.ValueKey, resolvedValue);
+        }
+
+        // Phase 3: Resolve container image references with registry-prefixed names.
+        // During publish, images are written as "server:latest". At deploy time, we resolve
+        // the full image name including the container registry (e.g., "myregistry.azurecr.io/server:latest")
+        // using the same ContainerImageReference pattern as Docker Compose.
+        foreach (var imageRef in environment.CapturedHelmImageReferences)
+        {
+            IValueProvider cir = new ContainerImageReference(imageRef.Resource);
+            var resolvedImage = await cir.GetValueAsync(cancellationToken).ConfigureAwait(false);
+            if (resolvedImage is not null)
+            {
+                SetOverrideValue(overrideValues, imageRef.Section, imageRef.ResourceKey, imageRef.ValueKey, resolvedImage);
+            }
         }
 
         if (overrideValues.Count > 0)

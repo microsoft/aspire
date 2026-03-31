@@ -100,6 +100,12 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     internal List<CapturedHelmCrossReference> CapturedHelmCrossReferences { get; } = [];
 
     /// <summary>
+    /// Captured container image references populated during publish, consumed during deploy
+    /// to resolve the full registry-prefixed image name (e.g., "myregistry.azurecr.io/server:latest").
+    /// </summary>
+    internal List<CapturedHelmImageReference> CapturedHelmImageReferences { get; } = [];
+
+    /// <summary>
     /// Represents a captured mapping from a Helm values.yaml path to a <see cref="ParameterResource"/>
     /// for deferred resolution during deploy.
     /// </summary>
@@ -111,6 +117,12 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     /// At deploy time, the Helm expressions in the template are substituted with resolved values.
     /// </summary>
     internal sealed record CapturedHelmCrossReference(string Section, string ResourceKey, string ValueKey, string TemplateValue);
+
+    /// <summary>
+    /// Represents a captured container image reference that needs deploy-time resolution
+    /// to prepend the container registry (e.g., "server:latest" → "myregistry.azurecr.io/server:latest").
+    /// </summary>
+    internal sealed record CapturedHelmImageReference(string Section, string ResourceKey, string ValueKey, IResource Resource);
 
     /// <summary>
     /// Initializes a new instance of the <see cref="KubernetesEnvironmentResource"/> class.

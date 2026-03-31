@@ -180,6 +180,20 @@ internal sealed class KubernetesPublishingContext(
             }
 
             paramValues[key.ToHelmValuesSectionName()] = value ?? string.Empty;
+
+            // Capture container image references for deploy-time registry resolution.
+            // During publish, the default image name (e.g., "server:latest") is written to values.yaml.
+            // During deploy, the ContainerImageReference resolves the full registry-prefixed name
+            // (e.g., "myregistry.azurecr.io/server:latest") and writes it to the override file.
+            if (helmExpressionWithValue.ImageResource is not null)
+            {
+                environment?.CapturedHelmImageReferences.Add(
+                    new KubernetesEnvironmentResource.CapturedHelmImageReference(
+                        helmKey,
+                        resource.Name.ToHelmValuesSectionName(),
+                        key.ToHelmValuesSectionName(),
+                        helmExpressionWithValue.ImageResource));
+            }
         }
 
         if (paramValues.Count > 0)

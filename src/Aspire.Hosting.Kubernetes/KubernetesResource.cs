@@ -145,7 +145,10 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
         var imageEnvName = $"{resourceInstance.Name.ToHelmValuesSectionName()}_image";
         var value = $"{resourceInstance.Name}:latest";
-        var expression = new HelmValue(imageEnvName.ToHelmParameterExpression(resource.Name), value);
+        var expression = new HelmValue(imageEnvName.ToHelmParameterExpression(resource.Name), value)
+        {
+            ImageResource = resourceInstance
+        };
 
         Parameters[imageEnvName] = expression;
         return expression.ToScalar();
@@ -679,6 +682,13 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
         /// Gets the parameter resource associated with this HelmValue, if any.
         /// </summary>
         public ParameterResource? ParameterSource { get; }
+
+        /// <summary>
+        /// Gets the resource associated with a container image reference, if any.
+        /// When set, the image name is resolved at deploy time via <see cref="ContainerImageReference"/>
+        /// to include the container registry prefix.
+        /// </summary>
+        public IResource? ImageResource { get; init; }
 
         /// <summary>
         /// Indicates whether the expression contains a Helm secret expression. 

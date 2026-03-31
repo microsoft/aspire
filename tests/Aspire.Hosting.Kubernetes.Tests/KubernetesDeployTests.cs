@@ -725,4 +725,148 @@ public class KubernetesDeployTests(ITestOutputHelper output)
             c.Section == "secrets" &&
             c.Parameter.Name == "my-password");
     }
+
+    [Fact]
+    public async Task PublishCapturesImageReferencesForProjectResources()
+    {
+        using var tempDir = new TestTempDirectory();
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            tempDir.Path,
+            step: WellKnownPipelineSteps.Publish);
+        var mockActivityReporter = new TestPipelineActivityReporter(output);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+
+        builder.AddContainerRegistry("registry", "myregistry.azurecr.io", "myrepo");
+        var envBuilder = builder.AddKubernetesEnvironment("env");
+
+        builder.AddProject<Projects.ServiceA>("api");
+
+        using var app = builder.Build();
+        var env = envBuilder.Resource;
+
+        await app.RunAsync();
+
+        // After publish, project resources should have image references captured for registry resolution
+        Assert.NotEmpty(env.CapturedHelmImageReferences);
+        Assert.Contains(env.CapturedHelmImageReferences, c =>
+            c.Section == "parameters" &&
+            c.ValueKey == "api_image" &&
+            c.Resource.Name == "api");
+    }
+
+    [Fact]
+    public void HelmValue_ImageResource_IsSetForProjectResources()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var env = builder.AddKubernetesEnvironment("env");
+        var project = builder.AddProject<Projects.ServiceA>("api");
+
+        var app = builder.Build();
+        var envResource = env.Resource;
+
+        // Create a KubernetesResource to test GetContainerImageName
+        var k8sResource = new KubernetesResource("api-k8s", project.Resource, envResource);
+        var imageName = k8sResource.GetContainerImageName(project.Resource);
+
+        // Should return a Helm expression
+        Assert.Contains("{{ .Values.", imageName);
+
+        // The Parameters dictionary should have the image entry with ImageResource set
+        var imageParam = k8sResource.Parameters.Values.SingleOrDefault(p => p.ImageResource is not null);
+        Assert.NotNull(imageParam);
+        Assert.Same(project.Resource, imageParam.ImageResource);
+    }
+
+    [Fact]
+    public void HelmValue_ImageResource_IsNotSetForContainerResources()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var env = builder.AddKubernetesEnvironment("env");
+        var container = builder.AddContainer("cache", "redis");
+
+        var app = builder.Build();
+        var envResource = env.Resource;
+
+        // Create a KubernetesResource to test GetContainerImageName
+        var k8sResource = new KubernetesResource("cache-k8s", container.Resource, envResource);
+        var imageName = k8sResource.GetContainerImageName(container.Resource);
+
+        // Container resources with existing images return the literal image name, not a Helm expression
+        Assert.DoesNotContain("{{ .Values.", imageName);
+
+        // No parameters should have ImageResource set (image is pre-existing, no build needed)
+        Assert.DoesNotContain(k8sResource.Parameters.Values, p => p.ImageResource is not null);
+    }
+
+    [Fact]
+    public async Task PrepareAsync_ResolvesImageReferencesWithRegistryPrefix()
+    {
+        using var tempDir = new TestTempDirectory();
+        var outputPath = Path.Combine(tempDir.Path, "env");
+        Directory.CreateDirectory(outputPath);
+
+        // Write a values.yaml with the default image placeholder
+        var valuesYaml = """
+            parameters:
+              api:
+                api_image: "api:latest"
+            secrets: {}
+            config: {}
+            """;
+        await File.WriteAllTextAsync(Path.Combine(outputPath, "values.yaml"), valuesYaml);
+
+        // Set up a builder with a container registry and a project resource
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddContainerRegistry("registry", "myregistry.azurecr.io", "myrepo");
+
+        var project = builder.AddProject<Projects.ServiceA>("api");
+        using var app = builder.Build();
+
+        // Trigger BeforeStartEvent to propagate RegistryTargetAnnotation
+        await app.StartAsync();
+        await app.StopAsync();
+
+        var environment = new KubernetesEnvironmentResource("env");
+
+        // Simulate what publish captures: an image reference for the project resource
+        environment.CapturedHelmImageReferences.Add(
+            new KubernetesEnvironmentResource.CapturedHelmImageReference(
+                "parameters", "api", "api_image", project.Resource));
+
+        // Act
+        await HelmDeploymentEngine.ResolveAndWriteDeployValuesAsync(
+            outputPath, environment, CancellationToken.None);
+
+        // Assert: values.env.yaml should exist with registry-prefixed image
+        var deployValuesPath = Path.Combine(outputPath, HelmDeploymentEngine.GetDeployValuesFileName("env"));
+        Assert.True(File.Exists(deployValuesPath), "values.env.yaml should be created");
+
+        var content = await File.ReadAllTextAsync(deployValuesPath);
+        output.WriteLine(content);
+
+        // The image should be prefixed with the registry endpoint and repository
+        Assert.Contains("myregistry.azurecr.io/myrepo/api:latest", content);
+    }
+
+    [Fact]
+    public async Task ResolveAndWriteDeployValuesAsync_NoOverrideFileWhenNoCaptures()
+    {
+        using var tempDir = new TestTempDirectory();
+        var outputPath = Path.Combine(tempDir.Path, "env");
+        Directory.CreateDirectory(outputPath);
+
+        var environment = new KubernetesEnvironmentResource("env");
+
+        // No captured values, cross-references, or image references
+        await HelmDeploymentEngine.ResolveAndWriteDeployValuesAsync(
+            outputPath, environment, CancellationToken.None);
+
+        // No override file should be created
+        var deployValuesPath = Path.Combine(outputPath, HelmDeploymentEngine.GetDeployValuesFileName("env"));
+        Assert.False(File.Exists(deployValuesPath));
+    }
 }
