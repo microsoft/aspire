@@ -39,28 +39,18 @@ export { AtsErrorCodes, isMarshalledHandle, isAtsError, wrapIfHandle } from './t
  * await api.withEnvironment("REDIS_URL", expr);
  * ```
  */
-export interface ReferenceExpression {
-    readonly isConditional: boolean;
-    toJSON(): { $expr: { format: string; valueProviders?: unknown[] } | { condition: unknown; whenTrue: unknown; whenFalse: unknown; matchValue: string } } | MarshalledHandle;
-    getValue(cancellationToken?: AbortSignal | CancellationToken): Promise<string | null>;
-    toString(): string;
-}
+const referenceExpressionState = new WeakMap<ReferenceExpression, {
+    format?: string;
+    valueProviders?: unknown[];
+    condition?: unknown;
+    whenTrue?: ReferenceExpression;
+    whenFalse?: ReferenceExpression;
+    matchValue?: string;
+    handle?: Handle;
+    client?: AspireClientRpc;
+}>();
 
-class ReferenceExpressionImpl implements ReferenceExpression {
-    // Expression mode fields
-    private readonly _format?: string;
-    private readonly _valueProviders?: unknown[];
-
-    // Conditional mode fields
-    private readonly _condition?: unknown;
-    private readonly _whenTrue?: ReferenceExpression;
-    private readonly _whenFalse?: ReferenceExpression;
-    private readonly _matchValue?: string;
-
-    // Handle mode fields (when wrapping a server-returned handle)
-    private readonly _handle?: Handle;
-    private readonly _client?: AspireClientRpc;
-
+export class ReferenceExpression {
     constructor(format: string, valueProviders: unknown[]);
     constructor(handle: Handle, client: AspireClientRpc);
     constructor(condition: unknown, matchValue: string, whenTrue: ReferenceExpression, whenFalse: ReferenceExpression);
@@ -70,25 +60,38 @@ class ReferenceExpressionImpl implements ReferenceExpression {
         whenTrueOrWhenFalse?: ReferenceExpression,
         whenFalse?: ReferenceExpression
     ) {
+        const state: {
+            format?: string;
+            valueProviders?: unknown[];
+            condition?: unknown;
+            whenTrue?: ReferenceExpression;
+            whenFalse?: ReferenceExpression;
+            matchValue?: string;
+            handle?: Handle;
+            client?: AspireClientRpc;
+        } = {};
+
         if (typeof handleOrFormatOrCondition === 'string') {
-            this._format = handleOrFormatOrCondition;
-            this._valueProviders = clientOrValueProvidersOrMatchValue as unknown[];
+            state.format = handleOrFormatOrCondition;
+            state.valueProviders = clientOrValueProvidersOrMatchValue as unknown[];
         } else if (isHandleLike(handleOrFormatOrCondition)) {
-            this._handle = handleOrFormatOrCondition;
-            this._client = clientOrValueProvidersOrMatchValue as AspireClientRpc;
+            state.handle = handleOrFormatOrCondition;
+            state.client = clientOrValueProvidersOrMatchValue as AspireClientRpc;
         } else {
-            this._condition = handleOrFormatOrCondition;
-            this._matchValue = (clientOrValueProvidersOrMatchValue as string) ?? 'True';
-            this._whenTrue = whenTrueOrWhenFalse;
-            this._whenFalse = whenFalse;
+            state.condition = handleOrFormatOrCondition;
+            state.matchValue = (clientOrValueProvidersOrMatchValue as string) ?? 'True';
+            state.whenTrue = whenTrueOrWhenFalse;
+            state.whenFalse = whenFalse;
         }
+
+        referenceExpressionState.set(this, state);
     }
 
     /**
      * Gets whether this reference expression is conditional.
      */
     get isConditional(): boolean {
-        return this._condition !== undefined;
+        return referenceExpressionState.get(this)?.condition !== undefined;
     }
 
     /**
@@ -105,25 +108,27 @@ class ReferenceExpressionImpl implements ReferenceExpression {
      * In handle mode, delegates to the handle's serialization.
      */
     toJSON(): { $expr: { format: string; valueProviders?: unknown[] } | { condition: unknown; whenTrue: unknown; whenFalse: unknown; matchValue: string } } | MarshalledHandle {
-        if (this._handle) {
-            return this._handle.toJSON();
+        const state = referenceExpressionState.get(this)!;
+
+        if (state.handle) {
+            return state.handle.toJSON();
         }
 
         if (this.isConditional) {
             return {
                 $expr: {
-                    condition: extractHandleForExpr(this._condition),
-                    whenTrue: this._whenTrue!.toJSON(),
-                    whenFalse: this._whenFalse!.toJSON(),
-                    matchValue: this._matchValue!
+                    condition: extractHandleForExpr(state.condition),
+                    whenTrue: state.whenTrue!.toJSON(),
+                    whenFalse: state.whenFalse!.toJSON(),
+                    matchValue: state.matchValue!
                 }
             };
         }
 
         return {
             $expr: {
-                format: this._format!,
-                valueProviders: this._valueProviders && this._valueProviders.length > 0 ? this._valueProviders : undefined
+                format: state.format!,
+                valueProviders: state.valueProviders && state.valueProviders.length > 0 ? state.valueProviders : undefined
             }
         };
     }
@@ -136,14 +141,16 @@ class ReferenceExpressionImpl implements ReferenceExpression {
      * @returns The resolved string value, or null if the expression resolves to null
      */
     async getValue(cancellationToken?: AbortSignal | CancellationToken): Promise<string | null> {
-        if (!this._handle || !this._client) {
+        const state = referenceExpressionState.get(this)!;
+
+        if (!state.handle || !state.client) {
             throw new Error('getValue is only available on server-returned ReferenceExpression instances');
         }
-        const cancellationTokenId = registerCancellation(this._client, cancellationToken);
+        const cancellationTokenId = registerCancellation(state.client, cancellationToken);
         try {
-            const rpcArgs: Record<string, unknown> = { context: this._handle };
+            const rpcArgs: Record<string, unknown> = { context: state.handle };
             if (cancellationTokenId !== undefined) rpcArgs.cancellationToken = cancellationTokenId;
-            return await this._client.invokeCapability<string | null>(
+            return await state.client.invokeCapability<string | null>(
                 'Aspire.Hosting.ApplicationModel/getValue',
                 rpcArgs
             );
@@ -156,13 +163,43 @@ class ReferenceExpressionImpl implements ReferenceExpression {
      * String representation for debugging.
      */
     toString(): string {
-        if (this._handle) {
+        const state = referenceExpressionState.get(this)!;
+
+        if (state.handle) {
             return `ReferenceExpression(handle)`;
         }
         if (this.isConditional) {
             return `ReferenceExpression(conditional)`;
         }
-        return `ReferenceExpression(${this._format})`;
+        return `ReferenceExpression(${state.format})`;
+    }
+
+    static create(strings: TemplateStringsArray, ...values: unknown[]): ReferenceExpression {
+        return createReferenceExpression(strings, ...values);
+    }
+
+    static createConditional(
+        condition: unknown,
+        whenTrue: ReferenceExpression,
+        whenFalse: ReferenceExpression
+    ): ReferenceExpression;
+    static createConditional(
+        condition: unknown,
+        matchValue: string,
+        whenTrue: ReferenceExpression,
+        whenFalse: ReferenceExpression
+    ): ReferenceExpression;
+    static createConditional(
+        condition: unknown,
+        matchValueOrWhenTrue: string | ReferenceExpression,
+        whenTrueOrWhenFalse: ReferenceExpression,
+        whenFalse?: ReferenceExpression
+    ): ReferenceExpression {
+        if (typeof matchValueOrWhenTrue === 'string') {
+            return createConditionalReferenceExpression(condition, matchValueOrWhenTrue, whenTrueOrWhenFalse, whenFalse!);
+        }
+
+        return createConditionalReferenceExpression(condition, matchValueOrWhenTrue, whenTrueOrWhenFalse);
     }
 }
 
@@ -177,7 +214,7 @@ function createReferenceExpression(strings: TemplateStringsArray, ...values: unk
 
     const valueProviders = values.map(extractHandleForExpr);
 
-    return new ReferenceExpressionImpl(format, valueProviders);
+    return new ReferenceExpression(format, valueProviders);
 }
 
 function createConditionalReferenceExpression(
@@ -198,19 +235,14 @@ function createConditionalReferenceExpression(
     whenFalse?: ReferenceExpression
 ): ReferenceExpression {
     if (typeof matchValueOrWhenTrue === 'string') {
-        return new ReferenceExpressionImpl(condition, matchValueOrWhenTrue, whenTrueOrWhenFalse, whenFalse!);
+        return new ReferenceExpression(condition, matchValueOrWhenTrue, whenTrueOrWhenFalse, whenFalse!);
     }
 
-    return new ReferenceExpressionImpl(condition, 'True', matchValueOrWhenTrue, whenTrueOrWhenFalse);
+    return new ReferenceExpression(condition, 'True', matchValueOrWhenTrue, whenTrueOrWhenFalse);
 }
 
-export const ReferenceExpression = {
-    create: createReferenceExpression,
-    createConditional: createConditionalReferenceExpression
-};
-
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression', (handle, client) =>
-    new ReferenceExpressionImpl(handle, client)
+    new ReferenceExpression(handle, client)
 );
 
 /**

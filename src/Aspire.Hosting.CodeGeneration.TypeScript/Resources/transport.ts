@@ -216,71 +216,72 @@ export class Handle<T extends string = string> {
  * const connectionString = await connectionStringExpression.getValue(cancellationToken);
  * ```
  */
-export interface CancellationToken {
-    toJSON(): string | undefined;
-    register(client?: AspireClientRpc): string | undefined;
-}
+const cancellationTokenState = new WeakMap<CancellationToken, {
+    signal?: AbortSignal;
+    remoteTokenId?: string;
+}>();
 
-class CancellationTokenImpl implements CancellationToken {
-    private readonly _signal?: AbortSignal;
-    private readonly _remoteTokenId?: string;
-
+export class CancellationToken {
     constructor(signal?: AbortSignal);
     constructor(tokenId?: string);
     constructor(value?: AbortSignal | string | null) {
+        const state: { signal?: AbortSignal; remoteTokenId?: string } = {};
+
         if (typeof value === 'string') {
-            this._remoteTokenId = value;
+            state.remoteTokenId = value;
         } else if (isAbortSignal(value)) {
-            this._signal = value;
+            state.signal = value;
         }
+
+        cancellationTokenState.set(this, state);
     }
 
     /**
      * Creates a cancellation token from a local {@link AbortSignal}.
      */
     toJSON(): string | undefined {
-        return this._remoteTokenId;
+        return cancellationTokenState.get(this)?.remoteTokenId;
     }
 
     register(client?: AspireClientRpc): string | undefined {
-        if (this._remoteTokenId !== undefined) {
-            return this._remoteTokenId;
+        const state = cancellationTokenState.get(this);
+
+        if (state?.remoteTokenId !== undefined) {
+            return state.remoteTokenId;
         }
 
         return client
-            ? registerCancellation(client, this._signal)
-            : registerCancellation(this._signal);
+            ? registerCancellation(client, state?.signal)
+            : registerCancellation(state?.signal);
     }
-}
 
-/**
- * Creates transport-safe cancellation token values for the generated SDK.
- */
-export const CancellationToken = {
-    from(signal?: AbortSignal): CancellationToken {
-        return new CancellationTokenImpl(signal);
-    },
+    /**
+     * Creates transport-safe cancellation token values for the generated SDK.
+     */
+    static from(signal?: AbortSignal): CancellationToken {
+        return new CancellationToken(signal);
+    }
 
     /**
      * Creates a cancellation token from a transport value.
      * Generated code uses this to materialize values that come from the AppHost.
      */
-    fromValue(value: unknown): CancellationToken {
+    static fromValue(value: unknown): CancellationToken {
         if (isCancellationTokenLike(value)) {
             return value;
         }
 
         if (typeof value === 'string') {
-            return new CancellationTokenImpl(value);
+            return new CancellationToken(value);
         }
 
         if (isAbortSignal(value)) {
-            return new CancellationTokenImpl(value);
+            return new CancellationToken(value);
         }
 
-        return new CancellationTokenImpl();
+        return new CancellationToken();
     }
-};
+}
 
 // ============================================================================
 // Handle Wrapper Registry
