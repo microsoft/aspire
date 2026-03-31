@@ -21,6 +21,9 @@ namespace Aspire.Managed.NuGet.Commands;
 /// </summary>
 public static class RestoreCommand
 {
+    private const string RuntimeIdentifierGraphFileName = "RuntimeIdentifierGraph.json";
+    private const string RuntimeIdentifierGraphResourceName = "Aspire.Managed.RuntimeIdentifierGraph.json";
+
     /// <summary>
     /// Creates the restore command.
     /// </summary>
@@ -351,6 +354,9 @@ public static class RestoreCommand
         var projectName = "AspireRestore";
         var projectPath = Path.Combine(outputPath, "project.json");
         var tfmShort = framework.GetShortFolderName();
+        var runtimeIdentifierGraphPath = !string.IsNullOrWhiteSpace(runtimeIdentifier)
+            ? EnsureRuntimeIdentifierGraphPath(outputPath)
+            : null;
 
         // Build dependencies
         var dependencies = packages.Select(p => new LibraryDependency
@@ -366,7 +372,8 @@ public static class RestoreCommand
         {
             FrameworkName = framework,
             TargetAlias = tfmShort,
-            Dependencies = dependencies
+            Dependencies = dependencies,
+            RuntimeIdentifierGraphPath = runtimeIdentifierGraphPath
         };
 
         // Build restore metadata
@@ -406,5 +413,21 @@ public static class RestoreCommand
         }
 
         return packageSpec;
+    }
+
+    private static string EnsureRuntimeIdentifierGraphPath(string outputPath)
+    {
+        var graphPath = Path.Combine(outputPath, RuntimeIdentifierGraphFileName);
+        if (File.Exists(graphPath))
+        {
+            return graphPath;
+        }
+
+        using var resourceStream = typeof(RestoreCommand).Assembly.GetManifestResourceStream(RuntimeIdentifierGraphResourceName)
+            ?? throw new InvalidOperationException($"Embedded runtime identifier graph resource '{RuntimeIdentifierGraphResourceName}' was not found.");
+        using var fileStream = File.Create(graphPath);
+        resourceStream.CopyTo(fileStream);
+
+        return graphPath;
     }
 }

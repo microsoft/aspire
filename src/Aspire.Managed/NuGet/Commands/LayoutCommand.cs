@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using NuGet.Frameworks;
 using NuGet.ProjectModel;
+using NuGet.RuntimeModel;
 
 namespace Aspire.Managed.NuGet.Commands;
 
@@ -15,6 +16,9 @@ namespace Aspire.Managed.NuGet.Commands;
 /// </summary>
 public static class LayoutCommand
 {
+    private const string RuntimeIdentifierGraphResourceName = "Aspire.Managed.RuntimeIdentifierGraph.json";
+    private static readonly Lazy<RuntimeGraph> s_runtimeGraph = new(LoadRuntimeGraph);
+
     /// <summary>
     /// Creates the layout command.
     /// </summary>
@@ -97,7 +101,9 @@ public static class LayoutCommand
             var effectiveRuntimeIdentifier = string.IsNullOrWhiteSpace(runtimeIdentifier)
                 ? RuntimeInformation.RuntimeIdentifier
                 : runtimeIdentifier;
-            var target = ResolveTarget(lockFile, framework, effectiveRuntimeIdentifier);
+            var runtimeFallbacks = GetRuntimeFallbacks(effectiveRuntimeIdentifier);
+            var target = ResolveTarget(lockFile, framework, runtimeFallbacks);
+            var frameworkTarget = lockFile.GetTarget(NuGetFramework.ParseFolder(framework), runtimeIdentifier: null);
 
             if (target == null)
             {
@@ -113,6 +119,9 @@ public static class LayoutCommand
             var skippedCount = 0;
 
             var packagesPath = GetPackagesPath(lockFile);
+            var frameworkLibraries = frameworkTarget?.Libraries.ToDictionary(
+                library => GetLibraryKey(library.Name ?? string.Empty, library.Version?.ToString() ?? string.Empty),
+                StringComparer.OrdinalIgnoreCase);
 
             if (verbose)
             {
@@ -125,10 +134,15 @@ public static class LayoutCommand
             // Process each library in the target
             foreach (var library in target.Libraries)
             {
+                LockFileTargetLibrary? frameworkLibrary = null;
+                frameworkLibraries?.TryGetValue(GetLibraryKey(library.Name ?? string.Empty, library.Version?.ToString() ?? string.Empty), out frameworkLibrary);
+
                 var (libraryCopiedCount, librarySkippedCount) = ProcessLibrary(
                     library,
+                    frameworkLibrary,
                     packagesPath,
                     outputPath,
+                    runtimeFallbacks,
                     verbose);
 
                 copiedCount += libraryCopiedCount;
@@ -155,11 +169,14 @@ public static class LayoutCommand
         }
     }
 
-    private static LockFileTarget? ResolveTarget(LockFile lockFile, string framework, string? runtimeIdentifier)
+    private static LockFileTarget? ResolveTarget(LockFile lockFile, string framework, IReadOnlyList<string> runtimeFallbacks)
     {
-        var nugetFramework = NuGetFramework.ParseFolder(framework);
-        return lockFile.GetTarget(nugetFramework, runtimeIdentifier)
-            ?? lockFile.GetTarget(nugetFramework, runtimeIdentifier: null);
+        return lockFile.Targets
+            .Where(t =>
+                t.TargetFramework.GetShortFolderName().Equals(framework, StringComparison.OrdinalIgnoreCase) ||
+                t.TargetFramework.ToString().Equals(framework, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(t => GetRuntimeMatchScore(t.RuntimeIdentifier, runtimeFallbacks))
+            .FirstOrDefault();
     }
 
     private static string GetPackagesPath(LockFile lockFile)
@@ -178,8 +195,10 @@ public static class LayoutCommand
 
     private static (int CopiedCount, int SkippedCount) ProcessLibrary(
         LockFileTargetLibrary library,
+        LockFileTargetLibrary? frameworkLibrary,
         string packagesPath,
         string outputPath,
+        IReadOnlyList<string> runtimeFallbacks,
         bool verbose)
     {
         if (library.Type != "package")
@@ -202,23 +221,31 @@ public static class LayoutCommand
         }
 
         var copiedCount = 0;
+        var runtimeAssemblies = library.RuntimeAssemblies.Count > 0 ? library.RuntimeAssemblies : frameworkLibrary?.RuntimeAssemblies ?? [];
+        var resourceAssemblies = library.ResourceAssemblies.Count > 0 ? library.ResourceAssemblies : frameworkLibrary?.ResourceAssemblies ?? [];
+        var nativeLibraries = library.NativeLibraries.Count > 0 ? library.NativeLibraries : frameworkLibrary?.NativeLibraries ?? [];
+        var runtimeTargets = library.RuntimeTargets.Count > 0 ? library.RuntimeTargets : frameworkLibrary?.RuntimeTargets ?? [];
+        var runtimeTargetsByFileName = BuildBestRuntimeTargetsByFileName(runtimeTargets, "runtime", runtimeFallbacks);
+        var nativeRuntimeTargetsByFileName = BuildBestRuntimeTargetsByFileName(runtimeTargets, "native", runtimeFallbacks);
 
-        copiedCount += CopyRuntimeAssemblies(library, packagePath, outputPath, verbose);
-        copiedCount += CopyResourceAssemblies(library, packagePath, outputPath, verbose);
-        copiedCount += CopyNativeLibraries(library, packagePath, outputPath, verbose);
+        copiedCount += CopyRuntimeAssemblies(runtimeAssemblies, packagePath, outputPath, runtimeTargetsByFileName, verbose);
+        copiedCount += CopyRuntimeTargets(runtimeTargets, packagePath, outputPath, verbose);
+        copiedCount += CopyResourceAssemblies(resourceAssemblies, packagePath, outputPath, verbose);
+        copiedCount += CopyNativeLibraries(nativeLibraries, packagePath, outputPath, nativeRuntimeTargetsByFileName, verbose);
 
         return (copiedCount, 0);
     }
 
     private static int CopyRuntimeAssemblies(
-        LockFileTargetLibrary library,
+        IEnumerable<LockFileItem> runtimeAssemblies,
         string packagePath,
         string outputPath,
+        IReadOnlyDictionary<string, LockFileRuntimeTarget> runtimeTargetsByFileName,
         bool verbose)
     {
         var copiedCount = 0;
 
-        foreach (var runtimeAssembly in library.RuntimeAssemblies)
+        foreach (var runtimeAssembly in runtimeAssemblies)
         {
             if (IsPlaceholderPath(runtimeAssembly.Path))
             {
@@ -227,6 +254,17 @@ public static class LayoutCommand
 
             var sourcePath = Path.Combine(packagePath, runtimeAssembly.Path.Replace('/', Path.DirectorySeparatorChar));
             var fileName = Path.GetFileName(sourcePath);
+            string? runtimePathToPreserve = null;
+
+            if (runtimeTargetsByFileName.TryGetValue(fileName, out var runtimeTarget))
+            {
+                sourcePath = Path.Combine(packagePath, runtimeTarget.Path.Replace('/', Path.DirectorySeparatorChar));
+                runtimePathToPreserve = runtimeTarget.Path;
+            }
+            else if (runtimeAssembly.Path.StartsWith("runtimes/", StringComparison.OrdinalIgnoreCase))
+            {
+                runtimePathToPreserve = runtimeAssembly.Path;
+            }
 
             if (!File.Exists(sourcePath))
             {
@@ -244,9 +282,9 @@ public static class LayoutCommand
                 }
             }
 
-            if (runtimeAssembly.Path.StartsWith("runtimes/", StringComparison.OrdinalIgnoreCase))
+            if (runtimePathToPreserve is not null)
             {
-                var structuredDestPath = Path.Combine(outputPath, runtimeAssembly.Path.Replace('/', Path.DirectorySeparatorChar));
+                var structuredDestPath = Path.Combine(outputPath, runtimePathToPreserve.Replace('/', Path.DirectorySeparatorChar));
                 if (CopyIfNewer(sourcePath, structuredDestPath, createDirectory: true))
                 {
                     copiedCount++;
@@ -274,15 +312,51 @@ public static class LayoutCommand
         return copiedCount;
     }
 
-    private static int CopyResourceAssemblies(
-        LockFileTargetLibrary library,
+    private static int CopyRuntimeTargets(
+        IEnumerable<LockFileRuntimeTarget> runtimeTargets,
         string packagePath,
         string outputPath,
         bool verbose)
     {
         var copiedCount = 0;
 
-        foreach (var resourceAssembly in library.ResourceAssemblies)
+        foreach (var runtimeTarget in runtimeTargets)
+        {
+            if (IsPlaceholderPath(runtimeTarget.Path))
+            {
+                continue;
+            }
+
+            var sourcePath = Path.Combine(packagePath, runtimeTarget.Path.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(sourcePath))
+            {
+                continue;
+            }
+
+            var destPath = Path.Combine(outputPath, runtimeTarget.Path.Replace('/', Path.DirectorySeparatorChar));
+            if (CopyIfNewer(sourcePath, destPath, createDirectory: true))
+            {
+                copiedCount++;
+
+                if (verbose)
+                {
+                    Console.WriteLine($"  Copy ({runtimeTarget.AssetType} target): {sourcePath} -> {destPath}");
+                }
+            }
+        }
+
+        return copiedCount;
+    }
+
+    private static int CopyResourceAssemblies(
+        IEnumerable<LockFileItem> resourceAssemblies,
+        string packagePath,
+        string outputPath,
+        bool verbose)
+    {
+        var copiedCount = 0;
+
+        foreach (var resourceAssembly in resourceAssemblies)
         {
             if (IsPlaceholderPath(resourceAssembly.Path))
             {
@@ -320,14 +394,16 @@ public static class LayoutCommand
     }
 
     private static int CopyNativeLibraries(
-        LockFileTargetLibrary library,
+        IEnumerable<LockFileItem> nativeLibraries,
         string packagePath,
         string outputPath,
+        IReadOnlyDictionary<string, LockFileRuntimeTarget> nativeRuntimeTargetsByFileName,
         bool verbose)
     {
         var copiedCount = 0;
+        var handledNativeRuntimeTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var nativeLib in library.NativeLibraries)
+        foreach (var nativeLib in nativeLibraries)
         {
             if (IsPlaceholderPath(nativeLib.Path))
             {
@@ -341,14 +417,26 @@ public static class LayoutCommand
             }
 
             var fileName = Path.GetFileName(sourcePath);
+            var rootSourcePath = sourcePath;
+
+            if (nativeRuntimeTargetsByFileName.TryGetValue(fileName, out var nativeRuntimeTarget))
+            {
+                var runtimeTargetPath = Path.Combine(packagePath, nativeRuntimeTarget.Path.Replace('/', Path.DirectorySeparatorChar));
+                if (File.Exists(runtimeTargetPath))
+                {
+                    rootSourcePath = runtimeTargetPath;
+                    handledNativeRuntimeTargets.Add(fileName);
+                }
+            }
+
             var destPath = Path.Combine(outputPath, fileName);
-            if (CopyIfNewer(sourcePath, destPath, createDirectory: false))
+            if (CopyIfNewer(rootSourcePath, destPath, createDirectory: false))
             {
                 copiedCount++;
 
                 if (verbose)
                 {
-                    Console.WriteLine($"  Copy (native): {sourcePath} -> {destPath}");
+                    Console.WriteLine($"  Copy (native): {rootSourcePath} -> {destPath}");
                 }
             }
 
@@ -360,6 +448,32 @@ public static class LayoutCommand
                 if (verbose)
                 {
                     Console.WriteLine($"  Copy (native path): {sourcePath} -> {structuredDestPath}");
+                }
+            }
+        }
+
+        foreach (var nativeRuntimeTarget in nativeRuntimeTargetsByFileName.Values)
+        {
+            var sourcePath = Path.Combine(packagePath, nativeRuntimeTarget.Path.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(sourcePath))
+            {
+                continue;
+            }
+
+            var fileName = Path.GetFileName(sourcePath);
+            if (handledNativeRuntimeTargets.Contains(fileName))
+            {
+                continue;
+            }
+
+            var destPath = Path.Combine(outputPath, fileName);
+            if (CopyIfNewer(sourcePath, destPath, createDirectory: false))
+            {
+                copiedCount++;
+
+                if (verbose)
+                {
+                    Console.WriteLine($"  Copy (native target): {sourcePath} -> {destPath}");
                 }
             }
         }
@@ -387,5 +501,68 @@ public static class LayoutCommand
     private static bool IsPlaceholderPath(string path)
     {
         return string.Equals(Path.GetFileName(path), "_._", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string GetLibraryKey(string name, string version) => $"{name}/{version}";
+
+    private static List<string> GetRuntimeFallbacks(string? runtimeIdentifier)
+    {
+        if (string.IsNullOrEmpty(runtimeIdentifier))
+        {
+            return [];
+        }
+
+        return s_runtimeGraph.Value
+            .ExpandRuntime(runtimeIdentifier)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static int GetRuntimeMatchScore(string? runtimeIdentifier, IReadOnlyList<string> runtimeFallbacks)
+    {
+        if (string.IsNullOrEmpty(runtimeIdentifier))
+        {
+            return runtimeFallbacks.Count;
+        }
+
+        for (var i = 0; i < runtimeFallbacks.Count; i++)
+        {
+            if (string.Equals(runtimeIdentifier, runtimeFallbacks[i], StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+
+        return int.MaxValue;
+    }
+
+    private static Dictionary<string, LockFileRuntimeTarget> BuildBestRuntimeTargetsByFileName(
+        IEnumerable<LockFileRuntimeTarget> runtimeTargets,
+        string assetType,
+        IReadOnlyList<string> runtimeFallbacks)
+    {
+        return runtimeTargets
+            .Where(runtimeTarget =>
+                string.Equals(runtimeTarget.AssetType, assetType, StringComparison.OrdinalIgnoreCase) &&
+                !IsPlaceholderPath(runtimeTarget.Path))
+            .Select(runtimeTarget => new
+            {
+                RuntimeTarget = runtimeTarget,
+                Score = GetRuntimeMatchScore(runtimeTarget.Runtime, runtimeFallbacks)
+            })
+            .Where(runtimeTarget => runtimeTarget.Score != int.MaxValue)
+            .GroupBy(runtimeTarget => Path.GetFileName(runtimeTarget.RuntimeTarget.Path), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.OrderBy(runtimeTarget => runtimeTarget.Score).First().RuntimeTarget,
+                StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static RuntimeGraph LoadRuntimeGraph()
+    {
+        using var stream = typeof(LayoutCommand).Assembly.GetManifestResourceStream(RuntimeIdentifierGraphResourceName)
+            ?? throw new InvalidOperationException($"Embedded runtime identifier graph '{RuntimeIdentifierGraphResourceName}' was not found.");
+
+        return JsonRuntimeFormat.ReadRuntimeGraph(stream);
     }
 }

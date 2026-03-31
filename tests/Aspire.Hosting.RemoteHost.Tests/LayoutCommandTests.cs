@@ -105,6 +105,96 @@ public class LayoutCommandTests
     }
 
     [Fact]
+    public async Task LayoutCommand_PrefersPortableRuntimeTargetsWhenRidTargetStillHasGenericRuntimeAssembly()
+    {
+        var workspaceRoot = Directory.CreateTempSubdirectory("aspire-layout-tests").FullName;
+
+        try
+        {
+            var packageRoot = Path.Combine(workspaceRoot, "packages", "test.package", "1.0.0");
+            Directory.CreateDirectory(Path.Combine(packageRoot, "lib", "net10.0"));
+            Directory.CreateDirectory(Path.Combine(packageRoot, "runtimes", "unix", "lib", "net10.0"));
+            Directory.CreateDirectory(Path.Combine(packageRoot, "runtimes", "win", "lib", "net10.0"));
+
+            await File.WriteAllTextAsync(Path.Combine(packageRoot, "lib", "net10.0", "Test.Package.dll"), "base");
+            await File.WriteAllTextAsync(Path.Combine(packageRoot, "runtimes", "unix", "lib", "net10.0", "Test.Package.dll"), "unix");
+            await File.WriteAllTextAsync(Path.Combine(packageRoot, "runtimes", "win", "lib", "net10.0", "Test.Package.dll"), "win");
+
+            var assetsPath = Path.Combine(workspaceRoot, "project.assets.json");
+            await File.WriteAllTextAsync(assetsPath, CreateAssetsJsonWithPortableRuntimeTargets(workspaceRoot, GetCurrentRuntimeIdentifier(), GetExpectedRuntimeAssemblyPath(), GetExpectedRuntimeAssetRid()));
+
+            var outputPath = Path.Combine(workspaceRoot, "out");
+            var command = LayoutCommand.Create();
+            var parseResult = command.Parse([
+                "--assets", assetsPath,
+                "--output", outputPath,
+                "--framework", "net10.0",
+                "--runtime-identifier", GetCurrentRuntimeIdentifier()
+            ]);
+
+            var exitCode = await parseResult.InvokeAsync();
+
+            Assert.Equal(0, exitCode);
+            Assert.Equal(GetExpectedRuntimeContent(), await File.ReadAllTextAsync(Path.Combine(outputPath, "Test.Package.dll")));
+            Assert.Equal(
+                GetExpectedRuntimeContent(),
+                await File.ReadAllTextAsync(Path.Combine(outputPath, GetExpectedRuntimeAssemblyPath().Replace('/', Path.DirectorySeparatorChar))));
+        }
+        finally
+        {
+            if (Directory.Exists(workspaceRoot))
+            {
+                Directory.Delete(workspaceRoot, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task LayoutCommand_UsesFrameworkRuntimeTargetsWhenRidTargetOmitsThem()
+    {
+        var workspaceRoot = Directory.CreateTempSubdirectory("aspire-layout-tests").FullName;
+
+        try
+        {
+            var packageRoot = Path.Combine(workspaceRoot, "packages", "test.package", "1.0.0");
+            Directory.CreateDirectory(Path.Combine(packageRoot, "lib", "net10.0"));
+            Directory.CreateDirectory(Path.Combine(packageRoot, "runtimes", "unix", "lib", "net10.0"));
+            Directory.CreateDirectory(Path.Combine(packageRoot, "runtimes", "win", "lib", "net10.0"));
+
+            await File.WriteAllTextAsync(Path.Combine(packageRoot, "lib", "net10.0", "Test.Package.dll"), "base");
+            await File.WriteAllTextAsync(Path.Combine(packageRoot, "runtimes", "unix", "lib", "net10.0", "Test.Package.dll"), "unix");
+            await File.WriteAllTextAsync(Path.Combine(packageRoot, "runtimes", "win", "lib", "net10.0", "Test.Package.dll"), "win");
+
+            var assetsPath = Path.Combine(workspaceRoot, "project.assets.json");
+            await File.WriteAllTextAsync(assetsPath, CreateAssetsJsonWithFrameworkOnlyRuntimeTargets(workspaceRoot, GetCurrentRuntimeIdentifier(), GetExpectedRuntimeAssemblyPath(), GetExpectedRuntimeAssetRid()));
+
+            var outputPath = Path.Combine(workspaceRoot, "out");
+            var command = LayoutCommand.Create();
+            var parseResult = command.Parse([
+                "--assets", assetsPath,
+                "--output", outputPath,
+                "--framework", "net10.0",
+                "--runtime-identifier", GetCurrentRuntimeIdentifier()
+            ]);
+
+            var exitCode = await parseResult.InvokeAsync();
+
+            Assert.Equal(0, exitCode);
+            Assert.Equal(GetExpectedRuntimeContent(), await File.ReadAllTextAsync(Path.Combine(outputPath, "Test.Package.dll")));
+            Assert.Equal(
+                GetExpectedRuntimeContent(),
+                await File.ReadAllTextAsync(Path.Combine(outputPath, GetExpectedRuntimeAssemblyPath().Replace('/', Path.DirectorySeparatorChar))));
+        }
+        finally
+        {
+            if (Directory.Exists(workspaceRoot))
+            {
+                Directory.Delete(workspaceRoot, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task LayoutCommand_FallsBackToFrameworkTargetWhenRidTargetIsMissing()
     {
         var workspaceRoot = Directory.CreateTempSubdirectory("aspire-layout-tests").FullName;
@@ -140,6 +230,172 @@ public class LayoutCommandTests
                 Directory.Delete(workspaceRoot, recursive: true);
             }
         }
+    }
+
+    private static string CreateAssetsJsonWithFrameworkOnlyRuntimeTargets(string rootPath, string runtimeIdentifier, string runtimeAssemblyPath, string runtimeTargetRid)
+    {
+        var packagesPath = Path.Combine(rootPath, "packages") + Path.DirectorySeparatorChar;
+        var escapedPackagesPath = packagesPath.Replace("\\", "\\\\");
+        var outputPath = Path.Combine(rootPath, "obj") + Path.DirectorySeparatorChar;
+        var escapedOutputPath = outputPath.Replace("\\", "\\\\");
+
+        return $$"""
+            {
+              "version": 3,
+              "targets": {
+                "net10.0": {
+                  "Test.Package/1.0.0": {
+                    "type": "package",
+                    "runtime": {
+                      "lib/net10.0/Test.Package.dll": {}
+                    },
+                    "runtimeTargets": {
+                      "{{runtimeAssemblyPath}}": { "rid": "{{runtimeTargetRid}}", "assetType": "runtime" },
+                      "runtimes/win/lib/net10.0/Test.Package.dll": { "rid": "win", "assetType": "runtime" }
+                    }
+                  }
+                },
+                "net10.0/{{runtimeIdentifier}}": {
+                  "Test.Package/1.0.0": {
+                    "type": "package",
+                    "runtime": {
+                      "lib/net10.0/Test.Package.dll": {}
+                    }
+                  }
+                }
+              },
+              "libraries": {
+                "Test.Package/1.0.0": {
+                  "type": "package",
+                  "path": "test.package/1.0.0",
+                  "files": [
+                    "lib/net10.0/Test.Package.dll",
+                    "{{runtimeAssemblyPath}}",
+                    "runtimes/win/lib/net10.0/Test.Package.dll"
+                  ]
+                }
+              },
+              "packageFolders": {
+                "{{escapedPackagesPath}}": {}
+              },
+              "project": {
+                "version": "1.0.0",
+                "restore": {
+                  "projectUniqueName": "test",
+                  "projectName": "test",
+                  "projectPath": "test",
+                  "packagesPath": "{{escapedPackagesPath}}",
+                  "outputPath": "{{escapedOutputPath}}",
+                  "projectStyle": "PackageReference",
+                  "originalTargetFrameworks": [ "net10.0" ],
+                  "sources": {},
+                  "frameworks": {
+                    "net10.0": {
+                      "targetAlias": "net10.0",
+                      "projectReferences": {}
+                    }
+                  }
+                },
+                "frameworks": {
+                  "net10.0": {
+                    "targetAlias": "net10.0",
+                    "dependencies": {
+                      "Test.Package": {
+                        "target": "Package",
+                        "version": "[1.0.0, )"
+                      }
+                    },
+                    "runtimeIdentifierGraphPath": "RuntimeIdentifierGraph.json"
+                  }
+                }
+              }
+            }
+            """;
+    }
+
+    private static string CreateAssetsJsonWithPortableRuntimeTargets(string rootPath, string runtimeIdentifier, string runtimeAssemblyPath, string runtimeTargetRid)
+    {
+        var packagesPath = Path.Combine(rootPath, "packages") + Path.DirectorySeparatorChar;
+        var escapedPackagesPath = packagesPath.Replace("\\", "\\\\");
+        var outputPath = Path.Combine(rootPath, "obj") + Path.DirectorySeparatorChar;
+        var escapedOutputPath = outputPath.Replace("\\", "\\\\");
+
+        return $$"""
+            {
+              "version": 3,
+              "targets": {
+                "net10.0": {
+                  "Test.Package/1.0.0": {
+                    "type": "package",
+                    "runtime": {
+                      "lib/net10.0/Test.Package.dll": {}
+                    },
+                    "runtimeTargets": {
+                      "{{runtimeAssemblyPath}}": { "rid": "{{runtimeTargetRid}}", "assetType": "runtime" },
+                      "runtimes/win/lib/net10.0/Test.Package.dll": { "rid": "win", "assetType": "runtime" }
+                    }
+                  }
+                },
+                "net10.0/{{runtimeIdentifier}}": {
+                  "Test.Package/1.0.0": {
+                    "type": "package",
+                    "runtime": {
+                      "lib/net10.0/Test.Package.dll": {}
+                    },
+                    "runtimeTargets": {
+                      "{{runtimeAssemblyPath}}": { "rid": "{{runtimeTargetRid}}", "assetType": "runtime" },
+                      "runtimes/win/lib/net10.0/Test.Package.dll": { "rid": "win", "assetType": "runtime" }
+                    }
+                  }
+                }
+              },
+              "libraries": {
+                "Test.Package/1.0.0": {
+                  "type": "package",
+                  "path": "test.package/1.0.0",
+                  "files": [
+                    "lib/net10.0/Test.Package.dll",
+                    "{{runtimeAssemblyPath}}",
+                    "runtimes/win/lib/net10.0/Test.Package.dll"
+                  ]
+                }
+              },
+              "packageFolders": {
+                "{{escapedPackagesPath}}": {}
+              },
+              "project": {
+                "version": "1.0.0",
+                "restore": {
+                  "projectUniqueName": "test",
+                  "projectName": "test",
+                  "projectPath": "test",
+                  "packagesPath": "{{escapedPackagesPath}}",
+                  "outputPath": "{{escapedOutputPath}}",
+                  "projectStyle": "PackageReference",
+                  "originalTargetFrameworks": [ "net10.0" ],
+                  "sources": {},
+                  "frameworks": {
+                    "net10.0": {
+                      "targetAlias": "net10.0",
+                      "projectReferences": {}
+                    }
+                  }
+                },
+                "frameworks": {
+                  "net10.0": {
+                    "targetAlias": "net10.0",
+                    "dependencies": {
+                      "Test.Package": {
+                        "target": "Package",
+                        "version": "[1.0.0, )"
+                      }
+                    },
+                    "runtimeIdentifierGraphPath": "RuntimeIdentifierGraph.json"
+                  }
+                }
+              }
+            }
+            """;
     }
 
     private static string CreateAssetsJsonWithResolvedRidTarget(string rootPath, string runtimeIdentifier, string nativeFileName)

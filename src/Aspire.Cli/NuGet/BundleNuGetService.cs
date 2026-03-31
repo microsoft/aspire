@@ -76,7 +76,7 @@ public sealed class BundleNuGetService : INuGetService
         }
 
         // Compute a hash for the package set to create a unique restore location
-        var packageHash = ComputePackageHash(packageList, targetFramework, runtimeIdentifier);
+        var packageHash = ComputePackageHash(packageList, targetFramework, runtimeIdentifier, managedPath);
         var restoreDir = Path.Combine(_cacheDirectory, "restore", packageHash);
         var objDir = Path.Combine(restoreDir, "obj");
         var libsDir = Path.Combine(restoreDir, "libs");
@@ -207,15 +207,47 @@ public sealed class BundleNuGetService : INuGetService
         return libsDir;
     }
 
-    private static string ComputePackageHash(List<(string Id, string Version)> packages, string tfm, string? runtimeIdentifier)
+    internal static string ComputePackageHash(List<(string Id, string Version)> packages, string tfm, string? runtimeIdentifier, string? managedPath = null)
     {
         var content = string.Join(";", packages.OrderBy(p => p.Id).Select(p => $"{p.Id}:{p.Version}"));
         content += $";tfm:{tfm}";
         content += $";rid:{runtimeIdentifier ?? "<none>"}";
+        content += $";managed:{GetManagedToolFingerprint(managedPath)}";
 
         // Use SHA256 for stable hash across processes/runtimes
         var hashBytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(content));
         return Convert.ToHexString(hashBytes)[..16]; // Use first 16 chars (64 bits) for reasonable uniqueness
+    }
+
+    private static string GetManagedToolFingerprint(string? managedPath)
+    {
+        if (string.IsNullOrEmpty(managedPath))
+        {
+            return "<none>";
+        }
+
+        try
+        {
+            var fileInfo = new FileInfo(managedPath);
+            if (!fileInfo.Exists)
+            {
+                return "<missing>";
+            }
+
+            return $"{fileInfo.Length}|{fileInfo.LastWriteTimeUtc.Ticks}";
+        }
+        catch (IOException)
+        {
+            return "<error>";
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return "<error>";
+        }
+        catch (NotSupportedException)
+        {
+            return "<error>";
+        }
     }
 
     private static string GetCacheDirectory()
