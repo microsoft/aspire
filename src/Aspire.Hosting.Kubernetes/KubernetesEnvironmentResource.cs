@@ -93,6 +93,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     /// <param name="name">The name of the Kubernetes environment.</param>
     public KubernetesEnvironmentResource(string name) : base(name)
     {
+        // Publish step - generates Helm chart YAML artifacts
         Annotations.Add(new PipelineStepAnnotation(context =>
         {
             var step = new PipelineStep
@@ -103,6 +104,72 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             };
             step.RequiredBy(WellKnownPipelineSteps.Publish);
             return step;
+        }));
+
+        // Deployment engine steps - expands steps from KubernetesDeploymentEngineAnnotation (e.g., Helm)
+        Annotations.Add(new PipelineStepAnnotation(async (factoryContext) =>
+        {
+            var environment = (KubernetesEnvironmentResource)factoryContext.Resource;
+
+            if (!environment.TryGetLastAnnotation<KubernetesDeploymentEngineAnnotation>(out var engineAnnotation))
+            {
+                return [];
+            }
+
+            var steps = await engineAnnotation.CreateSteps(environment, factoryContext).ConfigureAwait(false);
+
+            // Also expand deployment target steps for compute resources
+            var model = factoryContext.PipelineContext.Model;
+            var allSteps = new List<PipelineStep>(steps);
+
+            foreach (var computeResource in model.GetComputeResources())
+            {
+                var deploymentTarget = computeResource.GetDeploymentTargetAnnotation(environment)?.DeploymentTarget;
+                if (deploymentTarget is not null &&
+                    deploymentTarget.TryGetAnnotationsOfType<PipelineStepAnnotation>(out var annotations))
+                {
+                    foreach (var annotation in annotations)
+                    {
+                        var childFactoryContext = new PipelineStepFactoryContext
+                        {
+                            PipelineContext = factoryContext.PipelineContext,
+                            Resource = deploymentTarget
+                        };
+
+                        var deploymentTargetSteps = await annotation.CreateStepsAsync(childFactoryContext).ConfigureAwait(false);
+                        allSteps.AddRange(deploymentTargetSteps);
+                    }
+                }
+            }
+
+            return allSteps;
+        }));
+
+        // Pipeline configuration - wire up step dependencies
+        Annotations.Add(new PipelineConfigurationAnnotation(context =>
+        {
+            foreach (var computeResource in context.Model.GetComputeResources())
+            {
+                var deploymentTarget = computeResource.GetDeploymentTargetAnnotation(this)?.DeploymentTarget;
+                if (deploymentTarget is null)
+                {
+                    continue;
+                }
+
+                // Build steps must complete before the deploy step
+                var buildSteps = context.GetSteps(computeResource, WellKnownPipelineTags.BuildCompute);
+                buildSteps.RequiredBy(WellKnownPipelineSteps.Deploy)
+                          .DependsOn(WellKnownPipelineSteps.DeployPrereq);
+
+                // Push steps must complete before the helm deploy step
+                var pushSteps = context.GetSteps(computeResource, WellKnownPipelineTags.PushContainerImage);
+                var helmDeploySteps = context.GetSteps(this, "helm-deploy");
+                helmDeploySteps.DependsOn(pushSteps);
+
+                // Print summary steps must run after helm deploy
+                var printSummarySteps = context.GetSteps(deploymentTarget, "print-summary");
+                printSummarySteps.DependsOn(helmDeploySteps);
+            }
         }));
     }
 

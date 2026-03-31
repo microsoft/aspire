@@ -48,7 +48,55 @@ public static class KubernetesEnvironmentExtensions
             return builder.CreateResourceBuilder(resource);
 
         }
-        return builder.AddResource(resource);
+
+        var resourceBuilder = builder.AddResource(resource);
+
+        // Default to Helm deployment engine if not already configured
+        EnsureDefaultHelmEngine(resourceBuilder);
+
+        return resourceBuilder;
+    }
+
+    /// <summary>
+    /// Configures the Kubernetes environment to deploy using Helm charts.
+    /// </summary>
+    /// <param name="builder">The Kubernetes environment resource builder.</param>
+    /// <param name="configure">An optional callback to configure Helm chart settings such as namespace, release name, and chart version.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>
+    /// Helm is the default deployment engine. Call this method to customize Helm-specific settings.
+    /// <example>
+    /// Configure Helm deployment with custom settings:
+    /// <code>
+    /// builder.AddKubernetesEnvironment("k8s")
+    ///     .WithHelm(helm =>
+    ///     {
+    ///         helm.WithNamespace("my-namespace");
+    ///         helm.WithReleaseName("my-release");
+    ///         helm.WithChartVersion("1.0.0");
+    ///     });
+    /// </code>
+    /// </example>
+    /// </remarks>
+    [AspireExport("withHelm", Description = "Configures Helm chart deployment settings", RunSyncOnBackgroundThread = true)]
+    public static IResourceBuilder<KubernetesEnvironmentResource> WithHelm(
+        this IResourceBuilder<KubernetesEnvironmentResource> builder,
+        Action<HelmChartConfiguration>? configure = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        // Add or replace the Helm deployment engine annotation
+        builder.WithAnnotation(
+            new KubernetesDeploymentEngineAnnotation(HelmDeploymentEngine.CreateStepsAsync),
+            ResourceAnnotationMutationBehavior.Replace);
+
+        if (configure is not null)
+        {
+            var configuration = new HelmChartConfiguration(builder);
+            configure(configuration);
+        }
+
+        return builder;
     }
 
     /// <summary>
@@ -66,5 +114,13 @@ public static class KubernetesEnvironmentExtensions
         configure(builder.Resource);
 
         return builder;
+    }
+
+    private static void EnsureDefaultHelmEngine(IResourceBuilder<KubernetesEnvironmentResource> builder)
+    {
+        if (!builder.Resource.HasAnnotationOfType<KubernetesDeploymentEngineAnnotation>())
+        {
+            builder.WithAnnotation(new KubernetesDeploymentEngineAnnotation(HelmDeploymentEngine.CreateStepsAsync));
+        }
     }
 }

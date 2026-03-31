@@ -35,6 +35,7 @@ internal sealed class KubernetesInfrastructure(
         foreach (var environment in kubernetesEnvironments)
         {
             var environmentContext = new KubernetesEnvironmentContext(environment, logger);
+            var containerRegistry = GetContainerRegistry(environment, @event.Model);
 
             foreach (var r in @event.Model.GetComputeResources())
             {
@@ -51,10 +52,31 @@ internal sealed class KubernetesInfrastructure(
                 // Add deployment target annotation to the resource
                 r.Annotations.Add(new DeploymentTargetAnnotation(serviceResource)
                 {
-                    ComputeEnvironment = environment
+                    ComputeEnvironment = environment,
+                    ContainerRegistry = containerRegistry
                 });
             }
         }
+    }
+
+    private static IContainerRegistry? GetContainerRegistry(KubernetesEnvironmentResource environment, DistributedApplicationModel appModel)
+    {
+        // Check for explicit container registry reference annotation on the environment
+        if (environment.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var annotation))
+        {
+            return annotation.Registry;
+        }
+
+        // Check if there's a single container registry in the app model
+        var registries = appModel.Resources.OfType<IContainerRegistry>().ToArray();
+        if (registries.Length == 1)
+        {
+            return registries[0];
+        }
+
+        // Kubernetes has no local registry fallback — return null if no registry is configured.
+        // The PushPrereq step will validate and error if a registry is required but not available.
+        return null;
     }
 
     private static void EnsureNoPublishAsKubernetesServiceAnnotations(DistributedApplicationModel appModel)

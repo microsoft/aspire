@@ -19,6 +19,7 @@
   <ItemGroup>
 
     <Compile Include="$(TestsSharedDir)\TestModuleInitializer.cs" />
+    <Compile Include="$(TestsSharedDir)\TestPipelineActivityReporter.cs" />
   </ItemGroup>
   
 </Project>
