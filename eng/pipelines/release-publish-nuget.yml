@@ -60,7 +60,7 @@ resources:
       ref: refs/tags/release
   pipelines:
     - pipeline: aspire-build
-      source: dotnet-aspire  # Name of the main build pipeline
+      source: microsoft-aspire  # Name of the main build pipeline
       project: internal      # AzDO project name
       trigger: none          # Manual trigger only - no automatic releases
 
