@@ -400,7 +400,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
 
         if (skill.EmbeddedResourceRoot is not null)
         {
-            return await EmbeddedSkillResourceLoader.LoadTextFilesAsync(skill.EmbeddedResourceRoot, cancellationToken);
+            return await EmbeddedSkillResourceLoader.LoadTextFilesAsync(skill.EmbeddedResourceRoot, skill.ShouldInstallFile, cancellationToken);
         }
 
         throw new InvalidOperationException($"Skill '{skill.Name}' does not define installable files.");

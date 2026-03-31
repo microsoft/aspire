@@ -18,6 +18,7 @@ internal sealed class SkillDefinition
         AgentCommandStrings.SkillDescription_Aspire,
         skillContent: null,
         embeddedResourceRoot: CommonAgentApplicators.AspireSkillResourceRoot,
+        installExcludedRelativePaths: [Path.Combine("evals")],
         isDefault: true);
 
     /// <summary>
@@ -28,6 +29,7 @@ internal sealed class SkillDefinition
         AgentCommandStrings.SkillDescription_PlaywrightCli,
         skillContent: null,
         embeddedResourceRoot: null, // Playwright is installed via PlaywrightCliInstaller, not a static file
+        installExcludedRelativePaths: [],
         isDefault: true);
 
     /// <summary>
@@ -38,14 +40,16 @@ internal sealed class SkillDefinition
         AgentCommandStrings.SkillDescription_DotnetInspect,
         CommonAgentApplicators.DotnetInspectSkillFileContent,
         embeddedResourceRoot: null,
+        installExcludedRelativePaths: [],
         isDefault: true);
 
-    private SkillDefinition(string name, string description, string? skillContent, string? embeddedResourceRoot, bool isDefault)
+    private SkillDefinition(string name, string description, string? skillContent, string? embeddedResourceRoot, IReadOnlyList<string> installExcludedRelativePaths, bool isDefault)
     {
         Name = name;
         Description = description;
         SkillContent = skillContent;
         EmbeddedResourceRoot = embeddedResourceRoot;
+        InstallExcludedRelativePaths = installExcludedRelativePaths;
         IsDefault = isDefault;
     }
 
@@ -70,9 +74,45 @@ internal sealed class SkillDefinition
     public string? EmbeddedResourceRoot { get; }
 
     /// <summary>
+    /// Gets relative paths that should be excluded when the skill is installed into a workspace.
+    /// </summary>
+    public IReadOnlyList<string> InstallExcludedRelativePaths { get; }
+
+    /// <summary>
+    /// Gets whether a bundled file should be installed into a workspace.
+    /// </summary>
+    public bool ShouldInstallFile(string relativePath)
+    {
+        foreach (var excludedPath in InstallExcludedRelativePaths)
+        {
+            if (PathMatchesOrIsUnder(relativePath, excludedPath))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// Gets whether this skill should be selected by default.
     /// </summary>
     public bool IsDefault { get; }
+
+    private static bool PathMatchesOrIsUnder(string relativePath, string excludedPath)
+    {
+        if (string.Equals(relativePath, excludedPath, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (!relativePath.StartsWith(excludedPath, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return relativePath.Length > excludedPath.Length && relativePath[excludedPath.Length] == Path.DirectorySeparatorChar;
+    }
 
     /// <summary>
     /// Gets all available skill definitions.

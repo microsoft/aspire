@@ -20,6 +20,15 @@
         "The agent calls `aspire add javascript` and the appropriate packages are added to the aspire.config.json file.",
         "The agent correctly wires the existing express app into the apphost.ts file, ensuring that the express app is properly initialized and can be started using the aspire CLI."
       ]
+    },
+    {
+      "id": 3,
+      "prompt": "Help me expose one of those fancy aspire dashboard commands from my AppHost.cs?",
+      "expected_output": "The AppHost.cs has an added call to `WithCommand` on the target resource.",
+      "expectations": [
+        "The aspire docs search or get command was called for custom resource commands.",
+        "The agent chains a call to the target resource in AppHost.cs with `WithCommand`, providing the necessary configuration for the command."
+      ]
     }
   ]
 }

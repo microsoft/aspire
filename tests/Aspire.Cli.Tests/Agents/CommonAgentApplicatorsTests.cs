@@ -85,6 +85,14 @@ public class CommonAgentApplicatorsTests
     }
 
     [Fact]
+    public void SkillDefinition_Aspire_ExcludesEvalsFromInstall()
+    {
+        Assert.Contains(SkillDefinition.Aspire.InstallExcludedRelativePaths, path => path == Path.Combine("evals"));
+        Assert.False(SkillDefinition.Aspire.ShouldInstallFile(Path.Combine("evals", "evals.json")));
+        Assert.True(SkillDefinition.Aspire.ShouldInstallFile("SKILL.md"));
+    }
+
+    [Fact]
     public void SkillDefinition_DotnetInspect_HasSkillContent()
     {
         Assert.NotNull(SkillDefinition.DotnetInspect.SkillContent);

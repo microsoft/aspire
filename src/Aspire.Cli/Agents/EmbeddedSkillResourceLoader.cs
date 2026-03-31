@@ -8,12 +8,18 @@ namespace Aspire.Cli.Agents;
 /// </summary>
 internal static class EmbeddedSkillResourceLoader
 {
-    public static async Task<IReadOnlyList<SkillAssetFile>> LoadTextFilesAsync(string resourceRoot, CancellationToken cancellationToken)
+    public static Task<IReadOnlyList<SkillAssetFile>> LoadTextFilesAsync(string resourceRoot, CancellationToken cancellationToken)
+    {
+        return LoadTextFilesAsync(resourceRoot, static _ => true, cancellationToken);
+    }
+
+    public static async Task<IReadOnlyList<SkillAssetFile>> LoadTextFilesAsync(string resourceRoot, Func<string, bool> includeFile, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(resourceRoot);
+        ArgumentNullException.ThrowIfNull(includeFile);
 
         var assembly = typeof(EmbeddedSkillResourceLoader).Assembly;
-        var resourcePrefix = resourceRoot.EndsWith("/", StringComparison.Ordinal) ? resourceRoot : $"{resourceRoot}/";
+        var resourcePrefix = resourceRoot.EndsWith('/') ? resourceRoot : $"{resourceRoot}/";
         var resourceNames = assembly.GetManifestResourceNames()
             .Where(name => name.StartsWith(resourcePrefix, StringComparison.Ordinal))
             .OrderBy(static name => name, StringComparer.Ordinal)
@@ -31,6 +37,11 @@ internal static class EmbeddedSkillResourceLoader
             var relativePath = resourceName[resourcePrefix.Length..]
                 .Replace('/', Path.DirectorySeparatorChar)
                 .Replace('\\', Path.DirectorySeparatorChar);
+
+            if (!includeFile(relativePath))
+            {
+                continue;
+            }
 
             using var stream = assembly.GetManifestResourceStream(resourceName)
                 ?? throw new InvalidOperationException($"Embedded skill resource not found: {resourceName}");
