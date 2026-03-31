@@ -941,6 +941,66 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task CrossResourceSecretResolution_ReferenceExpressionWrappedParameter_PreservesValuesKey()
+    {
+        // Reproduces the real Redis+WithReference scenario where the password env var
+        // is provided as ReferenceExpression.Create($"{PasswordParameter}") — a {0} wrapper.
+        // Without the fix, the {0} passthrough converts HelmValue to string, losing ValuesKey.
+        using var tempDir = new TestTempDirectory();
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            tempDir.Path,
+            step: WellKnownPipelineSteps.Publish);
+        var mockActivityReporter = new TestPipelineActivityReporter(output);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+
+        var envBuilder = builder.AddKubernetesEnvironment("env");
+        var cachePassword = builder.AddParameter("cache-password", secret: true);
+
+        // Cache container with direct password env var
+        builder.AddContainer("cache", "redis")
+            .WithEndpoint(targetPort: 6379, name: "tcp")
+            .WithEnvironment("REDIS_PASSWORD", cachePassword);
+
+        // Server container uses ReferenceExpression wrapping (like real WithReference does)
+        // This is the key difference: ReferenceExpression.Create($"{param}") wraps in {0} format
+        builder.AddContainer("server", "myserver")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithEnvironment(context =>
+            {
+                // Mimic what Redis's GetConnectionProperties yields: Password wrapped in ReferenceExpression
+                context.EnvironmentVariables["CACHE_PASSWORD"] = ReferenceExpression.Create($"{cachePassword.Resource}");
+            });
+
+        using var app = builder.Build();
+        var env = envBuilder.Resource;
+
+        await app.RunAsync();
+
+        var valuesPath = Path.Combine(tempDir.Path, "values.yaml");
+        Assert.True(File.Exists(valuesPath), "values.yaml should exist");
+        var valuesContent = await File.ReadAllTextAsync(valuesPath);
+        output.WriteLine("=== values.yaml ===");
+        output.WriteLine(valuesContent);
+
+        // Critical: the key must be "cache_password" (from parameter name), NOT "CACHE_PASSWORD" (env var name)
+        // Without the fix, the {0} passthrough converts HelmValue to string, losing ValuesKey,
+        // and the fallback key is the env var name "CACHE_PASSWORD" (case mismatch with template).
+        Assert.DoesNotContain("CACHE_PASSWORD", valuesContent);
+        Assert.Contains("cache_password", valuesContent);
+
+        // Server's CapturedHelmValue should use the parameter name as the value key
+        Assert.Contains(env.CapturedHelmValues, c =>
+            c.Section == "secrets" &&
+            c.ResourceKey == "server" &&
+            c.ValueKey == "cache_password" &&
+            c.Parameter.Name == "cache-password");
+    }
+
+    [Fact]
     public async Task CrossResourceSecretResolution_OverrideFileResolvesAllPaths()
     {
         // Verifies that Phase 1 and Phase 2 resolution produces a correct override file.

@@ -10,4 +10,4 @@ metadata:
 data:
   OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "{{ .Values.config.ServiceA.OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY }}"
   ASPNETCORE_FORWARDEDHEADERS_ENABLED: "{{ .Values.config.ServiceA.ASPNETCORE_FORWARDEDHEADERS_ENABLED }}"
-  HTTP_PORTS: "{{ .Values.parameters.ServiceA.port_http }}"
+  HTTP_PORTS: {{ .Values.parameters.ServiceA.port_http | int }}
