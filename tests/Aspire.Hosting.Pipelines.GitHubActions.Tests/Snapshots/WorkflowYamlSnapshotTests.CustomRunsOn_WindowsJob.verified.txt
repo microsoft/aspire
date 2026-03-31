@@ -31,9 +31,18 @@ jobs:
       - name: Run pipeline steps
         env:
           DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
-        run: aspire do gha-build-windows-default-stage-build-win-job
-      - name: Stage deployment state
-        run: mkdir -p .aspire-state-staging && cp -r $HOME/.aspire/deployments/. .aspire-state-staging/ 2>/dev/null || true
+        run: aspire do gha-build-windows-default-stage-build-win-job --output-path .aspire-output
+      - name: Stage pipeline state
+        run: |
+          mkdir -p .aspire-state-staging
+          if [ -d "$HOME/.aspire/deployments" ]; then
+            mkdir -p .aspire-state-staging/deployments
+            cp -r $HOME/.aspire/deployments/. .aspire-state-staging/deployments/
+          fi
+          if [ -d ".aspire-output" ]; then
+            mkdir -p .aspire-state-staging/output
+            cp -r .aspire-output/. .aspire-state-staging/output/
+          fi
       - name: Upload state
         uses: actions/upload-artifact@v4
         with:

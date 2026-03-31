@@ -21,6 +21,11 @@ internal static class WorkflowYamlGenerator
     private const string StateStagingPath = ".aspire-state-staging";
     private const string StateRealPath = "$HOME/.aspire/deployments";
 
+    // Workspace-relative output path for publish artifacts (docker-compose.yaml, .env, etc.).
+    // This is passed to `aspire do --output-path` so both publish and deploy jobs use
+    // the same workspace-relative path, enabling artifact transfer between jobs.
+    private const string OutputPath = ".aspire-output";
+
     /// <summary>
     /// Generates a workflow YAML model from the scheduling result.
     /// </summary>
@@ -141,7 +146,7 @@ internal static class WorkflowYamlGenerator
             });
         }
 
-        // Download state artifacts from dependency jobs and restore to real path
+        // Download state artifacts from dependency jobs and restore
         var jobDeps = scheduling.JobDependencies.GetValueOrDefault(job.Id);
         if (jobDeps is { Count: > 0 })
         {
@@ -159,35 +164,56 @@ internal static class WorkflowYamlGenerator
                 });
             }
 
-            // Restore downloaded state from workspace-relative staging to real path
+            // Restore deployment state and publish output from staging
             steps.Add(new StepYaml
             {
-                Name = "Restore deployment state",
-                Run = $"mkdir -p {StateRealPath} && cp -r {StateStagingPath}/. {StateRealPath}/"
+                Name = "Restore pipeline state",
+                Run = string.Join("\n",
+                    $"if [ -d \"{StateStagingPath}/deployments\" ]; then",
+                    $"  mkdir -p {StateRealPath}",
+                    $"  cp -r {StateStagingPath}/deployments/. {StateRealPath}/",
+                    "fi",
+                    $"if [ -d \"{StateStagingPath}/output\" ]; then",
+                    $"  mkdir -p {OutputPath}",
+                    $"  cp -r {StateStagingPath}/output/. {OutputPath}/",
+                    "fi")
             });
         }
 
         // Run aspire do targeting the synthetic scheduling step for this job.
         // The synthetic step depends on the terminal steps, so its transitive closure
         // covers all steps assigned to this job.
+        // --output-path forces a workspace-relative output directory so publish artifacts
+        // land in a known location that can be transferred between CI jobs via artifacts.
         var stageName = FindStageName(workflow, job);
         var syntheticStepName = $"gha-{workflow.Name}-{stageName}-stage-{job.Id}-job";
 
         steps.Add(new StepYaml
         {
             Name = "Run pipeline steps",
-            Run = $"aspire do {syntheticStepName}",
+            Run = $"aspire do {syntheticStepName} --output-path {OutputPath}",
             Env = new Dictionary<string, string>
             {
                 ["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] = "1"
             }
         });
 
-        // Stage deployment state from real path to workspace-relative dir for upload
+        // Stage deployment state and publish output into a single staging directory.
+        // Both are needed by downstream jobs: deployment state for secrets/config,
+        // publish output (docker-compose.yaml, .env, etc.) for deploy steps.
         steps.Add(new StepYaml
         {
-            Name = "Stage deployment state",
-            Run = $"mkdir -p {StateStagingPath} && cp -r {StateRealPath}/. {StateStagingPath}/ 2>/dev/null || true"
+            Name = "Stage pipeline state",
+            Run = string.Join("\n",
+                $"mkdir -p {StateStagingPath}",
+                $"if [ -d \"{StateRealPath}\" ]; then",
+                $"  mkdir -p {StateStagingPath}/deployments",
+                $"  cp -r {StateRealPath}/. {StateStagingPath}/deployments/",
+                "fi",
+                $"if [ -d \"{OutputPath}\" ]; then",
+                $"  mkdir -p {StateStagingPath}/output",
+                $"  cp -r {OutputPath}/. {StateStagingPath}/output/",
+                "fi")
         });
 
         // Upload state artifacts for downstream jobs

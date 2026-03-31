@@ -31,9 +31,18 @@ jobs:
       - name: Run pipeline steps
         env:
           DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
-        run: aspire do gha-deploy-default-stage-build-job
-      - name: Stage deployment state
-        run: mkdir -p .aspire-state-staging && cp -r $HOME/.aspire/deployments/. .aspire-state-staging/ 2>/dev/null || true
+        run: aspire do gha-deploy-default-stage-build-job --output-path .aspire-output
+      - name: Stage pipeline state
+        run: |
+          mkdir -p .aspire-state-staging
+          if [ -d "$HOME/.aspire/deployments" ]; then
+            mkdir -p .aspire-state-staging/deployments
+            cp -r $HOME/.aspire/deployments/. .aspire-state-staging/deployments/
+          fi
+          if [ -d ".aspire-output" ]; then
+            mkdir -p .aspire-state-staging/output
+            cp -r .aspire-output/. .aspire-state-staging/output/
+          fi
       - name: Upload state
         uses: actions/upload-artifact@v4
         with:
@@ -61,14 +70,31 @@ jobs:
         with:
           name: aspire-do-state-build
           path: .aspire-state-staging
-      - name: Restore deployment state
-        run: mkdir -p $HOME/.aspire/deployments && cp -r .aspire-state-staging/. $HOME/.aspire/deployments/
+      - name: Restore pipeline state
+        run: |
+          if [ -d ".aspire-state-staging/deployments" ]; then
+            mkdir -p $HOME/.aspire/deployments
+            cp -r .aspire-state-staging/deployments/. $HOME/.aspire/deployments/
+          fi
+          if [ -d ".aspire-state-staging/output" ]; then
+            mkdir -p .aspire-output
+            cp -r .aspire-state-staging/output/. .aspire-output/
+          fi
       - name: Run pipeline steps
         env:
           DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
-        run: aspire do gha-deploy-default-stage-deploy-job
-      - name: Stage deployment state
-        run: mkdir -p .aspire-state-staging && cp -r $HOME/.aspire/deployments/. .aspire-state-staging/ 2>/dev/null || true
+        run: aspire do gha-deploy-default-stage-deploy-job --output-path .aspire-output
+      - name: Stage pipeline state
+        run: |
+          mkdir -p .aspire-state-staging
+          if [ -d "$HOME/.aspire/deployments" ]; then
+            mkdir -p .aspire-state-staging/deployments
+            cp -r $HOME/.aspire/deployments/. .aspire-state-staging/deployments/
+          fi
+          if [ -d ".aspire-output" ]; then
+            mkdir -p .aspire-state-staging/output
+            cp -r .aspire-output/. .aspire-state-staging/output/
+          fi
       - name: Upload state
         uses: actions/upload-artifact@v4
         with:
