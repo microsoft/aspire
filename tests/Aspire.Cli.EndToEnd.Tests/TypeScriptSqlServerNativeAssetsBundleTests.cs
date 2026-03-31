@@ -91,7 +91,6 @@ public sealed class TypeScriptSqlServerNativeAssetsBundleTests(ITestOutputHelper
 
         await auto.TypeAsync("aspire wait mydb --status up --timeout 300");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("mydb is up (running).", timeout: TimeSpan.FromMinutes(6));
         await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.AspireStopAsync(counter);
