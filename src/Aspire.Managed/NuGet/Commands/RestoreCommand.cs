@@ -10,6 +10,7 @@ using NuGet.Frameworks;
 using NuGet.LibraryModel;
 using NuGet.ProjectModel;
 using NuGet.Protocol.Core.Types;
+using NuGet.RuntimeModel;
 using NuGet.Versioning;
 
 namespace Aspire.Managed.NuGet.Commands;
@@ -41,6 +42,12 @@ public static class RestoreCommand
             DefaultValueFactory = _ => "net10.0"
         };
         command.Options.Add(frameworkOption);
+
+        var runtimeIdentifierOption = new Option<string?>("--runtime-identifier", "--rid")
+        {
+            Description = "Runtime identifier to restore for"
+        };
+        command.Options.Add(runtimeIdentifierOption);
 
         var outputOption = new Option<string>("--output", "-o")
         {
@@ -92,6 +99,7 @@ public static class RestoreCommand
             // Note: ?? is used for null-safety even with DefaultValueFactory because GetValue returns T?
             var packageArgs = parseResult.GetValue(packageOption) ?? [];
             var framework = parseResult.GetValue(frameworkOption)!;
+            var runtimeIdentifier = parseResult.GetValue(runtimeIdentifierOption);
             var output = parseResult.GetValue(outputOption)!;
             var packagesDir = parseResult.GetValue(packagesDirOption);
             var sources = parseResult.GetValue(sourceOption) ?? [];
@@ -124,7 +132,7 @@ public static class RestoreCommand
                 packages.Add((parts[0], parts[1]));
             }
 
-            return await ExecuteRestoreAsync([.. packages], framework, output, packagesDir, sources, nugetConfigPath, workingDir, noNugetOrg, verbose).ConfigureAwait(false);
+            return await ExecuteRestoreAsync([.. packages], framework, runtimeIdentifier, output, packagesDir, sources, nugetConfigPath, workingDir, noNugetOrg, verbose).ConfigureAwait(false);
         });
 
         return command;
@@ -133,6 +141,7 @@ public static class RestoreCommand
     private static async Task<int> ExecuteRestoreAsync(
         (string Id, string Version)[] packages,
         string framework,
+        string? runtimeIdentifier,
         string output,
         string? packagesDir,
         string[] sources,
@@ -158,6 +167,10 @@ public static class RestoreCommand
                 Console.WriteLine(string.Format(CultureInfo.InvariantCulture, "Restoring {0} packages for {1}", packages.Length, framework));
                 Console.WriteLine($"Output: {outputPath}");
                 Console.WriteLine($"Packages: {packagesDir}");
+                if (!string.IsNullOrWhiteSpace(runtimeIdentifier))
+                {
+                    Console.WriteLine($"Runtime identifier: {runtimeIdentifier}");
+                }
                 if (workingDir is not null)
                 {
                     Console.WriteLine($"Working dir: {workingDir}");
@@ -172,7 +185,7 @@ public static class RestoreCommand
             var packageSources = LoadPackageSources(sources, nugetConfigPath, workingDir, noNugetOrg, verbose);
 
             // Build PackageSpec
-            var packageSpec = BuildPackageSpec(packages, nugetFramework, outputPath, packagesDir, packageSources);
+            var packageSpec = BuildPackageSpec(packages, nugetFramework, runtimeIdentifier, outputPath, packagesDir, packageSources);
 
             // Create DependencyGraphSpec
             var dgSpec = new DependencyGraphSpec();
@@ -330,6 +343,7 @@ public static class RestoreCommand
     private static PackageSpec BuildPackageSpec(
         (string Id, string Version)[] packages,
         NuGetFramework framework,
+        string? runtimeIdentifier,
         string outputPath,
         string packagesPath,
         List<PackageSource> sources)
@@ -379,11 +393,18 @@ public static class RestoreCommand
             TargetAlias = tfmShort
         });
 
-        return new PackageSpec([tfInfo])
+        var packageSpec = new PackageSpec([tfInfo])
         {
             Name = projectName,
             FilePath = projectPath,
             RestoreMetadata = restoreMetadata,
         };
+
+        if (!string.IsNullOrWhiteSpace(runtimeIdentifier))
+        {
+            packageSpec.RuntimeGraph = new RuntimeGraph([new RuntimeDescription(runtimeIdentifier)]);
+        }
+
+        return packageSpec;
     }
 }

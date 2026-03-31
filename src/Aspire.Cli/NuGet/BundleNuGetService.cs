@@ -101,6 +101,12 @@ public sealed class BundleNuGetService : INuGetService
             "--framework", targetFramework
         };
 
+        if (!string.IsNullOrEmpty(runtimeIdentifier))
+        {
+            restoreArgs.Add("--runtime-identifier");
+            restoreArgs.Add(runtimeIdentifier);
+        }
+
         foreach (var (id, version) in packageList)
         {
             restoreArgs.Add("--package");
