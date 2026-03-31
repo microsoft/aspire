@@ -150,8 +150,9 @@ internal sealed class TelemetryManager : IDisposable
     {
         if (!_shuttingDown)
         {
-            // Ensure everything is cleaned up for tests.
-            // This covers the situation where the host is disposed without a call to ShutdownAsync
+            // Ensure everything is cleaned up for tests. This covers the situation where the host is disposed without a call to ShutdownAsync.
+            // The shutdown timeout is zero so not to wait for telemetry to be flushed. Don't want to delay tests.
+            // Dispose isn't used here because it always flushes telemetry and waits for completion.
             _azureMonitorProvider?.Shutdown(0);
 #if DEBUG
             _diagnosticProvider?.Shutdown(0);
