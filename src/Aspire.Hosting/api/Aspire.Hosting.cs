@@ -2042,8 +2042,6 @@ namespace Aspire.Hosting.ApplicationModel
     {
         public required System.Threading.CancellationToken CancellationToken { get { throw null; } init { } }
 
-        public required Microsoft.Extensions.Logging.ILogger Logger { get { throw null; } init { } }
-
         public required string ResourceName { get { throw null; } init { } }
 
         public required System.IServiceProvider ServiceProvider { get { throw null; } init { } }
