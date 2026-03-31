@@ -141,7 +141,8 @@ public static class RestoreCommand
         try
         {
             // Load NuGet settings once — handles working dir, config file, and machine-wide settings.
-            var settings = Settings.LoadDefaultSettings(workingDir, nugetConfigPath, new XPlatMachineWideSetting());
+            var machineWideSettings = new XPlatMachineWideSetting();
+            var settings = Settings.LoadDefaultSettings(workingDir, nugetConfigPath, machineWideSettings);
 
             if (verbose)
             {
@@ -158,17 +159,13 @@ public static class RestoreCommand
                 }
             }
 
-            // Resolve the default packages path from settings (env var, config, or ~/.nuget/packages).
-            // If --packages-dir is provided, RestoreArgs.GlobalPackagesFolder overrides this.
-            var defaultPackagesPath = SettingsUtility.GetGlobalPackagesFolder(settings);
-
             // Resolve package sources using NuGet's PackageSourceProvider
             var packageSources = ResolvePackageSources(settings, cliSources, noNugetOrg);
 
             var nugetFramework = NuGetFramework.Parse(framework);
 
             // Build PackageSpec and DependencyGraphSpec
-            var packageSpec = BuildPackageSpec(packages, nugetFramework, outputPath, defaultPackagesPath, packageSources, settings);
+            var packageSpec = BuildPackageSpec(packages, nugetFramework, outputPath, packageSources, settings);
 
             var dgSpec = new DependencyGraphSpec();
             dgSpec.AddProject(packageSpec);
@@ -188,7 +185,7 @@ public static class RestoreCommand
                 DisableParallel = Environment.ProcessorCount == 1,
                 AllowNoOp = false,
                 GlobalPackagesFolder = packagesDir,
-                MachineWideSettings = new XPlatMachineWideSetting(),
+                MachineWideSettings = machineWideSettings,
             };
 
             var results = await RestoreRunner.RunAsync(restoreArgs).ConfigureAwait(false);
@@ -258,7 +255,6 @@ public static class RestoreCommand
         List<(string Id, string Version)> packages,
         NuGetFramework framework,
         string outputPath,
-        string packagesPath,
         List<PackageSource> sources,
         ISettings settings)
     {
@@ -288,7 +284,7 @@ public static class RestoreCommand
             ProjectPath = projectPath,
             ProjectStyle = ProjectStyle.PackageReference,
             OutputPath = outputPath,
-            PackagesPath = packagesPath,
+            PackagesPath = SettingsUtility.GetGlobalPackagesFolder(settings),
             OriginalTargetFrameworks = [tfmShort],
             ConfigFilePaths = settings.GetConfigFilePaths().ToList(),
         };
