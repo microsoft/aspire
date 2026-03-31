@@ -101,7 +101,7 @@ await proxy.withConfiguration(async (config) => {
         .withTransformResponseTrailerRemove("X-Remove-Trailer")
         .withTransformResponseTrailersAllowed(["X-Response-Trailer"]);
 
-    await config.addRouteFromEndpoint("/from-endpoint/{**catchall}", endpoint)
+    await config.addRoute("/from-endpoint/{**catchall}", endpoint)
         .withMatch({
             path: "/from-endpoint/{**catchall}",
             methods: ["GET", "POST"],
@@ -111,11 +111,11 @@ await proxy.withConfiguration(async (config) => {
             PathPrefix: "/endpoint",
             RequestHeadersCopy: "true",
         });
-    await config.addRouteFromResource("/from-resource/{**catchall}", backend)
+    await config.addRoute("/from-resource/{**catchall}", backend)
         .withTransform({
             PathPrefix: "/resource",
         });
-    await config.addRouteFromExternalService("/from-external/{**catchall}", externalBackend)
+    await config.addRoute("/from-external/{**catchall}", externalBackend)
         .withTransform({
             PathPrefix: "/external",
         });
@@ -123,15 +123,15 @@ await proxy.withConfiguration(async (config) => {
         .withTransform({
             PathPrefix: "/cluster",
         });
-    await config.addCatchAllRouteFromEndpoint(endpoint)
+    await config.addCatchAllRoute(endpoint)
         .withTransform({
             PathPrefix: "/catchall-endpoint",
         });
-    await config.addCatchAllRouteFromResource(backend)
+    await config.addCatchAllRoute(backend)
         .withTransform({
             PathPrefix: "/catchall-resource",
         });
-    await config.addCatchAllRouteFromExternalService(externalBackend)
+    await config.addCatchAllRoute(externalBackend)
         .withTransform({
             PathPrefix: "/catchall-external",
         });

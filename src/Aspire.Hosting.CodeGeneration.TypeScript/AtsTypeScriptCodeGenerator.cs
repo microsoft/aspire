@@ -249,6 +249,11 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     /// </summary>
     private string MapInputTypeToTypeScript(AtsTypeRef? typeRef)
     {
+        if (typeRef?.Category == AtsTypeCategory.Union)
+        {
+            return MapInputUnionTypeToTypeScript(typeRef);
+        }
+
         if (IsInterfaceHandleType(typeRef))
         {
             return "ResourceBuilderBase";
@@ -260,6 +265,20 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         }
 
         return MapTypeRefToTypeScript(typeRef);
+    }
+
+    private string MapInputUnionTypeToTypeScript(AtsTypeRef typeRef)
+    {
+        if (typeRef.UnionTypes == null || typeRef.UnionTypes.Count == 0)
+        {
+            return "unknown";
+        }
+
+        var memberTypes = typeRef.UnionTypes
+            .Select(MapInputTypeToTypeScript)
+            .Distinct();
+
+        return string.Join(" | ", memberTypes);
     }
 
     /// <summary>

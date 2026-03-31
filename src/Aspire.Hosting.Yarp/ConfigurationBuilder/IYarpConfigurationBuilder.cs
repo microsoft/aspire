@@ -18,6 +18,7 @@ public interface IYarpConfigurationBuilder
     /// <param name="path">The path to match for this route.</param>
     /// <param name="cluster">The target cluster for this route.</param>
     /// <returns></returns>
+    [AspireExportIgnore(Reason = "Use the exported addRoute helper instead.")]
     public YarpRoute AddRoute(string path, YarpCluster cluster);
 
     /// <summary>
@@ -146,10 +147,24 @@ public static class YarpConfigurationBuilderExtensions
     /// <param name="builder">The builder instance.</param>
     /// <param name="cluster">The target cluster for this route.</param>
     /// <returns></returns>
-    [AspireExport("addCatchAllRoute", Description = "Adds a YARP catch-all route for an existing cluster.")]
+    [AspireExportIgnore(Reason = "Use the exported addCatchAllRoute helper instead.")]
     public static YarpRoute AddRoute(this IYarpConfigurationBuilder builder, YarpCluster cluster)
     {
         return builder.AddRoute(CatchAllPath, cluster);
+    }
+
+    /// <summary>
+    /// Adds a catch-all route for a cluster, endpoint, or resource target.
+    /// </summary>
+    /// <param name="builder">The builder instance.</param>
+    /// <param name="target">The target cluster, endpoint, or resource for this route.</param>
+    /// <returns>The created route.</returns>
+    [AspireExport("addCatchAllRoute", Description = "Adds a YARP catch-all route for a cluster, endpoint, or resource target.")]
+    internal static YarpRoute AddCatchAllRoute(
+        this IYarpConfigurationBuilder builder,
+        [AspireUnion(typeof(YarpCluster), typeof(EndpointReference), typeof(IResourceBuilder<IResourceWithServiceDiscovery>), typeof(IResourceBuilder<ExternalServiceResource>))] object target)
+    {
+        return AddRouteCore(builder, CatchAllPath, target);
     }
 
     /// <summary>
@@ -219,6 +234,36 @@ public static class YarpConfigurationBuilderExtensions
     }
 
     /// <summary>
+    /// Adds a route for a cluster, endpoint, or resource target.
+    /// </summary>
+    /// <param name="builder">The builder instance.</param>
+    /// <param name="path">The path to match for this route.</param>
+    /// <param name="target">The target cluster, endpoint, or resource for this route.</param>
+    /// <returns>The created route.</returns>
+    [AspireExport("addRoute", Description = "Adds a YARP route for a cluster, endpoint, or resource target.")]
+    internal static YarpRoute AddRoute(
+        this IYarpConfigurationBuilder builder,
+        string path,
+        [AspireUnion(typeof(YarpCluster), typeof(EndpointReference), typeof(IResourceBuilder<IResourceWithServiceDiscovery>), typeof(IResourceBuilder<ExternalServiceResource>))] object target)
+    {
+        return AddRouteCore(builder, path, target);
+    }
+
+    /// <summary>
+    /// Adds a route for an existing cluster.
+    /// </summary>
+    /// <param name="builder">The builder instance.</param>
+    /// <param name="path">The path to match for this route.</param>
+    /// <param name="cluster">The target cluster for this route.</param>
+    /// <returns>The created route.</returns>
+    [Obsolete("Use addRoute(path, target) instead.")]
+    [AspireExport("IYarpConfigurationBuilder.addRoute", MethodName = "addRouteCluster", Description = "Obsolete compatibility shim for the previous cluster-only addRoute export. Use addRoute(path, target) instead.")]
+    internal static YarpRoute AddRouteCluster(this IYarpConfigurationBuilder builder, string path, YarpCluster cluster)
+    {
+        return builder.AddRoute(path, cluster);
+    }
+
+    /// <summary>
     /// Add a new catch all route to YARP that will target the cluster in parameter.
     /// </summary>
     /// <param name="builder">The builder instance.</param>
@@ -228,5 +273,21 @@ public static class YarpConfigurationBuilderExtensions
     public static YarpRoute AddRoute(this IYarpConfigurationBuilder builder, IResourceBuilder<ExternalServiceResource> externalService)
     {
         return builder.AddRoute(CatchAllPath, externalService);
+    }
+
+    private static YarpRoute AddRouteCore(IYarpConfigurationBuilder builder, string path, object target)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(target);
+
+        return target switch
+        {
+            YarpCluster cluster => builder.AddRoute(path, cluster),
+            EndpointReference endpoint => builder.AddRoute(path, endpoint),
+            IResourceBuilder<IResourceWithServiceDiscovery> resource => builder.AddRoute(path, resource),
+            IResourceBuilder<ExternalServiceResource> externalService => builder.AddRoute(path, externalService),
+            _ => throw new ArgumentException($"Unsupported YARP route target type '{target.GetType().FullName}'.", nameof(target)),
+        };
     }
 }
