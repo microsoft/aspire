@@ -260,6 +260,7 @@ public class LayoutCommandTests
     [InlineData("osx-arm64", "unix", "runtimes/unix/lib/net10.0/Test.Package.dll", "unix")]
     [InlineData("linux-musl-x64", "linux-x64", "runtimes/linux-x64/lib/net10.0/Test.Package.dll", "linux-x64")]
     [InlineData("win10-x64", "win-x64", "runtimes/win-x64/lib/net10.0/Test.Package.dll", "win-x64")]
+    [InlineData("made-up-rid", "unix", "runtimes/unix/lib/net10.0/Test.Package.dll", "base")]
     public async Task LayoutCommand_UsesRuntimeGraphFallbacks(
         string requestedRuntimeIdentifier,
         string runtimeTargetRid,

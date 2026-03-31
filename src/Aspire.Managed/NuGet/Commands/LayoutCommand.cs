@@ -165,37 +165,8 @@ public static class LayoutCommand
                     continue;
                 }
 
-                var runtimeTargetsByFileName = library.RuntimeTargets
-                    .Where(runtimeTarget =>
-                        string.Equals(runtimeTarget.AssetType, "runtime", StringComparison.OrdinalIgnoreCase) &&
-                        !runtimeTarget.Path.EndsWith("_._", StringComparison.OrdinalIgnoreCase))
-                    .Select(runtimeTarget => new
-                    {
-                        RuntimeTarget = runtimeTarget,
-                        Score = GetRuntimeMatchScore(runtimeTarget.Runtime, runtimeFallbacks)
-                    })
-                    .Where(runtimeTarget => runtimeTarget.Score != int.MaxValue)
-                    .GroupBy(runtimeTarget => Path.GetFileName(runtimeTarget.RuntimeTarget.Path), StringComparer.OrdinalIgnoreCase)
-                    .ToDictionary(
-                        group => group.Key,
-                        group => group.OrderBy(runtimeTarget => runtimeTarget.Score).First().RuntimeTarget,
-                        StringComparer.OrdinalIgnoreCase);
-
-                var nativeRuntimeTargetsByFileName = library.RuntimeTargets
-                    .Where(runtimeTarget =>
-                        string.Equals(runtimeTarget.AssetType, "native", StringComparison.OrdinalIgnoreCase) &&
-                        !runtimeTarget.Path.EndsWith("_._", StringComparison.OrdinalIgnoreCase))
-                    .Select(runtimeTarget => new
-                    {
-                        RuntimeTarget = runtimeTarget,
-                        Score = GetRuntimeMatchScore(runtimeTarget.Runtime, runtimeFallbacks)
-                    })
-                    .Where(runtimeTarget => runtimeTarget.Score != int.MaxValue)
-                    .GroupBy(runtimeTarget => Path.GetFileName(runtimeTarget.RuntimeTarget.Path), StringComparer.OrdinalIgnoreCase)
-                    .ToDictionary(
-                        group => group.Key,
-                        group => group.OrderBy(runtimeTarget => runtimeTarget.Score).First().RuntimeTarget,
-                        StringComparer.OrdinalIgnoreCase);
+                var runtimeTargetsByFileName = BuildBestRuntimeTargetsByFileName(library.RuntimeTargets, "runtime", runtimeFallbacks);
+                var nativeRuntimeTargetsByFileName = BuildBestRuntimeTargetsByFileName(library.RuntimeTargets, "native", runtimeFallbacks);
 
                 // Copy runtime assemblies to the output root. Prefer runtime-specific targets for the current platform
                 // so probing-only assembly load contexts resolve the correct implementation.
@@ -215,7 +186,9 @@ public static class LayoutCommand
                         sourcePath = Path.Combine(packagePath, runtimeTarget.Path.Replace('/', Path.DirectorySeparatorChar));
                     }
 
-                    // Early exit if source doesn't exist
+                    // Packages that only ship runtime-specific native assets were already copied to their
+                    // structured runtimes/... paths in the runtime target loop above. This loop only handles
+                    // root promotion and preserving the generic native/... layout when that generic asset exists.
                     if (!File.Exists(sourcePath))
                     {
                         continue;
@@ -456,6 +429,28 @@ public static class LayoutCommand
         }
 
         return int.MaxValue;
+    }
+
+    private static Dictionary<string, LockFileRuntimeTarget> BuildBestRuntimeTargetsByFileName(
+        IEnumerable<LockFileRuntimeTarget> runtimeTargets,
+        string assetType,
+        IReadOnlyList<string> runtimeFallbacks)
+    {
+        return runtimeTargets
+            .Where(runtimeTarget =>
+                string.Equals(runtimeTarget.AssetType, assetType, StringComparison.OrdinalIgnoreCase) &&
+                !runtimeTarget.Path.EndsWith("_._", StringComparison.OrdinalIgnoreCase))
+            .Select(runtimeTarget => new
+            {
+                RuntimeTarget = runtimeTarget,
+                Score = GetRuntimeMatchScore(runtimeTarget.Runtime, runtimeFallbacks)
+            })
+            .Where(runtimeTarget => runtimeTarget.Score != int.MaxValue)
+            .GroupBy(runtimeTarget => Path.GetFileName(runtimeTarget.RuntimeTarget.Path), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.OrderBy(runtimeTarget => runtimeTarget.Score).First().RuntimeTarget,
+                StringComparer.OrdinalIgnoreCase);
     }
 
     private static RuntimeGraph LoadRuntimeGraph()
