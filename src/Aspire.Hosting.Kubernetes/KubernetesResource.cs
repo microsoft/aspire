@@ -600,7 +600,8 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
         // Always store the parameter reference for deferred resolution.
         // Secrets and parameters without defaults are resolved at deploy time (not publish time).
-        return new(expression, parameter);
+        // ValuesKey preserves the parameter name so values.yaml key matches the Helm expression path.
+        return new(expression, parameter) { ValuesKey = formattedName };
     }
     
     private static HelmValue ResolveUnknownValue(IManifestExpressionProvider parameter, IResource resource)
@@ -689,6 +690,13 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
         /// to include the container registry prefix.
         /// </summary>
         public IResource? ImageResource { get; init; }
+
+        /// <summary>
+        /// Gets the key to use when writing this value to the Helm values.yaml file.
+        /// When set, this overrides the dictionary key to ensure the values.yaml key matches
+        /// the Helm expression path (e.g., parameter name "cache_password" vs env var name "REDIS_PASSWORD").
+        /// </summary>
+        public string? ValuesKey { get; init; }
 
         /// <summary>
         /// Indicates whether the expression contains a Helm secret expression. 

@@ -136,18 +136,23 @@ internal sealed class KubernetesPublishingContext(
 
         foreach (var (key, helmExpressionWithValue) in contextItems)
         {
+            // Use ValuesKey when available to ensure values.yaml key matches the Helm expression path.
+            // This matters when the dictionary key (env var name, e.g., "REDIS_PASSWORD") differs from
+            // the parameter name used in the Helm expression (e.g., "cache_password").
+            var valuesKey = helmExpressionWithValue.ValuesKey ?? key.ToHelmValuesSectionName();
+
             // Cross-resource secret references have their Value set to a string containing
             // Helm expressions (e.g., "cache:6379,password={{ .Values.secrets.cache.password }}").
             // These need empty placeholders in values.yaml so the YAML section structure exists,
             // and the actual values are resolved at deploy time from the captured cross-reference.
             if (helmExpressionWithValue.ValueContainsHelmExpression)
             {
-                paramValues[key.ToHelmValuesSectionName()] = string.Empty;
+                paramValues[valuesKey] = string.Empty;
                 environment?.CapturedHelmCrossReferences.Add(
                     new KubernetesEnvironmentResource.CapturedHelmCrossReference(
                         helmKey,
                         resource.Name.ToHelmValuesSectionName(),
-                        key.ToHelmValuesSectionName(),
+                        valuesKey,
                         helmExpressionWithValue.ValueString!));
                 continue;
             }
@@ -166,7 +171,7 @@ internal sealed class KubernetesPublishingContext(
                         new KubernetesEnvironmentResource.CapturedHelmValue(
                             helmKey,
                             resource.Name.ToHelmValuesSectionName(),
-                            key.ToHelmValuesSectionName(),
+                            valuesKey,
                             parameter));
                 }
                 else
@@ -179,7 +184,7 @@ internal sealed class KubernetesPublishingContext(
                 value = helmExpressionWithValue.Value;
             }
 
-            paramValues[key.ToHelmValuesSectionName()] = value ?? string.Empty;
+            paramValues[valuesKey] = value ?? string.Empty;
 
             // Capture container image references for deploy-time registry resolution.
             // During publish, the default image name (e.g., "server:latest") is written to values.yaml.
@@ -191,7 +196,7 @@ internal sealed class KubernetesPublishingContext(
                     new KubernetesEnvironmentResource.CapturedHelmImageReference(
                         helmKey,
                         resource.Name.ToHelmValuesSectionName(),
-                        key.ToHelmValuesSectionName(),
+                        valuesKey,
                         helmExpressionWithValue.ImageResource));
             }
         }
