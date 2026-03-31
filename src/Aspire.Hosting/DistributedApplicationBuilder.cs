@@ -739,6 +739,15 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
                 throw new DistributedApplicationException($"Multiple resources with the name '{duplicateResourceName}'. Resource names are case-insensitive.");
             }
 
+            // Validate resource names. Resources added directly to the collection bypass AddResource validation.
+            foreach (var resource in Resources)
+            {
+                if (!resource.HasAnnotationOfType<SuppressNameValidationAnnotation>())
+                {
+                    ModelName.ValidateName(nameof(Resource), resource.Name);
+                }
+            }
+
             var application = new DistributedApplication(_innerBuilder.Build());
 
             _executionContextOptions.ServiceProvider = application.Services.GetRequiredService<IServiceProvider>();
@@ -756,6 +765,11 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
     public IResourceBuilder<T> AddResource<T>(T resource) where T : IResource
     {
         ArgumentNullException.ThrowIfNull(resource);
+
+        if (!resource.HasAnnotationOfType<SuppressNameValidationAnnotation>())
+        {
+            ModelName.ValidateName(nameof(Resource), resource.Name);
+        }
 
         if (Resources.FirstOrDefault(r => string.Equals(r.Name, resource.Name, StringComparisons.ResourceName)) is { } existingResource)
         {

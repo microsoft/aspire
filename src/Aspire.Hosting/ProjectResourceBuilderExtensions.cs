@@ -921,6 +921,7 @@ public static class ProjectResourceBuilderExtensions
 
         var rebuilderName = $"{projectResource.Name}-rebuilder";
         var rebuilder = new ProjectRebuilderResource(rebuilderName, projectResource, projectMetadata.ProjectPath);
+        rebuilder.Annotations.Add(new SuppressNameValidationAnnotation());
         var rebuilderBuilder = builder.ApplicationBuilder.AddResource(rebuilder);
 
         rebuilderBuilder

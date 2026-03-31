@@ -347,10 +347,63 @@ public class DistributedApplicationBuilderTests
         Assert.Equal(projectNameSha, legacySha);
     }
 
+    [Fact]
+    public void AddResource_InvalidName_Error()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+
+        var longName = new string('a', 65);
+        var resource = new ContainerResource(longName);
+
+        var ex = Assert.Throws<ArgumentException>(() => appBuilder.AddResource(resource));
+        Assert.Equal($"Resource name '{longName}' is invalid. Name must be between 1 and 64 characters long. (Parameter 'name')", ex.Message);
+    }
+
+    [Fact]
+    public void AddResource_InvalidNameWithExcludeAnnotation_Success()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+
+        var longName = new string('a', 65);
+        var resource = new ContainerResource(longName);
+        resource.Annotations.Add(new SuppressNameValidationAnnotation());
+
+        appBuilder.AddResource(resource);
+
+        Assert.Contains(appBuilder.Resources, r => r.Name == longName);
+    }
+
+    [Fact]
+    public void Build_InvalidName_Error()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+
+        var longName = new string('a', 65);
+        appBuilder.Resources.Add(new ContainerResource(longName));
+
+        var ex = Assert.Throws<ArgumentException>(appBuilder.Build);
+        Assert.Equal($"Resource name '{longName}' is invalid. Name must be between 1 and 64 characters long. (Parameter 'name')", ex.Message);
+    }
+
+    [Fact]
+    public void Build_InvalidNameWithExcludeAnnotation_Success()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+
+        var longName = new string('a', 65);
+        var resource = new ContainerResource(longName);
+        resource.Annotations.Add(new SuppressNameValidationAnnotation());
+        appBuilder.Resources.Add(resource);
+
+        var app = appBuilder.Build();
+
+        Assert.NotNull(app);
+    }
+
     private sealed class TestResource : IResource
     {
         public string Name => nameof(TestResource);
 
-        public ResourceAnnotationCollection Annotations => throw new NotImplementedException();
+        public ResourceAnnotationCollection Annotations { get; } = new();
     }
 }

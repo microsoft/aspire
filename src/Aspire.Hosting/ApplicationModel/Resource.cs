@@ -27,7 +27,7 @@ public abstract class Resource : IResource
     /// <param name="name">The name of the resource.</param>
     protected Resource(string name)
     {
-        ModelName.ValidateName(nameof(Resource), name);
+        ArgumentNullException.ThrowIfNull(name);
 
         Name = name;
     }

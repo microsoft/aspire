@@ -561,6 +561,21 @@ public class PackageInstallationTests
         Assert.Equal(["install", "--frozen-lockfile"], installCommand.Args);
     }
 
+    [Fact]
+    public void InstallerResourceHasSuppressNameValidationAnnotation()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddJavaScriptApp("nodeApp", "./test-app")
+            .WithNpm(install: true);
+
+        using var app = builder.Build();
+
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var installerResource = Assert.Single(appModel.Resources.OfType<JavaScriptInstallerResource>());
+        Assert.True(installerResource.TryGetLastAnnotation<SuppressNameValidationAnnotation>(out _));
+    }
+
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
     private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
 }
