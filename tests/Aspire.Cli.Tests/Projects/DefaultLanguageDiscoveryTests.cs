@@ -46,8 +46,7 @@ public class DefaultLanguageDiscoveryTests
         var typescript = languages.FirstOrDefault(l => l.LanguageId.Value == "typescript/nodejs");
         Assert.NotNull(typescript);
         Assert.Equal("TypeScript (Node.js)", typescript.DisplayName);
-        Assert.Contains("apphost.ts", typescript.DetectionPatterns);
-        Assert.Contains("*.apphost.ts", typescript.DetectionPatterns);
+        Assert.Equal(["apphost.ts"], typescript.DetectionPatterns);
     }
 
     [Fact]
@@ -62,8 +61,7 @@ public class DefaultLanguageDiscoveryTests
         var python = languages.FirstOrDefault(l => l.LanguageId.Value == KnownLanguageId.Python);
         Assert.NotNull(python);
         Assert.Equal(KnownLanguageId.PythonDisplayName, python.DisplayName);
-        Assert.Contains("apphost.py", python.DetectionPatterns);
-        Assert.Contains("*.apphost.py", python.DetectionPatterns);
+        Assert.Equal(["apphost.py"], python.DetectionPatterns);
     }
 
     [Fact]
@@ -105,7 +103,6 @@ public class DefaultLanguageDiscoveryTests
     [InlineData("APPHOST.CS", KnownLanguageId.CSharp)]
     [InlineData("apphost.ts", "typescript/nodejs")]
     [InlineData("AppHost.ts", "typescript/nodejs")]
-    [InlineData("aspire.hosting.redis.apphost.ts", "typescript/nodejs")]
     public void GetLanguageByFile_ReturnsCorrectLanguage(string fileName, string expectedLanguageId)
     {
         var discovery = new DefaultLanguageDiscovery(new TestFeatures());
@@ -118,9 +115,9 @@ public class DefaultLanguageDiscoveryTests
     }
 
     [Theory]
-    [InlineData("aspire.hosting.redis.apphost.py", KnownLanguageId.Python, "experimentalPolyglot:python")]
-    [InlineData("aspire.hosting.redis.apphost.java", KnownLanguageId.Java, "experimentalPolyglot:java")]
-    public void GetLanguageByFile_ReturnsExperimentalLanguageForSuffixedAppHosts(string fileName, string expectedLanguageId, string featureFlag)
+    [InlineData("apphost.py", KnownLanguageId.Python, "experimentalPolyglot:python")]
+    [InlineData("AppHost.java", KnownLanguageId.Java, "experimentalPolyglot:java")]
+    public void GetLanguageByFile_ReturnsExperimentalLanguageForConventionalAppHosts(string fileName, string expectedLanguageId, string featureFlag)
     {
         var features = new TestFeatures();
         features.SetFeature(featureFlag, true);
@@ -134,14 +131,14 @@ public class DefaultLanguageDiscoveryTests
     }
 
     [Fact]
-    public async Task DetectLanguageAsync_ReturnsTypeScriptForSuffixedAppHost()
+    public async Task DetectLanguageAsync_ReturnsTypeScriptForConventionalAppHost()
     {
         var discovery = new DefaultLanguageDiscovery(new TestFeatures());
         var directory = Directory.CreateTempSubdirectory();
 
         try
         {
-            File.WriteAllText(Path.Combine(directory.FullName, "aspire.hosting.redis.apphost.ts"), "// test");
+            File.WriteAllText(Path.Combine(directory.FullName, "apphost.ts"), "// test");
 
             var language = await discovery.DetectLanguageAsync(directory).DefaultTimeout();
 

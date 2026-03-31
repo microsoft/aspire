@@ -1,0 +1,9 @@
+{
+  "features": {
+    "experimentalPolyglot:java": true,
+    "experimentalPolyglot:python": true
+  },
+  "packages": {
+    "Aspire.Hosting.Yarp": ""
+  }
+}

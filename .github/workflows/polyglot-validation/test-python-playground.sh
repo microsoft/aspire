@@ -1,7 +1,7 @@
 #!/bin/bash
 # Polyglot SDK Validation - Python validation AppHosts
-# Iterates all Python validation AppHosts under tests/Polyglot/Python/,
-# runs 'aspire restore --apphost' to regenerate the shared .modules/ SDK, and
+# Iterates all Python validation AppHosts under tests/PolyglotAppHosts/*/Python,
+# runs 'aspire restore --apphost' to regenerate the per-integration .modules/ SDK, and
 # compiles each AppHost with the generated Python modules to verify syntax.
 set -euo pipefail
 
@@ -21,78 +21,84 @@ echo "Aspire CLI version:"
 aspire --version
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [ -d "/workspace/tests/Polyglot/Python" ]; then
-    PLAYGROUND_ROOT="/workspace/tests/Polyglot/Python"
-elif [ -d "$SCRIPT_DIR/../../../tests/Polyglot/Python" ]; then
-    PLAYGROUND_ROOT="$(cd "$SCRIPT_DIR/../../../tests/Polyglot/Python" && pwd)"
+if [ -d "/workspace/tests/PolyglotAppHosts" ]; then
+    VALIDATION_ROOT="/workspace/tests/PolyglotAppHosts"
+elif [ -d "$SCRIPT_DIR/../../../tests/PolyglotAppHosts" ]; then
+    VALIDATION_ROOT="$(cd "$SCRIPT_DIR/../../../tests/PolyglotAppHosts" && pwd)"
 else
-    echo "ERROR: Cannot find tests/Polyglot/Python directory"
+    echo "ERROR: Cannot find tests/PolyglotAppHosts directory"
     exit 1
 fi
 
-echo "Validation root: $PLAYGROUND_ROOT"
+echo "Validation root: $VALIDATION_ROOT"
 
-mapfile -t APP_HOSTS < <(find "$PLAYGROUND_ROOT" -maxdepth 1 -type f -name '*.apphost.py' | sort)
+APP_DIRS=()
+while IFS= read -r app_dir; do
+    APP_DIRS+=("$app_dir")
+done < <(find "$VALIDATION_ROOT" -mindepth 2 -maxdepth 2 -type d -name 'Python' | sort)
 
-if [ ${#APP_HOSTS[@]} -eq 0 ]; then
+if [ ${#APP_DIRS[@]} -eq 0 ]; then
     echo "ERROR: No Python validation AppHosts found"
     exit 1
 fi
 
-echo "Found ${#APP_HOSTS[@]} Python validation AppHosts:"
-for app_host in "${APP_HOSTS[@]}"; do
-    echo "  - $(basename "$app_host")"
+echo "Found ${#APP_DIRS[@]} Python validation AppHosts:"
+for app_dir in "${APP_DIRS[@]}"; do
+    echo "  - $(basename "$(dirname "$app_dir")")"
 done
 echo ""
 
 FAILED=()
 PASSED=()
 
-for app_host in "${APP_HOSTS[@]}"; do
-    app_name="$(basename "$app_host")"
+for app_dir in "${APP_DIRS[@]}"; do
+    integration_name="$(basename "$(dirname "$app_dir")")"
+
     echo "----------------------------------------"
-    echo "Testing: $app_name"
+    echo "Testing: $integration_name"
     echo "----------------------------------------"
 
-    cd "$PLAYGROUND_ROOT"
+    cd "$app_dir"
 
-    echo "  -> aspire restore --apphost $app_name..."
-    if ! aspire restore --non-interactive --apphost "$app_host" 2>&1; then
-        echo "  ERROR: aspire restore failed for $app_name"
-        FAILED+=("$app_name (aspire restore)")
+    echo "  -> aspire restore --apphost apphost.py..."
+    if ! aspire restore --non-interactive --apphost apphost.py 2>&1; then
+        echo "  ERROR: aspire restore failed for $integration_name"
+        FAILED+=("$integration_name (aspire restore)")
+        echo ""
         continue
     fi
 
     if [ ! -f ".modules/aspire_app.py" ]; then
-        echo "  ERROR: generated .modules/aspire_app.py missing for $app_name"
-        FAILED+=("$app_name (missing .modules/aspire_app.py)")
+        echo "  ERROR: generated .modules/aspire_app.py missing for $integration_name"
+        FAILED+=("$integration_name (missing .modules/aspire_app.py)")
+        echo ""
         continue
     fi
 
     echo "  -> python syntax validation..."
-    if ! python3 - "$app_name" <<'INNERPY'
+    if ! python3 - <<'INNERPY'
 from pathlib import Path
-import sys
 
-files = [Path(sys.argv[1])]
+files = [Path('apphost.py')]
 files.extend(sorted(Path('.modules').rglob('*.py')))
 for file in files:
     compile(file.read_text(encoding='utf-8'), str(file), 'exec')
 INNERPY
     then
-        echo "  ERROR: python compilation failed for $app_name"
-        FAILED+=("$app_name (python compile)")
+        echo "  ERROR: python compilation failed for $integration_name"
+        FAILED+=("$integration_name (python compile)")
+        echo ""
         continue
     fi
 
-    echo "  OK: $app_name passed"
-    PASSED+=("$app_name")
+    echo "  OK: $integration_name passed"
+    PASSED+=("$integration_name")
     echo ""
 done
 
 echo ""
 echo "----------------------------------------"
-echo "Results: ${#PASSED[@]} passed, ${#FAILED[@]} failed out of ${#APP_HOSTS[@]} AppHosts"
+echo "Results: ${#PASSED[@]} passed, ${#FAILED[@]} failed out of ${#APP_DIRS[@]} AppHosts"
 echo "----------------------------------------"
 
 if [ ${#FAILED[@]} -gt 0 ]; then
