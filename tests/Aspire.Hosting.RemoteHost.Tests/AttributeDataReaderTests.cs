@@ -109,6 +109,17 @@ public class AttributeDataReaderTests
     }
 
     [Fact]
+    public void GetObsoleteData_FindsOfficialAttribute_OnMethod()
+    {
+        var method = typeof(OfficialAttributeExports).GetMethod(nameof(OfficialAttributeExports.ObsoleteExportMethod))!;
+        var result = AttributeDataReader.GetObsoleteData(method);
+
+        Assert.NotNull(result);
+        Assert.Equal("Official obsolete method", result.Message);
+        Assert.False(result.IsError);
+    }
+
+    [Fact]
     public void GetAspireExportData_ReadsAllNamedProperties()
     {
         var method = typeof(OfficialAttributeExports).GetMethod(nameof(OfficialAttributeExports.OverriddenNameMethod))!;
@@ -194,6 +205,13 @@ public class AttributeDataReaderTests
         public static void OfficialUnionMethod([AspireUnion(typeof(string), typeof(int))] object value)
         {
             _ = value;
+        }
+
+        [Obsolete("Official obsolete method")]
+        [AspireExport("obsoleteMethod")]
+        public static void ObsoleteExportMethod(IResource resource)
+        {
+            _ = resource;
         }
     }
 

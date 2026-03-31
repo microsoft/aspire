@@ -7085,7 +7085,7 @@ export class ContainerResource extends ResourceBuilderBase<ContainerResourceHand
     }
 
     /** @internal */
-    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | ResourceBuilderBase | EndpointReference | EndpointReferenceExpression): Promise<ContainerResource> {
+    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
             'Aspire.Hosting/withEnvironment',
@@ -7095,7 +7095,7 @@ export class ContainerResource extends ResourceBuilderBase<ContainerResourceHand
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | ResourceBuilderBase | EndpointReference | EndpointReferenceExpression): ContainerResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression): ContainerResourcePromise {
         return new ContainerResourcePromise(this._withEnvironmentInternal(name, value));
     }
 
@@ -7109,7 +7109,10 @@ export class ContainerResource extends ResourceBuilderBase<ContainerResourceHand
         return new ContainerResource(result, this._client);
     }
 
-    /** Sets an environment variable from a reference expression */
+    /**
+     * Sets an environment variable from a reference expression
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentExpression(name: string, value: ReferenceExpression): ContainerResourcePromise {
         return new ContainerResourcePromise(this._withEnvironmentExpressionInternal(name, value));
     }
@@ -7144,7 +7147,10 @@ export class ContainerResource extends ResourceBuilderBase<ContainerResourceHand
         return new ContainerResource(result, this._client);
     }
 
-    /** Sets an environment variable from an endpoint reference */
+    /**
+     * Sets an environment variable from an endpoint reference
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentEndpoint(name: string, endpointReference: EndpointReference): ContainerResourcePromise {
         return new ContainerResourcePromise(this._withEnvironmentEndpointInternal(name, endpointReference));
     }
@@ -7159,7 +7165,10 @@ export class ContainerResource extends ResourceBuilderBase<ContainerResourceHand
         return new ContainerResource(result, this._client);
     }
 
-    /** Sets an environment variable from a parameter resource */
+    /**
+     * Sets an environment variable from a parameter resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentParameter(name: string, parameter: ParameterResource): ContainerResourcePromise {
         return new ContainerResourcePromise(this._withEnvironmentParameterInternal(name, parameter));
     }
@@ -7174,7 +7183,10 @@ export class ContainerResource extends ResourceBuilderBase<ContainerResourceHand
         return new ContainerResource(result, this._client);
     }
 
-    /** Sets an environment variable from a connection string resource */
+    /**
+     * Sets an environment variable from a connection string resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentConnectionString(envVarName: string, resource: ResourceBuilderBase): ContainerResourcePromise {
         return new ContainerResourcePromise(this._withEnvironmentConnectionStringInternal(envVarName, resource));
     }
@@ -8528,11 +8540,14 @@ export class ContainerResourcePromise implements PromiseLike<ContainerResource> 
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | ResourceBuilderBase | EndpointReference | EndpointReferenceExpression): ContainerResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression): ContainerResourcePromise {
         return new ContainerResourcePromise(this._promise.then(obj => obj.withEnvironment(name, value)));
     }
 
-    /** Sets an environment variable from a reference expression */
+    /**
+     * Sets an environment variable from a reference expression
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentExpression(name: string, value: ReferenceExpression): ContainerResourcePromise {
         return new ContainerResourcePromise(this._promise.then(obj => obj.withEnvironmentExpression(name, value)));
     }
@@ -8542,17 +8557,26 @@ export class ContainerResourcePromise implements PromiseLike<ContainerResource> 
         return new ContainerResourcePromise(this._promise.then(obj => obj.withEnvironmentCallback(callback)));
     }
 
-    /** Sets an environment variable from an endpoint reference */
+    /**
+     * Sets an environment variable from an endpoint reference
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentEndpoint(name: string, endpointReference: EndpointReference): ContainerResourcePromise {
         return new ContainerResourcePromise(this._promise.then(obj => obj.withEnvironmentEndpoint(name, endpointReference)));
     }
 
-    /** Sets an environment variable from a parameter resource */
+    /**
+     * Sets an environment variable from a parameter resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentParameter(name: string, parameter: ParameterResource): ContainerResourcePromise {
         return new ContainerResourcePromise(this._promise.then(obj => obj.withEnvironmentParameter(name, parameter)));
     }
 
-    /** Sets an environment variable from a connection string resource */
+    /**
+     * Sets an environment variable from a connection string resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentConnectionString(envVarName: string, resource: ResourceBuilderBase): ContainerResourcePromise {
         return new ContainerResourcePromise(this._promise.then(obj => obj.withEnvironmentConnectionString(envVarName, resource)));
     }
@@ -9071,7 +9095,7 @@ export class CSharpAppResource extends ResourceBuilderBase<CSharpAppResourceHand
     }
 
     /** @internal */
-    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | ResourceBuilderBase | EndpointReference | EndpointReferenceExpression): Promise<CSharpAppResource> {
+    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
             'Aspire.Hosting/withEnvironment',
@@ -9081,7 +9105,7 @@ export class CSharpAppResource extends ResourceBuilderBase<CSharpAppResourceHand
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | ResourceBuilderBase | EndpointReference | EndpointReferenceExpression): CSharpAppResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression): CSharpAppResourcePromise {
         return new CSharpAppResourcePromise(this._withEnvironmentInternal(name, value));
     }
 
@@ -9095,7 +9119,10 @@ export class CSharpAppResource extends ResourceBuilderBase<CSharpAppResourceHand
         return new CSharpAppResource(result, this._client);
     }
 
-    /** Sets an environment variable from a reference expression */
+    /**
+     * Sets an environment variable from a reference expression
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentExpression(name: string, value: ReferenceExpression): CSharpAppResourcePromise {
         return new CSharpAppResourcePromise(this._withEnvironmentExpressionInternal(name, value));
     }
@@ -9130,7 +9157,10 @@ export class CSharpAppResource extends ResourceBuilderBase<CSharpAppResourceHand
         return new CSharpAppResource(result, this._client);
     }
 
-    /** Sets an environment variable from an endpoint reference */
+    /**
+     * Sets an environment variable from an endpoint reference
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentEndpoint(name: string, endpointReference: EndpointReference): CSharpAppResourcePromise {
         return new CSharpAppResourcePromise(this._withEnvironmentEndpointInternal(name, endpointReference));
     }
@@ -9145,7 +9175,10 @@ export class CSharpAppResource extends ResourceBuilderBase<CSharpAppResourceHand
         return new CSharpAppResource(result, this._client);
     }
 
-    /** Sets an environment variable from a parameter resource */
+    /**
+     * Sets an environment variable from a parameter resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentParameter(name: string, parameter: ParameterResource): CSharpAppResourcePromise {
         return new CSharpAppResourcePromise(this._withEnvironmentParameterInternal(name, parameter));
     }
@@ -9160,7 +9193,10 @@ export class CSharpAppResource extends ResourceBuilderBase<CSharpAppResourceHand
         return new CSharpAppResource(result, this._client);
     }
 
-    /** Sets an environment variable from a connection string resource */
+    /**
+     * Sets an environment variable from a connection string resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentConnectionString(envVarName: string, resource: ResourceBuilderBase): CSharpAppResourcePromise {
         return new CSharpAppResourcePromise(this._withEnvironmentConnectionStringInternal(envVarName, resource));
     }
@@ -10440,11 +10476,14 @@ export class CSharpAppResourcePromise implements PromiseLike<CSharpAppResource> 
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | ResourceBuilderBase | EndpointReference | EndpointReferenceExpression): CSharpAppResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression): CSharpAppResourcePromise {
         return new CSharpAppResourcePromise(this._promise.then(obj => obj.withEnvironment(name, value)));
     }
 
-    /** Sets an environment variable from a reference expression */
+    /**
+     * Sets an environment variable from a reference expression
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentExpression(name: string, value: ReferenceExpression): CSharpAppResourcePromise {
         return new CSharpAppResourcePromise(this._promise.then(obj => obj.withEnvironmentExpression(name, value)));
     }
@@ -10454,17 +10493,26 @@ export class CSharpAppResourcePromise implements PromiseLike<CSharpAppResource> 
         return new CSharpAppResourcePromise(this._promise.then(obj => obj.withEnvironmentCallback(callback)));
     }
 
-    /** Sets an environment variable from an endpoint reference */
+    /**
+     * Sets an environment variable from an endpoint reference
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentEndpoint(name: string, endpointReference: EndpointReference): CSharpAppResourcePromise {
         return new CSharpAppResourcePromise(this._promise.then(obj => obj.withEnvironmentEndpoint(name, endpointReference)));
     }
 
-    /** Sets an environment variable from a parameter resource */
+    /**
+     * Sets an environment variable from a parameter resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentParameter(name: string, parameter: ParameterResource): CSharpAppResourcePromise {
         return new CSharpAppResourcePromise(this._promise.then(obj => obj.withEnvironmentParameter(name, parameter)));
     }
 
-    /** Sets an environment variable from a connection string resource */
+    /**
+     * Sets an environment variable from a connection string resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentConnectionString(envVarName: string, resource: ResourceBuilderBase): CSharpAppResourcePromise {
         return new CSharpAppResourcePromise(this._promise.then(obj => obj.withEnvironmentConnectionString(envVarName, resource)));
     }
@@ -11086,7 +11134,7 @@ export class DotnetToolResource extends ResourceBuilderBase<DotnetToolResourceHa
     }
 
     /** @internal */
-    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | ResourceBuilderBase | EndpointReference | EndpointReferenceExpression): Promise<DotnetToolResource> {
+    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
             'Aspire.Hosting/withEnvironment',
@@ -11096,7 +11144,7 @@ export class DotnetToolResource extends ResourceBuilderBase<DotnetToolResourceHa
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | ResourceBuilderBase | EndpointReference | EndpointReferenceExpression): DotnetToolResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression): DotnetToolResourcePromise {
         return new DotnetToolResourcePromise(this._withEnvironmentInternal(name, value));
     }
 
@@ -11110,7 +11158,10 @@ export class DotnetToolResource extends ResourceBuilderBase<DotnetToolResourceHa
         return new DotnetToolResource(result, this._client);
     }
 
-    /** Sets an environment variable from a reference expression */
+    /**
+     * Sets an environment variable from a reference expression
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentExpression(name: string, value: ReferenceExpression): DotnetToolResourcePromise {
         return new DotnetToolResourcePromise(this._withEnvironmentExpressionInternal(name, value));
     }
@@ -11145,7 +11196,10 @@ export class DotnetToolResource extends ResourceBuilderBase<DotnetToolResourceHa
         return new DotnetToolResource(result, this._client);
     }
 
-    /** Sets an environment variable from an endpoint reference */
+    /**
+     * Sets an environment variable from an endpoint reference
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentEndpoint(name: string, endpointReference: EndpointReference): DotnetToolResourcePromise {
         return new DotnetToolResourcePromise(this._withEnvironmentEndpointInternal(name, endpointReference));
     }
@@ -11160,7 +11214,10 @@ export class DotnetToolResource extends ResourceBuilderBase<DotnetToolResourceHa
         return new DotnetToolResource(result, this._client);
     }
 
-    /** Sets an environment variable from a parameter resource */
+    /**
+     * Sets an environment variable from a parameter resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentParameter(name: string, parameter: ParameterResource): DotnetToolResourcePromise {
         return new DotnetToolResourcePromise(this._withEnvironmentParameterInternal(name, parameter));
     }
@@ -11175,7 +11232,10 @@ export class DotnetToolResource extends ResourceBuilderBase<DotnetToolResourceHa
         return new DotnetToolResource(result, this._client);
     }
 
-    /** Sets an environment variable from a connection string resource */
+    /**
+     * Sets an environment variable from a connection string resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentConnectionString(envVarName: string, resource: ResourceBuilderBase): DotnetToolResourcePromise {
         return new DotnetToolResourcePromise(this._withEnvironmentConnectionStringInternal(envVarName, resource));
     }
@@ -12475,11 +12535,14 @@ export class DotnetToolResourcePromise implements PromiseLike<DotnetToolResource
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | ResourceBuilderBase | EndpointReference | EndpointReferenceExpression): DotnetToolResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression): DotnetToolResourcePromise {
         return new DotnetToolResourcePromise(this._promise.then(obj => obj.withEnvironment(name, value)));
     }
 
-    /** Sets an environment variable from a reference expression */
+    /**
+     * Sets an environment variable from a reference expression
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentExpression(name: string, value: ReferenceExpression): DotnetToolResourcePromise {
         return new DotnetToolResourcePromise(this._promise.then(obj => obj.withEnvironmentExpression(name, value)));
     }
@@ -12489,17 +12552,26 @@ export class DotnetToolResourcePromise implements PromiseLike<DotnetToolResource
         return new DotnetToolResourcePromise(this._promise.then(obj => obj.withEnvironmentCallback(callback)));
     }
 
-    /** Sets an environment variable from an endpoint reference */
+    /**
+     * Sets an environment variable from an endpoint reference
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentEndpoint(name: string, endpointReference: EndpointReference): DotnetToolResourcePromise {
         return new DotnetToolResourcePromise(this._promise.then(obj => obj.withEnvironmentEndpoint(name, endpointReference)));
     }
 
-    /** Sets an environment variable from a parameter resource */
+    /**
+     * Sets an environment variable from a parameter resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentParameter(name: string, parameter: ParameterResource): DotnetToolResourcePromise {
         return new DotnetToolResourcePromise(this._promise.then(obj => obj.withEnvironmentParameter(name, parameter)));
     }
 
-    /** Sets an environment variable from a connection string resource */
+    /**
+     * Sets an environment variable from a connection string resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentConnectionString(envVarName: string, resource: ResourceBuilderBase): DotnetToolResourcePromise {
         return new DotnetToolResourcePromise(this._promise.then(obj => obj.withEnvironmentConnectionString(envVarName, resource)));
     }
@@ -13026,7 +13098,7 @@ export class ExecutableResource extends ResourceBuilderBase<ExecutableResourceHa
     }
 
     /** @internal */
-    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | ResourceBuilderBase | EndpointReference | EndpointReferenceExpression): Promise<ExecutableResource> {
+    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
             'Aspire.Hosting/withEnvironment',
@@ -13036,7 +13108,7 @@ export class ExecutableResource extends ResourceBuilderBase<ExecutableResourceHa
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | ResourceBuilderBase | EndpointReference | EndpointReferenceExpression): ExecutableResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression): ExecutableResourcePromise {
         return new ExecutableResourcePromise(this._withEnvironmentInternal(name, value));
     }
 
@@ -13050,7 +13122,10 @@ export class ExecutableResource extends ResourceBuilderBase<ExecutableResourceHa
         return new ExecutableResource(result, this._client);
     }
 
-    /** Sets an environment variable from a reference expression */
+    /**
+     * Sets an environment variable from a reference expression
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentExpression(name: string, value: ReferenceExpression): ExecutableResourcePromise {
         return new ExecutableResourcePromise(this._withEnvironmentExpressionInternal(name, value));
     }
@@ -13085,7 +13160,10 @@ export class ExecutableResource extends ResourceBuilderBase<ExecutableResourceHa
         return new ExecutableResource(result, this._client);
     }
 
-    /** Sets an environment variable from an endpoint reference */
+    /**
+     * Sets an environment variable from an endpoint reference
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentEndpoint(name: string, endpointReference: EndpointReference): ExecutableResourcePromise {
         return new ExecutableResourcePromise(this._withEnvironmentEndpointInternal(name, endpointReference));
     }
@@ -13100,7 +13178,10 @@ export class ExecutableResource extends ResourceBuilderBase<ExecutableResourceHa
         return new ExecutableResource(result, this._client);
     }
 
-    /** Sets an environment variable from a parameter resource */
+    /**
+     * Sets an environment variable from a parameter resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentParameter(name: string, parameter: ParameterResource): ExecutableResourcePromise {
         return new ExecutableResourcePromise(this._withEnvironmentParameterInternal(name, parameter));
     }
@@ -13115,7 +13196,10 @@ export class ExecutableResource extends ResourceBuilderBase<ExecutableResourceHa
         return new ExecutableResource(result, this._client);
     }
 
-    /** Sets an environment variable from a connection string resource */
+    /**
+     * Sets an environment variable from a connection string resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentConnectionString(envVarName: string, resource: ResourceBuilderBase): ExecutableResourcePromise {
         return new ExecutableResourcePromise(this._withEnvironmentConnectionStringInternal(envVarName, resource));
     }
@@ -14385,11 +14469,14 @@ export class ExecutableResourcePromise implements PromiseLike<ExecutableResource
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | ResourceBuilderBase | EndpointReference | EndpointReferenceExpression): ExecutableResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression): ExecutableResourcePromise {
         return new ExecutableResourcePromise(this._promise.then(obj => obj.withEnvironment(name, value)));
     }
 
-    /** Sets an environment variable from a reference expression */
+    /**
+     * Sets an environment variable from a reference expression
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentExpression(name: string, value: ReferenceExpression): ExecutableResourcePromise {
         return new ExecutableResourcePromise(this._promise.then(obj => obj.withEnvironmentExpression(name, value)));
     }
@@ -14399,17 +14486,26 @@ export class ExecutableResourcePromise implements PromiseLike<ExecutableResource
         return new ExecutableResourcePromise(this._promise.then(obj => obj.withEnvironmentCallback(callback)));
     }
 
-    /** Sets an environment variable from an endpoint reference */
+    /**
+     * Sets an environment variable from an endpoint reference
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentEndpoint(name: string, endpointReference: EndpointReference): ExecutableResourcePromise {
         return new ExecutableResourcePromise(this._promise.then(obj => obj.withEnvironmentEndpoint(name, endpointReference)));
     }
 
-    /** Sets an environment variable from a parameter resource */
+    /**
+     * Sets an environment variable from a parameter resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentParameter(name: string, parameter: ParameterResource): ExecutableResourcePromise {
         return new ExecutableResourcePromise(this._promise.then(obj => obj.withEnvironmentParameter(name, parameter)));
     }
 
-    /** Sets an environment variable from a connection string resource */
+    /**
+     * Sets an environment variable from a connection string resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentConnectionString(envVarName: string, resource: ResourceBuilderBase): ExecutableResourcePromise {
         return new ExecutableResourcePromise(this._promise.then(obj => obj.withEnvironmentConnectionString(envVarName, resource)));
     }
@@ -16921,7 +17017,7 @@ export class ProjectResource extends ResourceBuilderBase<ProjectResourceHandle> 
     }
 
     /** @internal */
-    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | ResourceBuilderBase | EndpointReference | EndpointReferenceExpression): Promise<ProjectResource> {
+    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
             'Aspire.Hosting/withEnvironment',
@@ -16931,7 +17027,7 @@ export class ProjectResource extends ResourceBuilderBase<ProjectResourceHandle> 
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | ResourceBuilderBase | EndpointReference | EndpointReferenceExpression): ProjectResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression): ProjectResourcePromise {
         return new ProjectResourcePromise(this._withEnvironmentInternal(name, value));
     }
 
@@ -16945,7 +17041,10 @@ export class ProjectResource extends ResourceBuilderBase<ProjectResourceHandle> 
         return new ProjectResource(result, this._client);
     }
 
-    /** Sets an environment variable from a reference expression */
+    /**
+     * Sets an environment variable from a reference expression
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentExpression(name: string, value: ReferenceExpression): ProjectResourcePromise {
         return new ProjectResourcePromise(this._withEnvironmentExpressionInternal(name, value));
     }
@@ -16980,7 +17079,10 @@ export class ProjectResource extends ResourceBuilderBase<ProjectResourceHandle> 
         return new ProjectResource(result, this._client);
     }
 
-    /** Sets an environment variable from an endpoint reference */
+    /**
+     * Sets an environment variable from an endpoint reference
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentEndpoint(name: string, endpointReference: EndpointReference): ProjectResourcePromise {
         return new ProjectResourcePromise(this._withEnvironmentEndpointInternal(name, endpointReference));
     }
@@ -16995,7 +17097,10 @@ export class ProjectResource extends ResourceBuilderBase<ProjectResourceHandle> 
         return new ProjectResource(result, this._client);
     }
 
-    /** Sets an environment variable from a parameter resource */
+    /**
+     * Sets an environment variable from a parameter resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentParameter(name: string, parameter: ParameterResource): ProjectResourcePromise {
         return new ProjectResourcePromise(this._withEnvironmentParameterInternal(name, parameter));
     }
@@ -17010,7 +17115,10 @@ export class ProjectResource extends ResourceBuilderBase<ProjectResourceHandle> 
         return new ProjectResource(result, this._client);
     }
 
-    /** Sets an environment variable from a connection string resource */
+    /**
+     * Sets an environment variable from a connection string resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentConnectionString(envVarName: string, resource: ResourceBuilderBase): ProjectResourcePromise {
         return new ProjectResourcePromise(this._withEnvironmentConnectionStringInternal(envVarName, resource));
     }
@@ -18290,11 +18398,14 @@ export class ProjectResourcePromise implements PromiseLike<ProjectResource> {
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | ResourceBuilderBase | EndpointReference | EndpointReferenceExpression): ProjectResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression): ProjectResourcePromise {
         return new ProjectResourcePromise(this._promise.then(obj => obj.withEnvironment(name, value)));
     }
 
-    /** Sets an environment variable from a reference expression */
+    /**
+     * Sets an environment variable from a reference expression
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentExpression(name: string, value: ReferenceExpression): ProjectResourcePromise {
         return new ProjectResourcePromise(this._promise.then(obj => obj.withEnvironmentExpression(name, value)));
     }
@@ -18304,17 +18415,26 @@ export class ProjectResourcePromise implements PromiseLike<ProjectResource> {
         return new ProjectResourcePromise(this._promise.then(obj => obj.withEnvironmentCallback(callback)));
     }
 
-    /** Sets an environment variable from an endpoint reference */
+    /**
+     * Sets an environment variable from an endpoint reference
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentEndpoint(name: string, endpointReference: EndpointReference): ProjectResourcePromise {
         return new ProjectResourcePromise(this._promise.then(obj => obj.withEnvironmentEndpoint(name, endpointReference)));
     }
 
-    /** Sets an environment variable from a parameter resource */
+    /**
+     * Sets an environment variable from a parameter resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentParameter(name: string, parameter: ParameterResource): ProjectResourcePromise {
         return new ProjectResourcePromise(this._promise.then(obj => obj.withEnvironmentParameter(name, parameter)));
     }
 
-    /** Sets an environment variable from a connection string resource */
+    /**
+     * Sets an environment variable from a connection string resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentConnectionString(envVarName: string, resource: ResourceBuilderBase): ProjectResourcePromise {
         return new ProjectResourcePromise(this._promise.then(obj => obj.withEnvironmentConnectionString(envVarName, resource)));
     }
@@ -19044,7 +19164,7 @@ export class TestDatabaseResource extends ResourceBuilderBase<TestDatabaseResour
     }
 
     /** @internal */
-    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | ResourceBuilderBase | EndpointReference | EndpointReferenceExpression): Promise<TestDatabaseResource> {
+    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
             'Aspire.Hosting/withEnvironment',
@@ -19054,7 +19174,7 @@ export class TestDatabaseResource extends ResourceBuilderBase<TestDatabaseResour
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | ResourceBuilderBase | EndpointReference | EndpointReferenceExpression): TestDatabaseResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromise(this._withEnvironmentInternal(name, value));
     }
 
@@ -19068,7 +19188,10 @@ export class TestDatabaseResource extends ResourceBuilderBase<TestDatabaseResour
         return new TestDatabaseResource(result, this._client);
     }
 
-    /** Sets an environment variable from a reference expression */
+    /**
+     * Sets an environment variable from a reference expression
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentExpression(name: string, value: ReferenceExpression): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromise(this._withEnvironmentExpressionInternal(name, value));
     }
@@ -19103,7 +19226,10 @@ export class TestDatabaseResource extends ResourceBuilderBase<TestDatabaseResour
         return new TestDatabaseResource(result, this._client);
     }
 
-    /** Sets an environment variable from an endpoint reference */
+    /**
+     * Sets an environment variable from an endpoint reference
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentEndpoint(name: string, endpointReference: EndpointReference): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromise(this._withEnvironmentEndpointInternal(name, endpointReference));
     }
@@ -19118,7 +19244,10 @@ export class TestDatabaseResource extends ResourceBuilderBase<TestDatabaseResour
         return new TestDatabaseResource(result, this._client);
     }
 
-    /** Sets an environment variable from a parameter resource */
+    /**
+     * Sets an environment variable from a parameter resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentParameter(name: string, parameter: ParameterResource): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromise(this._withEnvironmentParameterInternal(name, parameter));
     }
@@ -19133,7 +19262,10 @@ export class TestDatabaseResource extends ResourceBuilderBase<TestDatabaseResour
         return new TestDatabaseResource(result, this._client);
     }
 
-    /** Sets an environment variable from a connection string resource */
+    /**
+     * Sets an environment variable from a connection string resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentConnectionString(envVarName: string, resource: ResourceBuilderBase): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromise(this._withEnvironmentConnectionStringInternal(envVarName, resource));
     }
@@ -20487,11 +20619,14 @@ export class TestDatabaseResourcePromise implements PromiseLike<TestDatabaseReso
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | ResourceBuilderBase | EndpointReference | EndpointReferenceExpression): TestDatabaseResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withEnvironment(name, value)));
     }
 
-    /** Sets an environment variable from a reference expression */
+    /**
+     * Sets an environment variable from a reference expression
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentExpression(name: string, value: ReferenceExpression): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withEnvironmentExpression(name, value)));
     }
@@ -20501,17 +20636,26 @@ export class TestDatabaseResourcePromise implements PromiseLike<TestDatabaseReso
         return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withEnvironmentCallback(callback)));
     }
 
-    /** Sets an environment variable from an endpoint reference */
+    /**
+     * Sets an environment variable from an endpoint reference
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentEndpoint(name: string, endpointReference: EndpointReference): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withEnvironmentEndpoint(name, endpointReference)));
     }
 
-    /** Sets an environment variable from a parameter resource */
+    /**
+     * Sets an environment variable from a parameter resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentParameter(name: string, parameter: ParameterResource): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withEnvironmentParameter(name, parameter)));
     }
 
-    /** Sets an environment variable from a connection string resource */
+    /**
+     * Sets an environment variable from a connection string resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentConnectionString(envVarName: string, resource: ResourceBuilderBase): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withEnvironmentConnectionString(envVarName, resource)));
     }
@@ -21241,7 +21385,7 @@ export class TestRedisResource extends ResourceBuilderBase<TestRedisResourceHand
     }
 
     /** @internal */
-    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | ResourceBuilderBase | EndpointReference | EndpointReferenceExpression): Promise<TestRedisResource> {
+    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
             'Aspire.Hosting/withEnvironment',
@@ -21251,7 +21395,7 @@ export class TestRedisResource extends ResourceBuilderBase<TestRedisResourceHand
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | ResourceBuilderBase | EndpointReference | EndpointReferenceExpression): TestRedisResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._withEnvironmentInternal(name, value));
     }
 
@@ -21265,7 +21409,10 @@ export class TestRedisResource extends ResourceBuilderBase<TestRedisResourceHand
         return new TestRedisResource(result, this._client);
     }
 
-    /** Sets an environment variable from a reference expression */
+    /**
+     * Sets an environment variable from a reference expression
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentExpression(name: string, value: ReferenceExpression): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._withEnvironmentExpressionInternal(name, value));
     }
@@ -21300,7 +21447,10 @@ export class TestRedisResource extends ResourceBuilderBase<TestRedisResourceHand
         return new TestRedisResource(result, this._client);
     }
 
-    /** Sets an environment variable from an endpoint reference */
+    /**
+     * Sets an environment variable from an endpoint reference
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentEndpoint(name: string, endpointReference: EndpointReference): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._withEnvironmentEndpointInternal(name, endpointReference));
     }
@@ -21315,7 +21465,10 @@ export class TestRedisResource extends ResourceBuilderBase<TestRedisResourceHand
         return new TestRedisResource(result, this._client);
     }
 
-    /** Sets an environment variable from a parameter resource */
+    /**
+     * Sets an environment variable from a parameter resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentParameter(name: string, parameter: ParameterResource): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._withEnvironmentParameterInternal(name, parameter));
     }
@@ -21330,7 +21483,10 @@ export class TestRedisResource extends ResourceBuilderBase<TestRedisResourceHand
         return new TestRedisResource(result, this._client);
     }
 
-    /** Sets an environment variable from a connection string resource */
+    /**
+     * Sets an environment variable from a connection string resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentConnectionString(envVarName: string, resource: ResourceBuilderBase): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._withEnvironmentConnectionStringInternal(envVarName, resource));
     }
@@ -22903,11 +23059,14 @@ export class TestRedisResourcePromise implements PromiseLike<TestRedisResource> 
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | ResourceBuilderBase | EndpointReference | EndpointReferenceExpression): TestRedisResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._promise.then(obj => obj.withEnvironment(name, value)));
     }
 
-    /** Sets an environment variable from a reference expression */
+    /**
+     * Sets an environment variable from a reference expression
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentExpression(name: string, value: ReferenceExpression): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._promise.then(obj => obj.withEnvironmentExpression(name, value)));
     }
@@ -22917,17 +23076,26 @@ export class TestRedisResourcePromise implements PromiseLike<TestRedisResource> 
         return new TestRedisResourcePromise(this._promise.then(obj => obj.withEnvironmentCallback(callback)));
     }
 
-    /** Sets an environment variable from an endpoint reference */
+    /**
+     * Sets an environment variable from an endpoint reference
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentEndpoint(name: string, endpointReference: EndpointReference): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._promise.then(obj => obj.withEnvironmentEndpoint(name, endpointReference)));
     }
 
-    /** Sets an environment variable from a parameter resource */
+    /**
+     * Sets an environment variable from a parameter resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentParameter(name: string, parameter: ParameterResource): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._promise.then(obj => obj.withEnvironmentParameter(name, parameter)));
     }
 
-    /** Sets an environment variable from a connection string resource */
+    /**
+     * Sets an environment variable from a connection string resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentConnectionString(envVarName: string, resource: ResourceBuilderBase): TestRedisResourcePromise {
         return new TestRedisResourcePromise(this._promise.then(obj => obj.withEnvironmentConnectionString(envVarName, resource)));
     }
@@ -23732,7 +23900,7 @@ export class TestVaultResource extends ResourceBuilderBase<TestVaultResourceHand
     }
 
     /** @internal */
-    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | ResourceBuilderBase | EndpointReference | EndpointReferenceExpression): Promise<TestVaultResource> {
+    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
             'Aspire.Hosting/withEnvironment',
@@ -23742,7 +23910,7 @@ export class TestVaultResource extends ResourceBuilderBase<TestVaultResourceHand
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | ResourceBuilderBase | EndpointReference | EndpointReferenceExpression): TestVaultResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression): TestVaultResourcePromise {
         return new TestVaultResourcePromise(this._withEnvironmentInternal(name, value));
     }
 
@@ -23756,7 +23924,10 @@ export class TestVaultResource extends ResourceBuilderBase<TestVaultResourceHand
         return new TestVaultResource(result, this._client);
     }
 
-    /** Sets an environment variable from a reference expression */
+    /**
+     * Sets an environment variable from a reference expression
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentExpression(name: string, value: ReferenceExpression): TestVaultResourcePromise {
         return new TestVaultResourcePromise(this._withEnvironmentExpressionInternal(name, value));
     }
@@ -23791,7 +23962,10 @@ export class TestVaultResource extends ResourceBuilderBase<TestVaultResourceHand
         return new TestVaultResource(result, this._client);
     }
 
-    /** Sets an environment variable from an endpoint reference */
+    /**
+     * Sets an environment variable from an endpoint reference
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentEndpoint(name: string, endpointReference: EndpointReference): TestVaultResourcePromise {
         return new TestVaultResourcePromise(this._withEnvironmentEndpointInternal(name, endpointReference));
     }
@@ -23806,7 +23980,10 @@ export class TestVaultResource extends ResourceBuilderBase<TestVaultResourceHand
         return new TestVaultResource(result, this._client);
     }
 
-    /** Sets an environment variable from a parameter resource */
+    /**
+     * Sets an environment variable from a parameter resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentParameter(name: string, parameter: ParameterResource): TestVaultResourcePromise {
         return new TestVaultResourcePromise(this._withEnvironmentParameterInternal(name, parameter));
     }
@@ -23821,7 +23998,10 @@ export class TestVaultResource extends ResourceBuilderBase<TestVaultResourceHand
         return new TestVaultResource(result, this._client);
     }
 
-    /** Sets an environment variable from a connection string resource */
+    /**
+     * Sets an environment variable from a connection string resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentConnectionString(envVarName: string, resource: ResourceBuilderBase): TestVaultResourcePromise {
         return new TestVaultResourcePromise(this._withEnvironmentConnectionStringInternal(envVarName, resource));
     }
@@ -25190,11 +25370,14 @@ export class TestVaultResourcePromise implements PromiseLike<TestVaultResource> 
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | ResourceBuilderBase | EndpointReference | EndpointReferenceExpression): TestVaultResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression): TestVaultResourcePromise {
         return new TestVaultResourcePromise(this._promise.then(obj => obj.withEnvironment(name, value)));
     }
 
-    /** Sets an environment variable from a reference expression */
+    /**
+     * Sets an environment variable from a reference expression
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentExpression(name: string, value: ReferenceExpression): TestVaultResourcePromise {
         return new TestVaultResourcePromise(this._promise.then(obj => obj.withEnvironmentExpression(name, value)));
     }
@@ -25204,17 +25387,26 @@ export class TestVaultResourcePromise implements PromiseLike<TestVaultResource> 
         return new TestVaultResourcePromise(this._promise.then(obj => obj.withEnvironmentCallback(callback)));
     }
 
-    /** Sets an environment variable from an endpoint reference */
+    /**
+     * Sets an environment variable from an endpoint reference
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentEndpoint(name: string, endpointReference: EndpointReference): TestVaultResourcePromise {
         return new TestVaultResourcePromise(this._promise.then(obj => obj.withEnvironmentEndpoint(name, endpointReference)));
     }
 
-    /** Sets an environment variable from a parameter resource */
+    /**
+     * Sets an environment variable from a parameter resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentParameter(name: string, parameter: ParameterResource): TestVaultResourcePromise {
         return new TestVaultResourcePromise(this._promise.then(obj => obj.withEnvironmentParameter(name, parameter)));
     }
 
-    /** Sets an environment variable from a connection string resource */
+    /**
+     * Sets an environment variable from a connection string resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentConnectionString(envVarName: string, resource: ResourceBuilderBase): TestVaultResourcePromise {
         return new TestVaultResourcePromise(this._promise.then(obj => obj.withEnvironmentConnectionString(envVarName, resource)));
     }
@@ -27294,7 +27486,7 @@ export class ResourceWithEnvironment extends ResourceBuilderBase<IResourceWithEn
     }
 
     /** @internal */
-    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | ResourceBuilderBase | EndpointReference | EndpointReferenceExpression): Promise<ResourceWithEnvironment> {
+    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression): Promise<ResourceWithEnvironment> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<IResourceWithEnvironmentHandle>(
             'Aspire.Hosting/withEnvironment',
@@ -27304,7 +27496,7 @@ export class ResourceWithEnvironment extends ResourceBuilderBase<IResourceWithEn
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | ResourceBuilderBase | EndpointReference | EndpointReferenceExpression): ResourceWithEnvironmentPromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression): ResourceWithEnvironmentPromise {
         return new ResourceWithEnvironmentPromise(this._withEnvironmentInternal(name, value));
     }
 
@@ -27318,7 +27510,10 @@ export class ResourceWithEnvironment extends ResourceBuilderBase<IResourceWithEn
         return new ResourceWithEnvironment(result, this._client);
     }
 
-    /** Sets an environment variable from a reference expression */
+    /**
+     * Sets an environment variable from a reference expression
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentExpression(name: string, value: ReferenceExpression): ResourceWithEnvironmentPromise {
         return new ResourceWithEnvironmentPromise(this._withEnvironmentExpressionInternal(name, value));
     }
@@ -27353,7 +27548,10 @@ export class ResourceWithEnvironment extends ResourceBuilderBase<IResourceWithEn
         return new ResourceWithEnvironment(result, this._client);
     }
 
-    /** Sets an environment variable from an endpoint reference */
+    /**
+     * Sets an environment variable from an endpoint reference
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentEndpoint(name: string, endpointReference: EndpointReference): ResourceWithEnvironmentPromise {
         return new ResourceWithEnvironmentPromise(this._withEnvironmentEndpointInternal(name, endpointReference));
     }
@@ -27368,7 +27566,10 @@ export class ResourceWithEnvironment extends ResourceBuilderBase<IResourceWithEn
         return new ResourceWithEnvironment(result, this._client);
     }
 
-    /** Sets an environment variable from a parameter resource */
+    /**
+     * Sets an environment variable from a parameter resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentParameter(name: string, parameter: ParameterResource): ResourceWithEnvironmentPromise {
         return new ResourceWithEnvironmentPromise(this._withEnvironmentParameterInternal(name, parameter));
     }
@@ -27383,7 +27584,10 @@ export class ResourceWithEnvironment extends ResourceBuilderBase<IResourceWithEn
         return new ResourceWithEnvironment(result, this._client);
     }
 
-    /** Sets an environment variable from a connection string resource */
+    /**
+     * Sets an environment variable from a connection string resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentConnectionString(envVarName: string, resource: ResourceBuilderBase): ResourceWithEnvironmentPromise {
         return new ResourceWithEnvironmentPromise(this._withEnvironmentConnectionStringInternal(envVarName, resource));
     }
@@ -27579,11 +27783,14 @@ export class ResourceWithEnvironmentPromise implements PromiseLike<ResourceWithE
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | ResourceBuilderBase | EndpointReference | EndpointReferenceExpression): ResourceWithEnvironmentPromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression): ResourceWithEnvironmentPromise {
         return new ResourceWithEnvironmentPromise(this._promise.then(obj => obj.withEnvironment(name, value)));
     }
 
-    /** Sets an environment variable from a reference expression */
+    /**
+     * Sets an environment variable from a reference expression
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentExpression(name: string, value: ReferenceExpression): ResourceWithEnvironmentPromise {
         return new ResourceWithEnvironmentPromise(this._promise.then(obj => obj.withEnvironmentExpression(name, value)));
     }
@@ -27593,17 +27800,26 @@ export class ResourceWithEnvironmentPromise implements PromiseLike<ResourceWithE
         return new ResourceWithEnvironmentPromise(this._promise.then(obj => obj.withEnvironmentCallback(callback)));
     }
 
-    /** Sets an environment variable from an endpoint reference */
+    /**
+     * Sets an environment variable from an endpoint reference
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentEndpoint(name: string, endpointReference: EndpointReference): ResourceWithEnvironmentPromise {
         return new ResourceWithEnvironmentPromise(this._promise.then(obj => obj.withEnvironmentEndpoint(name, endpointReference)));
     }
 
-    /** Sets an environment variable from a parameter resource */
+    /**
+     * Sets an environment variable from a parameter resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentParameter(name: string, parameter: ParameterResource): ResourceWithEnvironmentPromise {
         return new ResourceWithEnvironmentPromise(this._promise.then(obj => obj.withEnvironmentParameter(name, parameter)));
     }
 
-    /** Sets an environment variable from a connection string resource */
+    /**
+     * Sets an environment variable from a connection string resource
+     * @deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.
+     */
     withEnvironmentConnectionString(envVarName: string, resource: ResourceBuilderBase): ResourceWithEnvironmentPromise {
         return new ResourceWithEnvironmentPromise(this._promise.then(obj => obj.withEnvironmentConnectionString(envVarName, resource)));
     }

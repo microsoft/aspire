@@ -3,6 +3,7 @@
   MethodName: addTestRedis,
   QualifiedMethodName: addTestRedis,
   Description: Adds a test Redis resource,
+  IsObsolete: false,
   Parameters: [
     {
       Name: name,

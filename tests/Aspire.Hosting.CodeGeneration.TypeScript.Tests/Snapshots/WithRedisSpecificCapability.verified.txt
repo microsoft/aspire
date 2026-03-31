@@ -3,6 +3,7 @@
   MethodName: withRedisSpecific,
   QualifiedMethodName: withRedisSpecific,
   Description: Redis-specific configuration,
+  IsObsolete: false,
   Parameters: [
     {
       Name: option,

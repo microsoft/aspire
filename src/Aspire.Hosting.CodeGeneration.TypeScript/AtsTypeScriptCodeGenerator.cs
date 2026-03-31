@@ -281,11 +281,49 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         if (param.Type?.Category == AtsTypeCategory.Union && param.Type.UnionTypes is { Count: > 0 })
         {
             return string.Join(" | ", param.Type.UnionTypes
-                .Select(MapInputTypeToTypeScript)
-                .Distinct());
+                .SelectMany(t => MapInputTypeToTypeScript(t).Split(" | ", StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+                .Distinct(StringComparer.Ordinal));
         }
 
         return MapInputTypeToTypeScript(param.Type);
+    }
+
+    private void WriteCapabilityDocComment(string indent, AtsCapabilityInfo capability)
+    {
+        List<string>? lines = null;
+
+        if (!string.IsNullOrWhiteSpace(capability.Description))
+        {
+            lines = [];
+            lines.AddRange(capability.Description
+                .Split(['\r', '\n'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
+        }
+
+        if (capability.IsObsolete)
+        {
+            lines ??= [];
+            lines.Add(string.IsNullOrWhiteSpace(capability.ObsoleteMessage)
+                ? "@deprecated"
+                : $"@deprecated {capability.ObsoleteMessage}");
+        }
+
+        if (lines is not { Count: > 0 })
+        {
+            return;
+        }
+
+        if (lines.Count == 1 && !lines[0].StartsWith("@deprecated", StringComparison.Ordinal))
+        {
+            WriteLine($"{indent}/** {lines[0]} */");
+            return;
+        }
+
+        WriteLine($"{indent}/**");
+        foreach (var line in lines)
+        {
+            WriteLine($"{indent} * {line}");
+        }
+        WriteLine($"{indent} */");
     }
 
     private string? TryMapInterfaceInputTypeToTypeScript(AtsTypeRef typeRef)
@@ -570,14 +608,20 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         foreach (var builder in resourceBuilders)
         {
             _wrapperClassNames[builder.TypeId] = builder.BuilderClassName;
-            _typeRefsById[builder.TypeId] = builder.TargetType!;
+            if (builder.TargetType is { } targetType)
+            {
+                _typeRefsById[builder.TypeId] = targetType;
+            }
             // All resource builders get Promise wrappers
             _typesWithPromiseWrappers.Add(builder.TypeId);
         }
         foreach (var typeClass in typeClasses)
         {
             _wrapperClassNames[typeClass.TypeId] = DeriveClassName(typeClass.TypeId);
-            _typeRefsById[typeClass.TypeId] = typeClass.TargetType!;
+            if (typeClass.TargetType is { } targetType)
+            {
+                _typeRefsById[typeClass.TypeId] = targetType;
+            }
             // Type classes with methods get Promise wrappers
             if (HasChainableMethods(typeClass))
             {
@@ -1108,10 +1152,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             // Generate a simple async method that returns the actual type
             var returnType = MapTypeRefToTypeScript(capability.ReturnType);
 
-            if (!string.IsNullOrEmpty(capability.Description))
-            {
-                WriteLine($"    /** {capability.Description} */");
-            }
+            WriteCapabilityDocComment("    ", capability);
             Write($"    async {methodName}(");
             Write(publicParamsString);
             WriteLine($"): Promise<{returnType}> {{");
@@ -1189,10 +1230,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         WriteLine();
 
         // Generate public fluent method (returns thenable wrapper)
-        if (!string.IsNullOrEmpty(capability.Description))
-        {
-            WriteLine($"    /** {capability.Description} */");
-        }
+        WriteCapabilityDocComment("    ", capability);
         var promiseClass = $"{returnClassName}Promise";
         Write($"    {methodName}(");
         Write(publicParamsString);
@@ -1303,10 +1341,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             // Check if this method returns a non-builder type
             var hasNonBuilderReturn = !capability.ReturnsBuilder && capability.ReturnType != null;
 
-            if (!string.IsNullOrEmpty(capability.Description))
-            {
-                WriteLine($"    /** {capability.Description} */");
-            }
+            WriteCapabilityDocComment("    ", capability);
 
             if (hasNonBuilderReturn)
             {
@@ -1391,12 +1426,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var returnPromiseWrapper = GetPromiseWrapperForReturnType(capability.ReturnType);
 
         // Generate JSDoc
-        if (!string.IsNullOrEmpty(capability.Description))
-        {
-            WriteLine($"/**");
-            WriteLine($" * {capability.Description}");
-            WriteLine($" */");
-        }
+        WriteCapabilityDocComment(string.Empty, capability);
 
         // Generate function based on return type
         if (returnPromiseWrapper != null && !string.IsNullOrEmpty(capReturnTypeId))
@@ -2147,10 +2177,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             : "void";
 
         // Generate JSDoc
-        if (!string.IsNullOrEmpty(method.Description))
-        {
-            WriteLine($"    /** {method.Description} */");
-        }
+        WriteCapabilityDocComment("    ", method);
 
         // Generate async method
         Write($"    async {methodName}(");
@@ -2236,10 +2263,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var returnType = MapTypeRefToTypeScript(capability.ReturnType);
 
         // Generate JSDoc
-        if (!string.IsNullOrEmpty(capability.Description))
-        {
-            WriteLine($"    /** {capability.Description} */");
-        }
+        WriteCapabilityDocComment("    ", capability);
 
         // Generate async method
         Write($"    async {methodName}(");
@@ -2333,10 +2357,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var isVoid = capability.ReturnType == null || capability.ReturnType.TypeId == AtsConstants.Void;
 
         // Generate JSDoc
-        if (!string.IsNullOrEmpty(capability.Description))
-        {
-            WriteLine($"    /** {capability.Description} */");
-        }
+        WriteCapabilityDocComment("    ", capability);
 
         // If return type has a Promise wrapper, generate internal + fluent pattern
         if (returnPromiseWrapper != null)
@@ -2540,10 +2561,7 @@ public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             var returnType = MapTypeRefToTypeScript(capability.ReturnType);
             var isVoid = capability.ReturnType == null || capability.ReturnType.TypeId == AtsConstants.Void;
 
-            if (!string.IsNullOrEmpty(capability.Description))
-            {
-                WriteLine($"    /** {capability.Description} */");
-            }
+            WriteCapabilityDocComment("    ", capability);
 
             if (returnPromiseWrapper != null)
             {

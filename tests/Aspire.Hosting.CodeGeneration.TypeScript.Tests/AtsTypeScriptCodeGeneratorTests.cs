@@ -825,6 +825,31 @@ public class AtsTypeScriptCodeGeneratorTests
             .UseFileName("TwoPassScanningGeneratedAspire");
     }
 
+    [Fact]
+    public void TwoPassScanning_GeneratesDeprecatedJSDocForObsoleteExports()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireTs = files["aspire.ts"];
+
+        Assert.Contains("@deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.", aspireTs);
+        Assert.Contains("withEnvironmentExpression(name: string, value: ReferenceExpression)", aspireTs);
+    }
+
+    [Fact]
+    public void TwoPassScanning_DeduplicatesExpandedUnionTypes()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireTs = files["aspire.ts"];
+
+        Assert.DoesNotContain("ResourceBuilderBase | ResourceBuilderBase", aspireTs);
+        Assert.DoesNotContain("EndpointReference | EndpointReference", aspireTs);
+        Assert.Contains("value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression", aspireTs);
+    }
+
     private static List<AtsCapabilityInfo> ScanCapabilitiesFromTestAssembly()
     {
         var testAssembly = LoadTestAssembly();
