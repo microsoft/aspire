@@ -7,10 +7,20 @@ import * as rpc from 'vscode-jsonrpc/node.js';
 // ============================================================================
 
 /**
+ * Structural client surface used by generated wrappers and transport helpers.
+ * This keeps generated types assignable across separately restored SDK copies.
+ */
+export interface AspireClientRpc {
+    readonly connected: boolean;
+    invokeCapability<TResult = unknown>(capabilityId: string, args?: Record<string, unknown>): Promise<TResult>;
+    cancelToken(cancellationId: string): Promise<void>;
+}
+
+/**
  * Type for callback functions that can be registered and invoked from .NET.
  * Internal: receives args and client for handle wrapping.
  */
-export type CallbackFunction = (args: unknown, client: AspireClient) => unknown | Promise<unknown>;
+export type CallbackFunction = (args: unknown, client: AspireClientRpc) => unknown | Promise<unknown>;
 
 /**
  * Represents a handle to a .NET object in the ATS system.
@@ -208,7 +218,7 @@ export class Handle<T extends string = string> {
  */
 export interface CancellationToken {
     toJSON(): string | undefined;
-    register(client?: AspireClient): string | undefined;
+    register(client?: AspireClientRpc): string | undefined;
 }
 
 class CancellationTokenImpl implements CancellationToken {
@@ -232,7 +242,7 @@ class CancellationTokenImpl implements CancellationToken {
         return this._remoteTokenId;
     }
 
-    register(client?: AspireClient): string | undefined {
+    register(client?: AspireClientRpc): string | undefined {
         if (this._remoteTokenId !== undefined) {
             return this._remoteTokenId;
         }
@@ -279,7 +289,7 @@ export const CancellationToken = {
 /**
  * Factory function for creating typed wrapper instances from handles.
  */
-export type HandleWrapperFactory = (handle: Handle, client: AspireClient) => unknown;
+export type HandleWrapperFactory = (handle: Handle, client: AspireClientRpc) => unknown;
 
 /**
  * Registry of handle wrapper factories by type ID.
@@ -302,7 +312,7 @@ export function registerHandleWrapper(typeId: string, factory: HandleWrapperFact
  * @param value - The value to potentially wrap
  * @param client - Optional client for creating typed wrapper instances
  */
-export function wrapIfHandle(value: unknown, client?: AspireClient): unknown {
+export function wrapIfHandle(value: unknown, client?: AspireClientRpc): unknown {
     if (isMarshalledHandle(value)) {
         const handle = new Handle(value);
         const typeId = value.$type;
@@ -464,7 +474,7 @@ export function registerCallback<TResult = void>(
     const callbackId = `callback_${++callbackIdCounter}_${Date.now()}`;
 
     // Wrap the callback to handle .NET's positional argument format
-    const wrapper: CallbackFunction = async (args: unknown, client: AspireClient) => {
+    const wrapper: CallbackFunction = async (args: unknown, client: AspireClientRpc) => {
         // .NET sends args as object { p0: value0, p1: value1, ... }
         if (args && typeof args === 'object' && !Array.isArray(args)) {
             const argObj = args as Record<string, unknown>;
@@ -545,7 +555,7 @@ const cancellationRegistry = new Map<string, () => void>();
 let cancellationIdCounter = 0;
 const connectedClients = new Set<AspireClient>();
 
-function resolveCancellationClient(client?: AspireClient): AspireClient {
+function resolveCancellationClient(client?: AspireClientRpc): AspireClientRpc {
     if (client) {
         return client;
     }
@@ -567,7 +577,7 @@ function resolveCancellationClient(client?: AspireClient): AspireClient {
     );
 }
 
-function isAspireClientLike(value: unknown): value is AspireClient {
+function isAspireClientLike(value: unknown): value is AspireClientRpc {
     if (!value || typeof value !== 'object') {
         return false;
     }
@@ -593,7 +603,7 @@ function isAspireClientLike(value: unknown): value is AspireClient {
  * @param signalOrToken - The signal or token to register (optional)
  * @returns The cancellation ID, or undefined if no value was provided or the token maps to CancellationToken.None
  */
-export function registerCancellation(client: AspireClient, signalOrToken?: AbortSignal | CancellationToken): string | undefined;
+export function registerCancellation(client: AspireClientRpc, signalOrToken?: AbortSignal | CancellationToken): string | undefined;
 /**
  * Registers cancellation support using the single connected AspireClient.
  *
@@ -612,7 +622,7 @@ export function registerCancellation(client: AspireClient, signalOrToken?: Abort
  */
 export function registerCancellation(signalOrToken?: AbortSignal | CancellationToken): string | undefined;
 export function registerCancellation(
-    clientOrSignalOrToken?: AspireClient | AbortSignal | CancellationToken,
+    clientOrSignalOrToken?: AspireClientRpc | AbortSignal | CancellationToken,
     maybeSignalOrToken?: AbortSignal | CancellationToken
 ): string | undefined {
     const client = isAspireClientLike(clientOrSignalOrToken) ? clientOrSignalOrToken : undefined;
@@ -662,7 +672,7 @@ export function registerCancellation(
 
 async function marshalTransportValue(
     value: unknown,
-    client: AspireClient,
+    client: AspireClientRpc,
     cancellationIds: string[],
     capabilityId: string,
     path: string = 'args',
@@ -735,7 +745,7 @@ export function unregisterCancellation(cancellationId: string | undefined): void
 /**
  * Client for connecting to the Aspire AppHost via socket/named pipe.
  */
-export class AspireClient {
+export class AspireClient implements AspireClientRpc {
     private connection: rpc.MessageConnection | null = null;
     private socket: net.Socket | null = null;
     private disconnectCallbacks: (() => void)[] = [];

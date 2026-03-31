@@ -1,5 +1,6 @@
-﻿// base.ts - Core Aspire types: base classes, ReferenceExpression
+// base.ts - Core Aspire types: base classes, ReferenceExpression
 import { Handle, AspireClient, MarshalledHandle, CancellationToken, registerCancellation, registerHandleWrapper, unregisterCancellation } from './transport.js';
+import type { AspireClientRpc } from './transport.js';
 
 // Re-export transport types for convenience
 export { Handle, AspireClient, CapabilityError, CancellationToken, registerCallback, unregisterCallback, registerCancellation, unregisterCancellation } from './transport.js';
@@ -58,14 +59,14 @@ class ReferenceExpressionImpl implements ReferenceExpression {
 
     // Handle mode fields (when wrapping a server-returned handle)
     private readonly _handle?: Handle;
-    private readonly _client?: AspireClient;
+    private readonly _client?: AspireClientRpc;
 
     constructor(format: string, valueProviders: unknown[]);
-    constructor(handle: Handle, client: AspireClient);
+    constructor(handle: Handle, client: AspireClientRpc);
     constructor(condition: unknown, matchValue: string, whenTrue: ReferenceExpression, whenFalse: ReferenceExpression);
     constructor(
         handleOrFormatOrCondition: Handle | string | unknown,
-        clientOrValueProvidersOrMatchValue: AspireClient | unknown[] | string,
+        clientOrValueProvidersOrMatchValue: AspireClientRpc | unknown[] | string,
         whenTrueOrWhenFalse?: ReferenceExpression,
         whenFalse?: ReferenceExpression
     ) {
@@ -74,7 +75,7 @@ class ReferenceExpressionImpl implements ReferenceExpression {
             this._valueProviders = clientOrValueProvidersOrMatchValue as unknown[];
         } else if (isHandleLike(handleOrFormatOrCondition)) {
             this._handle = handleOrFormatOrCondition;
-            this._client = clientOrValueProvidersOrMatchValue as AspireClient;
+            this._client = clientOrValueProvidersOrMatchValue as AspireClientRpc;
         } else {
             this._condition = handleOrFormatOrCondition;
             this._matchValue = (clientOrValueProvidersOrMatchValue as string) ?? 'True';
@@ -304,7 +305,7 @@ export interface HandleReference {
  * Provides handle management and JSON serialization.
  */
 export class ResourceBuilderBase<THandle extends Handle = Handle> implements HandleReference {
-    constructor(protected _handle: THandle, protected _client: AspireClient) {}
+    constructor(protected _handle: THandle, protected _client: AspireClientRpc) {}
 
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 }
@@ -325,13 +326,24 @@ export class ResourceBuilderBase<THandle extends Handle = Handle> implements Han
  * await items.add(newItem);
  * ```
  */
-export class AspireList<T> {
+export type AspireList<T> = {
+    count(): Promise<number>;
+    get(index: number): Promise<T>;
+    add(item: T): Promise<void>;
+    removeAt(index: number): Promise<void>;
+    clear(): Promise<void>;
+    toArray(): Promise<T[]>;
+    toTransportValue(): Promise<MarshalledHandle>;
+    toJSON(): MarshalledHandle;
+};
+
+class AspireListImpl<T> implements AspireList<T> {
     private _resolvedHandle?: Handle;
     private _resolvePromise?: Promise<Handle>;
 
     constructor(
         private readonly _handleOrContext: Handle,
-        private readonly _client: AspireClient,
+        private readonly _client: AspireClientRpc,
         private readonly _typeId: string,
         private readonly _getterCapabilityId?: string
     ) {
@@ -442,6 +454,8 @@ export class AspireList<T> {
     }
 }
 
+export const AspireList = AspireListImpl;
+
 // ============================================================================
 // AspireDict<K, V> - Mutable Dictionary Wrapper
 // ============================================================================
@@ -458,13 +472,27 @@ export class AspireList<T> {
  * const hasKey = await config.containsKey("key");
  * ```
  */
-export class AspireDict<K, V> {
+export type AspireDict<K, V> = {
+    count(): Promise<number>;
+    get(key: K): Promise<V>;
+    set(key: K, value: V): Promise<void>;
+    containsKey(key: K): Promise<boolean>;
+    remove(key: K): Promise<boolean>;
+    clear(): Promise<void>;
+    keys(): Promise<K[]>;
+    values(): Promise<V[]>;
+    toObject(): Promise<Record<string, V>>;
+    toTransportValue(): Promise<MarshalledHandle>;
+    toJSON(): MarshalledHandle;
+};
+
+class AspireDictImpl<K, V> implements AspireDict<K, V> {
     private _resolvedHandle?: Handle;
     private _resolvePromise?: Promise<Handle>;
 
     constructor(
         private readonly _handleOrContext: Handle,
-        private readonly _client: AspireClient,
+        private readonly _client: AspireClientRpc,
         private readonly _typeId: string,
         private readonly _getterCapabilityId?: string
     ) {
@@ -609,3 +637,5 @@ export class AspireDict<K, V> {
         return this._resolvedHandle.toJSON();
     }
 }
+
+export const AspireDict = AspireDictImpl;
