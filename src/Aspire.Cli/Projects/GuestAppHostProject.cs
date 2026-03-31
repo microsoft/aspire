@@ -274,7 +274,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 cancellationToken);
 
             // Step 5: Install dependencies using GuestRuntime (best effort - don't block code generation)
-            await InstallDependenciesAsync(directory, rpcClient, treatMissingNodeToolAsWarning: true, cancellationToken);
+            await InstallDependenciesAsync(directory, rpcClient, treatMissingNodeToolAsWarning: true, cancellationToken: cancellationToken);
             return true;
         }
         finally
