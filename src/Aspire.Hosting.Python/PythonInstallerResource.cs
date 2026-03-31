@@ -11,6 +11,6 @@ namespace Aspire.Hosting.Python;
 /// <param name="name">The name of the resource.</param>
 /// <param name="parent">The parent Python application resource.</param>
 internal sealed class PythonInstallerResource(string name, PythonAppResource parent)
-    : ExecutableResource(name, "python", parent.WorkingDirectory)
+    : ExecutableResource(name, "python", parent.WorkingDirectory, skipValidation: true) // Validation is skipped because appending "-installer" to the parent name can exceed the 64-char limit.
 {
 }
