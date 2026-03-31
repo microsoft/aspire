@@ -147,7 +147,7 @@ public class MySqlFunctionalTests(ITestOutputHelper testOutputHelper)
             }
             else
             {
-                bindMountPath = Directory.CreateTempSubdirectory().FullName;
+                bindMountPath = Path.Combine(Directory.CreateTempSubdirectory().FullName, "data");
 
                 mysql1.WithDataBindMount(bindMountPath);
             }
@@ -285,7 +285,7 @@ public class MySqlFunctionalTests(ITestOutputHelper testOutputHelper)
             {
                 try
                 {
-                    Directory.Delete(bindMountPath);
+                    Directory.Delete(Path.GetDirectoryName(bindMountPath)!, recursive: true);
                 }
                 catch
                 {

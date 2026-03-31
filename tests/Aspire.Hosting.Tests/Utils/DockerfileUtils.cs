@@ -35,23 +35,49 @@ public static class DockerfileUtils
         RUN chmod -R 777 /usr/share/nginx/html
         """;
 
-    public static async Task<(string ContextPath, string DockerfilePath)> CreateTemporaryDockerfileAsync(string dockerfileName = "Dockerfile", bool createDockerfile = true, bool includeSecrets = false)
+    public static async Task<TemporaryDockerfileContext> CreateTemporaryDockerfileAsync(string dockerfileName = "Dockerfile", bool createDockerfile = true, bool includeSecrets = false)
     {
-        var tempContextPath = Directory.CreateTempSubdirectory().FullName;
+        var tempDirectory = new TestTempDirectory();
 
-        var tempDockerfilePath = Path.Combine(tempContextPath, dockerfileName);
-
-        if (createDockerfile)
+        try
         {
-            var dockerfileTemplate = includeSecrets ? HelloWorldDockerfileWithSecrets : HelloWorldDockerfile;
-            // We apply this random value to the Dockerfile to make sure that we get a clean
-            // build each time with no possible caching.
-            var cacheBuster = Guid.NewGuid();
-            var dockerfileContent = dockerfileTemplate.Replace("!!!CACHEBUSTER!!!", cacheBuster.ToString());
+            var tempContextPath = tempDirectory.Path;
+            var tempDockerfilePath = Path.Combine(tempContextPath, dockerfileName);
 
-            await File.WriteAllTextAsync(tempDockerfilePath, dockerfileContent);
+            if (createDockerfile)
+            {
+                var dockerfileTemplate = includeSecrets ? HelloWorldDockerfileWithSecrets : HelloWorldDockerfile;
+                // We apply this random value to the Dockerfile to make sure that we get a clean
+                // build each time with no possible caching.
+                var cacheBuster = Guid.NewGuid();
+                var dockerfileContent = dockerfileTemplate.Replace("!!!CACHEBUSTER!!!", cacheBuster.ToString());
+
+                await File.WriteAllTextAsync(tempDockerfilePath, dockerfileContent);
+            }
+
+            return new TemporaryDockerfileContext(tempDirectory, tempDockerfilePath);
         }
-
-        return (tempContextPath, tempDockerfilePath);
+        catch
+        {
+            tempDirectory.Dispose();
+            throw;
+        }
     }
+}
+
+public sealed class TemporaryDockerfileContext(TestTempDirectory tempDirectory, string dockerfilePath) : IDisposable
+{
+    private readonly TestTempDirectory _tempDirectory = tempDirectory;
+
+    public string ContextPath => _tempDirectory.Path;
+
+    public string DockerfilePath { get; } = dockerfilePath;
+
+    public void Deconstruct(out string contextPath, out string dockerfilePath)
+    {
+        contextPath = ContextPath;
+        dockerfilePath = DockerfilePath;
+    }
+
+    public void Dispose() => _tempDirectory.Dispose();
 }

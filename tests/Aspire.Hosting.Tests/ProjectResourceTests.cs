@@ -31,14 +31,15 @@ public class ProjectResourceTests
     [Fact]
     public async Task AddProjectWithTrailingCommasInLaunchSettingsDoesNotThrow()
     {
-        var projectDetails = await PrepareProjectWithTrailingCommasInLaunchSettingsAsync().DefaultTimeout();
+        using var tempDirectory = new TestTempDirectory();
+        var projectDetails = await PrepareProjectWithTrailingCommasInLaunchSettingsAsync(tempDirectory.Path).DefaultTimeout();
 
         var appBuilder = CreateBuilder();
 
         // Should not throw - trailing commas are common in hand-edited JSON.
         appBuilder.AddProject("project", projectDetails.ProjectFilePath);
 
-        async static Task<(string ProjectFilePath, string LaunchSettingsFilePath)> PrepareProjectWithTrailingCommasInLaunchSettingsAsync()
+        async static Task<(string ProjectFilePath, string LaunchSettingsFilePath)> PrepareProjectWithTrailingCommasInLaunchSettingsAsync(string projectDirectoryPath)
         {
             var csProjContent = """
                                 <Project Sdk="Microsoft.NET.Sdk.Web">
@@ -58,7 +59,6 @@ public class ProjectResourceTests
                                         }
                                         """;
 
-            var projectDirectoryPath = Directory.CreateTempSubdirectory().FullName;
             var projectFilePath = Path.Combine(projectDirectoryPath, "Project.csproj");
             var propertiesDirectoryPath = Path.Combine(projectDirectoryPath, "Properties");
             var launchSettingsFilePath = Path.Combine(propertiesDirectoryPath, "launchSettings.json");
@@ -75,7 +75,8 @@ public class ProjectResourceTests
     [Fact]
     public async Task AddProjectWithInvalidLaunchSettingsShouldThrowSpecificError()
     {
-        var projectDetails = await PrepareProjectWithMalformedLaunchSettingsAsync().DefaultTimeout();
+        using var tempDirectory = new TestTempDirectory();
+        var projectDetails = await PrepareProjectWithMalformedLaunchSettingsAsync(tempDirectory.Path).DefaultTimeout();
 
         var ex = Assert.Throws<DistributedApplicationException>(() =>
         {
@@ -86,7 +87,7 @@ public class ProjectResourceTests
         var expectedMessage = $"Failed to get effective launch profile for project resource 'project'. There is malformed JSON in the project's launch settings file at '{projectDetails.LaunchSettingsFilePath}'.";
         Assert.Equal(expectedMessage, ex.Message);
 
-        async static Task<(string ProjectFilePath, string LaunchSettingsFilePath)> PrepareProjectWithMalformedLaunchSettingsAsync()
+        async static Task<(string ProjectFilePath, string LaunchSettingsFilePath)> PrepareProjectWithMalformedLaunchSettingsAsync(string projectDirectoryPath)
         {
             var csProjContent = """
                                 <Project Sdk="Microsoft.NET.Sdk.Web">
@@ -98,7 +99,6 @@ public class ProjectResourceTests
                                         this { is } { mal formed! >
                                         """;
 
-            var projectDirectoryPath = Directory.CreateTempSubdirectory().FullName;
             var projectFilePath = Path.Combine(projectDirectoryPath, "Project.csproj");
             var propertiesDirectoryPath = Path.Combine(projectDirectoryPath, "Properties");
             var launchSettingsFilePath = Path.Combine(propertiesDirectoryPath, "launchSettings.json");
