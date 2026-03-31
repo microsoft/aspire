@@ -26,13 +26,6 @@ public sealed class TypeScriptSqlServerNativeAssetsBundleTests(ITestOutputHelper
             workspace,
             installMode,
             ["Aspire.Hosting.CodeGeneration.TypeScript.", "Aspire.Hosting.SqlServer."]);
-        var bundlePath = FindLocalBundlePath(repoRoot, installMode);
-
-        var additionalVolumes = new List<string>();
-        if (bundlePath is not null)
-        {
-            additionalVolumes.Add($"{bundlePath}:/opt/aspire-bundle:ro");
-        }
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(
             repoRoot,
@@ -40,8 +33,7 @@ public sealed class TypeScriptSqlServerNativeAssetsBundleTests(ITestOutputHelper
             output,
             variant: CliE2ETestHelpers.DockerfileVariant.Polyglot,
             mountDockerSocket: true,
-            workspace: workspace,
-            additionalVolumes: additionalVolumes);
+            workspace: workspace);
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
@@ -50,13 +42,6 @@ public sealed class TypeScriptSqlServerNativeAssetsBundleTests(ITestOutputHelper
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliInDockerAsync(installMode, counter);
-
-        if (bundlePath is not null)
-        {
-            await auto.TypeAsync("ln -s /opt/aspire-bundle/managed ~/.aspire/managed && ln -s /opt/aspire-bundle/dcp ~/.aspire/dcp");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
-        }
 
         if (localChannel is not null)
         {
@@ -115,27 +100,5 @@ public sealed class TypeScriptSqlServerNativeAssetsBundleTests(ITestOutputHelper
         await auto.EnterAsync();
 
         await pendingRun;
-    }
-
-    private static string? FindLocalBundlePath(string repoRoot, CliE2ETestHelpers.DockerInstallMode installMode)
-    {
-        if (installMode != CliE2ETestHelpers.DockerInstallMode.SourceBuild)
-        {
-            return null;
-        }
-
-        var bundlePath = Path.Combine(repoRoot, "artifacts", "bundle", "linux-x64");
-        if (!Directory.Exists(bundlePath))
-        {
-            throw new InvalidOperationException("Local source-built TypeScript E2E tests require the bundle layout. Run './build.sh --bundle' first.");
-        }
-
-        var managedPath = Path.Combine(bundlePath, "managed", "aspire-managed");
-        if (!File.Exists(managedPath))
-        {
-            throw new InvalidOperationException($"Bundle layout is missing aspire-managed at {managedPath}. Run './build.sh --bundle' first.");
-        }
-
-        return bundlePath;
     }
 }
