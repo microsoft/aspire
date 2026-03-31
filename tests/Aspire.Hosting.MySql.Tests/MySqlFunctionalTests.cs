@@ -308,6 +308,16 @@ public class MySqlFunctionalTests(ITestOutputHelper testOutputHelper)
 
         var bindMountPath = Directory.CreateTempSubdirectory().FullName;
 
+        if (!OperatingSystem.IsWindows())
+        {
+            const UnixFileMode BindMountPermissions =
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+                UnixFileMode.OtherRead | UnixFileMode.OtherExecute;
+
+            File.SetUnixFileMode(bindMountPath, BindMountPermissions);
+        }
+
         try
         {
             File.WriteAllText(Path.Combine(bindMountPath, "init.sql"), """
