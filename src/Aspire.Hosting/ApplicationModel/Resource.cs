@@ -27,7 +27,7 @@ public abstract class Resource : IResource
     /// <param name="name">The name of the resource.</param>
     protected Resource(string name)
     {
-        ArgumentNullException.ThrowIfNull(name);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
         Name = name;
     }
