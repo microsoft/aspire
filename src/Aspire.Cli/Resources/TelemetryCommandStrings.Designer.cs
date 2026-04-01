@@ -205,7 +205,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Dashboard API returned unexpected content type. Expected JSON response..
+        ///   Looks up a localized string similar to Dashboard API returned unexpected content type '{0}'. Expected JSON response..
         /// </summary>
         internal static string UnexpectedContentType {
             get {

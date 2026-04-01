@@ -117,6 +117,46 @@ internal static class TelemetryCommandHelpers
     }
 
     /// <summary>
+    /// Validates a telemetry API response by checking for conditions that indicate the API is not enabled,
+    /// then ensuring a success status code and JSON content type.
+    /// </summary>
+    /// <param name="response">The HTTP response to validate.</param>
+    /// <remarks>
+    /// When the dashboard telemetry API is not enabled, requests may return a 404 status code
+    /// or a 200 with text/html content (Blazor fallback route). In either case, this method throws
+    /// an <see cref="HttpRequestException"/> with a <see cref="HttpStatusCode.NotFound"/> status code
+    /// so that existing error handling can detect the condition and display an appropriate message.
+    /// </remarks>
+    /// <exception cref="HttpRequestException">
+    /// Thrown when the response indicates the API is not enabled (404 or HTML content type),
+    /// when the response has a non-success status code, or when the content type is not JSON.
+    /// </exception>
+    public static void EnsureTelemetryApiResponse(HttpResponseMessage response)
+    {
+        // A 200 with text/html content type indicates the Blazor fallback route handled the request,
+        // meaning the telemetry API endpoint doesn't exist. Treat this the same as a 404.
+        if (response.IsSuccessStatusCode &&
+            response.Content.Headers.ContentType?.MediaType is "text/html")
+        {
+            throw new HttpRequestException(
+                HttpRequestError.InvalidResponse,
+                statusCode: HttpStatusCode.NotFound);
+        }
+
+        response.EnsureSuccessStatusCode();
+
+        if (!HasJsonContentType(response))
+        {
+            var mediaType = response.Content.Headers.ContentType?.MediaType ?? "(none)";
+            throw new HttpRequestException(
+                HttpRequestError.InvalidResponse,
+                string.Format(CultureInfo.InvariantCulture, TelemetryCommandStrings.UnexpectedContentType, mediaType),
+                inner: null,
+                response.StatusCode);
+        }
+    }
+
+    /// <summary>
     /// Resolves an AppHost connection and gets Dashboard API info.
     /// </summary>
     /// <param name="connectionResolver">The connection resolver for AppHost discovery.</param>
@@ -328,7 +368,7 @@ internal static class TelemetryCommandHelpers
     {
         var url = DashboardUrls.TelemetryResourcesApiUrl(baseUrl);
         var response = await client.GetAsync(url, cancellationToken).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
+        EnsureTelemetryApiResponse(response);
 
         var resources = await response.Content.ReadFromJsonAsync(OtlpJsonSerializerContext.Default.ResourceInfoJsonArray, cancellationToken).ConfigureAwait(false) ?? [];
 

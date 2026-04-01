@@ -177,13 +177,7 @@ internal sealed class TelemetrySpansCommand : BaseCommand
     private async Task<int> GetSpansSnapshotAsync(HttpClient client, string url, OutputFormat format, IReadOnlyList<IOtlpResource> allResources, CancellationToken cancellationToken)
     {
         var response = await client.GetAsync(url, cancellationToken);
-        response.EnsureSuccessStatusCode();
-
-        if (!TelemetryCommandHelpers.HasJsonContentType(response))
-        {
-            _interactionService.DisplayError(TelemetryCommandStrings.UnexpectedContentType);
-            return ExitCodeConstants.DashboardFailure;
-        }
+        TelemetryCommandHelpers.EnsureTelemetryApiResponse(response);
 
         var json = await response.Content.ReadAsStringAsync(cancellationToken);
 
@@ -203,13 +197,7 @@ internal sealed class TelemetrySpansCommand : BaseCommand
     private async Task<int> StreamSpansAsync(HttpClient client, string url, OutputFormat format, IReadOnlyList<IOtlpResource> allResources, CancellationToken cancellationToken)
     {
         using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-        response.EnsureSuccessStatusCode();
-
-        if (!TelemetryCommandHelpers.HasJsonContentType(response))
-        {
-            _interactionService.DisplayError(TelemetryCommandStrings.UnexpectedContentType);
-            return ExitCodeConstants.DashboardFailure;
-        }
+        TelemetryCommandHelpers.EnsureTelemetryApiResponse(response);
 
         using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var reader = new StreamReader(stream);

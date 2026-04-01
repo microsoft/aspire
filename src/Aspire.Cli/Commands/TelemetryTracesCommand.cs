@@ -146,13 +146,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
             return ExitCodeConstants.InvalidCommand;
         }
 
-        response.EnsureSuccessStatusCode();
-
-        if (!TelemetryCommandHelpers.HasJsonContentType(response))
-        {
-            _interactionService.DisplayError(TelemetryCommandStrings.UnexpectedContentType);
-            return ExitCodeConstants.DashboardFailure;
-        }
+        TelemetryCommandHelpers.EnsureTelemetryApiResponse(response);
 
         var json = await response.Content.ReadAsStringAsync(cancellationToken);
 
@@ -211,13 +205,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         _logger.LogDebug("Fetching traces from {Url}", url);
 
         var response = await client.GetAsync(url, cancellationToken);
-        response.EnsureSuccessStatusCode();
-
-        if (!TelemetryCommandHelpers.HasJsonContentType(response))
-        {
-            _interactionService.DisplayError(TelemetryCommandStrings.UnexpectedContentType);
-            return ExitCodeConstants.DashboardFailure;
-        }
+        TelemetryCommandHelpers.EnsureTelemetryApiResponse(response);
 
         var json = await response.Content.ReadAsStringAsync(cancellationToken);
 

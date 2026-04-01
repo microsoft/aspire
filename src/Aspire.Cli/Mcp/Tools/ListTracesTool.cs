@@ -74,7 +74,7 @@ internal sealed class ListTracesTool(IDashboardInfoProvider dashboardInfoProvide
             logger.LogDebug("Fetching traces from {Url}", url);
 
             var response = await client.GetAsync(url, cancellationToken).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
+            TelemetryCommandHelpers.EnsureTelemetryApiResponse(response);
 
             var apiResponse = await response.Content.ReadFromJsonAsync(OtlpJsonSerializerContext.Default.TelemetryApiResponse, cancellationToken).ConfigureAwait(false);
             var resourceSpans = apiResponse?.Data?.ResourceSpans;

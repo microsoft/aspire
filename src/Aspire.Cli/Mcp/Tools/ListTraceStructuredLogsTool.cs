@@ -74,7 +74,7 @@ internal sealed class ListTraceStructuredLogsTool(IDashboardInfoProvider dashboa
             logger.LogDebug("Fetching structured logs from {Url}", url);
 
             var response = await client.GetAsync(url, cancellationToken).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
+            TelemetryCommandHelpers.EnsureTelemetryApiResponse(response);
 
             var apiResponse = await response.Content.ReadFromJsonAsync(OtlpJsonSerializerContext.Default.TelemetryApiResponse, cancellationToken).ConfigureAwait(false);
             var resourceLogs = apiResponse?.Data?.ResourceLogs;
