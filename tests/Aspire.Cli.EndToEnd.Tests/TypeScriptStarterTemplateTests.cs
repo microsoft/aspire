@@ -53,10 +53,7 @@ public sealed class TypeScriptStarterTemplateTests(ITestOutputHelper output)
         // CLI can resolve Aspire packages during template creation.
         if (localChannel is not null)
         {
-            var containerLocalChannelPackagesPath = CliE2ETestHelpers.ToContainerPath(localChannel.PackagesPath, workspace);
-            await auto.TypeAsync($"mkdir -p ~/.aspire/hives/local && rm -rf ~/.aspire/hives/local/packages && ln -s '{containerLocalChannelPackagesPath}' ~/.aspire/hives/local/packages");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
+            await auto.MountLocalChannelPackagesAsync(localChannel, workspace, counter);
 
             // Set channel and SDK version globally so aspire new uses the local
             // channel with the correct prerelease version (dev builds fall back to

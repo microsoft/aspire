@@ -126,13 +126,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
 
         await auto.EnablePolyglotSupportAsync(counter);
 
-        if (localChannel is not null)
-        {
-            var containerLocalChannelPackagesPath = CliE2ETestHelpers.ToContainerPath(localChannel.PackagesPath, workspace);
-            await auto.TypeAsync($"mkdir -p ~/.aspire/hives/local && rm -rf ~/.aspire/hives/local/packages && ln -s '{containerLocalChannelPackagesPath}' ~/.aspire/hives/local/packages");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
-        }
+        await auto.MountLocalChannelPackagesAsync(localChannel, workspace, counter);
 
         // Create brownfield Vite project
         await auto.TypeAsync("mkdir brownfield && cd brownfield");

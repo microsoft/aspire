@@ -96,6 +96,28 @@ internal static class CliE2EAutomatorHelpers
     }
 
     /// <summary>
+    /// Mounts the workspace-local Aspire package hive into the standard local hive path inside Docker.
+    /// Used for SourceBuild E2E runs where the CLI binary is local but package resolution still needs
+    /// locally packed Aspire packages.
+    /// </summary>
+    internal static async Task MountLocalChannelPackagesAsync(
+        this Hex1bTerminalAutomator auto,
+        CliE2ETestHelpers.LocalChannelInfo? localChannel,
+        TemporaryWorkspace workspace,
+        SequenceCounter counter)
+    {
+        if (localChannel is null)
+        {
+            return;
+        }
+
+        var containerLocalChannelPackagesPath = CliE2ETestHelpers.ToContainerPath(localChannel.PackagesPath, workspace);
+        await auto.TypeAsync($"mkdir -p ~/.aspire/hives/local && rm -rf ~/.aspire/hives/local/packages && ln -s '{containerLocalChannelPackagesPath}' ~/.aspire/hives/local/packages");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    /// <summary>
     /// Prepares a non-Docker terminal environment with prompt counting and workspace navigation.
     /// Used by tests that run with <see cref="CliE2ETestHelpers.CreateTestTerminal"/> (bare bash, no Docker).
     /// </summary>
