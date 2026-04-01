@@ -67,7 +67,13 @@ internal sealed class KubernetesPublishingContext(
 
     private async Task WriteKubernetesOutputAsync(DistributedApplicationModel model, KubernetesEnvironmentResource environment)
     {
-        foreach (var resource in model.Resources)
+        // Include the dashboard resource alongside model resources so its templates are generated.
+        // This mirrors the Docker Compose pattern in DockerComposePublishingContext.
+        IEnumerable<IResource> resources = environment.DashboardEnabled && environment.Dashboard?.Resource is IResource dashboardResource
+            ? [dashboardResource, .. model.Resources]
+            : model.Resources;
+
+        foreach (var resource in resources)
         {
             if (resource.GetDeploymentTargetAnnotation(environment)?.DeploymentTarget is KubernetesResource serviceResource)
             {
