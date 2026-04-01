@@ -4,7 +4,6 @@
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -420,15 +419,10 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.DisableDashboard = false,
-            testOutputHelper: outputHelper);
-
-        builder.Configuration.Sources.Clear();
-        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            [KnownConfigNames.AspNetCoreUrls] = "http://localhost",
-            [KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = "http://localhost",
-            [KnownConfigNames.DashboardUnsecuredAllowAnonymous] = "true"
-        });
+            outputHelper,
+            $"{KnownConfigNames.AspNetCoreUrls}=http://localhost",
+            $"{KnownConfigNames.DashboardOtlpGrpcEndpointUrl}=http://localhost",
+            $"{KnownConfigNames.DashboardUnsecuredAllowAnonymous}=true");
 
         using var app = builder.Build();
         await app.ExecuteBeforeStartHooksAsync(default).DefaultTimeout();
