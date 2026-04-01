@@ -437,8 +437,10 @@ public class ListTracesToolTests
         TestAuxiliaryBackchannelMonitor? monitor = null,
         IHttpClientFactory? httpClientFactory = null)
     {
+        var actualMonitor = monitor ?? new TestAuxiliaryBackchannelMonitor();
+        IDashboardInfoProvider dashboardInfoProvider = new BackchannelDashboardInfoProvider(actualMonitor, NullLogger<BackchannelDashboardInfoProvider>.Instance);
         return new ListTracesTool(
-            monitor ?? new TestAuxiliaryBackchannelMonitor(),
+            dashboardInfoProvider,
             httpClientFactory ?? s_httpClientFactory,
             NullLogger<ListTracesTool>.Instance);
     }

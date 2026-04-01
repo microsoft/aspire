@@ -398,8 +398,10 @@ public class ListStructuredLogsToolTests
         TestAuxiliaryBackchannelMonitor? monitor = null,
         IHttpClientFactory? httpClientFactory = null)
     {
+        var actualMonitor = monitor ?? new TestAuxiliaryBackchannelMonitor();
+        IDashboardInfoProvider dashboardInfoProvider = new BackchannelDashboardInfoProvider(actualMonitor, NullLogger<BackchannelDashboardInfoProvider>.Instance);
         return new ListStructuredLogsTool(
-            monitor ?? new TestAuxiliaryBackchannelMonitor(),
+            dashboardInfoProvider,
             httpClientFactory ?? s_httpClientFactory,
             NullLogger<ListStructuredLogsTool>.Instance);
     }

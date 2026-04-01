@@ -55,9 +55,9 @@ internal sealed class PlaywrightCliInstaller(
     internal const string PackageName = "@playwright/cli";
 
     /// <summary>
-    /// The version range to resolve. Accepts any version from 0.1.1 onwards.
+    /// The version range to resolve. Accepts any version from 0.1.3 onwards.
     /// </summary>
-    internal const string VersionRange = ">=0.1.1";
+    internal const string VersionRange = ">=0.1.3";
 
     /// <summary>
     /// The expected source repository for provenance verification.

@@ -360,6 +360,12 @@
         "command": "aspire-vscode.codeLensRevealResource",
         "title": "%command.codeLensRevealResource%",
         "category": "Aspire"
+      },
+      {
+        "command": "aspire-vscode.expandAll",
+        "title": "%command.expandAll%",
+        "category": "Aspire",
+        "icon": "$(expand-all)"
       }
     ],
     "jsonValidation": [
@@ -493,6 +499,10 @@
         {
           "command": "aspire-vscode.copyPid",
           "when": "false"
+        },
+        {
+          "command": "aspire-vscode.expandAll",
+          "when": "false"
         }
       ],
       "view/title": [
@@ -515,6 +525,11 @@
       "view/item/context": [
         {
           "command": "aspire-vscode.openDashboard",
+          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost|workspaceResources)$/",
+          "group": "inline"
+        },
+        {
+          "command": "aspire-vscode.expandAll",
           "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost|workspaceResources)$/",
           "group": "inline"
         },
