@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 using Semver;
 
@@ -54,7 +55,12 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
                 return null;
             }
 
-            var versionString = versionOutput.Trim();
+            if (!TryExtractLastVersion(versionOutput, out var versionString))
+            {
+                logger.LogDebug("Could not extract version from npm output: {Output}", versionOutput.Trim());
+                return null;
+            }
+
             if (!SemVersion.TryParse(versionString, SemVersionStyles.Any, out var version))
             {
                 logger.LogDebug("Could not parse npm version from output: {Output}", versionString);
@@ -300,6 +306,44 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
         }
 
         return startInfo;
+    }
+
+    /// <summary>
+    /// Tries to extract the version string from npm view output. When a version range
+    /// matches multiple versions, npm returns multi-line output in the format
+    /// <c>@scope/pkg@version 'version'</c> per line, sorted ascending. This method
+    /// returns the last (highest) version from such output, or the trimmed output
+    /// when it contains a single version.
+    /// </summary>
+    internal static bool TryExtractLastVersion(string npmOutput, [NotNullWhen(true)] out string? version)
+    {
+        version = null;
+
+        var lastLine = npmOutput
+            .Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries)
+            .LastOrDefault()?
+            .Trim();
+
+        if (string.IsNullOrEmpty(lastLine))
+        {
+            return false;
+        }
+
+        // Multi-version format: "@scope/pkg@version 'version'" — extract the quoted version.
+        // Single-version format: just "version" — return as-is.
+        var quoteStart = lastLine.IndexOf('\'');
+        if (quoteStart >= 0)
+        {
+            var quoteEnd = lastLine.IndexOf('\'', quoteStart + 1);
+            if (quoteEnd > quoteStart)
+            {
+                version = lastLine[(quoteStart + 1)..quoteEnd];
+                return !string.IsNullOrEmpty(version);
+            }
+        }
+
+        version = lastLine;
+        return true;
     }
 
     private async Task<string?> RunNpmCommandInDirectoryAsync(string npmPath, string[] args, string workingDirectory, CancellationToken cancellationToken)
