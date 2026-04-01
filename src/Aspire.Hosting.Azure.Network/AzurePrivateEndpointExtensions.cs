@@ -3,7 +3,6 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
-using Aspire.Hosting.Azure.Network;
 using Azure.Provisioning;
 using Azure.Provisioning.Network;
 using Azure.Provisioning.PrivateDns;

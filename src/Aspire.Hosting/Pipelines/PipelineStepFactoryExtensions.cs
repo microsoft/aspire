@@ -134,6 +134,7 @@ public static class PipelineStepFactoryExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="callback">The callback function to execute during the configuration phase.</param>
     /// <returns>The resource builder for chaining.</returns>
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the synchronous Action<> overload via withPipelineConfiguration.")]
     public static IResourceBuilder<T> WithPipelineConfiguration<T>(
         this IResourceBuilder<T> builder,
         Func<PipelineConfigurationContext, Task> callback) where T : IResource

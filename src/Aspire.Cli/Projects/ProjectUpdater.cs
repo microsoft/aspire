@@ -115,7 +115,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 cancellationToken: cancellationToken);
 
             var nugetConfigDirectory = new DirectoryInfo(selectedPathForNewNuGetConfigFile);
-            await NuGetConfigMerger.CreateOrUpdateAsync(nugetConfigDirectory, channel, AnalyzeAndConfirmNuGetConfigChanges, cancellationToken);
+            await NuGetConfigMerger.CreateOrUpdateAsync(nugetConfigDirectory, channel, AnalyzeAndConfirmNuGetConfigChanges, cancellationToken: cancellationToken);
         }
 
         interactionService.DisplayEmptyLine();

@@ -96,7 +96,7 @@ internal sealed class BuilderModel
 /// </list>
 /// </para>
 /// </remarks>
-public sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
+internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 {
     private TextWriter _writer = null!;
 

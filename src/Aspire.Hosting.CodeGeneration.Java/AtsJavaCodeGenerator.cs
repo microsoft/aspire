@@ -12,7 +12,7 @@ namespace Aspire.Hosting.CodeGeneration.Java;
 /// Generates a Java SDK using the ATS (Aspire Type System) capability-based API.
 /// Produces wrapper classes that proxy capabilities via JSON-RPC.
 /// </summary>
-public sealed class AtsJavaCodeGenerator : ICodeGenerator
+internal sealed class AtsJavaCodeGenerator : ICodeGenerator
 {
     private static readonly HashSet<string> s_javaKeywords = new(StringComparer.Ordinal)
     {
@@ -1530,6 +1530,11 @@ public sealed class AtsJavaCodeGenerator : ICodeGenerator
         WriteLine("        }");
         WriteLine("        AspireClient client = new AspireClient(socketPath);");
         WriteLine("        client.connect();");
+        WriteLine("        String authToken = System.getenv(\"ASPIRE_REMOTE_APPHOST_TOKEN\");");
+        WriteLine("        if (authToken == null || authToken.isEmpty()) {");
+        WriteLine("            throw new RuntimeException(\"ASPIRE_REMOTE_APPHOST_TOKEN environment variable not set. Run this application using `aspire run`.\");");
+        WriteLine("        }");
+        WriteLine("        client.authenticate(authToken);");
         WriteLine("        client.onDisconnect(() -> System.exit(1));");
         WriteLine("        return client;");
         WriteLine("    }");

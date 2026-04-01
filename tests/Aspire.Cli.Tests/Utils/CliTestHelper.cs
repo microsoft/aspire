@@ -253,10 +253,12 @@ internal sealed class CliServiceCollectionTestOptions
         var cacheDirectory = new DirectoryInfo(Path.Combine(WorkingDirectory.FullName, ".aspire", "cache"));
         var logsDirectory = new DirectoryInfo(Path.Combine(WorkingDirectory.FullName, ".aspire", "logs"));
         var logFilePath = Path.Combine(logsDirectory.FullName, "test.log");
-        return new CliExecutionContext(WorkingDirectory, hivesDirectory, cacheDirectory, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-sdks")), logsDirectory, logFilePath);
+        return new CliExecutionContext(WorkingDirectory, hivesDirectory, cacheDirectory, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-sdks")), logsDirectory, logFilePath, packagesDirectory: PackagesDirectory);
     }
 
     public DirectoryInfo WorkingDirectory { get; set; }
+
+    public DirectoryInfo? PackagesDirectory { get; set; }
 
     public Action<Dictionary<string, string?>> ConfigurationCallback { get; set; } = (Dictionary<string, string?> config) =>
     {

@@ -7,7 +7,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Azure.Network;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Pipelines;
 using Azure.Provisioning;
@@ -438,8 +437,6 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
 
         return result;
     }
-
-    BicepOutputReference IAzurePrivateEndpointTarget.Id => Id;
 
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["sqlServer"];
 

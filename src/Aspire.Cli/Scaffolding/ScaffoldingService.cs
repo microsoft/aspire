@@ -79,96 +79,81 @@ internal sealed class ScaffoldingService : IScaffoldingService
         }
 
         // Step 2: Start the server temporarily for scaffolding and code generation
-        var currentPid = Environment.ProcessId;
-        var (socketPath, serverProcess, _) = appHostServerProject.Run(currentPid, new Dictionary<string, string>());
+        await using var serverSession = AppHostServerSession.Start(
+            appHostServerProject,
+            environmentVariables: null,
+            debug: false,
+            _logger);
 
-        try
+        // Step 3: Connect to server and get scaffold templates via RPC
+        var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
+
+        var scaffoldFiles = await rpcClient.ScaffoldAppHostAsync(
+            language.LanguageId,
+            directory.FullName,
+            context.ProjectName,
+            cancellationToken);
+
+        // Step 4: Write scaffold files to disk
+        foreach (var (fileName, content) in scaffoldFiles)
         {
-            // Step 3: Connect to server and get scaffold templates via RPC
-            await using var rpcClient = await AppHostRpcClient.ConnectAsync(socketPath, cancellationToken);
-
-            var scaffoldFiles = await rpcClient.ScaffoldAppHostAsync(
-                language.LanguageId,
-                directory.FullName,
-                context.ProjectName,
-                cancellationToken);
-
-            // Step 4: Write scaffold files to disk
-            foreach (var (fileName, content) in scaffoldFiles)
+            var filePath = Path.Combine(directory.FullName, fileName);
+            var fileDirectory = Path.GetDirectoryName(filePath);
+            if (!string.IsNullOrEmpty(fileDirectory))
             {
-                var filePath = Path.Combine(directory.FullName, fileName);
-                var fileDirectory = Path.GetDirectoryName(filePath);
-                if (!string.IsNullOrEmpty(fileDirectory))
-                {
-                    Directory.CreateDirectory(fileDirectory);
-                }
-                await File.WriteAllTextAsync(filePath, content, cancellationToken);
+                Directory.CreateDirectory(fileDirectory);
             }
-
-            _logger.LogDebug("Wrote {Count} scaffold files", scaffoldFiles.Count);
-
-            // Step 5: Generate SDK code via RPC (must happen before dependency installation
-            // because pylock.toml/requirements.txt reference the generated code directory)
-            await GenerateCodeViaRpcAsync(
-                directory.FullName,
-                rpcClient,
-                language,
-                cancellationToken);
-
-            // Step 6: Install dependencies using GuestRuntime
-            var installResult = await _interactionService.ShowStatusAsync(
-                $"Installing {language.DisplayName} dependencies...",
-                () => InstallDependenciesAsync(directory, language, rpcClient, cancellationToken),
-                emoji: KnownEmojis.Package);
-            if (installResult != 0)
-            {
-                return false;
-            }
-
-            // Save channel and language to aspire.config.json (new format)
-            // Read profiles from apphost.run.json (created by codegen) and merge into aspire.config.json
-            var appHostRunPath = Path.Combine(directory.FullName, "apphost.run.json");
-            var profiles = AspireConfigFile.ReadApphostRunProfiles(appHostRunPath, _logger);
-
-            if (profiles is not null && File.Exists(appHostRunPath))
-            {
-                try
-                {
-                    // Delete apphost.run.json since profiles are now in aspire.config.json
-                    File.Delete(appHostRunPath);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogDebug(ex, "Failed to delete apphost.run.json after reading profiles");
-                }
-            }
-
-            config.Profiles = profiles;
-            if (prepareResult.ChannelName is not null)
-            {
-                config.Channel = prepareResult.ChannelName;
-            }
-            config.AppHost ??= new AspireConfigAppHost();
-            config.AppHost.Path ??= language.AppHostFileName;
-            config.AppHost.Language = language.LanguageId;
-            config.Save(directory.FullName);
-            return true;
+            await File.WriteAllTextAsync(filePath, content, cancellationToken);
         }
-        finally
+
+        _logger.LogDebug("Wrote {Count} scaffold files", scaffoldFiles.Count);
+
+        // Step 5: Generate SDK code via RPC (must happen before dependency installation
+        // because pylock.toml/requirements.txt reference the generated code directory)
+        await GenerateCodeViaRpcAsync(
+            directory.FullName,
+            rpcClient,
+            language,
+            cancellationToken);
+
+        // Step 6: Install dependencies using GuestRuntime
+        var installResult = await _interactionService.ShowStatusAsync(
+            $"Installing {language.DisplayName} dependencies...",
+            () => InstallDependenciesAsync(directory, language, rpcClient, cancellationToken),
+            emoji: KnownEmojis.Package);
+        if (installResult != 0)
         {
-            // Step 7: Stop the server
-            if (!serverProcess.HasExited)
+            return false;
+        }
+
+        // Save channel and language to aspire.config.json (new format)
+        // Read profiles from apphost.run.json (created by codegen) and merge into aspire.config.json
+        var appHostRunPath = Path.Combine(directory.FullName, "apphost.run.json");
+        var profiles = AspireConfigFile.ReadApphostRunProfiles(appHostRunPath, _logger);
+
+        if (profiles is not null && File.Exists(appHostRunPath))
+        {
+            try
             {
-                try
-                {
-                    serverProcess.Kill(entireProcessTree: true);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogDebug(ex, "Error killing AppHost server process after scaffolding");
-                }
+                // Delete apphost.run.json since profiles are now in aspire.config.json
+                File.Delete(appHostRunPath);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to delete apphost.run.json after reading profiles");
             }
         }
+
+        config.Profiles = profiles;
+        if (prepareResult.ChannelName is not null)
+        {
+            config.Channel = prepareResult.ChannelName;
+        }
+        config.AppHost ??= new AspireConfigAppHost();
+        config.AppHost.Path ??= language.AppHostFileName;
+        config.AppHost.Language = language.LanguageId;
+        config.Save(directory.FullName);
+        return true;
     }
 
     private async Task<int> InstallDependenciesAsync(

@@ -58,7 +58,7 @@ internal sealed class BuilderModel
 /// </list>
 /// </para>
 /// </remarks>
-public sealed class AtsPythonCodeGenerator : ICodeGenerator
+internal sealed class AtsPythonCodeGenerator : ICodeGenerator
 {
     private static readonly HashSet<string> s_pythonKeywords = new(StringComparer.Ordinal)
     {

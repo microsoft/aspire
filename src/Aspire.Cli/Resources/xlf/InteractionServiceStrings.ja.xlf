@@ -102,6 +102,11 @@
         <target state="translated">プロジェクトを構築できませんでした。{0} でログを表示する</target>
         <note />
       </trans-unit>
+      <trans-unit id="ProjectCouldNotBeCreated">
+        <source>The app could not be created. See logs at {0}</source>
+        <target state="new">The app could not be created. See logs at {0}</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ProjectOptionDoesntExist">
         <source>The --apphost option specified a project that does not exist.</source>
         <target state="translated">--apphost オプションで、存在しないプロジェクトが指定されています。</target>

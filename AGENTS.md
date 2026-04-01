@@ -393,6 +393,7 @@ The following specialized skills are available in `.github/skills/`:
 - **test-management**: Quarantines or disables flaky/problematic tests using the QuarantineTools utility
 - **connection-properties**: Expert for creating and improving Connection Properties in Aspire resources
 - **dependency-update**: Guides dependency version updates by checking nuget.org, triggering the dotnet-migrate-package Azure DevOps pipeline, and monitoring runs
+- **api-review**: Reviews .NET API surface area PRs for design guideline violations, applies rules from .NET Framework Design Guidelines and Aspire conventions, and attributes findings to the author who introduced each API
 - **startup-perf**: Measures Aspire application startup performance using dotnet-trace and the TraceAnalyzer tool
 
 ## Pattern-Based Instructions

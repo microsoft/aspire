@@ -46,6 +46,12 @@ public static class AttributeDataReader
     // --- AspireExportIgnore lookup ---
 
     /// <summary>
+    /// Determines whether the specified <paramref name="type"/> has the AspireExportIgnore attribute.
+    /// </summary>
+    public static bool HasAspireExportIgnoreData(Type type)
+        => HasAttribute(type.GetCustomAttributesData(), AspireExportIgnoreAttributeFullName);
+
+    /// <summary>
     /// Determines whether the specified <paramref name="property"/> has the AspireExportIgnore attribute.
     /// </summary>
     public static bool HasAspireExportIgnoreData(PropertyInfo property)

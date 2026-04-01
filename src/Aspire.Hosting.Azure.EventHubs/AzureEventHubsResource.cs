@@ -213,8 +213,6 @@ public class AzureEventHubsResource(string name, Action<AzureResourceInfrastruct
         }
     }
 
-    BicepOutputReference IAzurePrivateEndpointTarget.Id => Id;
-
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["namespace"];
 
     string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() => "privatelink.servicebus.windows.net";

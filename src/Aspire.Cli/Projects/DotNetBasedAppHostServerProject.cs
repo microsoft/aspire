@@ -22,7 +22,6 @@ namespace Aspire.Cli.Projects;
 internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
 {
     private const string ProjectHashFileName = ".projecthash";
-    private const string FolderPrefix = ".aspire";
     private const string AppsFolder = "hosts";
     public const string ProjectFileName = "AppHostServer.csproj";
     private const string ProjectDllName = "AppHostServer.dll";
@@ -74,20 +73,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         else
         {
             var pathDir = Convert.ToHexString(pathHash)[..12].ToLowerInvariant();
-            var tempPath = Path.GetTempPath();
-            // On macOS, /var is a symlink to /private/var. MSBuild resolves symlinks when
-            // computing relative paths between projects, but then tries to resolve those
-            // relative paths from the original (unresolved) directory. This mismatch causes
-            // transitive project references to fail. Using the canonical path ensures consistency.
-            if (OperatingSystem.IsMacOS() && tempPath.StartsWith("/var/", StringComparison.Ordinal))
-            {
-                var canonical = "/private" + tempPath;
-                if (Directory.Exists(canonical))
-                {
-                    tempPath = canonical;
-                }
-            }
-            _projectModelPath = Path.Combine(tempPath, FolderPrefix, AppsFolder, pathDir);
+            _projectModelPath = Path.Combine(CliPathHelper.GetAspireHomeDirectory(), AppsFolder, pathDir);
         }
 
         // Create a stable UserSecretsId based on the app path hash
@@ -97,7 +83,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     }
 
     /// <inheritdoc />
-    public string AppPath => _appPath;
+    public string AppDirectoryPath => _appPath;
 
     public string ProjectModelPath => _projectModelPath;
     public string UserSecretsId => _userSecretsId;

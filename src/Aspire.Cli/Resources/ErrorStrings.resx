@@ -118,7 +118,7 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="MinimumSdkVersionNotMet" xml:space="preserve">
-    <value>The Aspire CLI requires .NET SDK version {0} or later. Detected: {1}.</value>
+    <value>C# apphost requires .NET SDK version {0} or later. Detected: {1}.</value>
   </data>
   <data name="InvalidLocaleProvided" xml:space="preserve">
     <value>Invalid locale {0} provided will not be used.</value>

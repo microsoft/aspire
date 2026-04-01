@@ -31,7 +31,7 @@ internal interface IAppHostServerProject
     /// <summary>
     /// Gets the path to the user's app (the polyglot apphost directory).
     /// </summary>
-    string AppPath { get; }
+    string AppDirectoryPath { get; }
 
     /// <summary>
     /// Prepares the AppHost server for running.

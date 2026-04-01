@@ -1091,7 +1091,7 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("withBuildArg", Description = "Adds a build argument from a parameter resource")]
+    [AspireExport("withParameterBuildArg", MethodName = "withBuildArg", Description = "Adds a build argument from a parameter resource")]
     public static IResourceBuilder<T> WithBuildArg<T>(this IResourceBuilder<T> builder, string name, IResourceBuilder<ParameterResource> value) where T : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -1139,7 +1139,7 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("withBuildSecret", Description = "Adds a build secret from a parameter resource")]
+    [AspireExport("withParameterBuildSecret", MethodName = "withBuildSecret", Description = "Adds a build secret from a parameter resource")]
     public static IResourceBuilder<T> WithBuildSecret<T>(this IResourceBuilder<T> builder, string name, IResourceBuilder<ParameterResource> value) where T : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(builder);

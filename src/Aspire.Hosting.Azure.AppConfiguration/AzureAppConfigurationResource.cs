@@ -77,8 +77,6 @@ public class AzureAppConfigurationResource(string name, Action<AzureResourceInfr
         return store;
     }
 
-    BicepOutputReference IAzurePrivateEndpointTarget.Id => Id;
-
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["configurationStores"];
 
     string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() => "privatelink.azconfig.io";

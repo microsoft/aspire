@@ -2548,7 +2548,8 @@ public static class AtsCapabilityScanner
     /// </summary>
     private static bool HasExportIgnoreAttribute(PropertyInfo property)
     {
-        return AttributeDataReader.HasAspireExportIgnoreData(property);
+        return AttributeDataReader.HasAspireExportIgnoreData(property) ||
+               (property.DeclaringType is not null && AttributeDataReader.HasAspireExportIgnoreData(property.DeclaringType));
     }
 
     /// <summary>
@@ -2556,7 +2557,8 @@ public static class AtsCapabilityScanner
     /// </summary>
     private static bool HasExportIgnoreAttribute(MethodInfo method)
     {
-        return AttributeDataReader.HasAspireExportIgnoreData(method);
+        return AttributeDataReader.HasAspireExportIgnoreData(method) ||
+               (method.DeclaringType is not null && AttributeDataReader.HasAspireExportIgnoreData(method.DeclaringType));
     }
 
     /// <summary>

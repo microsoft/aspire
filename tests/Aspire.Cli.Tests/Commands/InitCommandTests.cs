@@ -1,10 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Projects;
+using Aspire.Cli.Resources;
+using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -541,6 +545,109 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         
         // Assert - should fail with non-zero exit code for invalid channel
         Assert.NotEqual(0, exitCode);
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenCSharpInitializationFails_DisplaysCreationErrorMessage()
+    {
+        TestInteractionService? testInteractionService = null;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Create a solution file only (no project files in the same directory)
+        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
+        File.WriteAllText(solutionFile.FullName, "Fake solution file");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = (sp) =>
+            {
+                testInteractionService = new TestInteractionService();
+                return testInteractionService;
+            };
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.GetSolutionProjectsAsyncCallback = (_, _, _) =>
+                {
+                    return (0, Array.Empty<FileInfo>());
+                };
+                runner.NewProjectAsyncCallback = (templateName, projectName, outputPath, invocationOptions, ct) =>
+                {
+                    return 1; // Simulate failure for C# template
+                };
+                return runner;
+            };
+            options.PackagingServiceFactory = (sp) =>
+            {
+                return new TestPackagingService();
+            };
+        });
+
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
+        var expectedMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ProjectCouldNotBeCreated, executionContext.LogFilePath);
+
+        Assert.NotEqual(0, exitCode);
+        Assert.NotNull(testInteractionService);
+        Assert.Contains(expectedMessage, testInteractionService.DisplayedErrors);
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenTypeScriptInitializationFails_DisplaysCreationErrorMessage()
+    {
+        TestInteractionService? testInteractionService = null;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = (sp) =>
+            {
+                testInteractionService = new TestInteractionService();
+                return testInteractionService;
+            };
+
+            options.LanguageServiceFactory = (sp) =>
+            {
+                var projectFactory = sp.GetRequiredService<IAppHostProjectFactory>();
+                var tsProject = projectFactory.GetProject(new LanguageInfo(
+                    LanguageId: new LanguageId(KnownLanguageId.TypeScript),
+                    DisplayName: "TypeScript (Node.js)",
+                    PackageName: "@aspire/app-host",
+                    DetectionPatterns: ["apphost.ts"],
+                    CodeGenerator: "typescript",
+                    AppHostFileName: "apphost.ts"));
+                return new TestLanguageService { DefaultProject = tsProject };
+            };
+        });
+
+        services.AddSingleton<IScaffoldingService>(new TestScaffoldingService
+        {
+            ScaffoldAsyncCallback = (context, cancellationToken) =>
+            {
+                return Task.FromResult(false); // Simulate failure for TypeScript scaffolding
+            }
+        });
+
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
+        var expectedMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ProjectCouldNotBeCreated, executionContext.LogFilePath);
+
+        Assert.NotEqual(0, exitCode);
+        Assert.NotNull(testInteractionService);
+        Assert.Contains(expectedMessage, testInteractionService.DisplayedErrors);
     }
 
     private sealed class TestPackagingServiceWithChannelTracking(Action<string> onChannelUsed) : IPackagingService

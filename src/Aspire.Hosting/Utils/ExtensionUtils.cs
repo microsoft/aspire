@@ -13,6 +13,7 @@ namespace Aspire.Hosting.Utils;
 #pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 internal static class ExtensionUtils
 {
+    [AspireExportIgnore(Reason = "Debug support inspection is a local .NET helper and is not part of the ATS surface.")]
     public static bool SupportsDebugging(this IResource builder, IConfiguration configuration, [NotNullWhen(true)] out SupportsDebuggingAnnotation? supportsDebuggingAnnotation)
     {
         var supportedLaunchConfigurations = GetSupportedLaunchConfigurations(configuration);

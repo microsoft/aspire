@@ -102,6 +102,11 @@
         <target state="translated">프로젝트를 빌드할 수 없습니다. {0}에서 로그 보기</target>
         <note />
       </trans-unit>
+      <trans-unit id="ProjectCouldNotBeCreated">
+        <source>The app could not be created. See logs at {0}</source>
+        <target state="new">The app could not be created. See logs at {0}</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ProjectOptionDoesntExist">
         <source>The --apphost option specified a project that does not exist.</source>
         <target state="translated">--apphost 옵션에서 존재하지 않는 프로젝트를 지정했습니다.</target>

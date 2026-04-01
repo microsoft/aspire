@@ -41,6 +41,10 @@ public static class AzureCognitiveServicesProjectExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
+        if (builder.Resource.IsEmulator)
+        {
+            throw new InvalidOperationException(FoundryExtensions.LocalProjectsNotSupportedMessage);
+        }
 
         builder.ApplicationBuilder.Services.Configure<AzureProvisioningOptions>(o => o.SupportsTargetedRoleAssignments = true);
 
@@ -598,10 +602,7 @@ public static class AzureCognitiveServicesProjectExtensions
         }
 
         var resource = new AzureContainerRegistryResource(name, configureInfrastructure);
-        if (builder.ExecutionContext.IsPublishMode)
-        {
-            builder.AddResource(resource);
-        }
+        builder.AddResource(resource);
         return resource;
     }
 }

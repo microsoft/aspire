@@ -81,8 +81,6 @@ public class AzureWebPubSubResource(string name, Action<AzureResourceInfrastruct
         yield return new("Uri", UriExpression);
     }
 
-    BicepOutputReference IAzurePrivateEndpointTarget.Id => Id;
-
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["webpubsub"];
 
     string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() => "privatelink.webpubsub.azure.com";

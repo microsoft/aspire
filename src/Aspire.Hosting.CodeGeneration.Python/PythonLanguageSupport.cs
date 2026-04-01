@@ -16,7 +16,7 @@ namespace Aspire.Hosting.CodeGeneration.Python;
 /// the runtime to create a virtual environment and install dependencies. When <c>uv</c> is available
 /// on PATH it is preferred; otherwise the standard <c>python -m venv</c> / <c>pip</c> toolchain is used.
 /// </remarks>
-public sealed class PythonLanguageSupport : ILanguageSupport
+internal sealed class PythonLanguageSupport : ILanguageSupport
 {
     /// <summary>
     /// The language/runtime identifier for Python.

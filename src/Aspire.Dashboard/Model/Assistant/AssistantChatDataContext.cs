@@ -102,10 +102,11 @@ public sealed class AssistantChatDataContext
         return SharedAIHelpers.GetTraceJson(spans, r => OtlpHelpers.GetResourceName(r, resources), AIHelpers.GetDashboardUrl(_dashboardOptions.CurrentValue));
     }
 
+    // resourceName is provided as a non-nullable string to prevent the JSON schema from including an array. An array breaks VS integration.
     [Description("Get structured logs for resources.")]
     public async Task<string> GetStructuredLogsAsync(
         [Description("The resource name. This limits logs returned to the specified resource. If no resource name is specified then structured logs for all resources are returned.")]
-        string? resourceName = null,
+        string resourceName,
         CancellationToken cancellationToken = default)
     {
         // TODO: The resourceName might be a name that resolves to multiple replicas, e.g. catalogservice has two replicas.
@@ -147,10 +148,11 @@ public sealed class AssistantChatDataContext
         return response;
     }
 
+    // resourceName is provided as a non-nullable string to prevent the JSON schema from including an array. An array breaks VS integration.
     [Description("Get distributed traces for resources. A distributed trace is used to track operations. A distributed trace can span multiple resources across a distributed system. Includes a list of distributed traces with their IDs, resources in the trace, duration and whether an error occurred in the trace.")]
     public async Task<string> GetTracesAsync(
         [Description("The resource name. This limits traces returned to the specified resource. If no resource name is specified then distributed traces for all resources are returned.")]
-        string? resourceName = null,
+        string resourceName,
         CancellationToken cancellationToken = default)
     {
         // TODO: The resourceName might be a name that resolves to multiple replicas, e.g. catalogservice has two replicas.
