@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Runtime.CompilerServices;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Aspire.Cli.Tests.Utils;
@@ -429,6 +430,22 @@ internal static class CliE2ETestHelpers
         }
 
         return new LocalChannelInfo(localChannelPackagesPath, sdkVersion);
+    }
+
+    internal static void WriteLocalChannelSettings(string projectRoot, string sdkVersion)
+    {
+        var configPath = Path.Combine(projectRoot, "aspire.config.json");
+        var config = File.Exists(configPath)
+            ? JsonNode.Parse(File.ReadAllText(configPath))?.AsObject() ?? new JsonObject()
+            : new JsonObject();
+
+        config["channel"] = "local";
+        config["sdk"] = new JsonObject
+        {
+            ["version"] = sdkVersion
+        };
+
+        File.WriteAllText(configPath, config.ToJsonString());
     }
 
     /// <summary>

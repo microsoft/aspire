@@ -154,7 +154,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
 
         if (localChannel is not null)
         {
-            WriteLocalChannelSettings(projectRoot, localChannel.SdkVersion);
+            CliE2ETestHelpers.WriteLocalChannelSettings(projectRoot, localChannel.SdkVersion);
         }
 
         // Run aspire init in brownfield mode
@@ -228,18 +228,5 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         await auto.EnterAsync();
 
         await pendingRun;
-    }
-
-    private static void WriteLocalChannelSettings(string projectRoot, string sdkVersion)
-    {
-        var configPath = Path.Combine(projectRoot, "aspire.config.json");
-
-        var config = new JsonObject
-        {
-            ["channel"] = "local",
-            ["sdk"] = new JsonObject { ["version"] = sdkVersion }
-        };
-
-        File.WriteAllText(configPath, config.ToJsonString());
     }
 }

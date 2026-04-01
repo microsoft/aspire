@@ -26,6 +26,7 @@ public sealed class TypeScriptSqlServerNativeAssetsBundleTests(ITestOutputHelper
             workspace,
             installMode,
             ["Aspire.Hosting.CodeGeneration.TypeScript.", "Aspire.Hosting.SqlServer."]);
+        var channelArgument = localChannel is not null ? " --channel local" : string.Empty;
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(
             repoRoot,
@@ -50,16 +51,10 @@ public sealed class TypeScriptSqlServerNativeAssetsBundleTests(ITestOutputHelper
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 
-            await auto.TypeAsync("aspire config set channel local --global");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
-
-            await auto.TypeAsync($"aspire config set sdk.version {localChannel.SdkVersion} --global");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
+            CliE2ETestHelpers.WriteLocalChannelSettings(workspace.WorkspaceRoot.FullName, localChannel.SdkVersion);
         }
 
-        await auto.TypeAsync("aspire init --language typescript --non-interactive");
+        await auto.TypeAsync($"aspire init --language typescript --non-interactive{channelArgument}");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
         await auto.WaitForSuccessPromptAsync(counter);
