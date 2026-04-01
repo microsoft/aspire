@@ -66,6 +66,7 @@
     <Project Path="src/Aspire.Hosting.OpenAI/Aspire.Hosting.OpenAI.csproj" />
     <Project Path="src/Aspire.Hosting.Oracle/Aspire.Hosting.Oracle.csproj" />
     <Project Path="src/Aspire.Hosting.Orleans/Aspire.Hosting.Orleans.csproj" />
+    <Project Path="src/Aspire.Hosting.Pipelines.GitHubActions/Aspire.Hosting.Pipelines.GitHubActions.csproj" />
     <Project Path="src/Aspire.Hosting.PostgreSQL/Aspire.Hosting.PostgreSQL.csproj" />
     <Project Path="src/Aspire.Hosting.Python/Aspire.Hosting.Python.csproj" />
     <Project Path="src/Aspire.Hosting.Qdrant/Aspire.Hosting.Qdrant.csproj" />
@@ -476,6 +477,7 @@
     <Project Path="tests/Aspire.Hosting.JavaScript.Tests/Aspire.Hosting.JavaScript.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.OpenAI.Tests/Aspire.Hosting.OpenAI.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Oracle.Tests/Aspire.Hosting.Oracle.Tests.csproj" />
+    <Project Path="tests/Aspire.Hosting.Pipelines.GitHubActions.Tests/Aspire.Hosting.Pipelines.GitHubActions.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.PostgreSQL.Tests/Aspire.Hosting.PostgreSQL.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Python.Tests/Aspire.Hosting.Python.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Qdrant.Tests/Aspire.Hosting.Qdrant.Tests.csproj" />

@@ -22,4 +22,11 @@ public class PipelineStepFactoryContext
     /// Gets the resource that this factory is associated with.
     /// </summary>
     public required IResource Resource { get; init; }
+
+    /// <summary>
+    /// Gets the pipeline steps that were directly added to the pipeline (not from annotations).
+    /// This allows annotation factories to see the existing steps and create synthetic steps
+    /// that depend on them.
+    /// </summary>
+    public IReadOnlyList<PipelineStep> ExistingSteps { get; init; } = [];
 }

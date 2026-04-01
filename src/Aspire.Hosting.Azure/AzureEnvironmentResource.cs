@@ -82,6 +82,7 @@ public sealed class AzureEnvironmentResource : Resource
                 Name = "validate-azure-login",
                 Description = "Validates Azure CLI authentication before deployment.",
                 Action = ctx => ValidateAzureLoginAsync(ctx),
+                Tags = [WellKnownDependencyTags.AzureCli],
                 RequiredBySteps = [WellKnownPipelineSteps.Deploy],
                 DependsOnSteps = [WellKnownPipelineSteps.DeployPrereq]
             };
@@ -99,6 +100,7 @@ public sealed class AzureEnvironmentResource : Resource
                     // Add Azure deployment information to the pipeline summary
                     AddToPipelineSummary(ctx, provisioningContext);
                 },
+                Tags = [WellKnownDependencyTags.AzureCli],
                 RequiredBySteps = [WellKnownPipelineSteps.Deploy],
                 DependsOnSteps = [WellKnownPipelineSteps.DeployPrereq]
             };
@@ -109,7 +111,7 @@ public sealed class AzureEnvironmentResource : Resource
                 Name = ProvisionInfrastructureStepName,
                 Description = "Aggregation step for all Azure infrastructure provisioning operations.",
                 Action = _ => Task.CompletedTask,
-                Tags = [WellKnownPipelineTags.ProvisionInfrastructure],
+                Tags = [WellKnownPipelineTags.ProvisionInfrastructure, WellKnownDependencyTags.AzureCli],
                 RequiredBySteps = [WellKnownPipelineSteps.Deploy],
                 DependsOnSteps = [WellKnownPipelineSteps.DeployPrereq]
             };

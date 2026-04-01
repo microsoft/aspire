@@ -45,7 +45,7 @@ public class ProjectResource : Resource, IResourceWithEnvironment, IResourceWith
                 Name = $"build-{name}",
                 Description = $"Builds the container image for the {name} project.",
                 Action = BuildProjectImage,
-                Tags = [WellKnownPipelineTags.BuildCompute],
+                Tags = [WellKnownPipelineTags.BuildCompute, WellKnownDependencyTags.DotNet, WellKnownDependencyTags.Docker],
                 RequiredBySteps = [WellKnownPipelineSteps.Build],
                 DependsOnSteps = [WellKnownPipelineSteps.BuildPrereq],
                 Resource = this
@@ -58,7 +58,7 @@ public class ProjectResource : Resource, IResourceWithEnvironment, IResourceWith
                 {
                     Name = $"push-{name}",
                     Action = ctx => PipelineStepHelpers.PushImageToRegistryAsync(this, ctx),
-                    Tags = [WellKnownPipelineTags.PushContainerImage],
+                    Tags = [WellKnownPipelineTags.PushContainerImage, WellKnownDependencyTags.Docker],
                     RequiredBySteps = [WellKnownPipelineSteps.Push],
                     Resource = this
                 };

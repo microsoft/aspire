@@ -25,12 +25,15 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 {
     private readonly List<PipelineStep> _steps = [];
     private readonly List<Func<PipelineConfigurationContext, Task>> _configurationCallbacks = [];
+    private readonly DistributedApplicationModel _model;
 
     // Store resolved pipeline data for diagnostics
     private List<PipelineStep>? _lastResolvedSteps;
 
-    public DistributedApplicationPipeline()
+    public DistributedApplicationPipeline(DistributedApplicationModel model)
     {
+        _model = model;
+
         // Dependency order
         // {verb} -> {user steps} -> {verb}-prereq
 
@@ -264,6 +267,22 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                 DumpDependencyGraphDiagnostics(stepsToAnalyze, context);
             }
         });
+
+        // Add pipeline-init step for generating CI/CD workflow files
+        _steps.Add(new PipelineStep
+        {
+            Name = WellKnownPipelineSteps.PipelineInit,
+            Description = "Generates CI/CD pipeline workflow files from pipeline environment resources in the app model.",
+            Action = ExecutePipelineInitAsync
+        });
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DistributedApplicationPipeline"/> class with an empty model.
+    /// Used for testing scenarios where the model is not needed.
+    /// </summary>
+    public DistributedApplicationPipeline() : this(new DistributedApplicationModel(Array.Empty<IResource>()))
+    {
     }
 
     public bool HasSteps => _steps.Count > 0;
@@ -272,6 +291,23 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         Func<PipelineStepContext, Task> action,
         object? dependsOn = null,
         object? requiredBy = null)
+    {
+        AddStep(name, action, dependsOn, requiredBy, scheduledBy: null);
+    }
+
+    /// <summary>
+    /// Adds a deployment step to the pipeline with an optional scheduling target.
+    /// </summary>
+    /// <param name="name">The unique name of the step.</param>
+    /// <param name="action">The action to execute for this step.</param>
+    /// <param name="dependsOn">The name of the step this step depends on, or a list of step names.</param>
+    /// <param name="requiredBy">The name of the step that requires this step, or a list of step names.</param>
+    /// <param name="scheduledBy">The pipeline step target to schedule this step onto (e.g., a CI/CD job).</param>
+    public void AddStep(string name,
+        Func<PipelineStepContext, Task> action,
+        object? dependsOn,
+        object? requiredBy,
+        IPipelineStepTarget? scheduledBy)
     {
         if (_steps.Any(s => s.Name == name))
         {
@@ -282,7 +318,8 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         var step = new PipelineStep
         {
             Name = name,
-            Action = action
+            Action = action,
+            ScheduledBy = scheduledBy
         };
 
         if (dependsOn != null)
@@ -351,20 +388,73 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         _steps.Add(step);
     }
 
+    public void ScheduleStep(string stepName, IPipelineStepTarget target)
+    {
+        ArgumentNullException.ThrowIfNull(stepName);
+        ArgumentNullException.ThrowIfNull(target);
+
+        var step = _steps.FirstOrDefault(s => s.Name == stepName)
+            ?? throw new InvalidOperationException(
+                $"No step with the name '{stepName}' exists in the pipeline. " +
+                $"Use AddStep to add the step first, or check the step name is correct.");
+
+        step.ScheduledBy = target;
+    }
+
     public void AddPipelineConfiguration(Func<PipelineConfigurationContext, Task> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
         _configurationCallbacks.Add(callback);
     }
 
+    public async Task<IPipelineEnvironment> GetEnvironmentAsync(CancellationToken cancellationToken = default)
+    {
+        var relevantEnvironments = new List<IPipelineEnvironment>();
+        var checkContext = new PipelineEnvironmentCheckContext { CancellationToken = cancellationToken };
+
+        foreach (var resource in _model.Resources.OfType<IPipelineEnvironment>())
+        {
+            if (resource is IResource resourceWithAnnotations &&
+                resourceWithAnnotations.TryGetAnnotationsOfType<PipelineEnvironmentCheckAnnotation>(out var annotations))
+            {
+                foreach (var annotation in annotations)
+                {
+                    if (await annotation.CheckAsync(checkContext).ConfigureAwait(false))
+                    {
+                        relevantEnvironments.Add(resource);
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (relevantEnvironments.Count > 1)
+        {
+            var environmentNames = string.Join(", ", relevantEnvironments.Select(e => ((IResource)e).Name));
+            throw new InvalidOperationException(
+                $"Multiple pipeline environments reported as relevant for the current invocation: {environmentNames}. " +
+                $"Only one pipeline environment can be active at a time.");
+        }
+
+        return relevantEnvironments.Count == 1
+            ? relevantEnvironments[0]
+            : new LocalPipelineEnvironment();
+    }
+
     public async Task ExecuteAsync(PipelineContext context)
     {
-        var annotationSteps = await CollectStepsFromAnnotationsAsync(context).ConfigureAwait(false);
-        var allSteps = _steps.Concat(annotationSteps).ToList();
+        var (resourceSteps, deferredAnnotations) = await CollectResourceStepsAsync(context, _steps).ConfigureAwait(false);
+        var allStepsSoFar = _steps.Concat(resourceSteps).ToList();
 
-        // Execute configuration callbacks even if there are no steps
-        // This allows callbacks to run validation or other logic
-        await ExecuteConfigurationCallbacksAsync(context, allSteps).ConfigureAwait(false);
+        // Execute configuration callbacks before the deferred (pipeline environment) pass.
+        // Config callbacks wire up cross-step dependencies (e.g., push-X.DependsOn(build-X))
+        // that the scheduling resolver needs to see for correct job assignments.
+        await ExecuteConfigurationCallbacksAsync(context, allStepsSoFar).ConfigureAwait(false);
+
+        // Deferred pass: pipeline environment annotations (e.g., GHA workflow) run
+        // scheduling over the fully-wired step graph, including config callback edges.
+        var environmentSteps = await CollectEnvironmentStepsAsync(context, deferredAnnotations, allStepsSoFar).ConfigureAwait(false);
+        var allSteps = allStepsSoFar.Concat(environmentSteps).ToList();
 
         if (allSteps.Count == 0)
         {
@@ -382,8 +472,13 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
         var (stepsToExecute, stepsByName) = FilterStepsForExecution(allSteps, context);
 
+        // Detect scope from the active pipeline environment. If we're running inside
+        // a CI job with a scope annotation, enter continuation mode: only in-scope steps
+        // execute, while out-of-scope steps are skipped (or have their TryRestoreStepAsync invoked).
+        var inScopeStepNames = await DetectScopeAsync(context).ConfigureAwait(false);
+
         // Build dependency graph and execute with readiness-based scheduler
-        await ExecuteStepsAsTaskDag(stepsToExecute, stepsByName, context).ConfigureAwait(false);
+        await ExecuteStepsAsTaskDag(stepsToExecute, stepsByName, context, inScopeStepNames).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -443,6 +538,69 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         return (stepsToExecute, filteredStepsByName);
     }
 
+    /// <summary>
+    /// Detects the current execution scope from the active pipeline environment.
+    /// Returns the set of in-scope step names, or null if not in continuation mode.
+    /// </summary>
+    private async Task<HashSet<string>?> DetectScopeAsync(PipelineContext context)
+    {
+        // Find the active pipeline environment
+        var environment = await GetEnvironmentAsync(context.CancellationToken).ConfigureAwait(false);
+
+        if (environment is not IResource environmentResource)
+        {
+            return null;
+        }
+
+        // Check for scope annotation
+        if (!environmentResource.TryGetAnnotationsOfType<PipelineScopeAnnotation>(out var scopeAnnotations))
+        {
+            return null;
+        }
+
+        var scopeAnnotation = scopeAnnotations.FirstOrDefault();
+        if (scopeAnnotation is null)
+        {
+            return null;
+        }
+
+        var scopeContext = new PipelineScopeContext { CancellationToken = context.CancellationToken };
+        var scopeResult = await scopeAnnotation.ResolveAsync(scopeContext).ConfigureAwait(false);
+
+        if (scopeResult is null)
+        {
+            return null;
+        }
+
+        // We have a scope — look up the scope map to find which steps are in this scope
+        if (!environmentResource.TryGetAnnotationsOfType<PipelineScopeMapAnnotation>(out var mapAnnotations))
+        {
+            context.Logger.LogWarning(
+                "Scope detected (RunId={RunId}, JobId={JobId}) but no PipelineScopeMapAnnotation found. " +
+                "All steps will execute.",
+                scopeResult.RunId,
+                scopeResult.JobId);
+            return null;
+        }
+
+        var scopeMap = mapAnnotations.FirstOrDefault();
+        if (scopeMap is null || !scopeMap.ScopeToSteps.TryGetValue(scopeResult.JobId, out var stepNames))
+        {
+            context.Logger.LogWarning(
+                "Scope '{JobId}' not found in scope map. All steps will execute.",
+                scopeResult.JobId);
+            return null;
+        }
+
+        context.Logger.LogInformation(
+            "Continuation mode: RunId={RunId}, JobId={JobId}, executing {Count} step(s)",
+            scopeResult.RunId,
+            scopeResult.JobId,
+            stepNames.Count);
+
+        return new HashSet<string>(stepNames, StringComparer.Ordinal);
+    }
+
     private static List<PipelineStep> ComputeTransitiveDependencies(
         PipelineStep step,
         Dictionary<string, PipelineStep> stepsByName)
@@ -476,9 +634,14 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         return result;
     }
 
-    private static async Task<List<PipelineStep>> CollectStepsFromAnnotationsAsync(PipelineContext context)
+    /// <summary>
+    /// First pass: collects steps from non-pipeline-environment resource annotations.
+    /// Returns the collected steps and any deferred (pipeline environment) annotations for the second pass.
+    /// </summary>
+    private static async Task<(List<PipelineStep> Steps, List<(IResource Resource, PipelineStepAnnotation Annotation)> DeferredAnnotations)> CollectResourceStepsAsync(PipelineContext context, IReadOnlyList<PipelineStep> existingSteps)
     {
         var steps = new List<PipelineStep>();
+        var deferredAnnotations = new List<(IResource Resource, PipelineStepAnnotation Annotation)>();
 
         foreach (var resource in context.Model.Resources)
         {
@@ -487,10 +650,18 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
             foreach (var annotation in annotations)
             {
+                if (resource is IPipelineEnvironment)
+                {
+                    // Defer pipeline environment annotations — they need visibility of all collected steps
+                    deferredAnnotations.Add((resource, annotation));
+                    continue;
+                }
+
                 var factoryContext = new PipelineStepFactoryContext
                 {
                     PipelineContext = context,
-                    Resource = resource
+                    Resource = resource,
+                    ExistingSteps = existingSteps
                 };
 
                 var annotationSteps = await annotation.CreateStepsAsync(factoryContext).ConfigureAwait(false);
@@ -499,6 +670,38 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                     steps.Add(step);
                     step.Resource ??= resource;
                 }
+            }
+        }
+
+        return (steps, deferredAnnotations);
+    }
+
+    /// <summary>
+    /// Second pass: collects steps from deferred pipeline environment annotations.
+    /// These annotations run scheduling over the fully-wired step graph (including
+    /// configuration callback edges) so that job assignments are correct.
+    /// </summary>
+    private static async Task<List<PipelineStep>> CollectEnvironmentStepsAsync(
+        PipelineContext context,
+        List<(IResource Resource, PipelineStepAnnotation Annotation)> deferredAnnotations,
+        List<PipelineStep> allStepsSoFar)
+    {
+        var steps = new List<PipelineStep>();
+
+        foreach (var (resource, annotation) in deferredAnnotations)
+        {
+            var factoryContext = new PipelineStepFactoryContext
+            {
+                PipelineContext = context,
+                Resource = resource,
+                ExistingSteps = allStepsSoFar
+            };
+
+            var annotationSteps = await annotation.CreateStepsAsync(factoryContext).ConfigureAwait(false);
+            foreach (var step in annotationSteps)
+            {
+                steps.Add(step);
+                step.Resource ??= resource;
             }
         }
 
@@ -583,7 +786,8 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
     private static async Task ExecuteStepsAsTaskDag(
         List<PipelineStep> steps,
         Dictionary<string, PipelineStep> stepsByName,
-        PipelineContext context)
+        PipelineContext context,
+        HashSet<string>? inScopeStepNames = null)
     {
         // Validate no cycles exist in the dependency graph
         ValidateDependencyGraph(steps, stepsByName);
@@ -655,7 +859,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                         {
                             PipelineLoggerProvider.CurrentStep = reportingStep;
 
-                            await ExecuteStepAsync(step, stepContext).ConfigureAwait(false);
+                            await ExecuteStepAsync(step, stepContext, inScopeStepNames).ConfigureAwait(false);
                         }
                         catch (Exception ex)
                         {
@@ -835,10 +1039,32 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         }
     }
 
-    private static async Task ExecuteStepAsync(PipelineStep step, PipelineStepContext stepContext)
+    private static async Task ExecuteStepAsync(PipelineStep step, PipelineStepContext stepContext, HashSet<string>? inScopeStepNames = null)
     {
         try
         {
+            // In continuation mode, out-of-scope steps are either restored or skipped.
+            var isInScope = inScopeStepNames is null || inScopeStepNames.Contains(step.Name);
+
+            // If the step has a restore callback, try it first. If it returns true,
+            // the step is considered already complete (e.g., restored from CI/CD state
+            // persisted by a previous job) and its Action is not invoked.
+            if (step.TryRestoreStepAsync is not null)
+            {
+                var restored = await step.TryRestoreStepAsync(stepContext).ConfigureAwait(false);
+                if (restored)
+                {
+                    return;
+                }
+            }
+
+            // Out-of-scope steps that couldn't restore are auto-skipped in continuation mode.
+            // Their dependencies are still satisfied so downstream in-scope steps can proceed.
+            if (!isInScope)
+            {
+                return;
+            }
+
             await step.Action(stepContext).ConfigureAwait(false);
         }
         catch (DistributedApplicationException)
@@ -1212,5 +1438,187 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         }
 
         return sb.ToString();
+    }
+
+    private async Task ExecutePipelineInitAsync(PipelineStepContext context)
+    {
+        // Discover all pipeline environment resources in the app model
+        var environments = _model.Resources.OfType<IPipelineEnvironment>().ToList();
+
+        if (environments.Count == 0)
+        {
+            context.Logger.LogWarning(
+                "No pipeline environment resources found in the app model. " +
+                "Add a pipeline environment (e.g., builder.AddGitHubActionsWorkflow(\"deploy\")) to generate workflow files.");
+            return;
+        }
+
+        // Detect the repository root directory (best-effort default — extensions may override)
+        var repoRoot = await DetectRepositoryRootAsync(context).ConfigureAwait(false);
+
+        if (repoRoot is not null)
+        {
+            context.Logger.LogInformation("Using repository root: {RepoRoot}", repoRoot);
+        }
+
+        foreach (var env in environments)
+        {
+            var resource = (IResource)env;
+
+            if (!resource.TryGetAnnotationsOfType<PipelineWorkflowGeneratorAnnotation>(out var generators))
+            {
+                context.Logger.LogWarning(
+                    "Pipeline environment '{Name}' does not have a workflow generator annotation. Skipping.",
+                    resource.Name);
+                continue;
+            }
+
+            context.Logger.LogInformation("Generating workflow files for pipeline environment: {Name}", resource.Name);
+
+            var generationContext = new PipelineWorkflowGenerationContext
+            {
+                StepContext = context,
+                Environment = env,
+                Steps = _lastResolvedSteps ?? _steps,
+                RepositoryRootDirectory = repoRoot,
+            };
+
+            foreach (var generator in generators)
+            {
+                await generator.GenerateAsync(generationContext).ConfigureAwait(false);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Detects the repository root directory by trying git, then aspire.config.json,
+    /// and confirms the result with the user via the interaction service.
+    /// </summary>
+    private static async Task<string?> DetectRepositoryRootAsync(PipelineStepContext context)
+    {
+        var ct = context.CancellationToken;
+        var logger = context.Logger;
+
+        // Strategy 1: Try git rev-parse --show-toplevel
+        var gitRoot = await TryGetGitRootAsync(logger, ct).ConfigureAwait(false);
+
+        // Strategy 2: Walk up directories looking for aspire.config.json
+        var configRoot = TryGetAspireConfigRoot(logger);
+
+        // Determine the best candidate
+        string? detectedRoot = gitRoot ?? configRoot;
+
+        if (detectedRoot is null)
+        {
+            logger.LogWarning("Could not auto-detect repository root via git or aspire.config.json.");
+        }
+
+        // Confirm with the user via interaction service, allowing override
+        var interactionService = context.Services.GetService<IInteractionService>();
+
+        if (interactionService is null)
+        {
+            // No interaction service available (e.g., non-interactive mode) — use what we detected
+            return detectedRoot;
+        }
+
+        var prompt = detectedRoot is not null
+            ? $"Detected repository root: {detectedRoot}"
+            : "Could not auto-detect the repository root.";
+
+        var result = await interactionService.PromptInputAsync(
+            "Repository Root",
+            prompt + " Enter the path or press OK to confirm.",
+            new InteractionInput
+            {
+                Name = "repoRoot",
+                Label = "Repository root directory",
+                InputType = InputType.Text,
+                Value = detectedRoot ?? Directory.GetCurrentDirectory(),
+                Required = true,
+            },
+            cancellationToken: ct).ConfigureAwait(false);
+
+        if (result.Canceled)
+        {
+            logger.LogWarning("User cancelled repository root selection.");
+            return null;
+        }
+
+        var selectedPath = result.Data?.Value;
+        if (string.IsNullOrWhiteSpace(selectedPath))
+        {
+            return detectedRoot;
+        }
+
+        var fullPath = Path.GetFullPath(selectedPath);
+        if (!Directory.Exists(fullPath))
+        {
+            logger.LogError("The specified repository root does not exist: {Path}", fullPath);
+            return null;
+        }
+
+        return fullPath;
+    }
+
+    private static async Task<string?> TryGetGitRootAsync(ILogger logger, CancellationToken ct)
+    {
+        try
+        {
+            var startInfo = new ProcessStartInfo("git", "rev-parse --show-toplevel")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+
+            using var process = new Process { StartInfo = startInfo };
+            process.Start();
+
+            var outputTask = process.StandardOutput.ReadToEndAsync(ct);
+            await process.WaitForExitAsync(ct).ConfigureAwait(false);
+
+            if (process.ExitCode != 0)
+            {
+                logger.LogDebug("git rev-parse returned non-zero exit code {ExitCode}.", process.ExitCode);
+                return null;
+            }
+
+            var output = (await outputTask.ConfigureAwait(false)).Trim();
+            if (!string.IsNullOrEmpty(output) && Directory.Exists(output))
+            {
+                logger.LogDebug("Detected git repository root: {GitRoot}", output);
+                return Path.GetFullPath(output);
+            }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            logger.LogDebug(ex, "Git is not installed or not accessible.");
+        }
+
+        return null;
+    }
+
+    private static string? TryGetAspireConfigRoot(ILogger logger)
+    {
+        const string configFileName = "aspire.config.json";
+
+        var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
+
+        while (directory is not null)
+        {
+            var configPath = Path.Combine(directory.FullName, configFileName);
+            if (File.Exists(configPath))
+            {
+                logger.LogDebug("Found {ConfigFile} at: {Directory}", configFileName, directory.FullName);
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        logger.LogDebug("Could not find {ConfigFile} walking up from current directory.", configFileName);
+        return null;
     }
 }

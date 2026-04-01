@@ -63,4 +63,9 @@ public static class WellKnownPipelineSteps
     /// The diagnostic step that dumps dependency graph information for troubleshooting.
     /// </summary>
     public const string Diagnostics = "diagnostics";
+
+    /// <summary>
+    /// The step that generates CI/CD pipeline workflow files from pipeline environment resources.
+    /// </summary>
+    public const string PipelineInit = "pipeline-init";
 }

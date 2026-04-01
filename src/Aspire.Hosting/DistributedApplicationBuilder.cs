@@ -99,7 +99,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
     public IDistributedApplicationEventing Eventing { get; } = new DistributedApplicationEventing();
 
     /// <inheritdoc />
-    public IDistributedApplicationPipeline Pipeline { get; } = new DistributedApplicationPipeline();
+    public IDistributedApplicationPipeline Pipeline { get; }
 
     /// <inheritdoc />
     public IFileSystemService FileSystemService => _directoryService;
@@ -176,6 +176,8 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
     public DistributedApplicationBuilder(DistributedApplicationOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+
+        Pipeline = new DistributedApplicationPipeline(new DistributedApplicationModel(Resources));
 
         _options = options;
 

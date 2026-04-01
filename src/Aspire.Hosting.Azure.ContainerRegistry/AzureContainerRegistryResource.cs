@@ -30,7 +30,7 @@ public class AzureContainerRegistryResource : AzureProvisioningResource, IAzureC
             {
                 Name = $"login-to-acr-{name}",
                 Action = context => AzureContainerRegistryHelpers.LoginToRegistryAsync(this, context),
-                Tags = ["acr-login"],
+                Tags = ["acr-login", WellKnownDependencyTags.AzureCli, WellKnownDependencyTags.Docker],
                 RequiredBySteps = [WellKnownPipelineSteps.PushPrereq],
                 Resource = this
             };

@@ -1,0 +1,53 @@
+﻿name: build-windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-win:
+    name: Build on Windows
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Install Aspire CLI
+        run: |
+          curl -sSL https://aspire.dev/install.sh | bash -s -- -q dev
+          echo "$HOME/.aspire/bin" >> $GITHUB_PATH
+      - name: Run pipeline steps
+        env:
+          DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+        run: aspire do gha-build-windows-default-stage-build-win-job --output-path aspire-output
+      - name: Stage pipeline state
+        run: |
+          mkdir -p aspire-state-staging
+          if [ -d "$HOME/.aspire/deployments" ]; then
+            mkdir -p aspire-state-staging/deployments
+            cp -r $HOME/.aspire/deployments/. aspire-state-staging/deployments/
+          fi
+          if [ -d "aspire-output" ]; then
+            mkdir -p aspire-state-staging/output
+            cp -r aspire-output/. aspire-state-staging/output/
+          fi
+          echo "Staged files:" && find aspire-state-staging -type f 2>/dev/null || echo "No files staged"
+      - name: Upload state
+        uses: actions/upload-artifact@v4
+        with:
+          name: aspire-do-state-build-win
+          path: aspire-state-staging
+          if-no-files-found: ignore
+          include-hidden-files: true

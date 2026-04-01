@@ -457,6 +457,8 @@ public class Program
         builder.Services.AddTransient<UpdateCommand>();
         builder.Services.AddTransient<DeployCommand>();
         builder.Services.AddTransient<DoCommand>();
+        builder.Services.AddTransient<PipelineCommand>();
+        builder.Services.AddTransient<PipelineInitCommand>();
         builder.Services.AddTransient<ExecCommand>();
         builder.Services.AddTransient<McpCommand>();
         builder.Services.AddTransient<McpStartCommand>();

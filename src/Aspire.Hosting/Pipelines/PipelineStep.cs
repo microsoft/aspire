@@ -58,6 +58,35 @@ public class PipelineStep
     public IResource? Resource { get; set; }
 
     /// <summary>
+    /// Gets or sets the pipeline step target that this step is scheduled onto.
+    /// </summary>
+    /// <remarks>
+    /// When set, the step is intended to execute in the context of the specified target
+    /// (e.g., a specific job in a CI/CD workflow). The scheduling resolver validates that
+    /// step-to-target assignments are consistent with the step dependency graph.
+    /// When <c>null</c>, the step is assigned to a default target or runs locally.
+    /// </remarks>
+    public IPipelineStepTarget? ScheduledBy { get; set; }
+
+    /// <summary>
+    /// Gets or initializes an optional callback that attempts to restore this step from prior state.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// When set, the pipeline executor calls this callback before executing the step's <see cref="Action"/>.
+    /// If the callback returns <c>true</c>, the step is considered already complete and its <see cref="Action"/>
+    /// is not invoked. If it returns <c>false</c>, the step executes normally.
+    /// </para>
+    /// <para>
+    /// This enables CI/CD scenarios where pipeline execution is distributed across multiple jobs
+    /// or machines. A step that ran in a previous job can persist its outputs (e.g., via
+    /// <see cref="IDeploymentStateManager"/>), and when the pipeline resumes on a different machine,
+    /// the callback restores that state and signals that re-execution is unnecessary.
+    /// </para>
+    /// </remarks>
+    public Func<PipelineStepContext, Task<bool>>? TryRestoreStepAsync { get; init; }
+
+    /// <summary>
     /// Adds a dependency on another step.
     /// </summary>
     /// <param name="stepName">The name of the step to depend on.</param>

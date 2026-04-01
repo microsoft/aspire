@@ -42,12 +42,14 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
             var prHives = executionContext.HivesDirectory.GetDirectories();
             foreach (var prHive in prHives)
             {
-                // The packages subdirectory contains the actual .nupkg files
-                // Use forward slashes for cross-platform NuGet config compatibility
-                var packagesPath = Path.Combine(prHive.FullName, "packages").Replace('\\', '/');
+                // Use %HOME% environment variable instead of the absolute path so that the
+                // NuGet.config is portable across machines (e.g., local dev → CI runner).
+                // NuGet expands %HOME% at runtime on all platforms.
+                var packagesPath = $"%HOME%/.aspire/hives/{prHive.Name}/packages";
+                var sourceKey = $"aspire-hive-{prHive.Name}";
                 var prChannel = PackageChannel.CreateExplicitChannel(prHive.Name, PackageChannelQuality.Prerelease, new[]
                 {
-                    new PackageMapping("Aspire*", packagesPath),
+                    new PackageMapping("Aspire*", packagesPath, key: sourceKey),
                     new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
                 }, nuGetPackageCache);
 

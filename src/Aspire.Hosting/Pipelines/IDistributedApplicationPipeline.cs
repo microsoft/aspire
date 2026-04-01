@@ -38,6 +38,13 @@ public interface IDistributedApplicationPipeline
     void AddPipelineConfiguration(Func<PipelineConfigurationContext, Task> callback);
 
     /// <summary>
+    /// Schedules a pipeline step to run on a specific pipeline step target (e.g., a workflow job or stage).
+    /// </summary>
+    /// <param name="stepName">The name of the step to schedule.</param>
+    /// <param name="target">The target to schedule the step on.</param>
+    void ScheduleStep(string stepName, IPipelineStepTarget target);
+
+    /// <summary>
     /// Executes all steps in the pipeline in dependency order.
     /// </summary>
     /// <param name="context">The pipeline context for the execution.</param>

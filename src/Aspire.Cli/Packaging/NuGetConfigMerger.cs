@@ -210,6 +210,16 @@ internal class NuGetConfigMerger
         var existingKeys = new HashSet<string>(context.ExistingAdds
             .Select(e => (string?)e.Attribute("key") ?? string.Empty), StringComparer.OrdinalIgnoreCase);
 
+        // Build a lookup from source URL to friendly key name from the mappings
+        var sourceToFriendlyKey = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var mapping in context.Mappings)
+        {
+            if (mapping.Key is not null && !sourceToFriendlyKey.ContainsKey(mapping.Source))
+            {
+                sourceToFriendlyKey[mapping.Source] = mapping.Key;
+            }
+        }
+
         var missingSources = context.RequiredSources
             .Where(s => !existingValues.Contains(s) && !existingKeys.Contains(s))
             .ToArray();
@@ -217,11 +227,15 @@ internal class NuGetConfigMerger
         // Add missing sources
         foreach (var source in missingSources)
         {
-            // Use the source URL as both key and value for consistency with our temporary config
+            // Use the friendly key from PackageMapping if available, otherwise fall back to source URL
+            var keyName = sourceToFriendlyKey.TryGetValue(source, out var friendlyKey) ? friendlyKey : source;
             var add = new XElement("add");
-            add.SetAttributeValue("key", source);
+            add.SetAttributeValue("key", keyName);
             add.SetAttributeValue("value", source);
             context.PackageSources.Add(add);
+
+            // Update the urlToExistingKey map so downstream methods can find the key
+            context.UrlToExistingKey[source] = keyName;
         }
     }
 
@@ -657,9 +671,15 @@ internal class NuGetConfigMerger
             return false;
         }
 
+        // Check if the key follows the aspire-hive-* naming convention
+        if (sourceKey.StartsWith("aspire-hive-", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
         var urlToCheck = sourceValue ?? sourceKey;
         
-        // Check if this is an Aspire PR hive
+        // Check if this is an Aspire PR hive (absolute path or %HOME%-relative path)
         if (!string.IsNullOrEmpty(urlToCheck) && urlToCheck.Contains(".aspire") && urlToCheck.Contains("hives"))
         {
             return true;

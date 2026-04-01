@@ -1,0 +1,107 @@
+﻿name: deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build:
+    name: 'Build & Publish'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Install Aspire CLI
+        run: |
+          curl -sSL https://aspire.dev/install.sh | bash -s -- -q dev
+          echo "$HOME/.aspire/bin" >> $GITHUB_PATH
+      - name: Run pipeline steps
+        env:
+          DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+        run: aspire do gha-deploy-default-stage-build-job --output-path aspire-output
+      - name: Stage pipeline state
+        run: |
+          mkdir -p aspire-state-staging
+          if [ -d "$HOME/.aspire/deployments" ]; then
+            mkdir -p aspire-state-staging/deployments
+            cp -r $HOME/.aspire/deployments/. aspire-state-staging/deployments/
+          fi
+          if [ -d "aspire-output" ]; then
+            mkdir -p aspire-state-staging/output
+            cp -r aspire-output/. aspire-state-staging/output/
+          fi
+          echo "Staged files:" && find aspire-state-staging -type f 2>/dev/null || echo "No files staged"
+      - name: Upload state
+        uses: actions/upload-artifact@v4
+        with:
+          name: aspire-do-state-build
+          path: aspire-state-staging
+          if-no-files-found: ignore
+          include-hidden-files: true
+
+  deploy:
+    name: Deploy to Azure
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Install Aspire CLI
+        run: |
+          curl -sSL https://aspire.dev/install.sh | bash -s -- -q dev
+          echo "$HOME/.aspire/bin" >> $GITHUB_PATH
+      - name: Download state from build
+        uses: actions/download-artifact@v4
+        with:
+          name: aspire-do-state-build
+          path: aspire-state-staging
+      - name: Restore pipeline state
+        run: |
+          if [ -d "aspire-state-staging/deployments" ]; then
+            mkdir -p $HOME/.aspire/deployments
+            cp -r aspire-state-staging/deployments/. $HOME/.aspire/deployments/
+          fi
+          if [ -d "aspire-state-staging/output" ]; then
+            mkdir -p aspire-output
+            cp -r aspire-state-staging/output/. aspire-output/
+          fi
+      - name: Run pipeline steps
+        env:
+          DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+        run: aspire do gha-deploy-default-stage-deploy-job --output-path aspire-output
+      - name: Stage pipeline state
+        run: |
+          mkdir -p aspire-state-staging
+          if [ -d "$HOME/.aspire/deployments" ]; then
+            mkdir -p aspire-state-staging/deployments
+            cp -r $HOME/.aspire/deployments/. aspire-state-staging/deployments/
+          fi
+          if [ -d "aspire-output" ]; then
+            mkdir -p aspire-state-staging/output
+            cp -r aspire-output/. aspire-state-staging/output/
+          fi
+          echo "Staged files:" && find aspire-state-staging -type f 2>/dev/null || echo "No files staged"
+      - name: Upload state
+        uses: actions/upload-artifact@v4
+        with:
+          name: aspire-do-state-deploy
+          path: aspire-state-staging
+          if-no-files-found: ignore
+          include-hidden-files: true
