@@ -410,11 +410,4 @@ await container.withCommand("restart", "Restart", async (_ctx) => {
 });
 
 const app = await builder.build();
-const _distributedAppConnectionString = await app.getConnectionString("customcs");
-const _distributedAppEndpoint = await app.getEndpoint("dockerapp", { endpointName: "http" });
-const _distributedAppEndpointForNetwork = await app.getEndpointForNetwork("dockerapp", {
-    networkIdentifier: "localhost",
-    endpointName: "http",
-});
-
 await app.run();

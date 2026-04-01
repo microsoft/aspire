@@ -4,6 +4,7 @@
     "experimentalPolyglot:python": true
   },
   "packages": {
-    "Aspire.Hosting": ""
+    "Aspire.Hosting": "",
+    "Aspire.Hosting.Redis": ""
   }
 }

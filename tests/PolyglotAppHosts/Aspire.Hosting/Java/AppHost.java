@@ -93,8 +93,5 @@ void main() throws Exception {
             return result;
         });
         var app = builder.build();
-        var _distributedAppConnectionString = app.getConnectionString("customcs");
-        var _distributedAppEndpoint = app.getEndpoint("dockerapp", "http");
-        var _distributedAppEndpointForNetwork = app.getEndpointForNetwork("dockerapp", new GetEndpointForNetworkOptions().networkIdentifier("localhost").endpointName("http"));
         app.run();
     }

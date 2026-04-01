@@ -26,7 +26,7 @@ internal sealed class SkillDefinition
         "playwright-cli",
         AgentCommandStrings.SkillDescription_PlaywrightCli,
         skillContent: null, // Playwright is installed via PlaywrightCliInstaller, not a static file
-        isDefault: true);
+        isDefault: false);
 
     /// <summary>
     /// The dotnet-inspect skill for querying .NET API surfaces.
