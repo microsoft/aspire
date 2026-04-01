@@ -490,7 +490,15 @@ public class DistributedApplication : IHost, IAsyncDisposable
             await ExecuteBeforeStartHooksAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        await _host.RunAsync(cancellationToken).ConfigureAwait(false);
+        var lifetime = _host.Services.GetRequiredService<IHostApplicationLifetime>();
+        try
+        {
+            await _host.RunAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (lifetime.ApplicationStopping.IsCancellationRequested)
+        {
+            // Do nothing
+        }
     }
 
     /// <summary>

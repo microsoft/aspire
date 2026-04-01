@@ -158,17 +158,6 @@ internal class DotNetTemplateFactory(
             languageId: KnownLanguageId.CSharp
             );
 
-        yield return new CallbackTemplate(
-            "aspire-py-starter",
-            TemplatingStrings.AspirePyStarter_Description,
-            projectName => $"./{projectName}",
-            ApplyDevLocalhostTldOption,
-            nonInteractive
-                ? ApplySingleFileTemplateWithNoExtraArgsAsync
-                : (template, inputs, parseResult, ct) => ApplySingleFileTemplate(template, inputs, parseResult, PromptForExtraAspirePythonStarterOptionsAsync, ct),
-            languageId: KnownLanguageId.CSharp
-            );
-
         if (showAllTemplates)
         {
             yield return new CallbackTemplate(
@@ -286,16 +275,6 @@ internal class DotNetTemplateFactory(
         var extraArgs = new List<string>();
 
         await PromptForDevLocalhostTldOptionAsync(result, extraArgs, cancellationToken);
-
-        return extraArgs.ToArray();
-    }
-
-    private async Task<string[]> PromptForExtraAspirePythonStarterOptionsAsync(ParseResult result, CancellationToken cancellationToken)
-    {
-        var extraArgs = new List<string>();
-
-        await PromptForDevLocalhostTldOptionAsync(result, extraArgs, cancellationToken);
-        await PromptForRedisCacheOptionAsync(result, extraArgs, cancellationToken);
 
         return extraArgs.ToArray();
     }

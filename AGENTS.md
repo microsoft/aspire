@@ -29,6 +29,7 @@ Instructions for GitHub Copilot and other AI coding agents working with the Aspi
 * Never change global.json unless explicitly asked to.
 * Never change package.json or package-lock.json files unless explicitly asked to.
 * Never change NuGet.config files unless explicitly asked to.
+* When code needs a temporary directory, prefer the repository temp directory abstractions first (for example `IFileSystemService.TempDirectory` / `ITempFileSystemService`) and otherwise use `Directory.CreateTempSubdirectory()` instead of `Path.Combine(Path.GetTempPath(), Path.GetRandomFileName())`; if you need a temporary file path, place it under a securely created temp directory.
 * Don't update files under `*/api/*.cs` (e.g. src/Aspire.Hosting/api/Aspire.Hosting.cs) as they are generated.
 
 ## Code Review Instructions

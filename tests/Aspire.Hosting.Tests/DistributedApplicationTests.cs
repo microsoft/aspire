@@ -370,6 +370,86 @@ public class DistributedApplicationTests
     }
 
     [Fact]
+    public async Task StartAsync_ThrowsWhenCancelled()
+    {
+        const string testName = "startasync-cancelled-during-startup";
+        using var testProgram = CreateTestProgram(testName, randomizePorts: false, includeIntegrationServices: false);
+
+        using var cts = new CancellationTokenSource();
+        testProgram.AppBuilder.Eventing.Subscribe<BeforeStartEvent>((_, cancellationToken) =>
+        {
+            cts.Cancel();
+            return Task.CompletedTask;
+        });
+
+        using var app = testProgram.Build();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await app.StartAsync(cts.Token);
+        }).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+    }
+
+    [Fact]
+    public async Task StartAsync_ThrowsWhenStopped()
+    {
+        const string testName = "startasync-stopped-during-startup";
+        using var testProgram = CreateTestProgram(testName, randomizePorts: false, includeIntegrationServices: false);
+
+        testProgram.AppBuilder.Eventing.Subscribe<BeforeStartEvent>((evt, cancellationToken) =>
+        {
+            evt.Services.GetRequiredService<IHostApplicationLifetime>().StopApplication();
+            return Task.CompletedTask;
+        });
+
+        using var app = testProgram.Build();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await app.StartAsync();
+        }).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+    }
+
+    [Fact]
+    public async Task RunAsync_ThrowsWhenCancelled()
+    {
+        const string testName = "runasync-cancelled-by-caller-during-startup";
+        using var testProgram = CreateTestProgram(testName, randomizePorts: false, includeIntegrationServices: false);
+        using var cts = new CancellationTokenSource();
+
+        testProgram.AppBuilder.Eventing.Subscribe<BeforeStartEvent>((_, cancellationToken) =>
+        {
+            cts.Cancel();
+            return Task.CompletedTask;
+        });
+
+        using var app = testProgram.Build();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await app.RunAsync(cts.Token);
+        }).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+    }
+
+    [Fact]
+    public async Task RunAsync_DoesNotThrowWhenStopped()
+    {
+        const string testName = "runasync-stopped-during-startup";
+        using var testProgram = CreateTestProgram(testName, randomizePorts: false, includeIntegrationServices: false);
+
+        testProgram.AppBuilder.Eventing.Subscribe<BeforeStartEvent>((evt, cancellationToken) =>
+        {
+            // Simulate ctrl+c by a user
+            evt.Services.GetRequiredService<IHostApplicationLifetime>().StopApplication();
+            return Task.CompletedTask;
+        });
+
+        using var app = testProgram.Build();
+
+        await app.RunAsync().DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+    }
+
+    [Fact]
     [RequiresFeature(TestFeature.Docker)]
     public async Task ExplicitStart_StartContainer()
     {

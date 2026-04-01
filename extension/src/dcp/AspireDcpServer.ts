@@ -140,7 +140,7 @@ export default class AspireDcpServer {
                     const config = await createDebugSessionConfiguration(
                         aspireDebugSession.configuration,
                         launchConfig,
-                        payload.args ?? [],
+                        payload.args,
                         payload.env ?? [],
                         { debug: launchConfig.mode === "Debug", runId, debugSessionId: dcpId, isApphost: false, debugSession: aspireDebugSession },
                         foundDebuggerExtension

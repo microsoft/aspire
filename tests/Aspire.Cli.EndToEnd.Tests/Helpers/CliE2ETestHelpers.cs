@@ -376,4 +376,58 @@ internal static class CliE2ETestHelpers
         var relativePath = Path.GetRelativePath(workspace.WorkspaceRoot.FullName, hostPath);
         return $"/workspace/{workspace.WorkspaceRoot.Name}/" + relativePath.Replace('\\', '/');
     }
+
+    /// <summary>
+    /// Copies a directory to testresults/workspaces/{testName}/{label} for CI artifact upload.
+    /// Renames dot-prefixed directories to underscore-prefixed (upload-artifact skips hidden files).
+    /// </summary>
+    internal static void CaptureDirectory(string sourcePath, string testName, string? label)
+    {
+        var destDir = Path.Combine(
+            AppContext.BaseDirectory,
+            "TestResults",
+            "workspaces",
+            testName);
+
+        if (label is not null)
+        {
+            destDir = Path.Combine(destDir, label);
+        }
+
+        using var logWriter = new StreamWriter(Path.Combine(
+            Directory.CreateDirectory(destDir).FullName,
+            "_capture.log"));
+
+        CopyDirectory(sourcePath, destDir, line => logWriter.WriteLine(line));
+    }
+
+    private static void CopyDirectory(string sourceDir, string destDir, Action<string>? log)
+    {
+        Directory.CreateDirectory(destDir);
+
+        log?.Invoke($"DIR: {sourceDir} ({Directory.GetFiles(sourceDir).Length} files, {Directory.GetDirectories(sourceDir).Length} dirs)");
+
+        foreach (var file in Directory.GetFiles(sourceDir))
+        {
+            var destFile = Path.Combine(destDir, Path.GetFileName(file));
+            File.Copy(file, destFile, overwrite: true);
+        }
+
+        foreach (var dir in Directory.GetDirectories(sourceDir))
+        {
+            var dirName = Path.GetFileName(dir);
+
+            // Skip node_modules — too large for artifacts
+            if (dirName.Equals("node_modules", StringComparison.OrdinalIgnoreCase))
+            {
+                log?.Invoke($"  SKIP: {dirName}");
+                continue;
+            }
+
+            // Rename dot-prefixed dirs to underscore-prefixed
+            // (upload-artifact uses include-hidden-files: false by default)
+            var destDirName = dirName.StartsWith('.') ? "_" + dirName[1..] : dirName;
+            CopyDirectory(dir, Path.Combine(destDir, destDirName), log);
+        }
+    }
 }

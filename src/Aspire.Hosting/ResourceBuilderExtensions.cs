@@ -3033,7 +3033,7 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(callback);
 
         var resource = builder.Resource;
-        builder.ApplicationBuilder.Eventing.Subscribe<BeforeStartEvent>((@event, cancellationToken) =>
+        builder.ApplicationBuilder.OnBeforeStart((@event, cancellationToken) =>
         {
             var developerCertificateService = @event.Services.GetRequiredService<IDeveloperCertificateService>();
 

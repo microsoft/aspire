@@ -1,13 +1,17 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Net;
 using System.Text.Json;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Resources;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Dashboard.Utils;
 using Aspire.Otlp.Serialization;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -194,5 +198,113 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
         };
 
         return JsonSerializer.Serialize(response, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+    }
+
+    [Fact]
+    public async Task TelemetryTracesCommand_WithDashboardUrl_FetchesTracesDirectly()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+
+        var handler = new MockHttpMessageHandler(request =>
+        {
+            var url = request.RequestUri!.ToString();
+            if (url.Contains("/api/telemetry/resources"))
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("[]", System.Text.Encoding.UTF8, "application/json")
+                };
+            }
+            if (url.Contains("/api/telemetry/traces"))
+            {
+                var json = BuildTracesJson(("abc1234567890def", "frontend", null, "span001", s_testTime, s_testTime.AddMilliseconds(50), false));
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json")
+                };
+            }
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = true;
+        });
+        services.AddSingleton(handler);
+        services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
+
+        var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("otel traces --dashboard-url http://localhost:18888");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        var dataRows = ParseTableDataRows(outputWriter.Logs);
+        Assert.Single(dataRows);
+        Assert.Contains("frontend", dataRows[0][1]);
+    }
+
+    [Fact]
+    public async Task TelemetryTracesCommand_WithDashboardUrlAndAppHost_ReturnsInvalidCommand()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var testInteractionService = new TestInteractionService();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+        });
+
+        var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("otel traces --dashboard-url http://localhost:18888 --apphost TestAppHost.csproj");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
+        Assert.Equal(TelemetryCommandStrings.DashboardUrlAndAppHostExclusive, errorMessage);
+    }
+
+    [Fact]
+    public async Task TelemetryTracesCommand_WithDashboardUrl_401_DisplaysAuthFailedMessage()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var testInteractionService = new TestInteractionService();
+
+        var handler = new MockHttpMessageHandler(request =>
+        {
+            var url = request.RequestUri!.ToString();
+            if (url.Contains("/api/telemetry/resources"))
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("[]", System.Text.Encoding.UTF8, "application/json")
+                };
+            }
+            return new HttpResponseMessage(HttpStatusCode.Unauthorized);
+        });
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+        });
+        services.AddSingleton(handler);
+        services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
+
+        var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("otel traces --dashboard-url http://localhost:18888");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
+        var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
+        Assert.Equal(TelemetryCommandStrings.DashboardAuthFailed, errorMessage);
     }
 }

@@ -239,12 +239,12 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             foreach (var skill in selectedSkills)
             {
                 // Playwright CLI is installed via PlaywrightCliInstaller, not as a static skill file
-                if (skill.SkillContent is null)
+                if (skill.SkillContent is null && skill.EmbeddedResourceRoot is null)
                 {
                     continue;
                 }
 
-                hasErrors |= !await InstallSkillFileAsync(
+                hasErrors |= !await InstallSkillAsync(
                     workspaceRoot,
                     location.RelativeSkillDirectory,
                     skill,
@@ -253,7 +253,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
 
                 if (location.IncludeUserLevel)
                 {
-                    hasErrors |= !await InstallSkillFileAsync(
+                    hasErrors |= !await InstallSkillAsync(
                         ExecutionContext.HomeDirectory,
                         location.RelativeSkillDirectory,
                         skill,
@@ -334,48 +334,79 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
     }
 
     /// <summary>
-    /// Installs a single skill file at the specified location, creating or updating as needed.
+    /// Installs the files for a skill at the specified location, creating or updating them as needed.
     /// </summary>
     /// <returns><c>true</c> if successful, <c>false</c> if an error occurred.</returns>
-    private async Task<bool> InstallSkillFileAsync(
+    private async Task<bool> InstallSkillAsync(
         DirectoryInfo rootDirectory,
         string relativeSkillDirectory,
         SkillDefinition skill,
         bool isUserLevel,
         CancellationToken cancellationToken)
     {
-        var relativePath = Path.Combine(relativeSkillDirectory, skill.Name, "SKILL.md");
-        var fullPath = Path.Combine(rootDirectory.FullName, relativePath);
-        var content = skill.SkillContent!;
+        var relativeSkillPath = Path.Combine(relativeSkillDirectory, skill.Name);
+        var fullSkillDirectoryPath = Path.Combine(rootDirectory.FullName, relativeSkillPath);
 
         try
         {
-            var directory = Path.GetDirectoryName(fullPath);
-            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
+            var skillFiles = await GetSkillFilesAsync(skill, cancellationToken);
+            var anyFileUpdated = false;
 
-            if (File.Exists(fullPath))
+            foreach (var skillFile in skillFiles)
             {
-                var existingContent = await File.ReadAllTextAsync(fullPath, cancellationToken);
-                if (string.Equals(existingContent.ReplaceLineEndings("\n"), content.ReplaceLineEndings("\n"), StringComparison.Ordinal))
+                var fullPath = Path.Combine(rootDirectory.FullName, relativeSkillPath, skillFile.RelativePath);
+                var directory = Path.GetDirectoryName(fullPath);
+                if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
                 {
-                    return true; // Already up to date
+                    Directory.CreateDirectory(directory);
                 }
+
+                if (File.Exists(fullPath))
+                {
+                    var existingContent = await File.ReadAllTextAsync(fullPath, cancellationToken);
+                    if (string.Equals(existingContent.ReplaceLineEndings("\n"), skillFile.Content.ReplaceLineEndings("\n"), StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+                }
+
+                await File.WriteAllTextAsync(fullPath, skillFile.Content, cancellationToken);
+                anyFileUpdated = true;
             }
 
-            await File.WriteAllTextAsync(fullPath, content, cancellationToken);
-            var displayPath = isUserLevel ? $"~/{relativePath}" : relativePath;
+            if (!anyFileUpdated)
+            {
+                return true;
+            }
+
+            var displayRelativeSkillPath = relativeSkillPath
+                .Replace(Path.DirectorySeparatorChar, '/')
+                .Replace(Path.AltDirectorySeparatorChar, '/');
+            var displayPath = isUserLevel ? $"~/{displayRelativeSkillPath}" : displayRelativeSkillPath;
             _interactionService.DisplayMessage(KnownEmojis.CheckMark,
                 string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkill, skill.Name, displayPath));
             return true;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
             _interactionService.DisplayError(
-                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_FailedToInstallSkill, skill.Name, fullPath, ex.Message));
+                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_FailedToInstallSkill, skill.Name, fullSkillDirectoryPath, ex.Message));
             return false;
         }
+    }
+
+    private static async Task<IReadOnlyList<SkillAssetFile>> GetSkillFilesAsync(SkillDefinition skill, CancellationToken cancellationToken)
+    {
+        if (skill.SkillContent is not null)
+        {
+            return [new SkillAssetFile("SKILL.md", skill.SkillContent)];
+        }
+
+        if (skill.EmbeddedResourceRoot is not null)
+        {
+            return await EmbeddedSkillResourceLoader.LoadTextFilesAsync(skill.EmbeddedResourceRoot, skill.ShouldInstallFile, cancellationToken);
+        }
+
+        throw new InvalidOperationException($"Skill '{skill.Name}' does not define installable files.");
     }
 }
