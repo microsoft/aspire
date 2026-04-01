@@ -234,7 +234,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.WaitUntilAsync(
             s => s.ContainsText("skills should be installed"),
             timeout: TimeSpan.FromSeconds(30), description: "skill selection prompt");
-        await auto.EnterAsync(); // Accept default skills (static skills only, MCP not pre-selected)
+        await auto.EnterAsync(); // Accept default skills (all pre-selected, MCP not pre-selected)
         await auto.WaitUntilTextAsync("complete", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter);
 
@@ -249,3 +249,4 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await pendingRun;
     }
 }
+

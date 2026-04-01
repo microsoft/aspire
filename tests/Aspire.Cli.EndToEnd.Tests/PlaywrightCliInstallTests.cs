@@ -73,12 +73,10 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
         await auto.TypeAsync(" "); // Toggle on Claude Code location
         await auto.EnterAsync();
 
-        // Third prompt: skills. Explicitly select Playwright CLI in addition to the default static skills.
+        // Third prompt: skills. Accept defaults (Aspire, Playwright CLI, dotnet-inspect).
         await auto.WaitUntilAsync(
             s => s.ContainsText("skills should be installed"),
             timeout: TimeSpan.FromSeconds(30), description: "skill selection prompt");
-        await auto.DownAsync();
-        await auto.TypeAsync(" ");
         await auto.EnterAsync();
 
         // Wait for installation to complete (this downloads from npm, can take a while)
@@ -160,12 +158,10 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
         await auto.TypeAsync(" "); // Toggle on Claude Code location
         await auto.EnterAsync();
 
-        // Select Playwright CLI in addition to the default static skills.
+        // Accept default skills, which include Playwright CLI.
         await auto.WaitUntilAsync(
             s => s.ContainsText("skills should be installed"),
             timeout: TimeSpan.FromSeconds(30), description: "skill selection prompt");
-        await auto.DownAsync();
-        await auto.TypeAsync(" ");
         await auto.EnterAsync();
 
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromMinutes(3));
