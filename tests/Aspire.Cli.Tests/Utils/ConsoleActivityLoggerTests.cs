@@ -171,7 +171,7 @@ public class ConsoleActivityLoggerTests
     }
 
     [Fact]
-    public void WriteSummary_WithMarkupCharactersInFailureReason_EscapesCorrectly()
+    public void WriteSummary_WithMarkupCharactersInFailureReason_RendersCorrectly()
     {
         var output = new StringBuilder();
         var logger = CreateLogger(output, interactive: true, color: true);
@@ -179,20 +179,51 @@ public class ConsoleActivityLoggerTests
         logger.StartTask("step1", "Test Step");
         logger.Failure("step1", "Failed");
 
+        // In the real code path, FailureReason values are pre-processed through
+        // ConvertTextWithMarkdownFlag which escapes brackets. Simulate that here.
         var records = new[]
         {
-            new ConsoleActivityLogger.StepDurationRecord("step1", "Test Step", ConsoleActivityLogger.ActivityState.Failure, TimeSpan.FromSeconds(1.5), "Error: Type[T] is invalid [details]")
+            new ConsoleActivityLogger.StepDurationRecord("step1", "Test Step", ConsoleActivityLogger.ActivityState.Failure, TimeSpan.FromSeconds(1.5), "Error: Type[[T]] is invalid [[details]]")
         };
         logger.SetStepDurations(records);
         logger.SetFinalResult(false);
 
-        // Should not throw — failure reason with brackets must be escaped
+        // Should not throw — failure reason with pre-escaped brackets renders correctly
         logger.WriteSummary();
 
         var result = output.ToString();
 
-        // The literal bracket text from the failure reason should appear
+        // The escaped brackets should render as literal brackets in output
         Assert.Contains("Type[T]", result);
+    }
+
+    [Fact]
+    public void WriteSummary_WithSpectreMarkupInFailureReason_RendersMarkupCorrectly()
+    {
+        var output = new StringBuilder();
+        var logger = CreateLogger(output, interactive: true, color: true);
+
+        logger.StartTask("step1", "Test Step");
+        logger.Failure("step1", "Failed");
+
+        // Simulate what happens when ConvertTextWithMarkdownFlag converts
+        // markdown like "Failed to provision **storage-roles**: Deployment failed"
+        // into Spectre markup.
+        var records = new[]
+        {
+            new ConsoleActivityLogger.StepDurationRecord("step1", "Test Step", ConsoleActivityLogger.ActivityState.Failure, TimeSpan.FromSeconds(1.5), "Failed to provision [bold]storage-roles[/]: Deployment failed")
+        };
+        logger.SetStepDurations(records);
+        logger.SetFinalResult(false);
+
+        logger.WriteSummary();
+
+        var result = output.ToString();
+
+        // The resource name should appear in the output without literal [bold] tags
+        Assert.Contains("storage-roles", result);
+        Assert.DoesNotContain("[bold]", result);
+        Assert.DoesNotContain("[/]", result);
     }
 
     [Fact]
