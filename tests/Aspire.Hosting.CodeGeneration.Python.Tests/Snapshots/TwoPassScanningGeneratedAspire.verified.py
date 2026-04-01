@@ -4718,6 +4718,10 @@ class AbstractResource(abc.ABC):
         """Adds a dependency on another resource"""
 
     @abc.abstractmethod
+    def with_union_dependency(self, dependency: str | AbstractResourceWithConnectionString) -> typing.Self:
+        """Adds a dependency from a string or another resource"""
+
+    @abc.abstractmethod
     def with_endpoints(self, endpoints: typing.Iterable[str]) -> typing.Self:
         """Sets the endpoints"""
 
@@ -5001,6 +5005,7 @@ class _BaseResourceKwargs(typing.TypedDict, total=False):
     validator: typing.Callable[[TestResourceContext], bool]
     test_wait_for: AbstractResource
     dependency: AbstractResourceWithConnectionString
+    union_dependency: str | AbstractResourceWithConnectionString
     endpoints: typing.Iterable[str]
     cancellable_operation: typing.Callable[[CancellationToken], None]
     merge_label: str | tuple[str, str]
@@ -5408,6 +5413,17 @@ class _BaseResource(AbstractResource):
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_union_dependency(self, dependency: str | AbstractResourceWithConnectionString) -> typing.Self:
+        """Adds a dependency from a string or another resource"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['dependency'] = dependency
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.Python.Tests/withUnionDependency',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def with_endpoints(self, endpoints: typing.Iterable[str]) -> typing.Self:
         """Sets the endpoints"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -5767,6 +5783,13 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withDependency', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'dependency'. Expected: AbstractResourceWithConnectionString")
+        if _union_dependency := kwargs.pop("union_dependency", None):
+            if _validate_type(_union_dependency, str | AbstractResourceWithConnectionString):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["dependency"] = typing.cast(str | AbstractResourceWithConnectionString, _union_dependency)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withUnionDependency', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'union_dependency'. Expected: str | AbstractResourceWithConnectionString")
         if _endpoints := kwargs.pop("endpoints", None):
             if _validate_type(_endpoints, typing.Iterable[str]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}

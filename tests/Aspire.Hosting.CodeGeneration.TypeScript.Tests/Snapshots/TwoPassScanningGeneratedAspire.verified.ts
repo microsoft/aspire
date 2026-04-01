@@ -1,4 +1,4 @@
-// aspire.ts - Capability-based Aspire SDK
+﻿// aspire.ts - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -5612,6 +5612,7 @@ export interface ConnectionStringResource {
     testWaitFor(dependency: HandleReference): ConnectionStringResourcePromise;
     withConnectionStringDirect(connectionString: string): ConnectionStringResourcePromise;
     withDependency(dependency: HandleReference): ConnectionStringResourcePromise;
+    withUnionDependency(dependency: string | HandleReference): ConnectionStringResourcePromise;
     withEndpoints(endpoints: string[]): ConnectionStringResourcePromise;
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ConnectionStringResourcePromise;
     withMergeLabel(label: string): ConnectionStringResourcePromise;
@@ -5668,6 +5669,7 @@ export interface ConnectionStringResourcePromise extends PromiseLike<ConnectionS
     testWaitFor(dependency: HandleReference): ConnectionStringResourcePromise;
     withConnectionStringDirect(connectionString: string): ConnectionStringResourcePromise;
     withDependency(dependency: HandleReference): ConnectionStringResourcePromise;
+    withUnionDependency(dependency: string | HandleReference): ConnectionStringResourcePromise;
     withEndpoints(endpoints: string[]): ConnectionStringResourcePromise;
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ConnectionStringResourcePromise;
     withMergeLabel(label: string): ConnectionStringResourcePromise;
@@ -6418,6 +6420,21 @@ class ConnectionStringResourceImpl extends ResourceBuilderBase<ConnectionStringR
     }
 
     /** @internal */
+    private async _withUnionDependencyInternal(dependency: string | HandleReference): Promise<ConnectionStringResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<ConnectionStringResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withUnionDependency',
+            rpcArgs
+        );
+        return new ConnectionStringResourceImpl(result, this._client);
+    }
+
+    /** Adds a dependency from a string or another resource */
+    withUnionDependency(dependency: string | HandleReference): ConnectionStringResourcePromise {
+        return new ConnectionStringResourcePromiseImpl(this._withUnionDependencyInternal(dependency));
+    }
+
+    /** @internal */
     private async _withEndpointsInternal(endpoints: string[]): Promise<ConnectionStringResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, endpoints };
         const result = await this._client.invokeCapability<ConnectionStringResourceHandle>(
@@ -6811,6 +6828,11 @@ class ConnectionStringResourcePromiseImpl implements ConnectionStringResourcePro
         return new ConnectionStringResourcePromiseImpl(this._promise.then(obj => obj.withDependency(dependency)));
     }
 
+    /** Adds a dependency from a string or another resource */
+    withUnionDependency(dependency: string | HandleReference): ConnectionStringResourcePromise {
+        return new ConnectionStringResourcePromiseImpl(this._promise.then(obj => obj.withUnionDependency(dependency)));
+    }
+
     /** Sets the endpoints */
     withEndpoints(endpoints: string[]): ConnectionStringResourcePromise {
         return new ConnectionStringResourcePromiseImpl(this._promise.then(obj => obj.withEndpoints(endpoints)));
@@ -6902,6 +6924,7 @@ export interface ContainerRegistryResource {
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ContainerRegistryResourcePromise;
     testWaitFor(dependency: HandleReference): ContainerRegistryResourcePromise;
     withDependency(dependency: HandleReference): ContainerRegistryResourcePromise;
+    withUnionDependency(dependency: string | HandleReference): ContainerRegistryResourcePromise;
     withEndpoints(endpoints: string[]): ContainerRegistryResourcePromise;
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ContainerRegistryResourcePromise;
     withMergeLabel(label: string): ContainerRegistryResourcePromise;
@@ -6948,6 +6971,7 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ContainerRegistryResourcePromise;
     testWaitFor(dependency: HandleReference): ContainerRegistryResourcePromise;
     withDependency(dependency: HandleReference): ContainerRegistryResourcePromise;
+    withUnionDependency(dependency: string | HandleReference): ContainerRegistryResourcePromise;
     withEndpoints(endpoints: string[]): ContainerRegistryResourcePromise;
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ContainerRegistryResourcePromise;
     withMergeLabel(label: string): ContainerRegistryResourcePromise;
@@ -7541,6 +7565,21 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     }
 
     /** @internal */
+    private async _withUnionDependencyInternal(dependency: string | HandleReference): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withUnionDependency',
+            rpcArgs
+        );
+        return new ContainerRegistryResourceImpl(result, this._client);
+    }
+
+    /** Adds a dependency from a string or another resource */
+    withUnionDependency(dependency: string | HandleReference): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._withUnionDependencyInternal(dependency));
+    }
+
+    /** @internal */
     private async _withEndpointsInternal(endpoints: string[]): Promise<ContainerRegistryResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, endpoints };
         const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
@@ -7884,6 +7923,11 @@ class ContainerRegistryResourcePromiseImpl implements ContainerRegistryResourceP
         return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.withDependency(dependency)));
     }
 
+    /** Adds a dependency from a string or another resource */
+    withUnionDependency(dependency: string | HandleReference): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.withUnionDependency(dependency)));
+    }
+
     /** Sets the endpoints */
     withEndpoints(endpoints: string[]): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.withEndpoints(endpoints)));
@@ -8030,6 +8074,7 @@ export interface ContainerResource {
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ContainerResourcePromise;
     testWaitFor(dependency: HandleReference): ContainerResourcePromise;
     withDependency(dependency: HandleReference): ContainerResourcePromise;
+    withUnionDependency(dependency: string | HandleReference): ContainerResourcePromise;
     withEndpoints(endpoints: string[]): ContainerResourcePromise;
     withEnvironmentVariables(variables: Record<string, string>): ContainerResourcePromise;
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ContainerResourcePromise;
@@ -8132,6 +8177,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ContainerResourcePromise;
     testWaitFor(dependency: HandleReference): ContainerResourcePromise;
     withDependency(dependency: HandleReference): ContainerResourcePromise;
+    withUnionDependency(dependency: string | HandleReference): ContainerResourcePromise;
     withEndpoints(endpoints: string[]): ContainerResourcePromise;
     withEnvironmentVariables(variables: Record<string, string>): ContainerResourcePromise;
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ContainerResourcePromise;
@@ -9652,6 +9698,21 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
+    private async _withUnionDependencyInternal(dependency: string | HandleReference): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withUnionDependency',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /** Adds a dependency from a string or another resource */
+    withUnionDependency(dependency: string | HandleReference): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withUnionDependencyInternal(dependency));
+    }
+
+    /** @internal */
     private async _withEndpointsInternal(endpoints: string[]): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, endpoints };
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
@@ -10285,6 +10346,11 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withDependency(dependency)));
     }
 
+    /** Adds a dependency from a string or another resource */
+    withUnionDependency(dependency: string | HandleReference): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withUnionDependency(dependency)));
+    }
+
     /** Sets the endpoints */
     withEndpoints(endpoints: string[]): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withEndpoints(endpoints)));
@@ -10422,6 +10488,7 @@ export interface CSharpAppResource {
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): CSharpAppResourcePromise;
     testWaitFor(dependency: HandleReference): CSharpAppResourcePromise;
     withDependency(dependency: HandleReference): CSharpAppResourcePromise;
+    withUnionDependency(dependency: string | HandleReference): CSharpAppResourcePromise;
     withEndpoints(endpoints: string[]): CSharpAppResourcePromise;
     withEnvironmentVariables(variables: Record<string, string>): CSharpAppResourcePromise;
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): CSharpAppResourcePromise;
@@ -10510,6 +10577,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): CSharpAppResourcePromise;
     testWaitFor(dependency: HandleReference): CSharpAppResourcePromise;
     withDependency(dependency: HandleReference): CSharpAppResourcePromise;
+    withUnionDependency(dependency: string | HandleReference): CSharpAppResourcePromise;
     withEndpoints(endpoints: string[]): CSharpAppResourcePromise;
     withEnvironmentVariables(variables: Record<string, string>): CSharpAppResourcePromise;
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): CSharpAppResourcePromise;
@@ -11815,6 +11883,21 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
+    private async _withUnionDependencyInternal(dependency: string | HandleReference): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withUnionDependency',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /** Adds a dependency from a string or another resource */
+    withUnionDependency(dependency: string | HandleReference): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withUnionDependencyInternal(dependency));
+    }
+
+    /** @internal */
     private async _withEndpointsInternal(endpoints: string[]): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, endpoints };
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
@@ -12378,6 +12461,11 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withDependency(dependency)));
     }
 
+    /** Adds a dependency from a string or another resource */
+    withUnionDependency(dependency: string | HandleReference): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withUnionDependency(dependency)));
+    }
+
     /** Sets the endpoints */
     withEndpoints(endpoints: string[]): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withEndpoints(endpoints)));
@@ -12521,6 +12609,7 @@ export interface DotnetToolResource {
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): DotnetToolResourcePromise;
     testWaitFor(dependency: HandleReference): DotnetToolResourcePromise;
     withDependency(dependency: HandleReference): DotnetToolResourcePromise;
+    withUnionDependency(dependency: string | HandleReference): DotnetToolResourcePromise;
     withEndpoints(endpoints: string[]): DotnetToolResourcePromise;
     withEnvironmentVariables(variables: Record<string, string>): DotnetToolResourcePromise;
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): DotnetToolResourcePromise;
@@ -12615,6 +12704,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): DotnetToolResourcePromise;
     testWaitFor(dependency: HandleReference): DotnetToolResourcePromise;
     withDependency(dependency: HandleReference): DotnetToolResourcePromise;
+    withUnionDependency(dependency: string | HandleReference): DotnetToolResourcePromise;
     withEndpoints(endpoints: string[]): DotnetToolResourcePromise;
     withEnvironmentVariables(variables: Record<string, string>): DotnetToolResourcePromise;
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): DotnetToolResourcePromise;
@@ -14008,6 +14098,21 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
+    private async _withUnionDependencyInternal(dependency: string | HandleReference): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withUnionDependency',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /** Adds a dependency from a string or another resource */
+    withUnionDependency(dependency: string | HandleReference): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withUnionDependencyInternal(dependency));
+    }
+
+    /** @internal */
     private async _withEndpointsInternal(endpoints: string[]): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, endpoints };
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
@@ -14601,6 +14706,11 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withDependency(dependency)));
     }
 
+    /** Adds a dependency from a string or another resource */
+    withUnionDependency(dependency: string | HandleReference): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withUnionDependency(dependency)));
+    }
+
     /** Sets the endpoints */
     withEndpoints(endpoints: string[]): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withEndpoints(endpoints)));
@@ -14738,6 +14848,7 @@ export interface ExecutableResource {
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ExecutableResourcePromise;
     testWaitFor(dependency: HandleReference): ExecutableResourcePromise;
     withDependency(dependency: HandleReference): ExecutableResourcePromise;
+    withUnionDependency(dependency: string | HandleReference): ExecutableResourcePromise;
     withEndpoints(endpoints: string[]): ExecutableResourcePromise;
     withEnvironmentVariables(variables: Record<string, string>): ExecutableResourcePromise;
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ExecutableResourcePromise;
@@ -14826,6 +14937,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ExecutableResourcePromise;
     testWaitFor(dependency: HandleReference): ExecutableResourcePromise;
     withDependency(dependency: HandleReference): ExecutableResourcePromise;
+    withUnionDependency(dependency: string | HandleReference): ExecutableResourcePromise;
     withEndpoints(endpoints: string[]): ExecutableResourcePromise;
     withEnvironmentVariables(variables: Record<string, string>): ExecutableResourcePromise;
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ExecutableResourcePromise;
@@ -16129,6 +16241,21 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
+    private async _withUnionDependencyInternal(dependency: string | HandleReference): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withUnionDependency',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /** Adds a dependency from a string or another resource */
+    withUnionDependency(dependency: string | HandleReference): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withUnionDependencyInternal(dependency));
+    }
+
+    /** @internal */
     private async _withEndpointsInternal(endpoints: string[]): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, endpoints };
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
@@ -16692,6 +16819,11 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withDependency(dependency)));
     }
 
+    /** Adds a dependency from a string or another resource */
+    withUnionDependency(dependency: string | HandleReference): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withUnionDependency(dependency)));
+    }
+
     /** Sets the endpoints */
     withEndpoints(endpoints: string[]): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withEndpoints(endpoints)));
@@ -16789,6 +16921,7 @@ export interface ExternalServiceResource {
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ExternalServiceResourcePromise;
     testWaitFor(dependency: HandleReference): ExternalServiceResourcePromise;
     withDependency(dependency: HandleReference): ExternalServiceResourcePromise;
+    withUnionDependency(dependency: string | HandleReference): ExternalServiceResourcePromise;
     withEndpoints(endpoints: string[]): ExternalServiceResourcePromise;
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ExternalServiceResourcePromise;
     withMergeLabel(label: string): ExternalServiceResourcePromise;
@@ -16836,6 +16969,7 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ExternalServiceResourcePromise;
     testWaitFor(dependency: HandleReference): ExternalServiceResourcePromise;
     withDependency(dependency: HandleReference): ExternalServiceResourcePromise;
+    withUnionDependency(dependency: string | HandleReference): ExternalServiceResourcePromise;
     withEndpoints(endpoints: string[]): ExternalServiceResourcePromise;
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ExternalServiceResourcePromise;
     withMergeLabel(label: string): ExternalServiceResourcePromise;
@@ -17448,6 +17582,21 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     }
 
     /** @internal */
+    private async _withUnionDependencyInternal(dependency: string | HandleReference): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withUnionDependency',
+            rpcArgs
+        );
+        return new ExternalServiceResourceImpl(result, this._client);
+    }
+
+    /** Adds a dependency from a string or another resource */
+    withUnionDependency(dependency: string | HandleReference): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._withUnionDependencyInternal(dependency));
+    }
+
+    /** @internal */
     private async _withEndpointsInternal(endpoints: string[]): Promise<ExternalServiceResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, endpoints };
         const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
@@ -17796,6 +17945,11 @@ class ExternalServiceResourcePromiseImpl implements ExternalServiceResourcePromi
         return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.withDependency(dependency)));
     }
 
+    /** Adds a dependency from a string or another resource */
+    withUnionDependency(dependency: string | HandleReference): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.withUnionDependency(dependency)));
+    }
+
     /** Sets the endpoints */
     withEndpoints(endpoints: string[]): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.withEndpoints(endpoints)));
@@ -17888,6 +18042,7 @@ export interface ParameterResource {
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ParameterResourcePromise;
     testWaitFor(dependency: HandleReference): ParameterResourcePromise;
     withDependency(dependency: HandleReference): ParameterResourcePromise;
+    withUnionDependency(dependency: string | HandleReference): ParameterResourcePromise;
     withEndpoints(endpoints: string[]): ParameterResourcePromise;
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ParameterResourcePromise;
     withMergeLabel(label: string): ParameterResourcePromise;
@@ -17935,6 +18090,7 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ParameterResourcePromise;
     testWaitFor(dependency: HandleReference): ParameterResourcePromise;
     withDependency(dependency: HandleReference): ParameterResourcePromise;
+    withUnionDependency(dependency: string | HandleReference): ParameterResourcePromise;
     withEndpoints(endpoints: string[]): ParameterResourcePromise;
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ParameterResourcePromise;
     withMergeLabel(label: string): ParameterResourcePromise;
@@ -18545,6 +18701,21 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     }
 
     /** @internal */
+    private async _withUnionDependencyInternal(dependency: string | HandleReference): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withUnionDependency',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /** Adds a dependency from a string or another resource */
+    withUnionDependency(dependency: string | HandleReference): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withUnionDependencyInternal(dependency));
+    }
+
+    /** @internal */
     private async _withEndpointsInternal(endpoints: string[]): Promise<ParameterResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, endpoints };
         const result = await this._client.invokeCapability<ParameterResourceHandle>(
@@ -18893,6 +19064,11 @@ class ParameterResourcePromiseImpl implements ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withDependency(dependency)));
     }
 
+    /** Adds a dependency from a string or another resource */
+    withUnionDependency(dependency: string | HandleReference): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withUnionDependency(dependency)));
+    }
+
     /** Sets the endpoints */
     withEndpoints(endpoints: string[]): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withEndpoints(endpoints)));
@@ -19025,6 +19201,7 @@ export interface ProjectResource {
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ProjectResourcePromise;
     testWaitFor(dependency: HandleReference): ProjectResourcePromise;
     withDependency(dependency: HandleReference): ProjectResourcePromise;
+    withUnionDependency(dependency: string | HandleReference): ProjectResourcePromise;
     withEndpoints(endpoints: string[]): ProjectResourcePromise;
     withEnvironmentVariables(variables: Record<string, string>): ProjectResourcePromise;
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ProjectResourcePromise;
@@ -19113,6 +19290,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ProjectResourcePromise;
     testWaitFor(dependency: HandleReference): ProjectResourcePromise;
     withDependency(dependency: HandleReference): ProjectResourcePromise;
+    withUnionDependency(dependency: string | HandleReference): ProjectResourcePromise;
     withEndpoints(endpoints: string[]): ProjectResourcePromise;
     withEnvironmentVariables(variables: Record<string, string>): ProjectResourcePromise;
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ProjectResourcePromise;
@@ -20418,6 +20596,21 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
+    private async _withUnionDependencyInternal(dependency: string | HandleReference): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withUnionDependency',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /** Adds a dependency from a string or another resource */
+    withUnionDependency(dependency: string | HandleReference): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withUnionDependencyInternal(dependency));
+    }
+
+    /** @internal */
     private async _withEndpointsInternal(endpoints: string[]): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, endpoints };
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
@@ -20981,6 +21174,11 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withDependency(dependency)));
     }
 
+    /** Adds a dependency from a string or another resource */
+    withUnionDependency(dependency: string | HandleReference): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withUnionDependency(dependency)));
+    }
+
     /** Sets the endpoints */
     withEndpoints(endpoints: string[]): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withEndpoints(endpoints)));
@@ -21132,6 +21330,7 @@ export interface TestDatabaseResource {
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestDatabaseResourcePromise;
     testWaitFor(dependency: HandleReference): TestDatabaseResourcePromise;
     withDependency(dependency: HandleReference): TestDatabaseResourcePromise;
+    withUnionDependency(dependency: string | HandleReference): TestDatabaseResourcePromise;
     withEndpoints(endpoints: string[]): TestDatabaseResourcePromise;
     withEnvironmentVariables(variables: Record<string, string>): TestDatabaseResourcePromise;
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestDatabaseResourcePromise;
@@ -21234,6 +21433,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestDatabaseResourcePromise;
     testWaitFor(dependency: HandleReference): TestDatabaseResourcePromise;
     withDependency(dependency: HandleReference): TestDatabaseResourcePromise;
+    withUnionDependency(dependency: string | HandleReference): TestDatabaseResourcePromise;
     withEndpoints(endpoints: string[]): TestDatabaseResourcePromise;
     withEnvironmentVariables(variables: Record<string, string>): TestDatabaseResourcePromise;
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestDatabaseResourcePromise;
@@ -22754,6 +22954,21 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
+    private async _withUnionDependencyInternal(dependency: string | HandleReference): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withUnionDependency',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /** Adds a dependency from a string or another resource */
+    withUnionDependency(dependency: string | HandleReference): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withUnionDependencyInternal(dependency));
+    }
+
+    /** @internal */
     private async _withEndpointsInternal(endpoints: string[]): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, endpoints };
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
@@ -23387,6 +23602,11 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withDependency(dependency)));
     }
 
+    /** Adds a dependency from a string or another resource */
+    withUnionDependency(dependency: string | HandleReference): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withUnionDependency(dependency)));
+    }
+
     /** Sets the endpoints */
     withEndpoints(endpoints: string[]): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withEndpoints(endpoints)));
@@ -23549,6 +23769,7 @@ export interface TestRedisResource {
     withConnectionStringDirect(connectionString: string): TestRedisResourcePromise;
     withRedisSpecific(option: string): TestRedisResourcePromise;
     withDependency(dependency: HandleReference): TestRedisResourcePromise;
+    withUnionDependency(dependency: string | HandleReference): TestRedisResourcePromise;
     withEndpoints(endpoints: string[]): TestRedisResourcePromise;
     withEnvironmentVariables(variables: Record<string, string>): TestRedisResourcePromise;
     getStatusAsync(options?: GetStatusAsyncOptions): Promise<string>;
@@ -23666,6 +23887,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
     withConnectionStringDirect(connectionString: string): TestRedisResourcePromise;
     withRedisSpecific(option: string): TestRedisResourcePromise;
     withDependency(dependency: HandleReference): TestRedisResourcePromise;
+    withUnionDependency(dependency: string | HandleReference): TestRedisResourcePromise;
     withEndpoints(endpoints: string[]): TestRedisResourcePromise;
     withEnvironmentVariables(variables: Record<string, string>): TestRedisResourcePromise;
     getStatusAsync(options?: GetStatusAsyncOptions): Promise<string>;
@@ -25346,6 +25568,21 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
+    private async _withUnionDependencyInternal(dependency: string | HandleReference): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withUnionDependency',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /** Adds a dependency from a string or another resource */
+    withUnionDependency(dependency: string | HandleReference): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withUnionDependencyInternal(dependency));
+    }
+
+    /** @internal */
     private async _withEndpointsInternal(endpoints: string[]): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, endpoints };
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
@@ -26097,6 +26334,11 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withDependency(dependency)));
     }
 
+    /** Adds a dependency from a string or another resource */
+    withUnionDependency(dependency: string | HandleReference): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withUnionDependency(dependency)));
+    }
+
     /** Sets the endpoints */
     withEndpoints(endpoints: string[]): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withEndpoints(endpoints)));
@@ -26268,6 +26510,7 @@ export interface TestVaultResource {
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestVaultResourcePromise;
     testWaitFor(dependency: HandleReference): TestVaultResourcePromise;
     withDependency(dependency: HandleReference): TestVaultResourcePromise;
+    withUnionDependency(dependency: string | HandleReference): TestVaultResourcePromise;
     withEndpoints(endpoints: string[]): TestVaultResourcePromise;
     withEnvironmentVariables(variables: Record<string, string>): TestVaultResourcePromise;
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestVaultResourcePromise;
@@ -26371,6 +26614,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestVaultResourcePromise;
     testWaitFor(dependency: HandleReference): TestVaultResourcePromise;
     withDependency(dependency: HandleReference): TestVaultResourcePromise;
+    withUnionDependency(dependency: string | HandleReference): TestVaultResourcePromise;
     withEndpoints(endpoints: string[]): TestVaultResourcePromise;
     withEnvironmentVariables(variables: Record<string, string>): TestVaultResourcePromise;
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestVaultResourcePromise;
@@ -27892,6 +28136,21 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
+    private async _withUnionDependencyInternal(dependency: string | HandleReference): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withUnionDependency',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /** Adds a dependency from a string or another resource */
+    withUnionDependency(dependency: string | HandleReference): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withUnionDependencyInternal(dependency));
+    }
+
+    /** @internal */
     private async _withEndpointsInternal(endpoints: string[]): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, endpoints };
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
@@ -28540,6 +28799,11 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withDependency(dependency)));
     }
 
+    /** Adds a dependency from a string or another resource */
+    withUnionDependency(dependency: string | HandleReference): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withUnionDependency(dependency)));
+    }
+
     /** Sets the endpoints */
     withEndpoints(endpoints: string[]): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withEndpoints(endpoints)));
@@ -28785,6 +29049,7 @@ export interface Resource {
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ResourcePromise;
     testWaitFor(dependency: HandleReference): ResourcePromise;
     withDependency(dependency: HandleReference): ResourcePromise;
+    withUnionDependency(dependency: string | HandleReference): ResourcePromise;
     withEndpoints(endpoints: string[]): ResourcePromise;
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ResourcePromise;
     withMergeLabel(label: string): ResourcePromise;
@@ -28831,6 +29096,7 @@ export interface ResourcePromise extends PromiseLike<Resource> {
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ResourcePromise;
     testWaitFor(dependency: HandleReference): ResourcePromise;
     withDependency(dependency: HandleReference): ResourcePromise;
+    withUnionDependency(dependency: string | HandleReference): ResourcePromise;
     withEndpoints(endpoints: string[]): ResourcePromise;
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ResourcePromise;
     withMergeLabel(label: string): ResourcePromise;
@@ -29424,6 +29690,21 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
+    private async _withUnionDependencyInternal(dependency: string | HandleReference): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withUnionDependency',
+            rpcArgs
+        );
+        return new ResourceImpl(result, this._client);
+    }
+
+    /** Adds a dependency from a string or another resource */
+    withUnionDependency(dependency: string | HandleReference): ResourcePromise {
+        return new ResourcePromiseImpl(this._withUnionDependencyInternal(dependency));
+    }
+
+    /** @internal */
     private async _withEndpointsInternal(endpoints: string[]): Promise<Resource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, endpoints };
         const result = await this._client.invokeCapability<IResourceHandle>(
@@ -29765,6 +30046,11 @@ class ResourcePromiseImpl implements ResourcePromise {
     /** Adds a dependency on another resource */
     withDependency(dependency: HandleReference): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withDependency(dependency)));
+    }
+
+    /** Adds a dependency from a string or another resource */
+    withUnionDependency(dependency: string | HandleReference): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.withUnionDependency(dependency)));
     }
 
     /** Sets the endpoints */

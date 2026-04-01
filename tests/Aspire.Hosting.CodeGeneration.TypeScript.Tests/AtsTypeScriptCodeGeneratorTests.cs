@@ -597,14 +597,14 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
-    public void AspireUnion_InterfaceHandleInput_GeneratesResourceBuilderBaseUnion()
+    public void AspireUnion_InterfaceHandleInput_GeneratesHandleReferenceUnion()
     {
         var atsContext = CreateContextFromTestAssembly();
 
         var files = _generator.GenerateDistributedApplication(atsContext);
         var aspireTs = files["aspire.ts"];
 
-        Assert.Contains("withUnionDependency(dependency: string | ResourceBuilderBase)", aspireTs);
+        Assert.Contains("withUnionDependency(dependency: string | HandleReference)", aspireTs);
     }
 
     [Fact]
