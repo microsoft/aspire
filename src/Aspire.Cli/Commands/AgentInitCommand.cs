@@ -346,10 +346,10 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
     {
         var relativeSkillPath = Path.Combine(relativeSkillDirectory, skill.Name);
         var fullSkillDirectoryPath = Path.Combine(rootDirectory.FullName, relativeSkillPath);
-        var skillFiles = await GetSkillFilesAsync(skill, cancellationToken);
 
         try
         {
+            var skillFiles = await GetSkillFilesAsync(skill, cancellationToken);
             var anyFileUpdated = false;
 
             foreach (var skillFile in skillFiles)
