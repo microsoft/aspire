@@ -139,6 +139,7 @@ public static class ResourceBuilderExtensions
 
     // Keep these ATS-only aliases for backward compatibility with existing polyglot app hosts.
     // Remove them once callers have migrated to the unified withEnvironment(...) export.
+    // Tracking issue: https://github.com/microsoft/aspire/issues/15734
     /// <summary>
     /// Obsolete ATS alias for <see cref="WithEnvironment{T}(IResourceBuilder{T}, string, ReferenceExpression)"/>.
     /// </summary>
@@ -147,7 +148,7 @@ public static class ResourceBuilderExtensions
     /// <param name="name">The name of the environment variable.</param>
     /// <param name="value">The reference expression value.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [Obsolete("ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.")]
+    [Obsolete("ATS compatibility shim. Use withEnvironment instead.")]
     [AspireExport("withEnvironmentExpression", Description = "Sets an environment variable from a reference expression")]
     internal static IResourceBuilder<T> WithEnvironmentExpressionShim<T>(this IResourceBuilder<T> builder, string name, ReferenceExpression value)
         where T : IResourceWithEnvironment
@@ -237,7 +238,7 @@ public static class ResourceBuilderExtensions
     /// <param name="name">The name of the environment variable.</param>
     /// <param name="endpointReference">The endpoint reference value.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [Obsolete("ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.")]
+    [Obsolete("ATS compatibility shim. Use withEnvironment instead.")]
     [AspireExport("withEnvironmentEndpoint", Description = "Sets an environment variable from an endpoint reference")]
     internal static IResourceBuilder<T> WithEnvironmentEndpointShim<T>(this IResourceBuilder<T> builder, string name, EndpointReference endpointReference)
         where T : IResourceWithEnvironment
@@ -319,7 +320,7 @@ public static class ResourceBuilderExtensions
     /// <param name="name">The name of the environment variable.</param>
     /// <param name="parameter">The parameter resource builder.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [Obsolete("ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.")]
+    [Obsolete("ATS compatibility shim. Use withEnvironment instead.")]
     [AspireExport("withEnvironmentParameter", Description = "Sets an environment variable from a parameter resource")]
     internal static IResourceBuilder<T> WithEnvironmentParameterShim<T>(this IResourceBuilder<T> builder, string name, IResourceBuilder<ParameterResource> parameter)
         where T : IResourceWithEnvironment
@@ -362,7 +363,7 @@ public static class ResourceBuilderExtensions
     /// <param name="envVarName">The name of the environment variable.</param>
     /// <param name="resource">The referenced connection string resource builder.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [Obsolete("ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.")]
+    [Obsolete("ATS compatibility shim. Use withEnvironment instead.")]
     [AspireExport("withEnvironmentConnectionString", Description = "Sets an environment variable from a connection string resource")]
     internal static IResourceBuilder<T> WithEnvironmentConnectionStringShim<T>(
         this IResourceBuilder<T> builder,

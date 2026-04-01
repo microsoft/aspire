@@ -833,7 +833,7 @@ public class AtsTypeScriptCodeGeneratorTests
         var files = _generator.GenerateDistributedApplication(atsContext);
         var aspireTs = files["aspire.ts"];
 
-        Assert.Contains("@deprecated ATS compatibility shim. Use withEnvironment instead. Remove after existing polyglot app hosts migrate.", aspireTs);
+        Assert.Contains("@deprecated ATS compatibility shim. Use withEnvironment instead.", aspireTs);
         Assert.Contains("withEnvironmentExpression(name: string, value: ReferenceExpression)", aspireTs);
     }
 
@@ -844,10 +844,11 @@ public class AtsTypeScriptCodeGeneratorTests
 
         var files = _generator.GenerateDistributedApplication(atsContext);
         var aspireTs = files["aspire.ts"];
+        var lines = aspireTs.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         Assert.DoesNotContain("ResourceBuilderBase | ResourceBuilderBase", aspireTs);
         Assert.DoesNotContain("EndpointReference | EndpointReference", aspireTs);
-        Assert.Contains("value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression", aspireTs);
+        Assert.Contains(lines, line => line == "withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression): ContainerResourcePromise {");
     }
 
     private static List<AtsCapabilityInfo> ScanCapabilitiesFromTestAssembly()
