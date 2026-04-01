@@ -370,7 +370,14 @@ internal class DeveloperCertificateService : IDeveloperCertificateService
             {
                 try
                 {
-                    Directory.CreateDirectory(s_userDevCertificateLocation, UnixFileMode.UserExecute | UnixFileMode.UserWrite | UnixFileMode.UserRead);
+                    if (OperatingSystem.IsWindows())
+                    {
+                        Directory.CreateDirectory(s_userDevCertificateLocation);
+                    }
+                    else
+                    {
+                        Directory.CreateDirectory(s_userDevCertificateLocation, UnixFileMode.UserExecute | UnixFileMode.UserWrite | UnixFileMode.UserRead);
+                    }
 
                     File.WriteAllBytes(pfxFileName, pfxBytes);
                 }
