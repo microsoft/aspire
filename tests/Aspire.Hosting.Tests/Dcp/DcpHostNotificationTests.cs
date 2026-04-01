@@ -43,7 +43,6 @@ public sealed class DcpHostNotificationTests
         var timeProvider = new FakeTimeProvider();
 
         var developerCertificateService = new TestDeveloperCertificateService([], false, false, false);
-        var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
         var configuration = new ConfigurationBuilder().Build();
 
         // Act & Assert - should not throw
@@ -56,7 +55,6 @@ public sealed class DcpHostNotificationTests
             applicationModel,
             timeProvider,
             developerCertificateService,
-            fileSystemService,
             configuration);
 
         Assert.NotNull(dcpHost);
@@ -88,7 +86,6 @@ public sealed class DcpHostNotificationTests
         var locations = CreateTestLocations();
         var timeProvider = new FakeTimeProvider();
         var developerCertificateService = new TestDeveloperCertificateService([], false, false, false);
-        var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
         var configuration = new ConfigurationBuilder().Build();
 
         var dcpHost = new DcpHost(
@@ -100,7 +97,6 @@ public sealed class DcpHostNotificationTests
             applicationModel,
             timeProvider,
             developerCertificateService,
-            fileSystemService,
             configuration);
 
         // Act
@@ -134,7 +130,6 @@ public sealed class DcpHostNotificationTests
         var applicationModel = CreateApplicationModelWithHttpsEndpoint();
         var timeProvider = new FakeTimeProvider();
         var developerCertificateService = new TestDeveloperCertificateService([certificate], false, true, false, latestCertificateIsUntrusted: true);
-        var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
         var configuration = new ConfigurationBuilder().Build();
 
         var dcpHost = new DcpHost(
@@ -146,7 +141,6 @@ public sealed class DcpHostNotificationTests
             applicationModel,
             timeProvider,
             developerCertificateService,
-            fileSystemService,
             configuration);
 
         // Act
@@ -189,7 +183,6 @@ public sealed class DcpHostNotificationTests
         var locations = CreateTestLocations();
         var timeProvider = new FakeTimeProvider();
         var developerCertificateService = new TestDeveloperCertificateService([], false, false, false);
-        var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
         var configuration = new ConfigurationBuilder().Build();
 
         var dcpHost = new DcpHost(
@@ -201,7 +194,6 @@ public sealed class DcpHostNotificationTests
             applicationModel,
             timeProvider,
             developerCertificateService,
-            fileSystemService,
             configuration);
 
         // Act
@@ -250,7 +242,6 @@ public sealed class DcpHostNotificationTests
         var locations = CreateTestLocations();
         var timeProvider = new FakeTimeProvider();
         var developerCertificateService = new TestDeveloperCertificateService([], false, false, false);
-        var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
         var configuration = new ConfigurationBuilder().Build();
 
         var dcpHost = new DcpHost(
@@ -262,7 +253,6 @@ public sealed class DcpHostNotificationTests
             applicationModel,
             timeProvider,
             developerCertificateService,
-            fileSystemService,
             configuration);
 
         // Act
@@ -311,7 +301,6 @@ public sealed class DcpHostNotificationTests
         var locations = CreateTestLocations();
         var timeProvider = new FakeTimeProvider();
         var developerCertificateService = new TestDeveloperCertificateService([], false, false, false);
-        var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
         var configuration = new ConfigurationBuilder().Build();
 
         var dcpHost = new DcpHost(
@@ -323,7 +312,6 @@ public sealed class DcpHostNotificationTests
             applicationModel,
             timeProvider,
             developerCertificateService,
-            fileSystemService,
             configuration);
 
         // Act
@@ -367,7 +355,6 @@ public sealed class DcpHostNotificationTests
         var locations = CreateTestLocations();
         var timeProvider = new FakeTimeProvider();
         var developerCertificateService = new TestDeveloperCertificateService([], false, false, false);
-        var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
         var configuration = new ConfigurationBuilder().Build();
 
         var dcpHost = new DcpHost(
@@ -379,7 +366,6 @@ public sealed class DcpHostNotificationTests
             applicationModel,
             timeProvider,
             developerCertificateService,
-            fileSystemService,
             configuration);
 
         // Act
@@ -441,7 +427,6 @@ public sealed class DcpHostNotificationTests
         var locations = CreateTestLocations();
         var timeProvider = new FakeTimeProvider();
         var developerCertificateService = new TestDeveloperCertificateService([], false, false, false);
-        var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
         var configuration = new ConfigurationBuilder().Build();
 
         var dcpHost = new DcpHost(
@@ -453,7 +438,6 @@ public sealed class DcpHostNotificationTests
             applicationModel,
             timeProvider,
             developerCertificateService,
-            fileSystemService,
             configuration);
 
         // Act
@@ -475,6 +459,108 @@ public sealed class DcpHostNotificationTests
         // This tests that the function returns immediately and doesn't start the polling task
         await Task.Delay(TimeSpan.FromMilliseconds(100));
         Assert.False(interaction.CancellationToken.IsCancellationRequested);
+    }
+
+    [Fact]
+    public void CreateDcpProcessSpec_WithoutTlsCertThumbprint_DoesNotIncludeThumbprintArgument()
+    {
+        // Arrange
+        var dcpHost = CreateDcpHostForProcessSpecTests();
+        var locations = CreateTestLocations();
+
+        // Act
+        var processSpec = dcpHost.CreateDcpProcessSpec(locations);
+
+        // Assert
+        Assert.DoesNotContain("--tls-cert-thumbprint", processSpec.Arguments);
+    }
+
+    [Fact]
+    public async Task CreateDcpProcessSpec_WithTlsCertThumbprint_IncludesThumbprintArgument()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Developer certificate thumbprint is only supported on Windows.");
+
+        // Arrange
+        using var certificate = CreateUntrustedCertificate();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [KnownConfigNames.DcpDeveloperCertificate] = "true"
+            })
+            .Build();
+        var dcpHost = CreateDcpHostForProcessSpecTests(
+            developerCertificateService: new TestDeveloperCertificateService([certificate], false, false, false),
+            configuration: configuration);
+        var locations = CreateTestLocations();
+
+        await dcpHost.PrepareDcpTlsCertificateAsync(CancellationToken.None);
+
+        // Act
+        var processSpec = dcpHost.CreateDcpProcessSpec(locations);
+
+        // Assert
+        Assert.Contains($"--tls-cert-thumbprint \"{certificate.Thumbprint}\"", processSpec.Arguments);
+    }
+
+    [Fact]
+    public async Task CreateDcpProcessSpec_WithDcpDeveloperCertificateDisabled_DoesNotIncludeThumbprintArgument()
+    {
+        // Arrange - config not set, so PrepareDcpTlsCertificateAsync should not set the thumbprint
+        using var certificate = CreateUntrustedCertificate();
+        var dcpHost = CreateDcpHostForProcessSpecTests(
+            developerCertificateService: new TestDeveloperCertificateService([certificate], false, false, false));
+        var locations = CreateTestLocations();
+
+        await dcpHost.PrepareDcpTlsCertificateAsync(CancellationToken.None);
+
+        // Act
+        var processSpec = dcpHost.CreateDcpProcessSpec(locations);
+
+        // Assert - thumbprint should not appear because config is not enabled
+        Assert.DoesNotContain("--tls-cert-thumbprint", processSpec.Arguments);
+    }
+
+    [Fact]
+    public void CreateDcpProcessSpec_WithContainerRuntime_IncludesContainerRuntimeArgument()
+    {
+        // Arrange
+        var resolvedOptions = GetDcpOptions();
+        resolvedOptions.ContainerRuntime = "podman";
+        var dcpHost = CreateDcpHostForProcessSpecTests(dcpOptions: resolvedOptions);
+        var locations = CreateTestLocations();
+
+        // Act
+        var processSpec = dcpHost.CreateDcpProcessSpec(locations);
+
+        // Assert
+        Assert.Contains("--container-runtime \"podman\"", processSpec.Arguments);
+    }
+
+    private static DcpHost CreateDcpHostForProcessSpecTests(
+        IDeveloperCertificateService? developerCertificateService = null,
+        IConfiguration? configuration = null,
+        DcpOptions? dcpOptions = null)
+    {
+        return new DcpHost(
+            new NullLoggerFactory(),
+            Options.Create(dcpOptions ?? GetDcpOptions()),
+            new TestDcpDependencyCheckService(),
+            new TestInteractionService(),
+            CreateTestLocations(),
+            new DistributedApplicationModel(new ResourceCollection()),
+            new FakeTimeProvider(),
+            developerCertificateService ?? new TestDeveloperCertificateService([], false, false, false),
+            configuration ?? new ConfigurationBuilder().Build());
+    }
+
+    private static DcpOptions GetDcpOptions()
+    {
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            DisableDashboard = true
+        });
+        using var host = builder.Build();
+        return host.Services.GetRequiredService<IOptions<DcpOptions>>().Value;
     }
 
     private static DistributedApplication CreateAppWithContainers()
@@ -535,7 +621,6 @@ public sealed class DcpHostNotificationTests
         var applicationModel = CreateApplicationModelWithHttpEndpoint();
         var timeProvider = new FakeTimeProvider();
         var developerCertificateService = new TestDeveloperCertificateService([certificate], false, true, false);
-        var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
         var configuration = new ConfigurationBuilder().Build();
 
         var dcpHost = new DcpHost(
@@ -547,7 +632,6 @@ public sealed class DcpHostNotificationTests
             applicationModel,
             timeProvider,
             developerCertificateService,
-            fileSystemService,
             configuration);
 
         // Act
@@ -587,7 +671,6 @@ public sealed class DcpHostNotificationTests
         var applicationModel = new DistributedApplicationModel(new ResourceCollection());
         var timeProvider = new FakeTimeProvider();
         var developerCertificateService = new TestDeveloperCertificateService([certificate], false, true, false);
-        var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
         var configuration = new ConfigurationBuilder().Build();
 
         var dcpHost = new DcpHost(
@@ -599,7 +682,6 @@ public sealed class DcpHostNotificationTests
             applicationModel,
             timeProvider,
             developerCertificateService,
-            fileSystemService,
             configuration);
 
         // Act
@@ -643,7 +725,6 @@ public sealed class DcpHostNotificationTests
 
         var timeProvider = new FakeTimeProvider();
         var developerCertificateService = new TestDeveloperCertificateService([certificate], false, true, false, latestCertificateIsUntrusted: true);
-        var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
         var appHostDirectory = Path.Combine(Path.GetTempPath(), "aspire-apphost-test");
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -661,7 +742,6 @@ public sealed class DcpHostNotificationTests
             applicationModel,
             timeProvider,
             developerCertificateService,
-            fileSystemService,
             configuration);
 
         // Act
@@ -702,7 +782,6 @@ public sealed class DcpHostNotificationTests
 
         var timeProvider = new FakeTimeProvider();
         var developerCertificateService = new TestDeveloperCertificateService([certificate], false, true, false);
-        var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
         var configuration = new ConfigurationBuilder().Build();
 
         var dcpHost = new DcpHost(
@@ -714,7 +793,6 @@ public sealed class DcpHostNotificationTests
             applicationModel,
             timeProvider,
             developerCertificateService,
-            fileSystemService,
             configuration);
 
         // Act
@@ -762,7 +840,6 @@ public sealed class DcpHostNotificationTests
 
         var timeProvider = new FakeTimeProvider();
         var developerCertificateService = new TestDeveloperCertificateService([certificate], false, true, false);
-        var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
         var configuration = new ConfigurationBuilder().Build();
 
         var dcpHost = new DcpHost(
@@ -774,7 +851,6 @@ public sealed class DcpHostNotificationTests
             applicationModel,
             timeProvider,
             developerCertificateService,
-            fileSystemService,
             configuration);
 
         // Act
@@ -823,7 +899,6 @@ public sealed class DcpHostNotificationTests
 
         var timeProvider = new FakeTimeProvider();
         var developerCertificateService = new TestDeveloperCertificateService([certificate], false, true, false, latestCertificateIsUntrusted: true);
-        var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
         var appHostDirectory = Path.Combine(Path.GetTempPath(), "aspire-apphost-test");
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -841,7 +916,6 @@ public sealed class DcpHostNotificationTests
             applicationModel,
             timeProvider,
             developerCertificateService,
-            fileSystemService,
             configuration);
 
         // Act

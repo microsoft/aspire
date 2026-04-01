@@ -35,6 +35,7 @@ internal sealed class TestInteractionService : IInteractionService
     public List<StringPromptCall> StringPromptCalls { get; } = [];
     public List<BooleanPromptCall> BooleanPromptCalls { get; } = [];
     public List<string> DisplayedErrors { get; } = [];
+    public List<(KnownEmoji Emoji, string Message)> DisplayedMessages { get; } = [];
 
     // Response queue setup methods
     public void SetupStringPromptResponse(string response) => _responses.Enqueue((response, ResponseType.String));
@@ -148,6 +149,7 @@ internal sealed class TestInteractionService : IInteractionService
 
     public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false)
     {
+        DisplayedMessages.Add((emoji, message));
     }
 
     public void DisplaySuccess(string message, bool allowMarkup = false)
@@ -197,8 +199,11 @@ internal sealed class TestInteractionService : IInteractionService
     {
     }
 
+    public Action<string>? DisplayRawTextCallback { get; set; }
+
     public void DisplayRawText(string text, ConsoleOutput? consoleOverride = null)
     {
+        DisplayRawTextCallback?.Invoke(text);
     }
 
     public void DisplayMarkdown(string markdown)

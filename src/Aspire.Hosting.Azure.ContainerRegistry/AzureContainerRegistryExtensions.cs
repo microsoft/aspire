@@ -81,7 +81,7 @@ public static class AzureContainerRegistryExtensions
     /// </summary>
     private static void SubscribeToAddRegistryTargetAnnotations(IDistributedApplicationBuilder builder, AzureContainerRegistryResource registry)
     {
-        builder.Eventing.Subscribe<BeforeStartEvent>((beforeStartEvent, cancellationToken) =>
+        builder.OnBeforeStart((beforeStartEvent, cancellationToken) =>
         {
             foreach (var resource in beforeStartEvent.Model.Resources)
             {

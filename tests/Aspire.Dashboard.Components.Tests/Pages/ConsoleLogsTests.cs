@@ -853,7 +853,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         Services.AddSingleton<IToastService, ToastService>();
         Services.AddSingleton<IconResolver>();
         Services.AddSingleton<IDashboardClient>(dashboardClient ?? new TestDashboardClient());
-        Services.AddSingleton<DashboardCommandExecutor>();
+        Services.AddScoped<DashboardCommandExecutor>();
         Services.AddSingleton<ConsoleLogsManager>();
     }
 }

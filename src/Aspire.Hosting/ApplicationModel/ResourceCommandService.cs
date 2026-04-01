@@ -106,7 +106,13 @@ public class ResourceCommandService
 
         if (failures.Count == 0 && cancellations.Count == 0)
         {
-            return new ExecuteCommandResult { Success = true };
+            var successWithResult = results.FirstOrDefault(r => r.Result is not null);
+            return new ExecuteCommandResult
+            {
+                Success = true,
+                Result = successWithResult?.Result,
+                ResultFormat = successWithResult?.ResultFormat
+            };
         }
         else if (failures.Count == 0 && cancellations.Count > 0)
         {
@@ -155,7 +161,8 @@ public class ResourceCommandService
                 {
                     ResourceName = resourceId,
                     ServiceProvider = _serviceProvider,
-                    CancellationToken = cancellationToken
+                    CancellationToken = cancellationToken,
+                    Logger = logger
                 };
 
                 var result = await annotation.ExecuteCommand(context).ConfigureAwait(false);

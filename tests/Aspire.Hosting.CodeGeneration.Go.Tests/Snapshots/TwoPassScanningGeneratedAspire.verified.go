@@ -127,6 +127,14 @@ const (
 	EndpointPropertyTlsEnabled EndpointProperty = "TlsEnabled"
 )
 
+// CommandResultFormat represents CommandResultFormat.
+type CommandResultFormat string
+
+const (
+	CommandResultFormatText CommandResultFormat = "Text"
+	CommandResultFormatJson CommandResultFormat = "Json"
+)
+
 // UrlDisplayLocation represents UrlDisplayLocation.
 type UrlDisplayLocation string
 
@@ -235,6 +243,8 @@ type ExecuteCommandResult struct {
 	Success bool `json:"Success,omitempty"`
 	Canceled bool `json:"Canceled,omitempty"`
 	ErrorMessage string `json:"ErrorMessage,omitempty"`
+	Result string `json:"Result,omitempty"`
+	ResultFormat CommandResultFormat `json:"ResultFormat,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
@@ -243,6 +253,8 @@ func (d *ExecuteCommandResult) ToMap() map[string]any {
 		"Success": SerializeValue(d.Success),
 		"Canceled": SerializeValue(d.Canceled),
 		"ErrorMessage": SerializeValue(d.ErrorMessage),
+		"Result": SerializeValue(d.Result),
+		"ResultFormat": SerializeValue(d.ResultFormat),
 	}
 }
 
@@ -8169,6 +8181,31 @@ func (s *ExecuteCommandContext) SetCancellationToken(value *CancellationToken) (
 		reqArgs["value"] = RegisterCancellation(value, s.Client())
 	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setCancellationToken", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ExecuteCommandContext), nil
+}
+
+// Logger gets the Logger property
+func (s *ExecuteCommandContext) Logger() (*ILogger, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.logger", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ILogger), nil
+}
+
+// SetLogger sets the Logger property
+func (s *ExecuteCommandContext) SetLogger(value *ILogger) (*ExecuteCommandContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setLogger", reqArgs)
 	if err != nil {
 		return nil, err
 	}

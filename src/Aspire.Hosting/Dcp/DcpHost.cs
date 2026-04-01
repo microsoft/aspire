@@ -5,6 +5,7 @@ using System.Buffers;
 using System.Collections;
 using System.IO.Pipelines;
 using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Aspire.Dashboard.Utils;
 using Aspire.Hosting.ApplicationModel;
@@ -33,9 +34,9 @@ internal sealed class DcpHost
     private readonly Locations _locations;
     private readonly TimeProvider _timeProvider;
     private readonly IDeveloperCertificateService _developerCertificateService;
-    private readonly IFileSystemService _fileSystemService;
     private readonly IConfiguration _configuration;
     private readonly CancellationTokenSource _shutdownCts = new();
+    private string? _dcpTlsCertThumbprint;
     private Task? _logProcessorTask;
 
     // These environment variables should never be inherited by DCP from app host.
@@ -56,7 +57,6 @@ internal sealed class DcpHost
         DistributedApplicationModel applicationModel,
         TimeProvider timeProvider,
         IDeveloperCertificateService developerCertificateService,
-        IFileSystemService fileSystemService,
         IConfiguration configuration)
     {
         _loggerFactory = loggerFactory;
@@ -68,7 +68,6 @@ internal sealed class DcpHost
         _applicationModel = applicationModel;
         _timeProvider = timeProvider;
         _developerCertificateService = developerCertificateService;
-        _fileSystemService = fileSystemService;
         _configuration = configuration;
     }
 
@@ -76,6 +75,7 @@ internal sealed class DcpHost
     {
         await EnsureDcpContainerRuntimeAsync(cancellationToken).ConfigureAwait(false);
         await EnsureDevelopmentCertificateTrustAsync(cancellationToken).ConfigureAwait(false);
+        await PrepareDcpTlsCertificateAsync(cancellationToken).ConfigureAwait(false);
         EnsureDcpHostRunning();
     }
 
@@ -192,6 +192,58 @@ internal sealed class DcpHost
         }
     }
 
+    internal Task PrepareDcpTlsCertificateAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // Using the ASP.NET dev cert for DCP TLS is opt-in; by default DCP uses its own ephemeral certificate.
+        if (!_configuration.GetBool(KnownConfigNames.DcpDeveloperCertificate, defaultValue: false))
+        {
+            return Task.CompletedTask;
+        }
+
+        if (!OperatingSystem.IsWindows())
+        {
+            _logger.LogWarning("Developer certificate thumbprint configuration is only supported on Windows. DCP will use its default certificate.");
+            return Task.CompletedTask;
+        }
+
+        // Check if we have a trusted developer certificate with a private key available
+        var certificates = _developerCertificateService.Certificates;
+        if (certificates.Count == 0)
+        {
+            return Task.CompletedTask;
+        }
+
+        // Use the first (latest/best) certificate that has a private key
+        X509Certificate2? certificate = null;
+        foreach (var cert in certificates)
+        {
+            if (cert.HasPrivateKey)
+            {
+                certificate = cert;
+                break;
+            }
+        }
+
+        if (certificate is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        var thumbprint = certificate.Thumbprint;
+        if (string.IsNullOrWhiteSpace(thumbprint))
+        {
+            _logger.LogWarning("Failed to read the developer certificate thumbprint. DCP will use its default certificate.");
+            return Task.CompletedTask;
+        }
+
+        _dcpTlsCertThumbprint = thumbprint;
+        _logger.LogDebug("Prepared DCP TLS certificate thumbprint {Thumbprint}.", thumbprint);
+
+        return Task.CompletedTask;
+    }
+
     public async Task StopAsync()
     {
         _shutdownCts.Cancel();
@@ -240,7 +292,7 @@ internal sealed class DcpHost
 
     }
 
-    private ProcessSpec CreateDcpProcessSpec(Locations locations)
+    public ProcessSpec CreateDcpProcessSpec(Locations locations)
     {
         var dcpExePath = _dcpOptions.CliPath;
         if (!File.Exists(dcpExePath))
@@ -252,6 +304,11 @@ internal sealed class DcpHost
         if (!string.IsNullOrEmpty(_dcpOptions.ContainerRuntime))
         {
             arguments += $" --container-runtime \"{_dcpOptions.ContainerRuntime}\"";
+        }
+
+        if (!string.IsNullOrWhiteSpace(_dcpTlsCertThumbprint))
+        {
+            arguments += $" --tls-cert-thumbprint \"{_dcpTlsCertThumbprint}\"";
         }
 
         var dcpProcessSpec = new ProcessSpec(dcpExePath)

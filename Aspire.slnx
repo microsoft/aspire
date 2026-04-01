@@ -142,6 +142,10 @@
     <Project Path="playground/AzureFunctionsEndToEnd/AzureFunctionsEndToEnd.AppHost/AzureFunctionsEndToEnd.AppHost.csproj" />
     <Project Path="playground/AzureFunctionsEndToEnd/AzureFunctionsEndToEnd.Functions/AzureFunctionsEndToEnd.Functions.csproj" />
   </Folder>
+  <Folder Name="/playground/AzureFunctionsWithDts/">
+    <Project Path="playground/AzureFunctionsWithDts/AzureFunctionsWithDts.AppHost/AzureFunctionsWithDts.AppHost.csproj" />
+    <Project Path="playground/AzureFunctionsWithDts/AzureFunctionsWithDts.Functions/AzureFunctionsWithDts.Functions.csproj" />
+  </Folder>
   <Folder Name="/playground/AzureKusto/">
     <Project Path="playground/AzureKusto/AzureKusto.AppHost/AzureKusto.AppHost.csproj" />
     <Project Path="playground/AzureKusto/AzureKusto.Worker/AzureKusto.Worker.csproj" />

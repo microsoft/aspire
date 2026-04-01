@@ -116,7 +116,7 @@ public static class MauiOtlpExtensions
 
         // Manually allocate the stub endpoint so dev tunnel can start
         // Dev tunnels wait for ResourceEndpointsAllocatedEvent before starting
-        appBuilder.Eventing.Subscribe<BeforeStartEvent>((evt, ct) =>
+        appBuilder.OnBeforeStart((evt, ct) =>
         {
             var endpoint = stubResource.Annotations.OfType<EndpointAnnotation>().FirstOrDefault();
             if (endpoint is not null && endpoint.AllocatedEndpoint is null)

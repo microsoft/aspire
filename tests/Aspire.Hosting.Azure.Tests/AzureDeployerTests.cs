@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREAZURE001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
@@ -438,7 +438,6 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
     [Theory]
     [InlineData("deploy")]
     [InlineData("diagnostics")]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/13287")]
     public async Task DeployAsync_WithMultipleComputeEnvironments_Works(string step)
     {
         // Arrange

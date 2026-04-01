@@ -65,10 +65,12 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Python (needed for Python templates).
+# Install Python and uv (needed for Python templates).
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends python3 python3-pip python3-venv && \
     rm -rf /var/lib/apt/lists/*
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:${PATH}"
 
 # Install Java (needed for Java AppHost tests).
 RUN apt-get update -qq && \

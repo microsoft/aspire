@@ -491,7 +491,7 @@ public static class PythonAppResourceBuilderExtensions
             // and the dependencies will be established based on which resources actually exist
             // Only do this in run mode since the installer and venv creator only run in run mode
             var resourceToSetup = resourceBuilder.Resource;
-            builder.Eventing.Subscribe<BeforeStartEvent>((evt, ct) =>
+            builder.OnBeforeStart((evt, ct) =>
             {
                 // Wire up wait dependencies for this resource based on which child resources exist
                 SetupDependencies(builder, resourceToSetup);
@@ -1332,7 +1332,7 @@ public static class PythonAppResourceBuilderExtensions
                 installerBuilder.WithExplicitStart();
             }
 
-            builder.ApplicationBuilder.Eventing.Subscribe<BeforeStartEvent>((_, _) =>
+            builder.ApplicationBuilder.OnBeforeStart((_, _) =>
             {
                 // Set the installer's working directory to match the resource's working directory
                 // and set the install command and args based on the resource's annotations

@@ -401,7 +401,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             return Task.CompletedTask;
         });
 
-        await events.PublishAsync(new OnResourceStartingContext(CancellationToken.None, KnownResourceTypes.Container, parentResource.Resource, parentResource.Resource.Name));
+        await events.PublishAsync(new OnConnectionStringAvailableContext(CancellationToken.None, parentResource.Resource));
 
         Assert.True(parentConnectionStringAvailable);
         Assert.True(childConnectionStringAvailable);

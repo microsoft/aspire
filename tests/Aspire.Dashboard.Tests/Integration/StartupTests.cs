@@ -137,19 +137,28 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
     [InlineData(KnownConfigNames.Legacy.DashboardConfigFilePath)]
     public async Task Configuration_ConfigFilePathDoesntExist_Error(string dashboardConfigFilePathNameKey)
     {
-        // Arrange & Act
-        var configFilePath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        var ex = await Assert.ThrowsAsync<FileNotFoundException>(async () =>
-        {
-            await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
-                additionalConfiguration: data =>
-                {
-                    data[dashboardConfigFilePathNameKey] = configFilePath;
-                });
-        }).DefaultTimeout();
+        var tempDirectory = Directory.CreateTempSubdirectory();
 
-        // Assert
-        Assert.Contains(configFilePath, ex.Message);
+        try
+        {
+            // Arrange & Act
+            var configFilePath = Path.Combine(tempDirectory.FullName, Path.GetRandomFileName());
+            var ex = await Assert.ThrowsAsync<FileNotFoundException>(async () =>
+            {
+                await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
+                    additionalConfiguration: data =>
+                    {
+                        data[dashboardConfigFilePathNameKey] = configFilePath;
+                    });
+            }).DefaultTimeout();
+
+            // Assert
+            Assert.Contains(configFilePath, ex.Message);
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory.FullName, recursive: true);
+        }
     }
 
     [Theory]
@@ -237,7 +246,8 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
     public async Task Configuration_FileConfigDirectoryDoesntExist_Error()
     {
         // Arrange & Act
-        var fileConfigDirectory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        var fileConfigDirectory = Directory.CreateTempSubdirectory().FullName;
+        Directory.Delete(fileConfigDirectory);
         var ex = await Assert.ThrowsAsync<DirectoryNotFoundException>(async () =>
         {
             await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
@@ -551,7 +561,8 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
     public async Task Configuration_Logging_FileConfig_OverrideDefaults(string dashboardConfigFilePathNameKey)
     {
         // Arrange
-        var configFilePath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        var tempDirectory = Directory.CreateTempSubdirectory();
+        var configFilePath = Path.Combine(tempDirectory.FullName, Path.GetRandomFileName());
         var configJson = new JsonObject
         {
             ["Logging"] = new JsonObject
@@ -587,7 +598,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         }
         finally
         {
-            File.Delete(configFilePath);
+            Directory.Delete(tempDirectory.FullName, recursive: true);
         }
     }
 

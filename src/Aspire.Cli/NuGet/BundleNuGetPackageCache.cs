@@ -21,12 +21,6 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
     private readonly ILogger<BundleNuGetPackageCache> _logger;
     private readonly IFeatures _features;
 
-    // List of deprecated packages that should be filtered by default
-    private static readonly HashSet<string> s_deprecatedPackages = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Aspire.Hosting.Dapr"
-    };
-
     public BundleNuGetPackageCache(
         IBundleService bundleService,
         ILogger<BundleNuGetPackageCache> logger,
@@ -226,7 +220,7 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
             // Apply deprecated package filter unless the user wants to show deprecated packages
             if (isOfficialPackage && !_features.IsFeatureEnabled(KnownFeatures.ShowDeprecatedPackages, defaultValue: false))
             {
-                return !s_deprecatedPackages.Contains(p.Id);
+                return !DeprecatedPackages.IsDeprecated(p.Id);
             }
 
             return isOfficialPackage;

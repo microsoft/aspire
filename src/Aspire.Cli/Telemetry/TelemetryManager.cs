@@ -14,7 +14,7 @@ namespace Aspire.Cli.Telemetry;
 /// Manages OpenTelemetry TracerProvider instances for the CLI.
 /// Maintains separate providers for Azure Monitor (production telemetry) and debug exporters (OTLP/console).
 /// </summary>
-internal sealed class TelemetryManager
+internal sealed class TelemetryManager : IDisposable
 {
     // Remote export connection string for Application Insights. Intentionally hard-coded.
     private const string ApplicationInsightsConnectionString = "InstrumentationKey=e39510fc-95a1-423d-9f33-6121bf0d2113;IngestionEndpoint=https://centralus-2.in.applicationinsights.azure.com/;LiveEndpoint=https://centralus.livediagnostics.monitor.azure.com/;ApplicationId=4d8bb9db-b7ab-49f9-978b-80ae1e83f6da";
@@ -31,6 +31,8 @@ internal sealed class TelemetryManager
 #if DEBUG
     private readonly TracerProvider? _diagnosticProvider;
 #endif
+
+    private bool _shuttingDown;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="TelemetryManager"/> class.
@@ -127,6 +129,8 @@ internal sealed class TelemetryManager
     /// </summary>
     public Task ShutdownAsync()
     {
+        _shuttingDown = true;
+
         return Task.Run(() =>
         {
             _azureMonitorProvider?.Shutdown(ShutDownTimeoutMilliseconds);
@@ -140,5 +144,19 @@ internal sealed class TelemetryManager
     {
         var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         return Path.Combine(homeDirectory, ".aspire", "cli", "telemetrystorage");
+    }
+
+    public void Dispose()
+    {
+        if (!_shuttingDown)
+        {
+            // Ensure everything is cleaned up for tests. This covers the situation where the host is disposed without a call to ShutdownAsync.
+            // The shutdown timeout is zero so not to wait for telemetry to be flushed. Don't want to delay tests.
+            // Dispose isn't used here because it always flushes telemetry and waits for completion.
+            _azureMonitorProvider?.Shutdown(0);
+#if DEBUG
+            _diagnosticProvider?.Shutdown(0);
+#endif
+        }
     }
 }

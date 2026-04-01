@@ -315,6 +315,25 @@ impl std::fmt::Display for EndpointProperty {
     }
 }
 
+/// CommandResultFormat
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CommandResultFormat {
+    #[default]
+    #[serde(rename = "Text")]
+    Text,
+    #[serde(rename = "Json")]
+    Json,
+}
+
+impl std::fmt::Display for CommandResultFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Text => write!(f, "Text"),
+            Self::Json => write!(f, "Json"),
+        }
+    }
+}
+
 /// UrlDisplayLocation
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum UrlDisplayLocation {
@@ -493,6 +512,10 @@ pub struct ExecuteCommandResult {
     pub canceled: bool,
     #[serde(rename = "ErrorMessage")]
     pub error_message: String,
+    #[serde(rename = "Result")]
+    pub result: String,
+    #[serde(rename = "ResultFormat")]
+    pub result_format: CommandResultFormat,
 }
 
 impl ExecuteCommandResult {
@@ -501,6 +524,8 @@ impl ExecuteCommandResult {
         map.insert("Success".to_string(), serde_json::to_value(&self.success).unwrap_or(Value::Null));
         map.insert("Canceled".to_string(), serde_json::to_value(&self.canceled).unwrap_or(Value::Null));
         map.insert("ErrorMessage".to_string(), serde_json::to_value(&self.error_message).unwrap_or(Value::Null));
+        map.insert("Result".to_string(), serde_json::to_value(&self.result).unwrap_or(Value::Null));
+        map.insert("ResultFormat".to_string(), serde_json::to_value(&self.result_format).unwrap_or(Value::Null));
         map
     }
 }
@@ -7088,6 +7113,25 @@ impl ExecuteCommandContext {
             args.insert("value".to_string(), Value::String(token_id));
         }
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setCancellationToken", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ExecuteCommandContext::new(handle, self.client.clone()))
+    }
+
+    /// Gets the Logger property
+    pub fn logger(&self) -> Result<ILogger, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.logger", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ILogger::new(handle, self.client.clone()))
+    }
+
+    /// Sets the Logger property
+    pub fn set_logger(&self, value: &ILogger) -> Result<ExecuteCommandContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), value.handle().to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setLogger", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ExecuteCommandContext::new(handle, self.client.clone()))
     }
