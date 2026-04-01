@@ -31,6 +31,11 @@ internal sealed class TestInteractionService : IInteractionService
     /// </summary>
     public Func<string, IEnumerable, Func<object, string>, CancellationToken, object>? PromptForSelectionCallback { get; set; }
 
+    /// <summary>
+    /// Callback for capturing multi-selection prompts in tests without compile-time knowledge of T.
+    /// </summary>
+    public Func<string, IEnumerable, Func<object, string>, CancellationToken, IReadOnlyList<object>>? PromptForSelectionsCallback { get; set; }
+
     // Call tracking
     public List<StringPromptCall> StringPromptCalls { get; } = [];
     public List<BooleanPromptCall> BooleanPromptCalls { get; } = [];
@@ -123,6 +128,12 @@ internal sealed class TestInteractionService : IInteractionService
         if (!choices.Any())
         {
             throw new EmptyChoicesException($"No items available for selection: {promptText}");
+        }
+
+        if (PromptForSelectionsCallback is not null)
+        {
+            var result = PromptForSelectionsCallback(promptText, choices, o => choiceFormatter((T)o), cancellationToken);
+            return Task.FromResult<IReadOnlyList<T>>(result.Cast<T>().ToList());
         }
 
         _ = _responses.TryDequeue(out _);
