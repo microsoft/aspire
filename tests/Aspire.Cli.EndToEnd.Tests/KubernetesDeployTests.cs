@@ -3,7 +3,6 @@
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Tests.Utils;
-using Aspire.TestUtilities;
 using Hex1b.Automation;
 using Xunit;
 
@@ -20,7 +19,6 @@ public sealed class KubernetesDeployTests(ITestOutputHelper output)
     private const string ProjectName = "K8sDeployTest";
 
     [Fact]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/15511")]
     [CaptureWorkspaceOnFailure]
     public async Task DeployBasicApiService()
     {
@@ -170,7 +168,6 @@ public sealed class KubernetesDeployTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/15511")]
     [CaptureWorkspaceOnFailure]
     public async Task DeployWithRedis()
     {
@@ -314,7 +311,6 @@ public sealed class KubernetesDeployTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/15511")]
     [CaptureWorkspaceOnFailure]
     public async Task DeployWithPostgres()
     {
@@ -448,7 +444,6 @@ public sealed class KubernetesDeployTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/15511")]
     [CaptureWorkspaceOnFailure]
     public async Task DeployWithRabbitMQ()
     {
@@ -578,7 +573,6 @@ public sealed class KubernetesDeployTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/15511")]
     [CaptureWorkspaceOnFailure]
     public async Task DeployWithMongoDB()
     {
@@ -718,7 +712,6 @@ public sealed class KubernetesDeployTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/15511")]
     [CaptureWorkspaceOnFailure]
     public async Task DeployWithMySql()
     {
@@ -852,7 +845,6 @@ public sealed class KubernetesDeployTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/15511")]
     [CaptureWorkspaceOnFailure]
     public async Task DeployWithSqlServer()
     {
@@ -986,7 +978,6 @@ public sealed class KubernetesDeployTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/15511")]
     [CaptureWorkspaceOnFailure]
     public async Task DeployWithGarnet()
     {
@@ -1123,7 +1114,6 @@ public sealed class KubernetesDeployTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/15511")]
     [CaptureWorkspaceOnFailure]
     public async Task DeployWithValkey()
     {
@@ -1260,7 +1250,6 @@ public sealed class KubernetesDeployTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/15511")]
     [CaptureWorkspaceOnFailure]
     public async Task DeployWithNats()
     {
