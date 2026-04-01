@@ -194,8 +194,7 @@ internal class DeveloperCertificateService : IDeveloperCertificateService
 
     // Well-known location on disk where dev-cert key material is cached on macOS.
     private static readonly string s_userDevCertificateLocation = Path.Combine(
-        Environment.GetFolderPath(Envi
-                // We only cache PEM certificates on MacOSronment.SpecialFolder.UserProfile), ".aspire", "dev-certs", "https");
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".aspire", "dev-certs", "https");
 
     private static readonly SemaphoreSlim s_certificateCacheSemaphore = new(1, 1);
 
