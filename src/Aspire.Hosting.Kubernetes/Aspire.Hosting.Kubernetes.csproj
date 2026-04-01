@@ -15,7 +15,6 @@
 
   <ItemGroup>
     <Compile Include="$(SharedDir)PublishingContextUtils.cs" LinkBase="Shared" />
-    <Compile Include="$(SharedDir)KnownOtelConfigNames.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)Yaml\*.cs" LinkBase="Shared\Yaml" />
   </ItemGroup>
 
