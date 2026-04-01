@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Security.Cryptography;
+using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Yarp;
 
@@ -154,15 +156,15 @@ public static class YarpConfigurationBuilderExtensions
     }
 
     /// <summary>
-    /// Adds a catch-all route for a cluster, endpoint, or resource target.
+    /// Adds a catch-all route for a cluster, endpoint, resource, or string destination target.
     /// </summary>
     /// <param name="builder">The builder instance.</param>
-    /// <param name="target">The target cluster, endpoint, or resource for this route.</param>
+    /// <param name="target">The target cluster, endpoint, resource, or string destination for this route.</param>
     /// <returns>The created route.</returns>
-    [AspireExport("addCatchAllRoute", Description = "Adds a YARP catch-all route for a cluster, endpoint, or resource target.")]
+    [AspireExport("addCatchAllRoute", Description = "Adds a YARP catch-all route for a cluster, endpoint, resource, or string destination target.")]
     internal static YarpRoute AddCatchAllRoute(
         this IYarpConfigurationBuilder builder,
-        [AspireUnion(typeof(YarpCluster), typeof(EndpointReference), typeof(IResourceBuilder<IResourceWithServiceDiscovery>), typeof(IResourceBuilder<ExternalServiceResource>))] object target)
+        [AspireUnion(typeof(YarpCluster), typeof(EndpointReference), typeof(IResourceBuilder<IResourceWithServiceDiscovery>), typeof(IResourceBuilder<ExternalServiceResource>), typeof(string))] object target)
     {
         return AddRouteCore(builder, CatchAllPath, target);
     }
@@ -234,17 +236,17 @@ public static class YarpConfigurationBuilderExtensions
     }
 
     /// <summary>
-    /// Adds a route for a cluster, endpoint, or resource target.
+    /// Adds a route for a cluster, endpoint, resource, or string destination target.
     /// </summary>
     /// <param name="builder">The builder instance.</param>
     /// <param name="path">The path to match for this route.</param>
-    /// <param name="target">The target cluster, endpoint, or resource for this route.</param>
+    /// <param name="target">The target cluster, endpoint, resource, or string destination for this route.</param>
     /// <returns>The created route.</returns>
-    [AspireExport("addRoute", Description = "Adds a YARP route for a cluster, endpoint, or resource target.")]
+    [AspireExport("addRoute", Description = "Adds a YARP route for a cluster, endpoint, resource, or string destination target.")]
     internal static YarpRoute AddRoute(
         this IYarpConfigurationBuilder builder,
         string path,
-        [AspireUnion(typeof(YarpCluster), typeof(EndpointReference), typeof(IResourceBuilder<IResourceWithServiceDiscovery>), typeof(IResourceBuilder<ExternalServiceResource>))] object target)
+        [AspireUnion(typeof(YarpCluster), typeof(EndpointReference), typeof(IResourceBuilder<IResourceWithServiceDiscovery>), typeof(IResourceBuilder<ExternalServiceResource>), typeof(string))] object target)
     {
         return AddRouteCore(builder, path, target);
     }
@@ -287,7 +289,18 @@ public static class YarpConfigurationBuilderExtensions
             EndpointReference endpoint => builder.AddRoute(path, endpoint),
             IResourceBuilder<IResourceWithServiceDiscovery> resource => builder.AddRoute(path, resource),
             IResourceBuilder<ExternalServiceResource> externalService => builder.AddRoute(path, externalService),
+            string destination => builder switch
+            {
+                YarpConfigurationBuilder yarpConfigurationBuilder => yarpConfigurationBuilder.AddRoute(path, destination),
+                _ => builder.AddRoute(path, builder.AddCluster(CreateSyntheticClusterName(path, destination), destination)),
+            },
             _ => throw new ArgumentException($"Unsupported YARP route target type '{target.GetType().FullName}'.", nameof(target)),
         };
+    }
+
+    private static string CreateSyntheticClusterName(string path, string destination)
+    {
+        var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes($"{path}\n{destination}"));
+        return $"route-cluster-{Convert.ToHexString(hashBytes)[..12].ToLowerInvariant()}";
     }
 }
