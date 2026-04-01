@@ -167,6 +167,50 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PsCommand_JsonFormat_ReturnsAnonymousDashboardUrl()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var textWriter = new TestOutputTextWriter(outputHelper);
+
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            IsInScope = true,
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost.csproj"),
+                ProcessId = 1234
+            },
+            DashboardUrlsState = new DashboardUrlsState
+            {
+                BaseUrlWithLoginToken = "http://localhost:18888"
+            }
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = textWriter;
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+        });
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("ps --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var jsonOutput = string.Join(string.Empty, textWriter.Logs);
+
+        var appHosts = JsonSerializer.Deserialize(jsonOutput, PsCommandJsonContext.RelaxedEscaping.ListAppHostDisplayInfo);
+        Assert.NotNull(appHosts);
+        Assert.Single(appHosts);
+        Assert.Equal("http://localhost:18888", appHosts[0].DashboardUrl);
+    }
+
+    [Fact]
     public async Task PsCommand_JsonFormat_NoResults_WritesEmptyArrayToStdout()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

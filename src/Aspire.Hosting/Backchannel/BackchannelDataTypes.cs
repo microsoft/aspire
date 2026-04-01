@@ -392,19 +392,21 @@ internal sealed class RpcResourceState
 }
 
 /// <summary>
-/// Represents dashboard URLs with authentication tokens.
+/// Represents dashboard URLs for the running AppHost.
 /// </summary>
 internal sealed class DashboardUrlsState
 {
     public bool DashboardHealthy { get; init; } = true;
 
     /// <summary>
-    /// Gets the base dashboard URL with a login token.
+    /// Gets the dashboard URL.
+    /// When browser token authentication is enabled, this value includes the login token.
     /// </summary>
     public string? BaseUrlWithLoginToken { get; init; }
 
     /// <summary>
-    /// Gets the Codespaces dashboard URL with a login token, if available.
+    /// Gets the Codespaces dashboard URL, if available.
+    /// When browser token authentication is enabled, this value includes the login token.
     /// </summary>
     public string? CodespacesUrlWithLoginToken { get; init; }
 }

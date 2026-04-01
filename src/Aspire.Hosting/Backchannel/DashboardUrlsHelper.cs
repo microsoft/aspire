@@ -94,14 +94,18 @@ internal static class DashboardUrlsHelper
             }
         }
 
-        // Build login URLs
+        // Build dashboard URLs. When browser token auth is enabled, include the login token.
+        // When anonymous access is enabled, return the base URL directly.
         var codespacesUrlRewriter = serviceProvider.GetService<CodespacesUrlRewriter>();
         string? baseUrlWithLoginToken = null;
         string? codespacesUrlWithLoginToken = null;
 
-        if (!string.IsNullOrEmpty(apiBaseUrl) && !string.IsNullOrEmpty(dashboardOptions.DashboardToken))
+        if (!string.IsNullOrEmpty(apiBaseUrl))
         {
-            baseUrlWithLoginToken = $"{apiBaseUrl.TrimEnd('/')}/login?t={dashboardOptions.DashboardToken}";
+            baseUrlWithLoginToken = !string.IsNullOrEmpty(dashboardOptions.DashboardToken)
+                ? $"{apiBaseUrl.TrimEnd('/')}/login?t={dashboardOptions.DashboardToken}"
+                : apiBaseUrl;
+
             var rewrittenUrl = codespacesUrlRewriter?.RewriteUrl(baseUrlWithLoginToken);
             if (rewrittenUrl != baseUrlWithLoginToken)
             {
@@ -122,13 +126,13 @@ internal static class DashboardUrlsHelper
     }
 
     /// <summary>
-    /// Gets the dashboard URLs including the login token.
+    /// Gets the dashboard URLs for the running AppHost.
     /// Waits for the dashboard to become healthy before returning.
     /// </summary>
     /// <param name="serviceProvider">The service provider.</param>
     /// <param name="logger">The logger for diagnostic output.</param>
     /// <param name="cancellationToken">A cancellation token.</param>
-    /// <returns>The Dashboard URLs state including health and login URLs.</returns>
+    /// <returns>The dashboard URL state including health and resolved dashboard URLs.</returns>
     public static async Task<DashboardUrlsState> GetDashboardUrlsAsync(
         IServiceProvider serviceProvider,
         ILogger logger,
@@ -156,6 +160,14 @@ internal sealed class DashboardConnectionInfo
     public string? ApiToken { get; init; }
     public string? McpBaseUrl { get; init; }
     public string? McpApiToken { get; init; }
+    /// <summary>
+    /// Gets the resolved dashboard URL.
+    /// When browser token authentication is enabled, this value includes the login token.
+    /// </summary>
     public string? BaseUrlWithLoginToken { get; init; }
+    /// <summary>
+    /// Gets the resolved Codespaces dashboard URL, if available.
+    /// When browser token authentication is enabled, this value includes the login token.
+    /// </summary>
     public string? CodespacesUrlWithLoginToken { get; init; }
 }
