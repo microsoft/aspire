@@ -41,7 +41,7 @@ Before starting, verify:
 - Fill known details in `## Description` (summary, motivation/context, dependencies, validation).
 - Fill checklist choices by selecting known answers and leaving only unknown choices unchecked.
 - Keep `Fixes # (issue)` unless a concrete issue number is provided.
-- Write the body to a temporary file (e.g., `pr-body.md` in the repo root).
+- Write the body to a temporary file named `pr-body.md` in the repo root.
 
 ### 4. Create the PR
 
@@ -70,13 +70,7 @@ gh pr create `
 
 > **Shell differences:** `VAR=val command` is bash syntax for setting an env var for a single command. PowerShell requires a separate `$env:VAR = "val"` statement (persists for the session, which is harmless here).
 
-### 5. Clean up
-
-Delete the temporary body file after the PR is created:
-- **bash:** `rm pr-body.md`
-- **PowerShell:** `Remove-Item pr-body.md`
-
-### 6. Handle existing PRs
+### 5. Handle existing PRs
 
 If a PR already exists for the branch:
 - Do not create another.
@@ -87,6 +81,12 @@ If a PR already exists for the branch:
   **PowerShell:** `$env:GH_PAGER = "cat"; gh pr edit <pr-number-or-url> --body-file pr-body.md`
 
 - Return the existing PR URL.
+
+### 6. Clean up
+
+After you are completely finished creating or updating the PR (after step 4 and, if needed, step 5), delete the temporary body file:
+- **bash:** `rm pr-body.md`
+- **PowerShell:** `Remove-Item pr-body.md`
 
 ## Error handling
 
