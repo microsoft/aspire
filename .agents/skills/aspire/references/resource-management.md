@@ -1,24 +1,25 @@
 # Resource Management
 
-Use this when the task is scoped to one resource or depends on a resource becoming healthy.
+Use this when the task is scoped to one resource or depends on a specific resource becoming healthy.
 
-## Wait For Resource Health
+## Scenario: Wait For One Resource Before Touching It
 
-Use these commands when the next step should wait for a resource to become ready.
+Use these commands when the next step depends on one resource being ready, such as before calling an API, opening a frontend, or querying a database.
 
 ```bash
 aspire wait <resource>
 aspire wait <resource> --status up --timeout 60
 ```
 
-Keep these points in mind when waiting on resources:
+Keep these points in mind:
 
-- Use `aspire wait` before interacting with a resource that must be healthy.
-- Add `--status` and `--timeout` when the task needs more explicit readiness checks.
+- Use `aspire wait` before a dependent action when readiness is the real blocker.
+- Add `--status` and `--timeout` when the ask calls for an explicit readiness condition rather than a generic wait.
+- Treat readiness as a resource-scoped concern; a missing ready signal is not automatically a reason to restart the whole AppHost.
 
-## Operate On A Resource
+## Scenario: Fix Or Operate On One Resource Without Bouncing The Whole App
 
-Use these commands when the task is about one running resource rather than the whole AppHost.
+Use these commands when the user calls out one resource by name, such as Redis, Postgres, cache, or a single custom resource command.
 
 ```bash
 aspire resource <resource> start
@@ -27,6 +28,8 @@ aspire resource <resource> restart
 aspire resource <resource> <command>
 ```
 
-Keep these points in mind when operating on resources:
+Keep these points in mind:
 
-- Prefer resource-scoped commands when the task does not require a full AppHost restart.
+- Prefer resource-scoped commands when the task does not require an AppHost-wide restart.
+- If the user says one resource is wedged, use `aspire resource <resource> restart` before escalating to `aspire start`.
+- Use `aspire resource <resource> <command>` when the AppHost exposes a resource-specific dashboard or operational command.

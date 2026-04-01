@@ -5,6 +5,9 @@
       "id": 1,
       "prompt": "I'd like to add postgres to my aspire TypeScript app, send help",
       "expected_output": "The apphost.ts contains a call to `addPostgres` and `addDatabase` with appropriate configuration for the Postgres database. The agent should identify the need to add Postgres, determine the necessary configuration, and modify the apphost.ts file accordingly.",
+      "files": [
+        "evals/files/typescript-postgres-app"
+      ],
       "expectations": [
         "The aspire docs search or get command was called for postgres.",
         "The agent should call `aspire add postgres` and the appropriate packages are added to the aspire.config.json file.",
@@ -15,19 +18,24 @@
       "id": 2,
       "prompt": "could you please help me add aspire to my existing express app?",
       "expected_output": "The apphost.ts file is created in the root of the workspace.",
+      "files": [
+        "evals/files/existing-express-app"
+      ],
       "expectations": [
         "The agent identifies that there is an existing express app and calls `aspire init` selects `TypeScript (Node.js)`.",
-        "The agent calls `aspire add javascript` and the appropriate packages are added to the aspire.config.json file.",
         "The agent correctly wires the existing express app into the apphost.ts file, ensuring that the express app is properly initialized and can be started using the aspire CLI."
       ]
     },
     {
       "id": 3,
       "prompt": "Help me expose one of those fancy aspire dashboard commands from my AppHost.cs?",
-      "expected_output": "The AppHost.cs has an added call to `WithCommand` on the target resource.",
+      "expected_output": "The apphost.cs file has an added call to `WithCommand` on the target resource.",
+      "files": [
+        "evals/files/csharp-apphost-command"
+      ],
       "expectations": [
         "The aspire docs search or get command was called for custom resource commands.",
-        "The agent chains a call to the target resource in AppHost.cs with `WithCommand`, providing the necessary configuration for the command."
+        "The agent chains a call to the target resource in apphost.cs with `WithCommand`, providing the necessary configuration for the command."
       ]
     },
     {
@@ -188,6 +196,886 @@
         "The response starts with live-app inspection such as `aspire describe` before proposing edits.",
         "The response follows the recommended debugging order: structured telemetry before raw console logs.",
         "The response uses `aspire export` when the prompt asks for a sharable artifact."
+      ]
+    },
+    {
+      "id": 20,
+      "prompt": "I already have another Aspire instance running from a different worktree. What's the safe way to start this one, and what should I rerun after AppHost edits?",
+      "expected_output": "The guidance starts the app with `aspire start --isolated`, keeps the flow in the CLI-managed background, and explains that re-running `aspire start` is the restart path after AppHost changes.",
+      "expectations": [
+        "The response chooses `aspire start --isolated` for a worktree or potentially conflicting local instance.",
+        "The response avoids `aspire run` for the normal agent workflow because it blocks the terminal.",
+        "The response explains that re-running `aspire start` is the safe way to pick up AppHost changes."
+      ]
+    },
+    {
+      "id": 21,
+      "prompt": "Need to launch this copy from a git worktree without colliding with the app I already have up locally. Which Aspire command should I use, and how do I restart after changing apphost?",
+      "expected_output": "The guidance starts the app with `aspire start --isolated`, keeps the flow in the CLI-managed background, and explains that re-running `aspire start` is the restart path after AppHost changes.",
+      "expectations": [
+        "The response chooses `aspire start --isolated` for a worktree or potentially conflicting local instance.",
+        "The response avoids `aspire run` for the normal agent workflow because it blocks the terminal.",
+        "The response explains that re-running `aspire start` is the safe way to pick up AppHost changes."
+      ]
+    },
+    {
+      "id": 22,
+      "prompt": "Can you start this Aspire app from my worktree so it doesn't fight the one from main, and then tell me the normal restart command after AppHost changes?",
+      "expected_output": "The guidance starts the app with `aspire start --isolated`, keeps the flow in the CLI-managed background, and explains that re-running `aspire start` is the restart path after AppHost changes.",
+      "expectations": [
+        "The response chooses `aspire start --isolated` for a worktree or potentially conflicting local instance.",
+        "The response avoids `aspire run` for the normal agent workflow because it blocks the terminal.",
+        "The response explains that re-running `aspire start` is the safe way to pick up AppHost changes."
+      ]
+    },
+    {
+      "id": 23,
+      "prompt": "What's the background-safe way to bring up this worktree instance of the app, and which command do I rerun when I tweak the AppHost?",
+      "expected_output": "The guidance starts the app with `aspire start --isolated`, keeps the flow in the CLI-managed background, and explains that re-running `aspire start` is the restart path after AppHost changes.",
+      "expectations": [
+        "The response chooses `aspire start --isolated` for a worktree or potentially conflicting local instance.",
+        "The response avoids `aspire run` for the normal agent workflow because it blocks the terminal.",
+        "The response explains that re-running `aspire start` is the safe way to pick up AppHost changes."
+      ]
+    },
+    {
+      "id": 24,
+      "prompt": "This project already exists. I don't need a fresh template, I need Aspire added to what I have. What's the right starting point?",
+      "expected_output": "The guidance uses `aspire init` for an existing project, distinguishes it from `aspire new`, and keeps the next steps grounded in AppHost creation rather than inventing a greenfield workflow.",
+      "expectations": [
+        "The response chooses `aspire init` for adding Aspire to an existing app.",
+        "The response explicitly distinguishes `aspire init` from `aspire new`.",
+        "The response keeps the workflow AppHost-oriented instead of suggesting unrelated manual scaffolding."
+      ]
+    },
+    {
+      "id": 25,
+      "prompt": "Can you bootstrap Aspire into an app that's already in this repo instead of creating a greenfield sample?",
+      "expected_output": "The guidance uses `aspire init` for an existing project, distinguishes it from `aspire new`, and keeps the next steps grounded in AppHost creation rather than inventing a greenfield workflow.",
+      "expectations": [
+        "The response chooses `aspire init` for adding Aspire to an existing app.",
+        "The response explicitly distinguishes `aspire init` from `aspire new`.",
+        "The response keeps the workflow AppHost-oriented instead of suggesting unrelated manual scaffolding."
+      ]
+    },
+    {
+      "id": 26,
+      "prompt": "I've already got the app code. How should I initialize Aspire around it without using `aspire new`?",
+      "expected_output": "The guidance uses `aspire init` for an existing project, distinguishes it from `aspire new`, and keeps the next steps grounded in AppHost creation rather than inventing a greenfield workflow.",
+      "expectations": [
+        "The response chooses `aspire init` for adding Aspire to an existing app.",
+        "The response explicitly distinguishes `aspire init` from `aspire new`.",
+        "The response keeps the workflow AppHost-oriented instead of suggesting unrelated manual scaffolding."
+      ]
+    },
+    {
+      "id": 27,
+      "prompt": "Help me wire Aspire into an existing codebase rather than spinning up a brand-new project from scratch.",
+      "expected_output": "The guidance uses `aspire init` for an existing project, distinguishes it from `aspire new`, and keeps the next steps grounded in AppHost creation rather than inventing a greenfield workflow.",
+      "expectations": [
+        "The response chooses `aspire init` for adding Aspire to an existing app.",
+        "The response explicitly distinguishes `aspire init` from `aspire new`.",
+        "The response keeps the workflow AppHost-oriented instead of suggesting unrelated manual scaffolding."
+      ]
+    },
+    {
+      "id": 28,
+      "prompt": "Before you touch myapi, wait until it's up and bail out if it's still not ready after sixty seconds.",
+      "expected_output": "The guidance uses a resource readiness gate such as `aspire wait myapi --status up --timeout 60` before interacting with the resource.",
+      "expectations": [
+        "The response uses `aspire wait` against the named resource before any dependent action.",
+        "The response includes `--status up` and `--timeout 60` or an equivalent explicit readiness check.",
+        "The response treats readiness as a resource-scoped concern, not a reason to restart the whole AppHost."
+      ]
+    },
+    {
+      "id": 29,
+      "prompt": "Can you gate the next step on myapi actually being up, with an explicit one-minute timeout?",
+      "expected_output": "The guidance uses a resource readiness gate such as `aspire wait myapi --status up --timeout 60` before interacting with the resource.",
+      "expectations": [
+        "The response uses `aspire wait` against the named resource before any dependent action.",
+        "The response includes `--status up` and `--timeout 60` or an equivalent explicit readiness check.",
+        "The response treats readiness as a resource-scoped concern, not a reason to restart the whole AppHost."
+      ]
+    },
+    {
+      "id": 30,
+      "prompt": "Please don't hit myapi until Aspire says it's ready, and use a 60 second timeout instead of waiting forever.",
+      "expected_output": "The guidance uses a resource readiness gate such as `aspire wait myapi --status up --timeout 60` before interacting with the resource.",
+      "expectations": [
+        "The response uses `aspire wait` against the named resource before any dependent action.",
+        "The response includes `--status up` and `--timeout 60` or an equivalent explicit readiness check.",
+        "The response treats readiness as a resource-scoped concern, not a reason to restart the whole AppHost."
+      ]
+    },
+    {
+      "id": 31,
+      "prompt": "I want a real readiness wait on myapi before anything else runs. About a minute is the max I'd wait.",
+      "expected_output": "The guidance uses a resource readiness gate such as `aspire wait myapi --status up --timeout 60` before interacting with the resource.",
+      "expectations": [
+        "The response uses `aspire wait` against the named resource before any dependent action.",
+        "The response includes `--status up` and `--timeout 60` or an equivalent explicit readiness check.",
+        "The response treats readiness as a resource-scoped concern, not a reason to restart the whole AppHost."
+      ]
+    },
+    {
+      "id": 32,
+      "prompt": "Only Redis is broken. What's the right Aspire command to restart just Redis without restarting everything else?",
+      "expected_output": "The guidance uses `aspire resource redis restart` or another resource-scoped command so the fix stays limited to the affected resource.",
+      "expectations": [
+        "The response chooses a resource-scoped command such as `aspire resource redis restart`.",
+        "The response avoids escalating to `aspire start` or another full AppHost restart when the prompt is resource-specific.",
+        "The response reflects that `aspire resource <resource> <command>` is the right surface for one-resource operations."
+      ]
+    },
+    {
+      "id": 33,
+      "prompt": "Can you keep this scoped to the cache resource? I only want Redis restarted, not the whole AppHost.",
+      "expected_output": "The guidance uses `aspire resource redis restart` or another resource-scoped command so the fix stays limited to the affected resource.",
+      "expectations": [
+        "The response chooses a resource-scoped command such as `aspire resource redis restart`.",
+        "The response avoids escalating to `aspire start` or another full AppHost restart when the prompt is resource-specific.",
+        "The response reflects that `aspire resource <resource> <command>` is the right surface for one-resource operations."
+      ]
+    },
+    {
+      "id": 34,
+      "prompt": "Redis is the only thing acting up. How do you bounce that resource and leave the rest of the app alone?",
+      "expected_output": "The guidance uses `aspire resource redis restart` or another resource-scoped command so the fix stays limited to the affected resource.",
+      "expectations": [
+        "The response chooses a resource-scoped command such as `aspire resource redis restart`.",
+        "The response avoids escalating to `aspire start` or another full AppHost restart when the prompt is resource-specific.",
+        "The response reflects that `aspire resource <resource> <command>` is the right surface for one-resource operations."
+      ]
+    },
+    {
+      "id": 35,
+      "prompt": "What's the one-resource restart path for Redis here? I do not want a full AppHost restart.",
+      "expected_output": "The guidance uses `aspire resource redis restart` or another resource-scoped command so the fix stays limited to the affected resource.",
+      "expectations": [
+        "The response chooses a resource-scoped command such as `aspire resource redis restart`.",
+        "The response avoids escalating to `aspire start` or another full AppHost restart when the prompt is resource-specific.",
+        "The response reflects that `aspire resource <resource> <command>` is the right surface for one-resource operations."
+      ]
+    },
+    {
+      "id": 36,
+      "prompt": "This repo has several AppHosts. How do I inspect the payments one and grab its endpoints in JSON?",
+      "expected_output": "The guidance disambiguates the AppHost and uses `aspire describe --apphost <path> --format Json` or an equivalent machine-readable inspection flow.",
+      "expectations": [
+        "The response uses `--apphost <path>` to disambiguate which AppHost to inspect.",
+        "The response chooses `aspire describe` and requests JSON output for machine-readable state.",
+        "The response focuses on current app state and endpoints before proposing deeper debugging or edits."
+      ]
+    },
+    {
+      "id": 37,
+      "prompt": "I only care about the catalog AppHost. What's the scriptable Aspire command for its current URLs?",
+      "expected_output": "The guidance disambiguates the AppHost and uses `aspire describe --apphost <path> --format Json` or an equivalent machine-readable inspection flow.",
+      "expectations": [
+        "The response uses `--apphost <path>` to disambiguate which AppHost to inspect.",
+        "The response chooses `aspire describe` and requests JSON output for machine-readable state.",
+        "The response focuses on current app state and endpoints before proposing deeper debugging or edits."
+      ]
+    },
+    {
+      "id": 38,
+      "prompt": "Show me how to point Aspire at one specific AppHost in this repo and get machine-readable endpoint data back.",
+      "expected_output": "The guidance disambiguates the AppHost and uses `aspire describe --apphost <path> --format Json` or an equivalent machine-readable inspection flow.",
+      "expectations": [
+        "The response uses `--apphost <path>` to disambiguate which AppHost to inspect.",
+        "The response chooses `aspire describe` and requests JSON output for machine-readable state.",
+        "The response focuses on current app state and endpoints before proposing deeper debugging or edits."
+      ]
+    },
+    {
+      "id": 39,
+      "prompt": "There are multiple AppHosts checked in here. How do I disambiguate one by path and dump its running endpoints as JSON?",
+      "expected_output": "The guidance disambiguates the AppHost and uses `aspire describe --apphost <path> --format Json` or an equivalent machine-readable inspection flow.",
+      "expectations": [
+        "The response uses `--apphost <path>` to disambiguate which AppHost to inspect.",
+        "The response chooses `aspire describe` and requests JSON output for machine-readable state.",
+        "The response focuses on current app state and endpoints before proposing deeper debugging or edits."
+      ]
+    },
+    {
+      "id": 40,
+      "prompt": "The checkout flow is timing out. Start with the structured telemetry commands, then give me something exportable if it's still murky.",
+      "expected_output": "The guidance starts with `aspire otel` commands before raw console logs and uses `aspire export` when a sharable diagnostics bundle is needed.",
+      "expectations": [
+        "The response prefers `aspire otel logs`, `aspire otel traces`, or `aspire otel spans` before plain `aspire logs`.",
+        "The response includes `aspire logs` only as a secondary console-output view, not the primary diagnostic step.",
+        "The response uses `aspire export` when the prompt asks for a handoff artifact."
+      ]
+    },
+    {
+      "id": 41,
+      "prompt": "Please investigate this Aspire issue with traces/logs first, not raw console spam, and grab a sharable bundle if needed.",
+      "expected_output": "The guidance starts with `aspire otel` commands before raw console logs and uses `aspire export` when a sharable diagnostics bundle is needed.",
+      "expectations": [
+        "The response prefers `aspire otel logs`, `aspire otel traces`, or `aspire otel spans` before plain `aspire logs`.",
+        "The response includes `aspire logs` only as a secondary console-output view, not the primary diagnostic step.",
+        "The response uses `aspire export` when the prompt asks for a handoff artifact."
+      ]
+    },
+    {
+      "id": 42,
+      "prompt": "I want the observability-first path here: structured telemetry before plain logs, plus a handoff artifact if you need one.",
+      "expected_output": "The guidance starts with `aspire otel` commands before raw console logs and uses `aspire export` when a sharable diagnostics bundle is needed.",
+      "expectations": [
+        "The response prefers `aspire otel logs`, `aspire otel traces`, or `aspire otel spans` before plain `aspire logs`.",
+        "The response includes `aspire logs` only as a secondary console-output view, not the primary diagnostic step.",
+        "The response uses `aspire export` when the prompt asks for a handoff artifact."
+      ]
+    },
+    {
+      "id": 43,
+      "prompt": "Can you debug this timeout starting from Aspire's OTEL tooling and only fall back to plain logs secondarily?",
+      "expected_output": "The guidance starts with `aspire otel` commands before raw console logs and uses `aspire export` when a sharable diagnostics bundle is needed.",
+      "expectations": [
+        "The response prefers `aspire otel logs`, `aspire otel traces`, or `aspire otel spans` before plain `aspire logs`.",
+        "The response includes `aspire logs` only as a secondary console-output view, not the primary diagnostic step.",
+        "The response uses `aspire export` when the prompt asks for a handoff artifact."
+      ]
+    },
+    {
+      "id": 44,
+      "prompt": "Please regenerate the deployment artifacts and redeploy this app. The last deploy looks stuck on cached state.",
+      "expected_output": "The guidance separates artifact generation from deployment by using `aspire publish` and then `aspire deploy --clear-cache`.",
+      "expectations": [
+        "The response uses `aspire publish` when the prompt asks to generate deployment artifacts.",
+        "The response uses `aspire deploy --clear-cache` to address stale cached deployment state.",
+        "The response treats deployment as CLI-driven work instead of inventing a manual pipeline."
+      ]
+    },
+    {
+      "id": 45,
+      "prompt": "I need a fresh publish and then a redeploy, but clear any stale deployment cache on the way.",
+      "expected_output": "The guidance separates artifact generation from deployment by using `aspire publish` and then `aspire deploy --clear-cache`.",
+      "expectations": [
+        "The response uses `aspire publish` when the prompt asks to generate deployment artifacts.",
+        "The response uses `aspire deploy --clear-cache` to address stale cached deployment state.",
+        "The response treats deployment as CLI-driven work instead of inventing a manual pipeline."
+      ]
+    },
+    {
+      "id": 46,
+      "prompt": "Can you rerun the full deployment flow for this Aspire app and force the stale deployment cache out of the way?",
+      "expected_output": "The guidance separates artifact generation from deployment by using `aspire publish` and then `aspire deploy --clear-cache`.",
+      "expectations": [
+        "The response uses `aspire publish` when the prompt asks to generate deployment artifacts.",
+        "The response uses `aspire deploy --clear-cache` to address stale cached deployment state.",
+        "The response treats deployment as CLI-driven work instead of inventing a manual pipeline."
+      ]
+    },
+    {
+      "id": 47,
+      "prompt": "Let's rebuild the deployment artifacts and redeploy cleanly; I think cached deployment state is the reason this is stuck.",
+      "expected_output": "The guidance separates artifact generation from deployment by using `aspire publish` and then `aspire deploy --clear-cache`.",
+      "expectations": [
+        "The response uses `aspire publish` when the prompt asks to generate deployment artifacts.",
+        "The response uses `aspire deploy --clear-cache` to address stale cached deployment state.",
+        "The response treats deployment as CLI-driven work instead of inventing a manual pipeline."
+      ]
+    },
+    {
+      "id": 48,
+      "prompt": "The deployment is already out there; I just need to rerun the push-containers step without doing a full deploy again.",
+      "expected_output": "The guidance uses `aspire do seed-data` or the equivalent named deployment-step command instead of a full publish/deploy cycle.",
+      "expectations": [
+        "The response chooses `aspire do <step>` for a single deployment pipeline step.",
+        "The response does not replace the request with a full `aspire deploy` run.",
+        "The response ties the command choice to the named-step behavior described by the skill."
+      ]
+    },
+    {
+      "id": 49,
+      "prompt": "Can you rerun only the diagnostics step from the deployment pipeline instead of kicking off the whole deployment flow?",
+      "expected_output": "The guidance uses `aspire do seed-data` or the equivalent named deployment-step command instead of a full publish/deploy cycle.",
+      "expectations": [
+        "The response chooses `aspire do <step>` for a single deployment pipeline step.",
+        "The response does not replace the request with a full `aspire deploy` run.",
+        "The response ties the command choice to the named-step behavior described by the skill."
+      ]
+    },
+    {
+      "id": 50,
+      "prompt": "I only need the publish-images style step rerun here, not another end-to-end deploy. What's the Aspire command for that?",
+      "expected_output": "The guidance uses `aspire do seed-data` or the equivalent named deployment-step command instead of a full publish/deploy cycle.",
+      "expectations": [
+        "The response chooses `aspire do <step>` for a single deployment pipeline step.",
+        "The response does not replace the request with a full `aspire deploy` run.",
+        "The response ties the command choice to the named-step behavior described by the skill."
+      ]
+    },
+    {
+      "id": 51,
+      "prompt": "Please run just the named container-push step from the deployment pipeline. Don't redo the full deployment.",
+      "expected_output": "The guidance uses `aspire do seed-data` or the equivalent named deployment-step command instead of a full publish/deploy cycle.",
+      "expectations": [
+        "The response chooses `aspire do <step>` for a single deployment pipeline step.",
+        "The response does not replace the request with a full `aspire deploy` run.",
+        "The response ties the command choice to the named-step behavior described by the skill."
+      ]
+    },
+    {
+      "id": 52,
+      "prompt": "Before you touch our Postgres integration, can you look up the Aspire docs path we're supposed to follow?",
+      "expected_output": "The guidance uses `aspire docs search postgres` and `aspire docs get <slug>` or an equivalent docs lookup flow before making integration changes.",
+      "expectations": [
+        "The response uses Aspire docs commands before proposing integration changes.",
+        "The response searches for relevant docs and then drills into a specific doc entry.",
+        "The response treats docs lookup as part of the recommended skill workflow, not an optional afterthought."
+      ]
+    },
+    {
+      "id": 53,
+      "prompt": "Don't change the Postgres setup yet. First use Aspire docs to confirm the recommended integration flow.",
+      "expected_output": "The guidance uses `aspire docs search postgres` and `aspire docs get <slug>` or an equivalent docs lookup flow before making integration changes.",
+      "expectations": [
+        "The response uses Aspire docs commands before proposing integration changes.",
+        "The response searches for relevant docs and then drills into a specific doc entry.",
+        "The response treats docs lookup as part of the recommended skill workflow, not an optional afterthought."
+      ]
+    },
+    {
+      "id": 54,
+      "prompt": "Can you do a docs-first pass for Postgres before proposing any AppHost edits?",
+      "expected_output": "The guidance uses `aspire docs search postgres` and `aspire docs get <slug>` or an equivalent docs lookup flow before making integration changes.",
+      "expectations": [
+        "The response uses Aspire docs commands before proposing integration changes.",
+        "The response searches for relevant docs and then drills into a specific doc entry.",
+        "The response treats docs lookup as part of the recommended skill workflow, not an optional afterthought."
+      ]
+    },
+    {
+      "id": 55,
+      "prompt": "I want the official Aspire docs checked for Postgres before we change anything in the apphost.",
+      "expected_output": "The guidance uses `aspire docs search postgres` and `aspire docs get <slug>` or an equivalent docs lookup flow before making integration changes.",
+      "expectations": [
+        "The response uses Aspire docs commands before proposing integration changes.",
+        "The response searches for relevant docs and then drills into a specific doc entry.",
+        "The response treats docs lookup as part of the recommended skill workflow, not an optional afterthought."
+      ]
+    },
+    {
+      "id": 56,
+      "prompt": "My Aspire CLI feels off on this machine. Can you show where the effective config is coming from, then do the normal repair steps?",
+      "expected_output": "The guidance inspects configuration provenance with `aspire config info` and then uses recovery commands such as `aspire doctor`, `aspire cache clear`, or certificate repair when the issue looks environmental.",
+      "expectations": [
+        "The response uses `aspire config info` to explain configuration sources and effective settings.",
+        "The response uses `aspire doctor` early when the symptoms point to local environment drift.",
+        "The response includes repair commands such as `aspire cache clear`, `aspire certs trust`, or `aspire certs clean` if the environment still needs cleanup."
+      ]
+    },
+    {
+      "id": 57,
+      "prompt": "Before we blame the app, can you inspect Aspire's config sources and then run the usual local-environment cleanup commands if needed?",
+      "expected_output": "The guidance inspects configuration provenance with `aspire config info` and then uses recovery commands such as `aspire doctor`, `aspire cache clear`, or certificate repair when the issue looks environmental.",
+      "expectations": [
+        "The response uses `aspire config info` to explain configuration sources and effective settings.",
+        "The response uses `aspire doctor` early when the symptoms point to local environment drift.",
+        "The response includes repair commands such as `aspire cache clear`, `aspire certs trust`, or `aspire certs clean` if the environment still needs cleanup."
+      ]
+    },
+    {
+      "id": 58,
+      "prompt": "Something about my local Aspire install is cursed. I want config provenance first, then doctor/cache/cert fixes if that's where the issue is.",
+      "expected_output": "The guidance inspects configuration provenance with `aspire config info` and then uses recovery commands such as `aspire doctor`, `aspire cache clear`, or certificate repair when the issue looks environmental.",
+      "expectations": [
+        "The response uses `aspire config info` to explain configuration sources and effective settings.",
+        "The response uses `aspire doctor` early when the symptoms point to local environment drift.",
+        "The response includes repair commands such as `aspire cache clear`, `aspire certs trust`, or `aspire certs clean` if the environment still needs cleanup."
+      ]
+    },
+    {
+      "id": 59,
+      "prompt": "Please explain which settings files Aspire is using here and then repair the local setup if the problem is environmental.",
+      "expected_output": "The guidance inspects configuration provenance with `aspire config info` and then uses recovery commands such as `aspire doctor`, `aspire cache clear`, or certificate repair when the issue looks environmental.",
+      "expectations": [
+        "The response uses `aspire config info` to explain configuration sources and effective settings.",
+        "The response uses `aspire doctor` early when the symptoms point to local environment drift.",
+        "The response includes repair commands such as `aspire cache clear`, `aspire certs trust`, or `aspire certs clean` if the environment still needs cleanup."
+      ]
+    },
+    {
+      "id": 60,
+      "prompt": "I need another integration API to show up in apphost.ts, but I don't want to edit generated code. What is the normal regenerate flow?",
+      "expected_output": "The guidance uses `aspire add <package>` to regenerate the TypeScript API surface and then inspects `.modules/aspire.ts` rather than editing `.modules/` directly.",
+      "expectations": [
+        "The response explicitly says not to edit `.modules/` by hand.",
+        "The response uses `aspire add <package>` to regenerate the available TypeScript APIs.",
+        "The response inspects `.modules/aspire.ts` after the add operation to discover the refreshed API surface."
+      ]
+    },
+    {
+      "id": 61,
+      "prompt": "What's the supported Aspire way to make new TypeScript AppHost APIs appear without touching `.modules` manually?",
+      "expected_output": "The guidance uses `aspire add <package>` to regenerate the TypeScript API surface and then inspects `.modules/aspire.ts` rather than editing `.modules/` directly.",
+      "expectations": [
+        "The response explicitly says not to edit `.modules/` by hand.",
+        "The response uses `aspire add <package>` to regenerate the available TypeScript APIs.",
+        "The response inspects `.modules/aspire.ts` after the add operation to discover the refreshed API surface."
+      ]
+    },
+    {
+      "id": 62,
+      "prompt": "I added a new integration and now need the fresh TypeScript API surface. How should I regenerate it safely?",
+      "expected_output": "The guidance uses `aspire add <package>` to regenerate the TypeScript API surface and then inspects `.modules/aspire.ts` rather than editing `.modules/` directly.",
+      "expectations": [
+        "The response explicitly says not to edit `.modules/` by hand.",
+        "The response uses `aspire add <package>` to regenerate the available TypeScript APIs.",
+        "The response inspects `.modules/aspire.ts` after the add operation to discover the refreshed API surface."
+      ]
+    },
+    {
+      "id": 63,
+      "prompt": "Can you explain how to refresh the generated TypeScript AppHost APIs and where to inspect the new surface afterward?",
+      "expected_output": "The guidance uses `aspire add <package>` to regenerate the TypeScript API surface and then inspects `.modules/aspire.ts` rather than editing `.modules/` directly.",
+      "expectations": [
+        "The response explicitly says not to edit `.modules/` by hand.",
+        "The response uses `aspire add <package>` to regenerate the available TypeScript APIs.",
+        "The response inspects `.modules/aspire.ts` after the add operation to discover the refreshed API surface."
+      ]
+    },
+    {
+      "id": 64,
+      "prompt": "The generated TypeScript APIs look stale after I added a package. What's the supported refresh flow without touching generated files?",
+      "expected_output": "The guidance uses `aspire add <package>` to regenerate the TypeScript API surface and then inspects `.modules/aspire.ts` rather than editing `.modules/` directly.",
+      "expectations": [
+        "The response explicitly says not to edit `.modules/` by hand.",
+        "The response uses `aspire add <package>` to regenerate the available TypeScript APIs.",
+        "The response inspects `.modules/aspire.ts` after the add operation to discover the refreshed API surface."
+      ]
+    },
+    {
+      "id": 65,
+      "prompt": "Can you regenerate the TypeScript AppHost APIs for a newly added integration and then show where to inspect the refreshed surface?",
+      "expected_output": "The guidance uses `aspire add <package>` to regenerate the TypeScript API surface and then inspects `.modules/aspire.ts` rather than editing `.modules/` directly.",
+      "expectations": [
+        "The response explicitly says not to edit `.modules/` by hand.",
+        "The response uses `aspire add <package>` to regenerate the available TypeScript APIs.",
+        "The response inspects `.modules/aspire.ts` after the add operation to discover the refreshed API surface."
+      ]
+    },
+    {
+      "id": 66,
+      "prompt": "I want the normal Aspire path for refreshing TypeScript AppHost APIs after an integration change, not a manual edit to `.modules`.",
+      "expected_output": "The guidance uses `aspire add <package>` to regenerate the TypeScript API surface and then inspects `.modules/aspire.ts` rather than editing `.modules/` directly.",
+      "expectations": [
+        "The response explicitly says not to edit `.modules/` by hand.",
+        "The response uses `aspire add <package>` to regenerate the available TypeScript APIs.",
+        "The response inspects `.modules/aspire.ts` after the add operation to discover the refreshed API surface."
+      ]
+    },
+    {
+      "id": 67,
+      "prompt": "After switching branches my TypeScript AppHost is missing `.modules`. What's the first recovery step?",
+      "expected_output": "The guidance uses `aspire restore` because the skill says that restore explicitly regenerates `.modules/*` for TypeScript AppHosts.",
+      "expectations": [
+        "The response uses `aspire restore` as the first recovery step for missing generated `.modules/*` files.",
+        "The response connects `aspire restore` to regeneration of TypeScript AppHost support files.",
+        "The response avoids suggesting manual recreation or direct editing of generated module files."
+      ]
+    },
+    {
+      "id": 68,
+      "prompt": "I cleaned the repo and now the generated `.modules` files are gone. What should I run before trying to rebuild them by hand?",
+      "expected_output": "The guidance uses `aspire restore` because the skill says that restore explicitly regenerates `.modules/*` for TypeScript AppHosts.",
+      "expectations": [
+        "The response uses `aspire restore` as the first recovery step for missing generated `.modules/*` files.",
+        "The response connects `aspire restore` to regeneration of TypeScript AppHost support files.",
+        "The response avoids suggesting manual recreation or direct editing of generated module files."
+      ]
+    },
+    {
+      "id": 69,
+      "prompt": "Pulled latest, `.modules` vanished, and I don't want to recreate anything manually. What's the Aspire recovery path?",
+      "expected_output": "The guidance uses `aspire restore` because the skill says that restore explicitly regenerates `.modules/*` for TypeScript AppHosts.",
+      "expectations": [
+        "The response uses `aspire restore` as the first recovery step for missing generated `.modules/*` files.",
+        "The response connects `aspire restore` to regeneration of TypeScript AppHost support files.",
+        "The response avoids suggesting manual recreation or direct editing of generated module files."
+      ]
+    },
+    {
+      "id": 70,
+      "prompt": "What's the proper Aspire fix when the generated TypeScript AppHost support files disappear after a branch change?",
+      "expected_output": "The guidance uses `aspire restore` because the skill says that restore explicitly regenerates `.modules/*` for TypeScript AppHosts.",
+      "expectations": [
+        "The response uses `aspire restore` as the first recovery step for missing generated `.modules/*` files.",
+        "The response connects `aspire restore` to regeneration of TypeScript AppHost support files.",
+        "The response avoids suggesting manual recreation or direct editing of generated module files."
+      ]
+    },
+    {
+      "id": 71,
+      "prompt": "A clean checkout left my TypeScript AppHost without its generated `.modules` files. What should I try first?",
+      "expected_output": "The guidance uses `aspire restore` because the skill says that restore explicitly regenerates `.modules/*` for TypeScript AppHosts.",
+      "expectations": [
+        "The response uses `aspire restore` as the first recovery step for missing generated `.modules/*` files.",
+        "The response connects `aspire restore` to regeneration of TypeScript AppHost support files.",
+        "The response avoids suggesting manual recreation or direct editing of generated module files."
+      ]
+    },
+    {
+      "id": 72,
+      "prompt": "The `.modules` folder disappeared after rebasing. What's the first Aspire command before I consider recreating anything?",
+      "expected_output": "The guidance uses `aspire restore` because the skill says that restore explicitly regenerates `.modules/*` for TypeScript AppHosts.",
+      "expectations": [
+        "The response uses `aspire restore` as the first recovery step for missing generated `.modules/*` files.",
+        "The response connects `aspire restore` to regeneration of TypeScript AppHost support files.",
+        "The response avoids suggesting manual recreation or direct editing of generated module files."
+      ]
+    },
+    {
+      "id": 73,
+      "prompt": "My TypeScript AppHost support files are missing after a branch hop. What's the proper recovery flow before any manual fixes?",
+      "expected_output": "The guidance uses `aspire restore` because the skill says that restore explicitly regenerates `.modules/*` for TypeScript AppHosts.",
+      "expectations": [
+        "The response uses `aspire restore` as the first recovery step for missing generated `.modules/*` files.",
+        "The response connects `aspire restore` to regeneration of TypeScript AppHost support files.",
+        "The response avoids suggesting manual recreation or direct editing of generated module files."
+      ]
+    },
+    {
+      "id": 74,
+      "prompt": "Playwright is ready to go, but first I need the right frontend URL from Aspire rather than guessing. What's the handoff flow?",
+      "expected_output": "The guidance uses `aspire describe` to discover the correct frontend endpoint and only then transitions to Playwright CLI.",
+      "expectations": [
+        "The response uses Aspire state inspection before any Playwright step.",
+        "The response does not guess the frontend URL.",
+        "The response treats Playwright CLI as a follow-on step after endpoint discovery."
+      ]
+    },
+    {
+      "id": 75,
+      "prompt": "Before browser tests run, can you pull the live frontend endpoint from Aspire and only then hand that URL to Playwright?",
+      "expected_output": "The guidance uses `aspire describe` to discover the correct frontend endpoint and only then transitions to Playwright CLI.",
+      "expectations": [
+        "The response uses Aspire state inspection before any Playwright step.",
+        "The response does not guess the frontend URL.",
+        "The response treats Playwright CLI as a follow-on step after endpoint discovery."
+      ]
+    },
+    {
+      "id": 76,
+      "prompt": "I need the actual frontend URL from the running Aspire app before I point Playwright anywhere.",
+      "expected_output": "The guidance uses `aspire describe` to discover the correct frontend endpoint and only then transitions to Playwright CLI.",
+      "expectations": [
+        "The response uses Aspire state inspection before any Playwright step.",
+        "The response does not guess the frontend URL.",
+        "The response treats Playwright CLI as a follow-on step after endpoint discovery."
+      ]
+    },
+    {
+      "id": 77,
+      "prompt": "Can you use Aspire to discover the correct browser entrypoint first, then pass that on to Playwright?",
+      "expected_output": "The guidance uses `aspire describe` to discover the correct frontend endpoint and only then transitions to Playwright CLI.",
+      "expectations": [
+        "The response uses Aspire state inspection before any Playwright step.",
+        "The response does not guess the frontend URL.",
+        "The response treats Playwright CLI as a follow-on step after endpoint discovery."
+      ]
+    },
+    {
+      "id": 78,
+      "prompt": "There are multiple frontend resources in this app. How do you figure out which one Playwright should target instead of guessing?",
+      "expected_output": "The guidance uses Aspire inspection to identify the correct endpoint for the intended frontend and keeps the handoff grounded in live Aspire state.",
+      "expectations": [
+        "The response uses `aspire describe` or equivalent Aspire inspection to disambiguate frontend endpoints.",
+        "The response explicitly avoids guessing when multiple frontends exist.",
+        "The response keeps the skill boundary clear: Aspire finds the endpoint, Playwright uses it after handoff."
+      ]
+    },
+    {
+      "id": 79,
+      "prompt": "Don't guess the URL; this Aspire app has several frontends. How would you disambiguate the right one for Playwright?",
+      "expected_output": "The guidance uses Aspire inspection to identify the correct endpoint for the intended frontend and keeps the handoff grounded in live Aspire state.",
+      "expectations": [
+        "The response uses `aspire describe` or equivalent Aspire inspection to disambiguate frontend endpoints.",
+        "The response explicitly avoids guessing when multiple frontends exist.",
+        "The response keeps the skill boundary clear: Aspire finds the endpoint, Playwright uses it after handoff."
+      ]
+    },
+    {
+      "id": 80,
+      "prompt": "We have more than one UI in this AppHost. Can you use Aspire state to determine which frontend URL Playwright should use?",
+      "expected_output": "The guidance uses Aspire inspection to identify the correct endpoint for the intended frontend and keeps the handoff grounded in live Aspire state.",
+      "expectations": [
+        "The response uses `aspire describe` or equivalent Aspire inspection to disambiguate frontend endpoints.",
+        "The response explicitly avoids guessing when multiple frontends exist.",
+        "The response keeps the skill boundary clear: Aspire finds the endpoint, Playwright uses it after handoff."
+      ]
+    },
+    {
+      "id": 81,
+      "prompt": "Please identify the correct frontend endpoint from Aspire when multiple frontends are present, then hand that one to Playwright.",
+      "expected_output": "The guidance uses Aspire inspection to identify the correct endpoint for the intended frontend and keeps the handoff grounded in live Aspire state.",
+      "expectations": [
+        "The response uses `aspire describe` or equivalent Aspire inspection to disambiguate frontend endpoints.",
+        "The response explicitly avoids guessing when multiple frontends exist.",
+        "The response keeps the skill boundary clear: Aspire finds the endpoint, Playwright uses it after handoff."
+      ]
+    },
+    {
+      "id": 82,
+      "prompt": "I'm in a worktree. Start the app the safe way in the background and wait for myapi before doing anything else.",
+      "expected_output": "The guidance follows the skill's agent workflow by using `aspire start --isolated` and then `aspire wait myapi` before interaction.",
+      "expectations": [
+        "The response uses `aspire start --isolated` for a git-worktree agent session.",
+        "The response follows startup with `aspire wait myapi` before interacting with the resource.",
+        "The response keeps the sequence aligned with the agent-workflows reference rather than collapsing it into a generic run command."
+      ]
+    },
+    {
+      "id": 83,
+      "prompt": "Can you use the isolated startup path for this worktree and then explicitly wait on myapi first?",
+      "expected_output": "The guidance follows the skill's agent workflow by using `aspire start --isolated` and then `aspire wait myapi` before interaction.",
+      "expectations": [
+        "The response uses `aspire start --isolated` for a git-worktree agent session.",
+        "The response follows startup with `aspire wait myapi` before interacting with the resource.",
+        "The response keeps the sequence aligned with the agent-workflows reference rather than collapsing it into a generic run command."
+      ]
+    },
+    {
+      "id": 84,
+      "prompt": "Need the normal worktree-safe Aspire startup flow here, plus a wait on myapi before the next step touches it.",
+      "expected_output": "The guidance follows the skill's agent workflow by using `aspire start --isolated` and then `aspire wait myapi` before interaction.",
+      "expectations": [
+        "The response uses `aspire start --isolated` for a git-worktree agent session.",
+        "The response follows startup with `aspire wait myapi` before interacting with the resource.",
+        "The response keeps the sequence aligned with the agent-workflows reference rather than collapsing it into a generic run command."
+      ]
+    },
+    {
+      "id": 85,
+      "prompt": "Please bring this worktree instance up without collisions and gate follow-up work on `aspire wait myapi`.",
+      "expected_output": "The guidance follows the skill's agent workflow by using `aspire start --isolated` and then `aspire wait myapi` before interaction.",
+      "expectations": [
+        "The response uses `aspire start --isolated` for a git-worktree agent session.",
+        "The response follows startup with `aspire wait myapi` before interacting with the resource.",
+        "The response keeps the sequence aligned with the agent-workflows reference rather than collapsing it into a generic run command."
+      ]
+    },
+    {
+      "id": 86,
+      "prompt": "Something feels wrong with the Aspire app. Investigate in the normal live-app order first and export diagnostics if it still isn't obvious.",
+      "expected_output": "The guidance follows the skill's investigation order: inspect state with `aspire describe`, inspect structured telemetry with `aspire otel`, use raw logs secondarily, and export diagnostics if a handoff artifact is needed.",
+      "expectations": [
+        "The response starts with live-app inspection such as `aspire describe` before proposing edits.",
+        "The response follows the recommended debugging order: structured telemetry before raw console logs.",
+        "The response uses `aspire export` when the prompt asks for a sharable artifact."
+      ]
+    },
+    {
+      "id": 87,
+      "prompt": "Don't patch code yet. I want the usual Aspire investigation flow first, plus a sharable export if the issue remains unclear.",
+      "expected_output": "The guidance follows the skill's investigation order: inspect state with `aspire describe`, inspect structured telemetry with `aspire otel`, use raw logs secondarily, and export diagnostics if a handoff artifact is needed.",
+      "expectations": [
+        "The response starts with live-app inspection such as `aspire describe` before proposing edits.",
+        "The response follows the recommended debugging order: structured telemetry before raw console logs.",
+        "The response uses `aspire export` when the prompt asks for a sharable artifact."
+      ]
+    },
+    {
+      "id": 88,
+      "prompt": "Please diagnose this Aspire app starting from live state and structured telemetry before any edits, and grab an export if needed.",
+      "expected_output": "The guidance follows the skill's investigation order: inspect state with `aspire describe`, inspect structured telemetry with `aspire otel`, use raw logs secondarily, and export diagnostics if a handoff artifact is needed.",
+      "expectations": [
+        "The response starts with live-app inspection such as `aspire describe` before proposing edits.",
+        "The response follows the recommended debugging order: structured telemetry before raw console logs.",
+        "The response uses `aspire export` when the prompt asks for a sharable artifact."
+      ]
+    },
+    {
+      "id": 89,
+      "prompt": "Can you do the standard investigate-before-editing workflow for this app and package up a handoff artifact if the root cause still isn't obvious?",
+      "expected_output": "The guidance follows the skill's investigation order: inspect state with `aspire describe`, inspect structured telemetry with `aspire otel`, use raw logs secondarily, and export diagnostics if a handoff artifact is needed.",
+      "expectations": [
+        "The response starts with live-app inspection such as `aspire describe` before proposing edits.",
+        "The response follows the recommended debugging order: structured telemetry before raw console logs.",
+        "The response uses `aspire export` when the prompt asks for a sharable artifact."
+      ]
+    },
+    {
+      "id": 90,
+      "prompt": "I'm in apphost.ts and the builder API I need is unfamiliar. How would you read the Aspire docs and the generated TypeScript APIs before changing code?",
+      "expected_output": "The guidance starts with `aspire docs search/get` for the unfamiliar TypeScript API, inspects `.modules/aspire.ts` or another generated `.modules/*.ts` file to understand the local API surface, and avoids guessing or hand-editing generated files.",
+      "expectations": [
+        "The response uses Aspire docs commands before proposing an unfamiliar TypeScript AppHost API change.",
+        "The response inspects `.modules/aspire.ts` or another generated `.modules/*.ts` file to understand the local TypeScript API surface.",
+        "The response avoids guessing or hand-editing generated `.modules/*` files while reading the TypeScript APIs."
+      ]
+    },
+    {
+      "id": 91,
+      "prompt": "I know there's probably an Aspire TypeScript helper for this resource, but I don't know its name. How do you look it up without guessing?",
+      "expected_output": "The guidance starts with `aspire docs search/get` for the unfamiliar TypeScript API, inspects `.modules/aspire.ts` or another generated `.modules/*.ts` file to understand the local API surface, and avoids guessing or hand-editing generated files.",
+      "expectations": [
+        "The response uses Aspire docs commands before proposing an unfamiliar TypeScript AppHost API change.",
+        "The response inspects `.modules/aspire.ts` or another generated `.modules/*.ts` file to understand the local TypeScript API surface.",
+        "The response avoids guessing or hand-editing generated `.modules/*` files while reading the TypeScript APIs."
+      ]
+    },
+    {
+      "id": 92,
+      "prompt": "This TypeScript AppHost API is unfamiliar. Please use docs first, then inspect the generated API surface before proposing code changes.",
+      "expected_output": "The guidance starts with `aspire docs search/get` for the unfamiliar TypeScript API, inspects `.modules/aspire.ts` or another generated `.modules/*.ts` file to understand the local API surface, and avoids guessing or hand-editing generated files.",
+      "expectations": [
+        "The response uses Aspire docs commands before proposing an unfamiliar TypeScript AppHost API change.",
+        "The response inspects `.modules/aspire.ts` or another generated `.modules/*.ts` file to understand the local TypeScript API surface.",
+        "The response avoids guessing or hand-editing generated `.modules/*` files while reading the TypeScript APIs."
+      ]
+    },
+    {
+      "id": 93,
+      "prompt": "In apphost.ts I need to understand a chaining method I haven't used before. What's the safe docs-plus-modules workflow?",
+      "expected_output": "The guidance starts with `aspire docs search/get` for the unfamiliar TypeScript API, inspects `.modules/aspire.ts` or another generated `.modules/*.ts` file to understand the local API surface, and avoids guessing or hand-editing generated files.",
+      "expectations": [
+        "The response uses Aspire docs commands before proposing an unfamiliar TypeScript AppHost API change.",
+        "The response inspects `.modules/aspire.ts` or another generated `.modules/*.ts` file to understand the local TypeScript API surface.",
+        "The response avoids guessing or hand-editing generated `.modules/*` files while reading the TypeScript APIs."
+      ]
+    },
+    {
+      "id": 94,
+      "prompt": "Can you help me read the local TypeScript AppHost API surface before editing the AppHost? I don't want hand-edited generated files.",
+      "expected_output": "The guidance starts with `aspire docs search/get` for the unfamiliar TypeScript API, inspects `.modules/aspire.ts` or another generated `.modules/*.ts` file to understand the local API surface, and avoids guessing or hand-editing generated files.",
+      "expectations": [
+        "The response uses Aspire docs commands before proposing an unfamiliar TypeScript AppHost API change.",
+        "The response inspects `.modules/aspire.ts` or another generated `.modules/*.ts` file to understand the local TypeScript API surface.",
+        "The response avoids guessing or hand-editing generated `.modules/*` files while reading the TypeScript APIs."
+      ]
+    },
+    {
+      "id": 95,
+      "prompt": "The docs probably cover this, but I also need to understand what the generated TypeScript APIs currently expose in `.modules`.",
+      "expected_output": "The guidance starts with `aspire docs search/get` for the unfamiliar TypeScript API, inspects `.modules/aspire.ts` or another generated `.modules/*.ts` file to understand the local API surface, and avoids guessing or hand-editing generated files.",
+      "expectations": [
+        "The response uses Aspire docs commands before proposing an unfamiliar TypeScript AppHost API change.",
+        "The response inspects `.modules/aspire.ts` or another generated `.modules/*.ts` file to understand the local TypeScript API surface.",
+        "The response avoids guessing or hand-editing generated `.modules/*` files while reading the TypeScript APIs."
+      ]
+    },
+    {
+      "id": 96,
+      "prompt": "I need to understand the TypeScript AppHost API for a resource builder before writing code. How would you inspect it without inventing methods?",
+      "expected_output": "The guidance starts with `aspire docs search/get` for the unfamiliar TypeScript API, inspects `.modules/aspire.ts` or another generated `.modules/*.ts` file to understand the local API surface, and avoids guessing or hand-editing generated files.",
+      "expectations": [
+        "The response uses Aspire docs commands before proposing an unfamiliar TypeScript AppHost API change.",
+        "The response inspects `.modules/aspire.ts` or another generated `.modules/*.ts` file to understand the local TypeScript API surface.",
+        "The response avoids guessing or hand-editing generated `.modules/*` files while reading the TypeScript APIs."
+      ]
+    },
+    {
+      "id": 97,
+      "prompt": "Please figure out whether the generated TypeScript AppHost APIs already expose this capability before you change anything.",
+      "expected_output": "The guidance starts with `aspire docs search/get` for the unfamiliar TypeScript API, inspects `.modules/aspire.ts` or another generated `.modules/*.ts` file to understand the local API surface, and avoids guessing or hand-editing generated files.",
+      "expectations": [
+        "The response uses Aspire docs commands before proposing an unfamiliar TypeScript AppHost API change.",
+        "The response inspects `.modules/aspire.ts` or another generated `.modules/*.ts` file to understand the local TypeScript API surface.",
+        "The response avoids guessing or hand-editing generated `.modules/*` files while reading the TypeScript APIs."
+      ]
+    },
+    {
+      "id": 98,
+      "prompt": "I want the documented Aspire path for this TypeScript AppHost change, plus the local generated type surface that backs it.",
+      "expected_output": "The guidance starts with `aspire docs search/get` for the unfamiliar TypeScript API, inspects `.modules/aspire.ts` or another generated `.modules/*.ts` file to understand the local API surface, and avoids guessing or hand-editing generated files.",
+      "expectations": [
+        "The response uses Aspire docs commands before proposing an unfamiliar TypeScript AppHost API change.",
+        "The response inspects `.modules/aspire.ts` or another generated `.modules/*.ts` file to understand the local TypeScript API surface.",
+        "The response avoids guessing or hand-editing generated `.modules/*` files while reading the TypeScript APIs."
+      ]
+    },
+    {
+      "id": 99,
+      "prompt": "There's an unfamiliar TypeScript AppHost resource method here. Show the non-guessy way to read docs and `.modules` first.",
+      "expected_output": "The guidance starts with `aspire docs search/get` for the unfamiliar TypeScript API, inspects `.modules/aspire.ts` or another generated `.modules/*.ts` file to understand the local API surface, and avoids guessing or hand-editing generated files.",
+      "expectations": [
+        "The response uses Aspire docs commands before proposing an unfamiliar TypeScript AppHost API change.",
+        "The response inspects `.modules/aspire.ts` or another generated `.modules/*.ts` file to understand the local TypeScript API surface.",
+        "The response avoids guessing or hand-editing generated `.modules/*` files while reading the TypeScript APIs."
+      ]
+    },
+    {
+      "id": 100,
+      "prompt": "Can you confirm the official docs flow for this TypeScript AppHost API and then inspect `.modules/aspire.ts` for the local shape?",
+      "expected_output": "The guidance starts with `aspire docs search/get` for the unfamiliar TypeScript API, inspects `.modules/aspire.ts` or another generated `.modules/*.ts` file to understand the local API surface, and avoids guessing or hand-editing generated files.",
+      "expectations": [
+        "The response uses Aspire docs commands before proposing an unfamiliar TypeScript AppHost API change.",
+        "The response inspects `.modules/aspire.ts` or another generated `.modules/*.ts` file to understand the local TypeScript API surface.",
+        "The response avoids guessing or hand-editing generated `.modules/*` files while reading the TypeScript APIs."
+      ]
+    },
+    {
+      "id": 101,
+      "prompt": "Before you edit apphost.ts for this integration, read the Aspire docs and the generated TypeScript API surface so you don't invent a method.",
+      "expected_output": "The guidance starts with `aspire docs search/get` for the unfamiliar TypeScript API, inspects `.modules/aspire.ts` or another generated `.modules/*.ts` file to understand the local API surface, and avoids guessing or hand-editing generated files.",
+      "expectations": [
+        "The response uses Aspire docs commands before proposing an unfamiliar TypeScript AppHost API change.",
+        "The response inspects `.modules/aspire.ts` or another generated `.modules/*.ts` file to understand the local TypeScript API surface.",
+        "The response avoids guessing or hand-editing generated `.modules/*` files while reading the TypeScript APIs."
+      ]
+    },
+    {
+      "id": 102,
+      "prompt": "I'm in AppHost.cs and I can't tell which Aspire API I should use for this resource. How would you read the docs before changing code?",
+      "expected_output": "The guidance starts with `aspire docs search/get` for the unfamiliar C# API, keeps Aspire docs as the primary documented source, and only uses `dotnet-inspect` conditionally, if available, to inspect local overloads or builder chains.",
+      "expectations": [
+        "The response uses Aspire docs commands before proposing an unfamiliar C# AppHost API change.",
+        "The response treats `dotnet-inspect` as conditional (`if available`) when reading local C# APIs.",
+        "The response keeps Aspire docs as the primary documented guidance and scopes `dotnet-inspect` to local symbols, overloads, or builder chains."
+      ]
+    },
+    {
+      "id": 103,
+      "prompt": "This C# AppHost builder API is unfamiliar to me. What's the right way to look up the official Aspire guidance and then inspect the local API shape if available?",
+      "expected_output": "The guidance starts with `aspire docs search/get` for the unfamiliar C# API, keeps Aspire docs as the primary documented source, and only uses `dotnet-inspect` conditionally, if available, to inspect local overloads or builder chains.",
+      "expectations": [
+        "The response uses Aspire docs commands before proposing an unfamiliar C# AppHost API change.",
+        "The response treats `dotnet-inspect` as conditional (`if available`) when reading local C# APIs.",
+        "The response keeps Aspire docs as the primary documented guidance and scopes `dotnet-inspect` to local symbols, overloads, or builder chains."
+      ]
+    },
+    {
+      "id": 104,
+      "prompt": "Can you help me understand an unfamiliar Aspire C# API before I touch AppHost.cs? I don't want you guessing the method chain.",
+      "expected_output": "The guidance starts with `aspire docs search/get` for the unfamiliar C# API, keeps Aspire docs as the primary documented source, and only uses `dotnet-inspect` conditionally, if available, to inspect local overloads or builder chains.",
+      "expectations": [
+        "The response uses Aspire docs commands before proposing an unfamiliar C# AppHost API change.",
+        "The response treats `dotnet-inspect` as conditional (`if available`) when reading local C# APIs.",
+        "The response keeps Aspire docs as the primary documented guidance and scopes `dotnet-inspect` to local symbols, overloads, or builder chains."
+      ]
+    },
+    {
+      "id": 105,
+      "prompt": "I need to read the Aspire API for a C# AppHost change first. If there's a local .NET inspection skill available, use it only to understand overloads after the docs.",
+      "expected_output": "The guidance starts with `aspire docs search/get` for the unfamiliar C# API, keeps Aspire docs as the primary documented source, and only uses `dotnet-inspect` conditionally, if available, to inspect local overloads or builder chains.",
+      "expectations": [
+        "The response uses Aspire docs commands before proposing an unfamiliar C# AppHost API change.",
+        "The response treats `dotnet-inspect` as conditional (`if available`) when reading local C# APIs.",
+        "The response keeps Aspire docs as the primary documented guidance and scopes `dotnet-inspect` to local symbols, overloads, or builder chains."
+      ]
+    },
+    {
+      "id": 106,
+      "prompt": "In this C# AppHost I know the concept I want, but not the exact API. How should you combine Aspire docs with local API inspection without replacing the docs?",
+      "expected_output": "The guidance starts with `aspire docs search/get` for the unfamiliar C# API, keeps Aspire docs as the primary documented source, and only uses `dotnet-inspect` conditionally, if available, to inspect local overloads or builder chains.",
+      "expectations": [
+        "The response uses Aspire docs commands before proposing an unfamiliar C# AppHost API change.",
+        "The response treats `dotnet-inspect` as conditional (`if available`) when reading local C# APIs.",
+        "The response keeps Aspire docs as the primary documented guidance and scopes `dotnet-inspect` to local symbols, overloads, or builder chains."
+      ]
+    },
+    {
+      "id": 107,
+      "prompt": "Please figure out how to read the documented Aspire C# API first and only then inspect the local builder chain details if the tooling is available.",
+      "expected_output": "The guidance starts with `aspire docs search/get` for the unfamiliar C# API, keeps Aspire docs as the primary documented source, and only uses `dotnet-inspect` conditionally, if available, to inspect local overloads or builder chains.",
+      "expectations": [
+        "The response uses Aspire docs commands before proposing an unfamiliar C# AppHost API change.",
+        "The response treats `dotnet-inspect` as conditional (`if available`) when reading local C# APIs.",
+        "The response keeps Aspire docs as the primary documented guidance and scopes `dotnet-inspect` to local symbols, overloads, or builder chains."
       ]
     }
   ]
