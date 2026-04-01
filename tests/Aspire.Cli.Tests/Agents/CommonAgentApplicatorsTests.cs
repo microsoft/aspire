@@ -52,11 +52,9 @@ public class CommonAgentApplicatorsTests
     }
 
     [Fact]
-    public void SkillDefinition_DefaultSelection_ExcludesPlaywrightCli()
+    public void SkillDefinition_AllDefaultsAreTrue()
     {
-        Assert.True(SkillDefinition.Aspire.IsDefault);
-        Assert.False(SkillDefinition.PlaywrightCli.IsDefault);
-        Assert.True(SkillDefinition.DotnetInspect.IsDefault);
+        Assert.All(SkillDefinition.All, s => Assert.True(s.IsDefault));
     }
 
     [Fact]
