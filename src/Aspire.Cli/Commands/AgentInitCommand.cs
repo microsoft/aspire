@@ -345,6 +345,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         CancellationToken cancellationToken)
     {
         var relativeSkillPath = Path.Combine(relativeSkillDirectory, skill.Name);
+        var fullSkillDirectoryPath = Path.Combine(rootDirectory.FullName, relativeSkillPath);
         var skillFiles = await GetSkillFilesAsync(skill, cancellationToken);
 
         try
@@ -378,7 +379,10 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
                 return true;
             }
 
-            var displayPath = isUserLevel ? $"~/{relativeSkillPath}" : relativeSkillPath;
+            var displayRelativeSkillPath = relativeSkillPath
+                .Replace(Path.DirectorySeparatorChar, '/')
+                .Replace(Path.AltDirectorySeparatorChar, '/');
+            var displayPath = isUserLevel ? $"~/{displayRelativeSkillPath}" : displayRelativeSkillPath;
             _interactionService.DisplayMessage(KnownEmojis.CheckMark,
                 string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkill, skill.Name, displayPath));
             return true;
@@ -386,7 +390,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
             _interactionService.DisplayError(
-                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_FailedToInstallSkill, skill.Name, rootDirectory.FullName, ex.Message));
+                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_FailedToInstallSkill, skill.Name, fullSkillDirectoryPath, ex.Message));
             return false;
         }
     }

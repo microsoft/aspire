@@ -64,7 +64,8 @@ internal sealed class SkillDefinition
     public string Description { get; }
 
     /// <summary>
-    /// Gets the content for the SKILL.md file, or <c>null</c> if this skill is installed by other means.
+    /// Gets the content for the top-level SKILL.md file when the skill is defined as a single-file bundle,
+    /// or <c>null</c> when installable files come from <see cref="EmbeddedResourceRoot"/> or another installer.
     /// </summary>
     public string? SkillContent { get; }
 
