@@ -43,6 +43,7 @@ internal sealed class ConsoleActivityLogger
     private string? _finalStatusHeader;
     private bool _pipelineSucceeded;
     private IReadOnlyList<BackchannelPipelineSummaryItem>? _pipelineSummary;
+    private TimeSpan? _summaryElapsedOverride;
 
     // No raw ANSI escape codes; rely on Spectre.Console markup tokens.
 
@@ -207,7 +208,8 @@ internal sealed class ConsoleActivityLogger
     {
         lock (_lock)
         {
-            var totalSeconds = _stopwatch.Elapsed.TotalSeconds;
+            var totalDuration = _summaryElapsedOverride ?? _stopwatch.Elapsed;
+            var totalSeconds = totalDuration.TotalSeconds;
             var line = new string('-', 60);
             _console.MarkupLine(line);
             var totalSteps = _stepStates.Count;
@@ -337,6 +339,27 @@ internal sealed class ConsoleActivityLogger
     public void SetStepDurations(IEnumerable<StepDurationRecord> records)
     {
         _durationRecords = records.ToList();
+    }
+
+    internal void SeedSummaryState(IEnumerable<StepDurationRecord> records)
+    {
+        var recordList = records.ToList();
+
+        lock (_lock)
+        {
+            _stepStates.Clear();
+            _displayNames.Clear();
+
+            foreach (var record in recordList)
+            {
+                _stepStates[record.Key] = record.State;
+                _displayNames[record.Key] = record.DisplayName;
+            }
+
+            _summaryElapsedOverride = recordList.Count > 0
+                ? recordList.Max(r => r.EndOffset > TimeSpan.Zero ? r.EndOffset : r.Duration)
+                : TimeSpan.Zero;
+        }
     }
 
     public readonly record struct StepDurationRecord(
