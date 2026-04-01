@@ -77,17 +77,19 @@ jobs:
             displayName: 🟣Build bundle payload
 
           - script: >-
-              $(Build.SourcesDirectory)/$(dotnetScript)
-              pack
-              $(Build.SourcesDirectory)/src/Aspire.Cli/Aspire.Cli.Tool.csproj
-              -c $(_BuildConfig)
-              -o $(Build.Arcade.ArtifactsPath)packages/$(_BuildConfig)/Shipping
+              $(Build.SourcesDirectory)/$(scriptName)
+              --ci
+              --build
+              --pack
+              --restore
+              --projects $(Build.SourcesDirectory)/src/Aspire.Cli/Aspire.Cli.Tool.csproj
               /p:RuntimeIdentifier=${{ targetRid }}
+              /p:SelfContained=true
               /p:BundlePayloadPath=$(Build.SourcesDirectory)/artifacts/bundle/aspire-ci-bundlepayload-${{ targetRid }}.tar.gz
-              /p:ContinuousIntegrationBuild=true
+              $(_buildArgs)
               ${{ parameters.extraBuildArgs }}
               /bl:$(Build.Arcade.LogsPath)AspireCliTool.${{ replace(targetRid, '-', '_') }}.binlog
-            displayName: 🟣Pack CLI tool (${{ targetRid }})
+            displayName: 🟣Build CLI tool package (${{ targetRid }})
             env:
               SYSTEM_ACCESSTOKEN: $(System.AccessToken)
 
