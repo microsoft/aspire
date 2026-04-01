@@ -52,11 +52,6 @@
         <target state="translated">Daha fazla bilgi</target>
         <note />
       </trans-unit>
-      <trans-unit id="MessageUnsecuredEndpointMcpBody">
-        <source>Untrusted apps can access sensitive information about the running services.</source>
-        <target state="translated">Güvenilmeyen uygulamalar, çalışan hizmetler hakkındaki hassas bilgilere erişebilir.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="MessageUnsecuredEndpointTelemetryBody">
         <source>Untrusted apps can send telemetry to the dashboard.</source>
         <target state="translated">Güvenilmeyen uygulamalar panoya telemetri verileri gönderebilir.</target>

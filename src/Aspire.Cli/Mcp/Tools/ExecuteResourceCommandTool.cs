@@ -74,9 +74,19 @@ internal sealed class ExecuteResourceCommandTool(
 
             if (response.Success)
             {
+                var content = new List<TextContentBlock>
+                {
+                    new() { Text = $"Command '{commandName}' executed successfully on resource '{resourceName}'." }
+                };
+
+                if (response.Result is not null)
+                {
+                    content.Add(new TextContentBlock { Text = response.Result });
+                }
+
                 return new CallToolResult
                 {
-                    Content = [new TextContentBlock { Text = $"Command '{commandName}' executed successfully on resource '{resourceName}'." }]
+                    Content = [.. content]
                 };
             }
             else if (response.Canceled)
@@ -86,7 +96,22 @@ internal sealed class ExecuteResourceCommandTool(
             else
             {
                 var message = response.ErrorMessage is { Length: > 0 } ? response.ErrorMessage : "Unknown error. See logs for details.";
-                throw new McpProtocolException($"Command '{commandName}' failed for resource '{resourceName}': {message}", McpErrorCode.InternalError);
+
+                var content = new List<TextContentBlock>
+                {
+                    new() { Text = $"Command '{commandName}' failed for resource '{resourceName}': {message}" }
+                };
+
+                if (response.Result is not null)
+                {
+                    content.Add(new TextContentBlock { Text = response.Result });
+                }
+
+                return new CallToolResult
+                {
+                    IsError = true,
+                    Content = [.. content]
+                };
             }
         }
         catch (McpProtocolException)

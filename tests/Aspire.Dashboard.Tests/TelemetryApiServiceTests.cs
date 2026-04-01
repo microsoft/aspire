@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text;
 using Aspire.Dashboard.Api;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
@@ -406,6 +407,50 @@ public class TelemetryApiServiceTests
 
         // Assert - should receive NO items because the resource doesn't exist
         Assert.Empty(receivedItems);
+    }
+
+    [Theory]
+    [InlineData("747261636531", true)] // full hex trace ID
+    [InlineData("7472616", true)] // shortened (7 char) prefix
+    [InlineData("747261", false)] // too short
+    [InlineData("nonexistent", false)]
+    public void GetTrace_VariousTraceIds_ReturnsExpectedResult(string lookupId, bool expectFound)
+    {
+        var repository = CreateRepository();
+        var traceId = Encoding.UTF8.GetString(Convert.FromHexString("747261636531"));
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: traceId, spanId: "span1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1))
+                        }
+                    }
+                }
+            }
+        });
+
+        var service = CreateService(repository);
+
+        var result = service.GetTrace(lookupId);
+
+        if (expectFound)
+        {
+            Assert.NotNull(result);
+            Assert.Equal(1, result.ReturnedCount);
+        }
+        else
+        {
+            Assert.Null(result);
+        }
     }
 
     /// <summary>

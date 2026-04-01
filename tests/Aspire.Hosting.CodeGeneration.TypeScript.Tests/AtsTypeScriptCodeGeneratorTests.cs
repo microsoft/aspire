@@ -65,10 +65,11 @@ public class AtsTypeScriptCodeGeneratorTests
         var files = _generator.GenerateDistributedApplication(atsContext);
 
         Assert.DoesNotContain("export class ReferenceExpression {", files["aspire.ts"]);
+        Assert.Contains("export class ReferenceExpression {", files["base.ts"]);
         Assert.Contains("registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression'", files["base.ts"]);
-        Assert.Contains("condition: extractHandleForExpr(this._condition),", files["base.ts"]);
+        Assert.Contains("condition: extractHandleForExpr(state.condition),", files["base.ts"]);
         Assert.Contains("('$handle' in json || '$expr' in json)", files["base.ts"]);
-        Assert.Contains("registerCancellation(this._client, cancellationToken)", files["base.ts"]);
+        Assert.Contains("registerCancellation(state.client, cancellationToken)", files["base.ts"]);
     }
 
     [Fact]
@@ -339,7 +340,7 @@ public class AtsTypeScriptCodeGeneratorTests
 
         // Verify the thenable class also uses the child type's promise class.
         // In TestRedisResourcePromise, addTestChildDatabase should return TestDatabaseResourcePromise.
-        Assert.Contains("new TestDatabaseResourcePromise(this._promise.then(obj => obj.addTestChildDatabase(", aspireTs);
+        Assert.Contains("new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.addTestChildDatabase(", aspireTs);
     }
 
     [Fact]
@@ -582,23 +583,17 @@ public class AtsTypeScriptCodeGeneratorTests
     [Fact]
     public void Pattern4_InterfaceParameterType_GeneratesUnionType()
     {
-        // Pattern 4/5: Verify that parameters with interface handle types generate union types
-        // in the generated TypeScript.
+        // Interface-constrained resource parameters should accept a structural
+        // handle-bearing type instead of the nominal ResourceBuilderBase type.
         var atsContext = CreateContextFromTestAssembly();
 
         // Generate the TypeScript output
         var files = _generator.GenerateDistributedApplication(atsContext);
         var aspireTs = files["aspire.ts"];
 
-        // The withDependency method should have its dependency parameter as a union type:
-        // dependency: IResourceWithConnectionStringHandle | ResourceBuilderBase
-        // Note: The exact generated name depends on the type mapping, but it should contain
-        // both the handle type and ResourceBuilderBase.
-        Assert.Contains("ResourceBuilderBase", aspireTs);
-
-        // Also verify the union type pattern appears somewhere
-        // (the exact format depends on the type name mapping)
-        Assert.Contains("|", aspireTs); // Union types use pipe
+        Assert.Contains("export type { HandleReference } from './base.js';", aspireTs);
+        Assert.Contains("withDependency(dependency: HandleReference)", aspireTs);
+        Assert.DoesNotContain("withDependency(dependency: ResourceBuilderBase)", aspireTs);
     }
 
     [Fact]
@@ -1066,8 +1061,8 @@ public class AtsTypeScriptCodeGeneratorTests
         var code = GenerateTwoPassCode();
 
         // TestResourceContext has ExposeMethods=true - gets Promise wrapper
-        Assert.Contains("export class TestResourceContextPromise", code);
-        Assert.Contains("implements PromiseLike<TestResourceContext>", code);
+        Assert.Contains("class TestResourceContextPromiseImpl implements TestResourceContextPromise", code);
+        Assert.Contains("implements TestResourceContextPromise", code);
     }
 
     [Fact]
@@ -1139,7 +1134,7 @@ public class AtsTypeScriptCodeGeneratorTests
     public void Generate_MethodWithCancellationToken_GeneratesCancellationTokenParameter()
     {
         // Generated input parameters should accept AbortSignal for user-authored cancellation,
-        // while callbacks and returned values continue to use the SDK CancellationToken wrapper.
+        // while callbacks and returned values use the structural SDK cancellation token interface.
         var code = GenerateTwoPassCode();
 
         Assert.Contains("cancellationToken?: AbortSignal | CancellationToken;", code);
@@ -1354,12 +1349,12 @@ public class AtsTypeScriptCodeGeneratorTests
         var files = _generator.GenerateDistributedApplication(atsContext);
         var code = files["aspire.ts"];
 
-        // Count occurrences of the class definition
-        var classCount = CountOccurrences(code, "export class TestVaultResource ");
+        // Count occurrences of the public interface definition.
+        var classCount = CountOccurrences(code, "export interface TestVaultResource ");
         Assert.Equal(1, classCount);
 
-        // Also verify the Promise wrapper is not duplicated
-        var promiseCount = CountOccurrences(code, "export class TestVaultResourcePromise ");
+        // Also verify the Promise wrapper interface is not duplicated.
+        var promiseCount = CountOccurrences(code, "export interface TestVaultResourcePromise ");
         Assert.Equal(1, promiseCount);
     }
 

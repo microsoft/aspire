@@ -1,4 +1,4 @@
-﻿{
+{
   "author": "Microsoft",
   "name": "Aspire スターター アプリ (ASP.NET Core/React)",
   "description": "React フロントエンドと C# MInimal API バックエンド サービスを使用して Aspire アプリを作成するためのプロジェクト テンプレート。必要に応じて、Redis キャッシュを使用します。",
@@ -10,11 +10,9 @@
   "symbols/UseRedisCache/description": "Redis をキャッシュに使用するようにアプリケーションを設定するかどうかを構成します。ローカルで実行するには、サポートされているコンテナー ランタイムが必要です。詳細については、https://aka.ms/aspire/containers を参照してください。",
   "symbols/appHostHttpPort/description": "AppHost プロジェクトの launchSettings.json の HTTP エンドポイントに使用するポート番号。",
   "symbols/appHostOtlpHttpPort/description": "AppHost プロジェクトの launchSettings.json で OTLP HTTP エンドポイントに使用するポート番号。",
-  "symbols/appHostMcpHttpPort/description": "AppHost プロジェクトの launchSettings.json で MCP HTTP エンドポイント向けに使用するポート番号。",
   "symbols/appHostResourceHttpPort/description": "AppHost プロジェクトの launchSettings.json のリソース サービス HTTP エンドポイントに使用するポート番号。",
   "symbols/appHostHttpsPort/description": "AppHost プロジェクトの launchSettings.json の HTTPS エンドポイントに使用するポート番号。このオプションは、パラメーター no-https を使用しない場合にのみ適用されます。",
   "symbols/appHostOtlpHttpsPort/description": "AppHost プロジェクトの launchSettings.json で OTLP HTTPS エンドポイントに使用するポート番号。",
-  "symbols/appHostMcpHttpsPort/description": "AppHost プロジェクトの launchSettings.json で MCP HTTPS エンドポイント向けに使用するポート番号。",
   "symbols/appHostResourceHttpsPort/description": "AppHost プロジェクトの launchSettings.json のリソース サービス HTTPS エンドポイントに使用するポート番号。",
   "symbols/serverHttpPort/description": "Server プロジェクトの launchSettings.json の HTTP エンドポイントに使用するポート番号。",
   "symbols/serverHttpsPort/description": "Server プロジェクトの launchSettings.json の HTTPS エンドポイントに使用するポート番号。このオプションは、パラメーター no-https を使用されていない場合にのみ適用されます。",

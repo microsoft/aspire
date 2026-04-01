@@ -16,7 +16,9 @@ internal sealed class SkillDefinition
     public static readonly SkillDefinition Aspire = new(
         CommonAgentApplicators.AspireSkillName,
         AgentCommandStrings.SkillDescription_Aspire,
-        CommonAgentApplicators.SkillFileContent,
+        skillContent: null,
+        embeddedResourceRoot: CommonAgentApplicators.AspireSkillResourceRoot,
+        installExcludedRelativePaths: [Path.Combine("evals")],
         isDefault: true);
 
     /// <summary>
@@ -25,7 +27,9 @@ internal sealed class SkillDefinition
     public static readonly SkillDefinition PlaywrightCli = new(
         "playwright-cli",
         AgentCommandStrings.SkillDescription_PlaywrightCli,
-        skillContent: null, // Playwright is installed via PlaywrightCliInstaller, not a static file
+        skillContent: null,
+        embeddedResourceRoot: null, // Playwright is installed via PlaywrightCliInstaller, not a static file
+        installExcludedRelativePaths: [],
         isDefault: true);
 
     /// <summary>
@@ -35,13 +39,17 @@ internal sealed class SkillDefinition
         CommonAgentApplicators.DotnetInspectSkillName,
         AgentCommandStrings.SkillDescription_DotnetInspect,
         CommonAgentApplicators.DotnetInspectSkillFileContent,
+        embeddedResourceRoot: null,
+        installExcludedRelativePaths: [],
         isDefault: true);
 
-    private SkillDefinition(string name, string description, string? skillContent, bool isDefault)
+    private SkillDefinition(string name, string description, string? skillContent, string? embeddedResourceRoot, IReadOnlyList<string> installExcludedRelativePaths, bool isDefault)
     {
         Name = name;
         Description = description;
         SkillContent = skillContent;
+        EmbeddedResourceRoot = embeddedResourceRoot;
+        InstallExcludedRelativePaths = installExcludedRelativePaths;
         IsDefault = isDefault;
     }
 
@@ -56,14 +64,56 @@ internal sealed class SkillDefinition
     public string Description { get; }
 
     /// <summary>
-    /// Gets the content for the SKILL.md file, or <c>null</c> if this skill is installed by other means.
+    /// Gets the content for the top-level SKILL.md file when the skill is defined as a single-file bundle,
+    /// or <c>null</c> when installable files come from <see cref="EmbeddedResourceRoot"/> or another installer.
     /// </summary>
     public string? SkillContent { get; }
+
+    /// <summary>
+    /// Gets the embedded resource root for bundled skill files, or <c>null</c> if the skill is not installed from an embedded file tree.
+    /// </summary>
+    public string? EmbeddedResourceRoot { get; }
+
+    /// <summary>
+    /// Gets relative paths that should be excluded when the skill is installed into a workspace.
+    /// </summary>
+    public IReadOnlyList<string> InstallExcludedRelativePaths { get; }
+
+    /// <summary>
+    /// Gets whether a bundled file should be installed into a workspace.
+    /// </summary>
+    public bool ShouldInstallFile(string relativePath)
+    {
+        foreach (var excludedPath in InstallExcludedRelativePaths)
+        {
+            if (PathMatchesOrIsUnder(relativePath, excludedPath))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 
     /// <summary>
     /// Gets whether this skill should be selected by default.
     /// </summary>
     public bool IsDefault { get; }
+
+    private static bool PathMatchesOrIsUnder(string relativePath, string excludedPath)
+    {
+        if (string.Equals(relativePath, excludedPath, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (!relativePath.StartsWith(excludedPath, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return relativePath.Length > excludedPath.Length && relativePath[excludedPath.Length] == Path.DirectorySeparatorChar;
+    }
 
     /// <summary>
     /// Gets all available skill definitions.

@@ -324,7 +324,7 @@ public class DotNetTemplateFactoryTests
         // Assert
         var templateNames = templates.Select(t => t.Name).ToList();
         Assert.DoesNotContain("aspire-apphost-singlefile", templateNames);
-        Assert.Contains("aspire-py-starter", templateNames);
+        Assert.DoesNotContain("aspire-py-starter", templateNames);
     }
 
     [Fact]

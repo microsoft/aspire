@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { ResourceState, HealthStatus, StateStyle } from '../editor/resourceConstants';
@@ -7,7 +9,6 @@ import {
     cliPidLabel,
     appHostPidLabel,
     resourcesGroupLabel,
-    resourceStateLabel,
     noCommandsAvailable,
     selectCommandPlaceholder,
     selectDashboardPlaceholder,
@@ -17,6 +18,12 @@ import {
     tooltipState,
     tooltipHealth,
     tooltipEndpoints,
+    appHostSourceNotFound,
+    appHostSourceOpenFailed,
+    healthChecksLabel,
+    healthCheckDescription,
+    resourceDescriptionHealth,
+    resourceDescriptionExitCode,
 } from '../loc/strings';
 import {
     AppHostDataRepository,
@@ -26,7 +33,7 @@ import {
     shortenPath,
 } from './AppHostDataRepository';
 
-type TreeElement = AppHostItem | PidItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem;
+type TreeElement = AppHostItem | PidItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | HealthChecksGroupItem | HealthCheckItem;
 
 function sortResources(resources: ResourceJson[]): ResourceJson[] {
     return [...resources].sort((a, b) => {
@@ -59,7 +66,12 @@ class AppHostItem extends vscode.TreeItem {
 }
 
 class WorkspaceResourcesItem extends vscode.TreeItem {
-    constructor(public readonly resources: ResourceJson[], public readonly dashboardUrl: string | null, appHostPath?: string, appHostName?: string) {
+    constructor(
+        public readonly resources: ResourceJson[],
+        public readonly dashboardUrl: string | null,
+        public readonly appHostPath: string | undefined,
+        appHostName?: string
+    ) {
         super(appHostName ?? workspaceAppHostLabel, vscode.TreeItemCollapsibleState.Expanded);
         this.id = 'workspace-resources';
         this.iconPath = appHostIcon(appHostPath);
@@ -108,22 +120,57 @@ class ResourcesGroupItem extends vscode.TreeItem {
     }
 }
 
+class HealthChecksGroupItem extends vscode.TreeItem {
+    constructor(public readonly resource: ResourceJson, parentId: string) {
+        super(healthChecksLabel, vscode.TreeItemCollapsibleState.Collapsed);
+        this.id = `${parentId}:health-checks`;
+        this.iconPath = new vscode.ThemeIcon('heart');
+        this.contextValue = 'healthChecksGroup';
+        const reports = resource.healthReports;
+        if (reports) {
+            const total = Object.keys(reports).length;
+            const passed = Object.values(reports).filter(r => r.status === 'Healthy').length;
+            this.description = `${passed}/${total}`;
+        }
+    }
+}
+
+class HealthCheckItem extends vscode.TreeItem {
+    constructor(name: string, status: string | null, description: string | null, parentId: string) {
+        super(name, vscode.TreeItemCollapsibleState.None);
+        this.id = `${parentId}:health:${name}`;
+        const isHealthy = status === 'Healthy';
+        const isDegraded = status === 'Degraded';
+        this.iconPath = isHealthy
+            ? new vscode.ThemeIcon('pass', new vscode.ThemeColor('testing.iconPassed'))
+            : isDegraded
+                ? new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.warningForeground'))
+                : new vscode.ThemeIcon('error', new vscode.ThemeColor('list.errorForeground'));
+        this.description = healthCheckDescription(status ?? 'Unknown');
+        if (description) {
+            this.tooltip = description;
+        }
+        this.contextValue = 'healthCheck';
+    }
+}
+
 function getParentResourceName(resource: ResourceJson): string | null {
     return resource.properties?.['resource.parentName'] ?? null;
 }
 
 class ResourceItem extends vscode.TreeItem {
     constructor(public readonly resource: ResourceJson, public readonly appHostPid: number | null, hasChildren: boolean) {
-        const state = resource.state ?? '';
-        const label = state ? resourceStateLabel(resource.displayName ?? resource.name, state) : (resource.displayName ?? resource.name);
+        const label = resource.displayName ?? resource.name;
         const hasUrls = resource.urls && resource.urls.filter(u => !u.isInternal).length > 0;
+        const hasHealthReports = resource.healthReports && Object.keys(resource.healthReports).length > 0;
+        const hasExpandableContent = hasChildren || hasUrls || hasHealthReports;
         const collapsible = hasChildren
             ? vscode.TreeItemCollapsibleState.Expanded
-            : hasUrls ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None;
+            : hasExpandableContent ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None;
         super(label, collapsible);
         this.id = appHostPid !== null ? `resource:${appHostPid}:${resource.name}` : `resource:workspace:${resource.name}`;
         this.iconPath = getResourceIcon(resource);
-        this.description = resource.resourceType;
+        this.description = buildResourceDescription(resource);
         this.tooltip = buildResourceTooltip(resource);
         this.contextValue = getResourceContextValue(resource);
     }
@@ -150,8 +197,11 @@ export function getResourceIcon(resource: ResourceJson): vscode.ThemeIcon {
     switch (state) {
         case ResourceState.Running:
         case ResourceState.Active:
-            if (health === HealthStatus.Unhealthy || resource.stateStyle === StateStyle.Error) {
+            if (resource.stateStyle === StateStyle.Error) {
                 return new vscode.ThemeIcon('error', new vscode.ThemeColor('list.errorForeground'));
+            }
+            if (health === HealthStatus.Unhealthy) {
+                return new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.warningForeground'));
             }
             if (health === HealthStatus.Degraded || resource.stateStyle === StateStyle.Warning) {
                 return new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.warningForeground'));
@@ -159,10 +209,11 @@ export function getResourceIcon(resource: ResourceJson): vscode.ThemeIcon {
             return new vscode.ThemeIcon('pass', new vscode.ThemeColor('testing.iconPassed'));
         case ResourceState.Finished:
         case ResourceState.Exited:
-            if (resource.stateStyle === StateStyle.Error) {
+        case ResourceState.Stopped:
+            if (resource.stateStyle === StateStyle.Error || (resource.exitCode != null && resource.exitCode !== 0)) {
                 return new vscode.ThemeIcon('error', new vscode.ThemeColor('list.errorForeground'));
             }
-            return new vscode.ThemeIcon('circle-outline');
+            return new vscode.ThemeIcon('pass', new vscode.ThemeColor('charts.green'));
         case ResourceState.FailedToStart:
         case ResourceState.RuntimeUnhealthy:
             return new vscode.ThemeIcon('error', new vscode.ThemeColor('list.errorForeground'));
@@ -170,14 +221,62 @@ export function getResourceIcon(resource: ResourceJson): vscode.ThemeIcon {
         case ResourceState.Stopping:
         case ResourceState.Building:
         case ResourceState.Waiting:
-        case ResourceState.NotStarted:
             return new vscode.ThemeIcon('loading~spin');
+        case ResourceState.NotStarted:
+            return new vscode.ThemeIcon('record', new vscode.ThemeColor('descriptionForeground'));
         default:
             if (state === null || state === undefined) {
-                return new vscode.ThemeIcon('circle-outline');
+                return new vscode.ThemeIcon('record', new vscode.ThemeColor('descriptionForeground'));
             }
             return new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('aspire.brandPurple'));
     }
+}
+
+export function resolveAppHostSourcePath(appHostPath: string, fileExists: (candidate: string) => boolean = fs.existsSync): string {
+    if (!appHostPath.toLowerCase().endsWith('.csproj')) {
+        return appHostPath;
+    }
+
+    const projectDirectory = path.dirname(appHostPath);
+    // C# AppHosts are reported as the project file, but the tree action is meant to
+    // take the user to the AppHost source code instead of opening project XML.
+    const appHostCodePath = path.join(projectDirectory, 'AppHost.cs');
+    if (fileExists(appHostCodePath)) {
+        return appHostCodePath;
+    }
+
+    const fileBasedAppHostCodePath = path.join(projectDirectory, 'apphost.cs');
+    if (fileExists(fileBasedAppHostCodePath)) {
+        return fileBasedAppHostCodePath;
+    }
+
+    // Older/simple AppHosts may still use Program.cs, so prefer that before
+    // falling back to the .csproj when no source file can be resolved.
+    const programCodePath = path.join(projectDirectory, 'Program.cs');
+    if (fileExists(programCodePath)) {
+        return programCodePath;
+    }
+
+    return appHostPath;
+}
+
+export function buildResourceDescription(resource: ResourceJson): string {
+    const parts: string[] = [resource.resourceType];
+    const state = resource.state;
+    if (state) {
+        parts.push(state);
+    }
+    const reports = resource.healthReports;
+    const exitCode = resource.exitCode;
+    if (reports && Object.keys(reports).length > 0) {
+        const total = Object.keys(reports).length;
+        const passed = Object.values(reports).filter(r => r.status === 'Healthy').length;
+        parts.push(resourceDescriptionHealth(passed, total));
+    }
+    if (exitCode != null && exitCode !== 0) {
+        parts.push(resourceDescriptionExitCode(exitCode));
+    }
+    return parts.join(' · ');
 }
 
 function buildResourceTooltip(resource: ResourceJson): vscode.MarkdownString {
@@ -189,6 +288,14 @@ function buildResourceTooltip(resource: ResourceJson): vscode.MarkdownString {
     }
     if (resource.healthStatus) {
         md.appendMarkdown(`${tooltipHealth(resource.healthStatus)}\n\n`);
+        const reports = resource.healthReports;
+        if (reports) {
+            const entries = Object.entries(reports).sort(([a], [b]) => a.localeCompare(b));
+            for (const [name, report] of entries) {
+                const icon = report.status === HealthStatus.Healthy ? '$(pass)' : report.status === HealthStatus.Degraded ? '$(warning)' : '$(error)';
+                md.appendMarkdown(`${icon} ${name}: ${report.status ?? 'Unknown'}${report.description ? ` - ${report.description}` : ''}\n\n`);
+            }
+        }
     }
     const urls = resource.urls?.filter(u => !u.isInternal && typeof u.url === 'string' && (u.url.startsWith('http://') || u.url.startsWith('https://'))) ?? [];
     if (urls.length > 0) {
@@ -210,6 +317,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
     private readonly _dataSubscription: vscode.Disposable;
+    private _treeView: vscode.TreeView<TreeElement> | undefined;
 
     constructor(
         private readonly _repository: AppHostDataRepository,
@@ -239,6 +347,10 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     dispose(): void {
         this._dataSubscription.dispose();
         this._onDidChangeTreeData.dispose();
+    }
+
+    setTreeView(treeView: vscode.TreeView<TreeElement>): void {
+        this._treeView = treeView;
     }
 
     findResourceElement(resourceName: string): TreeElement | undefined {
@@ -330,6 +442,10 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return this._getResourceChildren(element, [...this._repository.workspaceResources]);
         }
 
+        if (element instanceof HealthChecksGroupItem) {
+            return this._getHealthCheckChildren(element);
+        }
+
         return [];
     }
 
@@ -383,6 +499,9 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
                 : this._repository.appHosts.find(a => a.appHostPid === element.appHostPid)?.resources ?? [];
             return this._getResourceChildren(element, allResources);
         }
+        if (element instanceof HealthChecksGroupItem) {
+            return this._getHealthCheckChildren(element);
+        }
 
         return [];
     }
@@ -399,10 +518,37 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         const urls = element.resource.urls?.filter(u => !u.isInternal) ?? [];
         items.push(...urls.map(url => new EndpointUrlItem(url.url, url.displayName ?? url.url)));
 
+        const reports = element.resource.healthReports;
+        if (reports && Object.keys(reports).length > 0) {
+            items.push(new HealthChecksGroupItem(element.resource, element.id!));
+        }
+
         return items;
     }
 
+    private _getHealthCheckChildren(element: HealthChecksGroupItem): TreeElement[] {
+        const reports = element.resource.healthReports;
+        if (!reports) {
+            return [];
+        }
+        return Object.entries(reports)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([name, report]) => new HealthCheckItem(name, report.status, report.description, element.id!));
+    }
+
     // ── Commands ──
+
+    async expandAll(element?: TreeElement): Promise<void> {
+        if (!this._treeView || !element) {
+            return;
+        }
+        const children = this.getChildren(element);
+        for (const child of children) {
+            if (child.collapsibleState !== vscode.TreeItemCollapsibleState.None) {
+                await this._treeView.reveal(child, { expand: 3 });
+            }
+        }
+    }
 
     async openDashboard(element?: TreeElement): Promise<void> {
         let url: string | null = null;
@@ -448,6 +594,32 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
     stopAppHost(element: AppHostItem): void {
         this._terminalProvider.sendAspireCommandToAspireTerminal(`stop --apphost "${element.appHost.appHostPath}"`);
+    }
+
+    async openAppHostSource(element?: AppHostItem | WorkspaceResourcesItem): Promise<void> {
+        if (!element || !(element instanceof AppHostItem || element instanceof WorkspaceResourcesItem)) {
+            vscode.window.showWarningMessage(appHostSourceNotFound);
+            return;
+        }
+
+        const appHostPath = element instanceof AppHostItem
+            ? element.appHost.appHostPath
+            : element.appHostPath;
+
+        if (!appHostPath) {
+            vscode.window.showWarningMessage(appHostSourceNotFound);
+            return;
+        }
+
+        const sourcePath = resolveAppHostSourcePath(appHostPath);
+        try {
+            // Open the resolved source path directly so TypeScript AppHosts open their
+            // file as-is, while C# AppHosts route through the .csproj special case above.
+            const document = await vscode.workspace.openTextDocument(vscode.Uri.file(sourcePath));
+            await vscode.window.showTextDocument(document, { preview: false });
+        } catch {
+            vscode.window.showWarningMessage(appHostSourceOpenFailed(sourcePath));
+        }
     }
 
     stopResource(element: ResourceItem): void {

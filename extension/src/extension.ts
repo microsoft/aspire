@@ -82,7 +82,9 @@ export async function activate(context: vscode.ExtensionContext) {
   const appHostTreeProvider = new AspireAppHostTreeProvider(dataRepository, terminalProvider);
   const appHostTreeView = vscode.window.createTreeView('aspire-vscode.runningAppHosts', {
     treeDataProvider: appHostTreeProvider,
+    showCollapseAll: true,
   });
+  appHostTreeProvider.setTreeView(appHostTreeView);
 
   // Global-mode polling is tied to panel visibility
   dataRepository.setPanelVisible(appHostTreeView.visible);
@@ -94,6 +96,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const switchToGlobalViewRegistration = vscode.commands.registerCommand('aspire-vscode.switchToGlobalView', () => dataRepository.setViewMode('global'));
   const switchToWorkspaceViewRegistration = vscode.commands.registerCommand('aspire-vscode.switchToWorkspaceView', () => dataRepository.setViewMode('workspace'));
   const openDashboardRegistration = vscode.commands.registerCommand('aspire-vscode.openDashboard', (element) => appHostTreeProvider.openDashboard(element));
+  const openAppHostSourceRegistration = vscode.commands.registerCommand('aspire-vscode.openAppHostSource', (element) => appHostTreeProvider.openAppHostSource(element));
   const stopAppHostRegistration = vscode.commands.registerCommand('aspire-vscode.stopAppHost', (element) => appHostTreeProvider.stopAppHost(element));
   const stopResourceRegistration = vscode.commands.registerCommand('aspire-vscode.stopResource', (element) => appHostTreeProvider.stopResource(element));
   const startResourceRegistration = vscode.commands.registerCommand('aspire-vscode.startResource', (element) => appHostTreeProvider.startResource(element));
@@ -106,6 +109,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const copyResourceNameRegistration = vscode.commands.registerCommand('aspire-vscode.copyResourceName', (element) => appHostTreeProvider.copyResourceName(element));
   const copyPidRegistration = vscode.commands.registerCommand('aspire-vscode.copyPid', (element) => appHostTreeProvider.copyPid(element));
   const copyAppHostPathRegistration = vscode.commands.registerCommand('aspire-vscode.copyAppHostPath', (element) => appHostTreeProvider.copyAppHostPath(element));
+  const expandAllRegistration = vscode.commands.registerCommand('aspire-vscode.expandAll', (element) => appHostTreeProvider.expandAll(element));
 
   // Set initial context for welcome view
   vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', true);
@@ -114,7 +118,7 @@ export async function activate(context: vscode.ExtensionContext) {
   // Activate the data repository (starts workspace describe --follow; global polling begins when the panel is visible)
   dataRepository.activate();
 
-  context.subscriptions.push(appHostTreeView, refreshRunningAppHostsRegistration, switchToGlobalViewRegistration, switchToWorkspaceViewRegistration, openDashboardRegistration, stopAppHostRegistration, stopResourceRegistration, startResourceRegistration, restartResourceRegistration, viewResourceLogsRegistration, executeResourceCommandRegistration, copyEndpointUrlRegistration, openInExternalBrowserRegistration, openInSimpleBrowserRegistration, copyResourceNameRegistration, copyPidRegistration, copyAppHostPathRegistration, { dispose: () => { appHostTreeProvider.dispose(); dataRepository.dispose(); } });
+  context.subscriptions.push(appHostTreeView, refreshRunningAppHostsRegistration, switchToGlobalViewRegistration, switchToWorkspaceViewRegistration, openDashboardRegistration, openAppHostSourceRegistration, stopAppHostRegistration, stopResourceRegistration, startResourceRegistration, restartResourceRegistration, viewResourceLogsRegistration, executeResourceCommandRegistration, copyEndpointUrlRegistration, openInExternalBrowserRegistration, openInSimpleBrowserRegistration, copyResourceNameRegistration, copyPidRegistration, copyAppHostPathRegistration, expandAllRegistration, { dispose: () => { appHostTreeProvider.dispose(); dataRepository.dispose(); } });
 
   // CodeLens provider — shows Debug on pipeline steps, resource state on resources
   const codeLensProvider = new AspireCodeLensProvider(appHostTreeProvider);

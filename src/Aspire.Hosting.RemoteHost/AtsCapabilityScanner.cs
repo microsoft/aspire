@@ -788,13 +788,15 @@ public static class AtsCapabilityScanner
                 continue;
             }
 
-            // Create type ref for this concrete type
+            // Create type ref for this concrete type, including inheritance info
             var concreteTypeRef = new AtsTypeRef
             {
                 TypeId = typeInfo.AtsTypeId,
                 ClrType = typeInfo.ClrType,
                 Category = AtsTypeCategory.Handle,
-                IsInterface = false
+                IsInterface = false,
+                ImplementedInterfaces = typeInfo.ImplementedInterfaces,
+                BaseType = typeInfo.BaseTypeHierarchy.Count > 0 ? typeInfo.BaseTypeHierarchy[0] : null
             };
 
             // Register under its own type ID so base types with derived types
@@ -1140,14 +1142,8 @@ public static class AtsCapabilityScanner
                     continue;
                 }
 
-                // Create type ref for the context type
-                var contextTypeRef = new AtsTypeRef
-                {
-                    TypeId = typeId,
-                    ClrType = contextType,
-                    Category = AtsTypeCategory.Handle,
-                    IsInterface = contextType.IsInterface
-                };
+                // Create type ref for the context type with full inheritance info
+                var contextTypeRef = CreateHandleTypeRef(contextType);
 
                 // Get custom method name from attribute if specified
                 var customMethodName = memberExportAttr?.Id;
@@ -1246,14 +1242,8 @@ public static class AtsCapabilityScanner
         }
 
         // Scan instance methods (either via ExposeMethods=true or member-level [AspireExport])
-        // Create context type ref once for all methods
-        var instanceContextTypeRef = new AtsTypeRef
-        {
-            TypeId = typeId,
-            ClrType = contextType,
-            Category = AtsTypeCategory.Handle,
-            IsInterface = contextType.IsInterface
-        };
+        // Create context type ref once for all methods with full inheritance info
+        var instanceContextTypeRef = CreateHandleTypeRef(contextType);
 
         foreach (var method in contextType.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance))
         {
@@ -2183,25 +2173,11 @@ public static class AtsCapabilityScanner
                         if (constraints.Length > 0)
                         {
                             var constraintType = constraints[0];
-                            var constraintTypeId = AtsTypeMapping.DeriveTypeId(constraintType);
-                            return new AtsTypeRef
-                            {
-                                TypeId = constraintTypeId,
-                                ClrType = constraintType,
-                                Category = AtsTypeCategory.Handle,
-                                IsInterface = constraintType.IsInterface
-                            };
+                            return CreateHandleTypeRef(constraintType);
                         }
                     }
 
-                    var typeId = AtsTypeMapping.DeriveTypeId(resourceType);
-                    return new AtsTypeRef
-                    {
-                        TypeId = typeId,
-                        ClrType = resourceType,
-                        Category = AtsTypeCategory.Handle,
-                        IsInterface = resourceType.IsInterface
-                    };
+                    return CreateHandleTypeRef(resourceType);
                 }
             }
         }
@@ -2324,6 +2300,7 @@ public static class AtsCapabilityScanner
 
     /// <summary>
     /// Collects ALL interfaces implemented by a type, including inherited interfaces.
+    /// Recursively populates ImplementedInterfaces for each interface.
     /// </summary>
     private static List<AtsTypeRef> CollectAllInterfaces(Type type)
     {
@@ -2333,12 +2310,17 @@ public static class AtsCapabilityScanner
         foreach (var iface in type.GetInterfaces())
         {
             var ifaceTypeId = AtsTypeMapping.DeriveTypeId(iface);
+
+            // Recursively collect interfaces that this interface extends
+            var nestedInterfaces = CollectAllInterfaces(iface);
+
             allInterfaces.Add(new AtsTypeRef
             {
                 TypeId = ifaceTypeId,
                 ClrType = iface,
                 Category = AtsTypeCategory.Handle,
-                IsInterface = true
+                IsInterface = true,
+                ImplementedInterfaces = nestedInterfaces
             });
         }
 
@@ -2348,6 +2330,7 @@ public static class AtsCapabilityScanner
     /// <summary>
     /// Collects the base type hierarchy for a type (from immediate base up to Resource/Object).
     /// This is used for expanding capabilities targeting base types to derived types.
+    /// Each base type includes its own ImplementedInterfaces and BaseType for full hierarchy info.
     /// </summary>
     private static List<AtsTypeRef> CollectBaseTypeHierarchy(Type type)
     {
@@ -2367,19 +2350,46 @@ public static class AtsCapabilityScanner
                 break;
             }
 
-            var baseTypeId = AtsTypeMapping.DeriveTypeId(currentBase);
-            baseTypes.Add(new AtsTypeRef
-            {
-                TypeId = baseTypeId,
-                ClrType = currentBase,
-                Category = AtsTypeCategory.Handle,
-                IsInterface = false
-            });
+            // Use CreateHandleTypeRef to get full inheritance info for each base type
+            baseTypes.Add(CreateHandleTypeRef(currentBase));
 
             currentBase = currentBase.BaseType;
         }
 
         return baseTypes;
+    }
+
+    /// <summary>
+    /// Creates an AtsTypeRef for a handle type with base type and interfaces populated.
+    /// Recursively populates base types and interfaces.
+    /// </summary>
+    private static AtsTypeRef CreateHandleTypeRef(Type type)
+    {
+        var typeId = AtsTypeMapping.DeriveTypeId(type);
+        var baseType = type.BaseType;
+        AtsTypeRef? baseTypeRef = null;
+
+        if (baseType != null && baseType != typeof(object))
+        {
+            var baseFullName = baseType.FullName;
+            if (baseFullName != null &&
+                !baseFullName.StartsWith("System.", StringComparison.Ordinal) &&
+                !baseFullName.StartsWith("Microsoft.", StringComparison.Ordinal))
+            {
+                // Recursively create the base type ref with its own interfaces and base type
+                baseTypeRef = CreateHandleTypeRef(baseType);
+            }
+        }
+
+        return new AtsTypeRef
+        {
+            TypeId = typeId,
+            ClrType = type,
+            Category = AtsTypeCategory.Handle,
+            IsInterface = type.IsInterface,
+            ImplementedInterfaces = CollectAllInterfaces(type),
+            BaseType = baseTypeRef
+        };
     }
 
     /// <summary>

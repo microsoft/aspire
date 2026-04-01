@@ -22,11 +22,6 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     string SocketPath { get; }
 
     /// <summary>
-    /// Gets the MCP connection information for the Dashboard.
-    /// </summary>
-    DashboardMcpConnectionInfo? McpInfo { get; }
-
-    /// <summary>
     /// Gets the AppHost information.
     /// </summary>
     AppHostInformation? AppHostInfo { get; }
@@ -50,7 +45,7 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     /// Gets the Dashboard URLs from the AppHost.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The Dashboard URLs state including health and login URLs.</returns>
+    /// <returns>The dashboard URL state including health and resolved dashboard URLs.</returns>
     Task<DashboardUrlsState?> GetDashboardUrlsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>

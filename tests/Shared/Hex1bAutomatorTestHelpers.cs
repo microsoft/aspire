@@ -216,27 +216,36 @@ internal static class Hex1bAutomatorTestHelpers
                 break;
 
             case AspireTemplate.EmptyAppHost:
-                await auto.DownAsync();
-                await auto.DownAsync();
-                await auto.DownAsync();
-                await auto.DownAsync();
-                await auto.WaitUntilAsync(
-                    s => new CellPatternSearcher().Find("> Empty (C# AppHost)").Search(s).Count > 0,
-                    timeout: TimeSpan.FromSeconds(5),
-                    description: "Empty AppHost template selected");
+                await auto.TypeAsync("Empty AppHost");
                 await auto.EnterAsync();
+                try
+                {
+                    await auto.WaitUntilAsync(
+                        s => new CellPatternSearcher().Find("Which language would you like to use?").Search(s).Count > 0,
+                        timeout: TimeSpan.FromSeconds(5),
+                        description: "AppHost language prompt");
+                    await auto.EnterAsync();
+                }
+                catch (Hex1bAutomationException)
+                {
+                }
                 break;
 
             case AspireTemplate.TypeScriptEmptyAppHost:
-                await auto.DownAsync();
-                await auto.DownAsync();
-                await auto.DownAsync();
-                await auto.DownAsync();
-                await auto.DownAsync();
+                await auto.TypeAsync("TypeScript");
                 await auto.WaitUntilAsync(
                     s => new CellPatternSearcher().Find("> Empty (TypeScript AppHost)").Search(s).Count > 0,
                     timeout: TimeSpan.FromSeconds(5),
                     description: "TypeScript Empty AppHost template selected");
+                await auto.EnterAsync();
+                break;
+
+            case AspireTemplate.JavaEmptyAppHost:
+                await auto.TypeAsync("Empty (Java AppHost)");
+                await auto.WaitUntilAsync(
+                    s => new CellPatternSearcher().Find("> Empty (Java AppHost)").Search(s).Count > 0,
+                    timeout: TimeSpan.FromSeconds(5),
+                    description: "Java Empty AppHost template selected");
                 await auto.EnterAsync();
                 break;
 

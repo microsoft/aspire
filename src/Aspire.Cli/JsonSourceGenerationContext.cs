@@ -18,7 +18,8 @@ namespace Aspire.Cli;
     WriteIndented = true,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     AllowTrailingCommas = true,
-    ReadCommentHandling = JsonCommentHandling.Skip)]
+    ReadCommentHandling = JsonCommentHandling.Skip,
+    Converters = [typeof(FlexibleBooleanConverter)])]
 [JsonSerializable(typeof(CliSettings))]
 [JsonSerializable(typeof(JsonObject))]
 [JsonSerializable(typeof(ListIntegrationsResponse))]

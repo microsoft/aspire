@@ -17,10 +17,16 @@ internal static class ExtensionUtils
     {
         var supportedLaunchConfigurations = GetSupportedLaunchConfigurations(configuration);
 
-        return builder.TryGetLastAnnotation(out supportsDebuggingAnnotation)
-            && !string.IsNullOrEmpty(configuration[DcpExecutor.DebugSessionPortVar])
-            && ((supportedLaunchConfigurations is null && supportsDebuggingAnnotation.LaunchConfigurationType == "project") // per DCP spec, project resources support debugging if no launch configurations are specified
-                || (supportedLaunchConfigurations is not null && supportedLaunchConfigurations.Contains(supportsDebuggingAnnotation.LaunchConfigurationType)));
+        if (!builder.TryGetLastAnnotation(out supportsDebuggingAnnotation)
+            || string.IsNullOrEmpty(configuration[DcpExecutor.DebugSessionPortVar]))
+        {
+            return false;
+        }
+
+        // Per DCP IDE execution spec, project launch configuration support is implicit.
+        // Custom launch types (for example, azure-functions) must be explicitly advertised.
+        return supportsDebuggingAnnotation.LaunchConfigurationType == "project"
+            || (supportedLaunchConfigurations is not null && supportedLaunchConfigurations.Contains(supportsDebuggingAnnotation.LaunchConfigurationType));
     }
 
     private static string[]? GetSupportedLaunchConfigurations(IConfiguration configuration)

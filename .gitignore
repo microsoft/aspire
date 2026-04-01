@@ -124,12 +124,18 @@ config.ps1
 # Node.js modules
 node_modules/
 
-# Generated Aspire TypeScript modules
+# Generated Aspire polyglot modules
 .modules/
 
 # Maven build outputs
 target/
 dependency-reduced-pom.xml
+
+# Java AppHost build artifacts
+playground/**/.java-build/
+playground/**/*.class
+tests/PolyglotAppHosts/**/.java-build/
+tests/PolyglotAppHosts/**/Java/**/*.class
 
 # Ignore cache created with the Angular CLI.
 .angular/
@@ -163,15 +169,13 @@ playground/**/publish/
 
 # TypeScript AppHost
 playground/**/dist/
+tests/PolyglotAppHosts/**/TypeScript/dist/
 
 # Verify
 *.received.*
 
 #Aspire CLI
 .aspire/
-
-# Required for polyglot apps
-!playground/polyglot/**/.aspire/
 
 # Release notes automation output
 tools/ReleaseNotes/analysis-output/

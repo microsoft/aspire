@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
@@ -13,7 +14,7 @@ namespace Aspire.Dashboard.Model;
 
 public sealed class DashboardCommandExecutor(
     IDashboardClient dashboardClient,
-    IDialogService dialogService,
+    DashboardDialogService dialogService,
     IToastService toastService,
     IStringLocalizer<Dashboard.Resources.Resources> loc,
     NavigationManager navigationManager,
@@ -166,6 +167,18 @@ public sealed class DashboardCommandExecutor(
             toastParameters.Content.Details = response.ErrorMessage;
             toastParameters.PrimaryAction = loc[nameof(Dashboard.Resources.Resources.ResourceCommandToastViewLogs)];
             toastParameters.OnPrimaryAction = EventCallback.Factory.Create<ToastResult>(this, () => navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: getResourceName(resource))));
+        }
+
+        if (response.Result is not null)
+        {
+            var fixedFormat = response.ResultFormat == CommandResultFormat.Json ? DashboardUIHelpers.JsonFormat : null;
+            await TextVisualizerDialog.OpenDialogAsync(new OpenTextVisualizerDialogOptions
+            {
+                DialogService = dialogService,
+                ValueDescription = command.GetDisplayName(),
+                Value = response.Result,
+                FixedFormat = fixedFormat
+            }).ConfigureAwait(false);
         }
 
         if (!toastClosed)

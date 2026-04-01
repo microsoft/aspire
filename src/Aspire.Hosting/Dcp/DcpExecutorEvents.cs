@@ -9,6 +9,7 @@ namespace Aspire.Hosting.Dcp;
 internal record ResourceStatus(string? State, DateTime? StartupTimestamp, DateTime? FinishedTimestamp);
 internal record OnEndpointsAllocatedContext(CancellationToken CancellationToken);
 internal record OnResourceStartingContext(CancellationToken CancellationToken, string ResourceType, IResource Resource, string? DcpResourceName);
+internal record OnConnectionStringAvailableContext(CancellationToken CancellationToken, IResource Resource);
 internal record OnResourcesPreparedContext(CancellationToken CancellationToken);
 internal record OnResourceChangedContext(CancellationToken CancellationToken, string ResourceType, IResource Resource, string DcpResourceName, ResourceStatus Status, Func<CustomResourceSnapshot, CustomResourceSnapshot> UpdateSnapshot);
 internal record OnResourceFailedToStartContext(CancellationToken CancellationToken, string ResourceType, IResource Resource, string? DcpResourceName);

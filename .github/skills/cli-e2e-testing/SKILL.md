@@ -569,9 +569,31 @@ testresults/
 ├── Aspire.Cli.EndToEnd.Tests_*.log     # Console output log
 ├── *.crash.dmp                        # Crash dump (if test crashed)
 ├── test.binlog                        # MSBuild binary log
-└── recordings/
-    ├── CreateAndRunAspireStarterProject.cast   # Asciinema recording
-    └── ...
+├── recordings/
+│   ├── CreateAndRunAspireStarterProject.cast   # Asciinema recording
+│   └── ...
+└── workspaces/                        # Captured project workspaces (on failure)
+    └── TestClassName.MethodName/      # Full generated project for debugging
+        ├── apphost.ts
+        ├── aspire.config.json
+        ├── .modules/                  # Generated SDK - check aspire.js for exports
+        └── ...
+```
+
+### Workspace Capture
+
+Tests annotated with `[CaptureWorkspaceOnFailure]` automatically copy the generated project workspace into the test artifacts when a test fails. This is invaluable for debugging template generation or `aspire run` failures — you can inspect the exact generated files including the SDK output in `.modules/aspire.js`.
+
+To add workspace capture to a new test:
+```csharp
+[Fact]
+[CaptureWorkspaceOnFailure]
+public async Task MyTemplateTest()
+{
+    var workspace = TemporaryWorkspace.Create(output);
+    // ... test code — workspace is automatically registered for capture ...
+}
+```
 ```
 
 ### One-Liner: Download Latest Recording

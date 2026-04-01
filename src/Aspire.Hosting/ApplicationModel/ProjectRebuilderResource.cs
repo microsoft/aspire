@@ -20,7 +20,7 @@ internal sealed class ProjectRebuilderResource : ExecutableResource, IResourceWi
     /// <param name="parent">The project resource this rebuilder is associated with.</param>
     /// <param name="projectPath">The path to the project file.</param>
     public ProjectRebuilderResource(string name, ProjectResource parent, string projectPath)
-        : base(name, "dotnet", Path.GetDirectoryName(projectPath)!)
+        : base(name, "dotnet", Path.GetDirectoryName(projectPath)!, skipValidation: true) // Validation is skipped because appending "-rebuilder" to the parent name can exceed the 64-char limit.
     {
         Parent = parent;
         ProjectPath = projectPath;

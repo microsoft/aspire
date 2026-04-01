@@ -214,13 +214,25 @@ internal sealed class PsCommand : BaseCommand
         {
             var shortPath = ShortenPath(appHost.AppHostPath);
             var cliPid = appHost.CliPid?.ToString(CultureInfo.InvariantCulture) ?? "-";
-            var dashboard = string.IsNullOrEmpty(appHost.DashboardUrl) ? "-" : appHost.DashboardUrl;
+            var dashboard = "-";
+            if (!string.IsNullOrEmpty(appHost.DashboardUrl))
+            {
+                if (Uri.TryCreate(appHost.DashboardUrl, UriKind.Absolute, out var dashboardUri))
+                {
+                    var displayText = $"{dashboardUri.Scheme}://{dashboardUri.Authority}";
+                    dashboard = $"[link={Markup.Escape(appHost.DashboardUrl)}]{Markup.Escape(displayText)}[/]";
+                }
+                else
+                {
+                    dashboard = Markup.Escape(appHost.DashboardUrl);
+                }
+            }
 
             table.AddRow(
                 Markup.Escape(shortPath),
                 appHost.AppHostPid.ToString(CultureInfo.InvariantCulture),
                 cliPid,
-                Markup.Escape(dashboard));
+                dashboard);
         }
 
         _interactionService.DisplayRenderable(table);

@@ -8,7 +8,6 @@ internal static class KnownConfigNames
     public const string AspNetCoreUrls = "ASPNETCORE_URLS";
     public const string AllowUnsecuredTransport = "ASPIRE_ALLOW_UNSECURED_TRANSPORT";
     public const string VersionCheckDisabled = "ASPIRE_VERSION_CHECK_DISABLED";
-    public const string DashboardMcpEndpointUrl = "ASPIRE_DASHBOARD_MCP_ENDPOINT_URL";
     public const string DashboardOtlpGrpcEndpointUrl = "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL";
     public const string DashboardOtlpHttpEndpointUrl = "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL";
     public const string DashboardFrontendBrowserToken = "ASPIRE_DASHBOARD_FRONTEND_BROWSERTOKEN";
@@ -50,6 +49,7 @@ internal static class KnownConfigNames
 
     public const string DeveloperCertificateDefaultTrust = "ASPIRE_DEVELOPER_CERTIFICATE_DEFAULT_TRUST";
     public const string DeveloperCertificateDefaultHttpsTermination = "ASPIRE_DEVELOPER_CERTIFICATE_DEFAULT_HTTPS_TERMINATION";
+    public const string DcpDeveloperCertificate = "ASPIRE_DCP_USE_DEVELOPER_CERTIFICATE";
 
     public const string DebugSessionInfo = "DEBUG_SESSION_INFO";
     public const string DebugSessionRunMode = "DEBUG_SESSION_RUN_MODE";

@@ -44,7 +44,13 @@ internal sealed record LanguageInfo(
     string[] DetectionPatterns,
     string CodeGenerator,
     string? AppHostFileName = null,
-    bool IsExperimental = false);
+    bool IsExperimental = false)
+{
+    /// <summary>
+    /// The well-known folder name where generated code is placed for all guest languages.
+    /// </summary>
+    internal const string GeneratedFolderName = ".modules";
+}
 
 /// <summary>
 /// Interface for discovering available languages.

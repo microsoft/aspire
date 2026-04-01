@@ -243,7 +243,7 @@ Some packages should be updated together. Common families in this repo:
 - **Grpc**: `Grpc.AspNetCore`, `Grpc.Net.ClientFactory`, `Grpc.Tools`
 - **Polly**: `Polly.Core`, `Polly.Extensions`
 - **Azure SDK**: `Azure.Messaging.*`, `Azure.Storage.*`, `Azure.Security.*`
-- **ModelContextProtocol**: `ModelContextProtocol`, `ModelContextProtocol.AspNetCore`
+- **ModelContextProtocol**: `ModelContextProtocol`
 
 When updating one member of a family, check if other members also have updates available and suggest updating them together.
 

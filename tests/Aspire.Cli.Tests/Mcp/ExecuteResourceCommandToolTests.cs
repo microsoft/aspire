@@ -61,7 +61,7 @@ public class ExecuteResourceCommandToolTests
     }
 
     [Fact]
-    public async Task ExecuteResourceCommandTool_ThrowsException_WhenCommandFails()
+    public async Task ExecuteResourceCommandTool_ReturnsError_WhenCommandFails()
     {
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var connection = new TestAppHostAuxiliaryBackchannel
@@ -76,10 +76,10 @@ public class ExecuteResourceCommandToolTests
 
         var tool = new ExecuteResourceCommandTool(monitor, NullLogger<ExecuteResourceCommandTool>.Instance);
 
-        var exception = await Assert.ThrowsAsync<ModelContextProtocol.McpProtocolException>(
-            () => tool.CallToolAsync(CallToolContextTestHelper.Create(CreateArguments("nonexistent", "start")), CancellationToken.None).AsTask()).DefaultTimeout();
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(CreateArguments("nonexistent", "start")), CancellationToken.None).DefaultTimeout();
 
-        Assert.Contains("Resource not found", exception.Message);
+        Assert.True(result.IsError);
+        Assert.Contains(result.Content, c => c is ModelContextProtocol.Protocol.TextContentBlock t && t.Text.Contains("Resource not found"));
     }
 
     [Fact]
@@ -149,6 +149,55 @@ public class ExecuteResourceCommandToolTests
         var exception2 = await Assert.ThrowsAsync<ModelContextProtocol.McpProtocolException>(
             () => tool.CallToolAsync(CallToolContextTestHelper.Create(partialArgs), CancellationToken.None).AsTask()).DefaultTimeout();
         Assert.Contains("Missing required arguments", exception2.Message);
+    }
+
+    [Fact]
+    public async Task ExecuteResourceCommandTool_ReturnsResult_WhenCommandReturnsResultData()
+    {
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
+            {
+                Success = true,
+                Result = "{\"token\": \"abc123\"}",
+                ResultFormat = "json"
+            }
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var tool = new ExecuteResourceCommandTool(monitor, NullLogger<ExecuteResourceCommandTool>.Instance);
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(CreateArguments("api-service", "generate-token")), CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.IsError is null or false);
+        Assert.NotNull(result.Content);
+        Assert.Equal(2, result.Content.Count);
+
+        var successText = result.Content[0] as ModelContextProtocol.Protocol.TextContentBlock;
+        Assert.NotNull(successText);
+        Assert.Contains("successfully", successText.Text);
+
+        var resultText = result.Content[1] as ModelContextProtocol.Protocol.TextContentBlock;
+        Assert.NotNull(resultText);
+        Assert.Contains("abc123", resultText.Text);
+    }
+
+    [Fact]
+    public async Task ExecuteResourceCommandTool_NoExtraContent_WhenCommandSucceedsWithoutResult()
+    {
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true }
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var tool = new ExecuteResourceCommandTool(monitor, NullLogger<ExecuteResourceCommandTool>.Instance);
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(CreateArguments("api-service", "start")), CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.IsError is null or false);
+        Assert.NotNull(result.Content);
+        Assert.Single(result.Content);
     }
 }
 

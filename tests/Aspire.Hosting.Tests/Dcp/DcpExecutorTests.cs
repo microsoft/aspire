@@ -1318,37 +1318,6 @@ public class DcpExecutorTests
         Assert.Equal(ContainerPullPolicy.Never, explicitNeverContainer.Spec.PullPolicy);
     }
 
-    [Fact]
-    public async Task CancelTokenDuringStartup()
-    {
-        // Arrange
-        var builder = DistributedApplication.CreateBuilder();
-
-        const int desiredTargetPort = TestKubernetesService.StartOfAutoPortRange - 999;
-        builder.AddContainer("database", "image")
-            .WithEndpoint(name: "NoPortTargetPortSet", targetPort: desiredTargetPort, env: "NO_PORT_TARGET_PORT_SET", isProxied: true);
-
-        var kubernetesService = new TestKubernetesService();
-
-        using var app = builder.Build();
-        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var dcpEvents = new DcpExecutorEvents();
-        var tokenSource = new CancellationTokenSource();
-        dcpEvents.Subscribe<OnResourcesPreparedContext>((context) =>
-        {
-            tokenSource.Cancel();
-            return Task.CompletedTask;
-        });
-
-        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, events: dcpEvents);
-
-        // Act
-        await appExecutor.RunApplicationAsync(tokenSource.Token);
-
-        // Assert
-        Assert.True(tokenSource.IsCancellationRequested);
-    }
-
     [Theory]
     [InlineData("127.0.0.1", "127.0.0.1")]
     [InlineData("[::1]", "[::1]")]
@@ -2129,6 +2098,346 @@ public class DcpExecutorTests
         Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
     }
 
+    [Fact]
+    public async Task ProjectExecutable_DebugSessionInfoWithoutProjectStillDefaultsToProjectSupport()
+    {
+        // Bug #15606/#15647: VS Code extension sends SupportedLaunchConfigurations=["azure-functions"]
+        // (not including "project"). Standard project resources should still get IDE execution because
+        // "project" launch support is implicit in DCP.
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
+        });
+
+        builder.AddProject<Projects.ServiceA>("ServiceA");
+
+        var runSessionInfo = new RunSessionInfo
+        {
+            ProtocolsSupported = ["coreclr"],
+            SupportedLaunchConfigurations = ["azure-functions"]
+        };
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(runSessionInfo),
+            [KnownConfigNames.ExtensionEndpoint] = "http://localhost:1234"
+        };
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>(), e => e.AppModelResourceName == "ServiceA");
+        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+
+        Assert.True(exe.TryGetAnnotationAsObjectList<ProjectLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var launchConfigs));
+        Assert.Single(launchConfigs);
+        Assert.Equal("project", launchConfigs[0].Type);
+    }
+
+    [Fact]
+    public async Task ProjectWithNonProjectAnnotation_DebugSessionWithoutInfo_FallsBackToProjectIdeExecution()
+    {
+        // Bug #15378: Simulates the Visual Studio scenario for projects with custom debug types.
+        // VS sets DEBUG_SESSION_PORT but does NOT send DEBUG_SESSION_INFO. A project resource
+        // with a non-"project" SupportsDebuggingAnnotation (e.g., "azure-functions") should still
+        // get ExecutionType.IDE with a ProjectLaunchConfiguration so VS can launch and debug it.
+        var builder = DistributedApplication.CreateBuilder();
+
+        var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
+        var annotationToRemove = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
+        if (annotationToRemove is not null)
+        {
+            projectBuilder.Resource.Annotations.Remove(annotationToRemove);
+        }
+        projectBuilder.WithDebugSupport(mode => new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }, "azure-functions");
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+        };
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>(), e => e.AppModelResourceName == "proj");
+        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+        Assert.NotNull(exe.Spec.FallbackExecutionTypes);
+        Assert.Equal(ExecutionType.Process, Assert.Single(exe.Spec.FallbackExecutionTypes));
+
+        Assert.True(exe.TryGetAnnotationAsObjectList<ProjectLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var launchConfigs));
+        Assert.Single(launchConfigs);
+        Assert.Equal("project", launchConfigs[0].Type);
+    }
+
+    [Fact]
+    public async Task ProjectWithNonProjectAnnotation_VSCodeExplicitlyUnsupported_RunsInProcess()
+    {
+        // Guard: When VS Code extension sends DEBUG_SESSION_INFO with SupportedLaunchConfigurations
+        // that do NOT include the custom type, the resource should fall to Process mode. This ensures
+        // the else-if branch doesn't over-capture VS Code scenarios.
+        var builder = DistributedApplication.CreateBuilder();
+
+        var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
+        var annotationToRemove = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
+        if (annotationToRemove is not null)
+        {
+            projectBuilder.Resource.Annotations.Remove(annotationToRemove);
+        }
+        projectBuilder.WithDebugSupport(mode => new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }, "azure-functions");
+
+        var runSessionInfo = new RunSessionInfo
+        {
+            ProtocolsSupported = ["coreclr"],
+            SupportedLaunchConfigurations = ["project"]
+        };
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(runSessionInfo),
+            [KnownConfigNames.ExtensionEndpoint] = "http://localhost:1234"
+        };
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>(), e => e.AppModelResourceName == "proj");
+        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+    }
+
+    [Fact]
+    public async Task ProjectWithNonProjectAnnotation_NoDebugSession_RunsInProcess()
+    {
+        // Guard: When there's no debug session (CLI scenario, no DEBUG_SESSION_PORT),
+        // projects with custom annotations should fall to Process execution.
+        var builder = DistributedApplication.CreateBuilder();
+
+        var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
+        var annotationToRemove = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
+        if (annotationToRemove is not null)
+        {
+            projectBuilder.Resource.Annotations.Remove(annotationToRemove);
+        }
+        projectBuilder.WithDebugSupport(mode => new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }, "azure-functions");
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>(), e => e.AppModelResourceName == "proj");
+        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+    }
+
+    [Fact]
+    public async Task ProjectWithNonProjectAnnotation_VSCodeWithMatchingSupport_RunsInIde()
+    {
+        // When VS Code extension sends DEBUG_SESSION_INFO with SupportedLaunchConfigurations
+        // that DO include the custom type, the resource should get IDE execution via the
+        // primary SupportsDebugging path (not the VS fallback).
+        var builder = DistributedApplication.CreateBuilder();
+
+        var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
+        var annotationToRemove = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
+        if (annotationToRemove is not null)
+        {
+            projectBuilder.Resource.Annotations.Remove(annotationToRemove);
+        }
+        projectBuilder.WithDebugSupport(mode => new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }, "azure-functions");
+
+        var runSessionInfo = new RunSessionInfo
+        {
+            ProtocolsSupported = ["coreclr"],
+            SupportedLaunchConfigurations = ["project", "azure-functions"]
+        };
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(runSessionInfo),
+            [KnownConfigNames.ExtensionEndpoint] = "http://localhost:1234"
+        };
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>(), e => e.AppModelResourceName == "proj");
+        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+    }
+
+    [Fact]
+    public async Task StandardAndCustomProjects_VSScenario_BothRunInIde()
+    {
+        // End-to-end VS scenario: a standard project and a custom-debug-type project both
+        // in the same AppHost. Both should get IDE execution when launched from VS
+        // (DEBUG_SESSION_PORT set, no DEBUG_SESSION_INFO).
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
+        });
+
+        builder.AddProject<Projects.ServiceA>("standard-project");
+
+        var customProject = builder.AddProject<TestProject>("custom-project", launchProfileName: null);
+        var annotationToRemove = customProject.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
+        if (annotationToRemove is not null)
+        {
+            customProject.Resource.Annotations.Remove(annotationToRemove);
+        }
+        customProject.WithDebugSupport(mode => new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }, "azure-functions");
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+        };
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var dcpExes = kubernetesService.CreatedResources.OfType<Executable>().ToList();
+        Assert.Equal(2, dcpExes.Count);
+
+        var standardExe = Assert.Single(dcpExes, e => e.AppModelResourceName == "standard-project");
+        Assert.Equal(ExecutionType.IDE, standardExe.Spec.ExecutionType);
+
+        var customExe = Assert.Single(dcpExes, e => e.AppModelResourceName == "custom-project");
+        Assert.Equal(ExecutionType.IDE, customExe.Spec.ExecutionType);
+        Assert.NotNull(customExe.Spec.FallbackExecutionTypes);
+        Assert.Equal(ExecutionType.Process, Assert.Single(customExe.Spec.FallbackExecutionTypes));
+
+        Assert.True(customExe.TryGetAnnotationAsObjectList<ProjectLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var launchConfigs));
+        Assert.Single(launchConfigs);
+        Assert.Equal("project", launchConfigs[0].Type);
+    }
+
+    [Fact]
+    public async Task StandardAndCustomProjects_VSCodeScenario_BothRunInIde()
+    {
+        // Combined VS Code scenario for bugs #15606/#15647 and class library projects:
+        // VS Code extension sends SupportedLaunchConfigurations=["azure-functions"] (not "project").
+        // A standard project (type "project") should still get IDE (implicit support).
+        // A project with "azure-functions" annotation should also get IDE (explicit match).
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
+        });
+
+        builder.AddProject<Projects.ServiceA>("standard-project");
+
+        var customProject = builder.AddProject<TestProject>("functions-project", launchProfileName: null);
+        var annotationToRemove = customProject.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
+        if (annotationToRemove is not null)
+        {
+            customProject.Resource.Annotations.Remove(annotationToRemove);
+        }
+        customProject.WithDebugSupport(mode => new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }, "azure-functions");
+
+        var runSessionInfo = new RunSessionInfo
+        {
+            ProtocolsSupported = ["coreclr"],
+            SupportedLaunchConfigurations = ["azure-functions"]
+        };
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(runSessionInfo),
+            [KnownConfigNames.ExtensionEndpoint] = "http://localhost:1234"
+        };
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var dcpExes = kubernetesService.CreatedResources.OfType<Executable>().ToList();
+        Assert.Equal(2, dcpExes.Count);
+
+        // Standard project: IDE via implicit "project" support (bug #15606/#15647 fix)
+        var standardExe = Assert.Single(dcpExes, e => e.AppModelResourceName == "standard-project");
+        Assert.Equal(ExecutionType.IDE, standardExe.Spec.ExecutionType);
+        Assert.True(standardExe.TryGetAnnotationAsObjectList<ProjectLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var standardConfigs));
+        Assert.Single(standardConfigs);
+        Assert.Equal("project", standardConfigs[0].Type);
+
+        // Azure Functions project: IDE via explicit "azure-functions" support
+        var functionsExe = Assert.Single(dcpExes, e => e.AppModelResourceName == "functions-project");
+        Assert.Equal(ExecutionType.IDE, functionsExe.Spec.ExecutionType);
+    }
+
+    [Fact]
+    public async Task ProjectWithNonProjectAnnotation_VSFallback_HasProcessFallbackExecutionType()
+    {
+        // Verifies the VS else-if branch sets FallbackExecutionTypes to [Process],
+        // ensuring DCP can fall back gracefully if IDE launch fails.
+        var builder = DistributedApplication.CreateBuilder();
+
+        var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
+        var annotationToRemove = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
+        if (annotationToRemove is not null)
+        {
+            projectBuilder.Resource.Annotations.Remove(annotationToRemove);
+        }
+        projectBuilder.WithDebugSupport(mode => new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }, "azure-functions");
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+        };
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>(), e => e.AppModelResourceName == "proj");
+        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+        Assert.NotNull(exe.Spec.FallbackExecutionTypes);
+        Assert.Single(exe.Spec.FallbackExecutionTypes);
+        Assert.Equal(ExecutionType.Process, exe.Spec.FallbackExecutionTypes[0]);
+    }
+
     [Theory]
     [InlineData()]
     [InlineData("alias1", "alias2")]
@@ -2167,9 +2476,13 @@ public class DcpExecutorTests
     }
 
     [Fact]
-    public async Task ProjectExecutable_NoSupportsDebuggingAnnotation_RunsInProcessMode()
+    public async Task ProjectExecutable_NoSupportsDebuggingAnnotation_InDebugSession_RunsInIdeMode()
     {
-        // Arrange
+        // ProjectResource subclasses added via AddResource (not AddProject) may not have
+        // a SupportsDebuggingAnnotation (e.g. third-party integrations). When in a debug session, these
+        // should still default to IDE execution with ProjectLaunchConfiguration — matching
+        // the pre-13.2 behavior. External integrations should not be forced to call the
+        // experimental WithDebugSupport API to get basic IDE execution.
         var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
         {
             AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
@@ -2179,7 +2492,7 @@ public class DcpExecutorTests
         var projectBuilder = builder.AddProject<Projects.ServiceA>("ServiceA", launchProfileName: null);
         // Remove the SupportsDebuggingAnnotation that AddProject adds by default
         var annotationToRemove = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
-        if (annotationToRemove != null)
+        if (annotationToRemove is not null)
         {
             projectBuilder.Resource.Annotations.Remove(annotationToRemove);
         }
@@ -2198,15 +2511,125 @@ public class DcpExecutorTests
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
         var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
 
-        // Act
         await appExecutor.RunApplicationAsync();
 
-        // Assert
-        var dcpExes = kubernetesService.CreatedResources.OfType<Executable>().ToList();
-        Assert.Single(dcpExes);
+        var exe = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>(), e => e.AppModelResourceName == "ServiceA");
+        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+        Assert.NotNull(exe.Spec.FallbackExecutionTypes);
+        Assert.Equal(ExecutionType.Process, Assert.Single(exe.Spec.FallbackExecutionTypes));
 
-        var exe = Assert.Single(dcpExes, e => e.AppModelResourceName == "ServiceA");
+        Assert.True(exe.TryGetAnnotationAsObjectList<ProjectLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var launchConfigs));
+        Assert.Single(launchConfigs);
+        Assert.Equal("project", launchConfigs[0].Type);
+    }
+
+    [Fact]
+    public async Task ProjectExecutable_NoSupportsDebuggingAnnotation_NoDebugSession_RunsInProcessMode()
+    {
+        // When there's no debug session (CLI scenario), projects without annotations
+        // should still run in Process mode.
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
+        });
+
+        var projectBuilder = builder.AddProject<Projects.ServiceA>("ServiceA", launchProfileName: null);
+        var annotationToRemove = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
+        if (annotationToRemove is not null)
+        {
+            projectBuilder.Resource.Annotations.Remove(annotationToRemove);
+        }
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>(), e => e.AppModelResourceName == "ServiceA");
         Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+    }
+
+    [Fact]
+    public async Task ProjectExecutable_NoAnnotation_ExecutableLaunchProfile_InDebugSession_RunsInIdeMode()
+    {
+        // Class library projects with commandName=Executable launch profiles (e.g. AWS Lambda
+        // using "dotnet exec ...") should get IDE execution so both VS and VS Code can debug them.
+        // VS natively handles Executable command profiles; VS Code's extension detects the
+        // Executable commandName and uses the profile's executablePath + args.
+        var builder = DistributedApplication.CreateBuilder();
+
+        var projectBuilder = builder.AddProject<TestProjectWithExecutableLaunchProfile>("TestFunction",
+            launchProfileName: "Aspire_TestFunction");
+        var annotationToRemove = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
+        if (annotationToRemove is not null)
+        {
+            projectBuilder.Resource.Annotations.Remove(annotationToRemove);
+        }
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+        };
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>(), e => e.AppModelResourceName == "TestFunction");
+        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+        Assert.NotNull(exe.Spec.FallbackExecutionTypes);
+        Assert.Equal(ExecutionType.Process, Assert.Single(exe.Spec.FallbackExecutionTypes));
+
+        Assert.True(exe.TryGetAnnotationAsObjectList<ProjectLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var launchConfigs));
+        Assert.Single(launchConfigs);
+        Assert.Equal("Aspire_TestFunction", launchConfigs[0].LaunchProfile);
+
+        // Project args should be empty — the Executable profile's command line args are NOT
+        // injected into project args (that was the old Process fallback behavior).
+        Assert.True(exe.TryGetAnnotationAsObjectList<string>(CustomResource.ResourceProjectArgsAnnotation, out var projectArgs));
+        Assert.Empty(projectArgs);
+    }
+
+    [Fact]
+    public async Task ProjectExecutable_NoAnnotation_ProjectLaunchProfile_InDebugSession_RunsInIdeMode()
+    {
+        // When a project without SupportsDebuggingAnnotation has a normal Project launch profile
+        // (not Executable), it should still get IDE execution in a debug session.
+        var builder = DistributedApplication.CreateBuilder();
+
+        var projectBuilder = builder.AddProject<TestProjectWithLaunchSettings>("proj", launchProfileName: "http");
+        var annotationToRemove = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
+        if (annotationToRemove is not null)
+        {
+            projectBuilder.Resource.Annotations.Remove(annotationToRemove);
+        }
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+        };
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>(), e => e.AppModelResourceName == "proj");
+        // Should be IDE, because it's a normal Project profile
+        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+        Assert.NotNull(exe.Spec.FallbackExecutionTypes);
+        Assert.Equal(ExecutionType.Process, Assert.Single(exe.Spec.FallbackExecutionTypes));
     }
 
     [Theory]
@@ -2321,6 +2744,266 @@ public class DcpExecutorTests
             Assert.Equal(endpoint.UriScheme, allocatedEndpoint.UriScheme);
             Assert.Equal($"{address}:{port}", allocatedEndpoint.EndPointString);
         }
+    }
+
+    // Verifies that environment value callbacks are invoked only once per container startup.
+    [Fact]
+    public async Task EnvironmentCallbacksInvokedOnceOnContainer()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var executable = builder.AddExecutable("anExecutable", "command", "")
+            .WithEndpoint(name: "http", targetPort: 1234, port: 5678, isProxied: true);
+
+        var callCount = 0;
+        builder.AddContainer("aContainer", "image")
+            .WithEnvironment(c =>
+            {
+                Interlocked.Increment(ref callCount);
+                c.EnvironmentVariables["EXEC_PORT"] = executable.GetEndpoint("http").Property(EndpointProperty.Port);
+            });
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var dcpOptions = new DcpOptions
+        {
+            EnableAspireContainerTunnel = true,
+        };
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions);
+        await appExecutor.RunApplicationAsync();
+
+        Assert.Equal(1, callCount);
+    }
+
+    // Ensures that environment value callbacks are invoked after the OnResourceStarting event is raised for the resource,
+    // allowing users to rely on any state set during that event in their environment callbacks.
+    [Fact]
+    public async Task EnvironmentCallbacksInvokedAfterBeforeResourceStartEvent()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var envCallCount = 0;
+        var resourceStartingRaised = false;
+        var resourceStartingCalledBeforeEnvCallback = false;
+
+        var executable = builder.AddExecutable("anExecutable", "command", "")
+            .WithEndpoint(name: "http", targetPort: 1234, port: 5678, isProxied: true);
+
+        builder.AddContainer("aContainer", "image")
+            .WithEnvironment(c =>
+            {
+                Interlocked.Increment(ref envCallCount);
+                c.EnvironmentVariables["EXEC_PORT"] = executable.GetEndpoint("http").Property(EndpointProperty.Port);
+            });
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceStartingContext>(context =>
+        {
+            if (context.ResourceType == "Container")
+            {
+                resourceStartingRaised = true;
+                resourceStartingCalledBeforeEnvCallback = envCallCount == 0;
+            }
+            return Task.CompletedTask;
+        });
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, events: events);
+        await appExecutor.RunApplicationAsync();
+
+        Assert.Equal(1, envCallCount);
+        Assert.True(resourceStartingRaised, "OnResourceStarting should be raised for the container");
+        Assert.True(resourceStartingCalledBeforeEnvCallback, "OnResourceStarting should be raised before the environment callback is invoked");
+    }
+
+    // Verifies that command-line argument callbacks are invoked only once per container startup.
+    [Fact]
+    public async Task ArgsCallbacksInvokedOnceOnContainer()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var executable = builder.AddExecutable("anExecutable", "command", "")
+            .WithEndpoint(name: "http", targetPort: 1234, port: 5678, isProxied: true);
+
+        var callCount = 0;
+        builder.AddContainer("aContainer", "image")
+            .WithArgs(c =>
+            {
+                Interlocked.Increment(ref callCount);
+                c.Args.Add("--port");
+                c.Args.Add(executable.GetEndpoint("http").Property(EndpointProperty.Port));
+            });
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var dcpOptions = new DcpOptions
+        {
+            EnableAspireContainerTunnel = true,
+        };
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions);
+        await appExecutor.RunApplicationAsync();
+
+        Assert.Equal(1, callCount);
+    }
+
+    // Ensures that command-line argument callbacks are invoked after the OnResourceStarting event is raised for the resource,
+    // allowing users to rely on any state set during that event in their argument callbacks.
+    [Fact]
+    public async Task ArgsCallbacksInvokedAfterBeforeResourceStartEvent()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var argsCallCount = 0;
+        var resourceStartingRaised = false;
+        var resourceStartingCalledBeforeArgsCallback = false;
+
+        var executable = builder.AddExecutable("anExecutable", "command", "")
+            .WithEndpoint(name: "http", targetPort: 1234, port: 5678, isProxied: true);
+
+        builder.AddContainer("aContainer", "image")
+            .WithArgs(c =>
+            {
+                Interlocked.Increment(ref argsCallCount);
+                c.Args.Add("--port");
+                c.Args.Add(executable.GetEndpoint("http").Property(EndpointProperty.Port));
+            });
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceStartingContext>(context =>
+        {
+            if (context.ResourceType == "Container")
+            {
+                resourceStartingRaised = true;
+                resourceStartingCalledBeforeArgsCallback = argsCallCount == 0;
+            }
+            return Task.CompletedTask;
+        });
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, events: events);
+        await appExecutor.RunApplicationAsync();
+
+        Assert.Equal(1, argsCallCount);
+        Assert.True(resourceStartingRaised, "OnResourceStarting should be raised for the container");
+        Assert.True(resourceStartingCalledBeforeArgsCallback, "OnResourceStarting should be raised before the args callback is invoked");
+    }
+
+    [Fact]
+    public async Task TunnelDependentAndIndependentContainersCanStartTogether()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        // An executable with an endpoint — containers that reference it will be tunnel-dependent.
+        var executable = builder.AddExecutable("anExecutable", "command", "")
+            .WithEndpoint(name: "http", targetPort: 1234, port: 5678, isProxied: true);
+
+        // A container that references the executable's endpoint — this makes it tunnel-dependent.
+        builder.AddContainer("tunnelDependent", "image")
+            .WithEnvironment("EXEC_PORT", executable.GetEndpoint("http").Property(EndpointProperty.Port));
+
+        // A container that does NOT reference any host resource — this is tunnel-independent.
+        builder.AddContainer("tunnelIndependent", "image");
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var dcpOptions = new DcpOptions
+        {
+            EnableAspireContainerTunnel = true,
+        };
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions);
+        await appExecutor.RunApplicationAsync();
+
+        // Both containers should have been created successfully.
+        var createdContainers = kubernetesService.CreatedResources.OfType<Container>().ToList();
+        Assert.Single(createdContainers, c => c.AppModelResourceName == "tunnelDependent");
+        Assert.Single(createdContainers, c => c.AppModelResourceName == "tunnelIndependent");
+    }
+
+    [Fact]
+    public async Task EnvironmentCallbackThrows_OtherResourcesStillStart()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddContainer("failing", "image")
+            .WithEnvironment(c =>
+            {
+                throw new InvalidOperationException("env callback failure");
+            });
+
+        builder.AddContainer("healthy", "image");
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var failedResources = new List<string>();
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceFailedToStartContext>(c =>
+        {
+            failedResources.Add(c.Resource.Name);
+            return Task.CompletedTask;
+        });
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, events: events);
+        await appExecutor.RunApplicationAsync();
+
+        // The healthy container should have been created successfully.
+        var createdContainers = kubernetesService.CreatedResources.OfType<Container>().ToList();
+        Assert.Single(createdContainers, c => c.AppModelResourceName == "healthy");
+
+        // The failing container should not have been created and should be reported as failed.
+        Assert.DoesNotContain(createdContainers, c => c.AppModelResourceName == "failing");
+        Assert.Single(failedResources, name => name == "failing");
+    }
+
+    [Fact]
+    public async Task ArgsCallbackThrows_OtherResourcesStillStart()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddContainer("failing", "image")
+            .WithArgs(c =>
+            {
+                throw new InvalidOperationException("args callback failure");
+            });
+
+        builder.AddContainer("healthy", "image");
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var failedResources = new List<string>();
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceFailedToStartContext>(c =>
+        {
+            failedResources.Add(c.Resource.Name);
+            return Task.CompletedTask;
+        });
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, events: events);
+        await appExecutor.RunApplicationAsync();
+
+        // The healthy container should have been created successfully.
+        var createdContainers = kubernetesService.CreatedResources.OfType<Container>().ToList();
+        Assert.Single(createdContainers, c => c.AppModelResourceName == "healthy");
+
+        // The failing container should not have been created and should be reported as failed.
+        Assert.DoesNotContain(createdContainers, c => c.AppModelResourceName == "failing");
+        Assert.Single(failedResources, name => name == "failing");
     }
 
     private static void HasKnownCommandAnnotations(IResource resource)
@@ -2587,8 +3270,7 @@ public class DcpExecutorTests
             new TestDcpDependencyCheckService(),
             new DcpNameGenerator(configuration, Options.Create(dcpOptions)),
             events ?? new DcpExecutorEvents(),
-            new Locations(new FileSystemService(configuration ?? new ConfigurationBuilder().Build())),
-            developerCertificateService);
+            new Locations(new FileSystemService(configuration ?? new ConfigurationBuilder().Build())));
 #pragma warning restore ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
     }
 
@@ -2682,6 +3364,24 @@ public class DcpExecutorTests
     private sealed class CustomChildResource(string name, IResource parent) : Resource(name), IResourceWithParent
     {
         public IResource Parent => parent;
+    }
+
+    private sealed class TestProjectWithExecutableLaunchProfile : IProjectMetadata
+    {
+        public string ProjectPath => "TestProjectWithExecutableLaunchProfile";
+        public LaunchSettings LaunchSettings { get; } = CreateLaunchSettings();
+
+        private static LaunchSettings CreateLaunchSettings()
+        {
+            var settings = new LaunchSettings();
+            settings.Profiles["Aspire_TestFunction"] = new LaunchProfile
+            {
+                CommandName = "Executable",
+                ExecutablePath = "dotnet",
+                CommandLineArgs = "exec --depsfile ./TestLib.deps.json --runtimeconfig ./TestLib.runtimeconfig.json $(HOME)/.dotnet/tools/TestTool.dll TestLib::TestLib.Functions::Handler"
+            };
+            return settings;
+        }
     }
 
 }

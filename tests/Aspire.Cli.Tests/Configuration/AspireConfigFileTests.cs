@@ -307,6 +307,69 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void Load_ReturnsConfig_WhenFeaturesAreBooleans()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(configPath, """
+            {
+              "features": { "polyglotSupportEnabled": true, "showAllTemplates": false }
+            }
+            """);
+
+        var result = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+
+        Assert.NotNull(result);
+        Assert.NotNull(result.Features);
+        Assert.True(result.Features["polyglotSupportEnabled"]);
+        Assert.False(result.Features["showAllTemplates"]);
+    }
+
+    [Fact]
+    public void Load_ReturnsConfig_WhenFeaturesAreStringBooleans()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Simulates what happens when ConfigurationService.SetNestedValue wrote "true"/"false" as strings
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(configPath, """
+            {
+              "features": { "polyglotSupportEnabled": "true", "showAllTemplates": "false" }
+            }
+            """);
+
+        var result = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+
+        Assert.NotNull(result);
+        Assert.NotNull(result.Features);
+        Assert.True(result.Features["polyglotSupportEnabled"]);
+        Assert.False(result.Features["showAllTemplates"]);
+    }
+
+    [Fact]
+    public void Save_Load_RoundTrips_WithFeatures()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var config = new AspireConfigFile
+        {
+            Features = new Dictionary<string, bool>
+            {
+                ["polyglotSupportEnabled"] = true,
+                ["showAllTemplates"] = false
+            }
+        };
+
+        config.Save(workspace.WorkspaceRoot.FullName);
+        var loaded = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+
+        Assert.NotNull(loaded?.Features);
+        Assert.True(loaded.Features["polyglotSupportEnabled"]);
+        Assert.False(loaded.Features["showAllTemplates"]);
+    }
+
+    [Fact]
     public void Load_RoundTrips_WithProfiles()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

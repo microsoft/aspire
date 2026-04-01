@@ -1,4 +1,4 @@
-﻿{
+{
   "author": "Microsoft",
   "name": "Prázdná aplikace Aspire",
   "description": "Šablona projektu pro vytvoření prázdné aplikace Aspire.",
@@ -12,11 +12,9 @@
   "symbols/AspireVersion/choices/!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!/description": "Zvolí Aspire !!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!",
   "symbols/appHostHttpPort/description": "Číslo portu, který se má použít pro koncový bod HTTP v launchSettings.json projektu AppHost.",
   "symbols/appHostOtlpHttpPort/description": "Číslo portu, který se má použít pro koncový bod HTTP OTLP v launchSettings.json projektu AppHost.",
-  "symbols/appHostMcpHttpPort/description": "Číslo portu, který se má použít pro koncový bod MCP HTTP v launchSettings.json projektu AppHost.",
   "symbols/appHostResourceHttpPort/description": "Číslo portu, který se má použít pro koncový bod HTTP služby prostředků v launchSettings.json projektu AppHost.",
   "symbols/appHostHttpsPort/description": "Číslo portu, který se má použít pro koncový bod HTTPS v launchSettings.json projektu AppHost. Tato možnost se dá použít jenom v případě, že se nepoužívá parametr no-https.",
   "symbols/appHostOtlpHttpsPort/description": "Číslo portu, který se má použít pro koncový bod HTTPS OTLP v launchSettings.json projektu AppHost.",
-  "symbols/appHostMcpHttpsPort/description": "Číslo portu, který se má použít pro koncový bod MCP HTTPS v launchSettings.json projektu AppHost.",
   "symbols/appHostResourceHttpsPort/description": "Číslo portu, který se má použít pro koncový bod HTTPS služby prostředků v launchSettings.json projektu AppHost.",
   "symbols/skipRestore/description": "Pokud se tato možnost zadá, přeskočí automatické obnovení projektu při vytvoření.",
   "symbols/NoHttps/description": "Určuje, jestli se má vypnout protokol HTTPS.",

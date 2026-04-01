@@ -3,7 +3,6 @@
 
 using System.Net.Http.Json;
 using System.Text.Json;
-using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Otlp.Serialization;
@@ -19,7 +18,7 @@ namespace Aspire.Cli.Mcp.Tools;
 /// MCP tool for listing distributed traces.
 /// Gets trace data directly from the Dashboard telemetry API.
 /// </summary>
-internal sealed class ListTracesTool(IAuxiliaryBackchannelMonitor auxiliaryBackchannelMonitor, IHttpClientFactory httpClientFactory, ILogger<ListTracesTool> logger) : CliMcpTool
+internal sealed class ListTracesTool(IDashboardInfoProvider dashboardInfoProvider, IHttpClientFactory httpClientFactory, ILogger<ListTracesTool> logger) : CliMcpTool
 {
     public override string Name => KnownMcpTools.ListTraces;
 
@@ -43,7 +42,7 @@ internal sealed class ListTracesTool(IAuxiliaryBackchannelMonitor auxiliaryBackc
     public override async ValueTask<CallToolResult> CallToolAsync(CallToolContext context, CancellationToken cancellationToken)
     {
         var arguments = context.Arguments;
-        var (apiToken, apiBaseUrl, dashboardBaseUrl) = await McpToolHelpers.GetDashboardInfoAsync(auxiliaryBackchannelMonitor, logger, cancellationToken).ConfigureAwait(false);
+        var (apiToken, apiBaseUrl, dashboardBaseUrl) = await dashboardInfoProvider.GetDashboardInfoAsync(cancellationToken).ConfigureAwait(false);
 
         // Extract resourceName from arguments
         string? resourceName = null;
@@ -75,7 +74,7 @@ internal sealed class ListTracesTool(IAuxiliaryBackchannelMonitor auxiliaryBackc
             logger.LogDebug("Fetching traces from {Url}", url);
 
             var response = await client.GetAsync(url, cancellationToken).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
+            TelemetryCommandHelpers.EnsureTelemetryApiResponse(response);
 
             var apiResponse = await response.Content.ReadFromJsonAsync(OtlpJsonSerializerContext.Default.TelemetryApiResponse, cancellationToken).ConfigureAwait(false);
             var resourceSpans = apiResponse?.Data?.ResourceSpans;
@@ -101,7 +100,10 @@ internal sealed class ListTracesTool(IAuxiliaryBackchannelMonitor auxiliaryBackc
         catch (HttpRequestException ex)
         {
             logger.LogError(ex, "Failed to fetch traces from Dashboard API");
-            throw new McpProtocolException($"Failed to fetch traces: {ex.Message}", McpErrorCode.InternalError);
+            var errorMessage = dashboardInfoProvider.IsDirectConnection
+                ? await TelemetryCommandHelpers.GetDashboardApiErrorMessageAsync(ex, apiBaseUrl, httpClientFactory, logger, cancellationToken)
+                : $"Failed to fetch traces: {ex.Message}";
+            throw new McpProtocolException(errorMessage, McpErrorCode.InternalError);
         }
     }
 }

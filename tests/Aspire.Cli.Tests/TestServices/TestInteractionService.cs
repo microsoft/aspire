@@ -31,10 +31,16 @@ internal sealed class TestInteractionService : IInteractionService
     /// </summary>
     public Func<string, IEnumerable, Func<object, string>, CancellationToken, object>? PromptForSelectionCallback { get; set; }
 
+    /// <summary>
+    /// Callback for capturing multi-selection prompts in tests without compile-time knowledge of T.
+    /// </summary>
+    public Func<string, IEnumerable, Func<object, string>, CancellationToken, IReadOnlyList<object>>? PromptForSelectionsCallback { get; set; }
+
     // Call tracking
     public List<StringPromptCall> StringPromptCalls { get; } = [];
     public List<BooleanPromptCall> BooleanPromptCalls { get; } = [];
     public List<string> DisplayedErrors { get; } = [];
+    public List<(KnownEmoji Emoji, string Message)> DisplayedMessages { get; } = [];
 
     // Response queue setup methods
     public void SetupStringPromptResponse(string response) => _responses.Enqueue((response, ResponseType.String));
@@ -125,6 +131,12 @@ internal sealed class TestInteractionService : IInteractionService
             throw new EmptyChoicesException($"No items available for selection: {promptText}");
         }
 
+        if (PromptForSelectionsCallback is not null)
+        {
+            var result = PromptForSelectionsCallback(promptText, choices, o => choiceFormatter((T)o), cancellationToken);
+            return Task.FromResult<IReadOnlyList<T>>(result.Cast<T>().ToList());
+        }
+
         _ = _responses.TryDequeue(out _);
 
         // In tests, return pre-selected items if provided, otherwise all items
@@ -148,6 +160,7 @@ internal sealed class TestInteractionService : IInteractionService
 
     public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false)
     {
+        DisplayedMessages.Add((emoji, message));
     }
 
     public void DisplaySuccess(string message, bool allowMarkup = false)
@@ -197,8 +210,11 @@ internal sealed class TestInteractionService : IInteractionService
     {
     }
 
+    public Action<string>? DisplayRawTextCallback { get; set; }
+
     public void DisplayRawText(string text, ConsoleOutput? consoleOverride = null)
     {
+        DisplayRawTextCallback?.Invoke(text);
     }
 
     public void DisplayMarkdown(string markdown)

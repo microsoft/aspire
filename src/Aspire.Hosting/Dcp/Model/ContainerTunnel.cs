@@ -259,8 +259,17 @@ internal sealed record ContainerNetworkTunnelProxyStatus : V1Status
 
 internal sealed class ContainerNetworkTunnelProxy : CustomResource<ContainerNetworkTunnelProxySpec, ContainerNetworkTunnelProxyStatus>, IKubernetesStaticMetadata
 {
+    /// <summary>
+    /// Contains updated tunnel configurations that have not yet been applied to the proxy pair.
+    /// </summary>
+    [JsonIgnore]
+    public List<TunnelConfiguration> UpdatedTunnels { get; private set; }
+
     [JsonConstructor]
-    public ContainerNetworkTunnelProxy(ContainerNetworkTunnelProxySpec spec) : base(spec) { }
+    public ContainerNetworkTunnelProxy(ContainerNetworkTunnelProxySpec spec) : base(spec)
+    {
+        UpdatedTunnels = spec.Tunnels ?? new List<TunnelConfiguration>();
+    }
 
     public static ContainerNetworkTunnelProxy Create(string name)
     {

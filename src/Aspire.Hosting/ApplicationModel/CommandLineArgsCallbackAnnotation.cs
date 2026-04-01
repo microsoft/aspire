@@ -1,16 +1,22 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Immutable;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.ApplicationModel;
 
+using IArgCallbackAnnotation = ICallbackResourceAnnotation<CommandLineArgsCallbackContext, IList<object>>;
+
 /// <summary>
 /// Represents an annotation that provides a callback to be executed with a list of command-line arguments when an executable resource is started.
 /// </summary>
-public class CommandLineArgsCallbackAnnotation : IResourceAnnotation
+public class CommandLineArgsCallbackAnnotation : IResourceAnnotation, IArgCallbackAnnotation
 {
+    private Task<IList<object>>? _callbackTask;
+    private readonly object _lock = new();
+
     /// <summary>
     /// Initializes a new instance of the <see cref="CommandLineArgsCallbackAnnotation"/> class with the specified callback action.
     /// </summary>
@@ -41,6 +47,35 @@ public class CommandLineArgsCallbackAnnotation : IResourceAnnotation
     /// Gets the callback action to be executed when the executable arguments are parsed.
     /// </summary>
     public Func<CommandLineArgsCallbackContext, Task> Callback { get; }
+
+    internal IArgCallbackAnnotation AsCallbackAnnotation() => this;
+
+    Task<IList<object>> IArgCallbackAnnotation.EvaluateOnceAsync(CommandLineArgsCallbackContext context)
+    {
+        lock(_lock)
+        {
+            if (_callbackTask is null)
+            {
+                _callbackTask = ExecuteCallbackAsync(context);
+            }
+            return _callbackTask;
+        }
+    }
+
+    void IArgCallbackAnnotation.ForgetCachedResult()
+    {
+        lock(_lock)
+        {
+            _callbackTask = null;
+        }
+    }
+
+    private async Task<IList<object>> ExecuteCallbackAsync(CommandLineArgsCallbackContext context)
+    {
+        await Callback(context).ConfigureAwait(false);
+        var result = context.Args.ToImmutableList();
+        return result;
+    }
 }
 
 /// <summary>

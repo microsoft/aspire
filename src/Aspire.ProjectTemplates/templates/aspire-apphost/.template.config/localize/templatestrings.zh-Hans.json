@@ -1,4 +1,4 @@
-﻿{
+{
   "author": "Microsoft",
   "name": "Aspire AppHost",
   "description": "用于创建 Aspire AppHost (业务流程协调程序)项目的项目模板。",
@@ -8,11 +8,9 @@
   "symbols/Framework/choices/net10.0/description": "目标 net10.0",
   "symbols/appHostHttpPort/description": "该端口号将用于 AppHost 项目的 launchSettings.json 中的 HTTP 终结点。",
   "symbols/appHostOtlpHttpPort/description": "该端口号将用于 AppHost 项目的 launchSettings.json 中的 OTLP HTTP 终结点。",
-  "symbols/appHostMcpHttpPort/description": "用于 AppHost 项目的 launchSettings.json 中 MCP HTTP 终结点的端口号。",
   "symbols/appHostResourceHttpPort/description": "该端口号将用于 AppHost 项目的 launchSettings.json 中的资源服务 HTTP 终结点。",
   "symbols/appHostHttpsPort/description": "该端口号将用于 AppHost 项目的 launchSettings.json 中的 HTTPS 终结点。仅当不使用参数 no-https 时，此选项才适用。",
   "symbols/appHostOtlpHttpsPort/description": "该端口号将用于 AppHost 项目的 launchSettings.json 中的 OTLP HTTPS 终结点。",
-  "symbols/appHostMcpHttpsPort/description": "用于 AppHost 项目的 launchSettings.json 中 MCP HTTPS 终结点的端口号。",
   "symbols/appHostResourceHttpsPort/description": "该端口号将用于 AppHost 项目的 launchSettings.json 中的资源服务 HTTPS 终结点。",
   "symbols/skipRestore/description": "如果指定，则在创建时跳过项目的自动还原。",
   "symbols/NoHttps/description": "是否禁用 HTTPS。",
