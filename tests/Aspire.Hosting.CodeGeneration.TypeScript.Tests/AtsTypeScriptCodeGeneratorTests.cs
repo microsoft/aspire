@@ -583,15 +583,15 @@ public class AtsTypeScriptCodeGeneratorTests
     [Fact]
     public void Pattern4_InterfaceParameterType_GeneratesUnionType()
     {
-        // Interface-constrained resource parameters should use ResourceBuilderBase
-        // when every assignable wrapper is a resource builder.
+        // Interface-constrained resource parameters should expand to the concrete
+        // wrapper interfaces/classes that satisfy the interface contract.
         var atsContext = CreateContextFromTestAssembly();
 
         // Generate the TypeScript output
         var files = _generator.GenerateDistributedApplication(atsContext);
         var aspireTs = files["aspire.ts"];
 
-        Assert.Contains("withDependency(dependency: ResourceBuilderBase)", aspireTs);
+        Assert.Contains("withDependency(dependency: ResourceWithConnectionString | TestRedisResource)", aspireTs);
         Assert.DoesNotContain("withDependency(dependency: HandleReference)", aspireTs);
     }
 
@@ -842,7 +842,9 @@ public class AtsTypeScriptCodeGeneratorTests
 
         Assert.DoesNotContain("ResourceBuilderBase | ResourceBuilderBase", aspireTs);
         Assert.DoesNotContain("EndpointReference | EndpointReference", aspireTs);
-        Assert.Contains(lines, line => line == "withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression): ContainerResourcePromise {");
+        Assert.Contains(lines, line => line.StartsWith("withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ", StringComparison.Ordinal));
+        Assert.Contains("ResourceWithConnectionString", aspireTs);
+        Assert.DoesNotContain("value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression", aspireTs);
     }
 
     private static List<AtsCapabilityInfo> ScanCapabilitiesFromTestAssembly()

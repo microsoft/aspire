@@ -621,8 +621,8 @@ export interface TestDatabaseResource {
     withStatus(status: TestResourceStatus): TestDatabaseResourcePromise;
     withNestedConfig(config: TestNestedDto): TestDatabaseResourcePromise;
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestDatabaseResourcePromise;
-    testWaitFor(dependency: ResourceBuilderBase): TestDatabaseResourcePromise;
-    withDependency(dependency: ResourceBuilderBase): TestDatabaseResourcePromise;
+    testWaitFor(dependency: Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource): TestDatabaseResourcePromise;
+    withDependency(dependency: ResourceWithConnectionString | TestRedisResource): TestDatabaseResourcePromise;
     withEndpoints(endpoints: string[]): TestDatabaseResourcePromise;
     withEnvironmentVariables(variables: Record<string, string>): TestDatabaseResourcePromise;
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestDatabaseResourcePromise;
@@ -648,8 +648,8 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
     withStatus(status: TestResourceStatus): TestDatabaseResourcePromise;
     withNestedConfig(config: TestNestedDto): TestDatabaseResourcePromise;
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestDatabaseResourcePromise;
-    testWaitFor(dependency: ResourceBuilderBase): TestDatabaseResourcePromise;
-    withDependency(dependency: ResourceBuilderBase): TestDatabaseResourcePromise;
+    testWaitFor(dependency: Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource): TestDatabaseResourcePromise;
+    withDependency(dependency: ResourceWithConnectionString | TestRedisResource): TestDatabaseResourcePromise;
     withEndpoints(endpoints: string[]): TestDatabaseResourcePromise;
     withEnvironmentVariables(variables: Record<string, string>): TestDatabaseResourcePromise;
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestDatabaseResourcePromise;
@@ -845,7 +845,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _testWaitForInternal(dependency: ResourceBuilderBase): Promise<TestDatabaseResource> {
+    private async _testWaitForInternal(dependency: Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests/testWaitFor',
@@ -855,12 +855,12 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** Waits for another resource (test version) */
-    testWaitFor(dependency: ResourceBuilderBase): TestDatabaseResourcePromise {
+    testWaitFor(dependency: Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._testWaitForInternal(dependency));
     }
 
     /** @internal */
-    private async _withDependencyInternal(dependency: ResourceBuilderBase): Promise<TestDatabaseResource> {
+    private async _withDependencyInternal(dependency: ResourceWithConnectionString | TestRedisResource): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withDependency',
@@ -870,7 +870,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** Adds a dependency on another resource */
-    withDependency(dependency: ResourceBuilderBase): TestDatabaseResourcePromise {
+    withDependency(dependency: ResourceWithConnectionString | TestRedisResource): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withDependencyInternal(dependency));
     }
 
@@ -1136,12 +1136,12 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
     }
 
     /** Waits for another resource (test version) */
-    testWaitFor(dependency: ResourceBuilderBase): TestDatabaseResourcePromise {
+    testWaitFor(dependency: Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.testWaitFor(dependency)));
     }
 
     /** Adds a dependency on another resource */
-    withDependency(dependency: ResourceBuilderBase): TestDatabaseResourcePromise {
+    withDependency(dependency: ResourceWithConnectionString | TestRedisResource): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withDependency(dependency)));
     }
 
@@ -1228,11 +1228,11 @@ export interface TestRedisResource {
     withStatus(status: TestResourceStatus): TestRedisResourcePromise;
     withNestedConfig(config: TestNestedDto): TestRedisResourcePromise;
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestRedisResourcePromise;
-    testWaitFor(dependency: ResourceBuilderBase): TestRedisResourcePromise;
+    testWaitFor(dependency: Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource): TestRedisResourcePromise;
     getEndpoints(): Promise<string[]>;
     withConnectionStringDirect(connectionString: string): TestRedisResourcePromise;
     withRedisSpecific(option: string): TestRedisResourcePromise;
-    withDependency(dependency: ResourceBuilderBase): TestRedisResourcePromise;
+    withDependency(dependency: ResourceWithConnectionString | TestRedisResource): TestRedisResourcePromise;
     withEndpoints(endpoints: string[]): TestRedisResourcePromise;
     withEnvironmentVariables(variables: Record<string, string>): TestRedisResourcePromise;
     getStatusAsync(options?: GetStatusAsyncOptions): Promise<string>;
@@ -1266,11 +1266,11 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
     withStatus(status: TestResourceStatus): TestRedisResourcePromise;
     withNestedConfig(config: TestNestedDto): TestRedisResourcePromise;
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestRedisResourcePromise;
-    testWaitFor(dependency: ResourceBuilderBase): TestRedisResourcePromise;
+    testWaitFor(dependency: Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource): TestRedisResourcePromise;
     getEndpoints(): Promise<string[]>;
     withConnectionStringDirect(connectionString: string): TestRedisResourcePromise;
     withRedisSpecific(option: string): TestRedisResourcePromise;
-    withDependency(dependency: ResourceBuilderBase): TestRedisResourcePromise;
+    withDependency(dependency: ResourceWithConnectionString | TestRedisResource): TestRedisResourcePromise;
     withEndpoints(endpoints: string[]): TestRedisResourcePromise;
     withEnvironmentVariables(variables: Record<string, string>): TestRedisResourcePromise;
     getStatusAsync(options?: GetStatusAsyncOptions): Promise<string>;
@@ -1536,7 +1536,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _testWaitForInternal(dependency: ResourceBuilderBase): Promise<TestRedisResource> {
+    private async _testWaitForInternal(dependency: Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests/testWaitFor',
@@ -1546,7 +1546,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** Waits for another resource (test version) */
-    testWaitFor(dependency: ResourceBuilderBase): TestRedisResourcePromise {
+    testWaitFor(dependency: Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._testWaitForInternal(dependency));
     }
 
@@ -1590,7 +1590,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withDependencyInternal(dependency: ResourceBuilderBase): Promise<TestRedisResource> {
+    private async _withDependencyInternal(dependency: ResourceWithConnectionString | TestRedisResource): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withDependency',
@@ -1600,7 +1600,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** Adds a dependency on another resource */
-    withDependency(dependency: ResourceBuilderBase): TestRedisResourcePromise {
+    withDependency(dependency: ResourceWithConnectionString | TestRedisResource): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withDependencyInternal(dependency));
     }
 
@@ -1937,7 +1937,7 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
     }
 
     /** Waits for another resource (test version) */
-    testWaitFor(dependency: ResourceBuilderBase): TestRedisResourcePromise {
+    testWaitFor(dependency: Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.testWaitFor(dependency)));
     }
 
@@ -1957,7 +1957,7 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
     }
 
     /** Adds a dependency on another resource */
-    withDependency(dependency: ResourceBuilderBase): TestRedisResourcePromise {
+    withDependency(dependency: ResourceWithConnectionString | TestRedisResource): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withDependency(dependency)));
     }
 
@@ -2054,8 +2054,8 @@ export interface TestVaultResource {
     withStatus(status: TestResourceStatus): TestVaultResourcePromise;
     withNestedConfig(config: TestNestedDto): TestVaultResourcePromise;
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestVaultResourcePromise;
-    testWaitFor(dependency: ResourceBuilderBase): TestVaultResourcePromise;
-    withDependency(dependency: ResourceBuilderBase): TestVaultResourcePromise;
+    testWaitFor(dependency: Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource): TestVaultResourcePromise;
+    withDependency(dependency: ResourceWithConnectionString | TestRedisResource): TestVaultResourcePromise;
     withEndpoints(endpoints: string[]): TestVaultResourcePromise;
     withEnvironmentVariables(variables: Record<string, string>): TestVaultResourcePromise;
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestVaultResourcePromise;
@@ -2081,8 +2081,8 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
     withStatus(status: TestResourceStatus): TestVaultResourcePromise;
     withNestedConfig(config: TestNestedDto): TestVaultResourcePromise;
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestVaultResourcePromise;
-    testWaitFor(dependency: ResourceBuilderBase): TestVaultResourcePromise;
-    withDependency(dependency: ResourceBuilderBase): TestVaultResourcePromise;
+    testWaitFor(dependency: Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource): TestVaultResourcePromise;
+    withDependency(dependency: ResourceWithConnectionString | TestRedisResource): TestVaultResourcePromise;
     withEndpoints(endpoints: string[]): TestVaultResourcePromise;
     withEnvironmentVariables(variables: Record<string, string>): TestVaultResourcePromise;
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestVaultResourcePromise;
@@ -2278,7 +2278,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _testWaitForInternal(dependency: ResourceBuilderBase): Promise<TestVaultResource> {
+    private async _testWaitForInternal(dependency: Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests/testWaitFor',
@@ -2288,12 +2288,12 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** Waits for another resource (test version) */
-    testWaitFor(dependency: ResourceBuilderBase): TestVaultResourcePromise {
+    testWaitFor(dependency: Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._testWaitForInternal(dependency));
     }
 
     /** @internal */
-    private async _withDependencyInternal(dependency: ResourceBuilderBase): Promise<TestVaultResource> {
+    private async _withDependencyInternal(dependency: ResourceWithConnectionString | TestRedisResource): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withDependency',
@@ -2303,7 +2303,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** Adds a dependency on another resource */
-    withDependency(dependency: ResourceBuilderBase): TestVaultResourcePromise {
+    withDependency(dependency: ResourceWithConnectionString | TestRedisResource): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withDependencyInternal(dependency));
     }
 
@@ -2567,12 +2567,12 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
     }
 
     /** Waits for another resource (test version) */
-    testWaitFor(dependency: ResourceBuilderBase): TestVaultResourcePromise {
+    testWaitFor(dependency: Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.testWaitFor(dependency)));
     }
 
     /** Adds a dependency on another resource */
-    withDependency(dependency: ResourceBuilderBase): TestVaultResourcePromise {
+    withDependency(dependency: ResourceWithConnectionString | TestRedisResource): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withDependency(dependency)));
     }
 
@@ -2653,8 +2653,8 @@ export interface Resource {
     withStatus(status: TestResourceStatus): ResourcePromise;
     withNestedConfig(config: TestNestedDto): ResourcePromise;
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ResourcePromise;
-    testWaitFor(dependency: ResourceBuilderBase): ResourcePromise;
-    withDependency(dependency: ResourceBuilderBase): ResourcePromise;
+    testWaitFor(dependency: Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource): ResourcePromise;
+    withDependency(dependency: ResourceWithConnectionString | TestRedisResource): ResourcePromise;
     withEndpoints(endpoints: string[]): ResourcePromise;
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ResourcePromise;
     withMergeLabel(label: string): ResourcePromise;
@@ -2677,8 +2677,8 @@ export interface ResourcePromise extends PromiseLike<Resource> {
     withStatus(status: TestResourceStatus): ResourcePromise;
     withNestedConfig(config: TestNestedDto): ResourcePromise;
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ResourcePromise;
-    testWaitFor(dependency: ResourceBuilderBase): ResourcePromise;
-    withDependency(dependency: ResourceBuilderBase): ResourcePromise;
+    testWaitFor(dependency: Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource): ResourcePromise;
+    withDependency(dependency: ResourceWithConnectionString | TestRedisResource): ResourcePromise;
     withEndpoints(endpoints: string[]): ResourcePromise;
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ResourcePromise;
     withMergeLabel(label: string): ResourcePromise;
@@ -2852,7 +2852,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
-    private async _testWaitForInternal(dependency: ResourceBuilderBase): Promise<Resource> {
+    private async _testWaitForInternal(dependency: Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource): Promise<Resource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         const result = await this._client.invokeCapability<IResourceHandle>(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests/testWaitFor',
@@ -2862,12 +2862,12 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** Waits for another resource (test version) */
-    testWaitFor(dependency: ResourceBuilderBase): ResourcePromise {
+    testWaitFor(dependency: Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource): ResourcePromise {
         return new ResourcePromiseImpl(this._testWaitForInternal(dependency));
     }
 
     /** @internal */
-    private async _withDependencyInternal(dependency: ResourceBuilderBase): Promise<Resource> {
+    private async _withDependencyInternal(dependency: ResourceWithConnectionString | TestRedisResource): Promise<Resource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         const result = await this._client.invokeCapability<IResourceHandle>(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withDependency',
@@ -2877,7 +2877,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** Adds a dependency on another resource */
-    withDependency(dependency: ResourceBuilderBase): ResourcePromise {
+    withDependency(dependency: ResourceWithConnectionString | TestRedisResource): ResourcePromise {
         return new ResourcePromiseImpl(this._withDependencyInternal(dependency));
     }
 
@@ -3106,12 +3106,12 @@ class ResourcePromiseImpl implements ResourcePromise {
     }
 
     /** Waits for another resource (test version) */
-    testWaitFor(dependency: ResourceBuilderBase): ResourcePromise {
+    testWaitFor(dependency: Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.testWaitFor(dependency)));
     }
 
     /** Adds a dependency on another resource */
-    withDependency(dependency: ResourceBuilderBase): ResourcePromise {
+    withDependency(dependency: ResourceWithConnectionString | TestRedisResource): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withDependency(dependency)));
     }
 

@@ -348,7 +348,6 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     private string? TryMapInterfaceInputTypeToTypeScript(AtsTypeRef typeRef)
     {
         List<string>? assignableWrapperTypes = null;
-        var includesResourceBuilder = false;
 
         foreach (var candidateTypeRef in _typeRefsById.Values)
         {
@@ -358,35 +357,18 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 continue;
             }
 
-            if (candidateTypeRef.IsResourceBuilder)
-            {
-                includesResourceBuilder = true;
-                continue;
-            }
-
             assignableWrapperTypes ??= [];
             assignableWrapperTypes.Add(wrapperClassName);
         }
 
-        if (!includesResourceBuilder && assignableWrapperTypes is not { Count: > 0 })
+        if (assignableWrapperTypes is not { Count: > 0 })
         {
             return null;
         }
 
-        var typeNames = new List<string>();
-        if (includesResourceBuilder)
-        {
-            typeNames.Add("ResourceBuilderBase");
-        }
-
-        if (assignableWrapperTypes is { Count: > 0 })
-        {
-            typeNames.AddRange(assignableWrapperTypes
-                .Distinct(StringComparer.Ordinal)
-                .OrderBy(static n => n, StringComparer.Ordinal));
-        }
-
-        return string.Join(" | ", typeNames);
+        return string.Join(" | ", assignableWrapperTypes
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static n => n, StringComparer.Ordinal));
     }
 
     private static bool IsAssignableToInterface(AtsTypeRef candidateTypeRef, string interfaceTypeId)
