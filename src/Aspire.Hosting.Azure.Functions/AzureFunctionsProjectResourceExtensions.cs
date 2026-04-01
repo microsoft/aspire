@@ -154,7 +154,7 @@ public static class AzureFunctionsProjectResourceExtensions
                 .Resource;
         }
 
-        builder.Eventing.Subscribe<BeforeStartEvent>((data, token) =>
+        builder.OnBeforeStart((data, token) =>
         {
             var removeStorage = true;
             // Look at all of the resources and if none of them use the default storage, then we can remove it.

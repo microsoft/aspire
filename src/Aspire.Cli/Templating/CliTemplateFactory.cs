@@ -37,6 +37,11 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
         Description = TemplatingStrings.UseLocalhostTld_Description
     };
 
+    private readonly Option<bool?> _useRedisCacheOption = new("--use-redis-cache")
+    {
+        Description = TemplatingStrings.UseRedisCache_Description
+    };
+
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly IAppHostProjectFactory _projectFactory;
     private readonly IScaffoldingService _scaffoldingService;
@@ -130,7 +135,20 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
                 ApplyEmptyAppHostTemplateAsync,
                 runtime: TemplateRuntime.Cli,
                 languageId: KnownLanguageId.Java,
-                isEmpty: true)
+                isEmpty: true),
+
+            new CallbackTemplate(
+                KnownTemplateId.PythonStarter,
+                "Starter App (FastAPI/React)",
+                projectName => $"./{projectName}",
+                cmd =>
+                {
+                    AddOptionIfMissing(cmd, _localhostTldOption);
+                    AddOptionIfMissing(cmd, _useRedisCacheOption);
+                },
+                ApplyPythonStarterTemplateAsync,
+                runtime: TemplateRuntime.Cli,
+                languageId: KnownLanguageId.TypeScript)
         ];
 
         return templates.Where(IsTemplateAvailable);

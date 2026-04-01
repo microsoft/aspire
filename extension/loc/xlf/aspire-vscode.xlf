@@ -103,6 +103,9 @@
     <trans-unit id="command.copyResourceName">
       <source xml:lang="en">Copy resource name</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostSourceNotFound">
+      <source xml:lang="en">Could not determine the AppHost source file to open.</source>
+    </trans-unit>
     <trans-unit id="walkthrough.getStarted.createProject.title">
       <source xml:lang="en">Create a new project</source>
     </trans-unit>
@@ -198,6 +201,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.failedToGetTargetPath">
       <source xml:lang="en">Failed to get TargetPath: {0}.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostSourceOpenFailed">
+      <source xml:lang="en">Failed to open AppHost source file: {0}</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.failedToParseConfigInfo">
       <source xml:lang="en">Failed to parse Aspire config info: {0}. Try updating the Aspire CLI with: aspire update</source>
@@ -309,6 +315,9 @@
     </trans-unit>
     <trans-unit id="extension.description">
       <source xml:lang="en">Official Aspire extension for Visual Studio Code</source>
+    </trans-unit>
+    <trans-unit id="command.openAppHostSource">
+      <source xml:lang="en">Open AppHost source</source>
     </trans-unit>
     <trans-unit id="command.openDashboard">
       <source xml:lang="en">Open Aspire Dashboard</source>

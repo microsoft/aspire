@@ -485,7 +485,7 @@ public static class AzureCosmosExtensions
         // need to do this later in case builder becomes an emulator after this method is called.
         if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
         {
-            builder.ApplicationBuilder.Eventing.Subscribe<BeforeStartEvent>((data, _) =>
+            builder.ApplicationBuilder.OnBeforeStart((data, _) =>
             {
                 if (builder.Resource.IsEmulator)
                 {

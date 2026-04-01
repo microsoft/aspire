@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { ResourceState, HealthStatus, StateStyle } from '../editor/resourceConstants';
@@ -17,6 +19,8 @@ import {
     tooltipState,
     tooltipHealth,
     tooltipEndpoints,
+    appHostSourceNotFound,
+    appHostSourceOpenFailed,
 } from '../loc/strings';
 import {
     AppHostDataRepository,
@@ -59,7 +63,12 @@ class AppHostItem extends vscode.TreeItem {
 }
 
 class WorkspaceResourcesItem extends vscode.TreeItem {
-    constructor(public readonly resources: ResourceJson[], public readonly dashboardUrl: string | null, appHostPath?: string, appHostName?: string) {
+    constructor(
+        public readonly resources: ResourceJson[],
+        public readonly dashboardUrl: string | null,
+        public readonly appHostPath: string | undefined,
+        appHostName?: string
+    ) {
         super(appHostName ?? workspaceAppHostLabel, vscode.TreeItemCollapsibleState.Expanded);
         this.id = 'workspace-resources';
         this.iconPath = appHostIcon(appHostPath);
@@ -178,6 +187,34 @@ export function getResourceIcon(resource: ResourceJson): vscode.ThemeIcon {
             }
             return new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('aspire.brandPurple'));
     }
+}
+
+export function resolveAppHostSourcePath(appHostPath: string, fileExists: (candidate: string) => boolean = fs.existsSync): string {
+    if (!appHostPath.toLowerCase().endsWith('.csproj')) {
+        return appHostPath;
+    }
+
+    const projectDirectory = path.dirname(appHostPath);
+    // C# AppHosts are reported as the project file, but the tree action is meant to
+    // take the user to the AppHost source code instead of opening project XML.
+    const appHostCodePath = path.join(projectDirectory, 'AppHost.cs');
+    if (fileExists(appHostCodePath)) {
+        return appHostCodePath;
+    }
+
+    const fileBasedAppHostCodePath = path.join(projectDirectory, 'apphost.cs');
+    if (fileExists(fileBasedAppHostCodePath)) {
+        return fileBasedAppHostCodePath;
+    }
+
+    // Older/simple AppHosts may still use Program.cs, so prefer that before
+    // falling back to the .csproj when no source file can be resolved.
+    const programCodePath = path.join(projectDirectory, 'Program.cs');
+    if (fileExists(programCodePath)) {
+        return programCodePath;
+    }
+
+    return appHostPath;
 }
 
 function buildResourceTooltip(resource: ResourceJson): vscode.MarkdownString {
@@ -448,6 +485,32 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
     stopAppHost(element: AppHostItem): void {
         this._terminalProvider.sendAspireCommandToAspireTerminal(`stop --apphost "${element.appHost.appHostPath}"`);
+    }
+
+    async openAppHostSource(element?: AppHostItem | WorkspaceResourcesItem): Promise<void> {
+        if (!element || !(element instanceof AppHostItem || element instanceof WorkspaceResourcesItem)) {
+            vscode.window.showWarningMessage(appHostSourceNotFound);
+            return;
+        }
+
+        const appHostPath = element instanceof AppHostItem
+            ? element.appHost.appHostPath
+            : element.appHostPath;
+
+        if (!appHostPath) {
+            vscode.window.showWarningMessage(appHostSourceNotFound);
+            return;
+        }
+
+        const sourcePath = resolveAppHostSourcePath(appHostPath);
+        try {
+            // Open the resolved source path directly so TypeScript AppHosts open their
+            // file as-is, while C# AppHosts route through the .csproj special case above.
+            const document = await vscode.workspace.openTextDocument(vscode.Uri.file(sourcePath));
+            await vscode.window.showTextDocument(document, { preview: false });
+        } catch {
+            vscode.window.showWarningMessage(appHostSourceOpenFailed(sourcePath));
+        }
     }
 
     stopResource(element: ResourceItem): void {

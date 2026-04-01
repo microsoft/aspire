@@ -250,6 +250,12 @@ export enum CertificateTrustScope {
     System = "System",
 }
 
+/** Enum type for CommandResultFormat */
+export enum CommandResultFormat {
+    Text = "Text",
+    Json = "Json",
+}
+
 /** Enum type for ContainerLifetime */
 export enum ContainerLifetime {
     Session = "Session",
@@ -390,6 +396,8 @@ export interface ExecuteCommandResult {
     success?: boolean;
     canceled?: boolean;
     errorMessage?: string;
+    result?: string;
+    resultFormat?: CommandResultFormat;
 }
 
 /** DTO interface for ResourceEventDto */
@@ -1491,6 +1499,17 @@ export class ExecuteCommandContext {
                 { context: this._handle, value: CancellationToken.fromValue(value) }
             );
         }
+    };
+
+    /** Gets the Logger property */
+    logger = {
+        get: async (): Promise<Logger> => {
+            const handle = await this._client.invokeCapability<ILoggerHandle>(
+                'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.logger',
+                { context: this._handle }
+            );
+            return new Logger(handle, this._client);
+        },
     };
 
 }

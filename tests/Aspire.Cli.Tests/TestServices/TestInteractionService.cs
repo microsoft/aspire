@@ -146,8 +146,11 @@ internal sealed class TestInteractionService : IInteractionService
         DisplayedErrors.Add(errorMessage);
     }
 
+    public Action<KnownEmoji, string>? DisplayMessageCallback { get; set; }
+
     public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false)
     {
+        DisplayMessageCallback?.Invoke(emoji, message);
     }
 
     public void DisplaySuccess(string message, bool allowMarkup = false)
@@ -197,8 +200,11 @@ internal sealed class TestInteractionService : IInteractionService
     {
     }
 
+    public Action<string>? DisplayRawTextCallback { get; set; }
+
     public void DisplayRawText(string text, ConsoleOutput? consoleOverride = null)
     {
+        DisplayRawTextCallback?.Invoke(text);
     }
 
     public void DisplayMarkdown(string markdown)

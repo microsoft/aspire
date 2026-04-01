@@ -1491,6 +1491,8 @@ def _validate_dict_types(args: typing.Any, arg_types: typing.Any) -> bool:
 
 CertificateTrustScope = typing.Literal["None", "Append", "Override", "System"]
 
+CommandResultFormat = typing.Literal["Text", "Json"]
+
 ContainerLifetime = typing.Literal["Session", "Persistent"]
 
 DistributedApplicationOperation = typing.Literal["Run", "Publish"]
@@ -1678,6 +1680,8 @@ class ExecuteCommandResult(typing.TypedDict, total=False):
     Success: bool
     Canceled: bool
     ErrorMessage: str
+    Result: str
+    ResultFormat: CommandResultFormat
 
 class ResourceEventDto(typing.TypedDict, total=False):
     ResourceName: str
@@ -3338,6 +3342,23 @@ class ExecuteCommandContext:
             {'context': self._handle}
         )
         token.cancel()
+
+    @_uncached_property
+    def logger(self) -> AbstractLogger:
+        """Gets the Logger property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.logger',
+            {'context': self._handle}
+        )
+        return typing.cast(AbstractLogger, result)
+
+    @logger.setter
+    def logger(self, value: AbstractLogger) -> None:
+        """Sets the Logger property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setLogger',
+            {'context': self._handle, 'value': value}
+        )
 
 
 class InitializeResourceEvent:

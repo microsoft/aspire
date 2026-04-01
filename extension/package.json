@@ -71,12 +71,12 @@
       {
         "view": "aspire-vscode.runningAppHosts",
         "contents": "%views.runningAppHosts.welcome%",
-        "when": "aspire.noRunningAppHosts && !aspire.fetchAppHostsError && !aspire.loading && aspire.viewMode != global"
+        "when": "aspire.noRunningAppHosts && !aspire.fetchAppHostsError && !aspire.loading && aspire.viewMode != 'global'"
       },
       {
         "view": "aspire-vscode.runningAppHosts",
         "contents": "%views.runningAppHosts.globalWelcome%",
-        "when": "aspire.noRunningAppHosts && !aspire.fetchAppHostsError && !aspire.loading && aspire.viewMode == global"
+        "when": "aspire.noRunningAppHosts && !aspire.fetchAppHostsError && !aspire.loading && aspire.viewMode == 'global'"
       },
       {
         "view": "aspire-vscode.runningAppHosts",
@@ -235,6 +235,12 @@
         "title": "%command.openDashboard%",
         "category": "Aspire",
         "icon": "$(globe)"
+      },
+      {
+        "command": "aspire-vscode.openAppHostSource",
+        "title": "%command.openAppHostSource%",
+        "category": "Aspire",
+        "icon": "$(go-to-file)"
       },
       {
         "command": "aspire-vscode.stopAppHost",
@@ -417,6 +423,10 @@
           "when": "false"
         },
         {
+          "command": "aspire-vscode.openAppHostSource",
+          "when": "false"
+        },
+        {
           "command": "aspire-vscode.stopResource",
           "when": "false"
         },
@@ -488,17 +498,17 @@
       "view/title": [
         {
           "command": "aspire-vscode.switchToGlobalView",
-          "when": "view == aspire-vscode.runningAppHosts && aspire.viewMode != global",
+          "when": "view == 'aspire-vscode.runningAppHosts' && aspire.viewMode != 'global'",
           "group": "navigation"
         },
         {
           "command": "aspire-vscode.switchToWorkspaceView",
-          "when": "view == aspire-vscode.runningAppHosts && aspire.viewMode == global",
+          "when": "view == 'aspire-vscode.runningAppHosts' && aspire.viewMode == 'global'",
           "group": "navigation"
         },
         {
           "command": "aspire-vscode.refreshRunningAppHosts",
-          "when": "view == aspire-vscode.runningAppHosts",
+          "when": "view == 'aspire-vscode.runningAppHosts'",
           "group": "navigation"
         }
       ],
@@ -507,6 +517,11 @@
           "command": "aspire-vscode.openDashboard",
           "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost|workspaceResources)$/",
           "group": "inline"
+        },
+        {
+          "command": "aspire-vscode.openAppHostSource",
+          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost|workspaceResources)$/",
+          "group": "1_open@1"
         },
         {
           "command": "aspire-vscode.stopAppHost",
