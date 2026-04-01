@@ -1,4 +1,4 @@
-﻿// aspire.ts - Capability-based Aspire SDK
+// aspire.ts - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -1711,6 +1711,10 @@ export interface ExecuteCommandContext {
         get: () => Promise<CancellationToken>;
         set: (value: AbortSignal | CancellationToken) => Promise<void>;
     };
+    logger: {
+        get: () => Promise<Logger>;
+        set: (value: HandleReference) => Promise<void>;
+    };
 }
 
 // ============================================================================
@@ -1783,8 +1787,14 @@ class ExecuteCommandContextImpl implements ExecuteCommandContext {
                 'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.logger',
                 { context: this._handle }
             );
-            return new Logger(handle, this._client);
+            return new LoggerImpl(handle, this._client);
         },
+        set: async (value: HandleReference): Promise<void> => {
+            await this._client.invokeCapability<void>(
+                'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setLogger',
+                { context: this._handle, value }
+            );
+        }
     };
 
 }
