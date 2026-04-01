@@ -20,9 +20,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
         var interactionService = new TestInteractionService();
-        var messages = new List<string>();
         interactionService.SetupStringPromptResponse(workspace.WorkspaceRoot.FullName);
-        interactionService.DisplayMessageCallback = (_, message) => messages.Add(message);
         interactionService.PromptForSelectionsCallback = (_, choices, _, _) => choices.Cast<object>()
             .Where(choice => choice switch
             {
@@ -45,8 +43,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(0, exitCode);
         Assert.Contains(
-            messages,
-            message => message == string.Format(
+            interactionService.DisplayedMessages,
+            displayedMessage => displayedMessage.Message == string.Format(
                 CultureInfo.CurrentCulture,
                 AgentCommandStrings.InitCommand_InstalledSkill,
                 SkillDefinition.Aspire.Name,
