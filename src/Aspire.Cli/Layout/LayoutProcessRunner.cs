@@ -2,26 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using Aspire.Shared;
 
 namespace Aspire.Cli.Layout;
-
-/// <summary>
-/// Helper to detect the current runtime identifier.
-/// Delegates to shared BundleDiscovery for consistent behavior.
-/// </summary>
-internal static class RuntimeIdentifierHelper
-{
-    /// <summary>
-    /// Gets the current platform's runtime identifier.
-    /// </summary>
-    public static string GetCurrent() => BundleDiscovery.GetCurrentRuntimeIdentifier();
-
-    /// <summary>
-    /// Gets the archive extension for the current platform.
-    /// </summary>
-    public static string GetArchiveExtension() => BundleDiscovery.GetArchiveExtension();
-}
 
 /// <summary>
 /// Utilities for running processes using layout tools.

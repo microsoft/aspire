@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Xml.Linq;
@@ -174,7 +175,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         return await _nugetService.RestorePackagesAsync(
             packages,
             DotNetBasedAppHostServerProject.TargetFramework,
-            runtimeIdentifier: RuntimeIdentifierHelper.GetCurrent(),
+            runtimeIdentifier: RuntimeInformation.RuntimeIdentifier,
             sources: sources,
             workingDirectory: _appDirectoryPath,
             ct: cancellationToken);
