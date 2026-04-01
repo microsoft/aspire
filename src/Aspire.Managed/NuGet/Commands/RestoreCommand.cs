@@ -48,12 +48,6 @@ public static class RestoreCommand
         };
         command.Options.Add(outputOption);
 
-        var packagesDirOption = new Option<string?>("--packages-dir")
-        {
-            Description = "NuGet packages directory"
-        };
-        command.Options.Add(packagesDirOption);
-
         var sourceOption = new Option<string[]>("--source")
         {
             Description = "NuGet feed URL (can specify multiple)",
@@ -92,7 +86,6 @@ public static class RestoreCommand
             var packageArgs = parseResult.GetValue(packageOption) ?? [];
             var framework = parseResult.GetValue(frameworkOption)!;
             var output = parseResult.GetValue(outputOption)!;
-            var packagesDir = parseResult.GetValue(packagesDirOption);
             var sources = parseResult.GetValue(sourceOption) ?? [];
             var nugetConfigPath = parseResult.GetValue(configOption);
             var workingDir = parseResult.GetValue(workingDirOption);
@@ -116,7 +109,7 @@ public static class RestoreCommand
                 packages.Add((parts[0], parts[1]));
             }
 
-            return await ExecuteRestoreAsync(packages, framework, output, packagesDir, sources, nugetConfigPath, workingDir, noNugetOrg, verbose).ConfigureAwait(false);
+            return await ExecuteRestoreAsync(packages, framework, output, sources, nugetConfigPath, workingDir, noNugetOrg, verbose).ConfigureAwait(false);
         });
 
         return command;
@@ -126,7 +119,6 @@ public static class RestoreCommand
         List<(string Id, string Version)> packages,
         string framework,
         string output,
-        string? packagesDir,
         string[] cliSources,
         string? nugetConfigPath,
         string? workingDir,
@@ -148,7 +140,6 @@ public static class RestoreCommand
             {
                 Console.WriteLine($"Restoring {packages.Count} packages for {framework}");
                 Console.WriteLine($"Output: {outputPath}");
-                Console.WriteLine($"Packages: {packagesDir}");
                 if (workingDir is not null)
                 {
                     Console.WriteLine($"Working dir: {workingDir}");
@@ -184,7 +175,6 @@ public static class RestoreCommand
                 PreLoadedRequestProviders = [dgProvider],
                 DisableParallel = Environment.ProcessorCount == 1,
                 AllowNoOp = false,
-                GlobalPackagesFolder = packagesDir,
                 MachineWideSettings = machineWideSettings,
             };
 
