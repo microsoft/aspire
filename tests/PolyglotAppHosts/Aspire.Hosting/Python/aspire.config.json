@@ -8,8 +8,6 @@
   },
   "packages": {
     "Aspire.Hosting": "",
-    "Aspire.Hosting.Testing": "",
-    "Aspire.Hosting.Yarp": "",
     "Aspire.Hosting.Redis": ""
   }
 }
