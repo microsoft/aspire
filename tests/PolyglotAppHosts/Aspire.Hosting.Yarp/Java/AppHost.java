@@ -7,6 +7,7 @@ void main() throws Exception {
         var staticFilesSource = builder.addContainer("static-files-source", "nginx");
         var backend = builder.addContainer("backend", "nginx");
         backend.withHttpEndpoint(new WithHttpEndpointOptions().name("http").targetPort(80.0));
+        var backendService = builder.addProject("backend-service", "./src/BackendService", "http");
         var externalBackend = builder.addExternalService("external-backend", "https://example.com");
         var proxy = builder.addYarp("proxy");
         proxy.withHostPort(8080.0);
@@ -22,7 +23,6 @@ void main() throws Exception {
         proxy.withBuildSecret("MY_SECRET", buildSecret);
         proxy.withConfiguration((config) -> {
             var endpoint = backend.getEndpoint("http");
-            var backendService = backend;
             var endpointCluster = config.addClusterFromEndpoint(endpoint);
             var resourceCluster = config.addClusterFromResource(backendService);
             var externalServiceCluster = config.addClusterFromExternalService(externalBackend);
