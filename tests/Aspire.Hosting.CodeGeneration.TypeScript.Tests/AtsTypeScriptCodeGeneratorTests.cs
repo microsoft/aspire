@@ -602,6 +602,17 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public void AspireUnion_InterfaceHandleInput_GeneratesResourceBuilderBaseUnion()
+    {
+        var atsContext = CreateContextFromTestAssembly();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireTs = files["aspire.ts"];
+
+        Assert.Contains("withUnionDependency(dependency: string | ResourceBuilderBase)", aspireTs);
+    }
+
+    [Fact]
     public async Task Scanner_BaseTypeHierarchy_IsCollected()
     {
         // Verify that AtsTypeInfo includes base type hierarchy for inheritance expansion.

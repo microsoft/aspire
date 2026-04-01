@@ -578,6 +578,18 @@ public static class TestExtensions
     }
 
     /// <summary>
+    /// Tests an Aspire union parameter that includes an interface handle.
+    /// The dependency parameter should generate a union type: string | ResourceBuilderBase.
+    /// </summary>
+    [AspireExport("withUnionDependency", Description = "Adds a dependency from a string or another resource")]
+    public static IResourceBuilder<T> WithUnionDependency<T>(
+        this IResourceBuilder<T> builder,
+        [AspireUnion(typeof(string), typeof(IResourceBuilder<IResourceWithConnectionString>))] object dependency) where T : IResource
+    {
+        return builder;
+    }
+
+    /// <summary>
     /// Tests IReadOnlyList parameter - verifies readonly array handling.
     /// </summary>
     [AspireExport("withEndpoints", Description = "Sets the endpoints")]

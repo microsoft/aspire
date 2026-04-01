@@ -7,6 +7,7 @@ const buildSecret = await builder.addParameterFromConfiguration("buildSecret", "
 const staticFilesSource = await builder.addContainer("static-files-source", "nginx");
 const backend = await builder.addContainer("backend", "nginx")
     .withHttpEndpoint({ name: "http", targetPort: 80 });
+const backendService = await builder.addProject("backend-service", "./src/BackendService", "http");
 const externalBackend = await builder.addExternalService("external-backend", "https://example.com");
 
 const proxy = await builder.addYarp("proxy")
@@ -66,7 +67,7 @@ await proxy.withConfiguration(async (config) => {
                 reactivationPeriod: 100_000_000,
             },
         });
-    const resourceCluster = await config.addClusterFromResource(backend);
+    const resourceCluster = await config.addClusterFromResource(backendService);
     const externalServiceCluster = await config.addClusterFromExternalService(externalBackend);
     const singleDestinationCluster = await config.addClusterWithDestination("single-destination", "https://example.net");
     const multiDestinationCluster = await config.addClusterWithDestinations("multi-destination", [
@@ -111,7 +112,7 @@ await proxy.withConfiguration(async (config) => {
             PathPrefix: "/endpoint",
             RequestHeadersCopy: "true",
         });
-    await config.addRoute("/from-resource/{**catchall}", backend)
+    await config.addRoute("/from-resource/{**catchall}", backendService)
         .withTransform({
             PathPrefix: "/resource",
         });
@@ -127,7 +128,7 @@ await proxy.withConfiguration(async (config) => {
         .withTransform({
             PathPrefix: "/catchall-endpoint",
         });
-    await config.addCatchAllRoute(backend)
+    await config.addCatchAllRoute(backendService)
         .withTransform({
             PathPrefix: "/catchall-resource",
         });
