@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as path from 'path';
 import { shortenPath } from '../views/AppHostDataRepository';
-import { getResourceContextValue, getResourceIcon, resolveAppHostSourcePath } from '../views/AspireAppHostTreeProvider';
+import { getResourceContextValue, getResourceIcon, resolveAppHostSourcePath, buildResourceDescription } from '../views/AspireAppHostTreeProvider';
 import type { ResourceJson } from '../views/AppHostDataRepository';
 import { ResourceState, HealthStatus, StateStyle } from '../editor/resourceConstants';
 
@@ -13,6 +13,8 @@ function makeResource(overrides: Partial<ResourceJson> = {}): ResourceJson {
         state: null,
         stateStyle: null,
         healthStatus: null,
+        healthReports: null,
+        exitCode: null,
         dashboardUrl: null,
         urls: null,
         commands: null,
@@ -154,9 +156,9 @@ suite('getResourceIcon', () => {
         assert.strictEqual(icon.id, 'pass');
     });
 
-    test('Running + Unhealthy shows error icon', () => {
+    test('Running + Unhealthy shows warning icon', () => {
         const icon = getResourceIcon(makeResource({ state: ResourceState.Running, healthStatus: HealthStatus.Unhealthy }));
-        assert.strictEqual(icon.id, 'error');
+        assert.strictEqual(icon.id, 'warning');
     });
 
     test('Running + Degraded shows warning icon', () => {
@@ -179,14 +181,19 @@ suite('getResourceIcon', () => {
         assert.strictEqual(icon.id, 'pass');
     });
 
-    test('Finished shows circle-outline', () => {
-        const icon = getResourceIcon(makeResource({ state: ResourceState.Finished }));
-        assert.strictEqual(icon.id, 'circle-outline');
-    });
-
     test('Exited with error stateStyle shows error', () => {
         const icon = getResourceIcon(makeResource({ state: ResourceState.Exited, stateStyle: StateStyle.Error }));
         assert.strictEqual(icon.id, 'error');
+    });
+
+    test('Exited with non-zero exit code shows error', () => {
+        const icon = getResourceIcon(makeResource({ state: ResourceState.Exited, exitCode: 137 }));
+        assert.strictEqual(icon.id, 'error');
+    });
+
+    test('Finished with exit code 0 shows green pass', () => {
+        const icon = getResourceIcon(makeResource({ state: ResourceState.Finished, exitCode: 0 }));
+        assert.strictEqual(icon.id, 'pass');
     });
 
     test('FailedToStart shows error icon', () => {
@@ -209,13 +216,68 @@ suite('getResourceIcon', () => {
         assert.strictEqual(icon.id, 'loading~spin');
     });
 
-    test('null state shows circle-outline', () => {
+    test('Waiting shows loading spinner', () => {
+        const icon = getResourceIcon(makeResource({ state: ResourceState.Waiting }));
+        assert.strictEqual(icon.id, 'loading~spin');
+    });
+
+    test('NotStarted shows record (no spinner)', () => {
+        const icon = getResourceIcon(makeResource({ state: ResourceState.NotStarted }));
+        assert.strictEqual(icon.id, 'record');
+    });
+
+    test('Finished shows green pass', () => {
+        const icon = getResourceIcon(makeResource({ state: ResourceState.Finished }));
+        assert.strictEqual(icon.id, 'pass');
+    });
+
+    test('null state shows record', () => {
         const icon = getResourceIcon(makeResource({ state: null }));
-        assert.strictEqual(icon.id, 'circle-outline');
+        assert.strictEqual(icon.id, 'record');
     });
 
     test('unknown state shows circle-filled', () => {
         const icon = getResourceIcon(makeResource({ state: 'SomeUnknownState' }));
         assert.strictEqual(icon.id, 'circle-filled');
+    });
+});
+
+suite('buildResourceDescription', () => {
+    test('no state, health, or exit code returns resource type', () => {
+        assert.strictEqual(buildResourceDescription(makeResource()), 'Project');
+    });
+
+    test('with state shows type and state', () => {
+        assert.strictEqual(buildResourceDescription(makeResource({ state: 'Running' })), 'Project · Running');
+    });
+
+    test('with health reports shows count', () => {
+        const desc = buildResourceDescription(makeResource({
+            healthReports: {
+                'check1': { status: 'Healthy', description: null, exceptionMessage: null },
+                'check2': { status: 'Unhealthy', description: null, exceptionMessage: null },
+            },
+        }));
+        assert.ok(desc.includes('1/2'));
+    });
+
+    test('with exit code shows exit code', () => {
+        const desc = buildResourceDescription(makeResource({ exitCode: 137 }));
+        assert.ok(desc.includes('137'));
+    });
+
+    test('with both health and exit code shows both', () => {
+        const desc = buildResourceDescription(makeResource({
+            exitCode: 1,
+            healthReports: {
+                'check1': { status: 'Healthy', description: null, exceptionMessage: null },
+            },
+        }));
+        assert.ok(desc.includes('1/1'));
+        assert.ok(desc.includes('Exit Code: 1'));
+    });
+
+    test('empty health reports returns resource type', () => {
+        assert.strictEqual(buildResourceDescription(makeResource({ healthReports: {} })), 'Project');
     });
 });

@@ -181,6 +181,9 @@
     <trans-unit id="command.executeResourceCommand">
       <source xml:lang="en">Execute resource command</source>
     </trans-unit>
+    <trans-unit id="command.expandAll">
+      <source xml:lang="en">Expand all resources</source>
+    </trans-unit>
     <trans-unit id="walkthrough.getStarted.dashboard.title">
       <source xml:lang="en">Explore the dashboard</source>
     </trans-unit>

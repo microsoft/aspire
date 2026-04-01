@@ -263,8 +263,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
     private static (string projectDirectory, string pythonExecutable, string scriptName) CreateTempPythonProject(ITestOutputHelper outputHelper, bool instrument = false)
     {
-        var projectDirectory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        Directory.CreateDirectory(projectDirectory);
+        var projectDirectory = Directory.CreateTempSubdirectory().FullName;
 
         if (instrument)
         {

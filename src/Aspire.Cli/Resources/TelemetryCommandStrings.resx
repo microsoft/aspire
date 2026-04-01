@@ -166,7 +166,7 @@
     <value>Trace with ID '{0}' was not found.</value>
   </data>
   <data name="UnexpectedContentType" xml:space="preserve">
-    <value>Dashboard API returned unexpected content type. Expected JSON response.</value>
+    <value>Dashboard API returned unexpected content type '{0}'. Expected JSON response.</value>
   </data>
   <data name="SelectAppHostAction" xml:space="preserve">
     <value>view telemetry for</value>
@@ -185,5 +185,29 @@
   </data>
   <data name="HeaderStatus" xml:space="preserve">
     <value>Status</value>
+  </data>
+  <data name="DashboardUrlOptionDescription" xml:space="preserve">
+    <value>URL of a standalone Aspire Dashboard to connect to directly (bypasses AppHost discovery)</value>
+  </data>
+  <data name="ApiKeyOptionDescription" xml:space="preserve">
+    <value>API key for authenticating with the dashboard (optional, for dashboards with API key authentication)</value>
+  </data>
+  <data name="DashboardUrlAndAppHostExclusive" xml:space="preserve">
+    <value>The --dashboard-url and --apphost options cannot be used together. Specify one or the other.</value>
+  </data>
+  <data name="DashboardAuthFailed" xml:space="preserve">
+    <value>Authentication denied by the dashboard. Use --api-key to specify a valid API key that matches the dashboard's configured API key (Dashboard:Api:PrimaryApiKey).</value>
+  </data>
+  <data name="DashboardUrlNotReachable" xml:space="preserve">
+    <value>The specified --dashboard-url '{0}' does not appear to be a valid Aspire Dashboard. Verify the URL is correct.</value>
+  </data>
+  <data name="DashboardApiNotEnabled" xml:space="preserve">
+    <value>The dashboard at '{0}' does not have the telemetry API enabled. Configure the dashboard with Dashboard:Api:Enabled set to true.</value>
+  </data>
+  <data name="DashboardConnectionFailed" xml:space="preserve">
+    <value>Could not connect to the dashboard at '{0}'. Verify the dashboard is running and the URL is correct.</value>
+  </data>
+  <data name="DashboardUrlInvalid" xml:space="preserve">
+    <value>The value '{0}' is not a valid URL. Specify an absolute URL like 'http://localhost:18888'.</value>
   </data>
 </root>

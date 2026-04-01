@@ -17,6 +17,12 @@ export interface ResourceCommandJson {
     description: string | null;
 }
 
+export interface ResourceHealthReportJson {
+    status: string | null;
+    description: string | null;
+    exceptionMessage: string | null;
+}
+
 export interface ResourceJson {
     name: string;
     displayName: string | null;
@@ -24,6 +30,8 @@ export interface ResourceJson {
     state: string | null;
     stateStyle: string | null;
     healthStatus: string | null;
+    healthReports: Record<string, ResourceHealthReportJson> | null;
+    exitCode: number | null;
     dashboardUrl: string | null;
     urls: ResourceUrlJson[] | null;
     commands: Record<string, ResourceCommandJson> | null;
