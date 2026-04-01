@@ -193,8 +193,9 @@ internal class DeveloperCertificateService : IDeveloperCertificateService
     }
 
     // Well-known location on disk where dev-cert key material is cached on macOS.
-    private static readonly string s_macOSUserDevCertificateLocation = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".aspire", "dev-certs", "https");
+    private static readonly string s_userDevCertificateLocation = Path.Combine(
+        Environment.GetFolderPath(Envi
+                // We only cache PEM certificates on MacOSronment.SpecialFolder.UserProfile), ".aspire", "dev-certs", "https");
 
     private static readonly SemaphoreSlim s_certificateCacheSemaphore = new(1, 1);
 
@@ -257,13 +258,12 @@ internal class DeveloperCertificateService : IDeveloperCertificateService
         CancellationToken cancellationToken)
     {
         char[]? pemKey = null;
-        var keyFileName = Path.Join(s_macOSUserDevCertificateLocation, $"{lookup}.key");
+        var keyFileName = Path.Join(s_userDevCertificateLocation, $"{lookup}.key");
 
+        // We only cache PEM certificates on MacOS to avoid repeated keychain prompts.
+        // There's no concern of binary differences for PEM certs with persistent containers.
         if (OperatingSystem.IsMacOS() && certificate.IsAspNetCoreDevelopmentCertificate())
         {
-            // On macOS, we cache development certificate key material to avoid triggering repeated
-            // keychain prompts when referencing the development certificate key. We don't do this
-            // for other OSes or other certificates.
             try
             {
                 if (File.Exists(keyFileName))
@@ -316,7 +316,7 @@ internal class DeveloperCertificateService : IDeveloperCertificateService
                 // On macOS, cache the development certificate key material
                 try
                 {
-                    Directory.CreateDirectory(s_macOSUserDevCertificateLocation, UnixFileMode.UserExecute | UnixFileMode.UserWrite | UnixFileMode.UserRead);
+                    Directory.CreateDirectory(s_userDevCertificateLocation, UnixFileMode.UserExecute | UnixFileMode.UserWrite | UnixFileMode.UserRead);
 
                     await File.WriteAllTextAsync(keyFileName, new string(pemKey), cancellationToken).ConfigureAwait(false);
                 }
@@ -336,12 +336,12 @@ internal class DeveloperCertificateService : IDeveloperCertificateService
         string lookup)
     {
         byte[]? pfxBytes = null;
-        var pfxFileName = Path.Join(s_macOSUserDevCertificateLocation, $"{lookup}.pfx");
+        var pfxFileName = Path.Join(s_userDevCertificateLocation, $"{lookup}.pfx");
 
-        if (OperatingSystem.IsMacOS() && certificate.IsAspNetCoreDevelopmentCertificate())
+        // We cache PFX dev certs for all OSes to ensure consistent binary output for persistent containers
+        // in addition to avoiding repeated keychain prompts on MacOS.
+        if (certificate.IsAspNetCoreDevelopmentCertificate())
         {
-            // On macOS, we cache development certificate key material to avoid triggering repeated
-            // keychain prompts when referencing the development certificate key.
             try
             {
                 if (File.Exists(pfxFileName))
@@ -367,11 +367,11 @@ internal class DeveloperCertificateService : IDeveloperCertificateService
         {
             pfxBytes = certificate.Export(X509ContentType.Pfx, password);
 
-            if (pfxBytes is not null && OperatingSystem.IsMacOS() && certificate.IsAspNetCoreDevelopmentCertificate())
+            if (pfxBytes is not null && certificate.IsAspNetCoreDevelopmentCertificate())
             {
                 try
                 {
-                    Directory.CreateDirectory(s_macOSUserDevCertificateLocation, UnixFileMode.UserExecute | UnixFileMode.UserWrite | UnixFileMode.UserRead);
+                    Directory.CreateDirectory(s_userDevCertificateLocation, UnixFileMode.UserExecute | UnixFileMode.UserWrite | UnixFileMode.UserRead);
 
                     File.WriteAllBytes(pfxFileName, pfxBytes);
                 }
