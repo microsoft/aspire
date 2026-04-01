@@ -4,6 +4,7 @@
     "language": "typescript/nodejs"
   },
   "packages": {
-    "Aspire.Hosting.Azure.CosmosDB": ""
+    "Aspire.Hosting.Azure.CosmosDB": "",
+    "Aspire.Hosting.Azure.KeyVault": ""
   }
 }
