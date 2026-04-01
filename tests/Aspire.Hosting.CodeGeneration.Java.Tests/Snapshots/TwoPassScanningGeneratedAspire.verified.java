@@ -7711,7 +7711,7 @@ public class EndpointReference extends HandleWrapperBase {
         if (cancellationToken != null) {
             reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
         }
-        return (String) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/getValueAsync", reqArgs);
+        return (String) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.getValueAsync", reqArgs);
     }
 
     /** Gets a conditional expression that resolves to the enabledValue when TLS is enabled on the endpoint, or to the disabledValue otherwise. */
@@ -10303,7 +10303,7 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
     public DistributedApplication build() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        return (DistributedApplication) getClient().invokeCapability("Aspire.Hosting/build", reqArgs);
+        return (DistributedApplication) getClient().invokeCapability("Aspire.Hosting/IDistributedApplicationBuilder.build", reqArgs);
     }
 
     public ParameterResource addParameter(String name) {
@@ -12238,7 +12238,7 @@ public class PipelineStep extends HandleWrapperBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         reqArgs.put("stepName", AspireClient.serializeValue(stepName));
-        getClient().invokeCapability("Aspire.Hosting.Pipelines/dependsOn", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineStep.dependsOn", reqArgs);
     }
 
     /** Specifies that another step requires this step by name */
@@ -12246,7 +12246,7 @@ public class PipelineStep extends HandleWrapperBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         reqArgs.put("stepName", AspireClient.serializeValue(stepName));
-        getClient().invokeCapability("Aspire.Hosting.Pipelines/requiredBy", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineStep.requiredBy", reqArgs);
     }
 
 }
@@ -14077,7 +14077,7 @@ public class ReferenceExpressionBuilder extends HandleWrapperBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         reqArgs.put("value", AspireClient.serializeValue(value));
-        getClient().invokeCapability("Aspire.Hosting.ApplicationModel/appendLiteral", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ReferenceExpressionBuilder.appendLiteral", reqArgs);
     }
 
     public void appendFormatted(String value) {
@@ -14092,7 +14092,7 @@ public class ReferenceExpressionBuilder extends HandleWrapperBase {
         if (format != null) {
             reqArgs.put("format", AspireClient.serializeValue(format));
         }
-        getClient().invokeCapability("Aspire.Hosting.ApplicationModel/appendFormatted", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ReferenceExpressionBuilder.appendFormatted", reqArgs);
     }
 
     public void appendValueProvider(Object valueProvider) {
@@ -14107,14 +14107,14 @@ public class ReferenceExpressionBuilder extends HandleWrapperBase {
         if (format != null) {
             reqArgs.put("format", AspireClient.serializeValue(format));
         }
-        getClient().invokeCapability("Aspire.Hosting.ApplicationModel/appendValueProvider", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ReferenceExpressionBuilder.appendValueProvider", reqArgs);
     }
 
     /** Builds the reference expression */
     public ReferenceExpression build() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        return (ReferenceExpression) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/build", reqArgs);
+        return (ReferenceExpression) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ReferenceExpressionBuilder.build", reqArgs);
     }
 
 }

@@ -5809,7 +5809,7 @@ impl EndpointReference {
             let token_id = register_cancellation(token, self.client.clone());
             args.insert("cancellationToken".to_string(), Value::String(token_id));
         }
-        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/getValueAsync", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointReference.getValueAsync", args)?;
         Ok(serde_json::from_value(result)?)
     }
 
@@ -8004,7 +8004,7 @@ impl IDistributedApplicationBuilder {
     pub fn build(&self) -> Result<DistributedApplication, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
-        let result = self.client.invoke_capability("Aspire.Hosting/build", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting/IDistributedApplicationBuilder.build", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DistributedApplication::new(handle, self.client.clone()))
     }
@@ -9954,7 +9954,7 @@ impl PipelineStep {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         args.insert("stepName".to_string(), serde_json::to_value(&step_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting.Pipelines/dependsOn", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Pipelines/PipelineStep.dependsOn", args)?;
         Ok(())
     }
 
@@ -9963,7 +9963,7 @@ impl PipelineStep {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         args.insert("stepName".to_string(), serde_json::to_value(&step_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting.Pipelines/requiredBy", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Pipelines/PipelineStep.requiredBy", args)?;
         Ok(())
     }
 }
@@ -11361,7 +11361,7 @@ impl ReferenceExpressionBuilder {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/appendLiteral", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ReferenceExpressionBuilder.appendLiteral", args)?;
         Ok(())
     }
 
@@ -11373,7 +11373,7 @@ impl ReferenceExpressionBuilder {
         if let Some(ref v) = format {
             args.insert("format".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
-        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/appendFormatted", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ReferenceExpressionBuilder.appendFormatted", args)?;
         Ok(())
     }
 
@@ -11385,7 +11385,7 @@ impl ReferenceExpressionBuilder {
         if let Some(ref v) = format {
             args.insert("format".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
-        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/appendValueProvider", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ReferenceExpressionBuilder.appendValueProvider", args)?;
         Ok(())
     }
 
@@ -11393,7 +11393,7 @@ impl ReferenceExpressionBuilder {
     pub fn build(&self) -> Result<ReferenceExpression, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
-        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/build", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ReferenceExpressionBuilder.build", args)?;
         Ok(serde_json::from_value(result)?)
     }
 }

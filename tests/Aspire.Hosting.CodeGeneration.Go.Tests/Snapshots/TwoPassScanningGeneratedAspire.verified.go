@@ -6601,7 +6601,7 @@ func (s *EndpointReference) GetValueAsync(cancellationToken *CancellationToken) 
 	if cancellationToken != nil {
 		reqArgs["cancellationToken"] = RegisterCancellation(cancellationToken, s.Client())
 	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/getValueAsync", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.getValueAsync", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -9202,7 +9202,7 @@ func (s *IDistributedApplicationBuilder) Build() (*DistributedApplication, error
 	reqArgs := map[string]any{
 		"context": SerializeValue(s.Handle()),
 	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/build", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/IDistributedApplicationBuilder.build", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -11171,7 +11171,7 @@ func (s *PipelineStep) DependsOn(stepName string) error {
 		"context": SerializeValue(s.Handle()),
 	}
 	reqArgs["stepName"] = SerializeValue(stepName)
-	_, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/dependsOn", reqArgs)
+	_, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineStep.dependsOn", reqArgs)
 	return err
 }
 
@@ -11181,7 +11181,7 @@ func (s *PipelineStep) RequiredBy(stepName string) error {
 		"context": SerializeValue(s.Handle()),
 	}
 	reqArgs["stepName"] = SerializeValue(stepName)
-	_, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/requiredBy", reqArgs)
+	_, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineStep.requiredBy", reqArgs)
 	return err
 }
 
@@ -12836,7 +12836,7 @@ func (s *ReferenceExpressionBuilder) AppendLiteral(value string) error {
 		"context": SerializeValue(s.Handle()),
 	}
 	reqArgs["value"] = SerializeValue(value)
-	_, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/appendLiteral", reqArgs)
+	_, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ReferenceExpressionBuilder.appendLiteral", reqArgs)
 	return err
 }
 
@@ -12849,7 +12849,7 @@ func (s *ReferenceExpressionBuilder) AppendFormatted(value string, format *strin
 	if format != nil {
 		reqArgs["format"] = SerializeValue(format)
 	}
-	_, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/appendFormatted", reqArgs)
+	_, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ReferenceExpressionBuilder.appendFormatted", reqArgs)
 	return err
 }
 
@@ -12862,7 +12862,7 @@ func (s *ReferenceExpressionBuilder) AppendValueProvider(valueProvider any, form
 	if format != nil {
 		reqArgs["format"] = SerializeValue(format)
 	}
-	_, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/appendValueProvider", reqArgs)
+	_, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ReferenceExpressionBuilder.appendValueProvider", reqArgs)
 	return err
 }
 
@@ -12871,7 +12871,7 @@ func (s *ReferenceExpressionBuilder) Build() (*ReferenceExpression, error) {
 	reqArgs := map[string]any{
 		"context": SerializeValue(s.Handle()),
 	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/build", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ReferenceExpressionBuilder.build", reqArgs)
 	if err != nil {
 		return nil, err
 	}

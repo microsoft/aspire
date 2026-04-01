@@ -1488,7 +1488,7 @@ class EndpointReferenceImpl implements EndpointReference {
         const rpcArgs: Record<string, unknown> = { context: this._handle };
         if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
         return await this._client.invokeCapability<string>(
-            'Aspire.Hosting.ApplicationModel/getValueAsync',
+            'Aspire.Hosting.ApplicationModel/EndpointReference.getValueAsync',
             rpcArgs
         );
     }
@@ -2264,7 +2264,7 @@ class PipelineStepImpl implements PipelineStep {
     async _dependsOnInternal(stepName: string): Promise<PipelineStep> {
         const rpcArgs: Record<string, unknown> = { context: this._handle, stepName };
         await this._client.invokeCapability<void>(
-            'Aspire.Hosting.Pipelines/dependsOn',
+            'Aspire.Hosting.Pipelines/PipelineStep.dependsOn',
             rpcArgs
         );
         return this;
@@ -2279,7 +2279,7 @@ class PipelineStepImpl implements PipelineStep {
     async _requiredByInternal(stepName: string): Promise<PipelineStep> {
         const rpcArgs: Record<string, unknown> = { context: this._handle, stepName };
         await this._client.invokeCapability<void>(
-            'Aspire.Hosting.Pipelines/requiredBy',
+            'Aspire.Hosting.Pipelines/PipelineStep.requiredBy',
             rpcArgs
         );
         return this;
@@ -2748,7 +2748,7 @@ class ReferenceExpressionBuilderImpl implements ReferenceExpressionBuilder {
     async _appendLiteralInternal(value: string): Promise<ReferenceExpressionBuilder> {
         const rpcArgs: Record<string, unknown> = { context: this._handle, value };
         await this._client.invokeCapability<void>(
-            'Aspire.Hosting.ApplicationModel/appendLiteral',
+            'Aspire.Hosting.ApplicationModel/ReferenceExpressionBuilder.appendLiteral',
             rpcArgs
         );
         return this;
@@ -2764,7 +2764,7 @@ class ReferenceExpressionBuilderImpl implements ReferenceExpressionBuilder {
         const rpcArgs: Record<string, unknown> = { context: this._handle, value };
         if (format !== undefined) rpcArgs.format = format;
         await this._client.invokeCapability<void>(
-            'Aspire.Hosting.ApplicationModel/appendFormatted',
+            'Aspire.Hosting.ApplicationModel/ReferenceExpressionBuilder.appendFormatted',
             rpcArgs
         );
         return this;
@@ -2781,7 +2781,7 @@ class ReferenceExpressionBuilderImpl implements ReferenceExpressionBuilder {
         const rpcArgs: Record<string, unknown> = { context: this._handle, valueProvider };
         if (format !== undefined) rpcArgs.format = format;
         await this._client.invokeCapability<void>(
-            'Aspire.Hosting.ApplicationModel/appendValueProvider',
+            'Aspire.Hosting.ApplicationModel/ReferenceExpressionBuilder.appendValueProvider',
             rpcArgs
         );
         return this;
@@ -2796,7 +2796,7 @@ class ReferenceExpressionBuilderImpl implements ReferenceExpressionBuilder {
     async build(): Promise<ReferenceExpression> {
         const rpcArgs: Record<string, unknown> = { context: this._handle };
         return await this._client.invokeCapability<ReferenceExpression>(
-            'Aspire.Hosting.ApplicationModel/build',
+            'Aspire.Hosting.ApplicationModel/ReferenceExpressionBuilder.build',
             rpcArgs
         );
     }
@@ -4006,7 +4006,7 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     async _buildInternal(): Promise<DistributedApplication> {
         const rpcArgs: Record<string, unknown> = { context: this._handle };
         const result = await this._client.invokeCapability<DistributedApplicationHandle>(
-            'Aspire.Hosting/build',
+            'Aspire.Hosting/IDistributedApplicationBuilder.build',
             rpcArgs
         );
         return new DistributedApplicationImpl(result, this._client);

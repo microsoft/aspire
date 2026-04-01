@@ -1873,7 +1873,7 @@ class DistributedApplicationBuilder:
         """Builds the distributed application"""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
         result = self._client.invoke_capability(
-            'Aspire.Hosting/build',
+            'Aspire.Hosting/IDistributedApplicationBuilder.build',
             rpc_args,
         )
         return typing.cast(DistributedApplication, result)
@@ -3162,7 +3162,7 @@ class EndpointReference:
         if timeout is not None:
             rpc_args['cancellationToken'] = self._client.register_cancellation_token(timeout)
         result = self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/getValueAsync',
+            'Aspire.Hosting.ApplicationModel/EndpointReference.getValueAsync',
             rpc_args,
         )
         return result
@@ -3694,7 +3694,7 @@ class PipelineStep:
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
         rpc_args['stepName'] = step_name
         self._client.invoke_capability(
-            'Aspire.Hosting.Pipelines/dependsOn',
+            'Aspire.Hosting.Pipelines/PipelineStep.dependsOn',
             rpc_args
         )
 
@@ -3703,7 +3703,7 @@ class PipelineStep:
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
         rpc_args['stepName'] = step_name
         self._client.invoke_capability(
-            'Aspire.Hosting.Pipelines/requiredBy',
+            'Aspire.Hosting.Pipelines/PipelineStep.requiredBy',
             rpc_args
         )
 
@@ -3993,7 +3993,7 @@ class ReferenceExpressionBuilder:
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
         rpc_args['value'] = value
         self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/appendLiteral',
+            'Aspire.Hosting.ApplicationModel/ReferenceExpressionBuilder.appendLiteral',
             rpc_args
         )
 
@@ -4004,7 +4004,7 @@ class ReferenceExpressionBuilder:
         if format is not None:
             rpc_args['format'] = format
         self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/appendFormatted',
+            'Aspire.Hosting.ApplicationModel/ReferenceExpressionBuilder.appendFormatted',
             rpc_args
         )
 
@@ -4015,7 +4015,7 @@ class ReferenceExpressionBuilder:
         if format is not None:
             rpc_args['format'] = format
         self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/appendValueProvider',
+            'Aspire.Hosting.ApplicationModel/ReferenceExpressionBuilder.appendValueProvider',
             rpc_args
         )
 
@@ -4023,7 +4023,7 @@ class ReferenceExpressionBuilder:
         """Builds the reference expression"""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
         result = self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/build',
+            'Aspire.Hosting.ApplicationModel/ReferenceExpressionBuilder.build',
             rpc_args,
         )
         return typing.cast(ReferenceExpression, result)
