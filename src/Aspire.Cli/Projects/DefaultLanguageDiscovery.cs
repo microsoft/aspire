@@ -95,7 +95,8 @@ internal sealed class DefaultLanguageDiscovery(IFeatures features) : ILanguageDi
         {
             foreach (var pattern in language.DetectionPatterns)
             {
-                if (LanguageDetectionPatternMatcher.DirectoryContainsMatch(directory, pattern))
+                var filePath = Path.Combine(directory.FullName, pattern);
+                if (File.Exists(filePath))
                 {
                     return Task.FromResult<LanguageId?>(language.LanguageId);
                 }
@@ -132,7 +133,7 @@ internal sealed class DefaultLanguageDiscovery(IFeatures features) : ILanguageDi
     public LanguageInfo? GetLanguageByFile(FileInfo file)
     {
         var match = s_allLanguages.FirstOrDefault(l =>
-            l.DetectionPatterns.Any(p => LanguageDetectionPatternMatcher.MatchesPattern(file.Name, p)));
+            l.DetectionPatterns.Any(p => MatchesPattern(file.Name, p)));
 
         if (match is not null && !IsLanguageEnabled(match))
         {
@@ -155,5 +156,18 @@ internal sealed class DefaultLanguageDiscovery(IFeatures features) : ILanguageDi
         }
 
         return true;
+    }
+
+    private static bool MatchesPattern(string fileName, string pattern)
+    {
+        // Handle wildcard patterns like "*.csproj"
+        if (pattern.StartsWith("*.", StringComparison.Ordinal))
+        {
+            var extension = pattern[1..]; // ".csproj"
+            return fileName.EndsWith(extension, StringComparison.OrdinalIgnoreCase);
+        }
+        
+        // Exact match
+        return fileName.Equals(pattern, StringComparison.OrdinalIgnoreCase);
     }
 }

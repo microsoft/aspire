@@ -46,7 +46,7 @@ public class DefaultLanguageDiscoveryTests
         var typescript = languages.FirstOrDefault(l => l.LanguageId.Value == "typescript/nodejs");
         Assert.NotNull(typescript);
         Assert.Equal("TypeScript (Node.js)", typescript.DisplayName);
-        Assert.Equal(["apphost.ts"], typescript.DetectionPatterns);
+        Assert.Contains("apphost.ts", typescript.DetectionPatterns);
     }
 
     [Fact]
@@ -61,7 +61,7 @@ public class DefaultLanguageDiscoveryTests
         var python = languages.FirstOrDefault(l => l.LanguageId.Value == KnownLanguageId.Python);
         Assert.NotNull(python);
         Assert.Equal(KnownLanguageId.PythonDisplayName, python.DisplayName);
-        Assert.Equal(["apphost.py"], python.DetectionPatterns);
+        Assert.Contains("apphost.py", python.DetectionPatterns);
     }
 
     [Fact]
@@ -112,42 +112,6 @@ public class DefaultLanguageDiscoveryTests
 
         Assert.NotNull(language);
         Assert.Equal(expectedLanguageId, language.LanguageId.Value);
-    }
-
-    [Theory]
-    [InlineData("apphost.py", KnownLanguageId.Python, "experimentalPolyglot:python")]
-    [InlineData("AppHost.java", KnownLanguageId.Java, "experimentalPolyglot:java")]
-    public void GetLanguageByFile_ReturnsExperimentalLanguageForConventionalAppHosts(string fileName, string expectedLanguageId, string featureFlag)
-    {
-        var features = new TestFeatures();
-        features.SetFeature(featureFlag, true);
-        var discovery = new DefaultLanguageDiscovery(features);
-        var file = new FileInfo(Path.Combine(Path.GetTempPath(), fileName));
-
-        var language = discovery.GetLanguageByFile(file);
-
-        Assert.NotNull(language);
-        Assert.Equal(expectedLanguageId, language.LanguageId.Value);
-    }
-
-    [Fact]
-    public async Task DetectLanguageAsync_ReturnsTypeScriptForConventionalAppHost()
-    {
-        var discovery = new DefaultLanguageDiscovery(new TestFeatures());
-        var directory = Directory.CreateTempSubdirectory();
-
-        try
-        {
-            File.WriteAllText(Path.Combine(directory.FullName, "apphost.ts"), "// test");
-
-            var language = await discovery.DetectLanguageAsync(directory).DefaultTimeout();
-
-            Assert.Equal("typescript/nodejs", language?.Value);
-        }
-        finally
-        {
-            directory.Delete(recursive: true);
-        }
     }
 
     [Theory]

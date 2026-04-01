@@ -101,11 +101,12 @@ public sealed class JavaLanguageSupport : ILanguageSupport
             InstallDependencies = null,
             Execute = new CommandSpec
             {
-                // Use a shell to compile and run in sequence.
+                // Use a shell to compile and run in sequence
+                // On Windows, use cmd /c; on Unix, use sh -c
                 Command = OperatingSystem.IsWindows() ? "cmd" : "sh",
                 Args = OperatingSystem.IsWindows()
-                    ? ["/c", "if not exist .java-build mkdir .java-build && javac --enable-preview --source 25 -d .java-build @.modules\\sources.txt \"{appHostFile}\" && java --enable-preview -cp .java-build AppHost {args}"]
-                    : ["-c", "mkdir -p .java-build && javac --enable-preview --source 25 -d .java-build @.modules/sources.txt \"{appHostFile}\" && java --enable-preview -cp .java-build AppHost {args}"]
+                    ? ["/c", "if not exist .java-build mkdir .java-build && javac --enable-preview --source 25 -d .java-build @.modules\\sources.txt AppHost.java && java --enable-preview -cp .java-build AppHost {args}"]
+                    : ["-c", "mkdir -p .java-build && javac --enable-preview --source 25 -d .java-build @.modules/sources.txt AppHost.java && java --enable-preview -cp .java-build AppHost {args}"]
             }
         };
     }
