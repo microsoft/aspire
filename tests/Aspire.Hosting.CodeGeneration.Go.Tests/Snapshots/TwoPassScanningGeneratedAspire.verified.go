@@ -1587,6 +1587,19 @@ func (s *CSharpAppResource) WithDependency(dependency *IResourceWithConnectionSt
 	return result.(*IResource), nil
 }
 
+// WithUnionDependency adds a dependency from a string or another resource
+func (s *CSharpAppResource) WithUnionDependency(dependency any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["dependency"] = SerializeValue(dependency)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
 // WithEndpoints sets the endpoints
 func (s *CSharpAppResource) WithEndpoints(endpoints []string) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -2526,6 +2539,19 @@ func (s *ConnectionStringResource) WithDependency(dependency *IResourceWithConne
 	return result.(*IResource), nil
 }
 
+// WithUnionDependency adds a dependency from a string or another resource
+func (s *ConnectionStringResource) WithUnionDependency(dependency any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["dependency"] = SerializeValue(dependency)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
 // WithEndpoints sets the endpoints
 func (s *ConnectionStringResource) WithEndpoints(endpoints []string) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -3176,6 +3202,19 @@ func (s *ContainerRegistryResource) WithDependency(dependency *IResourceWithConn
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withDependency", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithUnionDependency adds a dependency from a string or another resource
+func (s *ContainerRegistryResource) WithUnionDependency(dependency any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["dependency"] = SerializeValue(dependency)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -4680,6 +4719,19 @@ func (s *ContainerResource) WithDependency(dependency *IResourceWithConnectionSt
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withDependency", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithUnionDependency adds a dependency from a string or another resource
+func (s *ContainerResource) WithUnionDependency(dependency any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["dependency"] = SerializeValue(dependency)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -6254,6 +6306,19 @@ func (s *DotnetToolResource) WithDependency(dependency *IResourceWithConnectionS
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withDependency", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithUnionDependency adds a dependency from a string or another resource
+func (s *DotnetToolResource) WithUnionDependency(dependency any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["dependency"] = SerializeValue(dependency)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -7929,6 +7994,19 @@ func (s *ExecutableResource) WithDependency(dependency *IResourceWithConnectionS
 	return result.(*IResource), nil
 }
 
+// WithUnionDependency adds a dependency from a string or another resource
+func (s *ExecutableResource) WithUnionDependency(dependency any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["dependency"] = SerializeValue(dependency)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
 // WithEndpoints sets the endpoints
 func (s *ExecutableResource) WithEndpoints(endpoints []string) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -8724,6 +8802,19 @@ func (s *ExternalServiceResource) WithDependency(dependency *IResourceWithConnec
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withDependency", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithUnionDependency adds a dependency from a string or another resource
+func (s *ExternalServiceResource) WithUnionDependency(dependency any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["dependency"] = SerializeValue(dependency)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -10700,6 +10791,19 @@ func (s *ParameterResource) WithDependency(dependency *IResourceWithConnectionSt
 	return result.(*IResource), nil
 }
 
+// WithUnionDependency adds a dependency from a string or another resource
+func (s *ParameterResource) WithUnionDependency(dependency any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["dependency"] = SerializeValue(dependency)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
 // WithEndpoints sets the endpoints
 func (s *ParameterResource) WithEndpoints(endpoints []string) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -12601,6 +12705,19 @@ func (s *ProjectResource) WithDependency(dependency *IResourceWithConnectionStri
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withDependency", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithUnionDependency adds a dependency from a string or another resource
+func (s *ProjectResource) WithUnionDependency(dependency any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["dependency"] = SerializeValue(dependency)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -14715,6 +14832,19 @@ func (s *TestDatabaseResource) WithDependency(dependency *IResourceWithConnectio
 	return result.(*IResource), nil
 }
 
+// WithUnionDependency adds a dependency from a string or another resource
+func (s *TestDatabaseResource) WithUnionDependency(dependency any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["dependency"] = SerializeValue(dependency)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
 // WithEndpoints sets the endpoints
 func (s *TestDatabaseResource) WithEndpoints(endpoints []string) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -16462,6 +16592,19 @@ func (s *TestRedisResource) WithDependency(dependency *IResourceWithConnectionSt
 	return result.(*IResource), nil
 }
 
+// WithUnionDependency adds a dependency from a string or another resource
+func (s *TestRedisResource) WithUnionDependency(dependency any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["dependency"] = SerializeValue(dependency)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
 // WithEndpoints sets the endpoints
 func (s *TestRedisResource) WithEndpoints(endpoints []string) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -18133,6 +18276,19 @@ func (s *TestVaultResource) WithDependency(dependency *IResourceWithConnectionSt
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withDependency", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithUnionDependency adds a dependency from a string or another resource
+func (s *TestVaultResource) WithUnionDependency(dependency any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["dependency"] = SerializeValue(dependency)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs)
 	if err != nil {
 		return nil, err
 	}
