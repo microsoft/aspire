@@ -212,7 +212,7 @@ extends:
                     - win-arm64
                   packCliToolPackages: true
 
-               - pwsh: |
+              - pwsh: |
                    $ErrorActionPreference = 'Stop'
                    $shippingDir = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping"
                    $nupkg = Get-ChildItem -Path $shippingDir -Filter "Aspire.Hosting.AppHost.*.nupkg" -ErrorAction SilentlyContinue |
@@ -341,10 +341,10 @@ extends:
                 itemPattern: |
                   **/aspire-cli-*.tar.gz
                 targetPath: '$(Pipeline.Workspace)/native-archives'
-             - template: /eng/pipelines/templates/prepare-homebrew-cask.yml@self
-               parameters:
-                 version: $(aspireVersion)
-                 artifactVersion: $(aspireArtifactVersion)
-                 archiveRoot: $(Pipeline.Workspace)/native-archives
-                 validateUrls: false
-                 runInstallTest: false
+            - template: /eng/pipelines/templates/prepare-homebrew-cask.yml@self
+              parameters:
+                version: $(aspireVersion)
+                artifactVersion: $(aspireArtifactVersion)
+                archiveRoot: $(Pipeline.Workspace)/native-archives
+                validateUrls: false
+                runInstallTest: false
