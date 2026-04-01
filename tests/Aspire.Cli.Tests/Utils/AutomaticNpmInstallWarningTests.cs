@@ -40,12 +40,4 @@ public class AutomaticNpmInstallWarningTests
 
         Assert.False(AutomaticNpmInstallWarning.IsMatch(lines));
     }
-
-    [Fact]
-    public void Message_ExplainsProjectCreationSucceeded()
-    {
-        Assert.Equal(
-            "Project files were created, but Aspire could not run 'npm install' automatically because the required Node.js tools were not found on PATH. You may see missing package errors or red squiggles in your IDE until you install Node.js and run 'npm install' in the project directory.",
-            AutomaticNpmInstallWarning.Message);
-    }
 }

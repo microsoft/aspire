@@ -4,6 +4,7 @@
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 
@@ -201,7 +202,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
             var lines = output.GetLines().ToArray();
             if (AutomaticNpmInstallWarning.IsMatch(lines))
             {
-                _interactionService.DisplayMessage(KnownEmojis.Warning, AutomaticNpmInstallWarning.Message);
+                _interactionService.DisplayMessage(KnownEmojis.Warning, ErrorStrings.ProjectFilesCreatedButNodeToolsNotFound);
                 return 0;
             }
 
