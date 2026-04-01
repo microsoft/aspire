@@ -120,6 +120,10 @@ await proxy.withConfiguration(async (config) => {
         .withTransform({
             PathPrefix: "/external",
         });
+    await config.addRoute("/from-string/{**catchall}", "https://example.route")
+        .withTransform({
+            PathPrefix: "/string",
+        });
     await config.addCatchAllRoute(endpointCluster)
         .withTransform({
             PathPrefix: "/cluster",
@@ -135,6 +139,10 @@ await proxy.withConfiguration(async (config) => {
     await config.addCatchAllRoute(externalBackend)
         .withTransform({
             PathPrefix: "/catchall-external",
+        });
+    await config.addCatchAllRoute("https://example.catchall")
+        .withTransform({
+            PathPrefix: "/catchall-string",
         });
 
     await config.addRoute("/resource/{**catchall}", resourceCluster);

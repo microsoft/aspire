@@ -24,6 +24,9 @@ def configure_proxy(config):
     config.add_route("/from-external/{**catchall}", external_backend).with_transform({
         "PathPrefix": "/external",
     })
+    config.add_route("/from-string/{**catchall}", "https://example.route").with_transform({
+        "PathPrefix": "/string",
+    })
     config.add_catch_all_route(endpoint_cluster).with_transform({
         "PathPrefix": "/cluster",
     })
@@ -35,6 +38,9 @@ def configure_proxy(config):
     })
     config.add_catch_all_route(external_backend).with_transform({
         "PathPrefix": "/catchall-external",
+    })
+    config.add_catch_all_route("https://example.catchall").with_transform({
+        "PathPrefix": "/catchall-string",
     })
 
     config.add_route("/resource/{**catchall}", resource_cluster)
