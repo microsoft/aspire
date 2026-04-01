@@ -164,84 +164,67 @@ internal sealed class SdkDumpCommand : BaseCommand
                 return ExitCodeConstants.FailedToBuildArtifacts;
             }
 
-            // Start the server
-            var currentPid = Environment.ProcessId;
-            var (socketPath, serverProcess, _) = appHostServerProject.Run(currentPid, new Dictionary<string, string>());
+            await using var serverSession = AppHostServerSession.Start(
+                appHostServerProject,
+                environmentVariables: null,
+                debug: false,
+                _logger);
 
-            try
+            // Connect and get capabilities
+            var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
+
+            _logger.LogDebug("Fetching capabilities via RPC");
+            var capabilities = await rpcClient.GetCapabilitiesAsync(cancellationToken);
+
+            // Output Info-level diagnostics to stderr via logger (shown with -d flag)
+            var infoDiagnostics = capabilities.Diagnostics.Where(d => d.Severity == "Info").ToList();
+            foreach (var diag in infoDiagnostics)
             {
-                // Connect and get capabilities
-                await using var rpcClient = await AppHostRpcClient.ConnectAsync(socketPath, cancellationToken);
-
-                _logger.LogDebug("Fetching capabilities via RPC");
-                var capabilities = await rpcClient.GetCapabilitiesAsync(cancellationToken);
-
-                // Output Info-level diagnostics to stderr via logger (shown with -d flag)
-                var infoDiagnostics = capabilities.Diagnostics.Where(d => d.Severity == "Info").ToList();
-                foreach (var diag in infoDiagnostics)
-                {
-                    var location = string.IsNullOrEmpty(diag.Location) ? "" : $" [{diag.Location}]";
-                    _logger.LogDebug("{Message}{Location}", diag.Message, location);
-                }
-
-                // Remove Info diagnostics from output (they go to stderr only)
-                capabilities.Diagnostics.RemoveAll(d => d.Severity == "Info");
-
-                // Stamp package versions for integrations that have them
-                var packageVersions = integrations
-                    .Where(i => i.IsPackageReference)
-                    .Select(i => new PackageInfo { Name = i.Name, Version = i.Version! })
-                    .ToList();
-                if (packageVersions.Count > 0)
-                {
-                    capabilities.Packages = packageVersions;
-                }
-
-                // Format the output
-                var output = format switch
-                {
-                    OutputFormat.Json => FormatJson(capabilities),
-                    OutputFormat.Ci => FormatCi(capabilities),
-                    _ => FormatPretty(capabilities)
-                };
-
-                // Write output
-                if (outputFile is not null)
-                {
-                    var outputDir = outputFile.Directory;
-                    if (outputDir is not null && !outputDir.Exists)
-                    {
-                        outputDir.Create();
-                    }
-                    await File.WriteAllTextAsync(outputFile.FullName, output, cancellationToken);
-                    InteractionService.DisplaySuccess($"Capabilities written to {outputFile.FullName}");
-                }
-                else
-                {
-                    // Output to stdout
-                    InteractionService.DisplayRawText(output, consoleOverride: ConsoleOutput.Standard);
-                }
-
-                // Return error code if there are errors in diagnostics
-                var hasErrors = capabilities.Diagnostics.Exists(d => d.Severity == "Error");
-                return hasErrors ? ExitCodeConstants.InvalidCommand : ExitCodeConstants.Success;
+                var location = string.IsNullOrEmpty(diag.Location) ? "" : $" [{diag.Location}]";
+                _logger.LogDebug("{Message}{Location}", diag.Message, location);
             }
-            finally
+
+            // Remove Info diagnostics from output (they go to stderr only)
+            capabilities.Diagnostics.RemoveAll(d => d.Severity == "Info");
+
+            // Stamp package versions for integrations that have them
+            var packageVersions = integrations
+                .Where(i => i.IsPackageReference)
+                .Select(i => new PackageInfo { Name = i.Name, Version = i.Version! })
+                .ToList();
+            if (packageVersions.Count > 0)
             {
-                // Stop the server - just try to kill, catch if already exited
-                try
-                {
-                    serverProcess.Kill(entireProcessTree: true);
-                }
-                catch (InvalidOperationException)
-                {
-                    // Process already exited - this is fine
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogDebug(ex, "Error killing AppHost server process");
-                }
+                capabilities.Packages = packageVersions;
             }
+
+            // Format the output
+            var output = format switch
+            {
+                OutputFormat.Json => FormatJson(capabilities),
+                OutputFormat.Ci => FormatCi(capabilities),
+                _ => FormatPretty(capabilities)
+            };
+
+            // Write output
+            if (outputFile is not null)
+            {
+                var outputDir = outputFile.Directory;
+                if (outputDir is not null && !outputDir.Exists)
+                {
+                    outputDir.Create();
+                }
+                await File.WriteAllTextAsync(outputFile.FullName, output, cancellationToken);
+                InteractionService.DisplaySuccess($"Capabilities written to {outputFile.FullName}");
+            }
+            else
+            {
+                // Output to stdout
+                InteractionService.DisplayRawText(output, consoleOverride: ConsoleOutput.Standard);
+            }
+
+            // Return error code if there are errors in diagnostics
+            var hasErrors = capabilities.Diagnostics.Exists(d => d.Severity == "Error");
+            return hasErrors ? ExitCodeConstants.InvalidCommand : ExitCodeConstants.Success;
         }
         finally
         {

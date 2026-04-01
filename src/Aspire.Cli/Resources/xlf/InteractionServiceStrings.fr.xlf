@@ -102,6 +102,11 @@
         <target state="translated">Désolé, le projet n’a pas pu être généré. Consultez les journaux à l’emplacement {0}</target>
         <note />
       </trans-unit>
+      <trans-unit id="ProjectCouldNotBeCreated">
+        <source>The app could not be created. See logs at {0}</source>
+        <target state="new">The app could not be created. See logs at {0}</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ProjectOptionDoesntExist">
         <source>The --apphost option specified a project that does not exist.</source>
         <target state="translated">L’option --apphost spécifie un projet qui n’existe pas.</target>

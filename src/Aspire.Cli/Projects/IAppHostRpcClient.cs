@@ -69,5 +69,5 @@ internal interface IAppHostRpcClientFactory
     /// Creates and connects an RPC client to the specified socket path.
     /// Handles platform-specific connection (Unix sockets vs named pipes).
     /// </summary>
-    Task<IAppHostRpcClient> ConnectAsync(string socketPath, CancellationToken cancellationToken);
+    Task<IAppHostRpcClient> ConnectAsync(string socketPath, string authenticationToken, CancellationToken cancellationToken);
 }

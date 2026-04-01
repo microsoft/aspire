@@ -97,11 +97,22 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ExtractHashFromSocketPath_ExtractsHashFromNewFormat()
     {
-        // New format: auxi.sock.{hash}.{pid}
-        var socketPath = "/home/user/.aspire/cli/backchannels/auxi.sock.abc123def4567890.12345";
+        // Current format: auxi.sock.{hash}.{instanceHash}.{pid}
+        var socketPath = "/home/user/.aspire/cli/backchannels/auxi.sock.abc123def4567890.a1b2c3d4e5f6.12345";
         
         var hash = AppHostHelper.ExtractHashFromSocketPath(socketPath);
         
+        Assert.Equal("abc123def4567890", hash);
+    }
+
+    [Fact]
+    public void ExtractHashFromSocketPath_ExtractsHashFromPreviousFormat()
+    {
+        // Previous format: auxi.sock.{hash}.{pid}
+        var socketPath = "/home/user/.aspire/cli/backchannels/auxi.sock.abc123def4567890.12345";
+
+        var hash = AppHostHelper.ExtractHashFromSocketPath(socketPath);
+
         Assert.Equal("abc123def4567890", hash);
     }
 
@@ -140,11 +151,22 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ExtractPidFromSocketPath_ExtractsPidFromNewFormat()
     {
-        // New format: auxi.sock.{hash}.{pid}
-        var socketPath = "/home/user/.aspire/cli/backchannels/auxi.sock.abc123def4567890.12345";
+        // Current format: auxi.sock.{hash}.{instanceHash}.{pid}
+        var socketPath = "/home/user/.aspire/cli/backchannels/auxi.sock.abc123def4567890.a1b2c3d4e5f6.12345";
         
         var pid = AppHostHelper.ExtractPidFromSocketPath(socketPath);
         
+        Assert.Equal(12345, pid);
+    }
+
+    [Fact]
+    public void ExtractPidFromSocketPath_ExtractsPidFromPreviousFormat()
+    {
+        // Previous format: auxi.sock.{hash}.{pid}
+        var socketPath = "/home/user/.aspire/cli/backchannels/auxi.sock.abc123def4567890.12345";
+
+        var pid = AppHostHelper.ExtractPidFromSocketPath(socketPath);
+
         Assert.Equal(12345, pid);
     }
 
@@ -215,8 +237,8 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(appHostPath, workspace.WorkspaceRoot.FullName);
         var hash = Path.GetFileName(prefix)["auxi.sock.".Length..];
         
-        // Create matching socket files (new format with PID)
-        var socket1 = Path.Combine(backchannelsDir, $"auxi.sock.{hash}.12345");
+        // Create matching socket files in both current and previous formats.
+        var socket1 = Path.Combine(backchannelsDir, $"auxi.sock.{hash}.a1b2c3d4e5f6.12345");
         var socket2 = Path.Combine(backchannelsDir, $"auxi.sock.{hash}.67890");
         File.WriteAllText(socket1, "");
         File.WriteAllText(socket2, "");

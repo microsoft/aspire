@@ -167,7 +167,7 @@ public class DotNetSdkInstallerTests
             "10.0.100",
             "(not found)");
 
-        Assert.Equal("The Aspire CLI requires .NET SDK version 10.0.100 or later. Detected: (not found).", message);
+        Assert.Equal("C# apphost requires .NET SDK version 10.0.100 or later. Detected: (not found).", message);
     }
 
     [Fact]

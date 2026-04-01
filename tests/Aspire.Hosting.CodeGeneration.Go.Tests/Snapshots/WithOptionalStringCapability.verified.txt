@@ -3,6 +3,7 @@
   MethodName: withOptionalString,
   QualifiedMethodName: withOptionalString,
   Description: Adds an optional string parameter,
+  IsObsolete: false,
   Parameters: [
     {
       Name: value,

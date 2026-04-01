@@ -865,7 +865,7 @@ export class AspireClient implements AspireClientRpc {
                 failConnect(new Error('Connection closed before JSON-RPC was established'));
             };
 
-            const onConnect = () => {
+            const onConnect = async () => {
                 if (settled) {
                     return;
                 }
@@ -902,7 +902,16 @@ export class AspireClient implements AspireClientRpc {
                     socket.on('error', onConnectedSocketError);
                     socket.on('close', onConnectedSocketClose);
 
+                    const authToken = process.env.ASPIRE_REMOTE_APPHOST_TOKEN;
+                    if (!authToken) {
+                        throw new Error('ASPIRE_REMOTE_APPHOST_TOKEN environment variable is not set.');
+                    }
                     this.connection.listen();
+                    const authenticated = await this.connection.sendRequest<boolean>('authenticate', authToken);
+                    if (!authenticated) {
+                        throw new Error('Failed to authenticate to the AppHost server.');
+                    }
+
                     connectedClients.add(this);
                     this._connectPromise = null;
                     settled = true;

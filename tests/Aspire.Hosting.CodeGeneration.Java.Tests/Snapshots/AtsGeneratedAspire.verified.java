@@ -18,6 +18,11 @@ public class Aspire {
         }
         AspireClient client = new AspireClient(socketPath);
         client.connect();
+        String authToken = System.getenv("ASPIRE_REMOTE_APPHOST_TOKEN");
+        if (authToken == null || authToken.isEmpty()) {
+            throw new RuntimeException("ASPIRE_REMOTE_APPHOST_TOKEN environment variable not set. Run this application using `aspire run`.");
+        }
+        client.authenticate(authToken);
         client.onDisconnect(() -> System.exit(1));
         return client;
     }
@@ -219,6 +224,31 @@ public class AspireClient {
         } catch (IOException e) {
             handleDisconnect();
             throw new RuntimeException("Failed to invoke capability: " + e.getMessage(), e);
+        }
+    }
+
+    public void authenticate(String token) {
+        int id = requestId.incrementAndGet();
+
+        List<Object> params = List.of(token);
+
+        Map<String, Object> request = new HashMap<>();
+        request.put("jsonrpc", "2.0");
+        request.put("id", id);
+        request.put("method", "authenticate");
+        request.put("params", params);
+
+        debug("Sending request authenticate with id=" + id);
+
+        try {
+            sendMessage(request);
+            Object result = readResponse(id);
+            if (!(result instanceof Boolean authenticated) || !authenticated) {
+                throw new RuntimeException("Failed to authenticate to the AppHost server.");
+            }
+        } catch (IOException e) {
+            handleDisconnect();
+            throw new RuntimeException("Failed to authenticate: " + e.getMessage(), e);
         }
     }
 

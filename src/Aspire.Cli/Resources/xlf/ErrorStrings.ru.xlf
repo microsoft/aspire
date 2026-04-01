@@ -123,8 +123,8 @@
         <note />
       </trans-unit>
       <trans-unit id="MinimumSdkVersionNotMet">
-        <source>The Aspire CLI requires .NET SDK version {0} or later. Detected: {1}.</source>
-        <target state="translated">Для Aspire CLI требуется версия .NET SDK {0} или более поздняя. Обнаружено: {1}.</target>
+        <source>C# apphost requires .NET SDK version {0} or later. Detected: {1}.</source>
+        <target state="needs-review-translation">Для Aspire CLI требуется версия .NET SDK {0} или более поздняя. Обнаружено: {1}.</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleProjectFilesFound">

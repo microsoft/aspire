@@ -117,7 +117,7 @@ public static class ExecutableResourceBuilderExtensions
     /// <param name="builder">Resource builder</param>
     /// <param name="configure">Optional action to configure the container resource</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("publishAsDockerFileWithConfigure", Description = "Publishes an executable as a Docker file with optional container configuration")]
+    [AspireExport("publishAsDockerFileWithConfigure", Description = "Publishes an executable as a Docker file with optional container configuration", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<T> PublishAsDockerFile<T>(this IResourceBuilder<T> builder, Action<IResourceBuilder<ContainerResource>>? configure)
         where T : ExecutableResource
     {

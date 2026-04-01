@@ -1613,6 +1613,9 @@ pub fn connect() -> Result<Arc<AspireClient>, Box<dyn std::error::Error>> {
         .map_err(|_| "REMOTE_APP_HOST_SOCKET_PATH environment variable not set. Run this application using `aspire run`")?;
     let client = Arc::new(AspireClient::new(&socket_path));
     client.connect()?;
+    let auth_token = std::env::var("ASPIRE_REMOTE_APPHOST_TOKEN")
+        .map_err(|_| "ASPIRE_REMOTE_APPHOST_TOKEN environment variable not set. Run this application using `aspire run`")?;
+    client.authenticate(&auth_token)?;
     Ok(client)
 }
 

@@ -23,6 +23,7 @@ namespace Aspire.Hosting;
 public static class FoundryExtensions
 {
     private const string DefaultCapabilityHostName = "foundry-caphost";
+    internal const string LocalProjectsNotSupportedMessage = "Microsoft Foundry projects are not supported when the parent Foundry resource is configured with RunAsFoundryLocal().";
 
     /// <summary>
     /// Adds a Microsoft Foundry resource to the application model.
@@ -140,6 +141,7 @@ public static class FoundryExtensions
         }
 
         var resource = builder.Resource;
+        ThrowIfProjectsConfiguredForLocal(builder, resource);
         resource.Annotations.Add(new EmulatorResourceAnnotation());
 
         builder.ApplicationBuilder.Services.AddSingleton<FoundryLocalManager>();
@@ -167,6 +169,16 @@ public static class FoundryExtensions
         builder.WithHealthCheck(healthCheckKey);
 
         return builder;
+    }
+
+    internal static void ThrowIfProjectsConfiguredForLocal(IResourceBuilder<FoundryResource> builder, FoundryResource resource)
+    {
+        if (builder.ApplicationBuilder.Resources
+            .OfType<AzureCognitiveServicesProjectResource>()
+            .Any(project => ReferenceEquals(project.Parent, resource)))
+        {
+            throw new InvalidOperationException(LocalProjectsNotSupportedMessage);
+        }
     }
 
     /// <summary>

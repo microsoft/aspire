@@ -115,14 +115,16 @@ extends:
                   Write-Host "Source Build ID: $(resources.pipeline.aspire-build.runID)"
                   Write-Host "Source Build Name: $(resources.pipeline.aspire-build.runName)"
                   Write-Host "This stage downloads artifacts and re-publishes them so 1ES PT can generate SBOM."
+                  Write-Host "Installer-only mode: ${{ and(eq(parameters.SkipNuGetPublish, true), eq(parameters.SkipChannelPromotion, true)) }}"
                   Write-Host "==============================="
                 displayName: 'Log Stage Info'
 
               # Download artifacts from the source build pipeline
-              - download: aspire-build
-                displayName: 'Download PackageArtifacts from Source Build'
-                artifact: PackageArtifacts
-                patterns: '**/*.nupkg'
+              - ${{ if not(and(eq(parameters.SkipNuGetPublish, true), eq(parameters.SkipChannelPromotion, true))) }}:
+                - download: aspire-build
+                  displayName: 'Download PackageArtifacts from Source Build'
+                  artifact: PackageArtifacts
+                  patterns: '**/*.nupkg'
 
               - download: aspire-build
                 displayName: 'Download WinGet Manifests from Source Build'
@@ -133,27 +135,39 @@ extends:
                 artifact: homebrew-cask-stable
 
               # Move artifacts to expected location for output
-              - powershell: |
-                  $sourcePath = "$(Pipeline.Workspace)/aspire-build/PackageArtifacts"
-                  $targetPath = "$(Pipeline.Workspace)/packages/PackageArtifacts"
-                  
-                  Write-Host "Moving artifacts from $sourcePath to $targetPath"
-                  
-                  if (!(Test-Path $targetPath)) {
-                    New-Item -ItemType Directory -Path $targetPath -Force | Out-Null
-                  }
-                  
-                  # Copy all nupkg files
-                  $packages = Get-ChildItem -Path $sourcePath -Filter "*.nupkg" -Recurse
-                  Write-Host "Found $($packages.Count) packages to copy"
-                  
-                  foreach ($pkg in $packages) {
-                    Copy-Item $pkg.FullName -Destination $targetPath -Force
-                    Write-Host "  Copied: $($pkg.Name)"
-                  }
-                  
-                  Write-Host "✓ Artifacts prepared for SBOM generation"
-                displayName: 'Prepare Artifacts for Publishing'
+              - ${{ if not(and(eq(parameters.SkipNuGetPublish, true), eq(parameters.SkipChannelPromotion, true))) }}:
+                - powershell: |
+                    $sourcePath = "$(Pipeline.Workspace)/aspire-build/PackageArtifacts"
+                    $targetPath = "$(Pipeline.Workspace)/packages/PackageArtifacts"
+
+                    Write-Host "Moving artifacts from $sourcePath to $targetPath"
+
+                    if (!(Test-Path $targetPath)) {
+                      New-Item -ItemType Directory -Path $targetPath -Force | Out-Null
+                    }
+
+                    # Copy all nupkg files
+                    $packages = Get-ChildItem -Path $sourcePath -Filter "*.nupkg" -Recurse
+                    Write-Host "Found $($packages.Count) packages to copy"
+
+                    foreach ($pkg in $packages) {
+                      Copy-Item $pkg.FullName -Destination $targetPath -Force
+                      Write-Host "  Copied: $($pkg.Name)"
+                    }
+
+                    Write-Host "✓ Artifacts prepared for SBOM generation"
+                  displayName: 'Prepare Artifacts for Publishing'
+
+              - ${{ if and(eq(parameters.SkipNuGetPublish, true), eq(parameters.SkipChannelPromotion, true)) }}:
+                - powershell: |
+                    $targetPath = "$(Pipeline.Workspace)/packages/PackageArtifacts"
+
+                    if (!(Test-Path $targetPath)) {
+                      New-Item -ItemType Directory -Path $targetPath -Force | Out-Null
+                    }
+
+                    Write-Host "Installer-only run detected; created empty PackageArtifacts placeholder."
+                  displayName: 'Prepare Empty PackageArtifacts Placeholder'
 
               # Copy installer artifacts to expected locations for output
               - powershell: |
@@ -225,118 +239,121 @@ extends:
                   Write-Host "Dry Run: ${{ parameters.DryRun }}"
                   Write-Host "Skip NuGet Publish: ${{ parameters.SkipNuGetPublish }}"
                   Write-Host "Skip Channel Promotion: ${{ parameters.SkipChannelPromotion }}"
+                  Write-Host "Installer-only mode: ${{ and(eq(parameters.SkipNuGetPublish, true), eq(parameters.SkipChannelPromotion, true)) }}"
                   Write-Host "==================================="
                 displayName: 'Validate Parameters'
 
               # ===== EXTRACT BAR BUILD ID =====
-              - powershell: |
-                  $buildId = "$(resources.pipeline.aspire-build.runID)"
-                  $org = "$(System.CollectionUri)"
-                  $project = "internal"
+              - ${{ if eq(parameters.SkipChannelPromotion, false) }}:
+                - powershell: |
+                    $buildId = "$(resources.pipeline.aspire-build.runID)"
+                    $org = "$(System.CollectionUri)"
+                    $project = "internal"
 
-                  Write-Host "Fetching build tags for build: $buildId"
+                    Write-Host "Fetching build tags for build: $buildId"
 
-                  # Use Azure DevOps REST API to get build tags
-                  $uri = "${org}${project}/_apis/build/builds/${buildId}/tags?api-version=7.0"
-                  Write-Host "API URI: $uri"
+                    # Use Azure DevOps REST API to get build tags
+                    $uri = "${org}${project}/_apis/build/builds/${buildId}/tags?api-version=7.0"
+                    Write-Host "API URI: $uri"
 
-                  try {
-                    $response = Invoke-RestMethod -Uri $uri -Headers @{
-                      Authorization = "Bearer $(System.AccessToken)"
-                    } -Method Get
+                    try {
+                      $response = Invoke-RestMethod -Uri $uri -Headers @{
+                        Authorization = "Bearer $(System.AccessToken)"
+                      } -Method Get
 
-                    Write-Host "Build tags found: $($response.value -join ', ')"
+                      Write-Host "Build tags found: $($response.value -join ', ')"
 
-                    # Find the BAR ID tag
-                    $barIdTag = $response.value | Where-Object { $_ -match 'BAR ID - (\d+)' }
+                      # Find the BAR ID tag
+                      $barIdTag = $response.value | Where-Object { $_ -match 'BAR ID - (\d+)' }
 
-                    if ($barIdTag -and $barIdTag -match 'BAR ID - (\d+)') {
-                      $barBuildId = $Matches[1]
-                      Write-Host "✓ Extracted BAR Build ID: $barBuildId"
-                      Write-Host "##vso[task.setvariable variable=BarBuildId]$barBuildId"
-                    } else {
-                      Write-Error "Could not find BAR ID tag in build $buildId. Tags found: $($response.value -join ', ')"
+                      if ($barIdTag -and $barIdTag -match 'BAR ID - (\d+)') {
+                        $barBuildId = $Matches[1]
+                        Write-Host "✓ Extracted BAR Build ID: $barBuildId"
+                        Write-Host "##vso[task.setvariable variable=BarBuildId]$barBuildId"
+                      } else {
+                        Write-Error "Could not find BAR ID tag in build $buildId. Tags found: $($response.value -join ', ')"
+                        exit 1
+                      }
+                    } catch {
+                      Write-Error "Failed to fetch build tags: $_"
                       exit 1
                     }
-                  } catch {
-                    Write-Error "Failed to fetch build tags: $_"
-                    exit 1
-                  }
-                displayName: 'Extract BAR Build ID'
-                env:
-                  SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+                  displayName: 'Extract BAR Build ID'
+                  env:
+                    SYSTEM_ACCESSTOKEN: $(System.AccessToken)
 
               # ===== DOWNLOAD PACKAGES =====
               # Artifacts are downloaded automatically via templateContext.inputs above
 
-              - task: UseDotNet@2
-                displayName: 'Install .NET 10 SDK'
-                inputs:
-                  packageType: 'sdk'
-                  version: '10.0.x'
+              - ${{ if eq(parameters.SkipNuGetPublish, false) }}:
+                - task: UseDotNet@2
+                  displayName: 'Install .NET 10 SDK'
+                  inputs:
+                    packageType: 'sdk'
+                    version: '10.0.x'
 
-              - powershell: |
-                  $packagesPath = "$(Pipeline.Workspace)/packages/PackageArtifacts"
-                  Write-Host "=== Package Inventory ==="
+                - powershell: |
+                    $packagesPath = "$(Pipeline.Workspace)/packages/PackageArtifacts"
+                    Write-Host "=== Package Inventory ==="
 
-                  $packages = Get-ChildItem -Path $packagesPath -Filter "*.nupkg" -Recurse
-                  Write-Host "Found $($packages.Count) packages:"
+                    $packages = Get-ChildItem -Path $packagesPath -Filter "*.nupkg" -Recurse
+                    Write-Host "Found $($packages.Count) packages:"
 
-                  foreach ($pkg in $packages) {
-                    $sizeMB = [math]::Round($pkg.Length / 1MB, 2)
-                    Write-Host "  - $($pkg.Name) ($sizeMB MB)"
-                  }
-
-                  if ($packages.Count -eq 0) {
-                    Write-Error "No packages found in artifacts!"
-                    exit 1
-                  }
-
-                  Write-Host "==========================="
-                displayName: 'List Packages'
-
-              # ===== VERIFY SIGNATURES =====
-              - powershell: |
-                  $packagesPath = "$(Pipeline.Workspace)/packages/PackageArtifacts"
-                  Write-Host "=== Verifying Package Signatures ==="
-
-                  $packages = Get-ChildItem -Path $packagesPath -Filter "*.nupkg" -Recurse
-                  $failedVerification = @()
-
-                  foreach ($package in $packages) {
-                    Write-Host "Verifying: $($package.Name)"
-
-                    # Use $ErrorActionPreference to prevent PowerShell from treating stderr as terminating error
-                    $originalErrorActionPreference = $ErrorActionPreference
-                    $ErrorActionPreference = 'Continue'
-                    $result = dotnet nuget verify $package.FullName 2>&1
-                    $verifyExitCode = $LASTEXITCODE
-                    $ErrorActionPreference = $originalErrorActionPreference
-
-                    if ($verifyExitCode -ne 0) {
-                      Write-Host "  ❌ Signature verification FAILED"
-                      Write-Host $result
-                      $failedVerification += $package.Name
-                    } else {
-                      Write-Host "  ✓ Signature valid"
+                    foreach ($pkg in $packages) {
+                      $sizeMB = [math]::Round($pkg.Length / 1MB, 2)
+                      Write-Host "  - $($pkg.Name) ($sizeMB MB)"
                     }
-                  }
 
-                  if ($failedVerification.Count -gt 0) {
+                    if ($packages.Count -eq 0) {
+                      Write-Error "No packages found in artifacts!"
+                      exit 1
+                    }
+
+                    Write-Host "==========================="
+                  displayName: 'List Packages'
+
+                # ===== VERIFY SIGNATURES =====
+                - powershell: |
+                    $packagesPath = "$(Pipeline.Workspace)/packages/PackageArtifacts"
+                    Write-Host "=== Verifying Package Signatures ==="
+
+                    $packages = Get-ChildItem -Path $packagesPath -Filter "*.nupkg" -Recurse
+                    $failedVerification = @()
+
+                    foreach ($package in $packages) {
+                      Write-Host "Verifying: $($package.Name)"
+
+                      # Use $ErrorActionPreference to prevent PowerShell from treating stderr as terminating error
+                      $originalErrorActionPreference = $ErrorActionPreference
+                      $ErrorActionPreference = 'Continue'
+                      $result = dotnet nuget verify $package.FullName 2>&1
+                      $verifyExitCode = $LASTEXITCODE
+                      $ErrorActionPreference = $originalErrorActionPreference
+
+                      if ($verifyExitCode -ne 0) {
+                        Write-Host "  ❌ Signature verification FAILED"
+                        Write-Host $result
+                        $failedVerification += $package.Name
+                      } else {
+                        Write-Host "  ✓ Signature valid"
+                      }
+                    }
+
+                    if ($failedVerification.Count -gt 0) {
+                      Write-Host ""
+                      Write-Host "=== SIGNATURE VERIFICATION FAILED ==="
+                      Write-Host "The following packages failed signature verification:"
+                      foreach ($pkg in $failedVerification) {
+                        Write-Host "  - $pkg"
+                      }
+                      Write-Error "Package signature verification failed. Aborting release."
+                      exit 1
+                    }
+
                     Write-Host ""
-                    Write-Host "=== SIGNATURE VERIFICATION FAILED ==="
-                    Write-Host "The following packages failed signature verification:"
-                    foreach ($pkg in $failedVerification) {
-                      Write-Host "  - $pkg"
-                    }
-                    Write-Error "Package signature verification failed. Aborting release."
-                    exit 1
-                  }
-
-                  Write-Host ""
-                  Write-Host "✓ All $($packages.Count) packages passed signature verification"
-                  Write-Host "==========================="
-                displayName: 'Verify Package Signatures'
+                    Write-Host "✓ All $($packages.Count) packages passed signature verification"
+                    Write-Host "==========================="
+                  displayName: 'Verify Package Signatures'
 
               # ===== PUBLISH TO NUGET =====
               # Dry Run: List packages that would be published (skip actual publish)
@@ -450,7 +467,11 @@ extends:
                   Write-Host "╠═══════════════════════════════════════════════════════════════╣"
                   Write-Host "║ Source Build:   $(resources.pipeline.aspire-build.runName)"
                   Write-Host "║ Source Build ID: $(resources.pipeline.aspire-build.runID)"
-                  Write-Host "║ BAR Build ID:   $(BarBuildId)"
+                  if ("${{ parameters.SkipChannelPromotion }}" -eq "true") {
+                    Write-Host "║ BAR Build ID:   (SKIPPED)"
+                  } else {
+                    Write-Host "║ BAR Build ID:   $(BarBuildId)"
+                  }
                   Write-Host "║ GA Channel:     ${{ parameters.GaChannelName }}"
                   Write-Host "║ Dry Run:        ${{ parameters.DryRun }}"
                   Write-Host "╠═══════════════════════════════════════════════════════════════╣"
@@ -526,5 +547,4 @@ extends:
               - template: /eng/pipelines/templates/publish-homebrew.yml@self
                 parameters:
                   caskArtifactPath: $(Pipeline.Workspace)/homebrew/homebrew-cask-stable
-                  channel: stable
                   dryRun: ${{ parameters.DryRun }}

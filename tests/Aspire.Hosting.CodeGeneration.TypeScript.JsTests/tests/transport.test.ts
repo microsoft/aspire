@@ -465,6 +465,36 @@ describe('AspireClient', () => {
         const client = new AspireClient('nonexistent-pipe-' + Date.now());
         await expect(client.connect(500)).rejects.toThrow();
     });
+
+    it('sends the authentication token as a direct parameter during connect', async () => {
+        const previousToken = process.env.ASPIRE_REMOTE_APPHOST_TOKEN;
+        const authenticate = vi.fn(async (token: string) => {
+            expect(token).toBe('secret-token');
+            return true;
+        });
+
+        process.env.ASPIRE_REMOTE_APPHOST_TOKEN = 'secret-token';
+
+        const fixture = createPipeFixture({ authenticate });
+        await fixture.start();
+
+        const client = new AspireClient(fixture.clientSocketPath);
+
+        try {
+            await client.connect();
+            await fixture.waitForClient();
+
+            expect(authenticate).toHaveBeenCalledOnce();
+        } finally {
+            if (previousToken === undefined) {
+                delete process.env.ASPIRE_REMOTE_APPHOST_TOKEN;
+            } else {
+                process.env.ASPIRE_REMOTE_APPHOST_TOKEN = previousToken;
+            }
+
+            await fixture.cleanup(client);
+        }
+    });
 });
 
 // ============================================================================
@@ -540,7 +570,7 @@ describe('registerHandleWrapper', () => {
  * Creates a named-pipe server that speaks JSON-RPC, connects an AspireClient,
  * and provides a `sendRequest` helper to invoke callbacks on the client side.
  */
-function createPipeFixture() {
+function createPipeFixture(options?: { authenticate?: (token: string) => boolean | Promise<boolean> }) {
     const pipeName = `aspire-test-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const pipePath = process.platform === 'win32' ? `\\\\.\\pipe\\${pipeName}` : `/tmp/${pipeName}`;
     let serverConnection: rpc.MessageConnection | null = null;
@@ -562,6 +592,10 @@ function createPipeFixture() {
 
         // Handle cancelToken
         serverConnection.onRequest('cancelToken', () => true);
+
+        if (options?.authenticate) {
+            serverConnection.onRequest('authenticate', options.authenticate);
+        }
 
         serverConnection.listen();
         onClientConnected?.();
@@ -591,12 +625,48 @@ function createPipeFixture() {
 
 describe('callback invocation protocol', () => {
     async function connectFixture() {
-        const fixture = createPipeFixture();
+        const previousToken = process.env.ASPIRE_REMOTE_APPHOST_TOKEN;
+        const testToken = 'callback-test-token';
+        process.env.ASPIRE_REMOTE_APPHOST_TOKEN = testToken;
+
+        const fixture = createPipeFixture({
+            authenticate: (token: string) => token === testToken,
+        });
+
         await fixture.start();
         const client = new AspireClient(fixture.clientSocketPath);
-        await client.connect();
-        await fixture.waitForClient();
-        return { fixture, client };
+
+        try {
+            await client.connect();
+            await fixture.waitForClient();
+        }
+        catch (error)
+        {
+            if (previousToken === undefined) {
+                delete process.env.ASPIRE_REMOTE_APPHOST_TOKEN;
+            } else {
+                process.env.ASPIRE_REMOTE_APPHOST_TOKEN = previousToken;
+            }
+
+            await fixture.cleanup(client);
+            throw error;
+        }
+
+        return {
+            fixture: {
+                ...fixture,
+                cleanup: async (client: AspireClient) => {
+                    if (previousToken === undefined) {
+                        delete process.env.ASPIRE_REMOTE_APPHOST_TOKEN;
+                    } else {
+                        process.env.ASPIRE_REMOTE_APPHOST_TOKEN = previousToken;
+                    }
+
+                    await fixture.cleanup(client);
+                },
+            },
+            client,
+        };
     }
 
     it('invokes a no-arg callback', async () => {

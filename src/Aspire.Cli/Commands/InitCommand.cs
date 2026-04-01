@@ -149,6 +149,12 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
             InteractionService.DisplayMessage(KnownEmojis.Information, $"Creating {languageInfo.DisplayName} AppHost...");
             InteractionService.DisplayEmptyLine();
             var polyglotResult = await CreatePolyglotAppHostAsync(languageInfo, cancellationToken);
+            if (polyglotResult != 0)
+            {
+                InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ProjectCouldNotBeCreated, ExecutionContext.LogFilePath));
+                return polyglotResult;
+            }
+
             return await _agentInitCommand.PromptAndChainAsync(_hostEnvironment, InteractionService, polyglotResult, _executionContext.WorkingDirectory, cancellationToken);
         }
 
@@ -181,6 +187,12 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
             InteractionService.DisplayEmptyLine();
             initResult = await CreateEmptyAppHostAsync(parseResult, cancellationToken);
             workspaceRoot = _executionContext.WorkingDirectory;
+        }
+
+        if (initResult != 0)
+        {
+            InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ProjectCouldNotBeCreated, ExecutionContext.LogFilePath));
+            return initResult;
         }
 
         return await _agentInitCommand.PromptAndChainAsync(_hostEnvironment, InteractionService, initResult, workspaceRoot, cancellationToken);

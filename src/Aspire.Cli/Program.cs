@@ -53,9 +53,7 @@ public class Program
 {
     private static string GetUsersAspirePath()
     {
-        var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var aspirePath = Path.Combine(homeDirectory, ".aspire");
-        return aspirePath;
+        return CliPathHelper.GetAspireHomeDirectory();
     }
 
     /// <summary>
@@ -517,7 +515,8 @@ public class Program
         var hivesDirectory = GetHivesDirectory();
         var cacheDirectory = GetCacheDirectory();
         var sdksDirectory = GetSdksDirectory();
-        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, sdksDirectory, new DirectoryInfo(logsDirectory), logFilePath, debugMode);
+        var packagesDirectory = GetPackagesDirectory();
+        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, sdksDirectory, new DirectoryInfo(logsDirectory), logFilePath, debugMode, packagesDirectory: packagesDirectory);
     }
 
     private static DirectoryInfo GetCacheDirectory()
@@ -525,6 +524,13 @@ public class Program
         var homeDirectory = GetUsersAspirePath();
         var cacheDirectoryPath = Path.Combine(homeDirectory, "cache");
         return new DirectoryInfo(cacheDirectoryPath);
+    }
+
+    private static DirectoryInfo GetPackagesDirectory()
+    {
+        var homeDirectory = GetUsersAspirePath();
+        var packagesDirectoryPath = Path.Combine(homeDirectory, "packages");
+        return new DirectoryInfo(packagesDirectoryPath);
     }
 
     private static void TrySetLocaleOverride(string? localeOverride, ILogger logger, IStartupErrorWriter errorWriter)

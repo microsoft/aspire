@@ -147,8 +147,6 @@ public class AzureKeyVaultResource(string name, Action<AzureResourceInfrastructu
         yield return new("Uri", UriExpression);
     }
 
-    BicepOutputReference IAzurePrivateEndpointTarget.Id => Id;
-
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["vault"];
 
     string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() => "privatelink.vaultcore.azure.net";

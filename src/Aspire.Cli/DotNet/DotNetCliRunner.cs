@@ -83,17 +83,7 @@ internal sealed class DotNetCliRunner(
 
     internal static string GetBackchannelSocketPath()
     {
-        var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var aspireCliPath = Path.Combine(homeDirectory, ".aspire", "cli", "backchannels");
-
-        if (!Directory.Exists(aspireCliPath))
-        {
-            Directory.CreateDirectory(aspireCliPath);
-        }
-
-        var uniqueSocketPathSegment = Guid.NewGuid().ToString("N");
-        var socketPath = Path.Combine(aspireCliPath, $"cli.sock.{uniqueSocketPathSegment}");
-        return socketPath;
+        return CliPathHelper.CreateUnixDomainSocketPath("cli.sock");
     }
 
     private async Task<int> ExecuteAsync(

@@ -3,11 +3,16 @@
 
 using System.Xml.Linq;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Layout;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Tests.Projects;
 
-public class PrebuiltAppHostServerTests
+public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public void GenerateIntegrationProjectFile_WithPackagesOnly_ProducesPackageReferences()
@@ -143,6 +148,48 @@ public class PrebuiltAppHostServerTests
         var ns = doc.Root!.GetDefaultNamespace();
         var restoreSources = doc.Descendants(ns + "RestoreAdditionalProjectSources").FirstOrDefault();
         Assert.Null(restoreSources);
+    }
+
+    [Fact]
+    public void Constructor_UsesUserAspireDirectoryForWorkingDirectory()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var nugetService = new BundleNuGetService(new NullLayoutDiscovery(), Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
+        var server = new PrebuiltAppHostServer(
+            workspace.WorkspaceRoot.FullName,
+            "test.sock",
+            new LayoutConfiguration(),
+            nugetService,
+            new TestDotNetCliRunner(),
+            new TestDotNetSdkInstaller(),
+            new Aspire.Cli.Tests.Mcp.MockPackagingService(),
+            new TestConfigurationService(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+
+        var workingDirectory = Assert.IsType<string>(
+            typeof(PrebuiltAppHostServer)
+                .GetField("_workingDirectory", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .GetValue(server));
+
+        var rootDirectory = Path.Combine(CliPathHelper.GetAspireHomeDirectory(), "bundle-hosts");
+        var isUnderRoot = workingDirectory.StartsWith(rootDirectory, StringComparison.OrdinalIgnoreCase);
+        var parentDirectory = Path.GetDirectoryName(workingDirectory);
+        var isDirectChildOfRoot = parentDirectory is not null &&
+                                   string.Equals(parentDirectory, rootDirectory, StringComparison.OrdinalIgnoreCase);
+        var isSafeToDelete = isUnderRoot && isDirectChildOfRoot && !string.Equals(workingDirectory, rootDirectory, StringComparison.OrdinalIgnoreCase);
+
+        try
+        {
+            Assert.True(isSafeToDelete);
+        }
+        finally
+        {
+            if (isSafeToDelete && Directory.Exists(workingDirectory))
+            {
+                Directory.Delete(workingDirectory, recursive: true);
+            }
+        }
     }
 
 }

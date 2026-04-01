@@ -282,7 +282,7 @@ public static class ProjectResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("addProjectWithOptions", Description = "Adds a project resource with configuration options")]
+    [AspireExport("addProjectWithOptions", Description = "Adds a project resource with configuration options", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<ProjectResource> AddProject(this IDistributedApplicationBuilder builder, [ResourceName] string name, string projectPath, Action<ProjectResourceOptions> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -364,7 +364,7 @@ public static class ProjectResourceBuilderExtensions
     /// </example>
     /// </remarks>
     [Experimental("ASPIRECSHARPAPPS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExport("addCSharpAppWithOptions", Description = "Adds a C# application resource with configuration options")]
+    [AspireExport("addCSharpAppWithOptions", Description = "Adds a C# application resource with configuration options", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<CSharpAppResource> AddCSharpApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string path, Action<ProjectResourceOptions> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -826,7 +826,7 @@ public static class ProjectResourceBuilderExtensions
     /// <param name="builder">Resource builder</param>
     /// <param name="configure">Optional action to configure the container resource</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("publishProjectAsDockerFileWithConfigure", MethodName = "publishAsDockerFile", Description = "Publishes a project as a Docker file with optional container configuration")]
+    [AspireExport("publishProjectAsDockerFileWithConfigure", MethodName = "publishAsDockerFile", Description = "Publishes a project as a Docker file with optional container configuration", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<T> PublishAsDockerFile<T>(this IResourceBuilder<T> builder, Action<IResourceBuilder<ContainerResource>>? configure = null)
         where T : ProjectResource
     {

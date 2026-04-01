@@ -35,7 +35,6 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     private readonly IDotNetCliRunner _runner;
     private readonly IPackagingService _packagingService;
     private readonly IConfiguration _configuration;
-    private readonly IConfigurationService _configurationService;
     private readonly IFeatures _features;
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly ILogger<GuestAppHostProject> _logger;
@@ -56,7 +55,6 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         IDotNetCliRunner runner,
         IPackagingService packagingService,
         IConfiguration configuration,
-        IConfigurationService configurationService,
         IFeatures features,
         ILanguageDiscovery languageDiscovery,
         ILogger<GuestAppHostProject> logger,
@@ -71,7 +69,6 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         _runner = runner;
         _packagingService = packagingService;
         _configuration = configuration;
-        _configurationService = configurationService;
         _features = features;
         _languageDiscovery = languageDiscovery;
         _logger = logger;
@@ -165,27 +162,27 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
     /// <summary>
     /// Resolves the directory containing the nearest aspire.config.json (or legacy settings file)
-    /// by using the already-resolved path from <see cref="IConfigurationService"/>.
+    /// by searching upward from <paramref name="appHostDirectory"/>.
     /// Falls back to <paramref name="appHostDirectory"/> when no config file is found.
     /// </summary>
-    private DirectoryInfo GetConfigDirectory(DirectoryInfo appHostDirectory)
+    private static DirectoryInfo GetConfigDirectory(DirectoryInfo appHostDirectory)
     {
-        var settingsFilePath = _configurationService.GetSettingsFilePath(isGlobal: false);
-        var settingsFile = new FileInfo(settingsFilePath);
-
-        // If the settings file exists and has a parent directory, use that
-        if (settingsFile.Directory is { Exists: true })
+        // Search from the apphost's directory upward to find the nearest config file.
+        var nearAppHost = ConfigurationHelper.FindNearestConfigFilePath(appHostDirectory);
+        if (nearAppHost is not null)
         {
-            // For legacy .aspire/settings.json, the config directory is the parent of .aspire/
-            // TODO: Remove legacy .aspire/ check once confident most users have migrated.
-            // Tracked by https://github.com/microsoft/aspire/issues/15239
-            if (string.Equals(settingsFile.Directory.Name, ".aspire", StringComparison.OrdinalIgnoreCase)
-                && settingsFile.Directory.Parent is not null)
+            var configFile = new FileInfo(nearAppHost);
+            if (configFile.Directory is { Exists: true })
             {
-                return settingsFile.Directory.Parent;
-            }
+                // For legacy .aspire/settings.json, the config directory is the parent of .aspire/
+                if (string.Equals(configFile.Directory.Name, ".aspire", StringComparison.OrdinalIgnoreCase)
+                    && configFile.Directory.Parent is not null)
+                {
+                    return configFile.Directory.Parent;
+                }
 
-            return settingsFile.Directory;
+                return configFile.Directory;
+            }
         }
 
         return appHostDirectory;
@@ -207,7 +204,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         }
     }
 
-    private void SaveConfiguration(AspireConfigFile config, DirectoryInfo directory)
+    private static void SaveConfiguration(AspireConfigFile config, DirectoryInfo directory)
     {
         var configDir = GetConfigDirectory(directory);
         config.Save(configDir.FullName);
@@ -256,42 +253,28 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         }
 
         // Step 2: Start the AppHost server temporarily for code generation
-        var currentPid = Environment.ProcessId;
-        var (socketPath, serverProcess, _) = appHostServerProject.Run(currentPid);
+        await using var serverSession = AppHostServerSession.Start(
+            appHostServerProject,
+            environmentVariables: null,
+            debug: false,
+            _logger);
 
-        try
-        {
-            // Step 3: Connect to server
-            await using var rpcClient = await AppHostRpcClient.ConnectAsync(socketPath, cancellationToken);
+        // Step 3: Connect to server
+        var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
 
-            // Step 4: Generate SDK code via RPC
-            // This must happen before dependency installation because the generated
-            // code directory (.modules) may not exist yet and dependency files reference it.
-            await GenerateCodeViaRpcAsync(
-                directory.FullName,
-                rpcClient,
-                integrations,
-                cancellationToken);
+        // Step 4: Generate SDK code via RPC
+        // This must happen before dependency installation because the generated
+        // code directory (.modules) may not exist yet and dependency files reference it.
+        await GenerateCodeViaRpcAsync(
+            directory.FullName,
+            rpcClient,
+            integrations,
+            cancellationToken);
 
-            // Step 5: Install dependencies using GuestRuntime (best effort - don't block code generation)
-            await InstallDependenciesAsync(directory, rpcClient, cancellationToken);
-            return true;
-        }
-        finally
-        {
-            // Step 6: Stop the server (we were just generating code)
-            if (!serverProcess.HasExited)
-            {
-                try
-                {
-                    serverProcess.Kill(entireProcessTree: true);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogDebug(ex, "Error killing AppHost server process after code generation");
-                }
-            }
-        }
+        // Step 5: Install dependencies using GuestRuntime (best effort - don't block code generation)
+        await InstallDependenciesAsync(directory, rpcClient, cancellationToken);
+
+        return true;
     }
 
     Task<bool> IGuestAppHostSdkGenerator.BuildAndGenerateSdkAsync(DirectoryInfo directory, CancellationToken cancellationToken)
@@ -422,8 +405,15 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             var enableHotReload = _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
 
             // Start the AppHost server process
-            var currentPid = Environment.ProcessId;
-            var (socketPath, appHostServerProcess, appHostServerOutputCollector) = appHostServerProject.Run(currentPid, launchSettingsEnvVars, debug: context.Debug);
+            await using var serverSession = AppHostServerSession.Start(
+                appHostServerProject,
+                launchSettingsEnvVars,
+                context.Debug,
+                _logger);
+            var socketPath = serverSession.SocketPath;
+            var appHostServerProcess = serverSession.ServerProcess;
+            var appHostServerOutputCollector = serverSession.Output;
+            var authenticationToken = serverSession.AuthenticationToken;
 
             // The backchannel completion source is the contract with RunCommand
             // We signal this when the backchannel is ready, RunCommand uses it for UX
@@ -443,7 +433,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             }
 
             // Step 5: Connect to server for RPC calls
-            await using var rpcClient = await AppHostRpcClient.ConnectAsync(socketPath, cancellationToken);
+            var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
 
             // Step 6: Generate SDK code via RPC if needed
             // This must happen before dependency installation because the generated
@@ -488,7 +478,8 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             {
                 ["REMOTE_APP_HOST_SOCKET_PATH"] = socketPath,
                 ["ASPIRE_PROJECT_DIRECTORY"] = directory.FullName,
-                ["ASPIRE_APPHOST_FILEPATH"] = appHostFile.FullName
+                ["ASPIRE_APPHOST_FILEPATH"] = appHostFile.FullName,
+                [KnownConfigNames.RemoteAppHostToken] = authenticationToken
             };
 
             // Pass debug flag to the guest process
@@ -796,8 +787,15 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             launchSettingsEnvVars[KnownConfigNames.AspireUserSecretsId] = UserSecretsPathHelper.ComputeSyntheticUserSecretsId(appHostFile.FullName);
 
             // Step 2: Start the AppHost server process(it opens the backchannel for progress reporting)
-            var currentPid = Environment.ProcessId;
-            var (jsonRpcSocketPath, appHostServerProcess, appHostServerOutputCollector) = appHostServerProject.Run(currentPid, launchSettingsEnvVars, debug: context.Debug);
+            await using var serverSession = AppHostServerSession.Start(
+                appHostServerProject,
+                launchSettingsEnvVars,
+                context.Debug,
+                _logger);
+            var jsonRpcSocketPath = serverSession.SocketPath;
+            var appHostServerProcess = serverSession.ServerProcess;
+            var appHostServerOutputCollector = serverSession.Output;
+            var authenticationToken = serverSession.AuthenticationToken;
 
             // Start connecting to the backchannel
             if (context.BackchannelCompletionSource is not null)
@@ -816,7 +814,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             }
 
             // Step 3: Connect to server for RPC calls
-            await using var rpcClient = await AppHostRpcClient.ConnectAsync(jsonRpcSocketPath, cancellationToken);
+            var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
 
             // Step 4: Generate code via RPC if needed
             // This must happen before dependency installation because the generated
@@ -859,7 +857,8 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             {
                 ["REMOTE_APP_HOST_SOCKET_PATH"] = jsonRpcSocketPath,
                 ["ASPIRE_PROJECT_DIRECTORY"] = directory.FullName,
-                ["ASPIRE_APPHOST_FILEPATH"] = appHostFile.FullName
+                ["ASPIRE_APPHOST_FILEPATH"] = appHostFile.FullName,
+                [KnownConfigNames.RemoteAppHostToken] = authenticationToken
             };
 
             // Step 6: Execute the guest apphost for publishing
@@ -935,11 +934,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     /// </summary>
     private static string GetBackchannelSocketPath()
     {
-        var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var aspireCliPath = Path.Combine(homeDirectory, ".aspire", "cli", "backchannels");
-        Directory.CreateDirectory(aspireCliPath);
-        var socketName = $"{Guid.NewGuid():N}.sock";
-        return Path.Combine(aspireCliPath, socketName);
+        return CliPathHelper.CreateUnixDomainSocketPath("cli.sock");
     }
 
     /// <summary>

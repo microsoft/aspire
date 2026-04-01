@@ -3,6 +3,7 @@
   MethodName: withPersistence,
   QualifiedMethodName: withPersistence,
   Description: Configures the Redis resource with persistence,
+  IsObsolete: false,
   Parameters: [
     {
       Name: mode,

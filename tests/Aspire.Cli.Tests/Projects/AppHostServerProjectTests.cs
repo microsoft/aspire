@@ -2,11 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Microsoft.AspNetCore.InternalTesting;
+using System.Security.Cryptography;
+using System.Text;
 using System.Xml.Linq;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Utils;
 using Aspire.Cli.Tests.Mcp;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -184,6 +187,38 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
 
         // Assert - same app path should result in same project model path
         Assert.Equal(project1.ProjectModelPath, project2.ProjectModelPath);
+    }
+
+    [Fact]
+    public void ProjectModelPath_UsesUserAspireDirectory()
+    {
+        // Arrange
+        var project = CreateProject();
+        var normalizedAppPath = Path.GetFullPath(project.AppDirectoryPath);
+        normalizedAppPath = new Uri(normalizedAppPath).LocalPath;
+        normalizedAppPath = OperatingSystem.IsWindows() ? normalizedAppPath.ToLowerInvariant() : normalizedAppPath;
+
+        var pathHash = SHA256.HashData(Encoding.UTF8.GetBytes(normalizedAppPath));
+        var pathDir = Convert.ToHexString(pathHash)[..12].ToLowerInvariant();
+        var expectedRoot = Path.Combine(CliPathHelper.GetAspireHomeDirectory(), "hosts");
+        var expectedPath = Path.Combine(expectedRoot, pathDir);
+        var parentDirectory = Path.GetDirectoryName(project.ProjectModelPath);
+        var isSafeToDelete = string.Equals(project.ProjectModelPath, expectedPath, StringComparison.OrdinalIgnoreCase) &&
+            parentDirectory is not null &&
+            string.Equals(parentDirectory, expectedRoot, StringComparison.OrdinalIgnoreCase);
+
+        try
+        {
+            // Assert
+            Assert.Equal(expectedPath, project.ProjectModelPath);
+        }
+        finally
+        {
+            if (isSafeToDelete && Directory.Exists(project.ProjectModelPath))
+            {
+                Directory.Delete(project.ProjectModelPath, recursive: true);
+            }
+        }
     }
 
     [Fact]

@@ -102,6 +102,11 @@
         <target state="translated">無法建置專案。請參閱 {0} 中的記錄</target>
         <note />
       </trans-unit>
+      <trans-unit id="ProjectCouldNotBeCreated">
+        <source>The app could not be created. See logs at {0}</source>
+        <target state="new">The app could not be created. See logs at {0}</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ProjectOptionDoesntExist">
         <source>The --apphost option specified a project that does not exist.</source>
         <target state="translated">--apphost 選項指定的專案不存在。</target>

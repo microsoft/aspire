@@ -5,12 +5,17 @@ using System.CommandLine;
 
 namespace Aspire.Cli;
 
-internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory, DirectoryInfo cacheDirectory, DirectoryInfo sdksDirectory, DirectoryInfo logsDirectory, string logFilePath, bool debugMode = false, IReadOnlyDictionary<string, string?>? environmentVariables = null, DirectoryInfo? homeDirectory = null)
+internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory, DirectoryInfo cacheDirectory, DirectoryInfo sdksDirectory, DirectoryInfo logsDirectory, string logFilePath, bool debugMode = false, IReadOnlyDictionary<string, string?>? environmentVariables = null, DirectoryInfo? homeDirectory = null, DirectoryInfo? packagesDirectory = null)
 {
     public DirectoryInfo WorkingDirectory { get; } = workingDirectory;
     public DirectoryInfo HivesDirectory { get; } = hivesDirectory;
     public DirectoryInfo CacheDirectory { get; } = cacheDirectory;
     public DirectoryInfo SdksDirectory { get; } = sdksDirectory;
+
+    /// <summary>
+    /// Gets the directory where restored NuGet packages are cached for apphost server sessions.
+    /// </summary>
+    public DirectoryInfo? PackagesDirectory { get; } = packagesDirectory;
 
     /// <summary>
     /// Gets the directory where CLI log files are stored.

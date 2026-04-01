@@ -70,6 +70,14 @@ public class AttributeDataReaderTests
     }
 
     [Fact]
+    public void HasAspireExportIgnoreData_FindsOfficialAttribute_OnType()
+    {
+        var result = AttributeDataReader.HasAspireExportIgnoreData(typeof(OfficialIgnoredType));
+
+        Assert.True(result);
+    }
+
+    [Fact]
     public void HasAspireDtoData_FindsOfficialAttribute()
     {
         var result = AttributeDataReader.HasAspireDtoData(typeof(OfficialDtoType));
@@ -232,6 +240,11 @@ public class AttributeDataReaderTests
         public OfficialMethodsResource(string name) : base(name) { }
 
         public void DoSomething() { }
+    }
+
+    [AspireExportIgnore]
+    public class OfficialIgnoredType
+    {
     }
 
     [AspireDto]

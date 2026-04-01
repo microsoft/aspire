@@ -1779,6 +1779,13 @@ func Connect() (*AspireClient, error) {
 	if err := client.Connect(); err != nil {
 		return nil, err
 	}
+	authToken := os.Getenv("ASPIRE_REMOTE_APPHOST_TOKEN")
+	if authToken == "" {
+		return nil, fmt.Errorf("ASPIRE_REMOTE_APPHOST_TOKEN environment variable not set. Run this application using `aspire run`")
+	}
+	if err := client.Authenticate(authToken); err != nil {
+		return nil, err
+	}
 	client.OnDisconnect(func() { os.Exit(1) })
 	return client, nil
 }

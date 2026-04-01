@@ -142,7 +142,7 @@ public static class ConnectionStringBuilderExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
-    [AspireExport("addConnectionStringBuilder", Description = "Adds a connection string with a builder callback")]
+    [AspireExport("addConnectionStringBuilder", Description = "Adds a connection string with a builder callback", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<ConnectionStringResource> AddConnectionString(this IDistributedApplicationBuilder builder, [ResourceName] string name, Action<ReferenceExpressionBuilder> connectionStringBuilder)
     {
         var rb = new ReferenceExpressionBuilder();

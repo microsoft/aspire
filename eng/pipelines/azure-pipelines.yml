@@ -227,6 +227,7 @@ extends:
             preSteps:
               - checkout: self
                 fetchDepth: 1
+                clean: true
 
             steps:
               - task: DownloadPipelineArtifact@2
@@ -295,23 +296,22 @@ extends:
                   vscePublishPreRelease: ${{ parameters.vscePublishPreRelease }}
 
               # Extract the Aspire version from a generated nupkg filename so downstream
-              # stages (e.g. publish_winget) can use it. We use Aspire.Hosting.Docker
-              # because it has no RID in its filename, so stripping the prefix cleanly
-              # yields just the version (e.g. "13.2.0-preview.1.26074.3").
+              # stages can use it. Aspire.Hosting.AppHost has no RID in its filename and
+              # does not suppress final package version stabilization, so stripping the
+              # prefix cleanly yields the stable version for installer publishing.
               - pwsh: |
                   $ErrorActionPreference = 'Stop'
                   $shippingDir = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping"
-                  $nupkg = Get-ChildItem -Path $shippingDir -Filter "Aspire.Hosting.Docker.*.nupkg" -ErrorAction SilentlyContinue |
+                  $nupkg = Get-ChildItem -Path $shippingDir -Filter "Aspire.Hosting.AppHost.*.nupkg" -ErrorAction SilentlyContinue |
                     Where-Object { $_.Name -notmatch '\.symbols\.' } |
                     Select-Object -First 1
 
                   if (-not $nupkg) {
-                    Write-Error "Could not find Aspire.Hosting.Docker nupkg in $shippingDir"
+                    Write-Error "Could not find Aspire.Hosting.AppHost nupkg in $shippingDir"
                     exit 1
                   }
 
-                  # Extract version: strip the known prefix and .nupkg suffix
-                  $version = $nupkg.Name -replace '^Aspire\.Hosting\.Docker\.', '' -replace '\.nupkg$', ''
+                  $version = $nupkg.Name -replace '^Aspire\.Hosting\.AppHost\.', '' -replace '\.nupkg$', ''
 
                   if ($version -notmatch '^\d+\.\d+\.\d+') {
                     Write-Error "Extracted version '$version' does not look like a valid semver. Check the nupkg name."
@@ -323,8 +323,22 @@ extends:
                 name: computeVersion
                 displayName: 🟣Compute Aspire version from nupkg
 
-              # Determine stable vs prerelease for installer pipelines (WinGet, Homebrew).
-              # DotNetFinalVersionKind is 'release' for stable builds, empty otherwise.
+              - pwsh: |
+                  $ErrorActionPreference = 'Stop'
+                  $artifactVersion = dotnet msbuild "$(Build.SourcesDirectory)/src/Aspire.Dashboard/Aspire.Dashboard.csproj" -getProperty:PackageVersion -property:SuppressFinalPackageVersion=true -property:OfficialBuildId=$(BUILD.BUILDNUMBER)
+                  $artifactVersion = $artifactVersion.Trim()
+
+                  if ($artifactVersion -notmatch '^\d+\.\d+\.\d+') {
+                    Write-Error "Computed artifact version '$artifactVersion' does not look like a valid semver. Check PackageVersion evaluation."
+                    exit 1
+                  }
+
+                  Write-Host "Detected installer artifact version: $artifactVersion"
+                  Write-Host "##vso[task.setvariable variable=aspireArtifactVersion;isOutput=true]$artifactVersion"
+                name: computeArtifactVersion
+                displayName: 🟣Compute installer artifact version
+
+              # Determine stable vs prerelease for installer pipelines.
               - pwsh: |
                   $ErrorActionPreference = 'Stop'
                   $versionKind = dotnet msbuild "$(Build.SourcesDirectory)/eng/Versions.props" -getProperty:DotNetFinalVersionKind
@@ -355,7 +369,6 @@ extends:
 
     # ----------------------------------------------------------------
     # Generate and test installer packages (WinGet + Homebrew).
-    # Channel (stable/prerelease) is determined by the build stage.
     # Artifacts are consumed by release-publish-nuget.yml for stable
     # publishing. No publishing happens from this pipeline.
     # ----------------------------------------------------------------
@@ -365,8 +378,20 @@ extends:
         - build
       variables:
         aspireVersion: $[ stageDependencies.build.Windows.outputs['computeVersion.aspireVersion'] ]
+        aspireArtifactVersion: $[ stageDependencies.build.Windows.outputs['computeArtifactVersion.aspireArtifactVersion'] ]
         installerChannel: $[ stageDependencies.build.Windows.outputs['computeChannel.installerChannel'] ]
-      condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+      condition: |
+        and(
+          succeeded(),
+          ne(variables['Build.Reason'], 'PullRequest'),
+          or(
+            ne(dependencies.build.outputs['Windows.computeChannel.installerChannel'], 'stable'),
+            or(
+              eq(variables['Build.SourceBranch'], 'refs/heads/main'),
+              startsWith(variables['Build.SourceBranch'], 'refs/heads/release/')
+            )
+          )
+        )
       jobs:
       - template: /eng/common/templates-official/jobs/jobs.yml@self
         parameters:
@@ -391,11 +416,13 @@ extends:
             - template: /eng/pipelines/templates/prepare-winget-manifest.yml@self
               parameters:
                 version: $(aspireVersion)
+                artifactVersion: $(aspireArtifactVersion)
                 channel: $(installerChannel)
 
           - job: Homebrew
             displayName: Homebrew Cask
             timeoutInMinutes: 30
+            condition: and(succeeded(), eq(variables['installerChannel'], 'stable'))
             pool:
               name: Azure Pipelines
               vmImage: macOS-latest-internal
@@ -406,4 +433,4 @@ extends:
             - template: /eng/pipelines/templates/prepare-homebrew-cask.yml@self
               parameters:
                 version: $(aspireVersion)
-                channel: $(installerChannel)
+                artifactVersion: $(aspireArtifactVersion)

@@ -45,7 +45,7 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
                 // The packages subdirectory contains the actual .nupkg files
                 // Use forward slashes for cross-platform NuGet config compatibility
                 var packagesPath = Path.Combine(prHive.FullName, "packages").Replace('\\', '/');
-                var prChannel = PackageChannel.CreateExplicitChannel(prHive.Name, PackageChannelQuality.Prerelease, new[]
+                var prChannel = PackageChannel.CreateExplicitChannel(prHive.Name, PackageChannelQuality.Both, new[]
                 {
                     new PackageMapping("Aspire*", packagesPath),
                     new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
