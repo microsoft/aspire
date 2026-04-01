@@ -55,13 +55,28 @@
 
       <_CliPackProjects Include="$(RepoRoot)eng\clipack\Aspire.Cli.*.csproj" />
       <_ExpectedRids Include="@(_CliPackProjects->'%(Filename)'->Replace('Aspire.Cli.', ''))" />
+      <_CliToolRidPackageFiles Include="$(ArtifactsPackagesDir)\**\Aspire.Cli.*.nupkg" Exclude="$(ArtifactsPackagesDir)\**\*.symbols.nupkg" />
+      <_CliToolPointerPackageFiles Include="$(ArtifactsPackagesDir)\**\Aspire.Cli.[0-9]*.nupkg" Exclude="$(ArtifactsPackagesDir)\**\*.symbols.nupkg" />
+    </ItemGroup>
+
+    <PropertyGroup>
+      <_ExpectedCliToolRidPattern>@(_ExpectedRids, '|')</_ExpectedCliToolRidPattern>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <_CliToolRidPackageFilesWithRid Include="@(_CliToolRidPackageFiles)">
+        <ExtractedRid>$([System.Text.RegularExpressions.Regex]::Match('%(_CliToolRidPackageFiles.FileName)', '^Aspire\.Cli\.($(_ExpectedCliToolRidPattern))\.\d+').Groups[1].Value)</ExtractedRid>
+      </_CliToolRidPackageFilesWithRid>
 
       <_MissingRids Include="@(_ExpectedRids)" Exclude="@(_ArchiveFilesWithRid -> '%(ExtractedRid)')" />
       <_UnexpectedRids Include="@(_ArchiveFilesWithRid -> '%(ExtractedRid)')" Exclude="@(_ExpectedRids)" />
+      <_MissingCliToolRids Include="@(_ExpectedRids)" Exclude="@(_CliToolRidPackageFilesWithRid -> '%(ExtractedRid)')" />
     </ItemGroup>
 
     <Warning Condition="@(_UnexpectedRids->Count()) > 0" Text="Found unexpected CLI archives for @(_UnexpectedRids, ',') . These are all the cli archives found - @(_ArchiveFiles, ', ')" />
     <Error Condition="@(_MissingRids->Count()) > 0" Text="Missing CLI archive(s) for runtime identifiers: @(_MissingRids, ', '). These are all the cli archives found - @(_ArchiveFiles, ', ')" />
+    <Error Condition="@(_MissingCliToolRids->Count()) > 0" Text="Missing RID-specific Aspire.Cli tool package(s) for runtime identifiers: @(_MissingCliToolRids, ', '). These are all the CLI tool packages found - @(_CliToolRidPackageFiles, ', ')" />
+    <Error Condition="@(_CliToolPointerPackageFiles->Count()) != 1" Text="Expected exactly 1 Aspire.Cli pointer package but found @(_CliToolPointerPackageFiles->Count()). Files: @(_CliToolPointerPackageFiles, ', ')" />
 
     <!-- Validate aspire-cli archive file extensions match expected format for each RID -->
     <ItemGroup>

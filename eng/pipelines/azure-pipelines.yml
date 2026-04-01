@@ -222,7 +222,7 @@ extends:
 
             variables:
               - name: _buildScript
-                value: $(Build.SourcesDirectory)/build.cmd -ci
+                value: $(Build.SourcesDirectory)/build.cmd -ci /p:SkipCliToolProject=true
 
             preSteps:
               - checkout: self
@@ -235,6 +235,7 @@ extends:
                   itemPattern: |
                     **/aspire-cli-*.zip
                     **/aspire-cli-*.tar.gz
+                    **/Aspire.Cli.*.nupkg
                   targetPath: '$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)'
 
               - task: PowerShell@2
@@ -290,6 +291,7 @@ extends:
                   targetRids:
                     - win-x64
                     - win-arm64
+                  packCliToolPackages: true
                   publishVSCodeExtension: ${{ parameters.publishVSCodeExtension }}
                   vscePublishToken: $(VscePublishToken)
                   vscePublishPreRelease: ${{ parameters.vscePublishPreRelease }}

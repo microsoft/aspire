@@ -8,6 +8,7 @@
       SkipTestProjects       - if 'true', skips building test projects, defaults to 'false'
       SkipPlaygroundProjects - if 'true', skips building playground projects, defaults to 'false'
       SkipBundleDeps         - if 'true', skips building eng/dcppack, eng/dashboardpack, Aspire.Dashboard, and Aspire.Cli projects during the main managed build, defaults to 'false'
+      SkipCliToolProject     - if 'true', removes Aspire.Cli.Tool.csproj from the main managed build, defaults to 'false'
       BuildBundleDepsOnly    - if 'true', builds only the RID-specific eng/dcppack and eng/dashboardpack projects for $(TargetRids), plus Aspire.Dashboard for restore, defaults to 'false'
       TargetRids             - colon separated list of RIDs to build native projects for
   -->
@@ -45,6 +46,7 @@
 
     <ProjectToBuild Include="$(RepoRoot)src\**\*.csproj" Exclude="$(RepoRoot)src\Aspire.ProjectTemplates\templates\**\*.csproj" />
     <ProjectToBuild Remove="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.*csproj" Condition="'$(SkipBundleDeps)' == 'true'" />
+    <ProjectToBuild Remove="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.Tool.csproj" Condition="'$(SkipCliToolProject)' == 'true'" />
     <ProjectToBuild Remove="$(RepoRoot)src\Aspire.Dashboard\Aspire.Dashboard.csproj" Condition="'$(SkipBundleDeps)' == 'true'" />
     <ProjectToBuild Include="$(RepoRoot)eng\dcppack\**\*.csproj" Condition="'$(SkipBundleDeps)' != 'true'" />
     <ProjectToBuild Include="$(RepoRoot)eng\dashboardpack\**\*.csproj" Condition="'$(SkipBundleDeps)' != 'true'" />

@@ -37,6 +37,9 @@ parameters:
   - name: vscePublishPreRelease
     type: boolean
     default: false
+  - name: packCliToolPackages
+    type: boolean
+    default: false
 
 steps:
   # Internal pipeline: Build with pack+sign
@@ -55,6 +58,36 @@ steps:
                 /bl:${{ parameters.repoLogPath }}/BundlePayload-${{ targetRid }}.binlog
         displayName: 🟣Build bundle payload (${{ targetRid }})
 
+    - ${{ if eq(parameters.packCliToolPackages, true) }}:
+      - ${{ each targetRid in parameters.targetRids }}:
+        - script: ${{ parameters.dotnetScript }}
+                  pack
+                  $(Build.SourcesDirectory)/src/Aspire.Cli/Aspire.Cli.Tool.csproj
+                  -c ${{ parameters.buildConfig }}
+                  -o $(Build.SourcesDirectory)/artifacts/packages/${{ parameters.buildConfig }}/Shipping
+                  /p:RuntimeIdentifier=${{ targetRid }}
+                  /p:BundlePayloadPath=$(Build.SourcesDirectory)/artifacts/bundle/aspire-ci-bundlepayload-${{ targetRid }}.tar.gz
+                  /p:ContinuousIntegrationBuild=true
+                  $(_OfficialBuildIdArgs)
+                  $(_InternalBuildArgs)
+                  /bl:${{ parameters.repoLogPath }}/AspireCliTool-${{ targetRid }}.binlog
+          displayName: 🟣Pack CLI tool (${{ targetRid }})
+          env:
+            SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+
+      - script: ${{ parameters.dotnetScript }}
+                pack
+                $(Build.SourcesDirectory)/src/Aspire.Cli/Aspire.Cli.Tool.csproj
+                -c ${{ parameters.buildConfig }}
+                -o $(Build.SourcesDirectory)/artifacts/packages/${{ parameters.buildConfig }}/Shipping
+                /p:ContinuousIntegrationBuild=true
+                $(_OfficialBuildIdArgs)
+                $(_InternalBuildArgs)
+                /bl:${{ parameters.repoLogPath }}/AspireCliTool.Pointer.binlog
+        displayName: 🟣Pack CLI tool pointer package
+        env:
+          SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+
     - script: ${{ parameters.buildScript }}
               -restore -build
               -pack
@@ -68,6 +101,87 @@ steps:
               /p:SkipTestProjects=true
               /p:BuildExtension=true
       displayName: 🟣Build
+
+    - ${{ if and(eq(parameters.packCliToolPackages, true), eq(parameters.isWindows, 'true')) }}:
+      - pwsh: |
+          $ErrorActionPreference = 'Stop'
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+          $shippingDir = '${{ parameters.repoArtifactsPath }}/packages/${{ parameters.buildConfig }}/Shipping'
+          $ridPackages = Get-ChildItem -Path $shippingDir -Filter 'Aspire.Cli.*.nupkg' -ErrorAction Stop |
+            Where-Object { $_.Name -notmatch '\.symbols\.' -and $_.Name -match '^Aspire\.Cli\.[a-z].*\.nupkg$' }
+
+          if ($ridPackages.Count -eq 0) {
+            Write-Error "No RID-specific Aspire.Cli tool packages were found in $shippingDir."
+            exit 1
+          }
+
+          foreach ($package in $ridPackages) {
+            $extractDir = Join-Path '$(Agent.TempDirectory)' $package.BaseName
+            if (Test-Path $extractDir) {
+              Remove-Item -Path $extractDir -Recurse -Force
+            }
+
+            [System.IO.Compression.ZipFile]::ExtractToDirectory($package.FullName, $extractDir)
+
+            $settingsFile = Get-ChildItem -Path $extractDir -Filter 'DotnetToolSettings.xml' -Recurse | Select-Object -First 1
+            if (-not $settingsFile) {
+              Write-Error "Could not find DotnetToolSettings.xml in $($package.Name)."
+              exit 1
+            }
+
+            [xml]$settings = Get-Content -Path $settingsFile.FullName
+            if ($settings.DotNetCliTool.Commands.Command.Runner -ne 'executable') {
+              Write-Error "Expected Runner=\"executable\" in $($package.Name), but found '$($settings.DotNetCliTool.Commands.Command.Runner)'."
+              exit 1
+            }
+          }
+
+          $pointerPackage = Get-ChildItem -Path $shippingDir -Filter 'Aspire.Cli.[0-9]*.nupkg' -ErrorAction Stop |
+            Where-Object { $_.Name -notmatch '\.symbols\.' } |
+            Select-Object -First 1
+
+          if (-not $pointerPackage) {
+            Write-Error "Could not find the Aspire.Cli pointer package in $shippingDir."
+            exit 1
+          }
+
+          $toolVersion = $pointerPackage.Name -replace '^Aspire\.Cli\.', '' -replace '\.nupkg$', ''
+          $smokeRoot = Join-Path '$(Agent.TempDirectory)' 'AspireCliToolSmoke'
+          $toolPath = Join-Path $smokeRoot 'tool'
+
+          if (Test-Path $smokeRoot) {
+            Remove-Item -Path $smokeRoot -Recurse -Force
+          }
+
+          New-Item -Path $toolPath -ItemType Directory -Force | Out-Null
+
+          & "${{ parameters.dotnetScript }}" tool install Aspire.Cli `
+            --tool-path $toolPath `
+            --add-source $shippingDir `
+            --version $toolVersion `
+            --ignore-failed-sources
+
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+          $toolExecutable = Join-Path $toolPath 'aspire.exe'
+          if (-not (Test-Path $toolExecutable)) {
+            Write-Error "The installed Aspire CLI executable was not found at $toolExecutable."
+            exit 1
+          }
+
+          & $toolExecutable --version
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+          & $toolExecutable help
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+        displayName: 🟣Smoke test CLI tool packages
 
     # Log MicroBuild environment for debugging
     # MicroBuildOutputFolderOverride is set by the MicroBuildSigningPlugin task in eng/common/templates-official/job/onelocbuild.yml

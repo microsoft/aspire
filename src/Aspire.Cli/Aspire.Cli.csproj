@@ -35,10 +35,7 @@
     <RollForward>Major</RollForward>
     <PackageTags>aspire cli</PackageTags>
     <Description>Command line tool for Aspire developers.</Description>
-    <!-- For 9.5 we want to keep the tool platform-independent, framework-dependent.
-         To do this we make sure it doesn't PublishAOT, and ensure that it doesn't publish for any RIDs at all. -->
-    <PublishAot>false</PublishAot>
-    <RuntimeIdentifiers></RuntimeIdentifiers>
+    <ToolPackageRuntimeIdentifiers>$(RuntimeIdentifiers)</ToolPackageRuntimeIdentifiers>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(PublishAot)' == 'true'">
