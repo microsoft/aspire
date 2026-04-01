@@ -1,5 +1,3 @@
-This instruction applies to files matching the pattern: **/*.cs
-
 ---
 applyTo: "**/*.cs"
 ---

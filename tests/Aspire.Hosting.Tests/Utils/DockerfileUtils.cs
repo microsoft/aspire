@@ -73,11 +73,5 @@ public sealed class TemporaryDockerfileContext(TestTempDirectory tempDirectory, 
 
     public string DockerfilePath { get; } = dockerfilePath;
 
-    public void Deconstruct(out string contextPath, out string dockerfilePath)
-    {
-        contextPath = ContextPath;
-        dockerfilePath = DockerfilePath;
-    }
-
     public void Dispose() => _tempDirectory.Dispose();
 }

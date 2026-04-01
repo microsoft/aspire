@@ -260,9 +260,7 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
     public async Task WithDockerfileResultsInBuildAttributeBeingAddedToManifest()
     {
         using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
-
         var tempContextPath = tempDockerfileContext.ContextPath;
-
         var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         var manifestOutputPath = Path.Combine(tempContextPath, "aspire-manifest.json");
         var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
@@ -312,9 +310,7 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
     public async Task AddDockerfileResultsInBuildAttributeBeingAddedToManifest()
     {
         using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
-
         var tempContextPath = tempDockerfileContext.ContextPath;
-
         var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         var manifestOutputPath = Path.Combine(tempContextPath, "aspire-manifest.json");
         var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
@@ -363,9 +359,7 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
     public async Task WithDockerfileWithBuildSecretResultsInManifestReferencingSecretParameter()
     {
         using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
-
         var tempContextPath = tempDockerfileContext.ContextPath;
-
         var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         var manifestOutputPath = Path.Combine(tempContextPath, "aspire-manifest.json");
         var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
@@ -413,9 +407,7 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
     public async Task AddDockerfileWithBuildSecretResultsInManifestReferencingSecretParameter()
     {
         using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
-
         var tempContextPath = tempDockerfileContext.ContextPath;
-
         var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         var manifestOutputPath = Path.Combine(tempContextPath, "aspire-manifest.json");
         var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
