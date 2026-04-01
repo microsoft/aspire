@@ -137,11 +137,9 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.WaitUntilAsync(
             s => s.ContainsText("skills should be installed"),
             timeout: TimeSpan.FromSeconds(30), description: "skill selection prompt");
-        await auto.DownAsync();
-        await auto.TypeAsync(" "); // Deselect playwright-cli to avoid npm dependency in CI
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.EnterAsync(); // Accept default skills
+        await auto.WaitUntilTextAsync("complete", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 3: Verify config was updated to new format
         // The updated config should contain "agent" and "mcp" but not "start"
@@ -223,8 +221,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         // Create .vscode folder so the scanner detects VS Code environment
         Directory.CreateDirectory(vscodePath);
 
-        // Run aspire agent init and accept the default location, but keep only the
-        // built-in skills that do not require downloading external npm packages.
+        // Run aspire agent init and accept defaults through both prompts
         await auto.TypeAsync("aspire agent init");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("workspace:", timeout: TimeSpan.FromSeconds(30));
@@ -237,11 +234,9 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.WaitUntilAsync(
             s => s.ContainsText("skills should be installed"),
             timeout: TimeSpan.FromSeconds(30), description: "skill selection prompt");
-        await auto.DownAsync();
-        await auto.TypeAsync(" "); // Deselect playwright-cli to avoid npm dependency in CI
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.EnterAsync(); // Accept default skills (all pre-selected, MCP not pre-selected)
+        await auto.WaitUntilTextAsync("complete", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Verify skill file was created (skills are now installed at .agents/skills/ by StandardLocationAgentEnvironmentScanner)
         var skillFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "SKILL.md");
@@ -254,3 +249,4 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await pendingRun;
     }
 }
+
