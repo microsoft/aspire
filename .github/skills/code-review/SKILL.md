@@ -45,8 +45,7 @@ If the current branch **does not match**, prompt the user with `vscode_askQuesti
 - **Question**: "The PR branch is not checked out. How would you like to proceed?"
 - **Options**:
   1. `"Check out the branch (stash uncommitted changes if needed)"` (recommended) — stash any uncommitted work, fetch, and check out the PR branch. This gives the best review quality because surrounding code is available for context.
-  2. `"Check out in a git worktree"` (recommended) — create a worktree so the current working tree is untouched. Equally good review quality since the agent reads source files from the worktree.
-  3. `"Review from GitHub diff only"` — proceed using only the GitHub API diff without touching the working tree. Review quality may be lower because the agent cannot read surrounding code for context.
+  2. `"Review from GitHub diff only"` — proceed using only the GitHub API diff without touching the working tree. Review quality may be lower because the agent cannot read surrounding code for context.
 
 ### Option: Check out the branch
 
@@ -67,15 +66,6 @@ Then fetch and check out:
 git fetch origin <branch>
 git checkout <branch>
 ```
-
-### Option: Git worktree
-
-```bash
-git fetch origin <branch>
-git worktree add ../aspire-review-<number> <branch>
-```
-
-Inform the user of the worktree path. **Store the absolute worktree path** (e.g., `../aspire-review-<number>` resolved to a full path) and use it as the base path for all file reads during the review. For example, to read `src/Aspire.Hosting/SomeFile.cs`, use `<worktree-path>/src/Aspire.Hosting/SomeFile.cs` instead of the current workspace path.
 
 ### Option: GitHub diff only
 
@@ -111,7 +101,6 @@ Group files by area to guide how deeply to review each:
 Read the diff carefully. For each changed file, also read surrounding context to understand the impact of the change.
 
 - **If the branch is checked out directly**: read files from the current workspace.
-- **If a worktree was created**: read files using the worktree's absolute path (stored in Step 1). All `read_file` calls must use the worktree path as the base, not the original workspace path.
 - **If reviewing from GitHub diff only**: use `mcp_github_get_file_contents` to fetch specific files from the PR branch when additional context is needed.
 
 ### What to Flag
@@ -155,7 +144,7 @@ When code is moved from one file to another (e.g., extracting a class), treat th
 
 ## Step 5: Present Findings to the User
 
-**Do not post a review automatically.** Instead, present all findings as a numbered list for the user to triage.
+**Do not post a review automatically.** Instead, present all findings as a numbered list for the user to triage. Order by potential impact.
 
 Then ask the user what to do next. The user may respond with:
 
@@ -181,7 +170,7 @@ Once the user has selected which findings to include:
 
 3. **Submit the review**:
    Use `mcp_github_pull_request_review_write` with method `submit_pending`:
-   - If any comments were posted: `event: "REQUEST_CHANGES"`, with a summary body listing the number of issues found by category.
+   - If any comments were posted: `event: "COMMENT"`, with a summary body listing the number of issues found by category. Do not use `"REQUEST_CHANGES"` unless the user explicitly asks for it.
    - If the user chose to add none: do not create or submit a review. Confirm to the user that no review was posted.
 
 ## Review Quality Rules
