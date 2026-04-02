@@ -8848,7 +8848,7 @@ export interface ContainerResource {
     withIconName(iconName: string, options?: WithIconNameOptions): ContainerResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ContainerResourcePromise;
     excludeFromMcp(): ContainerResourcePromise;
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): ContainerResourcePromise;
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ContainerResourcePromise;
     withRemoteImageName(remoteImageName: string): ContainerResourcePromise;
     withRemoteImageTag(remoteImageTag: string): ContainerResourcePromise;
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ContainerResourcePromise;
@@ -8959,7 +8959,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
     withIconName(iconName: string, options?: WithIconNameOptions): ContainerResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ContainerResourcePromise;
     excludeFromMcp(): ContainerResourcePromise;
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): ContainerResourcePromise;
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ContainerResourcePromise;
     withRemoteImageName(remoteImageName: string): ContainerResourcePromise;
     withRemoteImageTag(remoteImageTag: string): ContainerResourcePromise;
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ContainerResourcePromise;
@@ -10265,11 +10265,11 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withImagePushOptionsInternal(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): Promise<ContainerResource> {
-        const callbackId = registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as ContainerImagePushOptionsCallbackContextHandle;
-            const obj = new ContainerImagePushOptionsCallbackContextImpl(objHandle, this._client);
-            await callback(obj);
+    private async _withImagePushOptionsInternal(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): Promise<ContainerResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ContainerImagePushOptionsCallbackContextHandle;
+            const arg = new ContainerImagePushOptionsCallbackContextImpl(argHandle, this._client);
+            await callback(arg);
         });
         const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
@@ -10280,7 +10280,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** Sets image push options via callback */
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): ContainerResourcePromise {
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withImagePushOptionsInternal(callback));
     }
 
@@ -11278,7 +11278,7 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
     }
 
     /** Sets image push options via callback */
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): ContainerResourcePromise {
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)));
     }
 
@@ -11523,7 +11523,7 @@ export interface CSharpAppResource {
     withIconName(iconName: string, options?: WithIconNameOptions): CSharpAppResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): CSharpAppResourcePromise;
     excludeFromMcp(): CSharpAppResourcePromise;
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): CSharpAppResourcePromise;
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): CSharpAppResourcePromise;
     withRemoteImageName(remoteImageName: string): CSharpAppResourcePromise;
     withRemoteImageTag(remoteImageTag: string): CSharpAppResourcePromise;
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): CSharpAppResourcePromise;
@@ -11619,7 +11619,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
     withIconName(iconName: string, options?: WithIconNameOptions): CSharpAppResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): CSharpAppResourcePromise;
     excludeFromMcp(): CSharpAppResourcePromise;
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): CSharpAppResourcePromise;
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): CSharpAppResourcePromise;
     withRemoteImageName(remoteImageName: string): CSharpAppResourcePromise;
     withRemoteImageTag(remoteImageTag: string): CSharpAppResourcePromise;
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): CSharpAppResourcePromise;
@@ -12706,11 +12706,11 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withImagePushOptionsInternal(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): Promise<CSharpAppResource> {
-        const callbackId = registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as ContainerImagePushOptionsCallbackContextHandle;
-            const obj = new ContainerImagePushOptionsCallbackContextImpl(objHandle, this._client);
-            await callback(obj);
+    private async _withImagePushOptionsInternal(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): Promise<CSharpAppResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ContainerImagePushOptionsCallbackContextHandle;
+            const arg = new ContainerImagePushOptionsCallbackContextImpl(argHandle, this._client);
+            await callback(arg);
         });
         const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
@@ -12721,7 +12721,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** Sets image push options via callback */
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): CSharpAppResourcePromise {
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withImagePushOptionsInternal(callback));
     }
 
@@ -13630,7 +13630,7 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
     }
 
     /** Sets image push options via callback */
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): CSharpAppResourcePromise {
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)));
     }
 
@@ -13876,7 +13876,7 @@ export interface DotnetToolResource {
     withIconName(iconName: string, options?: WithIconNameOptions): DotnetToolResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): DotnetToolResourcePromise;
     excludeFromMcp(): DotnetToolResourcePromise;
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): DotnetToolResourcePromise;
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): DotnetToolResourcePromise;
     withRemoteImageName(remoteImageName: string): DotnetToolResourcePromise;
     withRemoteImageTag(remoteImageTag: string): DotnetToolResourcePromise;
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): DotnetToolResourcePromise;
@@ -13978,7 +13978,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
     withIconName(iconName: string, options?: WithIconNameOptions): DotnetToolResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): DotnetToolResourcePromise;
     excludeFromMcp(): DotnetToolResourcePromise;
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): DotnetToolResourcePromise;
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): DotnetToolResourcePromise;
     withRemoteImageName(remoteImageName: string): DotnetToolResourcePromise;
     withRemoteImageTag(remoteImageTag: string): DotnetToolResourcePromise;
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): DotnetToolResourcePromise;
@@ -15152,11 +15152,11 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withImagePushOptionsInternal(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): Promise<DotnetToolResource> {
-        const callbackId = registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as ContainerImagePushOptionsCallbackContextHandle;
-            const obj = new ContainerImagePushOptionsCallbackContextImpl(objHandle, this._client);
-            await callback(obj);
+    private async _withImagePushOptionsInternal(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): Promise<DotnetToolResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ContainerImagePushOptionsCallbackContextHandle;
+            const arg = new ContainerImagePushOptionsCallbackContextImpl(argHandle, this._client);
+            await callback(arg);
         });
         const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
@@ -15167,7 +15167,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** Sets image push options via callback */
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): DotnetToolResourcePromise {
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withImagePushOptionsInternal(callback));
     }
 
@@ -16106,7 +16106,7 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
     }
 
     /** Sets image push options via callback */
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): DotnetToolResourcePromise {
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)));
     }
 
@@ -16346,7 +16346,7 @@ export interface ExecutableResource {
     withIconName(iconName: string, options?: WithIconNameOptions): ExecutableResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ExecutableResourcePromise;
     excludeFromMcp(): ExecutableResourcePromise;
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise;
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise;
     withRemoteImageName(remoteImageName: string): ExecutableResourcePromise;
     withRemoteImageTag(remoteImageTag: string): ExecutableResourcePromise;
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ExecutableResourcePromise;
@@ -16442,7 +16442,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
     withIconName(iconName: string, options?: WithIconNameOptions): ExecutableResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ExecutableResourcePromise;
     excludeFromMcp(): ExecutableResourcePromise;
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise;
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise;
     withRemoteImageName(remoteImageName: string): ExecutableResourcePromise;
     withRemoteImageTag(remoteImageTag: string): ExecutableResourcePromise;
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ExecutableResourcePromise;
@@ -17526,11 +17526,11 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withImagePushOptionsInternal(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): Promise<ExecutableResource> {
-        const callbackId = registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as ContainerImagePushOptionsCallbackContextHandle;
-            const obj = new ContainerImagePushOptionsCallbackContextImpl(objHandle, this._client);
-            await callback(obj);
+    private async _withImagePushOptionsInternal(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): Promise<ExecutableResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ContainerImagePushOptionsCallbackContextHandle;
+            const arg = new ContainerImagePushOptionsCallbackContextImpl(argHandle, this._client);
+            await callback(arg);
         });
         const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
@@ -17541,7 +17541,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** Sets image push options via callback */
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise {
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withImagePushOptionsInternal(callback));
     }
 
@@ -18450,7 +18450,7 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
     }
 
     /** Sets image push options via callback */
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise {
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)));
     }
 
@@ -20992,7 +20992,7 @@ export interface ProjectResource {
     withIconName(iconName: string, options?: WithIconNameOptions): ProjectResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ProjectResourcePromise;
     excludeFromMcp(): ProjectResourcePromise;
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): ProjectResourcePromise;
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ProjectResourcePromise;
     withRemoteImageName(remoteImageName: string): ProjectResourcePromise;
     withRemoteImageTag(remoteImageTag: string): ProjectResourcePromise;
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ProjectResourcePromise;
@@ -21088,7 +21088,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
     withIconName(iconName: string, options?: WithIconNameOptions): ProjectResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ProjectResourcePromise;
     excludeFromMcp(): ProjectResourcePromise;
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): ProjectResourcePromise;
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ProjectResourcePromise;
     withRemoteImageName(remoteImageName: string): ProjectResourcePromise;
     withRemoteImageTag(remoteImageTag: string): ProjectResourcePromise;
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ProjectResourcePromise;
@@ -22175,11 +22175,11 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withImagePushOptionsInternal(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): Promise<ProjectResource> {
-        const callbackId = registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as ContainerImagePushOptionsCallbackContextHandle;
-            const obj = new ContainerImagePushOptionsCallbackContextImpl(objHandle, this._client);
-            await callback(obj);
+    private async _withImagePushOptionsInternal(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): Promise<ProjectResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ContainerImagePushOptionsCallbackContextHandle;
+            const arg = new ContainerImagePushOptionsCallbackContextImpl(argHandle, this._client);
+            await callback(arg);
         });
         const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
@@ -22190,7 +22190,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** Sets image push options via callback */
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): ProjectResourcePromise {
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withImagePushOptionsInternal(callback));
     }
 
@@ -23099,7 +23099,7 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
     }
 
     /** Sets image push options via callback */
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): ProjectResourcePromise {
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)));
     }
 
@@ -23353,7 +23353,7 @@ export interface TestDatabaseResource {
     withIconName(iconName: string, options?: WithIconNameOptions): TestDatabaseResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestDatabaseResourcePromise;
     excludeFromMcp(): TestDatabaseResourcePromise;
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestDatabaseResourcePromise;
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestDatabaseResourcePromise;
     withRemoteImageName(remoteImageName: string): TestDatabaseResourcePromise;
     withRemoteImageTag(remoteImageTag: string): TestDatabaseResourcePromise;
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestDatabaseResourcePromise;
@@ -23464,7 +23464,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
     withIconName(iconName: string, options?: WithIconNameOptions): TestDatabaseResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestDatabaseResourcePromise;
     excludeFromMcp(): TestDatabaseResourcePromise;
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestDatabaseResourcePromise;
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestDatabaseResourcePromise;
     withRemoteImageName(remoteImageName: string): TestDatabaseResourcePromise;
     withRemoteImageTag(remoteImageTag: string): TestDatabaseResourcePromise;
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestDatabaseResourcePromise;
@@ -24770,11 +24770,11 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withImagePushOptionsInternal(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): Promise<TestDatabaseResource> {
-        const callbackId = registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as ContainerImagePushOptionsCallbackContextHandle;
-            const obj = new ContainerImagePushOptionsCallbackContextImpl(objHandle, this._client);
-            await callback(obj);
+    private async _withImagePushOptionsInternal(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): Promise<TestDatabaseResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ContainerImagePushOptionsCallbackContextHandle;
+            const arg = new ContainerImagePushOptionsCallbackContextImpl(argHandle, this._client);
+            await callback(arg);
         });
         const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
@@ -24785,7 +24785,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** Sets image push options via callback */
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestDatabaseResourcePromise {
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withImagePushOptionsInternal(callback));
     }
 
@@ -25783,7 +25783,7 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
     }
 
     /** Sets image push options via callback */
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestDatabaseResourcePromise {
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)));
     }
 
@@ -26045,7 +26045,7 @@ export interface TestRedisResource {
     withIconName(iconName: string, options?: WithIconNameOptions): TestRedisResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestRedisResourcePromise;
     excludeFromMcp(): TestRedisResourcePromise;
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestRedisResourcePromise;
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestRedisResourcePromise;
     withRemoteImageName(remoteImageName: string): TestRedisResourcePromise;
     withRemoteImageTag(remoteImageTag: string): TestRedisResourcePromise;
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestRedisResourcePromise;
@@ -26172,7 +26172,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
     withIconName(iconName: string, options?: WithIconNameOptions): TestRedisResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestRedisResourcePromise;
     excludeFromMcp(): TestRedisResourcePromise;
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestRedisResourcePromise;
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestRedisResourcePromise;
     withRemoteImageName(remoteImageName: string): TestRedisResourcePromise;
     withRemoteImageTag(remoteImageTag: string): TestRedisResourcePromise;
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestRedisResourcePromise;
@@ -27530,11 +27530,11 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withImagePushOptionsInternal(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): Promise<TestRedisResource> {
-        const callbackId = registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as ContainerImagePushOptionsCallbackContextHandle;
-            const obj = new ContainerImagePushOptionsCallbackContextImpl(objHandle, this._client);
-            await callback(obj);
+    private async _withImagePushOptionsInternal(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): Promise<TestRedisResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ContainerImagePushOptionsCallbackContextHandle;
+            const arg = new ContainerImagePushOptionsCallbackContextImpl(argHandle, this._client);
+            await callback(arg);
         });
         const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
@@ -27545,7 +27545,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** Sets image push options via callback */
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestRedisResourcePromise {
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withImagePushOptionsInternal(callback));
     }
 
@@ -28747,7 +28747,7 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
     }
 
     /** Sets image push options via callback */
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestRedisResourcePromise {
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)));
     }
 
@@ -29071,7 +29071,7 @@ export interface TestVaultResource {
     withIconName(iconName: string, options?: WithIconNameOptions): TestVaultResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestVaultResourcePromise;
     excludeFromMcp(): TestVaultResourcePromise;
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise;
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise;
     withRemoteImageName(remoteImageName: string): TestVaultResourcePromise;
     withRemoteImageTag(remoteImageTag: string): TestVaultResourcePromise;
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestVaultResourcePromise;
@@ -29183,7 +29183,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
     withIconName(iconName: string, options?: WithIconNameOptions): TestVaultResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestVaultResourcePromise;
     excludeFromMcp(): TestVaultResourcePromise;
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise;
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise;
     withRemoteImageName(remoteImageName: string): TestVaultResourcePromise;
     withRemoteImageTag(remoteImageTag: string): TestVaultResourcePromise;
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestVaultResourcePromise;
@@ -30490,11 +30490,11 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withImagePushOptionsInternal(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): Promise<TestVaultResource> {
-        const callbackId = registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as ContainerImagePushOptionsCallbackContextHandle;
-            const obj = new ContainerImagePushOptionsCallbackContextImpl(objHandle, this._client);
-            await callback(obj);
+    private async _withImagePushOptionsInternal(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): Promise<TestVaultResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ContainerImagePushOptionsCallbackContextHandle;
+            const arg = new ContainerImagePushOptionsCallbackContextImpl(argHandle, this._client);
+            await callback(arg);
         });
         const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
@@ -30505,7 +30505,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** Sets image push options via callback */
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise {
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withImagePushOptionsInternal(callback));
     }
 
@@ -31518,7 +31518,7 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
     }
 
     /** Sets image push options via callback */
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise {
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)));
     }
 
@@ -31710,13 +31710,13 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
 
 export interface ComputeResource {
     toJSON(): MarshalledHandle;
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): ComputeResourcePromise;
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ComputeResourcePromise;
     withRemoteImageName(remoteImageName: string): ComputeResourcePromise;
     withRemoteImageTag(remoteImageTag: string): ComputeResourcePromise;
 }
 
 export interface ComputeResourcePromise extends PromiseLike<ComputeResource> {
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): ComputeResourcePromise;
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ComputeResourcePromise;
     withRemoteImageName(remoteImageName: string): ComputeResourcePromise;
     withRemoteImageTag(remoteImageTag: string): ComputeResourcePromise;
 }
@@ -31731,11 +31731,11 @@ class ComputeResourceImpl extends ResourceBuilderBase<IComputeResourceHandle> im
     }
 
     /** @internal */
-    private async _withImagePushOptionsInternal(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): Promise<ComputeResource> {
-        const callbackId = registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as ContainerImagePushOptionsCallbackContextHandle;
-            const obj = new ContainerImagePushOptionsCallbackContextImpl(objHandle, this._client);
-            await callback(obj);
+    private async _withImagePushOptionsInternal(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): Promise<ComputeResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ContainerImagePushOptionsCallbackContextHandle;
+            const arg = new ContainerImagePushOptionsCallbackContextImpl(argHandle, this._client);
+            await callback(arg);
         });
         const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
         const result = await this._client.invokeCapability<IComputeResourceHandle>(
@@ -31746,7 +31746,7 @@ class ComputeResourceImpl extends ResourceBuilderBase<IComputeResourceHandle> im
     }
 
     /** Sets image push options via callback */
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): ComputeResourcePromise {
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ComputeResourcePromise {
         return new ComputeResourcePromiseImpl(this._withImagePushOptionsInternal(callback));
     }
 
@@ -31800,7 +31800,7 @@ class ComputeResourcePromiseImpl implements ComputeResourcePromise {
     }
 
     /** Sets image push options via callback */
-    withImagePushOptions(callback: (obj: ContainerImagePushOptionsCallbackContext) => Promise<void>): ComputeResourcePromise {
+    withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ComputeResourcePromise {
         return new ComputeResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)));
     }
 

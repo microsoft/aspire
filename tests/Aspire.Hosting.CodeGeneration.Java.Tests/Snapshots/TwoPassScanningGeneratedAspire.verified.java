@@ -2388,8 +2388,8 @@ public class CSharpAppResource extends ResourceBuilderBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         var callbackId = getClient().registerCallback(args -> {
-            var obj = (ContainerImagePushOptionsCallbackContext) args[0];
-            callback.invoke(obj);
+            var arg = (ContainerImagePushOptionsCallbackContext) args[0];
+            callback.invoke(arg);
             return null;
         });
         if (callbackId != null) {
@@ -6194,8 +6194,8 @@ public class ContainerResource extends ResourceBuilderBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         var callbackId = getClient().registerCallback(args -> {
-            var obj = (ContainerImagePushOptionsCallbackContext) args[0];
-            callback.invoke(obj);
+            var arg = (ContainerImagePushOptionsCallbackContext) args[0];
+            callback.invoke(arg);
             return null;
         });
         if (callbackId != null) {
@@ -8043,8 +8043,8 @@ public class DotnetToolResource extends ResourceBuilderBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         var callbackId = getClient().registerCallback(args -> {
-            var obj = (ContainerImagePushOptionsCallbackContext) args[0];
-            callback.invoke(obj);
+            var arg = (ContainerImagePushOptionsCallbackContext) args[0];
+            callback.invoke(arg);
             return null;
         });
         if (callbackId != null) {
@@ -10004,8 +10004,8 @@ public class ExecutableResource extends ResourceBuilderBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         var callbackId = getClient().registerCallback(args -> {
-            var obj = (ContainerImagePushOptionsCallbackContext) args[0];
-            callback.invoke(obj);
+            var arg = (ContainerImagePushOptionsCallbackContext) args[0];
+            callback.invoke(arg);
             return null;
         });
         if (callbackId != null) {
@@ -15171,8 +15171,8 @@ public class ProjectResource extends ResourceBuilderBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         var callbackId = getClient().registerCallback(args -> {
-            var obj = (ContainerImagePushOptionsCallbackContext) args[0];
-            callback.invoke(obj);
+            var arg = (ContainerImagePushOptionsCallbackContext) args[0];
+            callback.invoke(arg);
             return null;
         });
         if (callbackId != null) {
@@ -17742,8 +17742,8 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         var callbackId = getClient().registerCallback(args -> {
-            var obj = (ContainerImagePushOptionsCallbackContext) args[0];
-            callback.invoke(obj);
+            var arg = (ContainerImagePushOptionsCallbackContext) args[0];
+            callback.invoke(arg);
             return null;
         });
         if (callbackId != null) {
@@ -19641,8 +19641,8 @@ public class TestRedisResource extends ResourceBuilderBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         var callbackId = getClient().registerCallback(args -> {
-            var obj = (ContainerImagePushOptionsCallbackContext) args[0];
-            callback.invoke(obj);
+            var arg = (ContainerImagePushOptionsCallbackContext) args[0];
+            callback.invoke(arg);
             return null;
         });
         if (callbackId != null) {
@@ -21621,8 +21621,8 @@ public class TestVaultResource extends ResourceBuilderBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         var callbackId = getClient().registerCallback(args -> {
-            var obj = (ContainerImagePushOptionsCallbackContext) args[0];
-            callback.invoke(obj);
+            var arg = (ContainerImagePushOptionsCallbackContext) args[0];
+            callback.invoke(arg);
             return null;
         });
         if (callbackId != null) {

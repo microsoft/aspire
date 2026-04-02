@@ -3991,7 +3991,7 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
-    [AspireExport("withImagePushOptions", Description = "Sets image push options via callback")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the async callback overload.")]
     public static IResourceBuilder<T> WithImagePushOptions<T>(
         this IResourceBuilder<T> builder,
         Action<ContainerImagePushOptionsCallbackContext> callback)
@@ -4031,7 +4031,7 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the synchronous Action<> overload via withImagePushOptions.")]
+    [AspireExport("withImagePushOptions", Description = "Sets image push options via callback")]
     public static IResourceBuilder<T> WithImagePushOptions<T>(
         this IResourceBuilder<T> builder,
         Func<ContainerImagePushOptionsCallbackContext, Task> callback)
