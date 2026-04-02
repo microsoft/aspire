@@ -93,13 +93,9 @@ internal sealed class DefaultLanguageDiscovery(IFeatures features) : ILanguageDi
     {
         foreach (var language in s_allLanguages.Where(IsLanguageEnabled))
         {
-            foreach (var pattern in language.DetectionPatterns)
+            if (language.FindInDirectory(directory.FullName) is not null)
             {
-                var filePath = Path.Combine(directory.FullName, pattern);
-                if (File.Exists(filePath))
-                {
-                    return Task.FromResult<LanguageId?>(language.LanguageId);
-                }
+                return Task.FromResult<LanguageId?>(language.LanguageId);
             }
         }
 
@@ -132,8 +128,7 @@ internal sealed class DefaultLanguageDiscovery(IFeatures features) : ILanguageDi
     /// <inheritdoc />
     public LanguageInfo? GetLanguageByFile(FileInfo file)
     {
-        var match = s_allLanguages.FirstOrDefault(l =>
-            l.DetectionPatterns.Any(p => MatchesPattern(file.Name, p)));
+        var match = s_allLanguages.FirstOrDefault(l => l.MatchesFile(file.Name));
 
         if (match is not null && !IsLanguageEnabled(match))
         {
@@ -156,18 +151,5 @@ internal sealed class DefaultLanguageDiscovery(IFeatures features) : ILanguageDi
         }
 
         return true;
-    }
-
-    private static bool MatchesPattern(string fileName, string pattern)
-    {
-        // Handle wildcard patterns like "*.csproj"
-        if (pattern.StartsWith("*.", StringComparison.Ordinal))
-        {
-            var extension = pattern[1..]; // ".csproj"
-            return fileName.EndsWith(extension, StringComparison.OrdinalIgnoreCase);
-        }
-        
-        // Exact match
-        return fileName.Equals(pattern, StringComparison.OrdinalIgnoreCase);
     }
 }

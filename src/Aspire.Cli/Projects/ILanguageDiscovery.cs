@@ -50,6 +50,52 @@ internal sealed record LanguageInfo(
     /// The well-known folder name where generated code is placed for all guest languages.
     /// </summary>
     internal const string GeneratedFolderName = ".modules";
+
+    /// <summary>
+    /// Maximum directory depth used when scanning the file system for language
+    /// detection patterns. Keeps the scan fast in large workspaces while still
+    /// finding AppHost files in typical nested project layouts.
+    /// </summary>
+    internal const int DetectionRecurseLimit = 5;
+
+    /// <summary>
+    /// Returns whether <paramref name="fileName"/> matches any of this
+    /// language's <see cref="DetectionPatterns"/>. Supports exact names
+    /// (e.g. <c>apphost.ts</c>) and wildcard extensions (e.g. <c>*.csproj</c>).
+    /// </summary>
+    internal bool MatchesFile(string fileName)
+    {
+        return DetectionPatterns.Any(p => MatchesPattern(fileName, p));
+    }
+
+    /// <summary>
+    /// Scans <paramref name="directory"/> (up to <see cref="DetectionRecurseLimit"/>
+    /// levels deep) for any file matching this language's detection patterns.
+    /// Uses <see cref="Utils.FileSystemHelper.FindFirstFile"/> so that glob
+    /// patterns like <c>*.csproj</c> are expanded correctly — unlike a plain
+    /// <see cref="File.Exists"/> call.
+    /// </summary>
+    /// <returns>The full path of the first matching file, or <c>null</c>.</returns>
+    internal string? FindInDirectory(string directory)
+    {
+        return Utils.FileSystemHelper.FindFirstFile(directory, DetectionRecurseLimit, DetectionPatterns);
+    }
+
+    /// <summary>
+    /// Checks whether <paramref name="fileName"/> matches a single detection
+    /// pattern. Handles wildcard extension patterns (<c>*.csproj</c>) and
+    /// exact file names (<c>apphost.ts</c>).
+    /// </summary>
+    internal static bool MatchesPattern(string fileName, string pattern)
+    {
+        if (pattern.StartsWith("*.", StringComparison.Ordinal))
+        {
+            var extension = pattern[1..]; // ".csproj"
+            return fileName.EndsWith(extension, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return fileName.Equals(pattern, StringComparison.OrdinalIgnoreCase);
+    }
 }
 
 /// <summary>
