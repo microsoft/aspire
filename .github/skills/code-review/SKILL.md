@@ -143,23 +143,13 @@ Only flag **actual problems**. Every comment must identify a concrete issue. Cat
 
 ## Step 5: Present Findings to the User
 
-**Do not post a review automatically.** Instead, present all findings as a numbered list for the user to triage. **Sort findings by severity, highest priority first**, using this order:
-
-1. **Security** — injection, credential exposure, OWASP violations
-2. **Bugs** — logic errors, null dereferences, missing awaits, race conditions
-3. **Concurrency issues** — thread-unsafe code, deadlocks
-4. **Correctness** — wrong behavior, breaking API changes
-5. **Performance regressions** — blocking async, unnecessary allocations in hot paths
-6. **Missing error handling** — unvalidated input at system boundaries
-7. **Repository convention violations** — `NuGet.config`, `api/*.cs`, `is null`, etc.
-8. **Test problems** — flaky patterns, test isolation issues
+**Do not post a review automatically.** Instead, present all findings as a numbered list for the user to triage.
 
 Then ask the user what to do next. The user may respond with:
 
 - **"Add 1, 3, 5 as comments"** — post only those numbered items as review comments.
 - **"Add all"** — post every item.
 - **"Add none"** — skip posting entirely.
-- **"Drop 2, 4"** — post all items except the listed numbers.
 - Any other selection or modification instructions.
 
 ## Step 6: Post Selected Comments as a Review
@@ -175,12 +165,7 @@ Once the user has selected which findings to include:
    - `side`: `RIGHT` for comments on new code
    - `path`: relative file path
    - `line`: the line number in the diff
-   - `body`: concise description of the problem and how to fix it, formatted as:
-     ```
-     **[Category]**: Description of the problem.
-
-     Suggested fix or direction (if non-obvious).
-     ```
+   - `body`: concise description of the problem and how to fix it
 
 3. **Submit the review**:
    Use `mcp_github_pull_request_review_write` with method `submit_pending`:
