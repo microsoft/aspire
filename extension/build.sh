@@ -15,13 +15,6 @@ if ! command -v npm &> /dev/null; then
     exit 1
 fi
 
-# Check for yarn
-if ! command -v yarn &> /dev/null; then
-    echo "Error: yarn is not installed. Please install yarn first."
-    echo "You can install yarn by running: npm install -g yarn"
-    exit 1
-fi
-
 # Check for VS Code or VS Code Insiders
 if ! command -v code &> /dev/null && ! command -v code-insiders &> /dev/null; then
     echo "Error: VS Code or VS Code Insiders is not installed or not in PATH."
@@ -38,12 +31,12 @@ fi
 
 echo "All prerequisites satisfied."
 echo ""
-echo "Running yarn install..."
-yarn install
+echo "Running npm install..."
+npm install
 
 echo ""
-echo "Running yarn compile..."
-yarn compile
+echo "Running npm run compile..."
+npm run compile
 
 echo ""
 echo "Building Aspire CLI..."

@@ -4,7 +4,7 @@
     <ExtensionSrcDir>$(MSBuildThisFileDirectory)</ExtensionSrcDir>
   </PropertyGroup>
 
-  <Target Name="BuildAndPackageExtension" BeforeTargets="Build" DependsOnTargets="CheckYarnInstalled;CheckVsceInstalled">
+  <Target Name="BuildAndPackageExtension" BeforeTargets="Build" DependsOnTargets="CheckVsceInstalled">
     <PropertyGroup>
       <_PackageJsonPath>$([MSBuild]::NormalizePath($(ExtensionSrcDir), 'package.json'))</_PackageJsonPath>
     </PropertyGroup>
@@ -26,8 +26,8 @@
     </PropertyGroup>
 
     <!-- Install dependencies and compile -->
-    <Exec Command="yarn install" WorkingDirectory="$(ExtensionSrcDir)" IgnoreStandardErrorWarningFormat="true" />
-    <Exec Command="yarn compile" WorkingDirectory="$(ExtensionSrcDir)" IgnoreStandardErrorWarningFormat="true" />
+    <Exec Command="npm install" WorkingDirectory="$(ExtensionSrcDir)" IgnoreStandardErrorWarningFormat="true" />
+    <Exec Command="npm run compile" WorkingDirectory="$(ExtensionSrcDir)" IgnoreStandardErrorWarningFormat="true" />
 
     <!-- Make extension directory -->
     <MakeDir Directories="$(_VscodeOutputDir)" />
@@ -51,17 +51,6 @@
     <Message Importance="high" Text="  VSIX: $(_VsixPath)" />
     <Message Importance="high" Text="  Manifest: $(_ManifestPath)" />
     <Message Importance="high" Text="  (Signature will be created by signing/signVsix.proj during signing phase)" />
-  </Target>
-
-  <Target Name="CheckYarnInstalled">
-    <Exec Command="yarn --version" ContinueOnError="true" ConsoleToMSBuild="true" IgnoreStandardErrorWarningFormat="true">
-      <Output TaskParameter="ExitCode" PropertyName="YarnExitCode" />
-      <Output TaskParameter="ConsoleOutput" PropertyName="YarnVersion" />
-    </Exec>
-
-    <Error Condition="'$(YarnExitCode)' != '0'" Text="yarn is not installed or not available in PATH. To build the extension, install yarn: https://yarnpkg.com/getting-started/install" />
-
-    <Message Importance="high" Text="yarn version: $(YarnVersion)" />
   </Target>
 
   <Target Name="CheckVsceInstalled">

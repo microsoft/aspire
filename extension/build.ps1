@@ -16,13 +16,6 @@ if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
-# Check for yarn
-if (-not (Get-Command yarn -ErrorAction SilentlyContinue)) {
-    Write-Error "Error: yarn is not installed. Please install yarn first."
-    Write-Host "You can install yarn by running: npm install -g yarn"
-    exit 1
-}
-
 # Check for VS Code or VS Code Insiders
 $hasVSCode = Get-Command code -ErrorAction SilentlyContinue
 $hasVSCodeInsiders = Get-Command code-insiders -ErrorAction SilentlyContinue
@@ -42,20 +35,20 @@ if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
 
 Write-Host "All prerequisites satisfied."
 Write-Host ""
-Write-Host "Running yarn install..."
-yarn install
+Write-Host "Running npm install..."
+npm install
 
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "yarn install failed with exit code $LASTEXITCODE"
+    Write-Error "npm install failed with exit code $LASTEXITCODE"
     exit $LASTEXITCODE
 }
 
 Write-Host ""
-Write-Host "Running yarn compile..."
-yarn compile
+Write-Host "Running npm run compile..."
+npm run compile
 
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "yarn compile failed with exit code $LASTEXITCODE"
+    Write-Error "npm run compile failed with exit code $LASTEXITCODE"
     exit $LASTEXITCODE
 }
 
