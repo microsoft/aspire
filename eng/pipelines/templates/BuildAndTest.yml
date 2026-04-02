@@ -118,13 +118,15 @@ steps:
         displayName: 🟣Build
 
     - ${{ if and(eq(parameters.packCliToolPackages, true), eq(parameters.isWindows, 'true')) }}:
-      - pwsh: |
-          $ErrorActionPreference = 'Stop'
-          Add-Type -AssemblyName System.IO.Compression.FileSystem
+        - pwsh: |
+            $ErrorActionPreference = 'Stop'
+            Add-Type -AssemblyName System.IO.Compression.FileSystem
 
-          $shippingDir = '${{ parameters.repoArtifactsPath }}/packages/${{ parameters.buildConfig }}/Shipping'
-          $ridPackages = Get-ChildItem -Path $shippingDir -Filter 'Aspire.Cli.*.nupkg' -ErrorAction Stop |
-            Where-Object { $_.Name -notmatch '\.symbols\.' -and $_.Name -match '^Aspire\.Cli\.[a-z].*\.nupkg$' }
+            $shippingDir = '${{ parameters.repoArtifactsPath }}/packages/${{ parameters.buildConfig }}/Shipping'
+            $packageArtifactsDir = '${{ parameters.repoArtifactsPath }}/packages/${{ parameters.buildConfig }}/PackageArtifacts'
+            $toolSources = @($shippingDir, $packageArtifactsDir) | Select-Object -Unique
+            $ridPackages = Get-ChildItem -Path $shippingDir -Filter 'Aspire.Cli.*.nupkg' -ErrorAction Stop |
+              Where-Object { $_.Name -notmatch '\.symbols\.' -and $_.Name -match '^Aspire\.Cli\.[a-z].*\.nupkg$' }
 
           if ($ridPackages.Count -eq 0) {
             Write-Error "No RID-specific Aspire.Cli tool packages were found in $shippingDir."
@@ -152,12 +154,16 @@ steps:
             }
           }
 
-          $pointerPackage = Get-ChildItem -Path $shippingDir -Filter 'Aspire.Cli.[0-9]*.nupkg' -ErrorAction Stop |
-            Where-Object { $_.Name -notmatch '\.symbols\.' } |
+          $pointerPackage = $toolSources |
+            Where-Object { Test-Path $_ } |
+            ForEach-Object {
+              Get-ChildItem -Path $_ -Filter 'Aspire.Cli.*.nupkg' -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -notmatch '\.symbols\.' -and $_.Name -match '^Aspire\.Cli\.\d+.*\.nupkg$' }
+            } |
             Select-Object -First 1
 
           if (-not $pointerPackage) {
-            Write-Error "Could not find the Aspire.Cli pointer package in $shippingDir."
+            Write-Error "Could not find the Aspire.Cli pointer package in any of: $($toolSources -join ', ')."
             exit 1
           }
 
@@ -171,11 +177,20 @@ steps:
 
           New-Item -Path $toolPath -ItemType Directory -Force | Out-Null
 
-          & "${{ parameters.dotnetScript }}" tool install Aspire.Cli `
-            --tool-path $toolPath `
-            --add-source $shippingDir `
-            --version $toolVersion `
-            --ignore-failed-sources
+          $installArgs = @(
+            'tool', 'install', 'Aspire.Cli',
+            '--tool-path', $toolPath,
+            '--version', $toolVersion,
+            '--ignore-failed-sources'
+          )
+
+          foreach ($toolSource in $toolSources) {
+            if (Test-Path $toolSource) {
+              $installArgs += @('--add-source', $toolSource)
+            }
+          }
+
+          & "${{ parameters.dotnetScript }}" @installArgs
 
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
