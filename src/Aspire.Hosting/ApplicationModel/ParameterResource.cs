@@ -9,7 +9,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <summary>
 /// Represents a parameter resource.
 /// </summary>
-public class ParameterResource : Resource, IManifestExpressionProvider, IValueProvider
+public class ParameterResource : Resource, IExpressionValue
 {
     private readonly Lazy<string> _lazyValue;
     private readonly Func<ParameterDefault?, string> _valueGetter;

@@ -583,17 +583,16 @@ public class AtsTypeScriptCodeGeneratorTests
     [Fact]
     public void Pattern4_InterfaceParameterType_GeneratesUnionType()
     {
-        // Interface-constrained resource parameters should accept a structural
-        // handle-bearing type instead of the nominal ResourceBuilderBase type.
+        // Interface-constrained resource parameters should expand to the concrete
+        // wrapper interfaces/classes that satisfy the interface contract.
         var atsContext = CreateContextFromTestAssembly();
 
         // Generate the TypeScript output
         var files = _generator.GenerateDistributedApplication(atsContext);
         var aspireTs = files["aspire.ts"];
 
-        Assert.Contains("export type { HandleReference } from './base.js';", aspireTs);
-        Assert.Contains("withDependency(dependency: HandleReference)", aspireTs);
-        Assert.DoesNotContain("withDependency(dependency: ResourceBuilderBase)", aspireTs);
+        Assert.Contains("withDependency(dependency: ResourceWithConnectionString | TestRedisResource)", aspireTs);
+        Assert.DoesNotContain("withDependency(dependency: HandleReference)", aspireTs);
     }
 
     [Fact]
@@ -847,6 +846,34 @@ public class AtsTypeScriptCodeGeneratorTests
         // Snapshot for detailed verification
         await Verify(aspireTs, extension: "ts")
             .UseFileName("TwoPassScanningGeneratedAspire");
+    }
+
+    [Fact]
+    public void TwoPassScanning_GeneratesDeprecatedJSDocForObsoleteExports()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireTs = files["aspire.ts"];
+
+        Assert.Contains("@deprecated ATS compatibility shim. Use withEnvironment instead.", aspireTs);
+        Assert.Contains("withEnvironmentExpression(name: string, value: ReferenceExpression)", aspireTs);
+    }
+
+    [Fact]
+    public void TwoPassScanning_DeduplicatesExpandedUnionTypes()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireTs = files["aspire.ts"];
+        var lines = aspireTs.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        Assert.DoesNotContain("ResourceBuilderBase | ResourceBuilderBase", aspireTs);
+        Assert.DoesNotContain("EndpointReference | EndpointReference", aspireTs);
+        Assert.Contains(lines, line => line.StartsWith("withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ", StringComparison.Ordinal));
+        Assert.Contains("ResourceWithConnectionString", aspireTs);
+        Assert.DoesNotContain("value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression", aspireTs);
     }
 
     private static List<AtsCapabilityInfo> ScanCapabilitiesFromTestAssembly()

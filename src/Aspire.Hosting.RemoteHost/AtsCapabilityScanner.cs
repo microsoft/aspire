@@ -1356,6 +1356,7 @@ public static class AtsCapabilityScanner
 
                 // Get description from attribute if specified
                 var description = memberExportAttr?.Description ?? $"Invokes the {method.Name} method";
+                var obsoleteData = AttributeDataReader.GetObsoleteData(method);
 
                 // Get simple method name (without type prefix)
                 var simpleMethodName = customMethodName ?? ToCamelCase(method.Name);
@@ -1366,6 +1367,8 @@ public static class AtsCapabilityScanner
                     MethodName = simpleMethodName,
                     OwningTypeName = typeName,
                     Description = description,
+                    IsObsolete = obsoleteData is not null,
+                    ObsoleteMessage = obsoleteData?.Message,
                     Parameters = paramInfos,
                     ReturnType = returnTypeRef ?? CreateVoidTypeRef(),
                     TargetTypeId = typeId,
@@ -1419,6 +1422,7 @@ public static class AtsCapabilityScanner
         // Get named arguments
         var description = exportAttr.Description;
         var methodNameOverride = exportAttr.MethodName;
+        var obsoleteData = AttributeDataReader.GetObsoleteData(method);
 
         var methodName = methodNameOverride ?? methodNameFromAttr;
         // New format: {AssemblyName}/{methodName}
@@ -1491,6 +1495,8 @@ public static class AtsCapabilityScanner
             CapabilityId = capabilityId,
             MethodName = methodName,
             Description = description,
+            IsObsolete = obsoleteData is not null,
+            ObsoleteMessage = obsoleteData?.Message,
             Parameters = paramInfos,
             ReturnType = returnTypeRef ?? CreateVoidTypeRef(),
             TargetTypeId = extendsTypeId,

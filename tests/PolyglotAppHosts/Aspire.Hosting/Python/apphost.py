@@ -33,12 +33,12 @@ with create_builder() as builder:
     built_connection_string = builder.add_connection_string_builder("connection-string", lambda *_args, **_kwargs: None)
     built_connection_string.with_connection_property("Key", "Value")
     built_connection_string.with_connection_property_value("Key", "Value")
-    # withEnvironmentEndpoint
-    container.with_environment_endpoint("KEY", None)
-    # withEnvironmentParameter
-    container.with_environment_parameter("KEY", None)
-    # withEnvironmentConnectionString
-    container.with_environment_connection_string("KEY", None)
+    # withEnvironment - EndpointReference
+    container.with_environment("KEY", endpoint)
+    # withEnvironment - ParameterResource
+    container.with_environment("KEY", builder.add_parameter("param"))
+    # withEnvironment - connection string resource
+    container.with_environment("KEY", built_connection_string)
     # withConnectionProperty — with ReferenceExpression
     built_connection_string.with_connection_property("Key", "Value")
     # withConnectionPropertyValue — with string

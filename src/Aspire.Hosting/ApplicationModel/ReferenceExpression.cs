@@ -27,7 +27,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </remarks>
 [AspireExport]
 [DebuggerDisplay("ReferenceExpression = {ValueExpression}, Providers = {ValueProviders.Count}")]
-public class ReferenceExpression : IManifestExpressionProvider, IValueProvider, IValueWithReferences
+public class ReferenceExpression : IExpressionValue, IManifestExpressionProvider, IValueProvider, IValueWithReferences
 {
     /// <summary>
     /// Represents an empty reference expression with no name, value providers, or arguments.

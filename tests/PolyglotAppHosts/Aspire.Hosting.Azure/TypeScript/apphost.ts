@@ -88,13 +88,14 @@ await identity.runAsExistingFromParameters(existingName, existingResourceGroup);
 await identity.publishAsExisting("identity-existing", "rg-identity");
 await identity.publishAsExistingFromParameters(existingName, existingResourceGroup);
 await identity.asExisting(existingName, existingResourceGroup);
+const identityClientId = await identity.getOutput("clientId");
 
-await container.withEnvironmentFromOutput("INFRA_URL", infrastructureOutput);
-await container.withEnvironmentFromKeyVaultSecret("SECRET_FROM_IDENTITY", identity);
+await container.withEnvironment("INFRA_URL", infrastructureOutput);
+await container.withEnvironment("SECRET_FROM_IDENTITY", identityClientId);
 await container.withAzureUserAssignedIdentity(identity);
 
-await executable.withEnvironmentFromOutput("INFRA_URL", infrastructureOutput);
-await executable.withEnvironmentFromKeyVaultSecret("SECRET_FROM_IDENTITY", identity);
+await executable.withEnvironment("INFRA_URL", infrastructureOutput);
+await executable.withEnvironment("SECRET_FROM_IDENTITY", identityClientId);
 await executable.withAzureUserAssignedIdentity(identity);
 
 await builder.build().run();

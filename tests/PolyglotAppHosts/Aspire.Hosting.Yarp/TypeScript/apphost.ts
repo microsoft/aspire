@@ -4,7 +4,6 @@ const builder = await createBuilder();
 
 const buildVersion = await builder.addParameterFromConfiguration("buildVersion", "MyConfig:BuildVersion");
 const buildSecret = await builder.addParameterFromConfiguration("buildSecret", "MyConfig:Secret", { secret: true });
-const staticFilesSource = await builder.addContainer("static-files-source", "nginx");
 const backend = await builder.addContainer("backend", "nginx")
     .withHttpEndpoint({ name: "http", targetPort: 80 });
 const backendService = await builder.addProject("backend-service", "./src/BackendService", "http");
@@ -18,7 +17,7 @@ const proxy = await builder.addYarp("proxy")
     .withImageSHA256("abc123def456")
     .withContainerNetworkAlias("myalias")
     .publishAsContainer()
-    .publishWithStaticFiles(staticFilesSource);
+    .withStaticFiles();
 
 await proxy.withVolume("/data", { name: "proxy-data" });
 await proxy.withBuildArg("BUILD_VERSION", buildVersion);

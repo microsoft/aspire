@@ -78,16 +78,30 @@ public static class AzureBicepResourceExtensions
     /// <param name="name">The name of the environment variable.</param>
     /// <param name="bicepOutputReference">The reference to the bicep output.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withEnvironmentFromOutput", Description = "Sets an environment variable from a Bicep output reference")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
     public static IResourceBuilder<T> WithEnvironment<T>(this IResourceBuilder<T> builder, string name, BicepOutputReference bicepOutputReference)
         where T : IResourceWithEnvironment
     {
-        builder.WithReferenceRelationship(bicepOutputReference.Resource);
+        return builder.WithEnvironment(name, (IExpressionValue)bicepOutputReference);
+    }
 
-        return builder.WithEnvironment(ctx =>
-        {
-            ctx.EnvironmentVariables[name] = bicepOutputReference;
-        });
+    // Keep these ATS-only aliases for backward compatibility with existing polyglot app hosts.
+    // Remove them once callers have migrated to the unified withEnvironment(...) export.
+    // Tracking issue: https://github.com/microsoft/aspire/issues/15734
+    /// <summary>
+    /// Obsolete ATS alias for <see cref="WithEnvironment{T}(IResourceBuilder{T}, string, BicepOutputReference)"/>.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="name">The name of the environment variable.</param>
+    /// <param name="bicepOutputReference">The reference to the Bicep output.</param>
+    /// <returns>An <see cref="IResourceBuilder{T}"/>.</returns>
+    [Obsolete("ATS compatibility shim. Use withEnvironment instead.")]
+    [AspireExport("withEnvironmentFromOutput", Description = "Sets an environment variable from a Bicep output reference")]
+    internal static IResourceBuilder<T> WithEnvironmentFromOutputShim<T>(this IResourceBuilder<T> builder, string name, BicepOutputReference bicepOutputReference)
+        where T : IResourceWithEnvironment
+    {
+        return builder.WithEnvironment(name, bicepOutputReference);
     }
 
     /// <summary>
@@ -116,14 +130,27 @@ public static class AzureBicepResourceExtensions
     /// <param name="name">The name of the environment variable.</param>
     /// <param name="secretReference">The reference to the key vault secret.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withEnvironmentFromKeyVaultSecret", Description = "Sets an environment variable from an Azure Key Vault secret reference")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
     public static IResourceBuilder<T> WithEnvironment<T>(this IResourceBuilder<T> builder, string name, IAzureKeyVaultSecretReference secretReference)
         where T : IResourceWithEnvironment
     {
-        return builder.WithEnvironment(ctx =>
-        {
-            ctx.EnvironmentVariables[name] = secretReference;
-        });
+        return builder.WithEnvironment(name, (IExpressionValue)secretReference);
+    }
+
+    /// <summary>
+    /// Obsolete ATS alias for <see cref="WithEnvironment{T}(IResourceBuilder{T}, string, IAzureKeyVaultSecretReference)"/>.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="name">The name of the environment variable.</param>
+    /// <param name="secretReference">The key vault secret reference.</param>
+    /// <returns>An <see cref="IResourceBuilder{T}"/>.</returns>
+    [Obsolete("ATS compatibility shim. Use withEnvironment instead.")]
+    [AspireExport("withEnvironmentFromKeyVaultSecret", Description = "Sets an environment variable from an Azure Key Vault secret reference")]
+    internal static IResourceBuilder<T> WithEnvironmentFromKeyVaultSecretShim<T>(this IResourceBuilder<T> builder, string name, IAzureKeyVaultSecretReference secretReference)
+        where T : IResourceWithEnvironment
+    {
+        return builder.WithEnvironment(name, secretReference);
     }
 
     /// <summary>

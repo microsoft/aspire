@@ -210,6 +210,16 @@ public sealed class AtsCapabilityInfo
     public string? Description { get; init; }
 
     /// <summary>
+    /// Gets or sets whether this capability is obsolete.
+    /// </summary>
+    public bool IsObsolete { get; init; }
+
+    /// <summary>
+    /// Gets or sets the obsolete message for this capability.
+    /// </summary>
+    public string? ObsoleteMessage { get; init; }
+
+    /// <summary>
     /// Gets or sets the parameters for this capability.
     /// </summary>
     public required IReadOnlyList<AtsParameterInfo> Parameters { get; init; }

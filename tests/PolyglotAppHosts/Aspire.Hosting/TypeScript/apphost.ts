@@ -75,7 +75,7 @@ const envConnectionString = await builder.addConnectionString("envcs");
 // ResourceBuilderExtensions.cs — NEW exports on ContainerResource
 // ===================================================================
 
-// withEnvironment — with EndpointReference
+// withEnvironment - EndpointReference
 await container.withEnvironment("MY_ENDPOINT", endpoint);
 
 // withEnvironment — with ReferenceExpression
