@@ -376,6 +376,16 @@ jobs:
             ${{ github.workspace }}/testresults \
             --combined
 
+      - name: Generate CI timeline
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 ${{ github.workspace }}/eng/scripts/generate-ci-timeline.py \
+            --repo ${{ github.repository }} \
+            --min-total 8
+
       - name: Fail if any dependency failed
         # 'skipped' can be when a transitive dependency fails and the dependent job gets 'skipped'.
         # For example, one of setup_* jobs failing and the dependent test jobs getting 'skipped'.
