@@ -297,7 +297,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         var disposeCts = new CancellationTokenSource();
         disposeCts.CancelAfter(s_disposeTimeout);
         await StopAsync(disposeCts.Token).ConfigureAwait(false);
-        if (_containerContextSource.Task.IsCompleted)
+        if (_containerContextSource.Task.IsCompletedSuccessfully)
         {
             _containerContextSource.Task.Result.Dispose();
         }
