@@ -290,7 +290,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     {
         if (typeRef.UnionTypes == null || typeRef.UnionTypes.Count == 0)
         {
-            return "unknown";
+            throw new InvalidOperationException("Union input types must define at least one member type.");
         }
 
         var memberTypes = typeRef.UnionTypes

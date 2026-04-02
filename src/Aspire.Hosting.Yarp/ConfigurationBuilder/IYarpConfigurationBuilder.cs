@@ -292,13 +292,16 @@ public static class YarpConfigurationBuilderExtensions
             string destination => builder switch
             {
                 YarpConfigurationBuilder yarpConfigurationBuilder => yarpConfigurationBuilder.AddRoute(path, destination),
-                _ => builder.AddRoute(path, builder.AddCluster(CreateSyntheticClusterName(path, destination), destination)),
+                _ => builder.AddRoute(path, builder.AddCluster(YarpConfigurationBuilderHelpers.CreateSyntheticClusterName(path, destination), destination)),
             },
             _ => throw new ArgumentException($"Unsupported YARP route target type '{target.GetType().FullName}'.", nameof(target)),
         };
     }
+}
 
-    private static string CreateSyntheticClusterName(string path, string destination)
+internal static class YarpConfigurationBuilderHelpers
+{
+    internal static string CreateSyntheticClusterName(string path, string destination)
     {
         var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes($"{path}\n{destination}"));
         return $"route-cluster-{Convert.ToHexString(hashBytes)[..12].ToLowerInvariant()}";

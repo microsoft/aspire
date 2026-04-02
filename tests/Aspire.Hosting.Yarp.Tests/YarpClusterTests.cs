@@ -235,6 +235,7 @@ public class YarpClusterTests(ITestOutputHelper testOutputHelper)
             Assert.Same(route, storedRoute);
             Assert.Equal("https://example.net", Assert.Single(cluster.Targets));
             Assert.Equal(cluster.ClusterConfig.ClusterId, route.RouteConfig.ClusterId);
+            Assert.Equal($"cluster_{YarpConfigurationBuilderHelpers.CreateSyntheticClusterName("/string/{**catchall}", "https://example.net")}", cluster.ClusterConfig.ClusterId);
             Assert.Equal("/string/{**catchall}", route.RouteConfig.Match?.Path);
         });
     }
@@ -255,6 +256,7 @@ public class YarpClusterTests(ITestOutputHelper testOutputHelper)
             Assert.Same(route, storedRoute);
             Assert.Equal("https://example.org", Assert.Single(cluster.Targets));
             Assert.Equal(cluster.ClusterConfig.ClusterId, route.RouteConfig.ClusterId);
+            Assert.Equal($"cluster_{YarpConfigurationBuilderHelpers.CreateSyntheticClusterName("/{**catchall}", "https://example.org")}", cluster.ClusterConfig.ClusterId);
             Assert.Equal("/{**catchall}", route.RouteConfig.Match?.Path);
         });
     }
