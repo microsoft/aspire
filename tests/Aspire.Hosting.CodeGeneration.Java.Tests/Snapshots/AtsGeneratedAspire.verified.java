@@ -1,4 +1,4 @@
-﻿// ===== Aspire.java =====
+// ===== Aspire.java =====
 // Aspire.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
@@ -1732,6 +1732,10 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return withUnionDependency(AspireUnion.of(dependency));
     }
 
+    public TestDatabaseResource withUnionDependency(ResourceBuilderBase dependency) {
+        return withUnionDependency(new IResourceWithConnectionString(dependency.getHandle(), dependency.getClient()));
+    }
+
     /** Adds a dependency from a string or another resource */
     public TestDatabaseResource withUnionDependency(AspireUnion dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -2327,6 +2331,10 @@ public class TestRedisResource extends ResourceBuilderBase {
         return withUnionDependency(AspireUnion.of(dependency));
     }
 
+    public TestRedisResource withUnionDependency(ResourceBuilderBase dependency) {
+        return withUnionDependency(new IResourceWithConnectionString(dependency.getHandle(), dependency.getClient()));
+    }
+
     /** Adds a dependency from a string or another resource */
     public TestRedisResource withUnionDependency(AspireUnion dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -2836,6 +2844,10 @@ public class TestVaultResource extends ResourceBuilderBase {
 
     public TestVaultResource withUnionDependency(IResourceWithConnectionString dependency) {
         return withUnionDependency(AspireUnion.of(dependency));
+    }
+
+    public TestVaultResource withUnionDependency(ResourceBuilderBase dependency) {
+        return withUnionDependency(new IResourceWithConnectionString(dependency.getHandle(), dependency.getClient()));
     }
 
     /** Adds a dependency from a string or another resource */

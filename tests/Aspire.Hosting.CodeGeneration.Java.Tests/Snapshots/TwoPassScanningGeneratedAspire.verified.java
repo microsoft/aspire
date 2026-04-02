@@ -2450,6 +2450,10 @@ public class CSharpAppResource extends ResourceBuilderBase {
         return withUnionDependency(AspireUnion.of(dependency));
     }
 
+    public CSharpAppResource withUnionDependency(ResourceBuilderBase dependency) {
+        return withUnionDependency(new IResourceWithConnectionString(dependency.getHandle(), dependency.getClient()));
+    }
+
     /** Adds a dependency from a string or another resource */
     public CSharpAppResource withUnionDependency(AspireUnion dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -3653,6 +3657,10 @@ public class ConnectionStringResource extends ResourceBuilderBase {
         return withUnionDependency(AspireUnion.of(dependency));
     }
 
+    public ConnectionStringResource withUnionDependency(ResourceBuilderBase dependency) {
+        return withUnionDependency(new IResourceWithConnectionString(dependency.getHandle(), dependency.getClient()));
+    }
+
     /** Adds a dependency from a string or another resource */
     public ConnectionStringResource withUnionDependency(AspireUnion dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -4343,6 +4351,10 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
 
     public ContainerRegistryResource withUnionDependency(IResourceWithConnectionString dependency) {
         return withUnionDependency(AspireUnion.of(dependency));
+    }
+
+    public ContainerRegistryResource withUnionDependency(ResourceBuilderBase dependency) {
+        return withUnionDependency(new IResourceWithConnectionString(dependency.getHandle(), dependency.getClient()));
     }
 
     /** Adds a dependency from a string or another resource */
@@ -5859,6 +5871,10 @@ public class ContainerResource extends ResourceBuilderBase {
 
     public ContainerResource withUnionDependency(IResourceWithConnectionString dependency) {
         return withUnionDependency(AspireUnion.of(dependency));
+    }
+
+    public ContainerResource withUnionDependency(ResourceBuilderBase dependency) {
+        return withUnionDependency(new IResourceWithConnectionString(dependency.getHandle(), dependency.getClient()));
     }
 
     /** Adds a dependency from a string or another resource */
@@ -7534,6 +7550,10 @@ public class DotnetToolResource extends ResourceBuilderBase {
         return withUnionDependency(AspireUnion.of(dependency));
     }
 
+    public DotnetToolResource withUnionDependency(ResourceBuilderBase dependency) {
+        return withUnionDependency(new IResourceWithConnectionString(dependency.getHandle(), dependency.getClient()));
+    }
+
     /** Adds a dependency from a string or another resource */
     public DotnetToolResource withUnionDependency(AspireUnion dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -9172,6 +9192,10 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withUnionDependency(AspireUnion.of(dependency));
     }
 
+    public ExecutableResource withUnionDependency(ResourceBuilderBase dependency) {
+        return withUnionDependency(new IResourceWithConnectionString(dependency.getHandle(), dependency.getClient()));
+    }
+
     /** Adds a dependency from a string or another resource */
     public ExecutableResource withUnionDependency(AspireUnion dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -9991,6 +10015,10 @@ public class ExternalServiceResource extends ResourceBuilderBase {
 
     public ExternalServiceResource withUnionDependency(IResourceWithConnectionString dependency) {
         return withUnionDependency(AspireUnion.of(dependency));
+    }
+
+    public ExternalServiceResource withUnionDependency(ResourceBuilderBase dependency) {
+        return withUnionDependency(new IResourceWithConnectionString(dependency.getHandle(), dependency.getClient()));
     }
 
     /** Adds a dependency from a string or another resource */
@@ -12065,6 +12093,10 @@ public class ParameterResource extends ResourceBuilderBase {
         return withUnionDependency(AspireUnion.of(dependency));
     }
 
+    public ParameterResource withUnionDependency(ResourceBuilderBase dependency) {
+        return withUnionDependency(new IResourceWithConnectionString(dependency.getHandle(), dependency.getClient()));
+    }
+
     /** Adds a dependency from a string or another resource */
     public ParameterResource withUnionDependency(AspireUnion dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -13898,6 +13930,10 @@ public class ProjectResource extends ResourceBuilderBase {
 
     public ProjectResource withUnionDependency(IResourceWithConnectionString dependency) {
         return withUnionDependency(AspireUnion.of(dependency));
+    }
+
+    public ProjectResource withUnionDependency(ResourceBuilderBase dependency) {
+        return withUnionDependency(new IResourceWithConnectionString(dependency.getHandle(), dependency.getClient()));
     }
 
     /** Adds a dependency from a string or another resource */
@@ -16276,6 +16312,10 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return withUnionDependency(AspireUnion.of(dependency));
     }
 
+    public TestDatabaseResource withUnionDependency(ResourceBuilderBase dependency) {
+        return withUnionDependency(new IResourceWithConnectionString(dependency.getHandle(), dependency.getClient()));
+    }
+
     /** Adds a dependency from a string or another resource */
     public TestDatabaseResource withUnionDependency(AspireUnion dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -18078,6 +18118,10 @@ public class TestRedisResource extends ResourceBuilderBase {
         return withUnionDependency(AspireUnion.of(dependency));
     }
 
+    public TestRedisResource withUnionDependency(ResourceBuilderBase dependency) {
+        return withUnionDependency(new IResourceWithConnectionString(dependency.getHandle(), dependency.getClient()));
+    }
+
     /** Adds a dependency from a string or another resource */
     public TestRedisResource withUnionDependency(AspireUnion dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -19771,6 +19815,10 @@ public class TestVaultResource extends ResourceBuilderBase {
 
     public TestVaultResource withUnionDependency(IResourceWithConnectionString dependency) {
         return withUnionDependency(AspireUnion.of(dependency));
+    }
+
+    public TestVaultResource withUnionDependency(ResourceBuilderBase dependency) {
+        return withUnionDependency(new IResourceWithConnectionString(dependency.getHandle(), dependency.getClient()));
     }
 
     /** Adds a dependency from a string or another resource */
