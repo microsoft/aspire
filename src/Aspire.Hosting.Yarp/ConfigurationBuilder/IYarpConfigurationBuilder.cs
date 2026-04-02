@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Security.Cryptography;
+using System.IO.Hashing;
 using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Yarp;
@@ -303,7 +303,8 @@ internal static class YarpConfigurationBuilderHelpers
 {
     internal static string CreateSyntheticClusterName(string path, string destination)
     {
-        var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes($"{path}\n{destination}"));
-        return $"route-cluster-{Convert.ToHexString(hashBytes)[..12].ToLowerInvariant()}";
+        var xxHash = new XxHash3();
+        xxHash.Append(Encoding.UTF8.GetBytes($"{path}\n{destination}"));
+        return $"route-cluster-{Convert.ToHexString(xxHash.GetCurrentHash())[..12].ToLowerInvariant()}";
     }
 }
