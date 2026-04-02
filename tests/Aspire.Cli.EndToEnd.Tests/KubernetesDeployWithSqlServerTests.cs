@@ -94,7 +94,7 @@ public sealed class KubernetesDeployWithSqlServerTests(ITestOutputHelper output)
                     cmd.CommandText = "SELECT 1 AS result";
                     var result = await cmd.ExecuteScalarAsync();
 
-                    if (result is int val && val == 1)
+                    if (Convert.ToInt32(result) == 1)
                     {
                         return Results.Ok("PASSED: SQL Server SELECT 1 works");
                     }
