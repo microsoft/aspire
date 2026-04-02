@@ -53,7 +53,6 @@ public static class ContainerAppExtensions
     ///        });
     /// </code>
     /// </example>
-    /// <para>In TypeScript app hosts this method is available as <c>app.configureCustomDomain(...)</c> inside the publish callback.</para>
     /// </remarks>
     [AspireExport("configureCustomDomain", Description = "Configures the custom domain for the container app")]
     [Experimental("ASPIREACADOMAINS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]

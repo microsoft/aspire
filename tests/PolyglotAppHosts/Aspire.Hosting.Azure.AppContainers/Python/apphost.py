@@ -15,7 +15,7 @@ with create_builder() as builder:
     # Test withAzureLogAnalyticsWorkspace with a Log Analytics Workspace resource
     laws = builder.add_azure_log_analytics_workspace("resource")
     env3 = builder.add_azure_container_app_environment("resource")
-    env3.with_azure_log_analytics_workspace()
+    env3.with_azure_log_analytics_workspace(laws)
     custom_domain = builder.add_parameter("parameter")
     certificate_name = builder.add_parameter("parameter")
     # Test publishAsAzureContainerApp on a container resource with callback
