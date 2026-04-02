@@ -93,10 +93,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         File.WriteAllText(oldBackup2, "test");
         File.WriteAllText(otherFile, "test");
 
-        var updateCommand = CreateUpdateCommand(workspace);
-
         // Act
-        updateCommand.CleanupOldBackupFiles(targetExePath);
+        FileDeleteHelper.TryCleanupOldItems(workspace.WorkspaceRoot.FullName, "aspire.exe");
 
         // Assert
         Assert.False(File.Exists(oldBackup1), "Old backup file should be deleted");
@@ -109,17 +107,14 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     {
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var targetExePath = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.exe");
         var oldBackup = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.exe.old.1234567890");
 
         // Create and lock the backup file
         File.WriteAllText(oldBackup, "test");
         using var fileStream = new FileStream(oldBackup, FileMode.Open, FileAccess.Read, FileShare.None);
 
-        var updateCommand = CreateUpdateCommand(workspace);
-
         // Act & Assert - should not throw exception
-        updateCommand.CleanupOldBackupFiles(targetExePath);
+        FileDeleteHelper.TryCleanupOldItems(workspace.WorkspaceRoot.FullName, "aspire.exe");
 
         // On Windows, locked files cannot be deleted, so the file should still exist
         // On Mac/Linux, locked files can be deleted, so the file may be deleted
@@ -136,13 +131,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public void CleanupOldBackupFiles_HandlesNonExistentDirectory()
     {
-        // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var nonExistentPath = Path.Combine("C:", "NonExistent", "aspire.exe");
-        var updateCommand = CreateUpdateCommand(workspace);
-
         // Act & Assert - should not throw exception
-        updateCommand.CleanupOldBackupFiles(nonExistentPath);
+        FileDeleteHelper.TryCleanupOldItems(Path.Combine("C:", "NonExistent"), "aspire.exe");
     }
 
     [Fact]
@@ -150,18 +140,9 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     {
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var targetExePath = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.exe");
-        var updateCommand = CreateUpdateCommand(workspace);
 
         // Act & Assert - should not throw exception
-        updateCommand.CleanupOldBackupFiles(targetExePath);
-    }
-
-    private UpdateCommand CreateUpdateCommand(TemporaryWorkspace workspace)
-    {
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
-        return provider.GetRequiredService<UpdateCommand>();
+        FileDeleteHelper.TryCleanupOldItems(workspace.WorkspaceRoot.FullName, "aspire.exe");
     }
 
     [Fact]

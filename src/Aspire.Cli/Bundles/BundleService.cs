@@ -173,16 +173,20 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
     /// <summary>
     /// Removes well-known layout subdirectories before re-extraction.
     /// Preserves the bin/ directory (which contains the CLI binary itself).
+    /// If a directory cannot be deleted (e.g. a process is still using files
+    /// inside it), it is renamed to {dir}.old.{timestamp} so extraction can
+    /// proceed. The stale directory will be cleaned up on the next successful
+    /// extraction.
     /// </summary>
     internal static void CleanLayoutDirectories(string layoutPath)
     {
         foreach (var dir in s_layoutDirectories)
         {
+            // Clean up stale .old directories from previous runs first
+            FileDeleteHelper.TryCleanupOldItems(layoutPath, dir);
+
             var fullPath = Path.Combine(layoutPath, dir);
-            if (Directory.Exists(fullPath))
-            {
-                Directory.Delete(fullPath, recursive: true);
-            }
+            FileDeleteHelper.TryDeleteDirectory(fullPath);
         }
 
         // Remove version marker so it's rewritten after extraction
