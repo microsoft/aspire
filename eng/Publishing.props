@@ -34,15 +34,15 @@
       <_ArchiveFiles Include="$(ArtifactsPackagesDir)\**\aspire-cli-*.zip" />
       <_ArchiveFiles Include="$(ArtifactsPackagesDir)\**\aspire-cli-*.tar.gz" />
       <!-- VS Code extension artifacts: VSIX, manifest, and signature file -->
-      <_ExtensionFilesToPublish Include="$(ArtifactsPackagesDir)**\aspire-vscode-*.vsix" />
-      <_ExtensionManifestFiles Include="$(ArtifactsPackagesDir)**\aspire-vscode-*.manifest" />
-      <_ExtensionSignatureFiles Include="$(ArtifactsPackagesDir)**\aspire-vscode-*.signature.p7s" />
+      <_ExtensionFilesToPublish Include="$(ArtifactsPackagesDir)**\aspire-vscode-*.vsix" Condition="'$(BuildExtension)' == 'true'" />
+      <_ExtensionManifestFiles Include="$(ArtifactsPackagesDir)**\aspire-vscode-*.manifest" Condition="'$(BuildExtension)' == 'true'" />
+      <_ExtensionSignatureFiles Include="$(ArtifactsPackagesDir)**\aspire-vscode-*.signature.p7s" Condition="'$(BuildExtension)' == 'true'" />
     </ItemGroup>
 
     <!-- Validate VS Code extension artifacts: we expect exactly 1 VSIX and 1 manifest file.
          The signature file is created by signVsix.proj which runs after publish, so validation happens there. -->
-    <Error Condition="@(_ExtensionFilesToPublish->Count()) != 1" Text="Expected exactly 1 VS Code extension VSIX file but found @(_ExtensionFilesToPublish->Count()). Files: @(_ExtensionFilesToPublish, ', ')" />
-    <Error Condition="@(_ExtensionManifestFiles->Count()) != 1" Text="Expected exactly 1 VS Code extension manifest file but found @(_ExtensionManifestFiles->Count()). Files: @(_ExtensionManifestFiles, ', ')" />
+    <Error Condition="'$(BuildExtension)' == 'true' and @(_ExtensionFilesToPublish->Count()) != 1" Text="Expected exactly 1 VS Code extension VSIX file but found @(_ExtensionFilesToPublish->Count()). Files: @(_ExtensionFilesToPublish, ', ')" />
+    <Error Condition="'$(BuildExtension)' == 'true' and @(_ExtensionManifestFiles->Count()) != 1" Text="Expected exactly 1 VS Code extension manifest file but found @(_ExtensionManifestFiles->Count()). Files: @(_ExtensionManifestFiles, ', ')" />
     <Error Condition="!Exists('$(RepoRoot)eng\scripts\get-aspire-cli.sh')" Text="Expected CLI install script at $(RepoRoot)eng\scripts\get-aspire-cli.sh." />
     <Error Condition="!Exists('$(RepoRoot)eng\scripts\get-aspire-cli.ps1')" Text="Expected CLI install script at $(RepoRoot)eng\scripts\get-aspire-cli.ps1." />
 
