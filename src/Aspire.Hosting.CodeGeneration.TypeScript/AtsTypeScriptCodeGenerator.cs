@@ -1834,11 +1834,11 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         // Close the callback registration
         if (isOptional)
         {
-            WriteLine($"{indent}}}) : undefined;");
+            WriteLine(indent + "}) : undefined;");
         }
         else
         {
-            WriteLine($"{indent}}});");
+            WriteLine(indent + "});");
         }
     }
 
