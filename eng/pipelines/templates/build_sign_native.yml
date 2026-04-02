@@ -76,24 +76,6 @@ jobs:
               /bl:$(Build.Arcade.LogsPath)BundlePayload.binlog
             displayName: 🟣Build bundle payload
 
-          - ${{ if ne(parameters.agentOs, 'macos') }}:
-            - script: >-
-                $(Build.SourcesDirectory)/$(scriptName)
-                --ci
-                --build
-                --pack
-                --restore
-                --projects $(Build.SourcesDirectory)/src/Aspire.Cli/Aspire.Cli.Tool.csproj
-                /p:RuntimeIdentifier=${{ targetRid }}
-                /p:SelfContained=true
-                /p:BundlePayloadPath=$(Build.SourcesDirectory)/artifacts/bundle/aspire-ci-bundlepayload-${{ targetRid }}.tar.gz
-                $(_buildArgs)
-                ${{ parameters.extraBuildArgs }}
-                /bl:$(Build.Arcade.LogsPath)AspireCliTool.${{ replace(targetRid, '-', '_') }}.binlog
-              displayName: 🟣Build CLI tool package (${{ targetRid }})
-              env:
-                SYSTEM_ACCESSTOKEN: $(System.AccessToken)
-
           - script: >-
               $(Build.SourcesDirectory)/$(scriptName)
               --ci
@@ -109,29 +91,29 @@ jobs:
             env:
               SYSTEM_ACCESSTOKEN: $(System.AccessToken) # Needed for the signing task
 
-          - ${{ if eq(parameters.agentOs, 'macos') }}:
-            - script: >-
-                $(Build.SourcesDirectory)/$(scriptName)
-                --ci
-                --build
-                --pack
-                --restore
-                --projects $(Build.SourcesDirectory)/src/Aspire.Cli/Aspire.Cli.Tool.csproj
-                /p:RuntimeIdentifier=${{ targetRid }}
-                /p:SelfContained=true
-                /p:PackageOutputPath=$(Build.SourcesDirectory)/artifacts/tool-packages/${{ targetRid }}
-                /p:BundlePayloadPath=$(Build.SourcesDirectory)/artifacts/bundle/aspire-ci-bundlepayload-${{ targetRid }}.tar.gz
-                /p:Configuration=$(_BuildConfig)
-                $(_OfficialBuildIdArgs)
-                /bl:$(Build.Arcade.LogsPath)AspireCliTool.${{ replace(targetRid, '-', '_') }}.binlog
-              displayName: 🟣Build CLI tool package (${{ targetRid }})
-              env:
-                SYSTEM_ACCESSTOKEN: $(System.AccessToken)
-            - script: >-
-                mkdir -p $(Build.Arcade.ArtifactsPath)packages/$(_BuildConfig)/Shipping &&
-                cp $(Build.SourcesDirectory)/artifacts/tool-packages/${{ targetRid }}/Aspire.Cli*.nupkg
-                $(Build.Arcade.ArtifactsPath)packages/$(_BuildConfig)/Shipping/
-              displayName: 🟣Stage CLI tool packages
+          - script: >-
+              $(Build.SourcesDirectory)/$(scriptName)
+              --ci
+              --build
+              --pack
+              --restore
+              --projects $(Build.SourcesDirectory)/src/Aspire.Cli/Aspire.Cli.Tool.csproj
+              /p:RuntimeIdentifier=${{ targetRid }}
+              /p:SelfContained=true
+              /p:PackageOutputPath=$(Build.SourcesDirectory)/artifacts/tool-packages/${{ targetRid }}
+              /p:BundlePayloadPath=$(Build.SourcesDirectory)/artifacts/bundle/aspire-ci-bundlepayload-${{ targetRid }}.tar.gz
+              /p:Configuration=$(_BuildConfig)
+              $(_OfficialBuildIdArgs)
+              /bl:$(Build.Arcade.LogsPath)AspireCliTool.${{ replace(targetRid, '-', '_') }}.binlog
+            displayName: 🟣Build CLI tool package (${{ targetRid }})
+            env:
+              SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+
+          - script: >-
+              mkdir -p $(Build.Arcade.ArtifactsPath)packages/$(_BuildConfig)/Shipping &&
+              cp $(Build.SourcesDirectory)/artifacts/tool-packages/${{ targetRid }}/Aspire.Cli*.nupkg
+              $(Build.Arcade.ArtifactsPath)packages/$(_BuildConfig)/Shipping/
+            displayName: 🟣Stage CLI tool packages
 
           - task: 1ES.PublishBuildArtifacts@1
             displayName: 🟣Publish Artifacts
