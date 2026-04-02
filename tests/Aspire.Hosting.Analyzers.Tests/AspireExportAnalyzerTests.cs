@@ -1596,8 +1596,7 @@ public class AspireExportAnalyzerTests
                     => builder;
             }
             """,
-            [new DiagnosticResult(diagnostic).WithLocation(15, 6).WithArguments("withRoleAssignments", "WithRoleAssignments", "MyResource", "withMyRoleAssignments"),
-             new DiagnosticResult(AspireExportAnalyzer.Diagnostics.s_redundantExportId).WithLocation(15, 6).WithArguments("withRoleAssignments", "WithRoleAssignments")]);
+            [new DiagnosticResult(diagnostic).WithLocation(15, 6).WithArguments("withRoleAssignments", "WithRoleAssignments", "MyResource", "withMyRoleAssignments")]);
 
         await test.RunAsync();
     }
@@ -1775,8 +1774,7 @@ public class AspireExportAnalyzerTests
                     => builder;
             }
             """,
-            [new DiagnosticResult(diagnostic).WithLocation(15, 6).WithArguments("withRoleAssignments", "WithRoleAssignments", "AzureSearchResource", "withSearchRoleAssignments"),
-             new DiagnosticResult(AspireExportAnalyzer.Diagnostics.s_redundantExportId).WithLocation(15, 6).WithArguments("withRoleAssignments", "WithRoleAssignments")]);
+            [new DiagnosticResult(diagnostic).WithLocation(15, 6).WithArguments("withRoleAssignments", "WithRoleAssignments", "AzureSearchResource", "withSearchRoleAssignments")]);
 
         await test.RunAsync();
     }
@@ -1816,6 +1814,73 @@ public class AspireExportAnalyzerTests
             {
                 [AspireExport("addRedisWithPort")]
                 public static string AddRedis(int port) => "test";
+            }
+            """, []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task RedundantExportId_InstanceMethod_CamelCaseOnlyNotMatchingConvention_NoDiagnostics()
+    {
+        // For instance methods in a type with ExposeMethods=true, the convention is
+        // "TypeName.camelCaseMethod" (e.g. "MyClass.getValue"), not just "getValue".
+        // So [AspireExport("getValue")] on GetValue does NOT trigger ASPIREEXPORT011.
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            [AspireExport(ExposeMethods = true)]
+            public class MyClass
+            {
+                [AspireExport("getValue")]
+                public string GetValue() => "test";
+            }
+            """, []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task RedundantExportId_InstanceMethod_TypePrefixMatchesConvention_ReportsASPIREEXPORT011()
+    {
+        // [AspireExport("MyClass.getValue")] on GetValue matches the convention-derived id
+        // "MyClass.getValue", so ASPIREEXPORT011 fires.
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_redundantExportId;
+
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            [AspireExport(ExposeMethods = true)]
+            public class MyClass
+            {
+                [AspireExport("MyClass.getValue")]
+                public string GetValue() => "test";
+            }
+            """,
+            [new DiagnosticResult(diagnostic).WithLocation(8, 6).WithArguments("MyClass.getValue", "GetValue")]);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task RedundantExportId_InstanceMethod_NoExplicitId_NoDiagnostics()
+    {
+        // Parameterless [AspireExport] on an instance method derives the id automatically.
+        // No ASPIREEXPORT011 is expected.
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            [AspireExport(ExposeMethods = true)]
+            public class MyClass
+            {
+                [AspireExport]
+                public string GetValue() => "test";
             }
             """, []);
 

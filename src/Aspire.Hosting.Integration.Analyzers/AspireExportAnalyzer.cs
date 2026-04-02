@@ -202,9 +202,13 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         var normalizedExportId = isExportIdFormatValid ? exportId : null;
         var effectiveExportId = normalizedExportId ?? derivedExportId;
 
-        // Rule 2b (ASPIREEXPORT011): Warn when explicit id matches the convention-derived name
+        // Rule 2b (ASPIREEXPORT011): Warn when explicit id matches the convention-derived name.
+        // Suppressed when Rule 7 (ASPIREEXPORT009) also fires — the two give contradictory advice
+        // (ASPIREEXPORT011 says "remove the id"; ASPIREEXPORT009 says "make the id more specific"),
+        // so only the actionable ASPIREEXPORT009 should appear.
         if (isExportIdFormatValid &&
-            string.Equals(exportId, derivedExportId, StringComparison.Ordinal))
+            string.Equals(exportId, derivedExportId, StringComparison.Ordinal) &&
+            !HasConcreteResourceBuilderTargetParameter(method, wellKnownTypes))
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 Diagnostics.s_redundantExportId,
@@ -294,6 +298,35 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
             location,
             method.Name,
             reason ?? "Add [AspireExport] if ATS-compatible, or [AspireExportIgnore] with a reason."));
+    }
+
+    /// <summary>
+    /// Returns true when the method satisfies the ASPIREEXPORT009 preconditions (open-generic
+    /// <c>IResourceBuilder&lt;T&gt;</c> first parameter plus at least one concrete
+    /// <c>IResourceBuilder&lt;ConcreteType&gt;</c> parameter), independently of what the export ID is.
+    /// Used to suppress ASPIREEXPORT011 when ASPIREEXPORT009 would fire for the same method.
+    /// </summary>
+    private static bool HasConcreteResourceBuilderTargetParameter(IMethodSymbol method, WellKnownTypes wellKnownTypes)
+    {
+        if (!method.IsExtensionMethod || method.Parameters.Length < 2)
+        {
+            return false;
+        }
+
+        if (!IsOpenGenericResourceBuilder(method.Parameters[0].Type, wellKnownTypes))
+        {
+            return false;
+        }
+
+        for (var i = 1; i < method.Parameters.Length; i++)
+        {
+            if (GetConcreteResourceBuilderTypeName(method.Parameters[i].Type, wellKnownTypes) is not null)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void AnalyzeExportNameUniqueness(
