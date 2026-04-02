@@ -1,4 +1,4 @@
-// ===== AddDockerfileOptions.java =====
+﻿// ===== AddDockerfileOptions.java =====
 // AddDockerfileOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
@@ -47,6 +47,33 @@ public final class AddParameterWithValueOptions {
     public Boolean getSecret() { return secret; }
     public AddParameterWithValueOptions secret(Boolean value) {
         this.secret = value;
+        return this;
+    }
+
+}
+
+// ===== AddStepOptions.java =====
+// AddStepOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Options for AddStep. */
+public final class AddStepOptions {
+    private String[] dependsOn;
+    private String[] requiredBy;
+
+    public String[] getDependsOn() { return dependsOn; }
+    public AddStepOptions dependsOn(String[] value) {
+        this.dependsOn = value;
+        return this;
+    }
+
+    public String[] getRequiredBy() { return requiredBy; }
+    public AddStepOptions requiredBy(String[] value) {
+        this.requiredBy = value;
         return this;
     }
 
@@ -1033,6 +1060,7 @@ import java.util.function.*;
 public class AspireRegistrations {
     static {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder", (h, c) -> new IDistributedApplicationBuilder(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.IDistributedApplicationPipeline", (h, c) -> new IDistributedApplicationPipeline(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.DistributedApplication", (h, c) -> new DistributedApplication(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference", (h, c) -> new EndpointReference(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource", (h, c) -> new IResource(h, c));
@@ -10528,6 +10556,13 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return (DistributedApplicationExecutionContext) getClient().invokeCapability("Aspire.Hosting/IDistributedApplicationBuilder.executionContext", reqArgs);
     }
 
+    /** Gets the Pipeline property */
+    public IDistributedApplicationPipeline pipeline() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (IDistributedApplicationPipeline) getClient().invokeCapability("Aspire.Hosting/IDistributedApplicationBuilder.pipeline", reqArgs);
+    }
+
     /** Gets the UserSecretsManager property */
     public IUserSecretsManager userSecretsManager() {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -10765,6 +10800,70 @@ public class IDistributedApplicationEventing extends HandleWrapperBase {
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         reqArgs.put("subscription", AspireClient.serializeValue(subscription));
         getClient().invokeCapability("Aspire.Hosting.Eventing/IDistributedApplicationEventing.unsubscribe", reqArgs);
+    }
+
+}
+
+// ===== IDistributedApplicationPipeline.java =====
+// IDistributedApplicationPipeline.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.Pipelines.IDistributedApplicationPipeline. */
+public class IDistributedApplicationPipeline extends HandleWrapperBase {
+    IDistributedApplicationPipeline(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Adds a pipeline step to the application */
+    public void addStep(String stepName, AspireAction1<PipelineStepContext> callback, AddStepOptions options) {
+        var dependsOn = options == null ? null : options.getDependsOn();
+        var requiredBy = options == null ? null : options.getRequiredBy();
+        addStepImpl(stepName, callback, dependsOn, requiredBy);
+    }
+
+    public void addStep(String stepName, AspireAction1<PipelineStepContext> callback) {
+        addStep(stepName, callback, null);
+    }
+
+    /** Adds a pipeline step to the application */
+    private void addStepImpl(String stepName, AspireAction1<PipelineStepContext> callback, String[] dependsOn, String[] requiredBy) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("pipeline", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("stepName", AspireClient.serializeValue(stepName));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (PipelineStepContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (dependsOn != null) {
+            reqArgs.put("dependsOn", AspireClient.serializeValue(dependsOn));
+        }
+        if (requiredBy != null) {
+            reqArgs.put("requiredBy", AspireClient.serializeValue(requiredBy));
+        }
+        getClient().invokeCapability("Aspire.Hosting/addStep", reqArgs);
+    }
+
+    /** Configures the application pipeline via a callback */
+    public void configure(AspireAction1<PipelineConfigurationContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("pipeline", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (PipelineConfigurationContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/configure", reqArgs);
     }
 
 }
@@ -20682,6 +20781,7 @@ public final class WithVolumeOptions {
 // ===== sources.txt =====
 .modules/AddDockerfileOptions.java
 .modules/AddParameterWithValueOptions.java
+.modules/AddStepOptions.java
 .modules/AfterResourcesCreatedEvent.java
 .modules/Aspire.java
 .modules/AspireAction0.java
@@ -20744,6 +20844,7 @@ public final class WithVolumeOptions {
 .modules/IDistributedApplicationBuilder.java
 .modules/IDistributedApplicationEvent.java
 .modules/IDistributedApplicationEventing.java
+.modules/IDistributedApplicationPipeline.java
 .modules/IDistributedApplicationResourceEvent.java
 .modules/IExpressionValue.java
 .modules/IHostEnvironment.java

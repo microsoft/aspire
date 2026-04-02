@@ -9332,6 +9332,18 @@ func (s *IDistributedApplicationBuilder) ExecutionContext() (*DistributedApplica
 	return result.(*DistributedApplicationExecutionContext), nil
 }
 
+// Pipeline gets the Pipeline property
+func (s *IDistributedApplicationBuilder) Pipeline() (*IDistributedApplicationPipeline, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/IDistributedApplicationBuilder.pipeline", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IDistributedApplicationPipeline), nil
+}
+
 // UserSecretsManager gets the UserSecretsManager property
 func (s *IDistributedApplicationBuilder) UserSecretsManager() (*IUserSecretsManager, error) {
 	reqArgs := map[string]any{
@@ -9590,6 +9602,49 @@ func (s *IDistributedApplicationEventing) Unsubscribe(subscription *DistributedA
 	}
 	reqArgs["subscription"] = SerializeValue(subscription)
 	_, err := s.Client().InvokeCapability("Aspire.Hosting.Eventing/IDistributedApplicationEventing.unsubscribe", reqArgs)
+	return err
+}
+
+// IDistributedApplicationPipeline wraps a handle for Aspire.Hosting/Aspire.Hosting.Pipelines.IDistributedApplicationPipeline.
+type IDistributedApplicationPipeline struct {
+	HandleWrapperBase
+}
+
+// NewIDistributedApplicationPipeline creates a new IDistributedApplicationPipeline.
+func NewIDistributedApplicationPipeline(handle *Handle, client *AspireClient) *IDistributedApplicationPipeline {
+	return &IDistributedApplicationPipeline{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// AddStep adds a pipeline step to the application
+func (s *IDistributedApplicationPipeline) AddStep(stepName string, callback func(...any) any, dependsOn []string, requiredBy []string) error {
+	reqArgs := map[string]any{
+		"pipeline": SerializeValue(s.Handle()),
+	}
+	reqArgs["stepName"] = SerializeValue(stepName)
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	if dependsOn != nil {
+		reqArgs["dependsOn"] = SerializeValue(dependsOn)
+	}
+	if requiredBy != nil {
+		reqArgs["requiredBy"] = SerializeValue(requiredBy)
+	}
+	_, err := s.Client().InvokeCapability("Aspire.Hosting/addStep", reqArgs)
+	return err
+}
+
+// Configure configures the application pipeline via a callback
+func (s *IDistributedApplicationPipeline) Configure(callback func(...any) any) error {
+	reqArgs := map[string]any{
+		"pipeline": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	_, err := s.Client().InvokeCapability("Aspire.Hosting/configure", reqArgs)
 	return err
 }
 
@@ -18559,6 +18614,9 @@ func (s *UpdateCommandStateContext) SetServiceProvider(value *IServiceProvider) 
 func init() {
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder", func(h *Handle, c *AspireClient) any {
 		return NewIDistributedApplicationBuilder(h, c)
+	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.IDistributedApplicationPipeline", func(h *Handle, c *AspireClient) any {
+		return NewIDistributedApplicationPipeline(h, c)
 	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.DistributedApplication", func(h *Handle, c *AspireClient) any {
 		return NewDistributedApplication(h, c)

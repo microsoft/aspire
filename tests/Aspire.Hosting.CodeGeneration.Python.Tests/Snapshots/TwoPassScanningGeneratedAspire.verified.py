@@ -1861,6 +1861,15 @@ class DistributedApplicationBuilder:
         return typing.cast(DistributedApplicationExecutionContext, result)
 
     @_cached_property
+    def pipeline(self) -> AbstractDistributedApplicationPipeline:
+        """Gets the Pipeline property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/IDistributedApplicationBuilder.pipeline',
+            {'context': self._handle}
+        )
+        return typing.cast(AbstractDistributedApplicationPipeline, result)
+
+    @_cached_property
     def user_secrets_manager(self) -> AbstractUserSecretsManager:
         """Gets the UserSecretsManager property"""
         result = self._client.invoke_capability(
@@ -2204,6 +2213,45 @@ class AbstractDistributedApplicationEventing:
         rpc_args['subscription'] = subscription
         self._client.invoke_capability(
             'Aspire.Hosting.Eventing/IDistributedApplicationEventing.unsubscribe',
+            rpc_args
+        )
+
+
+class AbstractDistributedApplicationPipeline:
+    """Type class for AbstractDistributedApplicationPipeline."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"AbstractDistributedApplicationPipeline(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    def add_step(self, step_name: str, callback: typing.Callable[[PipelineStepContext], None], *, depends_on: typing.Iterable[str] | None = None, required_by: typing.Iterable[str] | None = None) -> None:
+        """Adds a pipeline step to the application"""
+        rpc_args: dict[str, typing.Any] = {'pipeline': self._handle}
+        rpc_args['stepName'] = step_name
+        rpc_args['callback'] = self._client.register_callback(callback)
+        if depends_on is not None:
+            rpc_args['dependsOn'] = depends_on
+        if required_by is not None:
+            rpc_args['requiredBy'] = required_by
+        self._client.invoke_capability(
+            'Aspire.Hosting/addStep',
+            rpc_args
+        )
+
+    def configure(self, callback: typing.Callable[[PipelineConfigurationContext], None]) -> None:
+        """Configures the application pipeline via a callback"""
+        rpc_args: dict[str, typing.Any] = {'pipeline': self._handle}
+        rpc_args['callback'] = self._client.register_callback(callback)
+        self._client.invoke_capability(
+            'Aspire.Hosting/configure',
             rpc_args
         )
 
@@ -9720,6 +9768,7 @@ _register_handle_wrapper("Aspire.Hosting/List<Aspire.Hosting/Aspire.Hosting.Appl
 _register_handle_wrapper("Aspire.Hosting/Dict<string,string>", AspireDict)
 _register_handle_wrapper("Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfiguration", AbstractConfiguration)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationEventing", AbstractDistributedApplicationEventing)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.IDistributedApplicationPipeline", AbstractDistributedApplicationPipeline)
 _register_handle_wrapper("Microsoft.Extensions.Hosting.Abstractions/Microsoft.Extensions.Hosting.IHostEnvironment", AbstractHostEnvironment)
 _register_handle_wrapper("Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILogger", AbstractLogger)
 _register_handle_wrapper("Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILoggerFactory", AbstractLoggerFactory)
