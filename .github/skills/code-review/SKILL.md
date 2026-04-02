@@ -121,25 +121,37 @@ Only flag **actual problems**. Every comment must identify a concrete issue. Cat
 1. **Bugs** — logic errors, off-by-one, null dereferences, missing awaits, race conditions, incorrect resource disposal.
 2. **Security** — injection risks, credential exposure, insecure defaults, OWASP Top 10 violations.
 3. **Correctness** — wrong behavior relative to the PR description or existing contracts, breaking changes to public API without justification.
-4. **Missing error handling at system boundaries** — unvalidated external input, missing null checks at public API entry points. Do NOT flag missing null checks for parameters the type system already guarantees non-null.
-5. **Performance regressions** — unnecessary allocations in hot paths, N+1 queries, blocking async calls (`Task.Result`, `.Wait()`).
-6. **Concurrency issues** — thread-unsafe collections in concurrent code, missing synchronization, deadlock risks.
-7. **Repository convention violations** — per the AGENTS.md rules:
-   - Manual edits to `api/*.cs` files
-   - Manual edits to `*.xlf` files
-   - Changes to `NuGet.config` adding unapproved feeds
-   - Changes to `global.json`
-   - Using `== null` instead of `is null`
-   - Missing file-scoped namespaces
-8. **Test problems** — flaky patterns per the test review guidelines: thread-unsafe test fakes, log-based readiness checks instead of `WaitForHealthyAsync()`, shared timeout budgets, hardcoded ports, `Directory.SetCurrentDirectory` usage, commented-out tests.
+4. **Behavioral contract changes** — when a type/class is replaced, removed, or refactored, check whether any behavioral contracts were silently changed. Examples: a property that previously threw on invalid access now returns a default value; an override that enforced an invariant is gone; a method that validated input no longer does.
+5. **Weakened invariants** — check whether validation was relaxed during refactoring. Examples: `SingleOrDefault` (throws on duplicates) replaced by `FirstOrDefault` (silently picks first); `Debug.Assert` guarding a release-relevant invariant that should be an `if` + `throw`; precondition checks that were removed.
+6. **Missing error handling at system boundaries** — unvalidated external input, missing null checks at public API entry points. Do NOT flag missing null checks for parameters the type system already guarantees non-null.
+7. **Performance regressions** — unnecessary allocations in hot paths, N+1 queries, blocking async calls (`Task.Result`, `.Wait()`).
+8. **Concurrency issues** — thread-unsafe collections in concurrent code, missing synchronization, deadlock risks.
+9. **Temporal coupling and initialization safety** — fields initialized to `null!` with a separate `Initialize()` method that must be called before use; DI registrations that depend on call ordering; any pattern where forgetting a call causes a runtime NRE with no compile-time safety.
+10. **Resource leaks** — `IDisposable` objects (e.g., `CancellationTokenSource`, `SemaphoreSlim`) that are created but never disposed, even if the pattern was moved from elsewhere.
+11. **Dead code and stale comments** — comments describing behavior the code no longer implements; unused variables; `ToList()` calls with comments like "materialize to check count" where the count is never checked.
+12. **Repository convention violations** — per the AGENTS.md rules:
+    - Manual edits to `api/*.cs` files
+    - Manual edits to `*.xlf` files
+    - Changes to `NuGet.config` adding unapproved feeds
+    - Changes to `global.json`
+    - Using `== null` instead of `is null`
+    - Missing file-scoped namespaces
+13. **Test problems** — flaky patterns per the test review guidelines: thread-unsafe test fakes, log-based readiness checks instead of `WaitForHealthyAsync()`, shared timeout budgets, hardcoded ports, `Directory.SetCurrentDirectory` usage, commented-out tests.
 
 ### What NOT to Flag
 
 - Style preferences already handled by `.editorconfig` or formatters
 - Missing XML doc comments (unless a public API is completely undocumented)
-- Code that "could be better" but isn't wrong
 - Suggestions for refactoring unrelated code
 - Missing API file regeneration (this is expected during development)
+
+### Reviewing refactored / moved code
+
+When code is moved from one file to another (e.g., extracting a class), treat the moved code as if it were newly written. Specifically:
+
+- **Flag pre-existing issues in moved code.** If buggy or unsafe code is copy-pasted into a new file, flag it. The refactoring is an opportunity to fix it. Mark these as "Pre-existing issue, good opportunity to fix during this refactoring."
+- **Diff old vs. new behavior.** When a type/class is deleted and replaced, explicitly compare the old and new implementations. Look for: removed overrides, changed exception behavior, relaxed validation, lost invariant checks.
+- **Check callers of removed types.** If `OldClass` is removed and replaced by `NewClass<T>`, verify that all call sites that depended on `OldClass`-specific behavior still work correctly.
 
 ## Step 5: Present Findings to the User
 
@@ -174,9 +186,8 @@ Once the user has selected which findings to include:
 
 ## Review Quality Rules
 
-- **High confidence only.** Do not flag something unless you are confident it is a real problem. If unsure, skip it.
+- **Flag across the confidence spectrum.** Flag definite bugs, likely bugs, and design concerns. Label each with its confidence level so the author can prioritize. Do not skip something just because you're not 100% certain — if the concern is reasonable, flag it and let the author confirm or dismiss.
 - **One problem per comment.** Don't bundle multiple issues into a single comment.
 - **Be specific.** Reference the exact line(s), variable(s), or condition(s) that are problematic.
 - **Provide fix direction.** If the fix isn't obvious, include a brief suggestion or code snippet.
 - **Don't repeat existing review comments.** Check existing review threads before posting.
-- **Respect prior context.** If the same pattern exists in surrounding unchanged code, don't flag the PR author for it — it's pre-existing.
