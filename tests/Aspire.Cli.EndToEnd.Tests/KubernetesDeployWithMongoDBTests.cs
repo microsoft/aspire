@@ -51,6 +51,7 @@ public sealed class KubernetesDeployWithMongoDBTests(ITestOutputHelper output)
             await auto.CreateKindClusterWithRegistryAsync(counter, clusterName);
 
             var appHostCode = $$"""
+                #pragma warning disable ASPIRECOMPUTE003
                 using Aspire.Hosting;
                 using Aspire.Hosting.Kubernetes;
 

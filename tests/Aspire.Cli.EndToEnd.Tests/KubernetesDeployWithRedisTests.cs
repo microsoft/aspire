@@ -52,6 +52,7 @@ public sealed class KubernetesDeployWithRedisTests(ITestOutputHelper output)
 
             // Scaffold: AppHost with Redis + API service that uses Redis client
             var appHostCode = $$"""
+                #pragma warning disable ASPIRECOMPUTE003
                 using Aspire.Hosting;
                 using Aspire.Hosting.Kubernetes;
 

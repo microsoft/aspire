@@ -60,6 +60,7 @@ public sealed class KubernetesDeployBasicApiServiceTests(ITestOutputHelper outpu
             // =====================================================================
 
             var appHostCode = $$"""
+                #pragma warning disable ASPIRECOMPUTE003
                 using Aspire.Hosting;
                 using Aspire.Hosting.Kubernetes;
 
