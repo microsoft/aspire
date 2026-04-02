@@ -2374,12 +2374,15 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain("Aspire.Hosting.Redis", directoryPackagesContent);
     }
 
-    [Fact]
-    public async Task UpdateSdkVersionInCsprojAppHostAsync_MigratesFromOldFormatToNewFormat()
+    [Theory]
+    [InlineData(".csproj")]
+    [InlineData(".fsproj")]
+    [InlineData(".vbproj")]
+    public async Task UpdateSdkVersionInCsprojAppHostAsync_MigratesFromOldFormatToNewFormat(string projectExtension)
     {
         // Arrange - tests migration from old <Sdk Name="..."> to new <Project Sdk="..."> format
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj");
+        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, $"AppHost{projectExtension}");
         var originalContent = """
             <Project Sdk="Microsoft.NET.Sdk">
                 <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0" />
@@ -2395,19 +2398,24 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var package = new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.0.2", Source = "nuget.org" };
 
         // Act
-        await ProjectUpdater.UpdateSdkVersionInCsprojAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
+        await ProjectUpdater.UpdateSdkVersionInProjectAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
 
         // Assert
         var updatedContent = await File.ReadAllTextAsync(projectFile);
-        await Verify(updatedContent, extension: "xml");
+        await Verify(updatedContent, extension: "xml")
+            .UseFileName($"ProjectUpdaterTests.{nameof(UpdateSdkVersionInCsprojAppHostAsync_MigratesFromOldFormatToNewFormat)}")
+            .DisableRequireUniquePrefix();
     }
 
-    [Fact]
-    public async Task UpdateSdkVersionInCsprojAppHostAsync_UpdatesExistingNewFormat()
+    [Theory]
+    [InlineData(".csproj")]
+    [InlineData(".fsproj")]
+    [InlineData(".vbproj")]
+    public async Task UpdateSdkVersionInCsprojAppHostAsync_UpdatesExistingNewFormat(string projectExtension)
     {
         // Arrange - tests updating a project already using the new format
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj");
+        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, $"AppHost{projectExtension}");
         var originalContent = """
             <Project Sdk="Aspire.AppHost.Sdk/13.0.1">
                 <PropertyGroup>
@@ -2422,19 +2430,24 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var package = new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.0.2", Source = "nuget.org" };
 
         // Act
-        await ProjectUpdater.UpdateSdkVersionInCsprojAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
+        await ProjectUpdater.UpdateSdkVersionInProjectAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
 
         // Assert
         var updatedContent = await File.ReadAllTextAsync(projectFile);
-        await Verify(updatedContent, extension: "xml");
+        await Verify(updatedContent, extension: "xml")
+            .UseFileName($"ProjectUpdaterTests.{nameof(UpdateSdkVersionInCsprojAppHostAsync_UpdatesExistingNewFormat)}")
+            .DisableRequireUniquePrefix();
     }
 
-    [Fact]
-    public async Task UpdateSdkVersionInCsprojAppHostAsync_RemovesAspireHostingAppHostPackageReference()
+    [Theory]
+    [InlineData(".csproj")]
+    [InlineData(".fsproj")]
+    [InlineData(".vbproj")]
+    public async Task UpdateSdkVersionInCsprojAppHostAsync_RemovesAspireHostingAppHostPackageReference(string projectExtension)
     {
         // Arrange - tests removal of obsolete Aspire.Hosting.AppHost package reference
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj");
+        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, $"AppHost{projectExtension}");
         var originalContent = """
             <Project Sdk="Microsoft.NET.Sdk">
                 <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0" />
@@ -2454,19 +2467,24 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var package = new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.0.2", Source = "nuget.org" };
 
         // Act
-        await ProjectUpdater.UpdateSdkVersionInCsprojAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
+        await ProjectUpdater.UpdateSdkVersionInProjectAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
 
         // Assert
         var updatedContent = await File.ReadAllTextAsync(projectFile);
-        await Verify(updatedContent, extension: "xml");
+        await Verify(updatedContent, extension: "xml")
+            .UseFileName($"ProjectUpdaterTests.{nameof(UpdateSdkVersionInCsprojAppHostAsync_RemovesAspireHostingAppHostPackageReference)}")
+            .DisableRequireUniquePrefix();
     }
 
-    [Fact]
-    public async Task UpdateSdkVersionInCsprojAppHostAsync_RemovesEmptyItemGroupAfterPackageRemoval()
+    [Theory]
+    [InlineData(".csproj")]
+    [InlineData(".fsproj")]
+    [InlineData(".vbproj")]
+    public async Task UpdateSdkVersionInCsprojAppHostAsync_RemovesEmptyItemGroupAfterPackageRemoval(string projectExtension)
     {
         // Arrange - tests that empty ItemGroup is removed after Aspire.Hosting.AppHost removal
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj");
+        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, $"AppHost{projectExtension}");
         var originalContent = """
             <Project Sdk="Microsoft.NET.Sdk">
                 <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0" />
@@ -2485,19 +2503,24 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var package = new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.0.2", Source = "nuget.org" };
 
         // Act
-        await ProjectUpdater.UpdateSdkVersionInCsprojAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
+        await ProjectUpdater.UpdateSdkVersionInProjectAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
 
         // Assert
         var updatedContent = await File.ReadAllTextAsync(projectFile);
-        await Verify(updatedContent, extension: "xml");
+        await Verify(updatedContent, extension: "xml")
+            .UseFileName($"ProjectUpdaterTests.{nameof(UpdateSdkVersionInCsprojAppHostAsync_RemovesEmptyItemGroupAfterPackageRemoval)}")
+            .DisableRequireUniquePrefix();
     }
 
-    [Fact]
-    public async Task UpdateSdkVersionInCsprojAppHostAsync_PreservesOtherSdksInAttribute()
+    [Theory]
+    [InlineData(".csproj")]
+    [InlineData(".fsproj")]
+    [InlineData(".vbproj")]
+    public async Task UpdateSdkVersionInCsprojAppHostAsync_PreservesOtherSdksInAttribute(string projectExtension)
     {
         // Arrange - tests that other SDKs in the attribute are preserved
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj");
+        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, $"AppHost{projectExtension}");
         var originalContent = """
             <Project Sdk="Aspire.AppHost.Sdk/13.0.1;Microsoft.NET.Sdk.Web">
                 <PropertyGroup>
@@ -2512,20 +2535,25 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var package = new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.0.2", Source = "nuget.org" };
 
         // Act
-        await ProjectUpdater.UpdateSdkVersionInCsprojAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
+        await ProjectUpdater.UpdateSdkVersionInProjectAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
 
         // Assert
         var updatedContent = await File.ReadAllTextAsync(projectFile);
-        await Verify(updatedContent, extension: "xml");
+        await Verify(updatedContent, extension: "xml")
+            .UseFileName($"ProjectUpdaterTests.{nameof(UpdateSdkVersionInCsprojAppHostAsync_PreservesOtherSdksInAttribute)}")
+            .DisableRequireUniquePrefix();
     }
 
-    [Fact]
-    public async Task UpdateSdkVersionInCsprojAppHostAsync_DoesNotMatchSimilarSdkName()
+    [Theory]
+    [InlineData(".csproj")]
+    [InlineData(".fsproj")]
+    [InlineData(".vbproj")]
+    public async Task UpdateSdkVersionInCsprojAppHostAsync_DoesNotMatchSimilarSdkName(string projectExtension)
     {
         // Arrange - tests that Aspire.AppHost.SdkFoo doesn't match as the Aspire SDK
         // In this case, the old <Sdk Name="..."> element is used, so it's a migration scenario
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj");
+        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, $"AppHost{projectExtension}");
         var originalContent = """
             <Project Sdk="Aspire.AppHost.SdkFoo/1.0.0">
                 <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0" />
@@ -2540,14 +2568,20 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var package = new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.0.2", Source = "nuget.org" };
 
         // Act
-        await ProjectUpdater.UpdateSdkVersionInCsprojAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
+        await ProjectUpdater.UpdateSdkVersionInProjectAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
 
         // Assert
         var updatedContent = await File.ReadAllTextAsync(projectFile);
-        await Verify(updatedContent, extension: "xml");
+        await Verify(updatedContent, extension: "xml")
+            .UseFileName($"ProjectUpdaterTests.{nameof(UpdateSdkVersionInCsprojAppHostAsync_DoesNotMatchSimilarSdkName)}")
+            .DisableRequireUniquePrefix();
     }
-    [Fact]
-    public async Task UpdateSdkVersionInCsprojAppHostAsync_RemovesPackageVersionFromDirectoryPackagesPropsForCpm()
+
+    [Theory]
+    [InlineData(".csproj")]
+    [InlineData(".fsproj")]
+    [InlineData(".vbproj")]
+    public async Task UpdateSdkVersionInCsprojAppHostAsync_RemovesPackageVersionFromDirectoryPackagesPropsForCpm(string projectExtension)
     {
         // Arrange - simulates a CPM project with an old-format AppHost that has
         // Aspire.Hosting.AppHost in both csproj (as PackageReference) and
@@ -2556,7 +2590,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         // must also be removed to avoid NU1009.
         // See: https://github.com/microsoft/aspire/issues/14550
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj");
+        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, $"AppHost{projectExtension}");
         var originalContent = """
             <Project Sdk="Microsoft.NET.Sdk">
                 <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0" />
@@ -2590,7 +2624,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var package = new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.0.2", Source = "nuget.org" };
 
         // Act
-        await ProjectUpdater.UpdateSdkVersionInCsprojAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
+        await ProjectUpdater.UpdateSdkVersionInProjectAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
 
         // Assert - PackageVersion for Aspire.Hosting.AppHost should be removed from Directory.Packages.props
         var updatedPropsContent = await File.ReadAllTextAsync(directoryPackagesPropsFile);
