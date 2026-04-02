@@ -155,7 +155,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
 
         // Detect the AppHost language to determine which skills to offer.
         // When no language is detected (e.g., standalone `aspire agent init`), language-restricted skills are excluded.
-        var detectedLanguage = await _languageDiscovery.DetectLanguageAsync(ExecutionContext.WorkingDirectory, cancellationToken);
+        var detectedLanguage = await _languageDiscovery.DetectLanguageRecursiveAsync(ExecutionContext.WorkingDirectory, cancellationToken);
 
         // Filter skills based on language applicability
         var availableSkills = SkillDefinition.All
