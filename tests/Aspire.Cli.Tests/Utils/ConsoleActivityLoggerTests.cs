@@ -328,6 +328,19 @@ public class ConsoleActivityLoggerTests
     }
 
     [Fact]
+    public void WriteSummary_WithoutDurationRecords_DoesNotRenderStepsSummary()
+    {
+        var output = new StringBuilder();
+        var logger = CreateLogger(output, interactive: false, color: false);
+
+        logger.SetStepDurations([]);
+        logger.SetFinalResult(true);
+        logger.WriteSummary();
+
+        Assert.DoesNotContain(SharedCommandStrings.PipelineStepsSummaryTitle, output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void WriteSummary_WithDeepNesting_SkipsTimelineToPreserveStepNames()
     {
         var output = new StringBuilder();

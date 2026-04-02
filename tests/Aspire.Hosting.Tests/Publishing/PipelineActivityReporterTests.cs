@@ -76,6 +76,28 @@ public class PublishingActivityReporterTests
     }
 
     [Fact]
+    public async Task CreateStepAsync_WithParentStepTitle_ResolvesParentStepId()
+    {
+        // Arrange
+        var reporter = CreatePublishingReporter();
+        var parentStep = Assert.IsType<ReportingStep>(await reporter.CreateStepAsync("Parent Step", CancellationToken.None));
+
+        // Clear the parent step creation activity
+        reporter.ActivityItemUpdated.Reader.TryRead(out _);
+
+        // Act
+        var childStep = Assert.IsType<ReportingStep>(await reporter.CreateStepAsync("Child Step", "Parent Step", 1, CancellationToken.None));
+
+        // Assert
+        Assert.Equal(parentStep.Id, childStep.ParentStepId);
+
+        var activityReader = reporter.ActivityItemUpdated.Reader;
+        Assert.True(activityReader.TryRead(out var createActivity));
+        Assert.Equal(parentStep.Id, createActivity.Data.ParentStepId);
+        Assert.Equal(1, createActivity.Data.HierarchyLevel);
+    }
+
+    [Fact]
     public async Task CreateTaskAsync_CreatesTaskAndEmitsActivity()
     {
         // Arrange

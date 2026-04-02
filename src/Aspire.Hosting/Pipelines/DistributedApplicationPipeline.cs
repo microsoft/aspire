@@ -7,7 +7,6 @@
 #pragma warning disable ASPIREPIPELINES002
 #pragma warning disable ASPIREPIPELINES003
 
-using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.ExceptionServices;
@@ -602,7 +601,6 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             // Create a TaskCompletionSource for each step
             var stepCompletions = new Dictionary<string, TaskCompletionSource>(steps.Count, StringComparer.Ordinal);
             var stepHierarchyByName = GetStepHierarchyByStep(steps, stepsByName);
-            var reportingStepIds = new ConcurrentDictionary<string, string>(StringComparer.Ordinal);
             foreach (var step in steps)
             {
                 stepCompletions[step.Name] = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -645,21 +643,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                 {
                     var activityReporter = context.Services.GetRequiredService<IPipelineActivityReporter>();
                     var stepHierarchy = stepHierarchyByName.GetValueOrDefault(step.Name);
-                    var parentStepId = stepHierarchy.ParentStepName is { } parentStepName &&
-                        reportingStepIds.TryGetValue(parentStepName, out var value)
-                        ? value
-                        : null;
-
-                    var reportingStep = activityReporter switch
-                    {
-                        PipelineActivityReporter pipelineActivityReporter => await pipelineActivityReporter.CreateStepAsync(step.Name, parentStepId, stepHierarchy.Level, context.CancellationToken).ConfigureAwait(false),
-                        _ => await activityReporter.CreateStepAsync(step.Name, context.CancellationToken).ConfigureAwait(false)
-                    };
-
-                    if (reportingStep is ReportingStep concreteReportingStep)
-                    {
-                        reportingStepIds[step.Name] = concreteReportingStep.Id;
-                    }
+                    var reportingStep = await activityReporter.CreateStepAsync(step.Name, stepHierarchy.ParentStepName, stepHierarchy.Level, context.CancellationToken).ConfigureAwait(false);
 
                     await using (reportingStep.ConfigureAwait(false))
                     {

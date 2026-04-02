@@ -17,6 +17,7 @@ namespace Aspire.Hosting.Pipelines;
 internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsyncDisposable
 {
     private readonly ConcurrentDictionary<string, ReportingStep> _steps = new();
+    private readonly ConcurrentDictionary<string, string> _stepIdsByTitle = new(StringComparer.Ordinal);
     private readonly InteractionService _interactionService;
     private readonly ILogger<PipelineActivityReporter> _logger;
     private readonly CancellationTokenSource _cancellationTokenSource = new();
@@ -57,10 +58,15 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
         return await CreateStepAsync(title, parentStepId: null, hierarchyLevel: 0, cancellationToken).ConfigureAwait(false);
     }
 
-    internal async Task<ReportingStep> CreateStepAsync(string title, string? parentStepId, int hierarchyLevel, CancellationToken cancellationToken = default)
+    public async Task<IReportingStep> CreateStepAsync(string title, string? parentStepId, int hierarchyLevel, CancellationToken cancellationToken = default)
     {
-        var step = new ReportingStep(this, Guid.NewGuid().ToString(), title, parentStepId, hierarchyLevel);
+        var resolvedParentStepId = parentStepId is not null && _stepIdsByTitle.TryGetValue(parentStepId, out var resolvedStepId)
+            ? resolvedStepId
+            : parentStepId;
+
+        var step = new ReportingStep(this, Guid.NewGuid().ToString(), title, resolvedParentStepId, hierarchyLevel);
         _steps.TryAdd(step.Id, step);
+        _stepIdsByTitle[title] = step.Id;
 
         var state = new PublishingActivity
         {

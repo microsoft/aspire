@@ -377,6 +377,11 @@ internal sealed class ConsoleActivityLogger
     private void WriteStepDurationsSummary(IReadOnlyList<StepDurationRecord> records)
     {
         var orderedRecords = OrderStepDurationsHierarchically(records);
+        if (orderedRecords.Count == 0)
+        {
+            return;
+        }
+
         var summaryTitle = SharedCommandStrings.PipelineStepsSummaryTitle;
         var timelineLabel = SharedCommandStrings.PipelineStepTimelineLabel;
         var totalTimeline = orderedRecords.Max(r => r.EndOffset > TimeSpan.Zero ? r.EndOffset : r.Duration);

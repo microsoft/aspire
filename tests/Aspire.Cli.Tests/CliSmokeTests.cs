@@ -150,6 +150,7 @@ public class CliSmokeTests(ITestOutputHelper outputHelper)
             Assert.Contains("=== Duration extremes ===", combinedOutput);
             Assert.Contains("Steps Summary:", combinedOutput);
             Assert.Contains("Tiny 0.2ms event", combinedOutput);
+            Assert.Contains("Zero event", combinedOutput);
             Assert.Contains('╴', combinedOutput);
         }, options: s_remoteInvokeOptions);
 

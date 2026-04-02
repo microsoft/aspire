@@ -321,6 +321,7 @@ internal sealed class RenderCommand : BaseCommand
                 new("level-4", "Wait for deployment", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromSeconds(6), null, "level-3", 4, 5, TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(9)),
                 new("level-5", "Finalize output", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromSeconds(2), null, "level-4", 5, 6, TimeSpan.FromSeconds(9), TimeSpan.FromSeconds(11)),
                 new("level-10", "Leaf nested 10 levels deep", ConsoleActivityLogger.ActivityState.Warning, TimeSpan.FromSeconds(1), null, "level-5", 10, 7, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(11)),
+                new("level-11", "This is a very very very very very long name", ConsoleActivityLogger.ActivityState.Warning, TimeSpan.FromSeconds(1), null, "level-10", 11, 8, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(11)),
             ]),
         "publish-summary-long-text" => new(
             "Long text and constrained width",
@@ -352,6 +353,7 @@ internal sealed class RenderCommand : BaseCommand
                 new("tiny", "Tiny 0.2ms event", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromMilliseconds(0.2), null, "root", 1, 2, TimeSpan.FromMilliseconds(5), TimeSpan.FromMilliseconds(5.2)),
                 new("mid", "HTTP publish", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromSeconds(18), null, "root", 1, 3, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(48)),
                 new("late", "Finalize", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromSeconds(2), null, "root", 1, 4, TimeSpan.FromMinutes(2.5), TimeSpan.FromMinutes(2.53333333333333)),
+                new("zero", "Zero event", ConsoleActivityLogger.ActivityState.Success, TimeSpan.Zero, null, "root", 1, 5, TimeSpan.FromMinutes(2.51), TimeSpan.FromMinutes(2.51)),
             ]),
         _ => throw new InvalidOperationException($"Unknown publish summary scenario '{scenarioKey}'.")
     };
