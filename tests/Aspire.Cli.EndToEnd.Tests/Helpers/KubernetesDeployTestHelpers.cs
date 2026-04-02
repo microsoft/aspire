@@ -240,6 +240,16 @@ internal static class KubernetesDeployTestHelpers
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
+        // Show server pod logs for debugging connectivity issues
+        await auto.TypeAsync($"kubectl logs -n {@namespace} -l app={serviceName} --tail=50 2>&1 || true");
+        await auto.EnterAsync();
+        await auto.WaitForAnyPromptAsync(counter, TimeSpan.FromSeconds(30));
+
+        // Show environment variables in server pod for connection string debugging
+        await auto.TypeAsync($"kubectl exec -n {@namespace} deploy/{serviceName}-deployment -- env 2>&1 | grep -iE '(ConnectionStrings|services)' | head -10 || true");
+        await auto.EnterAsync();
+        await auto.WaitForAnyPromptAsync(counter, TimeSpan.FromSeconds(30));
+
         // Port-forward in background
         await auto.TypeAsync($"kubectl port-forward -n {@namespace} svc/{serviceName}-service {localPort}:8080 &");
         await auto.EnterAsync();
