@@ -2186,25 +2186,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         {
             // Single parameter callback
             var cbParam = callbackParameters[0];
-            var tsType = MapTypeRefToTypeScript(cbParam.Type);
-            var cbTypeId = cbParam.Type.TypeId;
-
-            if (cbTypeId == AtsConstants.CancellationToken)
-            {
-                WriteLine($"{bodyIndent}const {cbParam.Name} = CancellationToken.fromValue({cbParam.Name}Data);");
-            }
-            else if (_wrapperClassNames.TryGetValue(cbTypeId, out var wrapperClassName))
-            {
-                // For types with wrapper classes, create an instance of the wrapper
-                var handleType = GetHandleTypeName(cbTypeId);
-                WriteLine($"{bodyIndent}const {cbParam.Name}Handle = wrapIfHandle({cbParam.Name}Data) as {handleType};");
-                WriteLine($"{bodyIndent}const {cbParam.Name} = new {GetImplementationClassName(wrapperClassName)}({cbParam.Name}Handle, this._client);");
-            }
-            else
-            {
-                // For raw handle types, just wrap and cast
-                WriteLine($"{bodyIndent}const {cbParam.Name} = wrapIfHandle({cbParam.Name}Data) as {tsType};");
-            }
+            GenerateCallbackParameterConversion(cbParam, $"{cbParam.Name}Data");
 
             WriteLine($"{bodyIndent}{returnPrefix}await {callbackName}({cbParam.Name});");
         }
@@ -2214,30 +2196,43 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             for (var i = 0; i < callbackParameters.Count; i++)
             {
                 var cbParam = callbackParameters[i];
-                var tsType = MapTypeRefToTypeScript(cbParam.Type);
-                var cbTypeId = cbParam.Type.TypeId;
                 var callbackArgName = $"{cbParam.Name}Data";
 
-                if (cbTypeId == AtsConstants.CancellationToken)
-                {
-                    WriteLine($"{bodyIndent}const {cbParam.Name} = CancellationToken.fromValue({callbackArgName});");
-                }
-                else if (_wrapperClassNames.TryGetValue(cbTypeId, out var wrapperClassName))
-                {
-                    // For types with wrapper classes, create an instance of the wrapper
-                    var handleType = GetHandleTypeName(cbTypeId);
-                    WriteLine($"{bodyIndent}const {cbParam.Name}Handle = wrapIfHandle({callbackArgName}) as {handleType};");
-                    WriteLine($"{bodyIndent}const {cbParam.Name} = new {GetImplementationClassName(wrapperClassName)}({cbParam.Name}Handle, this._client);");
-                }
-                else
-                {
-                    // For raw handle types, just wrap and cast
-                    WriteLine($"{bodyIndent}const {cbParam.Name} = wrapIfHandle({callbackArgName}) as {tsType};");
-                }
+                GenerateCallbackParameterConversion(cbParam, callbackArgName);
                 callArgs.Add(cbParam.Name);
             }
 
             WriteLine($"{bodyIndent}{returnPrefix}await {callbackName}({string.Join(", ", callArgs)});");
+        }
+    }
+
+    private void GenerateCallbackParameterConversion(AtsCallbackParameterInfo callbackParameter, string callbackArgName)
+    {
+        var tsType = MapTypeRefToTypeScript(callbackParameter.Type);
+        var cbTypeId = callbackParameter.Type.TypeId;
+
+        if (cbTypeId == AtsConstants.CancellationToken)
+        {
+            WriteLine($"            const {callbackParameter.Name} = CancellationToken.fromValue({callbackArgName});");
+        }
+        else if (IsDictionaryType(callbackParameter.Type) && !callbackParameter.Type.IsReadOnly)
+        {
+            var keyType = MapTypeRefToTypeScript(callbackParameter.Type.KeyType);
+            var valueType = MapTypeRefToTypeScript(callbackParameter.Type.ValueType);
+            var handleType = GetHandleTypeName(cbTypeId);
+
+            WriteLine($"            const {callbackParameter.Name}Handle = wrapIfHandle({callbackArgName}) as {handleType};");
+            WriteLine($"            const {callbackParameter.Name} = new AspireDict<{keyType}, {valueType}>({callbackParameter.Name}Handle, this._client, '{cbTypeId}');");
+        }
+        else if (_wrapperClassNames.TryGetValue(cbTypeId, out var wrapperClassName))
+        {
+            var handleType = GetHandleTypeName(cbTypeId);
+            WriteLine($"            const {callbackParameter.Name}Handle = wrapIfHandle({callbackArgName}) as {handleType};");
+            WriteLine($"            const {callbackParameter.Name} = new {GetImplementationClassName(wrapperClassName)}({callbackParameter.Name}Handle, this._client);");
+        }
+        else
+        {
+            WriteLine($"            const {callbackParameter.Name} = wrapIfHandle({callbackArgName}) as {tsType};");
         }
     }
 

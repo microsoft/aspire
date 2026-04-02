@@ -1306,9 +1306,19 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         INamedTypeSymbol? aspireExportAttribute,
         HashSet<ITypeSymbol>? currentAssemblyExportedTypes)
     {
-        if (type is not INamedTypeSymbol namedType || !namedType.IsGenericType)
+        if (type is not INamedTypeSymbol namedType)
         {
             return false;
+        }
+
+        if (!namedType.IsGenericType)
+        {
+            return namedType is
+            {
+                ContainingNamespace.Name: "Collections",
+                ContainingNamespace.ContainingNamespace.Name: "System",
+                Name: "IDictionary" or "IList"
+            };
         }
 
         // Dictionary<K,V> and IDictionary<K,V>

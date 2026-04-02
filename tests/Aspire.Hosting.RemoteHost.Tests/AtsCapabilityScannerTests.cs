@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections;
 using System.Reflection;
 using System.Reflection.Emit;
 using Aspire.Hosting.ApplicationModel;
@@ -127,6 +128,22 @@ public class AtsCapabilityScannerTests
 
         // System.Object maps to 'any'
         Assert.Equal("any", result);
+    }
+
+    [Fact]
+    public void MapToAtsTypeId_NonGenericIDictionary_ReturnsStringAnyDict()
+    {
+        var result = AtsCapabilityScanner.MapToAtsTypeId(typeof(IDictionary));
+
+        Assert.Equal("Aspire.Hosting/Dict<string,any>", result);
+    }
+
+    [Fact]
+    public void MapToAtsTypeId_NonGenericIList_ReturnsAnyList()
+    {
+        var result = AtsCapabilityScanner.MapToAtsTypeId(typeof(IList));
+
+        Assert.Equal("Aspire.Hosting/List<any>", result);
     }
 
     [Fact]

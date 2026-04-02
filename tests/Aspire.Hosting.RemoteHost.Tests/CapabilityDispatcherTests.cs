@@ -940,6 +940,28 @@ public class CapabilityDispatcherTests
     }
 
     [Fact]
+    public void Invoke_ListGet_ReturnsItemFromTypedList()
+    {
+        var handles = new HandleRegistry();
+        var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles), [typeof(TestTypeCategoryCapabilities).Assembly, typeof(AspireExportAttribute).Assembly]);
+
+        var listResult = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/returnTypedMutableList", null);
+        var listHandle = (listResult as JsonObject)?["$handle"]?.GetValue<string>();
+        Assert.NotNull(listHandle);
+
+        var args = new JsonObject
+        {
+            ["list"] = new JsonObject { ["$handle"] = listHandle },
+            ["index"] = 1
+        };
+
+        var result = dispatcher.Invoke("Aspire.Hosting/List.get", args);
+
+        Assert.NotNull(result);
+        Assert.Equal(20, result.GetValue<int>());
+    }
+
+    [Fact]
     public void Invoke_ListRemoveAt_RemovesItem()
     {
         var handles = new HandleRegistry();
@@ -1061,6 +1083,28 @@ public class CapabilityDispatcherTests
 
         Assert.NotNull(result);
         Assert.Equal("value1", result.GetValue<string>());
+    }
+
+    [Fact]
+    public void Invoke_DictGet_ReturnsValueFromTypedDictionary()
+    {
+        var handles = new HandleRegistry();
+        var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles), [typeof(TestTypeCategoryCapabilities).Assembly, typeof(AspireExportAttribute).Assembly]);
+
+        var dictResult = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/returnTypedMutableDict", null);
+        var dictHandle = (dictResult as JsonObject)?["$handle"]?.GetValue<string>();
+        Assert.NotNull(dictHandle);
+
+        var args = new JsonObject
+        {
+            ["dict"] = new JsonObject { ["$handle"] = dictHandle },
+            ["key"] = "key1"
+        };
+
+        var result = dispatcher.Invoke("Aspire.Hosting/Dict.get", args);
+
+        Assert.NotNull(result);
+        Assert.Equal(10, result.GetValue<int>());
     }
 
     [Fact]
@@ -2016,13 +2060,29 @@ internal static class TestTypeCategoryCapabilities
         return ["first", "second", "third"];
     }
 
-    [AspireExport(Description = "Returns a mutable Dictionary<string, object>")]
+    [AspireExport("returnTypedMutableList", Description = "Returns a mutable List<int>")]
+    public static List<int> ReturnTypedMutableList()
+    {
+        return [10, 20, 30];
+    }
+
+    [AspireExport("returnMutableDict", Description = "Returns a mutable Dictionary<string, object>")]
     public static Dictionary<string, object> ReturnMutableDict()
     {
         return new Dictionary<string, object>
         {
             ["key1"] = "value1",
             ["key2"] = 42
+        };
+    }
+
+    [AspireExport("returnTypedMutableDict", Description = "Returns a mutable Dictionary<string, int>")]
+    public static Dictionary<string, int> ReturnTypedMutableDict()
+    {
+        return new Dictionary<string, int>
+        {
+            ["key1"] = 10,
+            ["key2"] = 20
         };
     }
 }

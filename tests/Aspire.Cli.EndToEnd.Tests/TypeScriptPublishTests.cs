@@ -99,4 +99,90 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
 
         await pendingRun;
     }
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task PublishWithConfigureEnvFileUpdatesEnvOutput()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+
+        if (installMode == CliE2ETestHelpers.DockerInstallMode.GaRelease)
+        {
+            Assert.Skip("This test exercises unreleased TypeScript AppHost SDK surface. Build a local Aspire CLI bundle or run in CI so the test uses current PR bits instead of the GA CLI.");
+        }
+
+        using var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, variant: CliE2ETestHelpers.DockerfileVariant.Polyglot, workspace: workspace);
+
+        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+
+        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+
+        await auto.EnablePolyglotSupportAsync(counter);
+
+        await auto.TypeAsync("aspire init --language typescript --non-interactive");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync("aspire add Aspire.Hosting.Docker");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("The package Aspire.Hosting.", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync("aspire restore");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
+        var newContent = """
+            import { createBuilder } from './.modules/aspire.js';
+
+            const builder = await createBuilder();
+
+            const compose = await builder.addDockerComposeEnvironment("compose");
+            await compose.withDashboard(false);
+
+            const container = await builder.addContainer("my-container", "nginx:alpine");
+            await container.withBindMount("/host/path/data", "/container/data");
+
+            await compose.configureEnvFile(async (envVars) => {
+                const bindMount = await envVars.get("MY_CONTAINER_BINDMOUNT_0");
+                await bindMount.description.set("Customized bind mount source");
+                await bindMount.defaultValue.set("./data");
+            });
+
+            await builder.build().run();
+            """;
+
+        File.WriteAllText(appHostPath, newContent);
+
+        await auto.TypeAsync("unset ASPIRE_PLAYGROUND");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync("aspire publish -o artifacts --non-interactive");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptFailFastAsync(counter, timeout: TimeSpan.FromMinutes(5));
+
+        var envFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "artifacts", ".env");
+        Assert.True(File.Exists(envFilePath), $"Expected env file at {envFilePath}");
+
+        var envFileContent = await File.ReadAllTextAsync(envFilePath);
+        Assert.Contains("# Customized bind mount source", envFileContent);
+        Assert.DoesNotContain("# Bind mount source for my-container:/container/data", envFileContent);
+
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
+
+        await pendingRun;
+    }
 }
