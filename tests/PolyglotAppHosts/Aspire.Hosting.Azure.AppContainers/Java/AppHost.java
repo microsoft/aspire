@@ -23,11 +23,13 @@ void main() throws Exception {
         var laws = builder.addAzureLogAnalyticsWorkspace("laws");
         var env3 = builder.addAzureContainerAppEnvironment("myenv3");
         env3.withAzureLogAnalyticsWorkspace(laws);
+        var customDomain = builder.addParameter("customDomain");
+        var certificateName = builder.addParameter("certificateName");
         // === PublishAsAzureContainerApp ===
         // Test publishAsAzureContainerApp on a container resource with callback
         var web = builder.addContainer("web", "myregistry/web:latest");
         web.publishAsAzureContainerApp((infrastructure, app) -> {
-            // Configure container app via callback
+            app.configureCustomDomain(customDomain, certificateName);
         });
         // Test publishAsAzureContainerAppJob on an executable resource
         var api = builder.addExecutable("api", "dotnet", ".", new String[] { "run" });

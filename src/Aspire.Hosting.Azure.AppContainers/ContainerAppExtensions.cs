@@ -36,7 +36,7 @@ public static class ContainerAppExtensions
     /// certificate. Once the certificate is successfully provisioned, subsequent deployments of the application can use this certificate name when the
     /// <paramref name="certificateName"/> is prompted.</para>
     /// <para>For deployments triggered locally by the Azure Developer CLI the <c>config.json</c> file in the <c>.azure/{environment name}</c> path
-    /// can by modified with the certificate name since Azure Developer CLI will not prompt again for the value.</para>
+    /// can be modified with the certificate name since Azure Developer CLI will not prompt again for the value.</para>
     /// <example>
     /// This example shows declaring two parameters to capture the custom domain and certificate name and
     /// passing them to the <see cref="ConfigureCustomDomain(ContainerApp, IResourceBuilder{ParameterResource}, IResourceBuilder{ParameterResource})"/>
@@ -53,9 +53,9 @@ public static class ContainerAppExtensions
     ///        });
     /// </code>
     /// </example>
-    /// <para>This method is not available in polyglot app hosts.</para>
+    /// <para>In TypeScript app hosts this method is available as <c>app.configureCustomDomain(...)</c> inside the publish callback.</para>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Extends ContainerApp (Azure.Provisioning type) which is not an IResourceBuilder<T> target, so the ATS codegen cannot generate a wrapper class for it.")]
+    [AspireExport("configureCustomDomain", Description = "Configures the custom domain for the container app")]
     [Experimental("ASPIREACADOMAINS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static void ConfigureCustomDomain(this ContainerApp app, IResourceBuilder<ParameterResource> customDomain, IResourceBuilder<ParameterResource> certificateName)
     {
