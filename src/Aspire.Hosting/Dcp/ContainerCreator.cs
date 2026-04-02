@@ -55,8 +55,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
     private readonly IDcpDependencyCheckService _dcpDependencyCheckService;
     private readonly ILogger<ContainerCreator> _logger;
     private readonly string _normalizedApplicationName;
-
-    private IDcpExecutor _executor = null!;
+    private readonly DcpAppResourceStore _appResources;
 
     public ContainerCreator(
         IConfiguration configuration,
@@ -67,7 +66,8 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         ResourceLoggerService loggerService,
         IDcpDependencyCheckService dcpDependencyCheckService,
         IHostEnvironment hostEnvironment,
-        ILogger<ContainerCreator> logger)
+        ILogger<ContainerCreator> logger,
+        DcpAppResourceStore appResources)
     {
         _configuration = configuration;
         _options = options;
@@ -78,11 +78,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         _dcpDependencyCheckService = dcpDependencyCheckService;
         _logger = logger;
         _normalizedApplicationName = DcpExecutor.NormalizeApplicationName(hostEnvironment.ApplicationName);
-    }
-
-    internal void Initialize(IDcpExecutor executor)
-    {
-        _executor = executor;
+        _appResources = appResources;
     }
 
     private async Task<string> GetContainerHostNameAsync(CancellationToken cancellationToken = default)
@@ -123,7 +119,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             network.Spec.NetworkName += $"-{shortApplicationName}";
         }
 
-        _executor.AppResources.Add(new AppResource<ContainerNetwork>(network));
+        _appResources.Add(new AppResource<ContainerNetwork>(network));
     }
 
     public IEnumerable<RenderedModelResource<Container>> PrepareObjects()
@@ -191,8 +187,8 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             }
 
             var containerAppResource = new RenderedModelResource<Container>(container, ctr);
-            DcpModelUtilities.AddServicesProducedInfo(containerAppResource, _executor.AppResources);
-            _executor.AppResources.Add(containerAppResource);
+            DcpModelUtilities.AddServicesProducedInfo(containerAppResource, _appResources.Get());
+            _appResources.Add(containerAppResource);
             result.Add(containerAppResource);
         }
 
@@ -206,7 +202,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         return true;
     }
 
-    public async Task CreateObjectAsync(RenderedModelResource<Container> cr, ContainerCreationContext cctx, ILogger logger, CancellationToken cancellationToken)
+    public async Task CreateObjectAsync(RenderedModelResource<Container> cr, ContainerCreationContext cctx, ILogger logger, IDcpObjectFactory factory, CancellationToken cancellationToken)
     {
         var signalServicesSpecReadyOnce = ConcurrencyUtils.Once(() => cctx.ContainerServicesSpecReady.Signal());
 
@@ -216,12 +212,12 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
             if (hostDependencies.Any())
             {
-                await CreateTunnelDependentContainerAsync(cr, hostDependencies, cctx, signalServicesSpecReadyOnce, cancellationToken).ConfigureAwait(false);
+                await CreateTunnelDependentContainerAsync(cr, hostDependencies, cctx, signalServicesSpecReadyOnce, factory, cancellationToken).ConfigureAwait(false);
             }
             else
             {
                 signalServicesSpecReadyOnce();
-                await BuildAndCreateContainerAsync(cr, logger, cancellationToken).ConfigureAwait(false);
+                await BuildAndCreateContainerAsync(cr, logger, factory, cancellationToken).ConfigureAwait(false);
             }
         }
         finally
@@ -253,11 +249,11 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             DcpExecutor.SetInitialResourceState(containerExecutable, containerExec);
 
             var exeAppResource = new RenderedModelResource<ContainerExec>(containerExecutable, containerExec);
-            _executor.AppResources.Add(exeAppResource);
+            _appResources.Add(exeAppResource);
         }
     }
 
-    private async Task BuildAndCreateContainerAsync(RenderedModelResource<Container> cr, ILogger logger, CancellationToken cToken)
+    private async Task BuildAndCreateContainerAsync(RenderedModelResource<Container> cr, ILogger logger, IDcpObjectFactory factory, CancellationToken cToken)
     {
         cToken.ThrowIfCancellationRequested();
 
@@ -313,30 +309,30 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             DcpDependencyCheck.CheckDcpInfoAndLogErrors(logger, _options.Value, dcpInfo);
         }
 
-        await _executor.CreateDcpObjectsAsync(new[] { dcpContainer }, cToken).ConfigureAwait(false);
+        await factory.CreateDcpObjectsAsync(new[] { dcpContainer }, cToken).ConfigureAwait(false);
 
-        var containerExes = _executor.AppResources.OfType<RenderedModelResource<ContainerExec>>().Where(ar => ar.DcpResource.Spec.ContainerName == dcpContainer.Metadata.Name).ToArray();
+        var containerExes = _appResources.Get().OfType<RenderedModelResource<ContainerExec>>().Where(ar => ar.DcpResource.Spec.ContainerName == dcpContainer.Metadata.Name).ToArray();
         if (containerExes.Length > 0)
         {
             IObjectCreator<ContainerExec, EmptyCreationContext> containerExecCreator = this;
-            await _executor.CreateRenderedResourcesAsync(containerExecCreator, containerExes, EmptyCreationContext.s_instance, cToken).ConfigureAwait(false);
+            await factory.CreateRenderedResourcesAsync(containerExecCreator, containerExes, EmptyCreationContext.s_instance, cToken).ConfigureAwait(false);
         }
     }
 
     IEnumerable<RenderedModelResource<ContainerExec>> IObjectCreator<ContainerExec, EmptyCreationContext>.PrepareObjects()
-        => _executor.AppResources.OfType<RenderedModelResource<ContainerExec>>();
+        => _appResources.Get().OfType<RenderedModelResource<ContainerExec>>();
 
     bool IObjectCreator<ContainerExec, EmptyCreationContext>.IsReadyToCreate(RenderedModelResource<ContainerExec> resource, EmptyCreationContext context)
         => true;
 
-    async Task IObjectCreator<ContainerExec, EmptyCreationContext>.CreateObjectAsync(RenderedModelResource<ContainerExec> er, EmptyCreationContext context, ILogger _, CancellationToken cancellationToken)
+    async Task IObjectCreator<ContainerExec, EmptyCreationContext>.CreateObjectAsync(RenderedModelResource<ContainerExec> er, EmptyCreationContext context, ILogger _, IDcpObjectFactory factory, CancellationToken cancellationToken)
     {
         if (er.DcpResource is not ContainerExec containerExe)
         {
             throw new InvalidOperationException($"Expected an {nameof(ContainerExec)} resource, but got {er.DcpResourceKind} instead");
         }
 
-        await _executor.CreateDcpObjectsAsync([containerExe], cancellationToken).ConfigureAwait(false);
+        await factory.CreateDcpObjectsAsync([containerExe], cancellationToken).ConfigureAwait(false);
     }
 
     internal IEnumerable<ContainerNetworkService> CreateContainerNetworkServicesForHostResource(HostResourceWithEndpoints re)
@@ -364,7 +360,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             svc.Spec.AddressAllocationMode = AddressAllocationModes.Proxyless;
             svc.Spec.Protocol = PortProtocol.FromProtocolType(endpoint.Protocol);
 
-            var serverSvc = _executor.AppResources.OfType<ServiceWithModelResource>().FirstOrDefault(swr =>
+            var serverSvc = _appResources.Get().OfType<ServiceWithModelResource>().FirstOrDefault(swr =>
                 StringComparers.ResourceName.Equals(swr.ModelResource.Name, re.Resource.Name) &&
                 StringComparers.EndpointAnnotationName.Equals(swr.EndpointAnnotation.Name, endpoint.Name)
             );
@@ -402,14 +398,14 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
     internal async Task<AppResource<ContainerNetworkTunnelProxy>> CreateTunnelProxyResourceAsync(List<TunnelConfiguration>? tunnels, CancellationToken cancellationToken = default)
     {
         Debug.Assert(_options.Value.EnableAspireContainerTunnel, "This method should only be called if the container tunnel feature is enabled.");
-        Debug.Assert(!_executor.AppResources.OfType<AppResource<ContainerNetworkTunnelProxy>>().Any(), "This method should only be called if a tunnel proxy resource hasn't already been created.");
+        Debug.Assert(!_appResources.Get().OfType<AppResource<ContainerNetworkTunnelProxy>>().Any(), "This method should only be called if a tunnel proxy resource hasn't already been created.");
 
         var tunnelProxy = ContainerNetworkTunnelProxy.Create(GetTunnelProxyResourceName());
         tunnelProxy.Spec.ContainerNetworkName = KnownNetworkIdentifiers.DefaultAspireContainerNetwork.Value;
         tunnelProxy.Spec.Aliases = [await GetContainerHostNameAsync(cancellationToken).ConfigureAwait(false)];
         tunnelProxy.Spec.Tunnels = tunnels;
         var tunnelAppResource = new AppResource<ContainerNetworkTunnelProxy>(tunnelProxy);
-        _executor.AppResources.Add(tunnelAppResource);
+        _appResources.Add(tunnelAppResource);
         return tunnelAppResource;
     }
 
@@ -417,7 +413,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
     /// Creates the container tunnel: reads tunnel service specs from the container creation context,
     /// creates the corresponding DCP service and tunnel proxy objects, and waits for their addresses.
     /// </summary>
-    internal async Task CreateTunnelAsync(ContainerCreationContext cctx, CancellationToken cancellationToken)
+    internal async Task CreateTunnelAsync(ContainerCreationContext cctx, IDcpObjectFactory factory, CancellationToken cancellationToken)
     {
         // Container creation tasks need to figure out dependencies of each container 
         // and then create Service and TunnelConfiguration definitions for each of them.
@@ -426,21 +422,21 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
         // Now create the container network services for the host resources, update the tunnel, and advertise AllocatedEndpoints.
         var containerNetworkServices = cctx.ContainerServicesChan.Reader.ReadAllAsync(cancellationToken).ToBlockingEnumerable(cancellationToken).ToArray();
-        _executor.AppResources.AddRange(containerNetworkServices.Select(cns => cns.ServiceResource));
+        _appResources.AddRange(containerNetworkServices.Select(cns => cns.ServiceResource));
         var serviceObjects = containerNetworkServices.Select(cns => cns.ServiceResource.DcpResource).ToArray();
-        await _executor.CreateDcpObjectsAsync(serviceObjects, cancellationToken).ConfigureAwait(false);
+        await factory.CreateDcpObjectsAsync(serviceObjects, cancellationToken).ConfigureAwait(false);
 
         var tunnels = containerNetworkServices.Where(s => s.TunnelConfig is not null).Select(s => s.TunnelConfig!).ToList();
         Debug.Assert(tunnels.Count == containerNetworkServices.Length, "Each tunneled service should have a tunnel config");
         await CreateTunnelProxyResourceAsync(tunnels, cancellationToken).ConfigureAwait(false);
 
         // Create all ContainerNetworkTunnelProxy objects that have been prepared.
-        var tunnelProxies = _executor.AppResources.OfType<AppResource<ContainerNetworkTunnelProxy>>().Select(r => r.DcpResource);
-        await _executor.CreateDcpObjectsAsync(tunnelProxies, cancellationToken).ConfigureAwait(false);
+        var tunnelProxies = _appResources.Get().OfType<AppResource<ContainerNetworkTunnelProxy>>().Select(r => r.DcpResource);
+        await factory.CreateDcpObjectsAsync(tunnelProxies, cancellationToken).ConfigureAwait(false);
 
         // Container tunnel initialization can take a while if the container tunnel image needs to be built,
         // especially if the required image pull is slow, hence 10 minute timeout here.
-        await _executor.UpdateWithEffectiveAddressInfo(serviceObjects, cancellationToken, TimeSpan.FromMinutes(10)).ConfigureAwait(false);
+        await factory.UpdateWithEffectiveAddressInfo(serviceObjects, cancellationToken, TimeSpan.FromMinutes(10)).ConfigureAwait(false);
     }
 
     internal async Task<IEnumerable<HostResourceWithEndpoints>> GetHostDependenciesAsync(IResource resource, CancellationToken cancellationToken)
@@ -471,7 +467,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         return hostDependencies;
     }
 
-    internal async Task CreateTunnelDependentContainerAsync(RenderedModelResource<Container> cr, ImmutableArray<HostResourceWithEndpoints> hostDependencies, ContainerCreationContext cctx, Action signalServicesSpecReadyOnce, CancellationToken cToken)
+    internal async Task CreateTunnelDependentContainerAsync(RenderedModelResource<Container> cr, ImmutableArray<HostResourceWithEndpoints> hostDependencies, ContainerCreationContext cctx, Action signalServicesSpecReadyOnce, IDcpObjectFactory factory, CancellationToken cToken)
     {
         cToken.ThrowIfCancellationRequested();
 
@@ -492,7 +488,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         signalServicesSpecReadyOnce();
         await cctx.CreateTunnel.ConfigureAwait(false);
 
-        await BuildAndCreateContainerAsync(cr, _loggerService.GetLogger(cr.ModelResource), cToken).ConfigureAwait(false);
+        await BuildAndCreateContainerAsync(cr, _loggerService.GetLogger(cr.ModelResource), factory, cToken).ConfigureAwait(false);
     }
 
     private string GetTunnelProxyResourceName()

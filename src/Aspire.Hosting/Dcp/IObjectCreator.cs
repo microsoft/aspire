@@ -38,7 +38,7 @@ internal interface IObjectCreator<TDcpResource, TContext>
     /// <summary>
     /// Creates the DCP resource object(s) for the given Aspire model resource.
     /// This method should handle all type-specific creation logic (building specs, configuration,
-    /// tunnel dependencies, etc.) and call IDcpExecutor.CreateDcpObjectsAsync to submit the objects.
+    /// tunnel dependencies, etc.) and call <paramref name="factory"/> to submit the objects.
     /// </summary>
-    Task CreateObjectAsync(RenderedModelResource<TDcpResource> resource, TContext context, ILogger logger, CancellationToken cancellationToken);
+    Task CreateObjectAsync(RenderedModelResource<TDcpResource> resource, TContext context, ILogger logger, IDcpObjectFactory factory, CancellationToken cancellationToken);
 }

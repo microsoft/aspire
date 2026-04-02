@@ -28,8 +28,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
     private readonly DistributedApplicationExecutionContext _executionContext;
     private readonly Locations _locations;
     private readonly ILogger<ExecutableCreator> _logger;
-
-    private IDcpExecutor _executor = null!;
+    private readonly DcpAppResourceStore _appResources;
 
     public ExecutableCreator(
         IConfiguration configuration,
@@ -38,7 +37,8 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         DistributedApplicationOptions distributedApplicationOptions,
         DistributedApplicationExecutionContext executionContext,
         Locations locations,
-        ILogger<ExecutableCreator> logger)
+        ILogger<ExecutableCreator> logger,
+        DcpAppResourceStore appResources)
     {
         _configuration = configuration;
         _nameGenerator = nameGenerator;
@@ -47,18 +47,14 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         _executionContext = executionContext;
         _locations = locations;
         _logger = logger;
-    }
-
-    internal void Initialize(IDcpExecutor executor)
-    {
-        _executor = executor;
+        _appResources = appResources;
     }
 
     public IEnumerable<RenderedModelResource<Executable>> PrepareObjects()
     {
         PrepareProjectExecutables();
         PreparePlainExecutables();
-        return _executor.AppResources.OfType<RenderedModelResource<Executable>>();
+        return _appResources.Get().OfType<RenderedModelResource<Executable>>();
     }
 
     public bool IsReadyToCreate(RenderedModelResource<Executable> resource, EmptyCreationContext context)
@@ -67,7 +63,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         return !explicitStartup;
     }
 
-    public async Task CreateObjectAsync(RenderedModelResource<Executable> er, EmptyCreationContext context, ILogger resourceLogger, CancellationToken cancellationToken)
+    public async Task CreateObjectAsync(RenderedModelResource<Executable> er, EmptyCreationContext context, ILogger resourceLogger, IDcpObjectFactory factory, CancellationToken cancellationToken)
     {
         if (er.DcpResource is not Executable exe)
         {
@@ -134,7 +130,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             }
         }
 
-        await _executor.CreateDcpObjectsAsync([exe], cancellationToken).ConfigureAwait(false);
+        await factory.CreateDcpObjectsAsync([exe], cancellationToken).ConfigureAwait(false);
     }
 
     private void PrepareProjectExecutables()
@@ -250,8 +246,8 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 exe.SetAnnotationAsObjectList(CustomResource.ResourceProjectArgsAnnotation, projectArgs);
 
                 var exeAppResource = new RenderedModelResource<Executable>(project, exe);
-                DcpModelUtilities.AddServicesProducedInfo(exeAppResource, _executor.AppResources);
-                _executor.AppResources.Add(exeAppResource);
+                DcpModelUtilities.AddServicesProducedInfo(exeAppResource, _appResources.Get());
+                _appResources.Add(exeAppResource);
             }
         }
     }
@@ -290,8 +286,8 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             DcpExecutor.SetInitialResourceState(executable, exe);
 
             var exeAppResource = new RenderedModelResource<Executable>(executable, exe);
-            DcpModelUtilities.AddServicesProducedInfo(exeAppResource, _executor.AppResources);
-            _executor.AppResources.Add(exeAppResource);
+            DcpModelUtilities.AddServicesProducedInfo(exeAppResource, _appResources.Get());
+            _appResources.Add(exeAppResource);
         }
     }
 

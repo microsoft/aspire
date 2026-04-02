@@ -5,7 +5,6 @@
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIRECONTAINERSHELLEXECUTION001
 
-using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -28,7 +27,7 @@ using Polly;
 
 namespace Aspire.Hosting.Dcp;
 
-internal sealed partial class DcpExecutor : IDcpExecutor, IAsyncDisposable
+internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDisposable
 {
     internal const string DebugSessionPortVar = "DEBUG_SESSION_PORT";
 
@@ -58,7 +57,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IAsyncDisposable
     private readonly IDistributedApplicationEventing _distributedApplicationEventing;
     private readonly IOptions<DcpOptions> _options;
     private readonly DistributedApplicationExecutionContext _executionContext;
-    private readonly ConcurrentBag<IAppResource> _appResources = [];
+    private readonly DcpAppResourceStore _appResources;
 
     // Has an entry if we raised ResourceEndpointsAllocatedEvent for a resource with a given name.
     // We want to ensure we raise the event only once for each app model resource.
@@ -95,6 +94,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IAsyncDisposable
                        IDcpDependencyCheckService dcpDependencyCheckService,
                        DcpNameGenerator nameGenerator,
                        DcpExecutorEvents executorEvents,
+                       DcpAppResourceStore appResources,
                        ExecutableCreator executableCreator,
                        ContainerCreator containerCreator)
     {
@@ -110,6 +110,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IAsyncDisposable
         _distributedApplicationEventing = distributedApplicationEventing;
         _options = options;
         _executionContext = executionContext;
+        _appResources = appResources;
 
         _resourceWatcher = new DcpResourceWatcher(logger, kubernetesService, loggerService, executorEvents, model, _appResources, _shutdownCancellation.Token);
 
@@ -118,11 +119,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IAsyncDisposable
         _containerContextSource = new TaskCompletionSource<ContainerCreationContext>(TaskCreationOptions.RunContinuationsAsynchronously);
         _executableCreator = executableCreator;
         _containerCreator = containerCreator;
-        _executableCreator.Initialize(this);
-        _containerCreator.Initialize(this);
     }
-
-    ConcurrentBag<IAppResource> IDcpExecutor.AppResources => _appResources;
 
     private string ContainerHostName => _configuration["AppHost:ContainerHostname"] ??
         (_options.Value.EnableAspireContainerTunnel ? KnownHostNames.DefaultContainerTunnelHostName : _dcpInfo?.Containers?.HostName ?? KnownHostNames.DockerDesktopHostBridge);
@@ -171,7 +168,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IAsyncDisposable
             {
                 await createServices.ConfigureAwait(false);
 
-                var proxiedWithNoAddress = _appResources.OfType<AppResource<Service>>().Select(r => r.DcpResource)
+                var proxiedWithNoAddress = _appResources.Get().OfType<AppResource<Service>>().Select(r => r.DcpResource)
                 .Where(sr => !sr.HasCompleteAddress && sr.Spec.AddressAllocationMode != AddressAllocationModes.Proxyless);
 
                 await UpdateWithEffectiveAddressInfo(proxiedWithNoAddress, ct, TimeSpan.FromMinutes(1)).ConfigureAwait(false);
@@ -198,7 +195,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IAsyncDisposable
             {
                 await Task.WhenAll([getProxyAddresses, createContainerNetworks]).WaitAsync(ct).ConfigureAwait(false);
 
-                await _containerCreator.CreateTunnelAsync(cctx, ct).ConfigureAwait(false);
+                await _containerCreator.CreateTunnelAsync(cctx, this, ct).ConfigureAwait(false);
 
                 AddAllocatedEndpointInfo(executables, AllocatedEndpointsMode.ContainerTunnel);
 
@@ -303,7 +300,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IAsyncDisposable
         {
             _containerContextSource.Task.Result.Dispose();
         }
-        foreach (var ar in _appResources)
+        foreach (var ar in _appResources.Get())
         {
             ar.Dispose();
         }
@@ -360,7 +357,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IAsyncDisposable
         };
     }
 
-    Task IDcpExecutor.UpdateWithEffectiveAddressInfo(IEnumerable<Service> services, CancellationToken cancellationToken, TimeSpan? timeout)
+    Task IDcpObjectFactory.UpdateWithEffectiveAddressInfo(IEnumerable<Service> services, CancellationToken cancellationToken, TimeSpan? timeout)
         => UpdateWithEffectiveAddressInfo(services, cancellationToken, timeout);
 
     // Waits till provided set of Services have their addresses allocated by the orchestrator
@@ -437,7 +434,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IAsyncDisposable
             // Container services are services that "mirror" their primary (host) service counterparts, but expose addresses usable from container network.
             // Without the tunnel we rely on Docker Desktop host.docker.internal bridge,
             // which means we just need to update their ports from primary services, changing the address to container host.
-            var containerServices = _appResources.OfType<AppResource<Service>>().Select(r => (
+            var containerServices = _appResources.Get().OfType<AppResource<Service>>().Select(r => (
                 Service: r.DcpResource,
                 PrimaryServiceName: r.DcpResource.Metadata.Annotations?.TryGetValue(CustomResource.PrimaryServiceNameAnnotation, out var psn) == true ? psn : null)
             )
@@ -445,7 +442,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IAsyncDisposable
 
             foreach (var cs in containerServices)
             {
-                var primaryService = _appResources.OfType<ServiceWithModelResource>().Select(sar => sar.Service)
+                var primaryService = _appResources.Get().OfType<ServiceWithModelResource>().Select(sar => sar.Service)
                     .First(svc => svc.Metadata.Name.Equals(cs.PrimaryServiceName));
                 cs.Service!.ApplyAddressInfoFrom(primaryService);
                 cs.Service!.Status!.EffectiveAddress = ContainerHostName;
@@ -459,11 +456,11 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IAsyncDisposable
 
     private Task CreateAllDcpObjectsAsync<RT>(CancellationToken cancellationToken) where RT : CustomResource, IKubernetesStaticMetadata
     {
-        var objects = _appResources.OfType<AppResource<RT>>().Select(ar => ar.DcpResource);
+        var objects = _appResources.Get().OfType<AppResource<RT>>().Select(ar => ar.DcpResource);
         return CreateDcpObjectsAsync(objects, cancellationToken);
     }
 
-    Task IDcpExecutor.CreateDcpObjectsAsync<T>(IEnumerable<T> objects, CancellationToken cancellationToken)
+    Task IDcpObjectFactory.CreateDcpObjectsAsync<T>(IEnumerable<T> objects, CancellationToken cancellationToken)
         => CreateDcpObjectsAsync(objects, cancellationToken);
 
     private async Task CreateDcpObjectsAsync<RT>(IEnumerable<RT> objects, CancellationToken cancellationToken) where RT : CustomResource, IKubernetesStaticMetadata
@@ -586,7 +583,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IAsyncDisposable
                 // If there are any additional services that are not directly produced by this resource,
                 // but leverage its endpoints via container tunnel, we want to add allocated endpoint info for them as well.
 
-                var tunnelServices = _appResources.OfType<AppResource<Service>>().Select(r => (
+                var tunnelServices = _appResources.Get().OfType<AppResource<Service>>().Select(r => (
                     Service: r.DcpResource,
                     ResourceName: r.DcpResource.Metadata.Annotations?.TryGetValue(CustomResource.ResourceNameAnnotation, out var resourceName) == true ? resourceName : null,
                     EndpointName: r.DcpResource.Metadata.Annotations?.TryGetValue(CustomResource.EndpointNameAnnotation, out var endpointName) == true ? endpointName : null,
@@ -613,7 +610,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IAsyncDisposable
                         throw new InvalidDataException($"Container tunnel service {ts.Service?.Metadata.Name} should have valid address at this point");
                     }
 
-                    var serverSvc = _appResources.OfType<ServiceWithModelResource>().FirstOrDefault(swr =>
+                    var serverSvc = _appResources.Get().OfType<ServiceWithModelResource>().FirstOrDefault(swr =>
                         string.Equals(swr.ModelResource.Name, ts.ResourceName, StringComparisons.ResourceName) &&
                         string.Equals(swr.EndpointAnnotation.Name, endpoint.Name, StringComparisons.EndpointAnnotationName)
                     );
@@ -852,7 +849,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IAsyncDisposable
                     AspireEventSource.Instance.DcpObjectCreationStart(er.DcpResourceKind, er.DcpResourceName);
                     try
                     {
-                        await creator.CreateObjectAsync(er, context, resourceLogger, cancellationToken).ConfigureAwait(false);
+                        await creator.CreateObjectAsync(er, context, resourceLogger, this, cancellationToken).ConfigureAwait(false);
                     }
                     finally
                     {
@@ -941,7 +938,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IAsyncDisposable
 
     public IResourceReference GetResource(string resourceName)
     {
-        var matchingResource = _appResources
+        var matchingResource = _appResources.Get()
             .Where(r => r.DcpResource is not Service)
             .Where(r => string.Equals(r.DcpResource.Metadata.Name, resourceName, StringComparisons.ResourceName))
             .OfType<IResourceReference>().FirstOrDefault();
@@ -1049,7 +1046,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IAsyncDisposable
                     await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName)).ConfigureAwait(false);
                     var startupCctx = await _containerContextSource.Task.ConfigureAwait(false);
                     using (var cctx = startupCctx.ForAdditionalContainers(1)) {
-                        await _containerCreator.CreateObjectAsync(cr, cctx, resourceLogger, cancellationToken).ConfigureAwait(false);
+                        await _containerCreator.CreateObjectAsync(cr, cctx, resourceLogger, this, cancellationToken).ConfigureAwait(false);
                     }
                     break;
                 case RenderedModelResource<Executable> er:
@@ -1057,7 +1054,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IAsyncDisposable
 
                     await _executorEvents.PublishAsync(new OnConnectionStringAvailableContext(cancellationToken, resourceReference.ModelResource)).ConfigureAwait(false);
                     await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName)).ConfigureAwait(false);
-                    await _executableCreator.CreateObjectAsync(er, EmptyCreationContext.s_instance, resourceLogger, cancellationToken).ConfigureAwait(false);
+                    await _executableCreator.CreateObjectAsync(er, EmptyCreationContext.s_instance, resourceLogger, this, cancellationToken).ConfigureAwait(false);
                     break;
 
                 default:

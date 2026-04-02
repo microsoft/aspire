@@ -3263,6 +3263,8 @@ public class DcpExecutorTests
         var hostEnv = hostEnvironment ?? new TestHostEnvironment();
         var dcpDependencyCheckService = new TestDcpDependencyCheckService();
 
+        var appResources = new DcpAppResourceStore();
+
         var executableCreator = new ExecutableCreator(
             configuration,
             nameGenerator,
@@ -3270,7 +3272,8 @@ public class DcpExecutorTests
             new DistributedApplicationOptions(),
             executionContext,
             locations,
-            NullLogger<ExecutableCreator>.Instance);
+            NullLogger<ExecutableCreator>.Instance,
+            appResources);
 
         var containerCreator = new ContainerCreator(
             configuration,
@@ -3281,7 +3284,8 @@ public class DcpExecutorTests
             resourceLoggerService,
             dcpDependencyCheckService,
             hostEnv,
-            NullLogger<ContainerCreator>.Instance);
+            NullLogger<ContainerCreator>.Instance,
+            appResources);
 
 #pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         return new DcpExecutor(
@@ -3297,6 +3301,7 @@ public class DcpExecutorTests
             dcpDependencyCheckService,
             nameGenerator,
             dcpEvts,
+            appResources,
             executableCreator,
             containerCreator);
 #pragma warning restore ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.

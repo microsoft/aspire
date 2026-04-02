@@ -50,7 +50,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         ResourceLoggerService loggerService,
         DcpExecutorEvents executorEvents,
         DistributedApplicationModel model,
-        ConcurrentBag<IAppResource> appResources,
+        DcpAppResourceStore appResources,
         CancellationToken shutdownToken)
     {
         _kubernetesService = kubernetesService;
@@ -59,7 +59,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         _logger = logger;
         _shutdownToken = shutdownToken;
 
-        _resourceState = new(model.Resources.ToDictionary(r => r.Name), appResources);
+        _resourceState = new(model.Resources.ToDictionary(r => r.Name), appResources.Get());
         _snapshotBuilder = new(_resourceState);
 
         WatchResourceRetryPipeline = DcpPipelineBuilder.BuildWatchResourcePipeline(logger);
