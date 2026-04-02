@@ -163,10 +163,10 @@ internal static class KubernetesDeployTestHelpers
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
         }
 
-        // Step 4: Add client NuGet packages to ApiService
+        // Step 4: Add client NuGet packages to ApiService (--prerelease needed for PR builds)
         foreach (var package in apiClientPackages)
         {
-            await auto.TypeAsync($"dotnet add {projectName}.ApiService package {package}");
+            await auto.TypeAsync($"dotnet add {projectName}.ApiService package {package} --prerelease");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
         }
