@@ -87,12 +87,12 @@ public sealed class KubernetesDeployWithRabbitMQTests(ITestOutputHelper output)
                 var app = builder.Build();
                 app.MapDefaultEndpoints();
 
-                app.MapGet("/test-deployment", (IConnection connection) =>
+                app.MapGet("/test-deployment", async (IConnection connection) =>
                 {
-                    using var channel = connection.CreateChannel();
+                    await using var channel = await connection.CreateChannelAsync();
                     var queueName = $"test-{Guid.NewGuid():N}";
-                    channel.QueueDeclare(queue: queueName, durable: false, exclusive: false, autoDelete: true);
-                    channel.QueueDelete(queueName);
+                    await channel.QueueDeclareAsync(queue: queueName, durable: false, exclusive: false, autoDelete: true);
+                    await channel.QueueDeleteAsync(queueName);
 
                     return Results.Ok("PASSED: RabbitMQ queue declare+delete works");
                 });
