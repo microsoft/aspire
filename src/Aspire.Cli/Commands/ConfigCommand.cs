@@ -239,36 +239,46 @@ internal sealed class ConfigCommand : BaseCommand
             var localConfig = await ConfigurationService.GetLocalConfigurationAsync(cancellationToken);
             var globalConfig = await ConfigurationService.GetGlobalConfigurationAsync(cancellationToken);
 
+            var featurePrefix = $"{KnownFeatures.FeaturePrefix}.";
+
             // Check if we have any configuration at all
             if (localConfig.Count == 0 && globalConfig.Count == 0)
             {
                 InteractionService.DisplayMessage(KnownEmojis.Information, ConfigCommandStrings.NoConfigurationValuesFound);
-                return ExitCodeConstants.Success;
+
+                if (!showAll)
+                {
+                    // Show hint about --all flag when there's no config and user didn't pass --all
+                    InteractionService.DisplayMarkupLine($"  [dim]{ConfigCommandStrings.ListCommand_AllFeaturesHint.EscapeMarkup()}[/]");
+                    return ExitCodeConstants.Success;
+                }
+
+                // showAll=true: fall through to show available features below
             }
+            else
+            {
+                // Compute max column widths across both tables for consistent alignment
+                var keyWidth = MaxWidth(ConfigCommandStrings.HeaderKey, localConfig.Keys, globalConfig.Keys);
+                var valueWidth = MaxWidth(ConfigCommandStrings.HeaderValue, localConfig.Values, globalConfig.Values);
 
-            var featurePrefix = $"{KnownFeatures.FeaturePrefix}.";
+                // Display Local Configuration
+                RenderConfigTable(
+                    ConfigCommandStrings.LocalConfigurationHeader,
+                    localConfig,
+                    ConfigCommandStrings.NoLocalConfigurationFound,
+                    keyWidth,
+                    valueWidth);
 
-            // Compute max column widths across both tables for consistent alignment
-            var keyWidth = MaxWidth(ConfigCommandStrings.HeaderKey, localConfig.Keys, globalConfig.Keys);
-            var valueWidth = MaxWidth(ConfigCommandStrings.HeaderValue, localConfig.Values, globalConfig.Values);
+                InteractionService.DisplayEmptyLine();
 
-            // Display Local Configuration
-            RenderConfigTable(
-                ConfigCommandStrings.LocalConfigurationHeader,
-                localConfig,
-                ConfigCommandStrings.NoLocalConfigurationFound,
-                keyWidth,
-                valueWidth);
-
-            InteractionService.DisplayEmptyLine();
-
-            // Display Global Configuration
-            RenderConfigTable(
-                ConfigCommandStrings.GlobalConfigurationHeader,
-                globalConfig,
-                ConfigCommandStrings.NoGlobalConfigurationFound,
-                keyWidth,
-                valueWidth);
+                // Display Global Configuration
+                RenderConfigTable(
+                    ConfigCommandStrings.GlobalConfigurationHeader,
+                    globalConfig,
+                    ConfigCommandStrings.NoGlobalConfigurationFound,
+                    keyWidth,
+                    valueWidth);
+            }
 
             // Display Available Features
             var allConfiguredFeatures = localConfig.Concat(globalConfig)
