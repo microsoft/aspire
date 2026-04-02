@@ -7,12 +7,11 @@ using System.Diagnostics;
 
 namespace Aspire.Hosting.Dcp;
 
-internal interface IAppResource: IDisposable
+internal interface IAppResource : IDisposable
 {
     CustomResource DcpResource { get; }
     string DcpResourceName { get; }
     string DcpResourceKind { get; }
-    List<AppResource<Service>> ServicesProduced { get; }
     SemaphoreSlim SerializedOpSemaphore { get; }
     Task Initialized { get; }
 
@@ -41,8 +40,6 @@ internal class AppResource<TDcpResource> : IAppResource, IDisposable, IEquatable
         DcpResource = dcpResource;
         _initializedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
     }
-
-    public virtual List<AppResource<Service>> ServicesProduced { get; } = [];
 
     public bool Equals(AppResource<TDcpResource>? other)
     {
@@ -78,7 +75,7 @@ internal class RenderedModelResource<TDcpResource> : AppResource<TDcpResource>, 
         ModelResource = modelResource;
     }
 
-    public new virtual List<ServiceWithModelResource> ServicesProduced { get; } = [];
+    public virtual List<ServiceWithModelResource> ServicesProduced { get; } = [];
     public virtual List<ServiceWithModelResource> ServicesConsumed { get; } = [];
 }
 

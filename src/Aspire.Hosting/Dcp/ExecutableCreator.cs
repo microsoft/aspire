@@ -255,9 +255,8 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
     private void PreparePlainExecutables()
     {
         var modelExecutableResources = _model.GetExecutableResources();
-        var executablesList = modelExecutableResources.ToList(); // Materialize to check count
 
-        foreach (var executable in executablesList)
+        foreach (var executable in modelExecutableResources)
         {
             EnsureRequiredAnnotations(executable);
 

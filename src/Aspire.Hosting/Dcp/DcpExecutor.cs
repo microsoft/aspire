@@ -225,9 +225,10 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
             await _executorEvents.PublishAsync(new OnEndpointsAllocatedContext(ct)).ConfigureAwait(false);
         }
-        catch
+        catch(Exception ex)
         {
             _shutdownCancellation.Cancel();
+            _containerContextSource.TrySetException(ex);
             throw;
         }
         finally
