@@ -118,15 +118,15 @@ steps:
         displayName: 🟣Build
 
     - ${{ if and(eq(parameters.packCliToolPackages, true), eq(parameters.isWindows, 'true')) }}:
-        - pwsh: |
-            $ErrorActionPreference = 'Stop'
-            Add-Type -AssemblyName System.IO.Compression.FileSystem
+      - pwsh: |
+          $ErrorActionPreference = 'Stop'
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
 
-            $shippingDir = '${{ parameters.repoArtifactsPath }}/packages/${{ parameters.buildConfig }}/Shipping'
-            $packageArtifactsDir = '${{ parameters.repoArtifactsPath }}/packages/${{ parameters.buildConfig }}/PackageArtifacts'
-            $toolSources = @($shippingDir, $packageArtifactsDir) | Select-Object -Unique
-            $ridPackages = Get-ChildItem -Path $shippingDir -Filter 'Aspire.Cli.*.nupkg' -ErrorAction Stop |
-              Where-Object { $_.Name -notmatch '\.symbols\.' -and $_.Name -match '^Aspire\.Cli\.[a-z].*\.nupkg$' }
+          $shippingDir = '${{ parameters.repoArtifactsPath }}/packages/${{ parameters.buildConfig }}/Shipping'
+          $packageArtifactsDir = '${{ parameters.repoArtifactsPath }}/packages/${{ parameters.buildConfig }}/PackageArtifacts'
+          $toolSources = @($shippingDir, $packageArtifactsDir) | Select-Object -Unique
+          $ridPackages = Get-ChildItem -Path $shippingDir -Filter 'Aspire.Cli.*.nupkg' -ErrorAction Stop |
+            Where-Object { $_.Name -notmatch '\.symbols\.' -and $_.Name -match '^Aspire\.Cli\.[a-z].*\.nupkg$' }
 
           if ($ridPackages.Count -eq 0) {
             Write-Error "No RID-specific Aspire.Cli tool packages were found in $shippingDir."
