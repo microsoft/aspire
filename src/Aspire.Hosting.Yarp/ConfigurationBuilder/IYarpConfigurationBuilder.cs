@@ -161,7 +161,7 @@ public static class YarpConfigurationBuilderExtensions
     /// <param name="builder">The builder instance.</param>
     /// <param name="target">The target cluster, endpoint, resource, or string destination for this route.</param>
     /// <returns>The created route.</returns>
-    [AspireExport("addCatchAllRoute", Description = "Adds a YARP catch-all route for a cluster, endpoint, resource, or string destination target.")]
+    [AspireExport(Description = "Adds a YARP catch-all route for a cluster, endpoint, resource, or string destination target.")]
     internal static YarpRoute AddCatchAllRoute(
         this IYarpConfigurationBuilder builder,
         [AspireUnion(typeof(YarpCluster), typeof(EndpointReference), typeof(IResourceBuilder<IResourceWithServiceDiscovery>), typeof(IResourceBuilder<ExternalServiceResource>), typeof(string))] object target)
@@ -242,7 +242,7 @@ public static class YarpConfigurationBuilderExtensions
     /// <param name="path">The path to match for this route.</param>
     /// <param name="target">The target cluster, endpoint, resource, or string destination for this route.</param>
     /// <returns>The created route.</returns>
-    [AspireExport("addRoute", Description = "Adds a YARP route for a cluster, endpoint, resource, or string destination target.")]
+    [AspireExport(Description = "Adds a YARP route for a cluster, endpoint, resource, or string destination target.")]
     internal static YarpRoute AddRoute(
         this IYarpConfigurationBuilder builder,
         string path,
