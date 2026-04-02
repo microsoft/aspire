@@ -339,14 +339,14 @@ class AspireDict<K, V> extends HandleWrapperBase {
     public V get(K key) {
         Map<String, Object> args = new HashMap<>();
         args.put("dict", ensureHandle().toJson());
-        args.put("key", key);
+        args.put("key", AspireClient.serializeValue(key));
         return (V) getClient().invokeCapability("Aspire.Hosting/Dict.get", args);
     }
 
     public void put(K key, V value) {
         Map<String, Object> args = new HashMap<>();
         args.put("dict", ensureHandle().toJson());
-        args.put("key", key);
+        args.put("key", AspireClient.serializeValue(key));
         args.put("value", AspireClient.serializeValue(value));
         getClient().invokeCapability("Aspire.Hosting/Dict.set", args);
     }
@@ -354,7 +354,7 @@ class AspireDict<K, V> extends HandleWrapperBase {
     public boolean remove(K key) {
         Map<String, Object> args = new HashMap<>();
         args.put("dict", ensureHandle().toJson());
-        args.put("key", key);
+        args.put("key", AspireClient.serializeValue(key));
         Object result = getClient().invokeCapability("Aspire.Hosting/Dict.remove", args);
         return Boolean.TRUE.equals(result);
     }
@@ -362,7 +362,7 @@ class AspireDict<K, V> extends HandleWrapperBase {
     public boolean containsKey(K key) {
         Map<String, Object> args = new HashMap<>();
         args.put("dict", ensureHandle().toJson());
-        args.put("key", key);
+        args.put("key", AspireClient.serializeValue(key));
         Object result = getClient().invokeCapability("Aspire.Hosting/Dict.has", args);
         return Boolean.TRUE.equals(result);
     }

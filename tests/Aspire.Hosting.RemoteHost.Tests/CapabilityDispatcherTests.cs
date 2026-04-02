@@ -1108,6 +1108,28 @@ public class CapabilityDispatcherTests
     }
 
     [Fact]
+    public void Invoke_DictGet_ReturnsValueFromIntKeyDictionary()
+    {
+        var handles = new HandleRegistry();
+        var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles), [typeof(TestTypeCategoryCapabilities).Assembly, typeof(AspireExportAttribute).Assembly]);
+
+        var dictResult = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/returnIntKeyMutableDict", null);
+        var dictHandle = (dictResult as JsonObject)?["$handle"]?.GetValue<string>();
+        Assert.NotNull(dictHandle);
+
+        var args = new JsonObject
+        {
+            ["dict"] = new JsonObject { ["$handle"] = dictHandle },
+            ["key"] = 1
+        };
+
+        var result = dispatcher.Invoke("Aspire.Hosting/Dict.get", args);
+
+        Assert.NotNull(result);
+        Assert.Equal("one", result.GetValue<string>());
+    }
+
+    [Fact]
     public void Invoke_DictRemove_RemovesKey()
     {
         var handles = new HandleRegistry();
@@ -1198,6 +1220,49 @@ public class CapabilityDispatcherTests
         Assert.Equal(2, keysArray.Count);
         Assert.Contains("key1", keysArray.Select(k => k?.GetValue<string>()));
         Assert.Contains("key2", keysArray.Select(k => k?.GetValue<string>()));
+    }
+
+    [Fact]
+    public void Invoke_DictKeys_ReturnsAllIntKeys()
+    {
+        var handles = new HandleRegistry();
+        var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles), [typeof(TestTypeCategoryCapabilities).Assembly, typeof(AspireExportAttribute).Assembly]);
+
+        var dictResult = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/returnIntKeyMutableDict", null);
+        var dictHandle = (dictResult as JsonObject)?["$handle"]?.GetValue<string>();
+        Assert.NotNull(dictHandle);
+
+        var args = new JsonObject
+        {
+            ["dict"] = new JsonObject { ["$handle"] = dictHandle }
+        };
+
+        var result = dispatcher.Invoke("Aspire.Hosting/Dict.keys", args);
+
+        Assert.NotNull(result);
+        var keysArray = Assert.IsType<JsonArray>(result);
+        Assert.Equal(2, keysArray.Count);
+        Assert.Contains(1, keysArray.Select(k => k?.GetValue<int>()));
+        Assert.Contains(2, keysArray.Select(k => k?.GetValue<int>()));
+    }
+
+    [Fact]
+    public void Invoke_DictToObject_ThrowsForNonStringKeyDictionary()
+    {
+        var handles = new HandleRegistry();
+        var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles), [typeof(TestTypeCategoryCapabilities).Assembly, typeof(AspireExportAttribute).Assembly]);
+
+        var dictResult = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/returnIntKeyMutableDict", null);
+        var dictHandle = (dictResult as JsonObject)?["$handle"]?.GetValue<string>();
+        Assert.NotNull(dictHandle);
+
+        var args = new JsonObject
+        {
+            ["dict"] = new JsonObject { ["$handle"] = dictHandle }
+        };
+
+        var ex = Assert.Throws<CapabilityException>(() => dispatcher.Invoke("Aspire.Hosting/Dict.toObject", args));
+        Assert.Contains("only supports string-key dictionaries", ex.Message);
     }
 
     [Fact]
@@ -2083,6 +2148,16 @@ internal static class TestTypeCategoryCapabilities
         {
             ["key1"] = 10,
             ["key2"] = 20
+        };
+    }
+
+    [AspireExport("returnIntKeyMutableDict", Description = "Returns a mutable Dictionary<int, string>")]
+    public static Dictionary<int, string> ReturnIntKeyMutableDict()
+    {
+        return new Dictionary<int, string>
+        {
+            [1] = "one",
+            [2] = "two"
         };
     }
 }

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections;
+using System.Globalization;
 
 namespace Aspire.Hosting.Ats;
 
@@ -33,8 +34,11 @@ internal static class CollectionExports
     /// <param name="key">The key to look up.</param>
     /// <returns>The value, or null if not found.</returns>
     [AspireExport("Dict.get", Description = "Gets a value from a dictionary")]
-    public static object? DictGet(this IDictionary dict, string key)
-        => dict.Contains(key) ? dict[key] : null;
+    public static object? DictGet(this IDictionary dict, object key)
+    {
+        var normalizedKey = NormalizeDictionaryKey(dict, key);
+        return dict.Contains(normalizedKey) ? dict[normalizedKey] : null;
+    }
 
     /// <summary>
     /// Sets a value in a dictionary.
@@ -43,8 +47,8 @@ internal static class CollectionExports
     /// <param name="key">The key to set.</param>
     /// <param name="value">The value to set.</param>
     [AspireExport("Dict.set", Description = "Sets a value in a dictionary")]
-    public static void DictSet(this IDictionary dict, string key, object value)
-        => dict[key] = value;
+    public static void DictSet(this IDictionary dict, object key, object value)
+        => dict[NormalizeDictionaryKey(dict, key)] = value;
 
     /// <summary>
     /// Removes a key from a dictionary.
@@ -53,14 +57,15 @@ internal static class CollectionExports
     /// <param name="key">The key to remove.</param>
     /// <returns>True if the key was removed, false if not found.</returns>
     [AspireExport("Dict.remove", Description = "Removes a key from a dictionary")]
-    public static bool DictRemove(this IDictionary dict, string key)
+    public static bool DictRemove(this IDictionary dict, object key)
     {
-        if (!dict.Contains(key))
+        var normalizedKey = NormalizeDictionaryKey(dict, key);
+        if (!dict.Contains(normalizedKey))
         {
             return false;
         }
 
-        dict.Remove(key);
+        dict.Remove(normalizedKey);
         return true;
     }
 
@@ -70,8 +75,8 @@ internal static class CollectionExports
     /// <param name="dict">The dictionary handle.</param>
     /// <returns>An array of all keys.</returns>
     [AspireExport("Dict.keys", Description = "Gets all keys from a dictionary")]
-    public static string[] DictKeys(this IDictionary dict)
-        => [.. dict.Keys.Cast<string>()];
+    public static object?[] DictKeys(this IDictionary dict)
+        => [.. dict.Keys.Cast<object?>()];
 
     /// <summary>
     /// Checks if a dictionary contains a key.
@@ -80,8 +85,8 @@ internal static class CollectionExports
     /// <param name="key">The key to check.</param>
     /// <returns>True if the key exists.</returns>
     [AspireExport("Dict.has", Description = "Checks if a dictionary contains a key")]
-    public static bool DictHas(this IDictionary dict, string key)
-        => dict.Contains(key);
+    public static bool DictHas(this IDictionary dict, object key)
+        => dict.Contains(NormalizeDictionaryKey(dict, key));
 
     /// <summary>
     /// Gets the number of entries in a dictionary.
@@ -116,7 +121,83 @@ internal static class CollectionExports
     /// <returns>A copy of the dictionary as an object.</returns>
     [AspireExport("Dict.toObject", Description = "Converts a dictionary to a plain object")]
     public static Dictionary<string, object?> DictToObject(this IDictionary dict)
-        => dict.Cast<DictionaryEntry>().ToDictionary(entry => (string)entry.Key, entry => entry.Value);
+    {
+        var result = new Dictionary<string, object?>(dict.Count);
+        foreach (var key in dict.Keys)
+        {
+            result[GetStringKey(key)] = dict[key];
+        }
+
+        return result;
+    }
+
+    private static object NormalizeDictionaryKey(IDictionary dict, object key)
+    {
+        var keyType = GetDictionaryKeyType(dict.GetType());
+        if (keyType is null)
+        {
+            return key;
+        }
+
+        var normalizedKeyType = Nullable.GetUnderlyingType(keyType) ?? keyType;
+        if (normalizedKeyType.IsInstanceOfType(key))
+        {
+            return key;
+        }
+
+        if (normalizedKeyType == typeof(string))
+        {
+            return key.ToString()!;
+        }
+
+        try
+        {
+            if (normalizedKeyType.IsEnum)
+            {
+                return key switch
+                {
+                    string enumName => Enum.Parse(normalizedKeyType, enumName, ignoreCase: true),
+                    IConvertible convertible => Enum.ToObject(normalizedKeyType, Convert.ChangeType(convertible, Enum.GetUnderlyingType(normalizedKeyType), CultureInfo.InvariantCulture)!),
+                    _ => key
+                };
+            }
+
+            if (normalizedKeyType == typeof(Guid) && key is string guidText && Guid.TryParse(guidText, out var guid))
+            {
+                return guid;
+            }
+
+            if (key is IConvertible)
+            {
+                return Convert.ChangeType(key, normalizedKeyType, CultureInfo.InvariantCulture)!;
+            }
+        }
+        catch (Exception ex) when (ex is FormatException or InvalidCastException or OverflowException or ArgumentException)
+        {
+        }
+
+        return key;
+    }
+
+    private static Type? GetDictionaryKeyType(Type type)
+    {
+        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IDictionary<,>))
+        {
+            return type.GetGenericArguments()[0];
+        }
+
+        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Dictionary<,>))
+        {
+            return type.GetGenericArguments()[0];
+        }
+
+        return type.GetInterfaces()
+            .FirstOrDefault(static iface => iface.IsGenericType && iface.GetGenericTypeDefinition() == typeof(IDictionary<,>))
+            ?.GetGenericArguments()[0];
+    }
+
+    private static string GetStringKey(object? key)
+        => key as string ?? throw new InvalidOperationException($"Aspire.Hosting/Dict.toObject only supports string-key dictionaries, but found key type '{key?.GetType().FullName ?? "null"}'.");
 
     #endregion
 
