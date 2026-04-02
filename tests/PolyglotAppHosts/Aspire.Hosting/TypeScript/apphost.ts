@@ -187,6 +187,13 @@ await container.withRemoteImageName("myregistry.azurecr.io/myapp");
 // withRemoteImageTag
 await container.withRemoteImageTag("latest");
 
+// withImagePushOptions
+await container.withImagePushOptions(async (context) => {
+    const options = await context.options.get();
+    await options.remoteImageName.set("myregistry.azurecr.io/myapp");
+    await options.remoteImageTag.set("latest");
+});
+
 // withMcpServer
 await container.withMcpServer({ path: "/mcp" });
 

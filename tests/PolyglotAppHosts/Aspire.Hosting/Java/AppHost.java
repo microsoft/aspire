@@ -40,6 +40,11 @@ void main() throws Exception {
         container.withHttpProbe(ProbeType.LIVENESS, new WithHttpProbeOptions().path("/health"));
         container.withRemoteImageName("myregistry.azurecr.io/myapp");
         container.withRemoteImageTag("latest");
+        container.withImagePushOptions((context) -> {
+            var options = context.options();
+            options.setRemoteImageName("myregistry.azurecr.io/myapp");
+            options.setRemoteImageTag("latest");
+        });
         container.withMcpServer(new WithMcpServerOptions().path("/mcp"));
         container.withRequiredCommand("docker");
         tool.withToolIgnoreExistingFeeds();

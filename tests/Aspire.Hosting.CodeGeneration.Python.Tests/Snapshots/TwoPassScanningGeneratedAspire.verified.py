@@ -3009,6 +3009,114 @@ class ConnectionStringAvailableEvent:
         return typing.cast(AbstractServiceProvider, result)
 
 
+class ContainerImagePushOptions:
+    """Type class for ContainerImagePushOptions."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"ContainerImagePushOptions(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    @_uncached_property
+    def remote_image_name(self) -> str:
+        """Gets the RemoteImageName property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.remoteImageName',
+            {'context': self._handle}
+        )
+        return typing.cast(str, result)
+
+    @remote_image_name.setter
+    def remote_image_name(self, value: str) -> None:
+        """Sets the RemoteImageName property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.setRemoteImageName',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_uncached_property
+    def remote_image_tag(self) -> str:
+        """Gets the RemoteImageTag property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.remoteImageTag',
+            {'context': self._handle}
+        )
+        return typing.cast(str, result)
+
+    @remote_image_tag.setter
+    def remote_image_tag(self, value: str) -> None:
+        """Sets the RemoteImageTag property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.setRemoteImageTag',
+            {'context': self._handle, 'value': value}
+        )
+
+
+class ContainerImagePushOptionsCallbackContext:
+    """Type class for ContainerImagePushOptionsCallbackContext."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"ContainerImagePushOptionsCallbackContext(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    @_uncached_property
+    def resource(self) -> AbstractResource:
+        """Gets the Resource property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.resource',
+            {'context': self._handle}
+        )
+        return typing.cast(AbstractResource, result)
+
+    @resource.setter
+    def resource(self, value: AbstractResource) -> None:
+        """Sets the Resource property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.setResource',
+            {'context': self._handle, 'value': value}
+        )
+
+    def cancel(self) -> None:
+        """Cancel the operation."""
+        token: CancellationToken = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.cancellationToken',
+            {'context': self._handle}
+        )
+        token.cancel()
+
+    @_uncached_property
+    def options(self) -> ContainerImagePushOptions:
+        """Gets the Options property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.options',
+            {'context': self._handle}
+        )
+        return typing.cast(ContainerImagePushOptions, result)
+
+    @options.setter
+    def options(self, value: ContainerImagePushOptions) -> None:
+        """Sets the Options property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.setOptions',
+            {'context': self._handle, 'value': value}
+        )
+
+
 class DistributedApplication:
     """Type class for DistributedApplication."""
 
@@ -5101,6 +5209,10 @@ class AbstractComputeResource(AbstractResource):
     """Abstract base class for AbstractComputeResource interface."""
 
     @abc.abstractmethod
+    def with_image_push_options(self, callback: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]) -> typing.Self:
+        """Sets image push options via callback"""
+
+    @abc.abstractmethod
     def with_remote_image_name(self, remote_image_name: str) -> typing.Self:
         """Sets the remote image name for publishing"""
 
@@ -6532,6 +6644,7 @@ class ContainerResourceKwargs(_BaseResourceKwargs, total=False):
     https_developer_certificate: ParameterResource | typing.Literal[True]
     without_https_certificate: typing.Literal[True]
     http_probe: ProbeType | HttpProbeParameters
+    image_push_options: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]
     remote_image_name: str
     remote_image_tag: str
     volume: str | VolumeParameters
@@ -7231,6 +7344,17 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_image_push_options(self, callback: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]) -> typing.Self:
+        """Sets image push options via callback"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['callback'] = self._client.register_callback(callback)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withImagePushOptions',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def with_remote_image_name(self, remote_image_name: str) -> typing.Self:
         """Sets the remote image name for publishing"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -7791,6 +7915,13 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpProbe', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'http_probe'. Expected: ProbeType or HttpProbeParameters")
+        if _image_push_options := kwargs.pop("image_push_options", None):
+            if _validate_type(_image_push_options, typing.Callable[[ContainerImagePushOptionsCallbackContext], None]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[ContainerImagePushOptionsCallbackContext], None], _image_push_options))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withImagePushOptions', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'image_push_options'. Expected: Callable[[ContainerImagePushOptionsCallbackContext], None]")
         if _remote_image_name := kwargs.pop("remote_image_name", None):
             if _validate_type(_remote_image_name, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -7883,6 +8014,7 @@ class ProjectResourceKwargs(_BaseResourceKwargs, total=False):
     https_developer_certificate: ParameterResource | typing.Literal[True]
     without_https_certificate: typing.Literal[True]
     http_probe: ProbeType | HttpProbeParameters
+    image_push_options: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]
     remote_image_name: str
     remote_image_tag: str
     on_resource_endpoints_allocated: typing.Callable[[ResourceEndpointsAllocatedEvent], None]
@@ -8414,6 +8546,17 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_image_push_options(self, callback: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]) -> typing.Self:
+        """Sets image push options via callback"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['callback'] = self._client.register_callback(callback)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withImagePushOptions',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def with_remote_image_name(self, remote_image_name: str) -> typing.Self:
         """Sets the remote image name for publishing"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -8841,6 +8984,13 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpProbe', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'http_probe'. Expected: ProbeType or HttpProbeParameters")
+        if _image_push_options := kwargs.pop("image_push_options", None):
+            if _validate_type(_image_push_options, typing.Callable[[ContainerImagePushOptionsCallbackContext], None]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[ContainerImagePushOptionsCallbackContext], None], _image_push_options))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withImagePushOptions', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'image_push_options'. Expected: Callable[[ContainerImagePushOptionsCallbackContext], None]")
         if _remote_image_name := kwargs.pop("remote_image_name", None):
             if _validate_type(_remote_image_name, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -8933,6 +9083,7 @@ class ExecutableResourceKwargs(_BaseResourceKwargs, total=False):
     https_developer_certificate: ParameterResource | typing.Literal[True]
     without_https_certificate: typing.Literal[True]
     http_probe: ProbeType | HttpProbeParameters
+    image_push_options: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]
     remote_image_name: str
     remote_image_tag: str
     on_resource_endpoints_allocated: typing.Callable[[ResourceEndpointsAllocatedEvent], None]
@@ -9454,6 +9605,17 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_image_push_options(self, callback: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]) -> typing.Self:
+        """Sets image push options via callback"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['callback'] = self._client.register_callback(callback)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withImagePushOptions',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def with_remote_image_name(self, remote_image_name: str) -> typing.Self:
         """Sets the remote image name for publishing"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -9874,6 +10036,13 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpProbe', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'http_probe'. Expected: ProbeType or HttpProbeParameters")
+        if _image_push_options := kwargs.pop("image_push_options", None):
+            if _validate_type(_image_push_options, typing.Callable[[ContainerImagePushOptionsCallbackContext], None]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[ContainerImagePushOptionsCallbackContext], None], _image_push_options))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withImagePushOptions', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'image_push_options'. Expected: Callable[[ContainerImagePushOptionsCallbackContext], None]")
         if _remote_image_name := kwargs.pop("remote_image_name", None):
             if _validate_type(_remote_image_name, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -10552,6 +10721,8 @@ _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeR
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeStartEvent", BeforeStartEvent)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext", CommandLineArgsCallbackContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ConnectionStringAvailableEvent", ConnectionStringAvailableEvent)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptions", ContainerImagePushOptions)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptionsCallbackContext", ContainerImagePushOptionsCallbackContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.DistributedApplication", DistributedApplication)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Eventing.DistributedApplicationEventSubscription", DistributedApplicationEventSubscription)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext", DistributedApplicationExecutionContext)

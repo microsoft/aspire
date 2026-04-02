@@ -3978,7 +3978,6 @@ public static class ResourceBuilderExtensions
     /// The callback receives a <see cref="ContainerImagePushOptionsCallbackContext"/> that provides access to the resource
     /// and the <see cref="ContainerImagePushOptions"/> that can be modified.
     /// Multiple callbacks can be registered on the same resource, and they will be invoked in the order they were added.
-    /// <para>This method is not available in polyglot app hosts.</para>
     /// </remarks>
     /// <example>
     /// Configure a custom image name and tag for a container resource:
@@ -3992,7 +3991,7 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
-    [AspireExportIgnore(Reason = "ContainerImagePushOptionsCallbackContext exposes IResource — not usable from polyglot hosts.")]
+    [AspireExport("withImagePushOptions", Description = "Sets image push options via callback")]
     public static IResourceBuilder<T> WithImagePushOptions<T>(
         this IResourceBuilder<T> builder,
         Action<ContainerImagePushOptionsCallbackContext> callback)
@@ -4018,7 +4017,6 @@ public static class ResourceBuilderExtensions
     /// The callback receives a <see cref="ContainerImagePushOptionsCallbackContext"/> that provides access to the resource
     /// and the <see cref="ContainerImagePushOptions"/> that can be modified.
     /// Multiple callbacks can be registered on the same resource, and they will be invoked in the order they were added.
-    /// <para>This method is not available in polyglot app hosts.</para>
     /// </remarks>
     /// <example>
     /// Configure image options asynchronously by retrieving values from configuration:
@@ -4033,7 +4031,7 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
-    [AspireExportIgnore(Reason = "ContainerImagePushOptionsCallbackContext exposes IResource — not usable from polyglot hosts.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the synchronous Action<> overload via withImagePushOptions.")]
     public static IResourceBuilder<T> WithImagePushOptions<T>(
         this IResourceBuilder<T> builder,
         Func<ContainerImagePushOptionsCallbackContext, Task> callback)

@@ -115,6 +115,13 @@ with create_builder() as builder:
     container.with_remote_image_name()
     # withRemoteImageTag
     container.with_remote_image_tag()
+    # withImagePushOptions
+    def configure_image_push_options(context):
+        options = context.options
+        options.remote_image_name = "myregistry.azurecr.io/myapp"
+        options.remote_image_tag = "latest"
+
+    container.with_image_push_options(configure_image_push_options)
     # withMcpServer
     container.with_mcp_server()
     # withRequiredCommand
