@@ -305,6 +305,29 @@ public class ConsoleActivityLoggerTests
     }
 
     [Fact]
+    public void WriteSummary_WithZeroDuration_UsesTimelineStartUnit()
+    {
+        var output = new StringBuilder();
+        var logger = CreateLogger(output, interactive: false, color: false);
+
+        var records = new[]
+        {
+            new ConsoleActivityLogger.StepDurationRecord("root", "Prepare", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromSeconds(8), null, null, 0, 1, TimeSpan.Zero, TimeSpan.FromSeconds(8)),
+            new ConsoleActivityLogger.StepDurationRecord("zero", "Zero event", ConsoleActivityLogger.ActivityState.Success, TimeSpan.Zero, null, "root", 1, 2, TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(4)),
+        };
+
+        logger.SetStepDurations(records);
+        logger.SetFinalResult(true);
+        logger.WriteSummary();
+
+        var lines = output.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+        var zeroEventLine = Assert.Single(lines, line => line.Contains("Zero event", StringComparison.Ordinal));
+
+        Assert.Contains("0s", zeroEventLine);
+        Assert.DoesNotContain("μs", zeroEventLine);
+    }
+
+    [Fact]
     public void WriteSummary_WithDeepNesting_SkipsTimelineToPreserveStepNames()
     {
         var output = new StringBuilder();

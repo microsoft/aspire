@@ -379,9 +379,9 @@ internal sealed class ConsoleActivityLogger
         var orderedRecords = OrderStepDurationsHierarchically(records);
         var summaryTitle = SharedCommandStrings.PipelineStepsSummaryTitle;
         var timelineLabel = SharedCommandStrings.PipelineStepTimelineLabel;
-        var durationWidth = Math.Max(10, orderedRecords.Max(r => DurationFormatter.FormatDuration(r.Duration, CultureInfo.InvariantCulture, DecimalDurationDisplay.Fixed).Length));
-        var nameWidth = Math.Max(timelineLabel.Length, orderedRecords.Max(r => GetIndentedDisplayName(r).Length));
         var totalTimeline = orderedRecords.Max(r => r.EndOffset > TimeSpan.Zero ? r.EndOffset : r.Duration);
+        var durationWidth = Math.Max(10, orderedRecords.Max(r => FormatSummaryDuration(r.Duration, totalTimeline).Length));
+        var nameWidth = Math.Max(timelineLabel.Length, orderedRecords.Max(r => GetIndentedDisplayName(r).Length));
         var renderTimeline = ShouldRenderTimeline(durationWidth, nameWidth, totalTimeline);
         var timelinePrefix = $"  {new string(' ', durationWidth)}    {new string(' ', nameWidth)}  ";
         var timelineLabelPrefix = $"  {new string(' ', durationWidth)}    {timelineLabel.PadRight(nameWidth)}  ";
@@ -397,7 +397,7 @@ internal sealed class ConsoleActivityLogger
 
         foreach (var rec in orderedRecords)
         {
-            var durStr = DurationFormatter.FormatDuration(rec.Duration, CultureInfo.InvariantCulture, DecimalDurationDisplay.Fixed).PadLeft(durationWidth);
+            var durStr = FormatSummaryDuration(rec.Duration, totalTimeline).PadLeft(durationWidth);
             var symbol = rec.State switch
             {
                 ActivityState.Success => _enableColor ? "[green]" + SuccessSymbol + "[/]" : SuccessSymbol,
@@ -553,6 +553,13 @@ internal sealed class ConsoleActivityLogger
     {
         var unit = totalTimeline > TimeSpan.Zero ? DurationFormatter.GetUnit(totalTimeline) : "ms";
         return $"0{unit}";
+    }
+
+    private static string FormatSummaryDuration(TimeSpan duration, TimeSpan totalTimeline)
+    {
+        return duration == TimeSpan.Zero
+            ? BuildTimelineStartLabel(totalTimeline)
+            : DurationFormatter.FormatDuration(duration, CultureInfo.InvariantCulture, DecimalDurationDisplay.Fixed);
     }
 
     private bool ShouldRenderTimeline(int durationWidth, int nameWidth, TimeSpan totalTimeline)
