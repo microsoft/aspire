@@ -33,6 +33,24 @@ with create_builder() as builder:
     built_connection_string = builder.add_connection_string_builder("connection-string", lambda *_args, **_kwargs: None)
     built_connection_string.with_connection_property("Key", "Value")
     built_connection_string.with_connection_property_value("Key", "Value")
+    # builder-level pipeline APIs
+    pipeline = builder.pipeline
+
+    def configure_builder_step(step_context):
+        step_context.summary.add("BuilderPipelineStep", "Validated")
+
+    pipeline.add_step(
+        "custom-builder-step",
+        configure_builder_step,
+        depends_on=["build"],
+        required_by=["publish"],
+    )
+
+    def configure_builder_pipeline(config_context):
+        _all_steps = config_context.steps
+        _builder_tagged_steps = config_context.get_steps_by_tag("custom-build")
+
+    pipeline.configure(configure_builder_pipeline)
     # withEnvironment - EndpointReference
     container.with_environment("KEY", endpoint)
     # withEnvironment - ParameterResource

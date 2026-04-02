@@ -187,6 +187,9 @@ type IResourceWithContainerFilesHandle = Handle<'Aspire.Hosting/Aspire.Hosting.I
 /** Handle to IUserSecretsManager */
 type IUserSecretsManagerHandle = Handle<'Aspire.Hosting/Aspire.Hosting.IUserSecretsManager'>;
 
+/** Handle to IDistributedApplicationPipeline */
+type IDistributedApplicationPipelineHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Pipelines.IDistributedApplicationPipeline'>;
+
 /** Handle to IReportingStep */
 type IReportingStepHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Pipelines.IReportingStep'>;
 
@@ -475,6 +478,11 @@ export interface AddParameterOptions {
 export interface AddParameterWithValueOptions {
     publishValueAsDefault?: boolean;
     secret?: boolean;
+}
+
+export interface AddStepOptions {
+    dependsOn?: string[];
+    requiredBy?: string[];
 }
 
 export interface AddTestChildDatabaseOptions {
@@ -3876,6 +3884,9 @@ export interface DistributedApplicationBuilder {
     executionContext: {
         get: () => Promise<DistributedApplicationExecutionContext>;
     };
+    pipeline: {
+        get: () => Promise<DistributedApplicationPipeline>;
+    };
     userSecretsManager: {
         get: () => Promise<UserSecretsManager>;
     };
@@ -3987,6 +3998,17 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
                 { context: this._handle }
             );
             return new DistributedApplicationExecutionContextImpl(handle, this._client);
+        },
+    };
+
+    /** Gets the Pipeline property */
+    pipeline = {
+        get: async (): Promise<DistributedApplicationPipeline> => {
+            const handle = await this._client.invokeCapability<IDistributedApplicationPipelineHandle>(
+                'Aspire.Hosting/IDistributedApplicationBuilder.pipeline',
+                { context: this._handle }
+            );
+            return new DistributedApplicationPipelineImpl(handle, this._client);
         },
     };
 
@@ -4610,6 +4632,105 @@ class DistributedApplicationEventingPromiseImpl implements DistributedApplicatio
     /** Invokes the Unsubscribe method */
     unsubscribe(subscription: DistributedApplicationEventSubscriptionHandle): DistributedApplicationEventingPromise {
         return new DistributedApplicationEventingPromiseImpl(this._promise.then(obj => obj.unsubscribe(subscription)));
+    }
+
+}
+
+// ============================================================================
+// DistributedApplicationPipeline
+// ============================================================================
+
+export interface DistributedApplicationPipeline {
+    toJSON(): MarshalledHandle;
+    addStep(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: AddStepOptions): DistributedApplicationPipelinePromise;
+    configure(callback: (arg: PipelineConfigurationContext) => Promise<void>): DistributedApplicationPipelinePromise;
+}
+
+export interface DistributedApplicationPipelinePromise extends PromiseLike<DistributedApplicationPipeline> {
+    addStep(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: AddStepOptions): DistributedApplicationPipelinePromise;
+    configure(callback: (arg: PipelineConfigurationContext) => Promise<void>): DistributedApplicationPipelinePromise;
+}
+
+// ============================================================================
+// DistributedApplicationPipelineImpl
+// ============================================================================
+
+/**
+ * Type class for DistributedApplicationPipeline.
+ */
+class DistributedApplicationPipelineImpl implements DistributedApplicationPipeline {
+    constructor(private _handle: IDistributedApplicationPipelineHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    /** Adds a pipeline step to the application */
+    /** @internal */
+    async _addStepInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[]): Promise<DistributedApplicationPipeline> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
+            const arg = new PipelineStepContextImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { pipeline: this._handle, stepName, callback: callbackId };
+        if (dependsOn !== undefined) rpcArgs.dependsOn = dependsOn;
+        if (requiredBy !== undefined) rpcArgs.requiredBy = requiredBy;
+        await this._client.invokeCapability<void>(
+            'Aspire.Hosting/addStep',
+            rpcArgs
+        );
+        return this;
+    }
+
+    addStep(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: AddStepOptions): DistributedApplicationPipelinePromise {
+        const dependsOn = options?.dependsOn;
+        const requiredBy = options?.requiredBy;
+        return new DistributedApplicationPipelinePromiseImpl(this._addStepInternal(stepName, callback, dependsOn, requiredBy));
+    }
+
+    /** Configures the application pipeline via a callback */
+    /** @internal */
+    async _configureInternal(callback: (arg: PipelineConfigurationContext) => Promise<void>): Promise<DistributedApplicationPipeline> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as PipelineConfigurationContextHandle;
+            const arg = new PipelineConfigurationContextImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { pipeline: this._handle, callback: callbackId };
+        await this._client.invokeCapability<void>(
+            'Aspire.Hosting/configure',
+            rpcArgs
+        );
+        return this;
+    }
+
+    configure(callback: (arg: PipelineConfigurationContext) => Promise<void>): DistributedApplicationPipelinePromise {
+        return new DistributedApplicationPipelinePromiseImpl(this._configureInternal(callback));
+    }
+
+}
+
+/**
+ * Thenable wrapper for DistributedApplicationPipeline that enables fluent chaining.
+ */
+class DistributedApplicationPipelinePromiseImpl implements DistributedApplicationPipelinePromise {
+    constructor(private _promise: Promise<DistributedApplicationPipeline>) {}
+
+    then<TResult1 = DistributedApplicationPipeline, TResult2 = never>(
+        onfulfilled?: ((value: DistributedApplicationPipeline) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    /** Adds a pipeline step to the application */
+    addStep(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: AddStepOptions): DistributedApplicationPipelinePromise {
+        return new DistributedApplicationPipelinePromiseImpl(this._promise.then(obj => obj.addStep(stepName, callback, options)));
+    }
+
+    /** Configures the application pipeline via a callback */
+    configure(callback: (arg: PipelineConfigurationContext) => Promise<void>): DistributedApplicationPipelinePromise {
+        return new DistributedApplicationPipelinePromiseImpl(this._promise.then(obj => obj.configure(callback)));
     }
 
 }
@@ -31791,6 +31912,7 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateComm
 registerHandleWrapper('Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfiguration', (handle, client) => new ConfigurationImpl(handle as IConfigurationHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder', (handle, client) => new DistributedApplicationBuilderImpl(handle as IDistributedApplicationBuilderHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationEventing', (handle, client) => new DistributedApplicationEventingImpl(handle as IDistributedApplicationEventingHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.IDistributedApplicationPipeline', (handle, client) => new DistributedApplicationPipelineImpl(handle as IDistributedApplicationPipelineHandle, client));
 registerHandleWrapper('Microsoft.Extensions.Hosting.Abstractions/Microsoft.Extensions.Hosting.IHostEnvironment', (handle, client) => new HostEnvironmentImpl(handle as IHostEnvironmentHandle, client));
 registerHandleWrapper('Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILogger', (handle, client) => new LoggerImpl(handle as ILoggerHandle, client));
 registerHandleWrapper('Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILoggerFactory', (handle, client) => new LoggerFactoryImpl(handle as ILoggerFactoryHandle, client));

@@ -72,6 +72,25 @@ await builtConnectionString.withConnectionPropertyValue("Mode", "Development");
 const envConnectionString = await builder.addConnectionString("envcs");
 
 // ===================================================================
+// Application pipeline on builder
+// ===================================================================
+
+const pipeline = await builder.pipeline.get();
+
+await pipeline.addStep("custom-builder-step", async (stepContext) => {
+    const summary = await stepContext.summary.get();
+    await summary.add("BuilderPipelineStep", "Validated");
+}, {
+    dependsOn: ["build"],
+    requiredBy: ["publish"],
+});
+
+await pipeline.configure(async (configContext) => {
+    const _allSteps = await configContext.steps.get();
+    const _builderTaggedSteps = await configContext.getStepsByTag("custom-build");
+});
+
+// ===================================================================
 // ResourceBuilderExtensions.cs — NEW exports on ContainerResource
 // ===================================================================
 

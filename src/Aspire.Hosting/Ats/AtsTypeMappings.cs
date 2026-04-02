@@ -19,6 +19,7 @@ using Microsoft.Extensions.Logging;
 
 // Core types (from Aspire.Hosting namespace)
 [assembly: AspireExport(typeof(IDistributedApplicationBuilder))]
+[assembly: AspireExport(typeof(IDistributedApplicationPipeline))]
 [assembly: AspireExport(typeof(DistributedApplication))]
 
 // Note: DistributedApplicationExecutionContext has [AspireExport(ExposeProperties = true)] on the type itself

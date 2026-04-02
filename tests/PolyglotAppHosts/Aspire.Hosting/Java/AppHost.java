@@ -19,6 +19,9 @@ void main() throws Exception {
         var builtConnectionString = builder.addConnectionStringBuilder("customcs", (connectionStringBuilder) -> { var _isEmpty = connectionStringBuilder.isEmpty(); connectionStringBuilder.appendLiteral("Host="); connectionStringBuilder.appendValueProvider(endpoint); connectionStringBuilder.appendLiteral(";Key="); connectionStringBuilder.appendValueProvider(secretParam); var _builtExpression = connectionStringBuilder.build(); });
         builtConnectionString.withConnectionProperty("Host", expr);
         builtConnectionString.withConnectionPropertyValue("Mode", "Development");
+        var pipeline = builder.pipeline();
+        pipeline.addStep("custom-builder-step", (stepContext) -> { var builderSummary = stepContext.summary(); builderSummary.add("BuilderPipelineStep", "Validated"); }, new AddStepOptions().dependsOn(new String[] { "build" }).requiredBy(new String[] { "publish" }));
+        pipeline.configure((configContext) -> { var _allSteps = configContext.steps(); var _builderTaggedSteps = configContext.getStepsByTag("custom-build"); });
         container.withEnvironment("MY_ENDPOINT", endpoint);
         container.withEnvironment("MY_PARAM", configParam);
         container.withEnvironment("MY_CONN", builtConnectionString);
