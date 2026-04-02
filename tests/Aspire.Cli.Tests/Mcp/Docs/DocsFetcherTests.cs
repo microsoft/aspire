@@ -2,14 +2,21 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net;
-using Aspire.Cli.Mcp.Docs;
+using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.Tests.Utils;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace Aspire.Cli.Tests.Mcp.Docs;
+namespace Aspire.Cli.Tests.Documentation.Docs;
 
 public class DocsFetcherTests
 {
+    private static DocsFetcher CreateFetcher(HttpClient httpClient, IDocsCache cache, IConfiguration? configuration = null)
+    {
+        configuration ??= new ConfigurationBuilder().Build();
+        return new DocsFetcher(httpClient, cache, configuration, NullLogger<DocsFetcher>.Instance);
+    }
+
     [Fact]
     public async Task FetchDocsAsync_SuccessfulRequest_ReturnsContent()
     {
@@ -29,7 +36,7 @@ public class DocsFetcherTests
         using var handler = new MockHttpMessageHandler(response);
         using var httpClient = new HttpClient(handler);
         var cache = new MockDocsCache();
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        var fetcher = CreateFetcher(httpClient, cache);
 
         var content = await fetcher.FetchDocsAsync();
 
@@ -49,7 +56,7 @@ public class DocsFetcherTests
         using var handler = new MockHttpMessageHandler(response);
         using var httpClient = new HttpClient(handler);
         var cache = new MockDocsCache();
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        var fetcher = CreateFetcher(httpClient, cache);
 
         await fetcher.FetchDocsAsync();
 
@@ -70,7 +77,7 @@ public class DocsFetcherTests
         using var handler = new MockHttpMessageHandler(response);
         using var httpClient = new HttpClient(handler);
         var cache = new MockDocsCache();
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        var fetcher = CreateFetcher(httpClient, cache);
 
         await fetcher.FetchDocsAsync();
 
@@ -96,7 +103,7 @@ public class DocsFetcherTests
         });
 
         using var httpClient = new HttpClient(handler);
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        var fetcher = CreateFetcher(httpClient, cache);
 
         await fetcher.FetchDocsAsync();
 
@@ -118,7 +125,7 @@ public class DocsFetcherTests
 
         using var handler = new MockHttpMessageHandler(response);
         using var httpClient = new HttpClient(handler);
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        var fetcher = CreateFetcher(httpClient, cache);
 
         var content = await fetcher.FetchDocsAsync();
 
@@ -153,7 +160,7 @@ public class DocsFetcherTests
         });
 
         using var httpClient = new HttpClient(handler);
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        var fetcher = CreateFetcher(httpClient, cache);
 
         var content = await fetcher.FetchDocsAsync();
 
@@ -172,7 +179,7 @@ public class DocsFetcherTests
         using var handler = new MockHttpMessageHandler(response);
         using var httpClient = new HttpClient(handler);
         var cache = new MockDocsCache();
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        var fetcher = CreateFetcher(httpClient, cache);
 
         var content = await fetcher.FetchDocsAsync();
 
@@ -185,7 +192,7 @@ public class DocsFetcherTests
         using var handler = new MockHttpMessageHandler(new HttpRequestException("Network error"));
         using var httpClient = new HttpClient(handler);
         var cache = new MockDocsCache();
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        var fetcher = CreateFetcher(httpClient, cache);
 
         var content = await fetcher.FetchDocsAsync();
 
@@ -199,7 +206,7 @@ public class DocsFetcherTests
         using var handler = new CancellationCheckingHandler();
         using var httpClient = new HttpClient(handler);
         var cache = new MockDocsCache();
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        var fetcher = CreateFetcher(httpClient, cache);
 
         using var cts = new CancellationTokenSource();
         cts.Cancel();
@@ -221,7 +228,7 @@ public class DocsFetcherTests
         using var handler = new MockHttpMessageHandler(response);
         using var httpClient = new HttpClient(handler);
         var cache = new MockDocsCache();
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        var fetcher = CreateFetcher(httpClient, cache);
 
         var content = await fetcher.FetchDocsAsync();
 
@@ -241,7 +248,7 @@ public class DocsFetcherTests
         using var handler = new MockHttpMessageHandler(response);
         using var httpClient = new HttpClient(handler);
         var cache = new MockDocsCache();
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        var fetcher = CreateFetcher(httpClient, cache);
 
         var content = await fetcher.FetchDocsAsync();
 
@@ -260,7 +267,7 @@ public class DocsFetcherTests
         using var handler = new MockHttpMessageHandler(response);
         using var httpClient = new HttpClient(handler);
         var cache = new MockDocsCache();
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        var fetcher = CreateFetcher(httpClient, cache);
 
         var content = await fetcher.FetchDocsAsync();
 
@@ -283,7 +290,7 @@ public class DocsFetcherTests
         using var handler = new MockHttpMessageHandler(response);
         using var httpClient = new HttpClient(handler);
         var cache = new MockDocsCache();
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        var fetcher = CreateFetcher(httpClient, cache);
 
         var content = await fetcher.FetchDocsAsync();
 
@@ -304,7 +311,7 @@ public class DocsFetcherTests
         using var handler = new MockHttpMessageHandler(exception);
         using var httpClient = new HttpClient(handler);
         var cache = new MockDocsCache();
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        var fetcher = CreateFetcher(httpClient, cache);
 
         var content = await fetcher.FetchDocsAsync();
 
@@ -325,7 +332,7 @@ public class DocsFetcherTests
         using var httpClient = new HttpClient(handler);
         var cache = new MockDocsCache();
         // Cache is empty, no ETag
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        var fetcher = CreateFetcher(httpClient, cache);
 
         var content = await fetcher.FetchDocsAsync();
 
@@ -356,7 +363,7 @@ public class DocsFetcherTests
         });
 
         using var httpClient = new HttpClient(handler);
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        var fetcher = CreateFetcher(httpClient, cache);
 
         var content = await fetcher.FetchDocsAsync();
 

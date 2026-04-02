@@ -2,9 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Microsoft.AspNetCore.InternalTesting;
-using Aspire.Cli.Mcp.Docs;
+using Aspire.Cli.Documentation.Docs;
 
-namespace Aspire.Cli.Tests.Mcp.Docs;
+namespace Aspire.Cli.Tests.Documentation.Docs;
 
 public class LlmsTxtParserTests
 {

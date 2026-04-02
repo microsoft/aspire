@@ -1,0 +1,806 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using System.Diagnostics;
+using System.Text.RegularExpressions;
+using Microsoft.Extensions.Logging;
+
+namespace Aspire.Cli.Documentation.ApiDocs;
+
+/// <summary>
+/// Common language identifiers for API reference entries.
+/// </summary>
+internal static class ApiReferenceLanguages
+{
+    /// <summary>
+    /// The C# API language identifier.
+    /// </summary>
+    public const string CSharp = "csharp";
+
+    /// <summary>
+    /// The TypeScript API language identifier.
+    /// </summary>
+    public const string TypeScript = "typescript";
+
+    /// <summary>
+    /// The Java API language identifier.
+    /// </summary>
+    public const string Java = "java";
+
+    /// <summary>
+    /// The Go API language identifier.
+    /// </summary>
+    public const string Go = "go";
+
+    /// <summary>
+    /// The Rust API language identifier.
+    /// </summary>
+    public const string Rust = "rust";
+
+    /// <summary>
+    /// The Python API language identifier.
+    /// </summary>
+    public const string Python = "python";
+
+    /// <summary>
+    /// Gets the supported API language identifiers.
+    /// </summary>
+    public static IReadOnlyList<string> All { get; } =
+    [
+        CSharp,
+        TypeScript,
+        Java,
+        Go,
+        Rust,
+        Python
+    ];
+
+    /// <summary>
+    /// Determines whether the specified language is supported.
+    /// </summary>
+    /// <param name="language">The language identifier to test.</param>
+    /// <returns><c>true</c> if the language is supported; otherwise, <c>false</c>.</returns>
+    public static bool IsSupported(string language) => All.Contains(language, StringComparer.OrdinalIgnoreCase);
+}
+
+/// <summary>
+/// Common kinds for API reference entries.
+/// </summary>
+internal static class ApiReferenceKinds
+{
+    /// <summary>
+    /// The package kind.
+    /// </summary>
+    public const string Package = "package";
+
+    /// <summary>
+    /// The module kind.
+    /// </summary>
+    public const string Module = "module";
+
+    /// <summary>
+    /// The type kind.
+    /// </summary>
+    public const string Type = "type";
+
+    /// <summary>
+    /// The symbol kind.
+    /// </summary>
+    public const string Symbol = "symbol";
+
+    /// <summary>
+    /// The member kind.
+    /// </summary>
+    public const string Member = "member";
+
+    /// <summary>
+    /// The C# member-group page kind.
+    /// </summary>
+    public const string MemberGroup = "member-group";
+}
+
+/// <summary>
+/// Represents a normalized API reference item in the cached index.
+/// </summary>
+internal sealed class ApiReferenceItem
+{
+    /// <summary>
+    /// Gets the stable identifier for the API item.
+    /// </summary>
+    public required string Id { get; init; }
+
+    /// <summary>
+    /// Gets or sets the display name for the API item.
+    /// </summary>
+    public required string Name { get; set; }
+
+    /// <summary>
+    /// Gets the language for the API item.
+    /// </summary>
+    public required string Language { get; init; }
+
+    /// <summary>
+    /// Gets or sets the kind for the API item.
+    /// </summary>
+    public required string Kind { get; set; }
+
+    /// <summary>
+    /// Gets the canonical page URL for the API item.
+    /// </summary>
+    public required string PageUrl { get; init; }
+
+    /// <summary>
+    /// Gets the parent identifier, if any.
+    /// </summary>
+    public string? ParentId { get; init; }
+
+    /// <summary>
+    /// Gets the member group for the API item, if any.
+    /// </summary>
+    public string? MemberGroup { get; init; }
+
+    /// <summary>
+    /// Gets or sets the summary for the API item.
+    /// </summary>
+    public string? Summary { get; set; }
+}
+
+/// <summary>
+/// Represents a listable API child item.
+/// </summary>
+internal sealed class ApiListItem
+{
+    /// <summary>
+    /// Gets the stable identifier for the list item.
+    /// </summary>
+    public required string Id { get; init; }
+
+    /// <summary>
+    /// Gets the display name for the list item.
+    /// </summary>
+    public required string Name { get; init; }
+
+    /// <summary>
+    /// Gets the language for the list item.
+    /// </summary>
+    public required string Language { get; init; }
+
+    /// <summary>
+    /// Gets the kind for the list item.
+    /// </summary>
+    public required string Kind { get; init; }
+
+    /// <summary>
+    /// Gets the parent identifier, if any.
+    /// </summary>
+    public string? ParentId { get; init; }
+
+    /// <summary>
+    /// Gets the member group, if any.
+    /// </summary>
+    public string? MemberGroup { get; init; }
+}
+
+/// <summary>
+/// Represents an API search result.
+/// </summary>
+internal sealed class ApiSearchResult
+{
+    /// <summary>
+    /// Gets the stable identifier for the search result.
+    /// </summary>
+    public required string Id { get; init; }
+
+    /// <summary>
+    /// Gets the display name for the search result.
+    /// </summary>
+    public required string Name { get; init; }
+
+    /// <summary>
+    /// Gets the language for the search result.
+    /// </summary>
+    public required string Language { get; init; }
+
+    /// <summary>
+    /// Gets the kind for the search result.
+    /// </summary>
+    public required string Kind { get; init; }
+
+    /// <summary>
+    /// Gets the parent identifier, if any.
+    /// </summary>
+    public string? ParentId { get; init; }
+
+    /// <summary>
+    /// Gets the member group, if any.
+    /// </summary>
+    public string? MemberGroup { get; init; }
+
+    /// <summary>
+    /// Gets the summary for the search result, if any.
+    /// </summary>
+    public string? Summary { get; init; }
+
+    /// <summary>
+    /// Gets the search score.
+    /// </summary>
+    public required float Score { get; init; }
+}
+
+/// <summary>
+/// Represents the content returned by <c>aspire api get</c>.
+/// </summary>
+internal sealed class ApiContent
+{
+    /// <summary>
+    /// Gets the stable identifier for the content item.
+    /// </summary>
+    public required string Id { get; init; }
+
+    /// <summary>
+    /// Gets the display name for the content item.
+    /// </summary>
+    public required string Name { get; init; }
+
+    /// <summary>
+    /// Gets the language for the content item.
+    /// </summary>
+    public required string Language { get; init; }
+
+    /// <summary>
+    /// Gets the kind for the content item.
+    /// </summary>
+    public required string Kind { get; init; }
+
+    /// <summary>
+    /// Gets the canonical URL for the content item.
+    /// </summary>
+    public required string Url { get; init; }
+
+    /// <summary>
+    /// Gets the parent identifier, if any.
+    /// </summary>
+    public string? ParentId { get; init; }
+
+    /// <summary>
+    /// Gets the member group, if any.
+    /// </summary>
+    public string? MemberGroup { get; init; }
+
+    /// <summary>
+    /// Gets the markdown content for the item.
+    /// </summary>
+    public required string Content { get; init; }
+}
+
+/// <summary>
+/// Provides indexing, browsing, searching, and retrieval for Aspire API reference documentation.
+/// </summary>
+internal interface IApiDocsIndexService
+{
+    /// <summary>
+    /// Gets a value indicating whether the API index is available in memory.
+    /// </summary>
+    bool IsIndexed { get; }
+
+    /// <summary>
+    /// Ensures that the API index has been loaded.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    ValueTask EnsureIndexedAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lists child API items under the specified scope.
+    /// </summary>
+    /// <param name="scope">The parent scope to browse.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The child items under the specified scope.</returns>
+    ValueTask<IReadOnlyList<ApiListItem>> ListAsync(string scope, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Searches the API index.
+    /// </summary>
+    /// <param name="query">The search query.</param>
+    /// <param name="language">An optional language filter.</param>
+    /// <param name="topK">The maximum number of results to return.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The matching API items.</returns>
+    ValueTask<IReadOnlyList<ApiSearchResult>> SearchAsync(string query, string? language = null, int topK = 10, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the content for the specified API item.
+    /// </summary>
+    /// <param name="id">The API item identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The API content, or <c>null</c> if the item is not found.</returns>
+    ValueTask<ApiContent?> GetAsync(string id, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Default implementation of <see cref="IApiDocsIndexService"/>.
+/// </summary>
+internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiDocsCache cache, ILogger<ApiDocsIndexService> logger) : IApiDocsIndexService
+{
+    private const string RootCSharpScope = ApiReferenceLanguages.CSharp;
+    private const string RootTypeScriptScope = ApiReferenceLanguages.TypeScript;
+    private const float ExactIdMatchBonus = 60.0f;
+    private const float ExactNameMatchBonus = 45.0f;
+    private const float PathSegmentMatchBonus = 20.0f;
+    private const float IdWeight = 8.0f;
+    private const float NameWeight = 10.0f;
+    private const float SummaryWeight = 4.0f;
+    private const float ParentWeight = 2.5f;
+    private const float MemberGroupWeight = 3.0f;
+    private const int MinTokenLength = 2;
+
+    private readonly IApiDocsFetcher _fetcher = fetcher;
+    private readonly IApiDocsCache _cache = cache;
+    private readonly ILogger<ApiDocsIndexService> _logger = logger;
+    private volatile List<IndexedApiReferenceItem>? _indexedItems;
+    private volatile Dictionary<string, ApiReferenceItem>? _itemsById;
+    private readonly SemaphoreSlim _indexLock = new(1, 1);
+
+    /// <summary>
+    /// Gets a value indicating whether the API index is available in memory.
+    /// </summary>
+    public bool IsIndexed => _indexedItems is not null;
+
+    /// <summary>
+    /// Ensures that the API index has been loaded from cache or rebuilt from source content.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    public async ValueTask EnsureIndexedAsync(CancellationToken cancellationToken = default)
+    {
+        if (_indexedItems is not null && _itemsById is not null)
+        {
+            return;
+        }
+
+        await _indexLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            if (_indexedItems is not null && _itemsById is not null)
+            {
+                return;
+            }
+
+            var startTimestamp = Stopwatch.GetTimestamp();
+            _logger.LogDebug("Loading Aspire API documentation index");
+
+            var cachedItems = await _cache.GetIndexAsync(cancellationToken).ConfigureAwait(false);
+            if (cachedItems is not null)
+            {
+                SetIndex(cachedItems);
+                _logger.LogInformation("Loaded {Count} API reference items from cache in {ElapsedTime:ss\\.fff} seconds.", cachedItems.Length, Stopwatch.GetElapsedTime(startTimestamp));
+                return;
+            }
+
+            var sitemapContent = await _fetcher.FetchSitemapAsync(cancellationToken).ConfigureAwait(false);
+            if (sitemapContent is null)
+            {
+                _logger.LogWarning("Failed to fetch Aspire API sitemap");
+                return;
+            }
+
+            var sitemapEntries = ApiSitemapParser.Parse(sitemapContent);
+            var items = BuildBaseItems(sitemapEntries);
+
+            var itemArray = items
+                .OrderBy(static item => item.Id, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            SetIndex(itemArray);
+            await _cache.SetIndexAsync(itemArray, cancellationToken).ConfigureAwait(false);
+
+            _logger.LogInformation("Indexed {Count} API reference items in {ElapsedTime:ss\\.fff} seconds.", itemArray.Length, Stopwatch.GetElapsedTime(startTimestamp));
+        }
+        finally
+        {
+            _indexLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Lists child API items under the specified scope.
+    /// </summary>
+    /// <param name="scope">The parent scope to browse.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The child items under the specified scope.</returns>
+    public async ValueTask<IReadOnlyList<ApiListItem>> ListAsync(string scope, CancellationToken cancellationToken = default)
+    {
+        await EnsureIndexedAsync(cancellationToken).ConfigureAwait(false);
+
+        if (_indexedItems is null || string.IsNullOrWhiteSpace(scope))
+        {
+            return [];
+        }
+
+        var normalizedScope = NormalizeId(scope);
+
+        return
+        [
+            .. _indexedItems
+                .Where(item => string.Equals(item.Source.ParentId, normalizedScope, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(static item => GetKindSortOrder(item.Source.Kind))
+                .ThenBy(static item => item.Source.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(static item => new ApiListItem
+                {
+                    Id = item.Source.Id,
+                    Name = item.Source.Name,
+                    Language = item.Source.Language,
+                    Kind = item.Source.Kind,
+                    ParentId = item.Source.ParentId,
+                    MemberGroup = item.Source.MemberGroup
+                })
+        ];
+    }
+
+    /// <summary>
+    /// Searches the API index.
+    /// </summary>
+    /// <param name="query">The search query.</param>
+    /// <param name="language">An optional language filter.</param>
+    /// <param name="topK">The maximum number of results to return.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The matching API items.</returns>
+    public async ValueTask<IReadOnlyList<ApiSearchResult>> SearchAsync(string query, string? language = null, int topK = 10, CancellationToken cancellationToken = default)
+    {
+        await EnsureIndexedAsync(cancellationToken).ConfigureAwait(false);
+
+        if (_indexedItems is null || string.IsNullOrWhiteSpace(query))
+        {
+            return [];
+        }
+
+        var normalizedLanguage = NormalizeLanguage(language);
+        if (language is not null && normalizedLanguage is null)
+        {
+            return [];
+        }
+
+        var queryTokens = Tokenize(query);
+        if (queryTokens.Length is 0)
+        {
+            return [];
+        }
+
+        var normalizedQuery = NormalizeId(query).ToLowerInvariant();
+        var results = new List<ApiSearchResult>();
+
+        foreach (var item in _indexedItems)
+        {
+            if (normalizedLanguage is not null && !item.Source.Language.Equals(normalizedLanguage, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var score = ScoreItem(item, queryTokens, normalizedQuery);
+            if (score <= 0)
+            {
+                continue;
+            }
+
+            results.Add(new ApiSearchResult
+            {
+                Id = item.Source.Id,
+                Name = item.Source.Name,
+                Language = item.Source.Language,
+                Kind = item.Source.Kind,
+                ParentId = item.Source.ParentId,
+                MemberGroup = item.Source.MemberGroup,
+                Summary = item.Source.Summary,
+                Score = score
+            });
+        }
+
+        return
+        [
+            .. results
+                .OrderByDescending(static result => result.Score)
+                .ThenBy(static result => result.Id, StringComparer.OrdinalIgnoreCase)
+                .Take(topK)
+        ];
+    }
+
+    /// <summary>
+    /// Gets the content for the specified API item.
+    /// </summary>
+    /// <param name="id">The API item identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The API content, or <c>null</c> if the item is not found.</returns>
+    public async ValueTask<ApiContent?> GetAsync(string id, CancellationToken cancellationToken = default)
+    {
+        await EnsureIndexedAsync(cancellationToken).ConfigureAwait(false);
+
+        if (_itemsById is null)
+        {
+            return null;
+        }
+
+        var normalizedId = NormalizeId(id);
+        if (!_itemsById.TryGetValue(normalizedId, out var item))
+        {
+            return null;
+        }
+
+        var content = await _fetcher.FetchPageAsync(item.PageUrl, cancellationToken).ConfigureAwait(false);
+        if (content is null)
+        {
+            return null;
+        }
+
+        return new ApiContent
+        {
+            Id = item.Id,
+            Name = item.Name,
+            Language = item.Language,
+            Kind = item.Kind,
+            Url = item.PageUrl,
+            ParentId = item.ParentId,
+            MemberGroup = item.MemberGroup,
+            Content = content
+        };
+    }
+
+    private void SetIndex(ApiReferenceItem[] items)
+    {
+        _indexedItems = [.. items.Select(static item => new IndexedApiReferenceItem(item))];
+        _itemsById = items.ToDictionary(static item => item.Id, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static List<ApiReferenceItem> BuildBaseItems(IReadOnlyList<ApiSitemapEntry> entries)
+    {
+        var items = new List<ApiReferenceItem>(entries.Count);
+        var typeScriptContainerIds = entries
+            .Where(static entry => entry.Language == ApiReferenceLanguages.TypeScript && entry.Segments.Length == 3)
+            .Select(static entry => $"{ApiReferenceLanguages.TypeScript}/{entry.Segments[0]}/{entry.Segments[1]}")
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var entry in entries)
+        {
+            switch (entry.Language)
+            {
+                case ApiReferenceLanguages.CSharp:
+                    BuildCSharpItems(items, entry);
+                    break;
+                case ApiReferenceLanguages.TypeScript:
+                    BuildTypeScriptItems(items, entry, typeScriptContainerIds);
+                    break;
+                default:
+                    BuildGenericItems(items, entry);
+                    break;
+            }
+        }
+
+        return Deduplicate(items);
+    }
+
+    private static void BuildCSharpItems(List<ApiReferenceItem> items, ApiSitemapEntry entry)
+    {
+        if (entry.Segments.Length == 1)
+        {
+            items.Add(new ApiReferenceItem
+            {
+                Id = $"{ApiReferenceLanguages.CSharp}/{entry.Segments[0]}",
+                Name = entry.Segments[0],
+                Language = ApiReferenceLanguages.CSharp,
+                Kind = ApiReferenceKinds.Package,
+                ParentId = RootCSharpScope,
+                PageUrl = entry.Url
+            });
+            return;
+        }
+
+        if (entry.Segments.Length == 2)
+        {
+            items.Add(new ApiReferenceItem
+            {
+                Id = $"{ApiReferenceLanguages.CSharp}/{entry.Segments[0]}/{entry.Segments[1]}",
+                Name = entry.Segments[1],
+                Language = ApiReferenceLanguages.CSharp,
+                Kind = ApiReferenceKinds.Type,
+                ParentId = $"{ApiReferenceLanguages.CSharp}/{entry.Segments[0]}",
+                PageUrl = entry.Url
+            });
+            return;
+        }
+
+        if (entry.Segments.Length == 3)
+        {
+            items.Add(new ApiReferenceItem
+            {
+                Id = $"{ApiReferenceLanguages.CSharp}/{entry.Segments[0]}/{entry.Segments[1]}/{entry.Segments[2]}",
+                Name = entry.Segments[2],
+                Language = ApiReferenceLanguages.CSharp,
+                Kind = ApiReferenceKinds.MemberGroup,
+                ParentId = $"{ApiReferenceLanguages.CSharp}/{entry.Segments[0]}/{entry.Segments[1]}",
+                PageUrl = entry.Url,
+                MemberGroup = entry.Segments[2]
+            });
+        }
+    }
+
+    private static void BuildTypeScriptItems(List<ApiReferenceItem> items, ApiSitemapEntry entry, HashSet<string> typeScriptContainerIds)
+    {
+        if (entry.Segments.Length == 1)
+        {
+            items.Add(new ApiReferenceItem
+            {
+                Id = $"{ApiReferenceLanguages.TypeScript}/{entry.Segments[0]}",
+                Name = entry.Segments[0],
+                Language = ApiReferenceLanguages.TypeScript,
+                Kind = ApiReferenceKinds.Module,
+                ParentId = RootTypeScriptScope,
+                PageUrl = entry.Url
+            });
+            return;
+        }
+
+        if (entry.Segments.Length == 2)
+        {
+            var id = $"{ApiReferenceLanguages.TypeScript}/{entry.Segments[0]}/{entry.Segments[1]}";
+            items.Add(new ApiReferenceItem
+            {
+                Id = id,
+                Name = entry.Segments[1],
+                Language = ApiReferenceLanguages.TypeScript,
+                Kind = typeScriptContainerIds.Contains(id) ? ApiReferenceKinds.Symbol : ApiReferenceKinds.Member,
+                ParentId = $"{ApiReferenceLanguages.TypeScript}/{entry.Segments[0]}",
+                PageUrl = entry.Url
+            });
+            return;
+        }
+
+        if (entry.Segments.Length == 3)
+        {
+            items.Add(new ApiReferenceItem
+            {
+                Id = $"{ApiReferenceLanguages.TypeScript}/{entry.Segments[0]}/{entry.Segments[1]}/{entry.Segments[2]}",
+                Name = entry.Segments[2],
+                Language = ApiReferenceLanguages.TypeScript,
+                Kind = ApiReferenceKinds.Member,
+                ParentId = $"{ApiReferenceLanguages.TypeScript}/{entry.Segments[0]}/{entry.Segments[1]}",
+                PageUrl = entry.Url
+            });
+        }
+    }
+
+    private static void BuildGenericItems(List<ApiReferenceItem> items, ApiSitemapEntry entry)
+    {
+        if (entry.Segments.Length is 0)
+        {
+            return;
+        }
+
+        items.Add(new ApiReferenceItem
+        {
+            Id = $"{entry.Language}/{string.Join('/', entry.Segments)}",
+            Name = entry.Segments[^1],
+            Language = entry.Language,
+            Kind = entry.Segments.Length switch
+            {
+                1 => ApiReferenceKinds.Module,
+                2 => ApiReferenceKinds.Symbol,
+                _ => ApiReferenceKinds.Member
+            },
+            ParentId = entry.Segments.Length == 1
+                ? entry.Language
+                : $"{entry.Language}/{string.Join('/', entry.Segments[..^1])}",
+            PageUrl = entry.Url
+        });
+    }
+
+    private static List<ApiReferenceItem> Deduplicate(List<ApiReferenceItem> items)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var deduplicated = new List<ApiReferenceItem>(items.Count);
+
+        foreach (var item in items)
+        {
+            if (seen.Add(item.Id))
+            {
+                deduplicated.Add(item);
+            }
+        }
+
+        return deduplicated;
+    }
+
+    private static int GetKindSortOrder(string kind) => kind switch
+    {
+        ApiReferenceKinds.Package => 0,
+        ApiReferenceKinds.Module => 0,
+        ApiReferenceKinds.Type => 1,
+        ApiReferenceKinds.Symbol => 2,
+        ApiReferenceKinds.MemberGroup => 3,
+        ApiReferenceKinds.Member => 3,
+        _ => 4
+    };
+
+    private static string NormalizeId(string value) => value.Trim().Trim('/');
+
+    private static string? NormalizeLanguage(string? language)
+    {
+        if (string.IsNullOrWhiteSpace(language))
+        {
+            return null;
+        }
+
+        var normalized = language.Trim().ToLowerInvariant();
+        return ApiReferenceLanguages.IsSupported(normalized)
+            ? normalized
+            : null;
+    }
+
+    private static float ScoreItem(IndexedApiReferenceItem item, string[] queryTokens, string normalizedQuery)
+    {
+        var score = 0.0f;
+        if (item.IdLower == normalizedQuery)
+        {
+            score += ExactIdMatchBonus;
+        }
+
+        if (item.NameLower == normalizedQuery)
+        {
+            score += ExactNameMatchBonus;
+        }
+
+        score += ScoreField(item.IdLower, queryTokens) * IdWeight;
+        score += ScoreField(item.NameLower, queryTokens) * NameWeight;
+
+        if (item.SummaryLower is not null)
+        {
+            score += ScoreField(item.SummaryLower, queryTokens) * SummaryWeight;
+        }
+
+        if (item.ParentIdLower is not null)
+        {
+            score += ScoreField(item.ParentIdLower, queryTokens) * ParentWeight;
+        }
+
+        if (item.MemberGroupLower is not null)
+        {
+            score += ScoreField(item.MemberGroupLower, queryTokens) * MemberGroupWeight;
+        }
+
+        foreach (var token in queryTokens)
+        {
+            if (item.PathSegments.Contains(token, StringComparer.Ordinal))
+            {
+                score += PathSegmentMatchBonus;
+            }
+        }
+
+        return score;
+    }
+
+    private static string[] Tokenize(string text)
+        => LexicalScoring.Tokenize(text, TokenSplitRegex(), MinTokenLength);
+
+    private static float ScoreField(string lowerText, string[] queryTokens)
+        => LexicalScoring.ScoreField(
+            lowerText,
+            queryTokens,
+            wordCharacterMode: LexicalWordCharacterMode.IdentifierWithHyphen);
+
+    [GeneratedRegex(@"[^\p{L}\p{N}\.\-_/]+")]
+    private static partial Regex TokenSplitRegex();
+
+    private sealed class IndexedApiReferenceItem(ApiReferenceItem source)
+    {
+        public ApiReferenceItem Source { get; } = source;
+
+        public string IdLower { get; } = source.Id.ToLowerInvariant();
+
+        public string NameLower { get; } = source.Name.ToLowerInvariant();
+
+        public string? SummaryLower { get; } = source.Summary?.ToLowerInvariant();
+
+        public string? ParentIdLower { get; } = source.ParentId?.ToLowerInvariant();
+
+        public string? MemberGroupLower { get; } = source.MemberGroup?.ToLowerInvariant();
+
+        public string[] PathSegments { get; } = [.. source.Id.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(static segment => segment.ToLowerInvariant())];
+    }
+}

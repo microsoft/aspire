@@ -66,6 +66,7 @@ aspire <command> [options]
 |---------|-------------|
 | `config` | Manage CLI configuration including feature flags. |
 | `cache` | Manage disk cache for CLI operations. |
+| `api` | Browse and search Aspire API reference documentation from aspire.dev. |
 | `doctor` | Diagnose Aspire environment issues and verify setup. |
 | `docs` | Browse and search Aspire documentation from aspire.dev. |
 | `agent` | Manage AI agent specific setup. |
@@ -104,6 +105,9 @@ aspire add redis
 
 # Diagnose environment issues
 aspire doctor
+
+# Search the API reference
+aspire api search "RunAsEmulator" --language csharp
 
 # Search Aspire documentation
 aspire docs search "redis"

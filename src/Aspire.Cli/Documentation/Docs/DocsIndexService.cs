@@ -5,7 +5,7 @@ using System.Diagnostics;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 
-namespace Aspire.Cli.Mcp.Docs;
+namespace Aspire.Cli.Documentation.Docs;
 
 /// <summary>
 /// Service for indexing and searching aspire.dev documentation using lexical search.
@@ -456,59 +456,19 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
     /// Tokenizes a query string, preserving symbols like --flag, AddRedis, aspire.json.
     /// </summary>
     private static string[] Tokenize(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return [];
-        }
-
-        // Split on whitespace/punctuation, then lowercase and dedupe
-        return
-        [
-            .. TokenSplitRegex().Split(text)
-                .Where(static t => t.Length >= MinTokenLength)
-                .Select(static t => t.ToLowerInvariant())
-                .Distinct()
-        ];
-    }
+        => LexicalScoring.Tokenize(text, TokenSplitRegex(), MinTokenLength);
 
     /// <summary>
     /// Scores how well a pre-lowercased field matches the query tokens.
     /// </summary>
     private static float ScoreField(string lowerText, string[] queryTokens)
-    {
-        if (lowerText.Length is 0)
-        {
-            return 0;
-        }
-
-        var score = 0.0f;
-        var textSpan = lowerText.AsSpan();
-
-        foreach (var token in queryTokens)
-        {
-            var index = textSpan.IndexOf(token, StringComparison.Ordinal);
-            if (index >= 0)
-            {
-                score += BaseMatchScore;
-
-                // Bonus for exact word boundary match
-                if (IsWordBoundaryMatch(textSpan, token, index))
-                {
-                    score += WordBoundaryBonus;
-                }
-
-                // Bonus for multiple occurrences (capped)
-                var count = CountOccurrences(textSpan, token);
-                if (count > 1)
-                {
-                    score += Math.Min(count - 1, MaxOccurrenceBonus) * MultipleOccurrenceBonus;
-                }
-            }
-        }
-
-        return score;
-    }
+        => LexicalScoring.ScoreField(
+            lowerText,
+            queryTokens,
+            MaxOccurrenceBonus,
+            BaseMatchScore,
+            WordBoundaryBonus,
+            MultipleOccurrenceBonus);
 
     /// <summary>
     /// Scores pre-extracted code identifiers against query tokens.
@@ -542,35 +502,6 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
         }
 
         return score;
-    }
-
-    private static bool IsWordBoundaryMatch(ReadOnlySpan<char> text, string token, int index)
-    {
-        var startOk = index == 0 || !char.IsLetterOrDigit(text[index - 1]);
-        var endIndex = index + token.Length;
-        var endOk = endIndex >= text.Length || !char.IsLetterOrDigit(text[endIndex]);
-
-        return startOk && endOk;
-    }
-
-    private static int CountOccurrences(ReadOnlySpan<char> text, string token)
-    {
-        var count = 0;
-        var remaining = text;
-
-        while (true)
-        {
-            var index = remaining.IndexOf(token, StringComparison.Ordinal);
-            if (index < 0)
-            {
-                break;
-            }
-
-            count++;
-            remaining = remaining[(index + token.Length)..];
-        }
-
-        return count;
     }
 
     // Split on whitespace and punctuation, keeping dotted/hyphenated tokens together

@@ -18,6 +18,7 @@ using Aspire.Cli.Caching;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Secrets;
+using Aspire.Cli.Documentation.ApiDocs;
 using Microsoft.AspNetCore.Certificates.Generation;
 using Aspire.Cli.Commands.Sdk;
 using Aspire.Cli.Configuration;
@@ -27,7 +28,7 @@ using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Mcp;
-using Aspire.Cli.Mcp.Docs;
+using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
@@ -375,11 +376,14 @@ public class Program
         builder.Services.AddSingleton<ResourceColorMap>();
         builder.Services.AddMemoryCache();
 
-        // MCP server: aspire.dev docs services.
+        // aspire.dev documentation services.
         builder.Services.AddSingleton<IDocsCache, DocsCache>();
         builder.Services.AddHttpClient<IDocsFetcher, DocsFetcher>();
         builder.Services.AddSingleton<IDocsIndexService, DocsIndexService>();
         builder.Services.AddSingleton<IDocsSearchService, DocsSearchService>();
+        builder.Services.AddSingleton<IApiDocsCache, ApiDocsCache>();
+        builder.Services.AddHttpClient<IApiDocsFetcher, ApiDocsFetcher>();
+        builder.Services.AddSingleton<IApiDocsIndexService, ApiDocsIndexService>();
 
         // Bundle layout services (for polyglot apphost without .NET SDK).
         // Registered before NuGetPackageCache so the factory can choose implementation.
@@ -485,6 +489,10 @@ public class Program
         builder.Services.AddTransient<TelemetrySpansCommand>();
         builder.Services.AddTransient<TelemetryTracesCommand>();
         builder.Services.AddTransient<ExportCommand>();
+        builder.Services.AddTransient<ApiCommand>();
+        builder.Services.AddTransient<ApiListCommand>();
+        builder.Services.AddTransient<ApiSearchCommand>();
+        builder.Services.AddTransient<ApiGetCommand>();
         builder.Services.AddTransient<DocsCommand>();
         builder.Services.AddTransient<DocsListCommand>();
         builder.Services.AddTransient<DocsSearchCommand>();

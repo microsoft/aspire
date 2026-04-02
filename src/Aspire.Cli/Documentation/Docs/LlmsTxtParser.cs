@@ -3,7 +3,7 @@
 
 using System.Buffers;
 
-namespace Aspire.Cli.Mcp.Docs;
+namespace Aspire.Cli.Documentation.Docs;
 
 /// <summary>
 /// Represents a parsed document from llms.txt format.
