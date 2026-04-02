@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Agents;
+using Aspire.Cli.Projects;
 
 namespace Aspire.Cli.Tests.Agents;
 
@@ -60,11 +61,29 @@ public class CommonAgentApplicatorsTests
     }
 
     [Fact]
-    public void SkillDefinition_DotnetInspect_IsDotNetOnly()
+    public void SkillDefinition_DotnetInspect_IsRestrictedToCSharp()
     {
-        Assert.True(SkillDefinition.DotnetInspect.IsDotNetOnly);
-        Assert.False(SkillDefinition.Aspire.IsDotNetOnly);
-        Assert.False(SkillDefinition.PlaywrightCli.IsDotNetOnly);
+        Assert.Equal([KnownLanguageId.CSharp], SkillDefinition.DotnetInspect.ApplicableLanguages);
+        Assert.Empty(SkillDefinition.Aspire.ApplicableLanguages);
+        Assert.Empty(SkillDefinition.PlaywrightCli.ApplicableLanguages);
+    }
+
+    [Fact]
+    public void SkillDefinition_IsApplicableToLanguage_EmptyApplicableLanguages_AlwaysTrue()
+    {
+        Assert.True(SkillDefinition.Aspire.IsApplicableToLanguage(null));
+        Assert.True(SkillDefinition.Aspire.IsApplicableToLanguage(new LanguageId(KnownLanguageId.CSharp)));
+        Assert.True(SkillDefinition.Aspire.IsApplicableToLanguage(new LanguageId(KnownLanguageId.TypeScript)));
+    }
+
+    [Fact]
+    public void SkillDefinition_IsApplicableToLanguage_WithRestrictions_MatchesCorrectly()
+    {
+        // DotnetInspect is restricted to CSharp
+        Assert.True(SkillDefinition.DotnetInspect.IsApplicableToLanguage(null)); // no language detected => offered
+        Assert.True(SkillDefinition.DotnetInspect.IsApplicableToLanguage(new LanguageId(KnownLanguageId.CSharp)));
+        Assert.False(SkillDefinition.DotnetInspect.IsApplicableToLanguage(new LanguageId(KnownLanguageId.TypeScript)));
+        Assert.False(SkillDefinition.DotnetInspect.IsApplicableToLanguage(new LanguageId(KnownLanguageId.Python)));
     }
 
     [Fact]

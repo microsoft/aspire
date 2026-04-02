@@ -154,13 +154,12 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             async () => await _agentEnvironmentDetector.DetectAsync(context, cancellationToken));
 
         // Detect the AppHost language to determine which skills to offer.
-        // When no language is detected (e.g., standalone `aspire agent init`), .NET-only skills are still offered.
+        // When no language is detected (e.g., standalone `aspire agent init`), language-restricted skills are still offered.
         var detectedLanguage = await _languageDiscovery.DetectLanguageAsync(ExecutionContext.WorkingDirectory, cancellationToken);
-        var includeDotNetSkills = detectedLanguage is null || detectedLanguage.Value.Value == KnownLanguageId.CSharp;
 
-        // Filter skills: exclude .NET-only skills when a non-.NET language is detected
+        // Filter skills based on language applicability
         var availableSkills = SkillDefinition.All
-            .Where(s => !s.IsDotNetOnly || includeDotNetSkills)
+            .Where(s => s.IsApplicableToLanguage(detectedLanguage))
             .ToList();
 
         // Apply deprecated config migrations silently (these are fixes, not choices)

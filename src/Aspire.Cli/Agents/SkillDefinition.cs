@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 
 namespace Aspire.Cli.Agents;
@@ -43,9 +44,9 @@ internal sealed class SkillDefinition
         embeddedResourceRoot: null,
         installExcludedRelativePaths: [],
         isDefault: false,
-        isDotNetOnly: true);
+        applicableLanguages: [KnownLanguageId.CSharp]);
 
-    private SkillDefinition(string name, string description, string? skillContent, string? embeddedResourceRoot, IReadOnlyList<string> installExcludedRelativePaths, bool isDefault, bool isDotNetOnly = false)
+    private SkillDefinition(string name, string description, string? skillContent, string? embeddedResourceRoot, IReadOnlyList<string> installExcludedRelativePaths, bool isDefault, IReadOnlyList<string>? applicableLanguages = null)
     {
         Name = name;
         Description = description;
@@ -53,7 +54,7 @@ internal sealed class SkillDefinition
         EmbeddedResourceRoot = embeddedResourceRoot;
         InstallExcludedRelativePaths = installExcludedRelativePaths;
         IsDefault = isDefault;
-        IsDotNetOnly = isDotNetOnly;
+        ApplicableLanguages = applicableLanguages ?? [];
     }
 
     /// <summary>
@@ -104,11 +105,33 @@ internal sealed class SkillDefinition
     public bool IsDefault { get; }
 
     /// <summary>
-    /// Gets whether this skill is only applicable to .NET AppHost projects.
-    /// When <c>true</c>, the skill is excluded from the selection list when a non-.NET language is detected.
-    /// If no language is detected, the skill is still offered.
+    /// Gets the set of language identifiers (from <see cref="KnownLanguageId"/>) this skill applies to.
+    /// An empty list means the skill is language-agnostic and always offered.
+    /// When non-empty, the skill is only offered when the detected language matches one of the entries,
+    /// or when no language is detected.
     /// </summary>
-    public bool IsDotNetOnly { get; }
+    public IReadOnlyList<string> ApplicableLanguages { get; }
+
+    /// <summary>
+    /// Returns whether this skill is applicable for the given detected language.
+    /// A skill with no <see cref="ApplicableLanguages"/> restrictions is always applicable.
+    /// A skill with restrictions is applicable when no language is detected (<paramref name="detectedLanguage"/> is <c>null</c>)
+    /// or when the detected language matches one of the entries.
+    /// </summary>
+    public bool IsApplicableToLanguage(LanguageId? detectedLanguage)
+    {
+        if (ApplicableLanguages.Count == 0)
+        {
+            return true;
+        }
+
+        if (detectedLanguage is null)
+        {
+            return true;
+        }
+
+        return ApplicableLanguages.Contains(detectedLanguage.Value.Value);
+    }
 
     private static bool PathMatchesOrIsUnder(string relativePath, string excludedPath)
     {
