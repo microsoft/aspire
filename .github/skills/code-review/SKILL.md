@@ -110,25 +110,11 @@ Read the diff carefully. For each changed file, also read surrounding context to
 - **If a worktree was created**: read files using the worktree's absolute path (stored in Step 1). All `read_file` calls must use the worktree path as the base, not the original workspace path.
 - **If reviewing from GitHub diff only**: use `mcp_github_get_file_contents` to fetch specific files from the PR branch when additional context is needed.
 
-### Review deleted and moved code
-
-Read the **removed** side of the diff as carefully as the added side. Deletions and refactors are a common source of silent behavioral changes. Specifically check:
-
-- Were any `throw` statements, defensive checks, or invariant assertions removed by the replacement code?
-- Did any method call change semantics (e.g., `Single` → `First` loses duplicate detection, `FindAll` → `Where` changes eagerness)?
-- Were any virtual/override methods or interface implementations lost when class hierarchies changed?
-- Did any error messages lose diagnostic information (e.g., variable names, identifiers) in the new version?
-- If a type was deleted and replaced by a different type, does the replacement preserve all behavioral contracts of the original (e.g., throwing on invalid access vs. returning a default)?
-
-### Check diff metadata
-
-Look for `\ No newline at end of file` markers in the diff output — these indicate a missing trailing newline which violates `.editorconfig` `insert_final_newline = true`. Flag as a convention violation.
-
 ### What to Flag
 
 Only flag **actual problems**. Every comment must identify a concrete issue. Categories:
 
-1. **Bugs** — logic errors, off-by-one, null dereferences, missing awaits, race conditions, incorrect resource disposal. Also: `Debug.Assert` used to enforce invariants that matter in release builds — assertions are stripped from release, so if the condition could cause incorrect behavior when violated, it should be an explicit `if`/`throw`.
+1. **Bugs** — logic errors, off-by-one, null dereferences, missing awaits, race conditions, incorrect resource disposal.
 2. **Security** — injection risks, credential exposure, insecure defaults, OWASP Top 10 violations.
 3. **Correctness** — wrong behavior relative to the PR description or existing contracts, breaking changes to public API without justification.
 4. **Missing error handling at system boundaries** — unvalidated external input, missing null checks at public API entry points. Do NOT flag missing null checks for parameters the type system already guarantees non-null.
@@ -142,7 +128,6 @@ Only flag **actual problems**. Every comment must identify a concrete issue. Cat
    - Using `== null` instead of `is null`
    - Missing file-scoped namespaces
 8. **Test problems** — flaky patterns per the test review guidelines: thread-unsafe test fakes, log-based readiness checks instead of `WaitForHealthyAsync()`, shared timeout budgets, hardcoded ports, `Directory.SetCurrentDirectory` usage, commented-out tests.
-9. **Stale or misleading comments** — Comments that describe behavior that no longer exists in the code they annotate. These are not style nits; they actively mislead future maintainers and can cause bugs when someone trusts the comment over the code.
 
 ### What NOT to Flag
 
@@ -154,22 +139,16 @@ Only flag **actual problems**. Every comment must identify a concrete issue. Cat
 
 ## Step 5: Present Findings to the User
 
-**Do not post a review automatically.** Instead, present all findings as a numbered list for the user to triage.
+**Do not post a review automatically.** Instead, present all findings as a numbered list for the user to triage. **Sort findings by severity, highest priority first**, using this order:
 
-Format the list as:
-
-```
-## Review Findings for PR #<number>
-
-1. **[Bug]** `path/to/file.cs#L42` — Description of the problem. Suggested fix or direction.
-2. **[Security]** `path/to/other.cs#L17` — Description of the problem.
-3. **[Convention]** `path/to/third.cs#L88` — Description of the problem.
-...
-
-No problems found. *(if the list is empty)*
-```
-
-Where `[Category]` is one of: `Bug`, `Security`, `Correctness`, `Error Handling`, `Performance`, `Concurrency`, `Convention`, `Test Issue`.
+1. **Security** — injection, credential exposure, OWASP violations
+2. **Bugs** — logic errors, null dereferences, missing awaits, race conditions
+3. **Concurrency issues** — thread-unsafe code, deadlocks
+4. **Correctness** — wrong behavior, breaking API changes
+5. **Performance regressions** — blocking async, unnecessary allocations in hot paths
+6. **Missing error handling** — unvalidated input at system boundaries
+7. **Repository convention violations** — `NuGet.config`, `api/*.cs`, `is null`, etc.
+8. **Test problems** — flaky patterns, test isolation issues
 
 Then ask the user what to do next. The user may respond with:
 
@@ -211,4 +190,4 @@ Once the user has selected which findings to include:
 - **Be specific.** Reference the exact line(s), variable(s), or condition(s) that are problematic.
 - **Provide fix direction.** If the fix isn't obvious, include a brief suggestion or code snippet.
 - **Don't repeat existing review comments.** Check existing review threads before posting.
-- **Respect prior context.** If the same pattern exists in surrounding unchanged code, don't flag the PR author for it — it's pre-existing. However, if code is **extracted or moved into a new file** as part of a refactor, problems carried forward into the new code are fair to flag — the author had the opportunity to fix them during the extraction.
+- **Respect prior context.** If the same pattern exists in surrounding unchanged code, don't flag the PR author for it — it's pre-existing.
