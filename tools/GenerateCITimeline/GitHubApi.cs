@@ -31,7 +31,8 @@ internal static class GitHubApi
         var text = stdout.Trim();
         if (string.IsNullOrEmpty(text))
         {
-            return JsonDocument.Parse("{}").RootElement.Clone();
+            using var emptyDoc = JsonDocument.Parse("{}");
+            return emptyDoc.RootElement.Clone();
         }
 
         // gh --paginate can produce multiple JSON objects concatenated together.
@@ -156,9 +157,16 @@ internal static class GitHubApi
         using var doc = JsonDocument.Parse(text);
         var root = doc.RootElement;
 
-        var runInfo = root.TryGetProperty("run_info", out var ri)
-            ? ri.Clone()
-            : JsonDocument.Parse("{}").RootElement.Clone();
+        JsonElement runInfo;
+        if (root.TryGetProperty("run_info", out var ri))
+        {
+            runInfo = ri.Clone();
+        }
+        else
+        {
+            using var emptyDoc = JsonDocument.Parse("{}");
+            runInfo = emptyDoc.RootElement.Clone();
+        }
 
         var jobs = new List<JsonElement>();
         if (root.TryGetProperty("jobs", out var jobsArray))

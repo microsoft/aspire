@@ -522,7 +522,7 @@ internal static partial class TimelineRenderer
         sb.AppendLine("<h2>⏱️ CI Timeline</h2>");
         var conclusionLabel = string.IsNullOrEmpty(conclusion) ? "in progress" : conclusion;
         var attemptNote = runAttempt > 1 ? $" (re-run attempt #{runAttempt})" : "";
-        sb.AppendLine(CultureInfo.InvariantCulture, $"<p>{conclusionIcon} <b>{conclusionLabel}</b> — Total: <b>{FormatDuration(totalSeconds)}</b>{attemptNote}</p>");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"<p>{conclusionIcon} <b>{E(conclusionLabel)}</b> — Total: <b>{FormatDuration(totalSeconds)}</b>{attemptNote}</p>");
 
         // Summary table
         sb.Append(RenderSummaryTable(groups, totalSeconds));
