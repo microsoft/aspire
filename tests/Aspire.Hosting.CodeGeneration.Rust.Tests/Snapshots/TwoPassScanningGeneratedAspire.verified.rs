@@ -1,4 +1,4 @@
-﻿//! aspire.rs - Capability-based Aspire SDK
+//! aspire.rs - Capability-based Aspire SDK
 //! GENERATED CODE - DO NOT EDIT
 
 use std::collections::HashMap;
@@ -3718,6 +3718,21 @@ impl ContainerResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
+    /// Configures the resource to use a programmatically generated Dockerfile
+    pub fn with_dockerfile_builder(&self, context_path: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, stage: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("contextPath".to_string(), serde_json::to_value(&context_path).unwrap_or(Value::Null));
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = stage {
+            args.insert("stage".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withDockerfileBuilder", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerResource::new(handle, self.client.clone()))
+    }
+
     /// Sets the base image for a Dockerfile build
     pub fn with_dockerfile_base_image(&self, build_image: Option<&str>, runtime_image: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -5064,6 +5079,316 @@ impl DistributedApplicationResourceEventSubscription {
 
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
+    }
+}
+
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileBuilder
+pub struct DockerfileBuilder {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for DockerfileBuilder {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl DockerfileBuilder {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Adds a global ARG statement to the Dockerfile
+    pub fn arg(&self, name: &str, default_value: Option<&str>) -> Result<DockerfileBuilder, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        if let Some(ref v) = default_value {
+            args.insert("defaultValue".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/dockerfileBuilderArg", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileBuilder::new(handle, self.client.clone()))
+    }
+
+    /// Adds a FROM statement to start a Dockerfile stage
+    pub fn from(&self, image: &str, stage_name: Option<&str>) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("image".to_string(), serde_json::to_value(&image).unwrap_or(Value::Null));
+        if let Some(ref v) = stage_name {
+            args.insert("stageName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/dockerfileBuilderFrom", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileStage::new(handle, self.client.clone()))
+    }
+
+    /// Adds Dockerfile stages for published container files
+    pub fn add_container_files_stages(&self, resource: &IResource, logger: Option<&ILogger>) -> Result<DockerfileBuilder, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resource".to_string(), resource.handle().to_json());
+        if let Some(ref v) = logger {
+            args.insert("logger".to_string(), v.handle().to_json());
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/dockerfileBuilderAddContainerFilesStages", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileBuilder::new(handle, self.client.clone()))
+    }
+}
+
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext
+pub struct DockerfileBuilderCallbackContext {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for DockerfileBuilderCallbackContext {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl DockerfileBuilderCallbackContext {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Gets the Resource property
+    pub fn resource(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.resource", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Gets the Builder property
+    pub fn builder(&self) -> Result<DockerfileBuilder, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.builder", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileBuilder::new(handle, self.client.clone()))
+    }
+
+    /// Gets the Services property
+    pub fn services(&self) -> Result<IServiceProvider, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.services", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IServiceProvider::new(handle, self.client.clone()))
+    }
+
+    /// Gets the CancellationToken property
+    pub fn cancellation_token(&self) -> Result<CancellationToken, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.cancellationToken", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(CancellationToken::new(handle, self.client.clone()))
+    }
+}
+
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileStage
+pub struct DockerfileStage {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for DockerfileStage {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl DockerfileStage {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Adds an ARG statement to a Dockerfile stage
+    pub fn arg(&self, name: &str, default_value: Option<&str>) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("stage".to_string(), self.handle.to_json());
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        if let Some(ref v) = default_value {
+            args.insert("defaultValue".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/dockerfileStageArg", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileStage::new(handle, self.client.clone()))
+    }
+
+    /// Adds a WORKDIR statement to a Dockerfile stage
+    pub fn work_dir(&self, path: &str) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("stage".to_string(), self.handle.to_json());
+        args.insert("path".to_string(), serde_json::to_value(&path).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/workDir", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileStage::new(handle, self.client.clone()))
+    }
+
+    /// Adds a RUN statement to a Dockerfile stage
+    pub fn run(&self, command: &str) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("stage".to_string(), self.handle.to_json());
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/dockerfileStageRun", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileStage::new(handle, self.client.clone()))
+    }
+
+    /// Adds a COPY statement to a Dockerfile stage
+    pub fn copy(&self, source: &str, destination: &str, chown: Option<&str>) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("stage".to_string(), self.handle.to_json());
+        args.insert("source".to_string(), serde_json::to_value(&source).unwrap_or(Value::Null));
+        args.insert("destination".to_string(), serde_json::to_value(&destination).unwrap_or(Value::Null));
+        if let Some(ref v) = chown {
+            args.insert("chown".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/dockerfileStageCopy", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileStage::new(handle, self.client.clone()))
+    }
+
+    /// Adds a COPY --from statement to a Dockerfile stage
+    pub fn copy_from(&self, from: &str, source: &str, destination: &str, chown: Option<&str>) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("stage".to_string(), self.handle.to_json());
+        args.insert("from".to_string(), serde_json::to_value(&from).unwrap_or(Value::Null));
+        args.insert("source".to_string(), serde_json::to_value(&source).unwrap_or(Value::Null));
+        args.insert("destination".to_string(), serde_json::to_value(&destination).unwrap_or(Value::Null));
+        if let Some(ref v) = chown {
+            args.insert("chown".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/dockerfileStageCopyFrom", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileStage::new(handle, self.client.clone()))
+    }
+
+    /// Adds an ENV statement to a Dockerfile stage
+    pub fn env(&self, name: &str, value: &str) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("stage".to_string(), self.handle.to_json());
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/env", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileStage::new(handle, self.client.clone()))
+    }
+
+    /// Adds an EXPOSE statement to a Dockerfile stage
+    pub fn expose(&self, port: f64) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("stage".to_string(), self.handle.to_json());
+        args.insert("port".to_string(), serde_json::to_value(&port).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/expose", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileStage::new(handle, self.client.clone()))
+    }
+
+    /// Adds a CMD statement to a Dockerfile stage
+    pub fn cmd(&self, command: Vec<String>) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("stage".to_string(), self.handle.to_json());
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/cmd", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileStage::new(handle, self.client.clone()))
+    }
+
+    /// Adds an ENTRYPOINT statement to a Dockerfile stage
+    pub fn entrypoint(&self, command: Vec<String>) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("stage".to_string(), self.handle.to_json());
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/entrypoint", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileStage::new(handle, self.client.clone()))
+    }
+
+    /// Adds a RUN statement with mounts to a Dockerfile stage
+    pub fn run_with_mounts(&self, command: &str, mounts: Vec<String>) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("stage".to_string(), self.handle.to_json());
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        args.insert("mounts".to_string(), serde_json::to_value(&mounts).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/runWithMounts", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileStage::new(handle, self.client.clone()))
+    }
+
+    /// Adds a USER statement to a Dockerfile stage
+    pub fn user(&self, user: &str) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("stage".to_string(), self.handle.to_json());
+        args.insert("user".to_string(), serde_json::to_value(&user).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/user", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileStage::new(handle, self.client.clone()))
+    }
+
+    /// Adds an empty line to a Dockerfile stage
+    pub fn empty_line(&self) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("stage".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/emptyLine", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileStage::new(handle, self.client.clone()))
+    }
+
+    /// Adds a comment to a Dockerfile stage
+    pub fn comment(&self, comment: &str) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("stage".to_string(), self.handle.to_json());
+        args.insert("comment".to_string(), serde_json::to_value(&comment).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/comment", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileStage::new(handle, self.client.clone()))
+    }
+
+    /// Adds COPY --from statements for published container files
+    pub fn add_container_files(&self, resource: &IResource, root_destination_path: &str, logger: Option<&ILogger>) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("stage".to_string(), self.handle.to_json());
+        args.insert("resource".to_string(), resource.handle().to_json());
+        args.insert("rootDestinationPath".to_string(), serde_json::to_value(&root_destination_path).unwrap_or(Value::Null));
+        if let Some(ref v) = logger {
+            args.insert("logger".to_string(), v.handle().to_json());
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/dockerfileStageAddContainerFiles", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileStage::new(handle, self.client.clone()))
     }
 }
 
@@ -8857,6 +9182,22 @@ impl IDistributedApplicationBuilder {
             args.insert("stage".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/addDockerfile", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds a container resource built from a programmatically generated Dockerfile
+    pub fn add_dockerfile_builder(&self, name: &str, context_path: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, stage: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        args.insert("contextPath".to_string(), serde_json::to_value(&context_path).unwrap_or(Value::Null));
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = stage {
+            args.insert("stage".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/addDockerfileBuilder", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
@@ -13282,6 +13623,21 @@ impl TestDatabaseResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
+    /// Configures the resource to use a programmatically generated Dockerfile
+    pub fn with_dockerfile_builder(&self, context_path: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, stage: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("contextPath".to_string(), serde_json::to_value(&context_path).unwrap_or(Value::Null));
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = stage {
+            args.insert("stage".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withDockerfileBuilder", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerResource::new(handle, self.client.clone()))
+    }
+
     /// Sets the base image for a Dockerfile build
     pub fn with_dockerfile_base_image(&self, build_image: Option<&str>, runtime_image: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -14686,6 +15042,21 @@ impl TestRedisResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("proxyEnabled".to_string(), serde_json::to_value(&proxy_enabled).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withEndpointProxySupport", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource to use a programmatically generated Dockerfile
+    pub fn with_dockerfile_builder(&self, context_path: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, stage: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("contextPath".to_string(), serde_json::to_value(&context_path).unwrap_or(Value::Null));
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = stage {
+            args.insert("stage".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withDockerfileBuilder", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
@@ -16267,6 +16638,21 @@ impl TestVaultResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("proxyEnabled".to_string(), serde_json::to_value(&proxy_enabled).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withEndpointProxySupport", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource to use a programmatically generated Dockerfile
+    pub fn with_dockerfile_builder(&self, context_path: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, stage: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("contextPath".to_string(), serde_json::to_value(&context_path).unwrap_or(Value::Null));
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = stage {
+            args.insert("stage".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withDockerfileBuilder", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
