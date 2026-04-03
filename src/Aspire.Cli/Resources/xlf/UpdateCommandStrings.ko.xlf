@@ -139,7 +139,7 @@
       </trans-unit>
       <trans-unit id="NoAppHostFoundUpdateCliPrompt">
         <source>No Aspire AppHost project found. Would you like to update the Aspire CLI instead?</source>
-        <target state="needs-review-translation">Azure AppHost 프로젝트를 찾을 수 없습니다. 대신 Aspire CLI를 업데이트하시겠어요?</target>
+        <target state="needs-review-translation">Aspire AppHost 프로젝트를 찾을 수 없습니다. 대신 Aspire CLI를 업데이트하시겠어요?</target>
         <note />
       </trans-unit>
       <trans-unit id="NoChangesDetectedInNuGetConfig">

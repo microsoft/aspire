@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="Description">
         <source>Describe resources in a running AppHost</source>
-        <target state="needs-review-translation">実行中の Aspire apphost からのリソース スナップショットを表示します。</target>
+        <target state="needs-review-translation">実行中の Aspire AppHost からのリソース スナップショットを表示します。</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
