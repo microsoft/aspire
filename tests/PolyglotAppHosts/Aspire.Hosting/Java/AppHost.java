@@ -14,6 +14,7 @@ void main() throws Exception {
         container.withDockerfileBaseImage(new WithDockerfileBaseImageOptions().buildImage("mcr.microsoft.com/dotnet/sdk:8.0"));
         container.withImageRegistry("docker.io");
         dockerContainer.withHttpEndpoint(new WithHttpEndpointOptions().name("http").targetPort(80.0));
+        dockerContainer.withHttpEndpointCallback((updateContext) -> { updateContext.setPort(8080.0); updateContext.setIsProxied(false); }, new WithHttpEndpointCallbackOptions().name("http").createIfNotExists(false));
         var endpoint = dockerContainer.getEndpoint("http");
         var expr = ReferenceExpression.refExpr("Host=%s", endpoint);
         var builtConnectionString = builder.addConnectionStringBuilder("customcs", (connectionStringBuilder) -> { var _isEmpty = connectionStringBuilder.isEmpty(); connectionStringBuilder.appendLiteral("Host="); connectionStringBuilder.appendValueProvider(endpoint); connectionStringBuilder.appendLiteral(";Key="); connectionStringBuilder.appendValueProvider(secretParam); var _builtExpression = connectionStringBuilder.build(); });
@@ -76,8 +77,14 @@ void main() throws Exception {
         container.onResourceReady((resourceReadyEvent) -> { var _resource = resourceReadyEvent.resource(); var services = resourceReadyEvent.services(); var loggerFactory = services.getLoggerFactory(); var logger = loggerFactory.createLogger("ValidationAppHost.ResourceReady"); logger.logInformation("ResourceReady"); });
         container.withEnvironment("MY_VAR", "value");
         container.withEndpoint();
+        container.withEndpoint(new WithEndpointOptions().name("callback-endpoint"));
+        container.withEndpointCallback("callback-endpoint", (updateContext) -> { updateContext.setPort(5001.0); updateContext.setTargetPort(5002.0); updateContext.setIsExternal(false); }, false);
         container.withHttpEndpoint();
+        container.withHttpEndpoint(new WithHttpEndpointOptions().name("callback-http"));
+        container.withHttpEndpointCallback((updateContext) -> { updateContext.setPort(8081.0); updateContext.setTargetPort(8082.0); updateContext.setIsProxied(false); }, new WithHttpEndpointCallbackOptions().name("callback-http").createIfNotExists(false));
         container.withHttpsEndpoint();
+        container.withHttpsEndpoint(new WithHttpsEndpointOptions().name("callback-https"));
+        container.withEndpointCallback("callback-https", (updateContext) -> { updateContext.setPort(8444.0); updateContext.setTargetPort(8443.0); updateContext.setIsProxied(false); }, false);
         container.withExternalHttpEndpoints();
         container.asHttp2Service();
         container.withArgs(new String[] { "--verbose" });

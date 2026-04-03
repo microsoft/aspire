@@ -82,6 +82,10 @@ await container.withImageRegistry("docker.io");
 // ===================================================================
 
 await dockerContainer.withHttpEndpoint({ name: "http", targetPort: 80 });
+await dockerContainer.withHttpEndpointCallback(async (updateContext) => {
+    await updateContext.port.set(8080);
+    await updateContext.isProxied.set(false);
+}, { name: "http", createIfNotExists: false });
 const endpoint = await dockerContainer.getEndpoint("http");
 const expr = refExpr`Host=${endpoint}`;
 
@@ -410,12 +414,30 @@ await container.withEnvironment("MY_VAR", "value");
 
 // withEndpoint
 await container.withEndpoint();
+await container.withEndpoint({ name: "callback-endpoint" });
+await container.withEndpointCallback("callback-endpoint", async (updateContext) => {
+    await updateContext.port.set(5001);
+    await updateContext.targetPort.set(5002);
+    await updateContext.isExternal.set(false);
+}, { createIfNotExists: false });
 
 // withHttpEndpoint
 await container.withHttpEndpoint();
+await container.withHttpEndpoint({ name: "callback-http" });
+await container.withHttpEndpointCallback(async (updateContext) => {
+    await updateContext.port.set(8081);
+    await updateContext.targetPort.set(8082);
+    await updateContext.isProxied.set(false);
+}, { name: "callback-http", createIfNotExists: false });
 
 // withHttpsEndpoint
 await container.withHttpsEndpoint();
+await container.withHttpsEndpoint({ name: "callback-https" });
+await container.withEndpointCallback("callback-https", async (updateContext) => {
+    await updateContext.port.set(8444);
+    await updateContext.targetPort.set(8443);
+    await updateContext.isProxied.set(false);
+}, { createIfNotExists: false });
 
 // withExternalHttpEndpoints
 await container.withExternalHttpEndpoints();

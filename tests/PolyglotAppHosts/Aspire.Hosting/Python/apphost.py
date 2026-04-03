@@ -5,6 +5,25 @@ from aspire_app import create_builder
 
 
 with create_builder() as builder:
+    def update_existing_http_endpoint(endpoint):
+        endpoint.port = 8080
+        endpoint.is_proxied = False
+
+    def update_endpoint(endpoint):
+        endpoint.port = 5001
+        endpoint.target_port = 5002
+        endpoint.is_external = False
+
+    def update_http_endpoint(endpoint):
+        endpoint.port = 8081
+        endpoint.target_port = 8082
+        endpoint.is_proxied = False
+
+    def update_https_endpoint(endpoint):
+        endpoint.port = 8444
+        endpoint.target_port = 8443
+        endpoint.is_proxied = False
+
     # addContainer (pre-existing)
     container = builder.add_container("resource", "image")
     # addDockerfile
@@ -27,8 +46,9 @@ with create_builder() as builder:
     # withImageRegistry
     container.with_image_registry("docker.io")
     # ===================================================================
-    docker_container.with_http_endpoint()
-    endpoint = docker_container.get_endpoint("default")
+    docker_container.with_http_endpoint(name="http", target_port=80)
+    docker_container.with_http_endpoint_callback(update_existing_http_endpoint, name="http", create_if_not_exists=False)
+    endpoint = docker_container.get_endpoint("http")
     expr = "expression"
     built_connection_string = builder.add_connection_string_builder("connection-string", lambda *_args, **_kwargs: None)
     built_connection_string.with_connection_property("Key", "Value")
@@ -120,10 +140,16 @@ with create_builder() as builder:
     container.with_environment("KEY", "value")
     # withEndpoint
     container.with_endpoint()
+    container.with_endpoint(name="callback-endpoint")
+    container.with_endpoint_callback("callback-endpoint", update_endpoint, create_if_not_exists=False)
     # withHttpEndpoint
     container.with_http_endpoint()
+    container.with_http_endpoint(name="callback-http")
+    container.with_http_endpoint_callback(update_http_endpoint, name="callback-http", create_if_not_exists=False)
     # withHttpsEndpoint
     container.with_https_endpoint()
+    container.with_https_endpoint(name="callback-https")
+    container.with_endpoint_callback("callback-https", update_https_endpoint, create_if_not_exists=False)
     # withExternalHttpEndpoints
     container.with_external_http_endpoints()
     # asHttp2Service

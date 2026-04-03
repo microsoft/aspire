@@ -1607,6 +1607,18 @@ class ReferenceParameters(typing.TypedDict, total=False):
     name: str
 
 
+class EndpointCallbackParameters(typing.TypedDict, total=False):
+    endpoint_name: typing.Required[str]
+    callback: typing.Required[typing.Callable[[EndpointUpdateContext], None]]
+    create_if_not_exists: bool
+
+
+class HttpEndpointCallbackParameters(typing.TypedDict, total=False):
+    callback: typing.Required[typing.Callable[[EndpointUpdateContext], None]]
+    name: str
+    create_if_not_exists: bool
+
+
 class EndpointParameters(typing.TypedDict, total=False):
     port: int
     target_port: int
@@ -3304,6 +3316,201 @@ class EndpointReferenceExpression:
         return typing.cast(str, result)
 
 
+class EndpointUpdateContext:
+    """Type class for EndpointUpdateContext."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"EndpointUpdateContext(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    @_cached_property
+    def name(self) -> str:
+        """Gets the Name property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.name',
+            {'context': self._handle}
+        )
+        return typing.cast(str, result)
+
+    @_uncached_property
+    def protocol(self) -> ProtocolType:
+        """Gets the Protocol property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.protocol',
+            {'context': self._handle}
+        )
+        return typing.cast(ProtocolType, result)
+
+    @protocol.setter
+    def protocol(self, value: ProtocolType) -> None:
+        """Sets the Protocol property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setProtocol',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_uncached_property
+    def port(self) -> int:
+        """Gets the Port property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.port',
+            {'context': self._handle}
+        )
+        return typing.cast(int, result)
+
+    @port.setter
+    def port(self, value: int) -> None:
+        """Sets the Port property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setPort',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_uncached_property
+    def target_port(self) -> int:
+        """Gets the TargetPort property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.targetPort',
+            {'context': self._handle}
+        )
+        return typing.cast(int, result)
+
+    @target_port.setter
+    def target_port(self, value: int) -> None:
+        """Sets the TargetPort property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setTargetPort',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_uncached_property
+    def uri_scheme(self) -> str:
+        """Gets the UriScheme property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.uriScheme',
+            {'context': self._handle}
+        )
+        return typing.cast(str, result)
+
+    @uri_scheme.setter
+    def uri_scheme(self, value: str) -> None:
+        """Sets the UriScheme property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setUriScheme',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_uncached_property
+    def target_host(self) -> str:
+        """Gets the TargetHost property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.targetHost',
+            {'context': self._handle}
+        )
+        return typing.cast(str, result)
+
+    @target_host.setter
+    def target_host(self, value: str) -> None:
+        """Sets the TargetHost property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setTargetHost',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_uncached_property
+    def transport(self) -> str:
+        """Gets the Transport property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.transport',
+            {'context': self._handle}
+        )
+        return typing.cast(str, result)
+
+    @transport.setter
+    def transport(self, value: str) -> None:
+        """Sets the Transport property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setTransport',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_uncached_property
+    def is_external(self) -> bool:
+        """Gets the IsExternal property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.isExternal',
+            {'context': self._handle}
+        )
+        return typing.cast(bool, result)
+
+    @is_external.setter
+    def is_external(self, value: bool) -> None:
+        """Sets the IsExternal property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setIsExternal',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_uncached_property
+    def is_proxied(self) -> bool:
+        """Gets the IsProxied property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.isProxied',
+            {'context': self._handle}
+        )
+        return typing.cast(bool, result)
+
+    @is_proxied.setter
+    def is_proxied(self, value: bool) -> None:
+        """Sets the IsProxied property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setIsProxied',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_uncached_property
+    def exclude_reference_endpoint(self) -> bool:
+        """Gets the ExcludeReferenceEndpoint property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.excludeReferenceEndpoint',
+            {'context': self._handle}
+        )
+        return typing.cast(bool, result)
+
+    @exclude_reference_endpoint.setter
+    def exclude_reference_endpoint(self, value: bool) -> None:
+        """Sets the ExcludeReferenceEndpoint property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setExcludeReferenceEndpoint',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_uncached_property
+    def tls_enabled(self) -> bool:
+        """Gets the TlsEnabled property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.tlsEnabled',
+            {'context': self._handle}
+        )
+        return typing.cast(bool, result)
+
+    @tls_enabled.setter
+    def tls_enabled(self, value: bool) -> None:
+        """Sets the TlsEnabled property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setTlsEnabled',
+            {'context': self._handle, 'value': value}
+        )
+
+
 class EnvironmentCallbackContext:
     """Type class for EnvironmentCallbackContext."""
 
@@ -4916,6 +5123,14 @@ class AbstractResourceWithEndpoints(AbstractResource):
         """Configures an MCP server endpoint on the resource"""
 
     @abc.abstractmethod
+    def with_endpoint_callback(self, endpoint_name: str, callback: typing.Callable[[EndpointUpdateContext], None], *, create_if_not_exists: bool = True) -> typing.Self:
+        """Updates a named endpoint via callback"""
+
+    @abc.abstractmethod
+    def with_http_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None = None, create_if_not_exists: bool = True) -> typing.Self:
+        """Updates an HTTP endpoint via callback"""
+
+    @abc.abstractmethod
     def with_endpoint(self, *, port: int | None = None, target_port: int | None = None, scheme: str | None = None, name: str | None = None, env: str | None = None, is_proxied: bool = True, is_external: bool | None = None, protocol: ProtocolType | None = None) -> typing.Self:
         """Adds a network endpoint"""
 
@@ -6240,6 +6455,8 @@ class ContainerResourceKwargs(_BaseResourceKwargs, total=False):
     reference_uri: tuple[str, str]
     reference_external_service: ExternalServiceResource
     reference_endpoint: EndpointReference
+    endpoint_callback: tuple[str, typing.Callable[[EndpointUpdateContext], None]] | EndpointCallbackParameters
+    http_endpoint_callback: typing.Callable[[EndpointUpdateContext], None] | HttpEndpointCallbackParameters
     endpoint: EndpointParameters | typing.Literal[True]
     http_endpoint: HttpEndpointParameters | typing.Literal[True]
     https_endpoint: HttpsEndpointParameters | typing.Literal[True]
@@ -6658,6 +6875,35 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         rpc_args['endpointReference'] = endpoint_reference
         result = self._client.invoke_capability(
             'Aspire.Hosting/withReferenceEndpoint',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_endpoint_callback(self, endpoint_name: str, callback: typing.Callable[[EndpointUpdateContext], None], *, create_if_not_exists: bool = True) -> typing.Self:
+        """Updates a named endpoint via callback"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['endpointName'] = endpoint_name
+        rpc_args['callback'] = self._client.register_callback(callback)
+        if create_if_not_exists is not None:
+            rpc_args['createIfNotExists'] = create_if_not_exists
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withEndpointCallback',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_http_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None = None, create_if_not_exists: bool = True) -> typing.Self:
+        """Updates an HTTP endpoint via callback"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['callback'] = self._client.register_callback(callback)
+        if name is not None:
+            rpc_args['name'] = name
+        if create_if_not_exists is not None:
+            rpc_args['createIfNotExists'] = create_if_not_exists
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withHttpEndpointCallback',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -7256,6 +7502,33 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withReferenceEndpoint', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'reference_endpoint'. Expected: EndpointReference")
+        if _endpoint_callback := kwargs.pop("endpoint_callback", None):
+            if _validate_tuple_types(_endpoint_callback, (str, typing.Callable[[EndpointUpdateContext], None])):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["endpointName"] = typing.cast(tuple[str, typing.Callable[[EndpointUpdateContext], None]], _endpoint_callback)[0]
+                rpc_args["callback"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[EndpointUpdateContext], None]], _endpoint_callback)[1])
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEndpointCallback', rpc_args))
+            elif _validate_dict_types(_endpoint_callback, EndpointCallbackParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["endpointName"] = typing.cast(EndpointCallbackParameters, _endpoint_callback)["endpoint_name"]
+                rpc_args["callback"] = client.register_callback(typing.cast(EndpointCallbackParameters, _endpoint_callback)["callback"])
+                rpc_args["createIfNotExists"] = typing.cast(EndpointCallbackParameters, _endpoint_callback).get("create_if_not_exists")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEndpointCallback', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'endpoint_callback'. Expected: (str, Callable[[EndpointUpdateContext], None]) or EndpointCallbackParameters")
+        if _http_endpoint_callback := kwargs.pop("http_endpoint_callback", None):
+            if _validate_type(_http_endpoint_callback, typing.Callable[[EndpointUpdateContext], None]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[EndpointUpdateContext], None], _http_endpoint_callback))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpEndpointCallback', rpc_args))
+            elif _validate_dict_types(_http_endpoint_callback, HttpEndpointCallbackParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(HttpEndpointCallbackParameters, _http_endpoint_callback)["callback"])
+                rpc_args["name"] = typing.cast(HttpEndpointCallbackParameters, _http_endpoint_callback).get("name")
+                rpc_args["createIfNotExists"] = typing.cast(HttpEndpointCallbackParameters, _http_endpoint_callback).get("create_if_not_exists")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpEndpointCallback', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'http_endpoint_callback'. Expected: Callable[[EndpointUpdateContext], None] or HttpEndpointCallbackParameters")
         if _endpoint := kwargs.pop("endpoint", None):
             if _validate_dict_types(_endpoint, EndpointParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -7503,6 +7776,8 @@ class ProjectResourceKwargs(_BaseResourceKwargs, total=False):
     reference_uri: tuple[str, str]
     reference_external_service: ExternalServiceResource
     reference_endpoint: EndpointReference
+    endpoint_callback: tuple[str, typing.Callable[[EndpointUpdateContext], None]] | EndpointCallbackParameters
+    http_endpoint_callback: typing.Callable[[EndpointUpdateContext], None] | HttpEndpointCallbackParameters
     endpoint: EndpointParameters | typing.Literal[True]
     http_endpoint: HttpEndpointParameters | typing.Literal[True]
     https_endpoint: HttpsEndpointParameters | typing.Literal[True]
@@ -7742,6 +8017,35 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         rpc_args['endpointReference'] = endpoint_reference
         result = self._client.invoke_capability(
             'Aspire.Hosting/withReferenceEndpoint',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_endpoint_callback(self, endpoint_name: str, callback: typing.Callable[[EndpointUpdateContext], None], *, create_if_not_exists: bool = True) -> typing.Self:
+        """Updates a named endpoint via callback"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['endpointName'] = endpoint_name
+        rpc_args['callback'] = self._client.register_callback(callback)
+        if create_if_not_exists is not None:
+            rpc_args['createIfNotExists'] = create_if_not_exists
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withEndpointCallback',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_http_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None = None, create_if_not_exists: bool = True) -> typing.Self:
+        """Updates an HTTP endpoint via callback"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['callback'] = self._client.register_callback(callback)
+        if name is not None:
+            rpc_args['name'] = name
+        if create_if_not_exists is not None:
+            rpc_args['createIfNotExists'] = create_if_not_exists
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withHttpEndpointCallback',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -8211,6 +8515,33 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withReferenceEndpoint', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'reference_endpoint'. Expected: EndpointReference")
+        if _endpoint_callback := kwargs.pop("endpoint_callback", None):
+            if _validate_tuple_types(_endpoint_callback, (str, typing.Callable[[EndpointUpdateContext], None])):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["endpointName"] = typing.cast(tuple[str, typing.Callable[[EndpointUpdateContext], None]], _endpoint_callback)[0]
+                rpc_args["callback"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[EndpointUpdateContext], None]], _endpoint_callback)[1])
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEndpointCallback', rpc_args))
+            elif _validate_dict_types(_endpoint_callback, EndpointCallbackParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["endpointName"] = typing.cast(EndpointCallbackParameters, _endpoint_callback)["endpoint_name"]
+                rpc_args["callback"] = client.register_callback(typing.cast(EndpointCallbackParameters, _endpoint_callback)["callback"])
+                rpc_args["createIfNotExists"] = typing.cast(EndpointCallbackParameters, _endpoint_callback).get("create_if_not_exists")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEndpointCallback', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'endpoint_callback'. Expected: (str, Callable[[EndpointUpdateContext], None]) or EndpointCallbackParameters")
+        if _http_endpoint_callback := kwargs.pop("http_endpoint_callback", None):
+            if _validate_type(_http_endpoint_callback, typing.Callable[[EndpointUpdateContext], None]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[EndpointUpdateContext], None], _http_endpoint_callback))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpEndpointCallback', rpc_args))
+            elif _validate_dict_types(_http_endpoint_callback, HttpEndpointCallbackParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(HttpEndpointCallbackParameters, _http_endpoint_callback)["callback"])
+                rpc_args["name"] = typing.cast(HttpEndpointCallbackParameters, _http_endpoint_callback).get("name")
+                rpc_args["createIfNotExists"] = typing.cast(HttpEndpointCallbackParameters, _http_endpoint_callback).get("create_if_not_exists")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpEndpointCallback', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'http_endpoint_callback'. Expected: Callable[[EndpointUpdateContext], None] or HttpEndpointCallbackParameters")
         if _endpoint := kwargs.pop("endpoint", None):
             if _validate_dict_types(_endpoint, EndpointParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -8467,6 +8798,8 @@ class ExecutableResourceKwargs(_BaseResourceKwargs, total=False):
     reference_uri: tuple[str, str]
     reference_external_service: ExternalServiceResource
     reference_endpoint: EndpointReference
+    endpoint_callback: tuple[str, typing.Callable[[EndpointUpdateContext], None]] | EndpointCallbackParameters
+    http_endpoint_callback: typing.Callable[[EndpointUpdateContext], None] | HttpEndpointCallbackParameters
     endpoint: EndpointParameters | typing.Literal[True]
     http_endpoint: HttpEndpointParameters | typing.Literal[True]
     https_endpoint: HttpsEndpointParameters | typing.Literal[True]
@@ -8707,6 +9040,35 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         rpc_args['endpointReference'] = endpoint_reference
         result = self._client.invoke_capability(
             'Aspire.Hosting/withReferenceEndpoint',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_endpoint_callback(self, endpoint_name: str, callback: typing.Callable[[EndpointUpdateContext], None], *, create_if_not_exists: bool = True) -> typing.Self:
+        """Updates a named endpoint via callback"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['endpointName'] = endpoint_name
+        rpc_args['callback'] = self._client.register_callback(callback)
+        if create_if_not_exists is not None:
+            rpc_args['createIfNotExists'] = create_if_not_exists
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withEndpointCallback',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_http_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None = None, create_if_not_exists: bool = True) -> typing.Self:
+        """Updates an HTTP endpoint via callback"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['callback'] = self._client.register_callback(callback)
+        if name is not None:
+            rpc_args['name'] = name
+        if create_if_not_exists is not None:
+            rpc_args['createIfNotExists'] = create_if_not_exists
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withHttpEndpointCallback',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -9165,6 +9527,33 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withReferenceEndpoint', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'reference_endpoint'. Expected: EndpointReference")
+        if _endpoint_callback := kwargs.pop("endpoint_callback", None):
+            if _validate_tuple_types(_endpoint_callback, (str, typing.Callable[[EndpointUpdateContext], None])):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["endpointName"] = typing.cast(tuple[str, typing.Callable[[EndpointUpdateContext], None]], _endpoint_callback)[0]
+                rpc_args["callback"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[EndpointUpdateContext], None]], _endpoint_callback)[1])
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEndpointCallback', rpc_args))
+            elif _validate_dict_types(_endpoint_callback, EndpointCallbackParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["endpointName"] = typing.cast(EndpointCallbackParameters, _endpoint_callback)["endpoint_name"]
+                rpc_args["callback"] = client.register_callback(typing.cast(EndpointCallbackParameters, _endpoint_callback)["callback"])
+                rpc_args["createIfNotExists"] = typing.cast(EndpointCallbackParameters, _endpoint_callback).get("create_if_not_exists")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEndpointCallback', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'endpoint_callback'. Expected: (str, Callable[[EndpointUpdateContext], None]) or EndpointCallbackParameters")
+        if _http_endpoint_callback := kwargs.pop("http_endpoint_callback", None):
+            if _validate_type(_http_endpoint_callback, typing.Callable[[EndpointUpdateContext], None]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[EndpointUpdateContext], None], _http_endpoint_callback))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpEndpointCallback', rpc_args))
+            elif _validate_dict_types(_http_endpoint_callback, HttpEndpointCallbackParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(HttpEndpointCallbackParameters, _http_endpoint_callback)["callback"])
+                rpc_args["name"] = typing.cast(HttpEndpointCallbackParameters, _http_endpoint_callback).get("name")
+                rpc_args["createIfNotExists"] = typing.cast(HttpEndpointCallbackParameters, _http_endpoint_callback).get("create_if_not_exists")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpEndpointCallback', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'http_endpoint_callback'. Expected: Callable[[EndpointUpdateContext], None] or HttpEndpointCallbackParameters")
         if _endpoint := kwargs.pop("endpoint", None):
             if _validate_dict_types(_endpoint, EndpointParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -10023,6 +10412,7 @@ _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.DistributedApplicationEx
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DistributedApplicationModel", DistributedApplicationModel)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference", EndpointReference)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression", EndpointReferenceExpression)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext", EndpointUpdateContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext", EnvironmentCallbackContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext", ExecuteCommandContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent", InitializeResourceEvent)
