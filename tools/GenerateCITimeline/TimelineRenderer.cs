@@ -30,11 +30,6 @@ internal sealed class JobGroup(string name)
     public double FirstCreated => Jobs.Min(j => j.CreatedAt);
     public double FirstStarted => Jobs.Min(j => j.StartedAt);
     public double LastCompleted => Jobs.Max(j => j.CompletedAt);
-    public double Span => LastCompleted - FirstStarted;
-    public double AvgQueue => Jobs.Count > 0 ? Jobs.Average(j => j.QueueTime) : 0;
-    public double MaxQueue => Jobs.Count > 0 ? Jobs.Max(j => j.QueueTime) : 0;
-    public int JobCount => Jobs.Count;
-
     public string GroupConclusion
     {
         get
@@ -370,7 +365,6 @@ internal static partial class TimelineRenderer
 
         var worstJobs = filteredGroups
             .SelectMany(g => g.Jobs)
-            .Where(IsSignificantJob)
             .OrderByDescending(j => j.QueueTime)
             .Take(10)
             .Where(j => j.QueueTime > 30)
