@@ -261,12 +261,6 @@ RUN_COLORS = {
 }
 
 
-EMOJI_BAR = {
-    "wait": "⬜",
-    "queue": "🟨",
-    "run": "🟩",
-}
-
 RUNNER_EMOJI = {
     "ubuntu": "🐧",
     "windows": "🪟",
@@ -284,23 +278,6 @@ def runner_icon(label: str) -> str:
                 return emoji + "⚡"
             return emoji
     return "🖥️"
-
-BAR_MAX_CHARS = 30
-
-
-def emoji_bar(segments: list[tuple[str, float]], total_seconds: float) -> str:
-    """Build an emoji bar from (kind, seconds) segments scaled to BAR_MAX_CHARS."""
-    if total_seconds <= 0:
-        return ""
-    chars_per_sec = BAR_MAX_CHARS / total_seconds
-    bar = ""
-    for kind, secs in segments:
-        n = int(secs * chars_per_sec)
-        if n < 1 and secs > 0:
-            n = 1
-        emoji = EMOJI_BAR.get(kind, "⬜")
-        bar += emoji * n
-    return bar
 
 
 # ── Phase classification ─────────────────────────────────────────────────────
@@ -351,13 +328,7 @@ def render_timeline_bars(groups: list[JobGroup], total_seconds: float,
     lines.append('<table>')
     lines.append(
         '<tr><th>Job</th>'
-        f'<th>Breakdown (wall: {fmt_duration(total_seconds)})</th>'
         '<th>Total</th><th>Deps</th><th>Queue</th><th>Run</th></tr>'
-    )
-
-    # Legend
-    lines.append(
-        '<tr><td colspan="6">⬜ deps · 🟨 queued · 🟩 running</td></tr>'
     )
 
     phase_order = ["Setup", "Build", "Tests", "Templates", "Validation"]
@@ -367,7 +338,7 @@ def render_timeline_bars(groups: list[JobGroup], total_seconds: float,
             continue
 
         lines.append(
-            f'<tr><td colspan="6"><b>📁 {phase}</b>'
+            f'<tr><td colspan="5"><b>📁 {phase}</b>'
             f' ({len(jobs_in_phase)} jobs)</td></tr>'
         )
 
@@ -377,16 +348,9 @@ def render_timeline_bars(groups: list[JobGroup], total_seconds: float,
             icon = STATUS_ICON.get(j.conclusion, "")
             ri = runner_icon(runner) + " " if runner else ""
 
-            bar = emoji_bar([
-                ("wait", j.created_at),
-                ("queue", j.queue_time),
-                ("run", j.run_time),
-            ], total_seconds)
-
             lines.append(
                 f'<tr>'
                 f'<td>{icon} {ri}<code>{name}</code></td>'
-                f'<td>{bar}</td>'
                 f'<td><b>{fmt_duration(j.completed_at)}</b></td>'
                 f'<td>{fmt_duration(j.created_at)}</td>'
                 f'<td>{fmt_duration(j.queue_time)}</td>'
@@ -426,7 +390,7 @@ def render_critical_path(groups: list[JobGroup], total_seconds: float,
     lines = []
     lines.append('<table>')
     lines.append(
-        '<tr><th>#</th><th>Job</th><th>Breakdown</th>'
+        '<tr><th>#</th><th>Job</th>'
         '<th>Total</th><th>Deps</th><th>Queue</th><th>Run</th></tr>'
     )
 
@@ -436,17 +400,10 @@ def render_critical_path(groups: list[JobGroup], total_seconds: float,
         runner = j.labels[0] if j.labels else ""
         ri = runner_icon(runner) + " " if runner else ""
 
-        bar = emoji_bar([
-            ("wait", j.created_at),
-            ("queue", j.queue_time),
-            ("run", j.run_time),
-        ], total_seconds)
-
         lines.append(
             f'<tr>'
             f'<td>{i}</td>'
             f'<td>{icon} {ri}<code>{name}</code></td>'
-            f'<td>{bar}</td>'
             f'<td><b>{fmt_duration(j.completed_at)}</b></td>'
             f'<td>{fmt_duration(j.created_at)}</td>'
             f'<td>{fmt_duration(j.queue_time)}</td>'
