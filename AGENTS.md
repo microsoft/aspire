@@ -388,6 +388,7 @@ For most development tasks, following these instructions should be sufficient to
 The following specialized skills are available in `.github/skills/`:
 
 - **cli-e2e-testing**: Guide for writing Aspire CLI end-to-end tests using Hex1b terminal automation
+- **ci-test-failures**: Diagnoses GitHub Actions test failures, extracts failed tests from runs, and creates or updates failing-test issues
 - **fix-flaky-test**: Reproduces and fixes flaky/quarantined tests using the CI reproduce workflow (`reproduce-flaky-tests.yml`). Use this when investigating, reproducing, or fixing a flaky or quarantined test.
 - **dashboard-testing**: Guide for writing tests for the Aspire Dashboard using xUnit and bUnit
 - **test-management**: Quarantines or disables flaky/problematic tests using the QuarantineTools utility
