@@ -13,7 +13,7 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Deploy an apphost to its deployment targets (Preview)</source>
+        <source>Deploy an AppHost to its deployment targets (Preview)</source>
         <target state="needs-review-translation">Distribuire il contenuto di un AppHost Aspire alle destinazioni di distribuzione definite. (Anteprima)</target>
         <note />
       </trans-unit>

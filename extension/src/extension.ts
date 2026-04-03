@@ -25,6 +25,7 @@ import { settingsCommand } from './commands/settings';
 import { openLocalSettingsCommand, openGlobalSettingsCommand } from './commands/openSettings';
 import { checkCliAvailableOrRedirect, checkForExistingAppHostPathInWorkspace } from './utils/workspace';
 import { AspireEditorCommandProvider } from './editor/AspireEditorCommandProvider';
+import { AspirePackageRestoreProvider } from './utils/AspirePackageRestoreProvider';
 import { AspireAppHostTreeProvider } from './views/AspireAppHostTreeProvider';
 import { AppHostDataRepository } from './views/AppHostDataRepository';
 import { installCliStableCommand, installCliDailyCommand, verifyCliInstalledCommand } from './commands/walkthroughCommands';
@@ -195,6 +196,21 @@ export async function activate(context: vscode.ExtensionContext) {
       // any user-visible errors should be handled within checkForExistingAppHostPathInWorkspace.
     });
   }
+
+  // Auto-restore: run `aspire restore` on workspace open and when aspire.config.json changes
+  const packageRestoreProvider = new AspirePackageRestoreProvider(terminalProvider);
+  context.subscriptions.push(packageRestoreProvider);
+  void packageRestoreProvider.activate().catch(err => {
+    extensionLogOutputChannel.warn(`Auto-restore activation failed: ${String(err)}`);
+  });
+
+  const restoreCommandRegistration = vscode.commands.registerCommand('aspire-vscode.restore', () => {
+    void packageRestoreProvider.retryRestore().catch(err => {
+      extensionLogOutputChannel.warn(`Manual restore failed: ${String(err)}`);
+    });
+  });
+  context.subscriptions.push(restoreCommandRegistration);
+
   // Return exported API for tests or other extensions
   return {
     rpcServerInfo: rpcServer.connectionInfo,

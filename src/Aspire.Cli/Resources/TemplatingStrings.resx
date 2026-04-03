@@ -254,10 +254,10 @@
     <value>Configures whether to use *.dev.localhost URLs for local development.</value>
   </data>
   <data name="RunCdThenAspireRun" xml:space="preserve">
-    <value>Run 'cd "{0}"' and then 'aspire run' to start your apphost.</value>
+    <value>Run 'cd "{0}"' and then 'aspire run' to start your AppHost.</value>
     <comment>{0} is the relative path to the project directory</comment>
   </data>
   <data name="RunAspireRun" xml:space="preserve">
-    <value>Run 'aspire run' to start your apphost.</value>
+    <value>Run 'aspire run' to start your AppHost.</value>
   </data>
 </root>

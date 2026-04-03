@@ -153,8 +153,8 @@ internal sealed class DotNetCliRunner(
         {
             try
             {
-                logger.LogTrace("Attempting to connect to AppHost backchannel at {SocketPath} (attempt {Attempt})", socketPath, connectionAttempts++);
-                await backchannel.ConnectAsync(socketPath, cancellationToken).ConfigureAwait(false);
+                logger.LogTrace("Attempting to connect to AppHost backchannel at {SocketPath} (attempt {Attempt})", socketPath, connectionAttempts);
+                await backchannel.ConnectAsync(socketPath, connectionAttempts, cancellationToken).ConfigureAwait(false);
                 backchannelCompletionSource.SetResult(backchannel);
                 // Note: We intentionally do not call Environment.Exit when the backchannel disconnects.
                 // The CLI should complete normally and return the appropriate exit code based on the
@@ -211,6 +211,10 @@ internal sealed class DotNetCliRunner(
                 logger.LogError(ex, "An unexpected error occurred while trying to connect to the backchannel.");
                 backchannelCompletionSource.SetException(ex);
                 throw;
+            }
+            finally
+            {
+                connectionAttempts++;
             }
 
         } while (await timer.WaitForNextTickAsync(cancellationToken));

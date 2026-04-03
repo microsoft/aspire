@@ -478,8 +478,16 @@ public class DistributedApplicationTests
         var startTask = app.StartAsync(token);
 
         // On start, one resource won't be started and the other is waiting on it.
-        var notStartedResourceEvent = await rns.WaitForResourceAsync(notStartedResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.NotStarted, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
-        var dependentResourceEvent = await rns.WaitForResourceAsync(dependentResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Waiting, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        var notStartedResourceEvent = await rns.WaitForResourceAsync(
+            notStartedResourceName,
+            e => e.Snapshot.State?.Text == KnownResourceStates.NotStarted,
+            token
+        ).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        var dependentResourceEvent = await rns.WaitForResourceAsync(
+            dependentResourceName,
+            e => e.Snapshot.State?.Text == KnownResourceStates.Waiting,
+            token
+        ).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
         Assert.Collection(notStartedResourceEvent.Snapshot.Urls, u =>
         {
@@ -1554,8 +1562,7 @@ public class DistributedApplicationTests
         await using var app = testProgram.Build();
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () => await app.StartAsync().DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout));
-        var suffix = app.Services.GetRequiredService<IOptions<DcpOptions>>().Value.ResourceNameSuffix;
-        Assert.Equal($"Resource '{testName}-servicea-{suffix}' uses multiple replicas and a proxy-less endpoint 'http'. These features do not work together.", ex.Message);
+        Assert.Equal($"Resource '{testName}-servicea' uses multiple replicas and a proxy-less endpoint 'http'. These features do not work together.", ex.Message);
     }
 
     [Fact]

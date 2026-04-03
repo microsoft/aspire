@@ -78,7 +78,7 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
             }
             else
             {
-                _logger.LogDebug("{Language}({ProcessId}) stdout: {Line}", _language, process.Id, e.Data);
+                _logger.LogTrace("{Language}({ProcessId}) stdout: {Line}", _language, process.Id, e.Data);
                 outputCollector.AppendOutput(e.Data);
             }
         };
@@ -92,7 +92,7 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
             }
             else
             {
-                _logger.LogDebug("{Language}({ProcessId}) stderr: {Line}", _language, process.Id, e.Data);
+                _logger.LogTrace("{Language}({ProcessId}) stderr: {Line}", _language, process.Id, e.Data);
                 outputCollector.AppendError(e.Data);
             }
         };

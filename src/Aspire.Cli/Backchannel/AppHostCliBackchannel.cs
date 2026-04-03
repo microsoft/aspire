@@ -17,8 +17,8 @@ internal interface IAppHostCliBackchannel
     Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken);
     IAsyncEnumerable<BackchannelLogEntry> GetAppHostLogEntriesAsync(CancellationToken cancellationToken);
     IAsyncEnumerable<RpcResourceState> GetResourceStatesAsync(CancellationToken cancellationToken);
-    Task ConnectAsync(string socketPath, CancellationToken cancellationToken);
-    Task ConnectAsync(string socketPath, bool autoReconnect, CancellationToken cancellationToken);
+    Task ConnectAsync(string socketPath, int retryCount, CancellationToken cancellationToken);
+    Task ConnectAsync(string socketPath, bool autoReconnect, int retryCount, CancellationToken cancellationToken);
     IAsyncEnumerable<PublishingActivity> GetPublishingActivitiesAsync(CancellationToken cancellationToken);
     Task<string[]> GetCapabilitiesAsync(CancellationToken cancellationToken);
     Task CompletePromptResponseAsync(string promptId, PublishingPromptInputAnswer[] answers, CancellationToken cancellationToken);
@@ -245,10 +245,10 @@ internal sealed class AppHostCliBackchannel(ILogger<AppHostCliBackchannel> logge
         logger.LogWarning("Timed out waiting for backchannel reconnection");
     }
 
-    public Task ConnectAsync(string socketPath, CancellationToken cancellationToken)
-        => ConnectAsync(socketPath, autoReconnect: false, cancellationToken);
+    public Task ConnectAsync(string socketPath, int retryCount, CancellationToken cancellationToken)
+        => ConnectAsync(socketPath, autoReconnect: false, retryCount: retryCount, cancellationToken);
 
-    public async Task ConnectAsync(string socketPath, bool autoReconnect, CancellationToken cancellationToken)
+    public async Task ConnectAsync(string socketPath, bool autoReconnect, int retryCount, CancellationToken cancellationToken)
     {
         try
         {
@@ -266,33 +266,43 @@ internal sealed class AppHostCliBackchannel(ILogger<AppHostCliBackchannel> logge
             _autoReconnect = autoReconnect;
             _cancellationToken = cancellationToken;
 
-            logger.LogDebug("Connecting to AppHost backchannel at {SocketPath} (autoReconnect={AutoReconnect})", socketPath, autoReconnect);
+            var connectingLogLevel = retryCount % 10 == 0 ? LogLevel.Debug : LogLevel.Trace;
+            logger.Log(connectingLogLevel, "Connecting to AppHost backchannel at {SocketPath} (autoReconnect={AutoReconnect}, retryCount={RetryCount})", socketPath, autoReconnect, retryCount);
             var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
             var endpoint = new UnixDomainSocketEndPoint(socketPath);
             await socket.ConnectAsync(endpoint, cancellationToken);
-            logger.LogDebug("Connected to AppHost backchannel at {SocketPath}", socketPath);
+            logger.LogDebug("Connected to AppHost backchannel at {SocketPath} (retryCount={RetryCount})", socketPath, retryCount);
 
             var stream = new NetworkStream(socket, true);
-            var rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream, BackchannelJsonSerializerContext.CreateRpcMessageFormatter()));
-            rpc.StartListening();
-
-            var capabilities = await rpc.InvokeWithCancellationAsync<string[]>(
-                "GetCapabilitiesAsync",
-                [],
-                cancellationToken);
-
-            if (!capabilities.Any(s => s == BaselineCapability))
+            JsonRpc? rpc = null;
+            try
             {
-                throw new AppHostIncompatibleException(
-                    string.Format(CultureInfo.CurrentCulture, ErrorStrings.AppHostIncompatibleWithCli, BaselineCapability),
-                    BaselineCapability
-                    );
+                rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream, BackchannelJsonSerializerContext.CreateRpcMessageFormatter()));
+                rpc.StartListening();
+
+                var capabilities = await rpc.InvokeWithCancellationAsync<string[]>(
+                    "GetCapabilitiesAsync",
+                    [],
+                    cancellationToken);
+
+                if (!capabilities.Any(s => s == BaselineCapability))
+                {
+                    throw new AppHostIncompatibleException(
+                        string.Format(CultureInfo.CurrentCulture, ErrorStrings.AppHostIncompatibleWithCli, BaselineCapability),
+                        BaselineCapability
+                        );
+                }
+
+                // Set up auto-reconnect if enabled
+                if (autoReconnect)
+                {
+                    rpc.Disconnected += OnDisconnected;
+                }
             }
-
-            // Set up auto-reconnect if enabled
-            if (autoReconnect)
+            catch
             {
-                rpc.Disconnected += OnDisconnected;
+                rpc?.Dispose();
+                throw;
             }
 
             lock (_lock)
@@ -366,18 +376,25 @@ internal sealed class AppHostCliBackchannel(ILogger<AppHostCliBackchannel> logge
         var startTime = DateTime.UtcNow;
         var maxWait = TimeSpan.FromSeconds(30);
 
+        var retryCount = 0;
         while (!_cancellationToken.IsCancellationRequested)
         {
             try
             {
-                await ConnectAsync(_socketPath, _autoReconnect, _cancellationToken).ConfigureAwait(false);
+                await ConnectAsync(_socketPath, _autoReconnect, retryCount, _cancellationToken).ConfigureAwait(false);
                 logger.LogInformation("Successfully reconnected to backchannel");
                 return;
             }
             catch (SocketException) when (DateTime.UtcNow - startTime < maxWait)
             {
+                retryCount++;
                 // Socket not ready yet, wait and retry
                 await Task.Delay(500, _cancellationToken).ConfigureAwait(false);
+            }
+            catch (SocketException)
+            {
+                // Timeout exceeded — fall through to warning
+                break;
             }
         }
 

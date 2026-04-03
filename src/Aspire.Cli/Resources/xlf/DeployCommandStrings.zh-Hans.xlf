@@ -13,7 +13,7 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Deploy an apphost to its deployment targets (Preview)</source>
+        <source>Deploy an AppHost to its deployment targets (Preview)</source>
         <target state="needs-review-translation">将 Aspire 应用主机的内容部署到其定义的部署目标。(预览版)</target>
         <note />
       </trans-unit>

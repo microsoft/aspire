@@ -1,0 +1,8 @@
+{
+  "name": "nodeserver",
+  "private": true,
+  "scripts": {
+    "dev": "node server.js",
+    "build": "mkdir -p build && cp server.js build/server.js"
+  }
+}

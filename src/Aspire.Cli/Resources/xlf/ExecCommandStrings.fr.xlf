@@ -8,7 +8,7 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Execute commands in the context of an Aspire application resource. Starts the apphost, waits for resources to initialize, then runs the specified command in the target resource's environment (Preview)
+        <source>Execute commands in the context of an Aspire application resource. Starts the AppHost, waits for resources to initialize, then runs the specified command in the target resource's environment (Preview)
 
 Examples:
   aspire exec --resource api dotnet build
@@ -35,7 +35,7 @@ Exemples :
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire apphost project file. If not specified, searches for a project file in the current directory.</source>
+        <source>The path to the Aspire AppHost project file. If not specified, searches for a project file in the current directory.</source>
         <target state="needs-review-translation">Chemin d’accès au fichier projet AppHost Aspire. Si rien n’est spécifié, recherche un fichier projet dans le répertoire actif.</target>
         <note />
       </trans-unit>
@@ -50,12 +50,12 @@ Exemples :
         <note />
       </trans-unit>
       <trans-unit id="StoppingAppHost">
-        <source>Stopping app host...</source>
-        <target state="translated">Arrêt en cours de l’application... Merci de patienter.</target>
+        <source>Stopping AppHost...</source>
+        <target state="needs-review-translation">Arrêt en cours de l’application... Merci de patienter.</target>
         <note />
       </trans-unit>
       <trans-unit id="TargetResourceArgumentDescription">
-        <source>The name of the target resource to execute the command against. The command will be executed as soon as the apphost starts, without waiting for the resource to be ready.</source>
+        <source>The name of the target resource to execute the command against. The command will be executed as soon as the AppHost starts, without waiting for the resource to be ready.</source>
         <target state="needs-review-translation">Nom de la ressource cible sur laquelle exécuter la commande. La commande est exécutée dès le démarrage de l’AppHost, sans attendre que la ressource soit prête.</target>
         <note />
       </trans-unit>
