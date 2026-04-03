@@ -8,6 +8,7 @@ var taskHub = scheduler.AddTaskHub("taskhub");
 
 builder.AddAzureFunctionsProject<Projects.AzureFunctionsWithDts_Functions>("funcapp")
     .WithHostStorage(storage)
-    .WithReference(taskHub);
+    .WithReference(taskHub)
+    .WaitFor(taskHub);
 
 builder.Build().Run();

@@ -136,6 +136,7 @@ public static class DurableTaskResourceExtensions
         builder.WithHttpEndpoint(name: "grpc", targetPort: 8080)
                .WithEndpoint("grpc", endpoint => endpoint.Transport = "http2")
                .WithHttpEndpoint(name: "http", targetPort: 8081)
+               .WithHttpHealthCheck(endpointName: "http", path: "/healthz", statusCode: 204)
                .WithHttpEndpoint(name: "dashboard", targetPort: 8082)
                .WithUrlForEndpoint("dashboard", c => c.DisplayText = "Scheduler Dashboard")
                .WithAnnotation(new ContainerImageAnnotation
