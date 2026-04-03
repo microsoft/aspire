@@ -147,6 +147,10 @@
     <Project Path="playground/AzureFunctionsWithDts/AzureFunctionsWithDts.AppHost/AzureFunctionsWithDts.AppHost.csproj" />
     <Project Path="playground/AzureFunctionsWithDts/AzureFunctionsWithDts.Functions/AzureFunctionsWithDts.Functions.csproj" />
   </Folder>
+  <Folder Name="/playground/DurableTaskWorkerWithDts/">
+    <Project Path="playground/DurableTaskWorkerWithDts/DurableTaskWorkerWithDts.AppHost/DurableTaskWorkerWithDts.AppHost.csproj" />
+    <Project Path="playground/DurableTaskWorkerWithDts/DurableTaskWorkerWithDts.Worker/DurableTaskWorkerWithDts.Worker.csproj" />
+  </Folder>
   <Folder Name="/playground/ProjectResourceExtensions/">
     <Project Path="playground/ProjectResourceExtensions/ProjectResourceExtensions.AppHost/ProjectResourceExtensions.AppHost.csproj" />
     <Project Path="playground/ProjectResourceExtensions/StandardService/StandardService.csproj" />
