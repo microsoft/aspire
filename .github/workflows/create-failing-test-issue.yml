@@ -117,7 +117,7 @@ jobs:
         dotnet run --no-build --project tools/CreateFailingTestIssue -- "${args[@]}" --output "$RUNNER_TEMP/failing-test-result.json"
 
     - name: Create or update failing-test issue
-      if: success()
+      if: steps.resolve-failure.outcome != 'skipped'
       uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
       env:
         RESULT_PATH: ${{ runner.temp }}/failing-test-result.json
@@ -226,4 +226,18 @@ jobs:
             repo: context.repo.repo,
             comment_id: context.payload.comment.id,
             content: 'rocket'
+          });
+
+    - name: Post failure comment on unexpected error
+      if: failure() && steps.extract-command.outcome == 'success' && steps.verify-permission.outcome == 'success'
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      with:
+        script: |
+          const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+          const message = `@${context.payload.comment.user.login} ❌ The \`/create-issue\` command failed. See the [workflow run](${runUrl}) for details.`;
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            body: message
           });
