@@ -79,7 +79,7 @@ public static class KubernetesEnvironmentExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("withHelm", Description = "Configures Helm chart deployment settings", RunSyncOnBackgroundThread = true)]
+    [AspireExport(Description = "Configures Helm chart deployment settings", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<KubernetesEnvironmentResource> WithHelm(
         this IResourceBuilder<KubernetesEnvironmentResource> builder,
         Action<HelmChartConfiguration>? configure = null)
@@ -128,7 +128,7 @@ public static class KubernetesEnvironmentExtensions
     /// in the Kubernetes cluster. All resources with OTLP telemetry support are automatically
     /// configured to send telemetry data to the dashboard.
     /// </remarks>
-    [AspireExport("withDashboard", Description = "Enables or disables the Aspire dashboard for the Kubernetes environment")]
+    [AspireExport(Description = "Enables or disables the Aspire dashboard for the Kubernetes environment")]
     public static IResourceBuilder<KubernetesEnvironmentResource> WithDashboard(this IResourceBuilder<KubernetesEnvironmentResource> builder, bool enabled = true)
     {
         ArgumentNullException.ThrowIfNull(builder);

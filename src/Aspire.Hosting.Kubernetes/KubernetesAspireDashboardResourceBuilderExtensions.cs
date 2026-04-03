@@ -47,7 +47,7 @@ public static class KubernetesAspireDashboardResourceBuilderExtensions
     /// <param name="builder">The <see cref="IResourceBuilder{KubernetesAspireDashboardResource}"/> instance to configure.</param>
     /// <param name="port">The port to expose. If non-null, the dashboard will be exposed externally. If <c>null</c>, the dashboard will only be reachable within the cluster network.</param>
     /// <returns>The <see cref="IResourceBuilder{KubernetesAspireDashboardResource}"/> instance for chaining.</returns>
-    [AspireExport("withHostPort", Description = "Sets the host port for the Aspire dashboard")]
+    [AspireExport(Description = "Sets the host port for the Aspire dashboard")]
     public static IResourceBuilder<KubernetesAspireDashboardResource> WithHostPort(
         this IResourceBuilder<KubernetesAspireDashboardResource> builder,
         int? port = null)
@@ -70,7 +70,7 @@ public static class KubernetesAspireDashboardResourceBuilderExtensions
     /// container. When enabled, the dashboard will process <c>X-Forwarded-Host</c> and <c>X-Forwarded-Proto</c>
     /// headers which is required when the dashboard is accessed through a reverse proxy or ingress controller.
     /// </remarks>
-    [AspireExport("withForwardedHeaders", Description = "Enables or disables forwarded headers support for the Aspire dashboard")]
+    [AspireExport(Description = "Enables or disables forwarded headers support for the Aspire dashboard")]
     public static IResourceBuilder<KubernetesAspireDashboardResource> WithForwardedHeaders(
         this IResourceBuilder<KubernetesAspireDashboardResource> builder,
         bool enabled = true)
