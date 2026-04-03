@@ -8309,6 +8309,7 @@ export interface ContainerResource {
     withHealthCheck(key: string): ContainerResourcePromise;
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): ContainerResourcePromise;
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ContainerResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: WithHttpCommandOptions): ContainerResourcePromise;
     withDeveloperCertificateTrust(trust: boolean): ContainerResourcePromise;
     withCertificateTrustScope(scope: CertificateTrustScope): ContainerResourcePromise;
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ContainerResourcePromise;
@@ -8415,6 +8416,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
     withHealthCheck(key: string): ContainerResourcePromise;
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): ContainerResourcePromise;
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ContainerResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: WithHttpCommandOptions): ContainerResourcePromise;
     withDeveloperCertificateTrust(trust: boolean): ContainerResourcePromise;
     withCertificateTrustScope(scope: CertificateTrustScope): ContainerResourcePromise;
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ContainerResourcePromise;
@@ -9479,12 +9481,12 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
             'Aspire.Hosting/withHttpCommand',
             rpcArgs
         );
-        return new ContainerResource(result, this._client);
+        return new ContainerResourceImpl(result, this._client);
     }
 
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ContainerResourcePromise {
-        return new ContainerResourcePromise(this._withHttpCommandInternal(path, displayName, options));
+        return new ContainerResourcePromiseImpl(this._withHttpCommandInternal(path, displayName, options));
     }
 
     /** @internal */
@@ -10584,7 +10586,7 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
 
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ContainerResourcePromise {
-        return new ContainerResourcePromise(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)));
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)));
     }
 
     /** Configures developer certificate trust */
@@ -10864,6 +10866,7 @@ export interface CSharpAppResource {
     withHealthCheck(key: string): CSharpAppResourcePromise;
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): CSharpAppResourcePromise;
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): CSharpAppResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: WithHttpCommandOptions): CSharpAppResourcePromise;
     withDeveloperCertificateTrust(trust: boolean): CSharpAppResourcePromise;
     withCertificateTrustScope(scope: CertificateTrustScope): CSharpAppResourcePromise;
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): CSharpAppResourcePromise;
@@ -10955,6 +10958,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
     withHealthCheck(key: string): CSharpAppResourcePromise;
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): CSharpAppResourcePromise;
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): CSharpAppResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: WithHttpCommandOptions): CSharpAppResourcePromise;
     withDeveloperCertificateTrust(trust: boolean): CSharpAppResourcePromise;
     withCertificateTrustScope(scope: CertificateTrustScope): CSharpAppResourcePromise;
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): CSharpAppResourcePromise;
@@ -11800,12 +11804,12 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
             'Aspire.Hosting/withHttpCommand',
             rpcArgs
         );
-        return new CSharpAppResource(result, this._client);
+        return new CSharpAppResourceImpl(result, this._client);
     }
 
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromise(this._withHttpCommandInternal(path, displayName, options));
+        return new CSharpAppResourcePromiseImpl(this._withHttpCommandInternal(path, displayName, options));
     }
 
     /** @internal */
@@ -12816,7 +12820,7 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
 
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromise(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)));
+        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)));
     }
 
     /** Configures developer certificate trust */
@@ -13097,6 +13101,7 @@ export interface DotnetToolResource {
     withHealthCheck(key: string): DotnetToolResourcePromise;
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): DotnetToolResourcePromise;
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): DotnetToolResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: WithHttpCommandOptions): DotnetToolResourcePromise;
     withDeveloperCertificateTrust(trust: boolean): DotnetToolResourcePromise;
     withCertificateTrustScope(scope: CertificateTrustScope): DotnetToolResourcePromise;
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): DotnetToolResourcePromise;
@@ -13194,6 +13199,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
     withHealthCheck(key: string): DotnetToolResourcePromise;
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): DotnetToolResourcePromise;
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): DotnetToolResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: WithHttpCommandOptions): DotnetToolResourcePromise;
     withDeveloperCertificateTrust(trust: boolean): DotnetToolResourcePromise;
     withCertificateTrustScope(scope: CertificateTrustScope): DotnetToolResourcePromise;
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): DotnetToolResourcePromise;
@@ -14126,12 +14132,12 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
             'Aspire.Hosting/withHttpCommand',
             rpcArgs
         );
-        return new DotnetToolResource(result, this._client);
+        return new DotnetToolResourceImpl(result, this._client);
     }
 
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromise(this._withHttpCommandInternal(path, displayName, options));
+        return new DotnetToolResourcePromiseImpl(this._withHttpCommandInternal(path, displayName, options));
     }
 
     /** @internal */
@@ -15172,7 +15178,7 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
 
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromise(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)));
+        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)));
     }
 
     /** Configures developer certificate trust */
@@ -15447,6 +15453,7 @@ export interface ExecutableResource {
     withHealthCheck(key: string): ExecutableResourcePromise;
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): ExecutableResourcePromise;
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ExecutableResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: WithHttpCommandOptions): ExecutableResourcePromise;
     withDeveloperCertificateTrust(trust: boolean): ExecutableResourcePromise;
     withCertificateTrustScope(scope: CertificateTrustScope): ExecutableResourcePromise;
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ExecutableResourcePromise;
@@ -15538,6 +15545,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
     withHealthCheck(key: string): ExecutableResourcePromise;
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): ExecutableResourcePromise;
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ExecutableResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: WithHttpCommandOptions): ExecutableResourcePromise;
     withDeveloperCertificateTrust(trust: boolean): ExecutableResourcePromise;
     withCertificateTrustScope(scope: CertificateTrustScope): ExecutableResourcePromise;
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ExecutableResourcePromise;
@@ -16380,12 +16388,12 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
             'Aspire.Hosting/withHttpCommand',
             rpcArgs
         );
-        return new ExecutableResource(result, this._client);
+        return new ExecutableResourceImpl(result, this._client);
     }
 
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ExecutableResourcePromise {
-        return new ExecutableResourcePromise(this._withHttpCommandInternal(path, displayName, options));
+        return new ExecutableResourcePromiseImpl(this._withHttpCommandInternal(path, displayName, options));
     }
 
     /** @internal */
@@ -17396,7 +17404,7 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
 
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ExecutableResourcePromise {
-        return new ExecutableResourcePromise(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)));
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)));
     }
 
     /** Configures developer certificate trust */
@@ -19973,6 +19981,7 @@ export interface ProjectResource {
     withHealthCheck(key: string): ProjectResourcePromise;
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): ProjectResourcePromise;
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ProjectResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: WithHttpCommandOptions): ProjectResourcePromise;
     withDeveloperCertificateTrust(trust: boolean): ProjectResourcePromise;
     withCertificateTrustScope(scope: CertificateTrustScope): ProjectResourcePromise;
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ProjectResourcePromise;
@@ -20064,6 +20073,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
     withHealthCheck(key: string): ProjectResourcePromise;
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): ProjectResourcePromise;
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ProjectResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: WithHttpCommandOptions): ProjectResourcePromise;
     withDeveloperCertificateTrust(trust: boolean): ProjectResourcePromise;
     withCertificateTrustScope(scope: CertificateTrustScope): ProjectResourcePromise;
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ProjectResourcePromise;
@@ -20909,12 +20919,12 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
             'Aspire.Hosting/withHttpCommand',
             rpcArgs
         );
-        return new ProjectResource(result, this._client);
+        return new ProjectResourceImpl(result, this._client);
     }
 
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ProjectResourcePromise {
-        return new ProjectResourcePromise(this._withHttpCommandInternal(path, displayName, options));
+        return new ProjectResourcePromiseImpl(this._withHttpCommandInternal(path, displayName, options));
     }
 
     /** @internal */
@@ -21925,7 +21935,7 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
 
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ProjectResourcePromise {
-        return new ProjectResourcePromise(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)));
+        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)));
     }
 
     /** Configures developer certificate trust */
@@ -22214,6 +22224,7 @@ export interface TestDatabaseResource {
     withHealthCheck(key: string): TestDatabaseResourcePromise;
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): TestDatabaseResourcePromise;
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): TestDatabaseResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: WithHttpCommandOptions): TestDatabaseResourcePromise;
     withDeveloperCertificateTrust(trust: boolean): TestDatabaseResourcePromise;
     withCertificateTrustScope(scope: CertificateTrustScope): TestDatabaseResourcePromise;
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): TestDatabaseResourcePromise;
@@ -22320,6 +22331,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
     withHealthCheck(key: string): TestDatabaseResourcePromise;
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): TestDatabaseResourcePromise;
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): TestDatabaseResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: WithHttpCommandOptions): TestDatabaseResourcePromise;
     withDeveloperCertificateTrust(trust: boolean): TestDatabaseResourcePromise;
     withCertificateTrustScope(scope: CertificateTrustScope): TestDatabaseResourcePromise;
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): TestDatabaseResourcePromise;
@@ -23384,12 +23396,12 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
             'Aspire.Hosting/withHttpCommand',
             rpcArgs
         );
-        return new TestDatabaseResource(result, this._client);
+        return new TestDatabaseResourceImpl(result, this._client);
     }
 
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromise(this._withHttpCommandInternal(path, displayName, options));
+        return new TestDatabaseResourcePromiseImpl(this._withHttpCommandInternal(path, displayName, options));
     }
 
     /** @internal */
@@ -24489,7 +24501,7 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
 
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromise(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)));
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)));
     }
 
     /** Configures developer certificate trust */
@@ -24786,6 +24798,7 @@ export interface TestRedisResource {
     withHealthCheck(key: string): TestRedisResourcePromise;
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): TestRedisResourcePromise;
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): TestRedisResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: WithHttpCommandOptions): TestRedisResourcePromise;
     withDeveloperCertificateTrust(trust: boolean): TestRedisResourcePromise;
     withCertificateTrustScope(scope: CertificateTrustScope): TestRedisResourcePromise;
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): TestRedisResourcePromise;
@@ -24908,6 +24921,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
     withHealthCheck(key: string): TestRedisResourcePromise;
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): TestRedisResourcePromise;
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): TestRedisResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: WithHttpCommandOptions): TestRedisResourcePromise;
     withDeveloperCertificateTrust(trust: boolean): TestRedisResourcePromise;
     withCertificateTrustScope(scope: CertificateTrustScope): TestRedisResourcePromise;
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): TestRedisResourcePromise;
@@ -26024,12 +26038,12 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
             'Aspire.Hosting/withHttpCommand',
             rpcArgs
         );
-        return new TestRedisResource(result, this._client);
+        return new TestRedisResourceImpl(result, this._client);
     }
 
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): TestRedisResourcePromise {
-        return new TestRedisResourcePromise(this._withHttpCommandInternal(path, displayName, options));
+        return new TestRedisResourcePromiseImpl(this._withHttpCommandInternal(path, displayName, options));
     }
 
     /** @internal */
@@ -27333,7 +27347,7 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
 
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): TestRedisResourcePromise {
-        return new TestRedisResourcePromise(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)));
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)));
     }
 
     /** Configures developer certificate trust */
@@ -27692,6 +27706,7 @@ export interface TestVaultResource {
     withHealthCheck(key: string): TestVaultResourcePromise;
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): TestVaultResourcePromise;
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): TestVaultResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: WithHttpCommandOptions): TestVaultResourcePromise;
     withDeveloperCertificateTrust(trust: boolean): TestVaultResourcePromise;
     withCertificateTrustScope(scope: CertificateTrustScope): TestVaultResourcePromise;
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): TestVaultResourcePromise;
@@ -27799,6 +27814,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
     withHealthCheck(key: string): TestVaultResourcePromise;
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): TestVaultResourcePromise;
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): TestVaultResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: WithHttpCommandOptions): TestVaultResourcePromise;
     withDeveloperCertificateTrust(trust: boolean): TestVaultResourcePromise;
     withCertificateTrustScope(scope: CertificateTrustScope): TestVaultResourcePromise;
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): TestVaultResourcePromise;
@@ -28864,12 +28880,12 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
             'Aspire.Hosting/withHttpCommand',
             rpcArgs
         );
-        return new TestVaultResource(result, this._client);
+        return new TestVaultResourceImpl(result, this._client);
     }
 
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): TestVaultResourcePromise {
-        return new TestVaultResourcePromise(this._withHttpCommandInternal(path, displayName, options));
+        return new TestVaultResourcePromiseImpl(this._withHttpCommandInternal(path, displayName, options));
     }
 
     /** @internal */
@@ -29984,7 +30000,7 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
 
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): TestVaultResourcePromise {
-        return new TestVaultResourcePromise(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)));
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)));
     }
 
     /** Configures developer certificate trust */
@@ -31856,6 +31872,7 @@ export interface ResourceWithEndpoints {
     asHttp2Service(): ResourceWithEndpointsPromise;
     withUrlForEndpointFactory(endpointName: string, callback: (arg: EndpointReference) => Promise<ResourceUrlAnnotation>): ResourceWithEndpointsPromise;
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): ResourceWithEndpointsPromise;
+    withHttpCommand(path: string, displayName: string, options?: WithHttpCommandOptions): ResourceWithEndpointsPromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ResourceWithEndpointsPromise;
     onResourceEndpointsAllocated(callback: (arg: ResourceEndpointsAllocatedEvent) => Promise<void>): ResourceWithEndpointsPromise;
 }
@@ -31870,6 +31887,7 @@ export interface ResourceWithEndpointsPromise extends PromiseLike<ResourceWithEn
     asHttp2Service(): ResourceWithEndpointsPromise;
     withUrlForEndpointFactory(endpointName: string, callback: (arg: EndpointReference) => Promise<ResourceUrlAnnotation>): ResourceWithEndpointsPromise;
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): ResourceWithEndpointsPromise;
+    withHttpCommand(path: string, displayName: string, options?: WithHttpCommandOptions): ResourceWithEndpointsPromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ResourceWithEndpointsPromise;
     onResourceEndpointsAllocated(callback: (arg: ResourceEndpointsAllocatedEvent) => Promise<void>): ResourceWithEndpointsPromise;
 }
@@ -32071,12 +32089,12 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
             'Aspire.Hosting/withHttpCommand',
             rpcArgs
         );
-        return new ResourceWithEndpoints(result, this._client);
+        return new ResourceWithEndpointsImpl(result, this._client);
     }
 
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ResourceWithEndpointsPromise {
-        return new ResourceWithEndpointsPromise(this._withHttpCommandInternal(path, displayName, options));
+        return new ResourceWithEndpointsPromiseImpl(this._withHttpCommandInternal(path, displayName, options));
     }
 
     /** @internal */
@@ -32194,7 +32212,7 @@ class ResourceWithEndpointsPromiseImpl implements ResourceWithEndpointsPromise {
 
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ResourceWithEndpointsPromise {
-        return new ResourceWithEndpointsPromise(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)));
+        return new ResourceWithEndpointsPromiseImpl(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)));
     }
 
     /** Adds an HTTP health probe to the resource */
