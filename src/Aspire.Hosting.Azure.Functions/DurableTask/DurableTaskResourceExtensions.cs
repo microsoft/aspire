@@ -134,7 +134,6 @@ public static class DurableTaskResourceExtensions
         builder.WithAnnotation(new EmulatorResourceAnnotation());
 
         builder.WithHttpEndpoint(name: "grpc", targetPort: 8080)
-               .WithEndpoint("grpc", endpoint => endpoint.Transport = "http2")
                .WithHttpEndpoint(name: "http", targetPort: 8081)
                .WithHttpEndpoint(name: "dashboard", targetPort: 8082)
                .WithUrlForEndpoint("dashboard", c => c.DisplayText = "Scheduler Dashboard")
