@@ -30,7 +30,7 @@ public static class KubernetesServiceExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("publishAsKubernetesService", Description = "Publishes the resource as a Kubernetes service")]
+    [AspireExport(Description = "Publishes the resource as a Kubernetes service")]
     public static IResourceBuilder<T> PublishAsKubernetesService<T>(this IResourceBuilder<T> builder, Action<KubernetesResource> configure)
         where T : IComputeResource
     {

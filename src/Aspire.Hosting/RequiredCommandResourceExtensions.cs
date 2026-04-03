@@ -25,7 +25,7 @@ public static class RequiredCommandResourceExtensions
     /// 2. It is discoverable on the current process PATH (respecting PATHEXT on Windows).
     /// If the command is not found, a warning message will be logged but the resource will be allowed to attempt to start.
     /// </remarks>
-    [AspireExport("withRequiredCommand", Description = "Adds a required command dependency")]
+    [AspireExport(Description = "Adds a required command dependency")]
     public static IResourceBuilder<T> WithRequiredCommand<T>(
         this IResourceBuilder<T> builder,
         string command,

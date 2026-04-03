@@ -35,7 +35,7 @@ public static class ContainerRegistryResourceBuilderExtensions
     /// </code>
     /// </example>
     [Experimental("ASPIRECOMPUTE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExport("addContainerRegistry", Description = "Adds a container registry resource")]
+    [AspireExport(Description = "Adds a container registry resource")]
     public static IResourceBuilder<ContainerRegistryResource> AddContainerRegistry(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -153,7 +153,7 @@ public static class ContainerRegistryResourceBuilderExtensions
     /// </code>
     /// </example>
     [Experimental("ASPIRECOMPUTE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExport("withContainerRegistry", Description = "Configures a resource to use a container registry")]
+    [AspireExport(Description = "Configures a resource to use a container registry")]
     public static IResourceBuilder<TDestination> WithContainerRegistry<TDestination, TContainerRegistry>(
         this IResourceBuilder<TDestination> builder,
         IResourceBuilder<TContainerRegistry> registry)

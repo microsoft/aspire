@@ -25,7 +25,7 @@ public static class DurableTaskResourceExtensions
     /// var scheduler = builder.AddDurableTaskScheduler("scheduler");
     /// </code>
     /// </example>
-    [AspireExport("addDurableTaskScheduler", Description = "Adds a Durable Task scheduler resource to the distributed application.")]
+    [AspireExport(Description = "Adds a Durable Task scheduler resource to the distributed application.")]
     public static IResourceBuilder<DurableTaskSchedulerResource> AddDurableTaskScheduler(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         var scheduler = new DurableTaskSchedulerResource(name);
@@ -120,7 +120,7 @@ public static class DurableTaskResourceExtensions
     ///     .RunAsEmulator();
     /// </code>
     /// </example>
-    [AspireExport("runAsEmulator", Description = "Configures the Durable Task scheduler to run using the local emulator.", RunSyncOnBackgroundThread = true)]
+    [AspireExport(Description = "Configures the Durable Task scheduler to run using the local emulator.", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<DurableTaskSchedulerResource> RunAsEmulator(this IResourceBuilder<DurableTaskSchedulerResource> builder, Action<IResourceBuilder<DurableTaskSchedulerEmulatorResource>>? configureContainer = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -199,7 +199,7 @@ public static class DurableTaskResourceExtensions
     ///     .WithTaskHubName("MyTaskHub");
     /// </code>
     /// </example>
-    [AspireExport("addTaskHub", Description = "Adds a Durable Task hub resource associated with the scheduler.")]
+    [AspireExport(Description = "Adds a Durable Task hub resource associated with the scheduler.")]
     public static IResourceBuilder<DurableTaskHubResource> AddTaskHub(this IResourceBuilder<DurableTaskSchedulerResource> builder, [ResourceName] string name)
     {
         var hub = new DurableTaskHubResource(name, builder.Resource);

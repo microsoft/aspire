@@ -42,7 +42,7 @@ public static class PostgresBuilderExtensions
     /// </para>
     /// This version of the package defaults to the <inheritdoc cref="PostgresContainerImageTags.Tag"/> tag of the <inheritdoc cref="PostgresContainerImageTags.Image"/> container image.
     /// </remarks>
-    [AspireExport("addPostgres", Description = "Adds a PostgreSQL server resource")]
+    [AspireExport(Description = "Adds a PostgreSQL server resource")]
     public static IResourceBuilder<PostgresServerResource> AddPostgres(this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
         IResourceBuilder<ParameterResource>? userName = null,
@@ -140,7 +140,7 @@ public static class PostgresBuilderExtensions
     /// The database creation happens automatically as part of the resource lifecycle.
     /// </para>
     /// </remarks>
-    [AspireExport("addDatabase", Description = "Adds a PostgreSQL database")]
+    [AspireExport(Description = "Adds a PostgreSQL database")]
     public static IResourceBuilder<PostgresDatabaseResource> AddDatabase(this IResourceBuilder<PostgresServerResource> builder, [ResourceName] string name, string? databaseName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -183,7 +183,7 @@ public static class PostgresBuilderExtensions
     /// <param name="configureContainer">Callback to configure PgAdmin container resource.</param>
     /// <param name="containerName">The name of the container (Optional).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withPgAdmin", Description = "Adds pgAdmin 4 management UI", RunSyncOnBackgroundThread = true)]
+    [AspireExport(Description = "Adds pgAdmin 4 management UI", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<T> WithPgAdmin<T>(this IResourceBuilder<T> builder, Action<IResourceBuilder<PgAdminContainerResource>>? configureContainer = null, string? containerName = null)
         where T : PostgresServerResource
     {
@@ -293,7 +293,7 @@ public static class PostgresBuilderExtensions
     /// </example>
     /// </remarks>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withPgWeb", Description = "Adds pgweb management UI", RunSyncOnBackgroundThread = true)]
+    [AspireExport(Description = "Adds pgweb management UI", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<PostgresServerResource> WithPgWeb(this IResourceBuilder<PostgresServerResource> builder, Action<IResourceBuilder<PgWebContainerResource>>? configureContainer = null, string? containerName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -361,7 +361,7 @@ public static class PostgresBuilderExtensions
     /// This version of the package defaults to the <inheritdoc cref="PostgresContainerImageTags.PostgresMcpTag"/> tag of the <inheritdoc cref="PostgresContainerImageTags.PostgresMcpImage"/> container image.
     /// </remarks>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withPostgresMcp", Description = "Adds Postgres MCP server", RunSyncOnBackgroundThread = true)]
+    [AspireExport(Description = "Adds Postgres MCP server", RunSyncOnBackgroundThread = true)]
     [Experimental("ASPIREPOSTGRES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<PostgresDatabaseResource> WithPostgresMcp(
         this IResourceBuilder<PostgresDatabaseResource> builder,
@@ -441,7 +441,7 @@ public static class PostgresBuilderExtensions
     /// This method automatically selects the correct path based on the configured container image tag.
     /// </para>
     /// </remarks>
-    [AspireExport("withDataVolume", Description = "Adds a data volume for PostgreSQL")]
+    [AspireExport(Description = "Adds a data volume for PostgreSQL")]
     public static IResourceBuilder<PostgresServerResource> WithDataVolume(this IResourceBuilder<PostgresServerResource> builder, string? name = null, bool isReadOnly = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -471,7 +471,7 @@ public static class PostgresBuilderExtensions
     /// This method automatically selects the correct path based on the configured container image tag.
     /// </para>
     /// </remarks>
-    [AspireExport("withDataBindMount", Description = "Adds a data bind mount for PostgreSQL")]
+    [AspireExport(Description = "Adds a data bind mount for PostgreSQL")]
     public static IResourceBuilder<PostgresServerResource> WithDataBindMount(this IResourceBuilder<PostgresServerResource> builder, string source, bool isReadOnly = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -506,7 +506,7 @@ public static class PostgresBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="source">The source directory or files on the host to copy into the container.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withInitFiles", Description = "Copies init files to PostgreSQL")]
+    [AspireExport(Description = "Copies init files to PostgreSQL")]
     public static IResourceBuilder<PostgresServerResource> WithInitFiles(this IResourceBuilder<PostgresServerResource> builder, string source)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -530,7 +530,7 @@ public static class PostgresBuilderExtensions
     /// and data insertion are not supported since they require a distinct connection to the newly created database.
     /// <value>Default script is <code>CREATE DATABASE "&lt;QUOTED_DATABASE_NAME&gt;"</code></value>
     /// </remarks>
-    [AspireExport("withCreationScript", Description = "Defines the SQL script for database creation")]
+    [AspireExport(Description = "Defines the SQL script for database creation")]
     public static IResourceBuilder<PostgresDatabaseResource> WithCreationScript(this IResourceBuilder<PostgresDatabaseResource> builder, string script)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -547,7 +547,7 @@ public static class PostgresBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="password">The parameter used to provide the password for the PostgreSQL resource.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withPassword", Description = "Configures the PostgreSQL password")]
+    [AspireExport(Description = "Configures the PostgreSQL password")]
     public static IResourceBuilder<PostgresServerResource> WithPassword(this IResourceBuilder<PostgresServerResource> builder, IResourceBuilder<ParameterResource> password)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -563,7 +563,7 @@ public static class PostgresBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="userName">The parameter used to provide the user name for the PostgreSQL resource.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withUserName", Description = "Configures the PostgreSQL user name")]
+    [AspireExport(Description = "Configures the PostgreSQL user name")]
     public static IResourceBuilder<PostgresServerResource> WithUserName(this IResourceBuilder<PostgresServerResource> builder, IResourceBuilder<ParameterResource> userName)
     {
         ArgumentNullException.ThrowIfNull(builder);

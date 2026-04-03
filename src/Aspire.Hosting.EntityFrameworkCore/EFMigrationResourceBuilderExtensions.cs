@@ -147,7 +147,7 @@ public static class EFMigrationResourceBuilderExtensions
     /// remains the original project.
     /// </para>
     /// </remarks>
-    [AspireExport]
+    [AspireExport("withMigrationsProjectFromPath", MethodName = "withMigrationsProject", Description = "Configures a separate project containing the migrations using a path")]
     public static IResourceBuilder<EFMigrationResource> WithMigrationsProject(this IResourceBuilder<EFMigrationResource> builder, string projectPath)
     {
         ArgumentException.ThrowIfNullOrEmpty(projectPath);

@@ -202,7 +202,7 @@ public static class GarnetBuilderExtensions
     /// Defaults to <c>false</c>.
     /// </param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withDataVolume", Description = "Adds a persistent data volume to the Garnet resource.")]
+    [AspireExport(Description = "Adds a persistent data volume to the Garnet resource.")]
     public static IResourceBuilder<GarnetResource> WithDataVolume(this IResourceBuilder<GarnetResource> builder,
         string? name = null, bool isReadOnly = false)
     {
@@ -238,7 +238,7 @@ public static class GarnetBuilderExtensions
     /// Defaults to <c>false</c>.
     /// </param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withDataBindMount", Description = "Mounts a host directory as the Garnet data directory.")]
+    [AspireExport(Description = "Mounts a host directory as the Garnet data directory.")]
     public static IResourceBuilder<GarnetResource> WithDataBindMount(this IResourceBuilder<GarnetResource> builder,
         string source, bool isReadOnly = false)
     {
@@ -292,7 +292,7 @@ public static class GarnetBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="interval">The interval between snapshot exports. Defaults to 60 seconds.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withPersistence", Description = "Configures snapshot persistence for the Garnet resource.")]
+    [AspireExport(Description = "Configures snapshot persistence for the Garnet resource.")]
     public static IResourceBuilder<GarnetResource> WithPersistence(this IResourceBuilder<GarnetResource> builder,
         TimeSpan? interval = null)
     {
