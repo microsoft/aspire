@@ -109,6 +109,9 @@ type IComputeResourceHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationM
 /** Handle to IContainerFilesDestinationResource */
 type IContainerFilesDestinationResourceHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.IContainerFilesDestinationResource'>;
 
+/** Handle to IExpressionValue */
+type IExpressionValueHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExpressionValue'>;
+
 /** Handle to InitializeResourceEvent */
 type InitializeResourceEventHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent'>;
 
@@ -220,12 +223,6 @@ type PipelineSummaryHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Pipelines.Pip
 /** Handle to ProjectResourceOptions */
 type ProjectResourceOptionsHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions'>;
 
-/** Handle to Dict<string,any> */
-type DictstringanyHandle = Handle<'Aspire.Hosting/Dict<string,any>'>;
-
-/** Handle to List<any> */
-type ListanyHandle = Handle<'Aspire.Hosting/List<any>'>;
-
 /** Handle to IConfiguration */
 type IConfigurationHandle = Handle<'Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfiguration'>;
 
@@ -240,9 +237,6 @@ type ILoggerHandle = Handle<'Microsoft.Extensions.Logging.Abstractions/Microsoft
 
 /** Handle to ILoggerFactory */
 type ILoggerFactoryHandle = Handle<'Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILoggerFactory'>;
-
-/** Handle to string[] */
-type stringArrayHandle = Handle<'string[]'>;
 
 /** Handle to IServiceProvider */
 type IServiceProviderHandle = Handle<'System.ComponentModel/System.IServiceProvider'>;

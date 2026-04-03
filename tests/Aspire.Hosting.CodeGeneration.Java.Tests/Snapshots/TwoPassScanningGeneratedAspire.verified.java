@@ -1170,6 +1170,9 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource", (h, c) -> new ExecutableResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource", (h, c) -> new ProjectResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource", (h, c) -> new ParameterResource(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerMountAnnotation", (h, c) -> new ContainerMountAnnotation(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImageReference", (h, c) -> new ContainerImageReference(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerPortReference", (h, c) -> new ContainerPortReference(h, c));
         AspireClient.registerHandleWrapper("System.ComponentModel/System.IServiceProvider", (h, c) -> new IServiceProvider(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceNotificationService", (h, c) -> new ResourceNotificationService(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceLoggerService", (h, c) -> new ResourceLoggerService(h, c));
@@ -4032,6 +4035,22 @@ public class ConnectionStringResource extends ResourceBuilderBase {
 
 }
 
+// ===== ContainerImageReference.java =====
+// ContainerImageReference.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImageReference. */
+public class ContainerImageReference extends HandleWrapperBase {
+    ContainerImageReference(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+}
+
 // ===== ContainerLifetime.java =====
 // ContainerLifetime.java - GENERATED CODE - DO NOT EDIT
 
@@ -4059,6 +4078,38 @@ public enum ContainerLifetime implements WireValueEnum {
         }
         throw new IllegalArgumentException("Unknown value: " + value);
     }
+}
+
+// ===== ContainerMountAnnotation.java =====
+// ContainerMountAnnotation.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerMountAnnotation. */
+public class ContainerMountAnnotation extends HandleWrapperBase {
+    ContainerMountAnnotation(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+}
+
+// ===== ContainerPortReference.java =====
+// ContainerPortReference.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerPortReference. */
+public class ContainerPortReference extends HandleWrapperBase {
+    ContainerPortReference(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
 }
 
 // ===== ContainerRegistryResource.java =====
@@ -21735,7 +21786,10 @@ public final class WithVolumeOptions {
 .modules/CompleteTaskOptions.java
 .modules/ConnectionStringAvailableEvent.java
 .modules/ConnectionStringResource.java
+.modules/ContainerImageReference.java
 .modules/ContainerLifetime.java
+.modules/ContainerMountAnnotation.java
+.modules/ContainerPortReference.java
 .modules/ContainerRegistryResource.java
 .modules/ContainerResource.java
 .modules/CreateBuilderOptions.java

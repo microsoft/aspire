@@ -143,12 +143,6 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     private string GetPublicPromiseInterfaceName(string typeId) => GetPromiseInterfaceName(GetConcreteClassName(typeId));
 
     /// <summary>
-    /// Checks if an AtsTypeRef represents a handle type.
-    /// </summary>
-    private static bool IsHandleType(AtsTypeRef? typeRef) =>
-        typeRef != null && typeRef.Category == AtsTypeCategory.Handle;
-
-    /// <summary>
     /// Maps an AtsTypeRef to a TypeScript type using category-based dispatch.
     /// This is the preferred method - uses type metadata rather than string parsing.
     /// </summary>
@@ -615,34 +609,11 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         // Exclude DTO types - they have their own interfaces, not handle aliases
         var dtoTypeIds = new HashSet<string>(dtoTypes.Select(d => d.TypeId));
         var typeIds = new HashSet<string>();
-        foreach (var cap in capabilities)
+        foreach (var typeId in CollectAllReferencedTypes(capabilities).Keys)
         {
-            if (!string.IsNullOrEmpty(cap.TargetTypeId) && !dtoTypeIds.Contains(cap.TargetTypeId))
+            if (!dtoTypeIds.Contains(typeId))
             {
-                typeIds.Add(cap.TargetTypeId);
-            }
-            if (IsHandleType(cap.ReturnType) && !dtoTypeIds.Contains(cap.ReturnType!.TypeId))
-            {
-                typeIds.Add(GetReturnTypeId(cap)!);
-            }
-            // Add parameter type IDs (for types like IResourceBuilder<IResource>)
-            foreach (var param in cap.Parameters)
-            {
-                if (IsHandleType(param.Type) && !dtoTypeIds.Contains(param.Type!.TypeId))
-                {
-                    typeIds.Add(param.Type!.TypeId);
-                }
-                // Also collect callback parameter types
-                if (param.IsCallback && param.CallbackParameters != null)
-                {
-                    foreach (var cbParam in param.CallbackParameters)
-                    {
-                        if (IsHandleType(cbParam.Type) && !dtoTypeIds.Contains(cbParam.Type.TypeId))
-                        {
-                            typeIds.Add(cbParam.Type.TypeId);
-                        }
-                    }
-                }
+                typeIds.Add(typeId);
             }
         }
 

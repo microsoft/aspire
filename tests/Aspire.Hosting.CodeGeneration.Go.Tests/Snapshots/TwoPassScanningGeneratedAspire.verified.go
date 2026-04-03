@@ -2894,6 +2894,42 @@ func (s *ConnectionStringResource) WithMergeRouteMiddleware(path string, method 
 	return result.(*IResource), nil
 }
 
+// ContainerImageReference wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImageReference.
+type ContainerImageReference struct {
+	HandleWrapperBase
+}
+
+// NewContainerImageReference creates a new ContainerImageReference.
+func NewContainerImageReference(handle *Handle, client *AspireClient) *ContainerImageReference {
+	return &ContainerImageReference{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// ContainerMountAnnotation wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerMountAnnotation.
+type ContainerMountAnnotation struct {
+	HandleWrapperBase
+}
+
+// NewContainerMountAnnotation creates a new ContainerMountAnnotation.
+func NewContainerMountAnnotation(handle *Handle, client *AspireClient) *ContainerMountAnnotation {
+	return &ContainerMountAnnotation{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// ContainerPortReference wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerPortReference.
+type ContainerPortReference struct {
+	HandleWrapperBase
+}
+
+// NewContainerPortReference creates a new ContainerPortReference.
+func NewContainerPortReference(handle *Handle, client *AspireClient) *ContainerPortReference {
+	return &ContainerPortReference{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
 // ContainerRegistryResource wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerRegistryResource.
 type ContainerRegistryResource struct {
 	ResourceBuilderBase
@@ -19297,6 +19333,15 @@ func init() {
 	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource", func(h *Handle, c *AspireClient) any {
 		return NewParameterResource(h, c)
+	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerMountAnnotation", func(h *Handle, c *AspireClient) any {
+		return NewContainerMountAnnotation(h, c)
+	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImageReference", func(h *Handle, c *AspireClient) any {
+		return NewContainerImageReference(h, c)
+	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerPortReference", func(h *Handle, c *AspireClient) any {
+		return NewContainerPortReference(h, c)
 	})
 	RegisterHandleWrapper("System.ComponentModel/System.IServiceProvider", func(h *Handle, c *AspireClient) any {
 		return NewIServiceProvider(h, c)
