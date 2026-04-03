@@ -125,6 +125,13 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
 
     private static void CopyFixtures(TemporaryWorkspace workspace)
     {
+        // Copy root-level files (e.g. verify.sh)
+        foreach (var file in Directory.GetFiles(s_fixturesDir))
+        {
+            File.Copy(file, Path.Combine(workspace.WorkspaceRoot.FullName, Path.GetFileName(file)));
+        }
+
+        // Copy subdirectories (app fixtures)
         foreach (var fixtureDir in Directory.GetDirectories(s_fixturesDir))
         {
             var targetDir = Path.Combine(workspace.WorkspaceRoot.FullName, Path.GetFileName(fixtureDir));
