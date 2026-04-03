@@ -1,4 +1,4 @@
-﻿#   -------------------------------------------------------------
+#   -------------------------------------------------------------
 #   Copyright (c) Microsoft Corporation. All rights reserved.
 #   Licensed under the MIT License. See LICENSE in project root for information.
 #
@@ -1595,6 +1595,12 @@ class ContainerCertificatePathsParameters(typing.TypedDict, total=False):
     default_certificate_dir_paths: typing.Iterable[str]
 
 
+class DockerfileBuilderParameters(typing.TypedDict, total=False):
+    context_path: typing.Required[str]
+    callback: typing.Required[typing.Callable[[DockerfileBuilderCallbackContext], None]]
+    stage: str
+
+
 class McpServerParameters(typing.TypedDict, total=False):
     path: str
     endpoint_name: str
@@ -2031,6 +2037,21 @@ class DistributedApplicationBuilder:
             rpc_args['stage'] = stage
         result = self._client.invoke_capability(
             'Aspire.Hosting/addDockerfile',
+            rpc_args,
+            kwargs,
+        )
+        return typing.cast(ContainerResource, result)
+
+    def add_dockerfile_builder(self, name: str, context_path: str, callback: typing.Callable[[DockerfileBuilderCallbackContext], None], *, stage: str | None = None, **kwargs: typing.Unpack["ContainerResourceKwargs"]) -> ContainerResource:  # type: ignore
+        """Adds a container resource built from a programmatically generated Dockerfile"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['name'] = name
+        rpc_args['contextPath'] = context_path
+        rpc_args['callback'] = self._client.register_callback(callback)
+        if stage is not None:
+            rpc_args['stage'] = stage
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/addDockerfileBuilder',
             rpc_args,
             kwargs,
         )
@@ -3153,6 +3174,278 @@ class DistributedApplicationModel:
             rpc_args,
         )
         return typing.cast(AbstractResource, result)
+
+
+class DockerfileBuilder:
+    """Type class for DockerfileBuilder."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"DockerfileBuilder(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    def arg(self, name: str, *, default_value: str | None = None) -> DockerfileBuilder:
+        """Adds a global ARG statement to the Dockerfile"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['name'] = name
+        if default_value is not None:
+            rpc_args['defaultValue'] = default_value
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/dockerfileBuilderArg',
+            rpc_args,
+        )
+        return typing.cast(DockerfileBuilder, result)
+
+    def from_(self, image: str, *, stage_name: str | None = None) -> DockerfileStage:
+        """Adds a FROM statement to start a Dockerfile stage"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['image'] = image
+        if stage_name is not None:
+            rpc_args['stageName'] = stage_name
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/dockerfileBuilderFrom',
+            rpc_args,
+        )
+        return typing.cast(DockerfileStage, result)
+
+    def add_container_files_stages(self, resource: AbstractResource, *, logger: AbstractLogger | None = None) -> DockerfileBuilder:
+        """Adds Dockerfile stages for published container files"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['resource'] = resource
+        if logger is not None:
+            rpc_args['logger'] = logger
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/dockerfileBuilderAddContainerFilesStages',
+            rpc_args,
+        )
+        return typing.cast(DockerfileBuilder, result)
+
+
+class DockerfileBuilderCallbackContext:
+    """Type class for DockerfileBuilderCallbackContext."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"DockerfileBuilderCallbackContext(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    @_cached_property
+    def resource(self) -> AbstractResource:
+        """Gets the Resource property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.resource',
+            {'context': self._handle}
+        )
+        return typing.cast(AbstractResource, result)
+
+    @_cached_property
+    def builder(self) -> DockerfileBuilder:
+        """Gets the Builder property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.builder',
+            {'context': self._handle}
+        )
+        return typing.cast(DockerfileBuilder, result)
+
+    @_cached_property
+    def services(self) -> AbstractServiceProvider:
+        """Gets the Services property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.services',
+            {'context': self._handle}
+        )
+        return typing.cast(AbstractServiceProvider, result)
+
+    def cancel(self) -> None:
+        """Cancel the operation."""
+        token: CancellationToken = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.cancellationToken',
+            {'context': self._handle}
+        )
+        token.cancel()
+
+
+class DockerfileStage:
+    """Type class for DockerfileStage."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"DockerfileStage(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    def arg(self, name: str, *, default_value: str | None = None) -> DockerfileStage:
+        """Adds an ARG statement to a Dockerfile stage"""
+        rpc_args: dict[str, typing.Any] = {'stage': self._handle}
+        rpc_args['name'] = name
+        if default_value is not None:
+            rpc_args['defaultValue'] = default_value
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/dockerfileStageArg',
+            rpc_args,
+        )
+        return typing.cast(DockerfileStage, result)
+
+    def work_dir(self, path: str) -> DockerfileStage:
+        """Adds a WORKDIR statement to a Dockerfile stage"""
+        rpc_args: dict[str, typing.Any] = {'stage': self._handle}
+        rpc_args['path'] = path
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/workDir',
+            rpc_args,
+        )
+        return typing.cast(DockerfileStage, result)
+
+    def run(self, command: str) -> DockerfileStage:
+        """Adds a RUN statement to a Dockerfile stage"""
+        rpc_args: dict[str, typing.Any] = {'stage': self._handle}
+        rpc_args['command'] = command
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/dockerfileStageRun',
+            rpc_args,
+        )
+        return typing.cast(DockerfileStage, result)
+
+    def copy(self, source: str, destination: str, *, chown: str | None = None) -> DockerfileStage:
+        """Adds a COPY statement to a Dockerfile stage"""
+        rpc_args: dict[str, typing.Any] = {'stage': self._handle}
+        rpc_args['source'] = source
+        rpc_args['destination'] = destination
+        if chown is not None:
+            rpc_args['chown'] = chown
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/dockerfileStageCopy',
+            rpc_args,
+        )
+        return typing.cast(DockerfileStage, result)
+
+    def copy_from(self, from_: str, source: str, destination: str, *, chown: str | None = None) -> DockerfileStage:
+        """Adds a COPY --from statement to a Dockerfile stage"""
+        rpc_args: dict[str, typing.Any] = {'stage': self._handle}
+        rpc_args['from'] = from_
+        rpc_args['source'] = source
+        rpc_args['destination'] = destination
+        if chown is not None:
+            rpc_args['chown'] = chown
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/dockerfileStageCopyFrom',
+            rpc_args,
+        )
+        return typing.cast(DockerfileStage, result)
+
+    def env(self, name: str, value: str) -> DockerfileStage:
+        """Adds an ENV statement to a Dockerfile stage"""
+        rpc_args: dict[str, typing.Any] = {'stage': self._handle}
+        rpc_args['name'] = name
+        rpc_args['value'] = value
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/env',
+            rpc_args,
+        )
+        return typing.cast(DockerfileStage, result)
+
+    def expose(self, port: int) -> DockerfileStage:
+        """Adds an EXPOSE statement to a Dockerfile stage"""
+        rpc_args: dict[str, typing.Any] = {'stage': self._handle}
+        rpc_args['port'] = port
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/expose',
+            rpc_args,
+        )
+        return typing.cast(DockerfileStage, result)
+
+    def cmd(self, command: typing.Iterable[str]) -> DockerfileStage:
+        """Adds a CMD statement to a Dockerfile stage"""
+        rpc_args: dict[str, typing.Any] = {'stage': self._handle}
+        rpc_args['command'] = command
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/cmd',
+            rpc_args,
+        )
+        return typing.cast(DockerfileStage, result)
+
+    def entrypoint(self, command: typing.Iterable[str]) -> DockerfileStage:
+        """Adds an ENTRYPOINT statement to a Dockerfile stage"""
+        rpc_args: dict[str, typing.Any] = {'stage': self._handle}
+        rpc_args['command'] = command
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/entrypoint',
+            rpc_args,
+        )
+        return typing.cast(DockerfileStage, result)
+
+    def run_with_mounts(self, command: str, mounts: typing.Iterable[str]) -> DockerfileStage:
+        """Adds a RUN statement with mounts to a Dockerfile stage"""
+        rpc_args: dict[str, typing.Any] = {'stage': self._handle}
+        rpc_args['command'] = command
+        rpc_args['mounts'] = mounts
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/runWithMounts',
+            rpc_args,
+        )
+        return typing.cast(DockerfileStage, result)
+
+    def user(self, user: str) -> DockerfileStage:
+        """Adds a USER statement to a Dockerfile stage"""
+        rpc_args: dict[str, typing.Any] = {'stage': self._handle}
+        rpc_args['user'] = user
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/user',
+            rpc_args,
+        )
+        return typing.cast(DockerfileStage, result)
+
+    def empty_line(self) -> DockerfileStage:
+        """Adds an empty line to a Dockerfile stage"""
+        rpc_args: dict[str, typing.Any] = {'stage': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/emptyLine',
+            rpc_args,
+        )
+        return typing.cast(DockerfileStage, result)
+
+    def comment(self, comment: str) -> DockerfileStage:
+        """Adds a comment to a Dockerfile stage"""
+        rpc_args: dict[str, typing.Any] = {'stage': self._handle}
+        rpc_args['comment'] = comment
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/comment',
+            rpc_args,
+        )
+        return typing.cast(DockerfileStage, result)
+
+    def add_container_files(self, resource: AbstractResource, root_destination_path: str, *, logger: AbstractLogger | None = None) -> DockerfileStage:
+        """Adds COPY --from statements for published container files"""
+        rpc_args: dict[str, typing.Any] = {'stage': self._handle}
+        rpc_args['resource'] = resource
+        rpc_args['rootDestinationPath'] = root_destination_path
+        if logger is not None:
+            rpc_args['logger'] = logger
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/dockerfileStageAddContainerFiles',
+            rpc_args,
+        )
+        return typing.cast(DockerfileStage, result)
 
 
 class EndpointReference:
@@ -6496,6 +6789,7 @@ class ContainerResourceKwargs(_BaseResourceKwargs, total=False):
     build_secret: tuple[str, ParameterResource]
     container_certificate_paths: ContainerCertificatePathsParameters | typing.Literal[True]
     endpoint_proxy_support: bool
+    dockerfile_builder: tuple[str, typing.Callable[[DockerfileBuilderCallbackContext], None]] | DockerfileBuilderParameters
     container_network_alias: str
     mcp_server: McpServerParameters | typing.Literal[True]
     otlp_exporter: OtlpProtocol | typing.Literal[True]
@@ -6731,6 +7025,20 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         rpc_args['proxyEnabled'] = proxy_enabled
         result = self._client.invoke_capability(
             'Aspire.Hosting/withEndpointProxySupport',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_dockerfile_builder(self, context_path: str, callback: typing.Callable[[DockerfileBuilderCallbackContext], None], *, stage: str | None = None) -> typing.Self:
+        """Configures the resource to use a programmatically generated Dockerfile"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['contextPath'] = context_path
+        rpc_args['callback'] = self._client.register_callback(callback)
+        if stage is not None:
+            rpc_args['stage'] = stage
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withDockerfileBuilder',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -7438,6 +7746,20 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEndpointProxySupport', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'endpoint_proxy_support'. Expected: bool")
+        if _dockerfile_builder := kwargs.pop("dockerfile_builder", None):
+            if _validate_tuple_types(_dockerfile_builder, (str, typing.Callable[[DockerfileBuilderCallbackContext], None])):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["contextPath"] = typing.cast(tuple[str, typing.Callable[[DockerfileBuilderCallbackContext], None]], _dockerfile_builder)[0]
+                rpc_args["callback"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[DockerfileBuilderCallbackContext], None]], _dockerfile_builder)[1])
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withDockerfileBuilder', rpc_args))
+            elif _validate_dict_types(_dockerfile_builder, DockerfileBuilderParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["contextPath"] = typing.cast(DockerfileBuilderParameters, _dockerfile_builder)["context_path"]
+                rpc_args["callback"] = client.register_callback(typing.cast(DockerfileBuilderParameters, _dockerfile_builder)["callback"])
+                rpc_args["stage"] = typing.cast(DockerfileBuilderParameters, _dockerfile_builder).get("stage")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withDockerfileBuilder', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'dockerfile_builder'. Expected: (str, Callable[[DockerfileBuilderCallbackContext], None]) or DockerfileBuilderParameters")
         if _container_network_alias := kwargs.pop("container_network_alias", None):
             if _validate_type(_container_network_alias, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -10556,6 +10878,9 @@ _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.DistributedApplication",
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Eventing.DistributedApplicationEventSubscription", DistributedApplicationEventSubscription)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext", DistributedApplicationExecutionContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DistributedApplicationModel", DistributedApplicationModel)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileBuilder", DockerfileBuilder)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext", DockerfileBuilderCallbackContext)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileStage", DockerfileStage)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference", EndpointReference)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression", EndpointReferenceExpression)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext", EndpointUpdateContext)

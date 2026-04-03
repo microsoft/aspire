@@ -1204,6 +1204,7 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext", (h, c) -> new CommandLineArgsCallbackContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ConnectionStringAvailableEvent", (h, c) -> new ConnectionStringAvailableEvent(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DistributedApplicationModel", (h, c) -> new DistributedApplicationModel(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext", (h, c) -> new DockerfileBuilderCallbackContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression", (h, c) -> new EndpointReferenceExpression(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext", (h, c) -> new EndpointUpdateContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext", (h, c) -> new EnvironmentCallbackContext(h, c));
@@ -1216,6 +1217,8 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceReadyEvent", (h, c) -> new ResourceReadyEvent(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceStoppedEvent", (h, c) -> new ResourceStoppedEvent(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext", (h, c) -> new ResourceUrlsCallbackContext(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileBuilder", (h, c) -> new DockerfileBuilder(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileStage", (h, c) -> new DockerfileStage(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ConnectionStringResource", (h, c) -> new ConnectionStringResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerRegistryResource", (h, c) -> new ContainerRegistryResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource", (h, c) -> new DotnetToolResource(h, c));
@@ -5116,6 +5119,30 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    public ContainerResource withDockerfileBuilder(String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback) {
+        return withDockerfileBuilder(contextPath, callback, null);
+    }
+
+    /** Configures the resource to use a programmatically generated Dockerfile */
+    public ContainerResource withDockerfileBuilder(String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback, String stage) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("contextPath", AspireClient.serializeValue(contextPath));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (DockerfileBuilderCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (stage != null) {
+            reqArgs.put("stage", AspireClient.serializeValue(stage));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withDockerfileBuilder", reqArgs);
+        return this;
+    }
+
     /** Sets the base image for a Dockerfile build */
     public ContainerResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
         var buildImage = options == null ? null : options.getBuildImage();
@@ -6842,6 +6869,304 @@ import java.util.function.*;
 public class DistributedApplicationResourceEventSubscription extends HandleWrapperBase {
     DistributedApplicationResourceEventSubscription(Handle handle, AspireClient client) {
         super(handle, client);
+    }
+
+}
+
+// ===== DockerfileBuilder.java =====
+// DockerfileBuilder.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileBuilder. */
+public class DockerfileBuilder extends HandleWrapperBase {
+    DockerfileBuilder(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    public DockerfileBuilder arg(String name) {
+        return arg(name, null);
+    }
+
+    /** Adds a global ARG statement to the Dockerfile */
+    public DockerfileBuilder arg(String name, String defaultValue) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        if (defaultValue != null) {
+            reqArgs.put("defaultValue", AspireClient.serializeValue(defaultValue));
+        }
+        return (DockerfileBuilder) getClient().invokeCapability("Aspire.Hosting/dockerfileBuilderArg", reqArgs);
+    }
+
+    public DockerfileStage from(String image) {
+        return from(image, null);
+    }
+
+    /** Adds a FROM statement to start a Dockerfile stage */
+    public DockerfileStage from(String image, String stageName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("image", AspireClient.serializeValue(image));
+        if (stageName != null) {
+            reqArgs.put("stageName", AspireClient.serializeValue(stageName));
+        }
+        return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/dockerfileBuilderFrom", reqArgs);
+    }
+
+    public DockerfileBuilder addContainerFilesStages(IResource resource) {
+        return addContainerFilesStages(resource, null);
+    }
+
+    public DockerfileBuilder addContainerFilesStages(ResourceBuilderBase resource) {
+        return addContainerFilesStages(new IResource(resource.getHandle(), resource.getClient()));
+    }
+
+    /** Adds Dockerfile stages for published container files */
+    public DockerfileBuilder addContainerFilesStages(IResource resource, ILogger logger) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resource", AspireClient.serializeValue(resource));
+        if (logger != null) {
+            reqArgs.put("logger", AspireClient.serializeValue(logger));
+        }
+        return (DockerfileBuilder) getClient().invokeCapability("Aspire.Hosting/dockerfileBuilderAddContainerFilesStages", reqArgs);
+    }
+
+    public DockerfileBuilder addContainerFilesStages(ResourceBuilderBase resource, ILogger logger) {
+        return addContainerFilesStages(new IResource(resource.getHandle(), resource.getClient()), logger);
+    }
+
+    public DockerfileBuilder addContainerFilesStages(IResource resource, HandleWrapperBase logger) {
+        return addContainerFilesStages(resource, new ILogger(logger.getHandle(), logger.getClient()));
+    }
+
+    public DockerfileBuilder addContainerFilesStages(ResourceBuilderBase resource, HandleWrapperBase logger) {
+        return addContainerFilesStages(new IResource(resource.getHandle(), resource.getClient()), new ILogger(logger.getHandle(), logger.getClient()));
+    }
+
+}
+
+// ===== DockerfileBuilderCallbackContext.java =====
+// DockerfileBuilderCallbackContext.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext. */
+public class DockerfileBuilderCallbackContext extends HandleWrapperBase {
+    DockerfileBuilderCallbackContext(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets the Resource property */
+    public IResource resource() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (IResource) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.resource", reqArgs);
+    }
+
+    /** Gets the Builder property */
+    public DockerfileBuilder builder() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (DockerfileBuilder) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.builder", reqArgs);
+    }
+
+    /** Gets the Services property */
+    public IServiceProvider services() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (IServiceProvider) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.services", reqArgs);
+    }
+
+    /** Gets the CancellationToken property */
+    public CancellationToken cancellationToken() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (CancellationToken) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.cancellationToken", reqArgs);
+    }
+
+}
+
+// ===== DockerfileStage.java =====
+// DockerfileStage.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileStage. */
+public class DockerfileStage extends HandleWrapperBase {
+    DockerfileStage(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    public DockerfileStage arg(String name) {
+        return arg(name, null);
+    }
+
+    /** Adds an ARG statement to a Dockerfile stage */
+    public DockerfileStage arg(String name, String defaultValue) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        if (defaultValue != null) {
+            reqArgs.put("defaultValue", AspireClient.serializeValue(defaultValue));
+        }
+        return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/dockerfileStageArg", reqArgs);
+    }
+
+    /** Adds a WORKDIR statement to a Dockerfile stage */
+    public DockerfileStage workDir(String path) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/workDir", reqArgs);
+    }
+
+    /** Adds a RUN statement to a Dockerfile stage */
+    public DockerfileStage run(String command) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/dockerfileStageRun", reqArgs);
+    }
+
+    public DockerfileStage copy(String source, String destination) {
+        return copy(source, destination, null);
+    }
+
+    /** Adds a COPY statement to a Dockerfile stage */
+    public DockerfileStage copy(String source, String destination, String chown) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("source", AspireClient.serializeValue(source));
+        reqArgs.put("destination", AspireClient.serializeValue(destination));
+        if (chown != null) {
+            reqArgs.put("chown", AspireClient.serializeValue(chown));
+        }
+        return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/dockerfileStageCopy", reqArgs);
+    }
+
+    public DockerfileStage copyFrom(String from, String source, String destination) {
+        return copyFrom(from, source, destination, null);
+    }
+
+    /** Adds a COPY --from statement to a Dockerfile stage */
+    public DockerfileStage copyFrom(String from, String source, String destination, String chown) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("from", AspireClient.serializeValue(from));
+        reqArgs.put("source", AspireClient.serializeValue(source));
+        reqArgs.put("destination", AspireClient.serializeValue(destination));
+        if (chown != null) {
+            reqArgs.put("chown", AspireClient.serializeValue(chown));
+        }
+        return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/dockerfileStageCopyFrom", reqArgs);
+    }
+
+    /** Adds an ENV statement to a Dockerfile stage */
+    public DockerfileStage env(String name, String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/env", reqArgs);
+    }
+
+    /** Adds an EXPOSE statement to a Dockerfile stage */
+    public DockerfileStage expose(double port) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/expose", reqArgs);
+    }
+
+    /** Adds a CMD statement to a Dockerfile stage */
+    public DockerfileStage cmd(String[] command) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/cmd", reqArgs);
+    }
+
+    /** Adds an ENTRYPOINT statement to a Dockerfile stage */
+    public DockerfileStage entrypoint(String[] command) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/entrypoint", reqArgs);
+    }
+
+    /** Adds a RUN statement with mounts to a Dockerfile stage */
+    public DockerfileStage runWithMounts(String command, String[] mounts) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        reqArgs.put("mounts", AspireClient.serializeValue(mounts));
+        return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/runWithMounts", reqArgs);
+    }
+
+    /** Adds a USER statement to a Dockerfile stage */
+    public DockerfileStage user(String user) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("user", AspireClient.serializeValue(user));
+        return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/user", reqArgs);
+    }
+
+    /** Adds an empty line to a Dockerfile stage */
+    public DockerfileStage emptyLine() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
+        return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/emptyLine", reqArgs);
+    }
+
+    /** Adds a comment to a Dockerfile stage */
+    public DockerfileStage comment(String comment) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("comment", AspireClient.serializeValue(comment));
+        return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/comment", reqArgs);
+    }
+
+    public DockerfileStage addContainerFiles(IResource resource, String rootDestinationPath) {
+        return addContainerFiles(resource, rootDestinationPath, null);
+    }
+
+    public DockerfileStage addContainerFiles(ResourceBuilderBase resource, String rootDestinationPath) {
+        return addContainerFiles(new IResource(resource.getHandle(), resource.getClient()), rootDestinationPath);
+    }
+
+    /** Adds COPY --from statements for published container files */
+    public DockerfileStage addContainerFiles(IResource resource, String rootDestinationPath, ILogger logger) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resource", AspireClient.serializeValue(resource));
+        reqArgs.put("rootDestinationPath", AspireClient.serializeValue(rootDestinationPath));
+        if (logger != null) {
+            reqArgs.put("logger", AspireClient.serializeValue(logger));
+        }
+        return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/dockerfileStageAddContainerFiles", reqArgs);
+    }
+
+    public DockerfileStage addContainerFiles(ResourceBuilderBase resource, String rootDestinationPath, ILogger logger) {
+        return addContainerFiles(new IResource(resource.getHandle(), resource.getClient()), rootDestinationPath, logger);
+    }
+
+    public DockerfileStage addContainerFiles(IResource resource, String rootDestinationPath, HandleWrapperBase logger) {
+        return addContainerFiles(resource, rootDestinationPath, new ILogger(logger.getHandle(), logger.getClient()));
+    }
+
+    public DockerfileStage addContainerFiles(ResourceBuilderBase resource, String rootDestinationPath, HandleWrapperBase logger) {
+        return addContainerFiles(new IResource(resource.getHandle(), resource.getClient()), rootDestinationPath, new ILogger(logger.getHandle(), logger.getClient()));
     }
 
 }
@@ -11585,6 +11910,30 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
             reqArgs.put("stage", AspireClient.serializeValue(stage));
         }
         return (ContainerResource) getClient().invokeCapability("Aspire.Hosting/addDockerfile", reqArgs);
+    }
+
+    public ContainerResource addDockerfileBuilder(String name, String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback) {
+        return addDockerfileBuilder(name, contextPath, callback, null);
+    }
+
+    /** Adds a container resource built from a programmatically generated Dockerfile */
+    public ContainerResource addDockerfileBuilder(String name, String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback, String stage) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("contextPath", AspireClient.serializeValue(contextPath));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (DockerfileBuilderCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (stage != null) {
+            reqArgs.put("stage", AspireClient.serializeValue(stage));
+        }
+        return (ContainerResource) getClient().invokeCapability("Aspire.Hosting/addDockerfileBuilder", reqArgs);
     }
 
     /** Adds a .NET tool resource */
@@ -16600,6 +16949,30 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return this;
     }
 
+    public TestDatabaseResource withDockerfileBuilder(String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback) {
+        return withDockerfileBuilder(contextPath, callback, null);
+    }
+
+    /** Configures the resource to use a programmatically generated Dockerfile */
+    public TestDatabaseResource withDockerfileBuilder(String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback, String stage) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("contextPath", AspireClient.serializeValue(contextPath));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (DockerfileBuilderCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (stage != null) {
+            reqArgs.put("stage", AspireClient.serializeValue(stage));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withDockerfileBuilder", reqArgs);
+        return this;
+    }
+
     /** Sets the base image for a Dockerfile build */
     public TestDatabaseResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
         var buildImage = options == null ? null : options.getBuildImage();
@@ -18444,6 +18817,30 @@ public class TestRedisResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("proxyEnabled", AspireClient.serializeValue(proxyEnabled));
         getClient().invokeCapability("Aspire.Hosting/withEndpointProxySupport", reqArgs);
+        return this;
+    }
+
+    public TestRedisResource withDockerfileBuilder(String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback) {
+        return withDockerfileBuilder(contextPath, callback, null);
+    }
+
+    /** Configures the resource to use a programmatically generated Dockerfile */
+    public TestRedisResource withDockerfileBuilder(String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback, String stage) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("contextPath", AspireClient.serializeValue(contextPath));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (DockerfileBuilderCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (stage != null) {
+            reqArgs.put("stage", AspireClient.serializeValue(stage));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withDockerfileBuilder", reqArgs);
         return this;
     }
 
@@ -20444,6 +20841,30 @@ public class TestVaultResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("proxyEnabled", AspireClient.serializeValue(proxyEnabled));
         getClient().invokeCapability("Aspire.Hosting/withEndpointProxySupport", reqArgs);
+        return this;
+    }
+
+    public TestVaultResource withDockerfileBuilder(String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback) {
+        return withDockerfileBuilder(contextPath, callback, null);
+    }
+
+    /** Configures the resource to use a programmatically generated Dockerfile */
+    public TestVaultResource withDockerfileBuilder(String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback, String stage) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("contextPath", AspireClient.serializeValue(contextPath));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (DockerfileBuilderCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (stage != null) {
+            reqArgs.put("stage", AspireClient.serializeValue(stage));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withDockerfileBuilder", reqArgs);
         return this;
     }
 
@@ -22748,6 +23169,9 @@ public final class WithVolumeOptions {
 .modules/DistributedApplicationModel.java
 .modules/DistributedApplicationOperation.java
 .modules/DistributedApplicationResourceEventSubscription.java
+.modules/DockerfileBuilder.java
+.modules/DockerfileBuilderCallbackContext.java
+.modules/DockerfileStage.java
 .modules/DotnetToolResource.java
 .modules/EndpointProperty.java
 .modules/EndpointReference.java
