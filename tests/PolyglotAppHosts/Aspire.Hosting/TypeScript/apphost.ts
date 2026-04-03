@@ -429,6 +429,11 @@ await container.withHttpEndpointCallback(async (updateContext) => {
     await updateContext.targetPort.set(8082);
     await updateContext.isProxied.set(false);
 }, { name: "callback-http", createIfNotExists: false });
+await container.withHttpEndpointCallback(async (updateContext) => {
+    await updateContext.port.set(8083);
+    await updateContext.targetPort.set(8084);
+    await updateContext.isProxied.set(false);
+}, { name: "created-http" });
 
 // withHttpsEndpoint
 await container.withHttpsEndpoint();

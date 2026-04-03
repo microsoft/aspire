@@ -82,6 +82,7 @@ void main() throws Exception {
         container.withHttpEndpoint();
         container.withHttpEndpoint(new WithHttpEndpointOptions().name("callback-http"));
         container.withHttpEndpointCallback((updateContext) -> { updateContext.setPort(8081.0); updateContext.setTargetPort(8082.0); updateContext.setIsProxied(false); }, new WithHttpEndpointCallbackOptions().name("callback-http").createIfNotExists(false));
+        container.withHttpEndpointCallback((updateContext) -> { updateContext.setPort(8083.0); updateContext.setTargetPort(8084.0); updateContext.setIsProxied(false); }, new WithHttpEndpointCallbackOptions().name("created-http"));
         container.withHttpsEndpoint();
         container.withHttpsEndpoint(new WithHttpsEndpointOptions().name("callback-https"));
         container.withEndpointCallback("callback-https", (updateContext) -> { updateContext.setPort(8444.0); updateContext.setTargetPort(8443.0); updateContext.setIsProxied(false); }, false);

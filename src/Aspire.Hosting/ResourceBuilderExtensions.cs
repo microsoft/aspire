@@ -1333,7 +1333,15 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(callback);
 
-        return builder.WithEndpoint(name ?? "http", endpoint => callback(new EndpointUpdateContext(endpoint)), createIfNotExists);
+        var endpointName = name ?? "http";
+
+        if (createIfNotExists &&
+            !builder.Resource.Annotations.OfType<EndpointAnnotation>().Any(endpoint => string.Equals(endpoint.Name, endpointName, StringComparisons.EndpointAnnotationName)))
+        {
+            builder.WithHttpEndpoint(name: endpointName);
+        }
+
+        return builder.WithEndpoint(endpointName, endpoint => callback(new EndpointUpdateContext(endpoint)), createIfNotExists: false);
     }
 
     /// <summary>

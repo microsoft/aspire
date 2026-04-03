@@ -19,6 +19,11 @@ with create_builder() as builder:
         endpoint.target_port = 8082
         endpoint.is_proxied = False
 
+    def update_created_http_endpoint(endpoint):
+        endpoint.port = 8083
+        endpoint.target_port = 8084
+        endpoint.is_proxied = False
+
     def update_https_endpoint(endpoint):
         endpoint.port = 8444
         endpoint.target_port = 8443
@@ -146,6 +151,7 @@ with create_builder() as builder:
     container.with_http_endpoint()
     container.with_http_endpoint(name="callback-http")
     container.with_http_endpoint_callback(update_http_endpoint, name="callback-http", create_if_not_exists=False)
+    container.with_http_endpoint_callback(update_created_http_endpoint, name="created-http")
     # withHttpsEndpoint
     container.with_https_endpoint()
     container.with_https_endpoint(name="callback-https")
