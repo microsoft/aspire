@@ -100,7 +100,6 @@
     <Compile Include="$(SharedDir)Model\KnownProperties.cs" Link="Model\KnownProperties.cs" />
     <Compile Include="$(SharedDir)Model\KnownResourceTypes.cs" Link="Model\KnownResourceTypes.cs" />
     <Compile Include="$(SharedDir)Model\ResourceSourceViewModel.cs" Link="Model\ResourceSourceViewModel.cs" />
-    <Compile Include="$(SharedDir)TokenGenerator.cs" Link="Utils\TokenGenerator.cs" />
     <Compile Include="$(SharedDir)DashboardUrls.cs" Link="Utils\DashboardUrls.cs" />
     <Compile Include="$(SharedDir)FormatHelpers.cs" Link="Utils\FormatHelpers.cs" />
     <Compile Include="$(SharedDir)DateFormatStringsHelpers.cs" Link="Utils\DateFormatStringsHelpers.cs" />
