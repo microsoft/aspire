@@ -103,7 +103,11 @@ internal sealed class DotNetCliRunner(
         // Resolve the dotnet executable path, preferring the private SDK installation if available.
         var dotnetPath = ResolveDotNetPath(finalEnv);
 
-        using var execution = executionFactory.CreateExecution(dotnetPath, args, finalEnv, workingDirectory, options);
+        // Do not use 'using' here: StartBackchannelAsync runs fire-and-forget and
+        // accesses execution.HasExited / ExitCode after this method returns. Disposing
+        // the underlying Process while the backchannel task is still polling would
+        // cause ObjectDisposedException. Let the GC handle cleanup instead.
+        var execution = executionFactory.CreateExecution(dotnetPath, args, finalEnv, workingDirectory, options);
 
         // Get socket path from env if present
         string? socketPath = null;

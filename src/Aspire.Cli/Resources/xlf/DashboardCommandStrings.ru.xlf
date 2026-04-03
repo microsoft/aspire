@@ -42,6 +42,11 @@
         <target state="new">Dashboard exited with exit code {0}.</target>
         <note />
       </trans-unit>
+      <trans-unit id="DashboardFailedToStart">
+        <source>Failed to start Aspire dashboard: {0}</source>
+        <target state="new">Failed to start Aspire dashboard: {0}</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DashboardLabel">
         <source>Dashboard</source>
         <target state="new">Dashboard</target>

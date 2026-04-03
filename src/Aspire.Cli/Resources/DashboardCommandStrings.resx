@@ -183,6 +183,9 @@
   <data name="DashboardExitedAddressInUse" xml:space="preserve">
     <value>Dashboard could not start because a configured port is already in use. Use a different port or stop the conflicting process.</value>
   </data>
+  <data name="DashboardFailedToStart" xml:space="preserve">
+    <value>Failed to start Aspire dashboard: {0}</value>
+  </data>
   <data name="StoppingDashboard" xml:space="preserve">
     <value>Stopping dashboard</value>
   </data>

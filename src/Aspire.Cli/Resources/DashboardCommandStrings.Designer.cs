@@ -183,5 +183,11 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string DashboardFailedToStart {
+            get {
+                return ResourceManager.GetString("DashboardFailedToStart", resourceCulture);
+            }
+        }
+
     }
 }

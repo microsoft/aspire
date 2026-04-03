@@ -370,7 +370,7 @@ internal sealed class DashboardRunCommand : BaseCommand
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to start dashboard process: {ManagedPath}", managedPath);
-            _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, DashboardCommandStrings.DashboardExitedWithError, ex.Message));
+            _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, DashboardCommandStrings.DashboardFailedToStart, ex.Message));
             return ExitCodeConstants.DashboardFailure;
         }
 

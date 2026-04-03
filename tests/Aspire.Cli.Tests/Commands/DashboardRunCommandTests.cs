@@ -314,7 +314,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
         var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
-        var expectedMessage = string.Format(CultureInfo.CurrentCulture, DashboardCommandStrings.DashboardExitedWithError, $"Failed to start process: {managedPath}");
+        var expectedMessage = string.Format(CultureInfo.CurrentCulture, DashboardCommandStrings.DashboardFailedToStart, $"Failed to start process: {managedPath}");
         Assert.Equal(expectedMessage, errorMessage);
     }
 
