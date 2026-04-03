@@ -27,7 +27,7 @@ import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 
 
 # ── Data models ──────────────────────────────────────────────────────────────
@@ -161,7 +161,8 @@ def fetch_run_data(repo: str, run_id: str) -> tuple[dict, list[dict]]:
 
 def load_json_data(path: str) -> tuple[dict, list[dict]]:
     """Load run data from a cached JSON file (ci-timeline format)."""
-    data = json.load(open(path))
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
     run_info = data.get("run_info", {})
     jobs = data.get("jobs", [])
     return run_info, jobs
@@ -719,7 +720,7 @@ def main():
     if output_path:
         is_html = output_path.endswith(".html")
         content = wrap_html(summary) if is_html else summary
-        with open(output_path, "w") as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             f.write(content)
         print(f"{'HTML' if is_html else 'Summary'} written to {output_path}", file=sys.stderr)
 
@@ -730,7 +731,7 @@ def main():
             webbrowser.open(f"file://{os.path.abspath(output_path)}")
 
     if is_ci:
-        with open(step_summary, "a") as f:
+        with open(step_summary, "a", encoding="utf-8") as f:
             f.write(summary)
             f.write("\n")
         print("Summary appended to $GITHUB_STEP_SUMMARY", file=sys.stderr)
