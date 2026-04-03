@@ -9,7 +9,7 @@ using Xunit;
 namespace Aspire.Cli.EndToEnd.Tests;
 
 /// <summary>
-/// E2E test for <c>aspire deploy</c> to Kubernetes: DeployWithRabbitMQ.
+/// E2E test for <c>aspire deploy</c> to Kubernetes: DeployK8sWithRabbitMQ.
 /// </summary>
 public sealed class KubernetesDeployWithRabbitMQTests(ITestOutputHelper output)
 {
@@ -17,7 +17,7 @@ public sealed class KubernetesDeployWithRabbitMQTests(ITestOutputHelper output)
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task DeployWithRabbitMQ()
+    public async Task DeployK8sWithRabbitMQ()
     {
         using var workspace = TemporaryWorkspace.Create(output);
 

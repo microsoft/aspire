@@ -9,7 +9,7 @@ using Xunit;
 namespace Aspire.Cli.EndToEnd.Tests;
 
 /// <summary>
-/// E2E test for <c>aspire deploy</c> to Kubernetes: DeployWithSqlServer.
+/// E2E test for <c>aspire deploy</c> to Kubernetes: DeployK8sWithSqlServer.
 /// </summary>
 public sealed class KubernetesDeployWithSqlServerTests(ITestOutputHelper output)
 {
@@ -17,7 +17,7 @@ public sealed class KubernetesDeployWithSqlServerTests(ITestOutputHelper output)
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task DeployWithSqlServer()
+    public async Task DeployK8sWithSqlServer()
     {
         using var workspace = TemporaryWorkspace.Create(output);
 

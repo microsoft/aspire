@@ -9,7 +9,7 @@ using Xunit;
 namespace Aspire.Cli.EndToEnd.Tests;
 
 /// <summary>
-/// E2E test for <c>aspire deploy</c> to Kubernetes: DeployWithGarnet.
+/// E2E test for <c>aspire deploy</c> to Kubernetes: DeployK8sWithGarnet.
 /// </summary>
 public sealed class KubernetesDeployWithGarnetTests(ITestOutputHelper output)
 {
@@ -17,7 +17,7 @@ public sealed class KubernetesDeployWithGarnetTests(ITestOutputHelper output)
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task DeployWithGarnet()
+    public async Task DeployK8sWithGarnet()
     {
         using var workspace = TemporaryWorkspace.Create(output);
 

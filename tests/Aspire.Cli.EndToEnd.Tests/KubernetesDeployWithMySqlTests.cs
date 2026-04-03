@@ -9,7 +9,7 @@ using Xunit;
 namespace Aspire.Cli.EndToEnd.Tests;
 
 /// <summary>
-/// E2E test for <c>aspire deploy</c> to Kubernetes: DeployWithMySql.
+/// E2E test for <c>aspire deploy</c> to Kubernetes: DeployK8sWithMySql.
 /// </summary>
 public sealed class KubernetesDeployWithMySqlTests(ITestOutputHelper output)
 {
@@ -17,7 +17,7 @@ public sealed class KubernetesDeployWithMySqlTests(ITestOutputHelper output)
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task DeployWithMySql()
+    public async Task DeployK8sWithMySql()
     {
         using var workspace = TemporaryWorkspace.Create(output);
 

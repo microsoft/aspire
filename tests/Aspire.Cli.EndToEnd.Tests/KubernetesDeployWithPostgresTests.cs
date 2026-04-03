@@ -9,7 +9,7 @@ using Xunit;
 namespace Aspire.Cli.EndToEnd.Tests;
 
 /// <summary>
-/// E2E test for <c>aspire deploy</c> to Kubernetes: DeployWithPostgres.
+/// E2E test for <c>aspire deploy</c> to Kubernetes: DeployK8sWithPostgres.
 /// </summary>
 public sealed class KubernetesDeployWithPostgresTests(ITestOutputHelper output)
 {
@@ -17,7 +17,7 @@ public sealed class KubernetesDeployWithPostgresTests(ITestOutputHelper output)
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task DeployWithPostgres()
+    public async Task DeployK8sWithPostgres()
     {
         using var workspace = TemporaryWorkspace.Create(output);
 

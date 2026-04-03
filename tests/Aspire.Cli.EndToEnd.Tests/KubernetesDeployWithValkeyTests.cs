@@ -9,7 +9,7 @@ using Xunit;
 namespace Aspire.Cli.EndToEnd.Tests;
 
 /// <summary>
-/// E2E test for <c>aspire deploy</c> to Kubernetes: DeployWithValkey.
+/// E2E test for <c>aspire deploy</c> to Kubernetes: DeployK8sWithValkey.
 /// </summary>
 public sealed class KubernetesDeployWithValkeyTests(ITestOutputHelper output)
 {
@@ -17,7 +17,7 @@ public sealed class KubernetesDeployWithValkeyTests(ITestOutputHelper output)
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task DeployWithValkey()
+    public async Task DeployK8sWithValkey()
     {
         using var workspace = TemporaryWorkspace.Create(output);
 

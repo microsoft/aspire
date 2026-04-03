@@ -36,8 +36,8 @@ COPY . .
 # Full build: restore, build, pack, then bundle (native AOT CLI).
 RUN if [ "$SKIP_SOURCE_BUILD" != "true" ]; then \
       ./restore.sh && \
-      ./build.sh --pack -c Release && \
-      ./build.sh --bundle -c Release; \
+      ./build.sh --pack -c Release /p:StabilizePackageVersion=false && \
+      ./build.sh --bundle -c Release /p:StabilizePackageVersion=false; \
     else \
       mkdir -p /repo/artifacts/bundle; \
     fi

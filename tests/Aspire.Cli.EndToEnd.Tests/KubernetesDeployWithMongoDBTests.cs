@@ -9,7 +9,7 @@ using Xunit;
 namespace Aspire.Cli.EndToEnd.Tests;
 
 /// <summary>
-/// E2E test for <c>aspire deploy</c> to Kubernetes: DeployWithMongoDB.
+/// E2E test for <c>aspire deploy</c> to Kubernetes: DeployK8sWithMongoDB.
 /// </summary>
 public sealed class KubernetesDeployWithMongoDBTests(ITestOutputHelper output)
 {
@@ -17,7 +17,7 @@ public sealed class KubernetesDeployWithMongoDBTests(ITestOutputHelper output)
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task DeployWithMongoDB()
+    public async Task DeployK8sWithMongoDB()
     {
         using var workspace = TemporaryWorkspace.Create(output);
 

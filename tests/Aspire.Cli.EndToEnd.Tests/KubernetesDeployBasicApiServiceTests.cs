@@ -9,7 +9,7 @@ using Xunit;
 namespace Aspire.Cli.EndToEnd.Tests;
 
 /// <summary>
-/// E2E test for <c>aspire deploy</c> to Kubernetes: DeployBasicApiService.
+/// E2E test for <c>aspire deploy</c> to Kubernetes: DeployK8sBasicApiService.
 /// </summary>
 public sealed class KubernetesDeployBasicApiServiceTests(ITestOutputHelper output)
 {
@@ -17,7 +17,7 @@ public sealed class KubernetesDeployBasicApiServiceTests(ITestOutputHelper outpu
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task DeployBasicApiService()
+    public async Task DeployK8sBasicApiService()
     {
         using var workspace = TemporaryWorkspace.Create(output);
 

@@ -10,7 +10,7 @@ using Xunit;
 namespace Aspire.Cli.EndToEnd.Tests;
 
 /// <summary>
-/// E2E test for <c>aspire deploy</c> to Kubernetes: DeployWithNats.
+/// E2E test for <c>aspire deploy</c> to Kubernetes: DeployK8sWithNats.
 /// </summary>
 public sealed class KubernetesDeployWithNatsTests(ITestOutputHelper output)
 {
@@ -19,7 +19,7 @@ public sealed class KubernetesDeployWithNatsTests(ITestOutputHelper output)
     [Fact]
     [CaptureWorkspaceOnFailure]
     [QuarantinedTest("https://github.com/microsoft/aspire/issues/15789")]
-    public async Task DeployWithNats()
+    public async Task DeployK8sWithNats()
     {
         using var workspace = TemporaryWorkspace.Create(output);
 

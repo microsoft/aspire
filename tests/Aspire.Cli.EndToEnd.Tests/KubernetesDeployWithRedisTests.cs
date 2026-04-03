@@ -9,7 +9,7 @@ using Xunit;
 namespace Aspire.Cli.EndToEnd.Tests;
 
 /// <summary>
-/// E2E test for <c>aspire deploy</c> to Kubernetes: DeployWithRedis.
+/// E2E test for <c>aspire deploy</c> to Kubernetes: DeployK8sWithRedis.
 /// </summary>
 public sealed class KubernetesDeployWithRedisTests(ITestOutputHelper output)
 {
@@ -17,7 +17,7 @@ public sealed class KubernetesDeployWithRedisTests(ITestOutputHelper output)
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task DeployWithRedis()
+    public async Task DeployK8sWithRedis()
     {
         using var workspace = TemporaryWorkspace.Create(output);
 
