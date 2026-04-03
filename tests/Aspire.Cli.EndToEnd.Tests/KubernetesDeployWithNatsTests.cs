@@ -47,6 +47,9 @@ public sealed class KubernetesDeployWithNatsTests(ITestOutputHelper output)
             await auto.VerifyAspireCliVersionAsync(commitSha, counter);
         }
 
+        // Assert CLI version has a prerelease suffix (runs in both CI and local)
+        await auto.AssertAspireVersionAsync(counter, output);
+
         try
         {
             await auto.InstallKindAndHelmAsync(counter);
