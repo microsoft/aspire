@@ -31,9 +31,10 @@ public sealed class CapturedEnvironmentVariable
     /// <summary>
     /// Gets or sets the source object that originated this environment variable.
     /// This could be a <see cref="ParameterResource"/>,
-    /// <see cref="ContainerMountAnnotation"/>, or other source types.
+    /// <see cref="ContainerMountAnnotation"/>, <see cref="ContainerImageReference"/>,
+    /// or <see cref="ContainerPortReference"/>.
     /// </summary>
-    [AspireExportIgnore(Reason = "Source can be arbitrary provenance data (ParameterResource, ContainerMountAnnotation, etc.); exporting it here would require projecting a much broader heterogeneous source surface that configureEnvFile does not need.")]
+    [AspireUnion(typeof(ParameterResource), typeof(ContainerMountAnnotation), typeof(ContainerImageReference), typeof(ContainerPortReference))]
     public object? Source { get; set; }
 
     /// <summary>
