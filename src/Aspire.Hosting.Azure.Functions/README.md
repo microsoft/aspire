@@ -84,6 +84,15 @@ When a Scheduler runs as an emulator, Aspire automatically provides:
 - A "Task Hub Dashboard" URL for each Task Hub resource.
 - A `DTS_TASK_HUB_NAMES` environment variable on the emulator container listing the Task Hub names associated with that scheduler.
 
+> **Note:** The DTS emulator stores all orchestration and entity state in memory. State is lost when the
+> container is stopped. The emulator does not support volume-based persistence. To preserve in-memory state
+> across application restarts, configure the container with a persistent lifetime:
+>
+> ```csharp
+> var scheduler = builder.AddDurableTaskScheduler("scheduler")
+>     .RunAsEmulator(c => c.WithLifetime(ContainerLifetime.Persistent));
+> ```
+
 ### Use an existing Scheduler
 
 If you already have a Scheduler instance, configure the resource using its connection string:
