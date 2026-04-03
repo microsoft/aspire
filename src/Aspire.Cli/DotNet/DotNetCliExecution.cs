@@ -159,7 +159,7 @@ internal sealed class DotNetCliExecution : IDotNetCliExecution
             {
                 if (!suppressLogging)
                 {
-                    _logger.LogDebug(
+                    _logger.LogTrace(
                         "dotnet({ProcessId}) {Identifier}: {Line}",
                         _process.Id,
                         identifier,

@@ -99,6 +99,12 @@ export const openCliInstallInstructions = vscode.l10n.t('See CLI installation in
 export const cliNotAvailable = vscode.l10n.t('Aspire CLI is not available on PATH. Please install it and restart VS Code.');
 export const cliFoundAtDefaultPath = (path: string) => vscode.l10n.t('Aspire CLI found at {0}. The extension will use this path.', path);
 export const selectDirectoryTitle = vscode.l10n.t('Select directory');
+export const runningAspireRestore = (configPath: string) => vscode.l10n.t('Running aspire restore on {0} ...', configPath);
+export const runningAspireRestoreProgress = (completed: number, total: number) => vscode.l10n.t('Running aspire restore ({0}/{1} projects) ...', completed, total);
+export const aspireRestoreCompleted = (configPath: string) => vscode.l10n.t('Aspire restore completed for {0}.', configPath);
+export const aspireRestoreAllCompleted = vscode.l10n.t('Aspire restore completed');
+export const aspireRestoreFailed = (configPath: string, error: string) => vscode.l10n.t('aspire restore failed for {0}: {1}', configPath, error);
+export const aspireRestoreFailedStatusBar = vscode.l10n.t('Aspire restore failed (click to retry)');
 export const selectFileTitle = vscode.l10n.t('Select file');
 export const enterPipelineStep = vscode.l10n.t('Enter the pipeline step to execute');
 export const appHostSourceNotFound = vscode.l10n.t('Could not determine the AppHost source file to open.');

@@ -40,6 +40,12 @@
     <trans-unit id="command.codeLensResourceAction">
       <source xml:lang="en">Aspire resource action</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.aspireRestoreAllCompleted">
+      <source xml:lang="en">Aspire restore completed</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.aspireRestoreCompleted">
+      <source xml:lang="en">Aspire restore completed for {0}.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.aspireTerminalName">
       <source xml:lang="en">Aspire terminal</source>
     </trans-unit>
@@ -57,6 +63,9 @@
     </trans-unit>
     <trans-unit id="configuration.aspire.enableAspireDashboardAutoLaunch.launch">
       <source xml:lang="en">Automatically open the dashboard in the browser.</source>
+    </trans-unit>
+    <trans-unit id="configuration.aspire.enableAutoRestore">
+      <source xml:lang="en">Automatically run &apos;aspire restore&apos; when the workspace opens and whenever aspire.config.json changes (e.g. after switching git branches). Keeps integration packages in sync and prevents editor errors.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.buildFailedForProjectWithError">
       <source xml:lang="en">Build failed for project {0} with error: {1}.</source>
@@ -388,6 +397,12 @@
     <trans-unit id="views.runningAppHosts.name">
       <source xml:lang="en">Running AppHosts</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.runningAspireRestoreProgress">
+      <source xml:lang="en">Running aspire restore ({0}/{1} projects) ...</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.runningAspireRestore">
+      <source xml:lang="en">Running aspire restore on {0} ...</source>
+    </trans-unit>
     <trans-unit id="walkthrough.getStarted.createProject.description">
       <source xml:lang="en">Scaffold a new Aspire project from a starter template. The template includes an AppHost orchestrator, a sample API, and a web frontend.&#10;&#10;[Create new project](command:aspire-vscode.new)</source>
     </trans-unit>
@@ -501,6 +516,9 @@
     </trans-unit>
     <trans-unit id="walkthrough.getStarted.nextSteps.description">
       <source xml:lang="en">You&apos;re all set! Add integrations for databases, messaging, and cloud services, or deploy your app to production.&#10;&#10;[Add an integration](command:aspire-vscode.add)&#10;&#10;[Open Aspire docs](https://aspire.dev/docs/)</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.aspireRestoreFailed">
+      <source xml:lang="en">aspire restore failed for {0}: {1}</source>
     </trans-unit>
   </body></file>
 </xliff>

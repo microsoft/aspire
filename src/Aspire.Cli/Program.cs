@@ -215,6 +215,16 @@ public class Program
                 builder.AddFilter("Aspire.Cli", consoleLogLevel.Value);
                 builder.AddFilter("Microsoft.Hosting.Lifetime", LogLevel.Warning);
             }
+            else
+            {
+                // Default writing debug level logs to file.
+                builder.AddFilter<FileLoggerProvider>(null, LogLevel.Debug);
+
+                // These categories are very verbose at Debug; suppress their Debug output by
+                // raising the minimum to Information unless an explicit log level is requested.
+                builder.AddFilter<FileLoggerProvider>("Microsoft.Extensions.Http.DefaultHttpClientFactory", LogLevel.Information);
+                builder.AddFilter<FileLoggerProvider>("Aspire.Cli.Certificates.NativeCertificateToolRunner", LogLevel.Information);
+            }
 
             // Configure console logging based on --verbosity or --debug
             if (consoleLogLevel is not null && !isMcpStartCommand && extensionEndpoint is null)
@@ -284,6 +294,9 @@ public class Program
 
         // Register file logger provider for components that write directly to the log file
         builder.Services.AddSingleton(startupContext.FileLoggerProvider);
+
+        // Register logging options so components can read the user's chosen log level
+        builder.Services.AddSingleton(startupContext.LoggingOptions);
 
         // Configure OpenTelemetry tracing. TelemetryManager reads configuration and creates
         // separate TracerProvider instances:

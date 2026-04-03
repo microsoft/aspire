@@ -32,6 +32,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     private readonly IDotNetSdkInstaller _sdkInstaller;
     private readonly RunningInstanceManager _runningInstanceManager;
     private readonly Diagnostics.FileLoggerProvider _fileLoggerProvider;
+    private readonly Program.CliLoggingOptions _loggingOptions;
 
     private static readonly string[] s_detectionPatterns = ["*.csproj", "*.fsproj", "*.vbproj", "apphost.cs"];
     internal static IReadOnlyCollection<string> ProjectExtensions { get; } =
@@ -47,6 +48,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         IDotNetSdkInstaller sdkInstaller,
         ILogger<DotNetAppHostProject> logger,
         Diagnostics.FileLoggerProvider fileLoggerProvider,
+        Program.CliLoggingOptions loggingOptions,
         TimeProvider? timeProvider = null)
     {
         _runner = runner;
@@ -58,6 +60,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         _sdkInstaller = sdkInstaller;
         _logger = logger;
         _fileLoggerProvider = fileLoggerProvider;
+        _loggingOptions = loggingOptions;
         _timeProvider = timeProvider ?? TimeProvider.System;
         _runningInstanceManager = new RunningInstanceManager(_logger, _interactionService, _timeProvider);
     }
@@ -227,6 +230,12 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             isolatedUserSecretsId = await ConfigureIsolatedModeAsync(effectiveAppHostFile, env, cancellationToken);
             _logger.LogInformation("Aspire run isolated. Isolated UserSecretsId: {IsolatedUserSecretsId}", isolatedUserSecretsId);
         }
+
+        // Enable debug logging in the app host so that debug-level output is
+        // captured in the CLI log file for diagnostics. Defaults to Debug but
+        // can be overridden via --log-level.
+        var appHostLogLevel = _loggingOptions.ConsoleLogLevel ?? LogLevel.Debug;
+        env["Logging__LogLevel__Default"] = appHostLogLevel.ToString();
 
         if (context.WaitForDebugger)
         {
