@@ -20,6 +20,7 @@ Environment variables (auto-detected in GitHub Actions):
 """
 
 import argparse
+import html
 import json
 import os
 import re
@@ -370,7 +371,7 @@ def render_timeline_bars(groups: list[JobGroup], total_seconds: float,
         )
 
         for j in jobs_in_phase:
-            name = short_name(group_base_name(j.name))
+            name = html.escape(short_name(group_base_name(j.name)))
             runner = j.labels[0] if j.labels else ""
             icon = STATUS_ICON.get(j.conclusion, "")
             ri = runner_icon(runner) + " " if runner else ""
@@ -429,7 +430,7 @@ def render_critical_path(groups: list[JobGroup], total_seconds: float,
     )
 
     for i, j in enumerate(all_jobs, 1):
-        name = short_name(group_base_name(j.name))
+        name = html.escape(short_name(group_base_name(j.name)))
         icon = STATUS_ICON.get(j.conclusion, "")
         runner = j.labels[0] if j.labels else ""
         ri = runner_icon(runner) + " " if runner else ""
@@ -481,7 +482,7 @@ def render_hotspots(groups: list[JobGroup]) -> str:
     lines = ['<table>']
     lines.append('<tr><th>Job</th><th>Queue</th></tr>')
     for j in worst_jobs:
-        name = short_name(group_base_name(j.name))
+        name = html.escape(short_name(group_base_name(j.name)))
         runner = j.labels[0] if j.labels else ""
         ri = runner_icon(runner) + " " if runner else ""
         lines.append(
@@ -522,7 +523,7 @@ def render_summary_table(groups: list[JobGroup], total_seconds: float) -> str:
     label_parts = []
     if runner_labels:
         label_parts = [
-            f"<code>{l}</code>: {c}"
+            f"<code>{html.escape(l)}</code>: {c}"
             for l, c in sorted(runner_labels.items(), key=lambda x: -x[1])[:5]
         ]
 
@@ -583,7 +584,7 @@ def generate_summary(run_info: dict, jobs: list[dict],
 
     groups = build_job_groups(jobs, t0)
 
-    conclusion = run_info.get("conclusion", run_info.get("status", ""))
+    conclusion = run_info.get("conclusion") or run_info.get("status") or ""
     conclusion_icon = STATUS_ICON.get(conclusion, "")
 
     lines = []
