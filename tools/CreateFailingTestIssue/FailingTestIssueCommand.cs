@@ -1058,6 +1058,7 @@ public static class FailingTestIssueLogic
     private const int MinimumErrorSectionLength = 512;
     private const int MinimumStackSectionLength = 512;
     private const int MinimumStdoutSectionLength = 512;
+    private const int ErrorDetailsCollapsibleLineThreshold = 30;
     private const string IssueSizeTruncationNote = "Snipped in the middle to keep the issue body under GitHub's 64 KB limit.";
     private static readonly IReadOnlyDictionary<string, string> s_workflowAliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
@@ -1566,11 +1567,27 @@ public static class FailingTestIssueLogic
         detailsBuilder.AppendLine(string.IsNullOrWhiteSpace(stackTraceResult.Content) ? "n/a" : stackTraceResult.Content.TrimEnd());
 
         var detailsContent = detailsBuilder.ToString().TrimEnd();
+        var lineCount = detailsContent.AsSpan().Count('\n') + 1;
         var fence = GetMarkdownFence(detailsContent);
+        var collapsible = lineCount > ErrorDetailsCollapsibleLineThreshold;
+
+        if (collapsible)
+        {
+            builder.AppendLine("<details>");
+            AppendInvariantLine(builder, $"<summary>Error details ({lineCount} lines)</summary>");
+            builder.AppendLine();
+        }
+
         AppendInvariantLine(builder, $"{fence}yml");
         builder.AppendLine(detailsContent);
         builder.AppendLine(fence);
         builder.AppendLine();
+
+        if (collapsible)
+        {
+            builder.AppendLine("</details>");
+            builder.AppendLine();
+        }
     }
 
     private static void AppendStandardOutputSection(StringBuilder builder, TruncationResult stdoutResult)

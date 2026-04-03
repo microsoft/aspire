@@ -231,7 +231,7 @@ The command writes a `diagnostics.log` file in the current directory. The JSON o
 3. Downloads failed test occurrences from `.trx` artifacts.
 4. Falls back to failed job logs when artifacts are missing or the run is still active.
 5. Matches the requested test using canonical or display names.
-6. Generates issue content that matches `.github/ISSUE_TEMPLATE/50_failing_test.yml`.
+6. Generates issue content that matches `.github/ISSUE_TEMPLATE/50_failing_test.yml`. The error details code block is wrapped in a collapsible `<details>` element when it exceeds 30 lines.
 7. Reuses an open issue with the same stable signature, reopens a closed one, or creates a new issue.
 
 ### Finding the failed tests to file
