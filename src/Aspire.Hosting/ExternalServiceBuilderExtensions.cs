@@ -24,7 +24,7 @@ public static class ExternalServiceBuilderExtensions
     /// <param name="name">The name of the resource.</param>
     /// <param name="url">The URL of the external service.</param>
     /// <returns>An <see cref="IResourceBuilder{ExternalServiceResource}"/> instance.</returns>
-    [AspireExport("addExternalService", Description = "Adds an external service resource")]
+    [AspireExport(Description = "Adds an external service resource")]
     public static IResourceBuilder<ExternalServiceResource> AddExternalService(this IDistributedApplicationBuilder builder, [ResourceName] string name, string url)
     {
         ArgumentNullException.ThrowIfNull(builder);

@@ -189,7 +189,7 @@ public static class ContainerAppExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("publishAsAzureContainerAppJob", Description = "Configures the compute resource as a manually triggered Azure Container App Job")]
+    [AspireExport(Description = "Configures the compute resource as a manually triggered Azure Container App Job")]
     [Experimental("ASPIREAZURE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<T> PublishAsAzureContainerAppJob<T>(this IResourceBuilder<T> resource)
         where T : IComputeResource
@@ -250,7 +250,7 @@ public static class ContainerAppExtensions
     /// <remarks>
     /// This method is a convenience wrapper that configures the job with a schedule trigger using the specified cron expression.
     /// </remarks>
-    [AspireExport("publishAsScheduledAzureContainerAppJob", Description = "Configures the compute resource as a scheduled Azure Container App Job")]
+    [AspireExport(Description = "Configures the compute resource as a scheduled Azure Container App Job")]
     [Experimental("ASPIREAZURE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     internal static IResourceBuilder<T> PublishAsScheduledAzureContainerAppJob<T>(this IResourceBuilder<T> resource, string cronExpression)
         where T : IComputeResource

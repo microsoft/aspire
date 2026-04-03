@@ -36,7 +36,7 @@ public static class AzureStorageExtensions
     ///
     /// These can be replaced by calling <see cref="WithRoleAssignments{T}(IResourceBuilder{T}, IResourceBuilder{AzureStorageResource}, StorageBuiltInRole[])"/>.
     /// </remarks>
-    [AspireExport("addAzureStorage", Description = "Adds an Azure Storage resource")]
+    [AspireExport(Description = "Adds an Azure Storage resource")]
     public static IResourceBuilder<AzureStorageResource> AddAzureStorage(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -174,7 +174,7 @@ public static class AzureStorageExtensions
     /// <param name="builder">The Azure storage resource builder.</param>
     /// <param name="configureContainer">Callback that exposes underlying container used for emulation to allow for customization.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("runAsEmulator", Description = "Configures the Azure Storage resource to be emulated using Azurite", RunSyncOnBackgroundThread = true)]
+    [AspireExport(Description = "Configures the Azure Storage resource to be emulated using Azurite", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureStorageResource> RunAsEmulator(this IResourceBuilder<AzureStorageResource> builder, Action<IResourceBuilder<AzureStorageEmulatorResource>>? configureContainer = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -269,7 +269,7 @@ public static class AzureStorageExtensions
     /// <param name="path">Relative path to the AppHost where emulator storage is persisted between runs. Defaults to the path '.azurite/{builder.Resource.Name}'</param>
     /// <param name="isReadOnly">A flag that indicates if this is a read-only mount.</param>
     /// <returns>A builder for the <see cref="AzureStorageEmulatorResource"/>.</returns>
-    [AspireExport("withDataBindMount", Description = "Adds a bind mount for the data folder to an Azure Storage emulator resource")]
+    [AspireExport(Description = "Adds a bind mount for the data folder to an Azure Storage emulator resource")]
     public static IResourceBuilder<AzureStorageEmulatorResource> WithDataBindMount(this IResourceBuilder<AzureStorageEmulatorResource> builder, string? path = null, bool isReadOnly = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -284,7 +284,7 @@ public static class AzureStorageExtensions
     /// <param name="name">The name of the volume. Defaults to an auto-generated name based on the application and resource names.</param>
     /// <param name="isReadOnly">A flag that indicates if this is a read-only volume.</param>
     /// <returns>A builder for the <see cref="AzureStorageEmulatorResource"/>.</returns>
-    [AspireExport("withDataVolume", Description = "Adds a named volume for the data folder to an Azure Storage emulator resource")]
+    [AspireExport(Description = "Adds a named volume for the data folder to an Azure Storage emulator resource")]
     public static IResourceBuilder<AzureStorageEmulatorResource> WithDataVolume(this IResourceBuilder<AzureStorageEmulatorResource> builder, string? name = null, bool isReadOnly = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -298,7 +298,7 @@ public static class AzureStorageExtensions
     /// <param name="builder">Storage emulator resource builder.</param>
     /// <param name="port">Host port to use.</param>
     /// <returns></returns>
-    [AspireExport("withBlobPort", Description = "Sets the host port for blob requests on the storage emulator")]
+    [AspireExport(Description = "Sets the host port for blob requests on the storage emulator")]
     public static IResourceBuilder<AzureStorageEmulatorResource> WithBlobPort(this IResourceBuilder<AzureStorageEmulatorResource> builder, int port)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -315,7 +315,7 @@ public static class AzureStorageExtensions
     /// <param name="builder">Storage emulator resource builder.</param>
     /// <param name="port">Host port to use.</param>
     /// <returns></returns>
-    [AspireExport("withQueuePort", Description = "Sets the host port for queue requests on the storage emulator")]
+    [AspireExport(Description = "Sets the host port for queue requests on the storage emulator")]
     public static IResourceBuilder<AzureStorageEmulatorResource> WithQueuePort(this IResourceBuilder<AzureStorageEmulatorResource> builder, int port)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -332,7 +332,7 @@ public static class AzureStorageExtensions
     /// <param name="builder">Storage emulator resource builder.</param>
     /// <param name="port">Host port to use.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/> for the <see cref="AzureStorageEmulatorResource"/>.</returns>
-    [AspireExport("withTablePort", Description = "Sets the host port for table requests on the storage emulator")]
+    [AspireExport(Description = "Sets the host port for table requests on the storage emulator")]
     public static IResourceBuilder<AzureStorageEmulatorResource> WithTablePort(this IResourceBuilder<AzureStorageEmulatorResource> builder, int port)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -349,7 +349,7 @@ public static class AzureStorageExtensions
     /// <param name="builder">Storage emulator resource builder.</param>
     /// <param name="enable">Whether to enable API version check or not. Default is <lang>true</lang>.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/> for the <see cref="AzureStorageEmulatorResource"/>.</returns>
-    [AspireExport("withApiVersionCheck", Description = "Configures whether the emulator checks API version validity")]
+    [AspireExport(Description = "Configures whether the emulator checks API version validity")]
     public static IResourceBuilder<AzureStorageEmulatorResource> WithApiVersionCheck(this IResourceBuilder<AzureStorageEmulatorResource> builder, bool enable = true)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -374,7 +374,7 @@ public static class AzureStorageExtensions
     /// <param name="builder">The <see cref="IResourceBuilder{T}"/> for <see cref="AzureStorageResource"/>.</param>
     /// <param name="name">The name of the resource.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/> for the <see cref="AzureBlobStorageResource"/>.</returns>
-    [AspireExport("addBlobs", Description = "Adds an Azure Blob Storage resource")]
+    [AspireExport(Description = "Adds an Azure Blob Storage resource")]
     public static IResourceBuilder<AzureBlobStorageResource> AddBlobs(this IResourceBuilder<AzureStorageResource> builder, [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -396,7 +396,7 @@ public static class AzureStorageExtensions
     /// <param name="builder">The <see cref="IResourceBuilder{T}"/> for <see cref="AzureStorageResource"/>.</param>
     /// <param name="name">The name of the resource.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/> for the <see cref="AzureDataLakeStorageResource"/>.</returns>
-    [AspireExport("addDataLake", Description = "Adds an Azure Data Lake Storage resource")]
+    [AspireExport(Description = "Adds an Azure Data Lake Storage resource")]
     public static IResourceBuilder<AzureDataLakeStorageResource> AddDataLake(this IResourceBuilder<AzureStorageResource> builder, [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -461,7 +461,7 @@ public static class AzureStorageExtensions
     /// <param name="name">The name of the resource.</param>
     /// <param name="blobContainerName">The name of the blob container.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/> for the <see cref="AzureBlobStorageContainerResource"/>.</returns>
-    [AspireExport("addBlobContainer", Description = "Adds an Azure Blob Storage container resource")]
+    [AspireExport(Description = "Adds an Azure Blob Storage container resource")]
     public static IResourceBuilder<AzureBlobStorageContainerResource> AddBlobContainer(this IResourceBuilder<AzureStorageResource> builder, [ResourceName] string name, string? blobContainerName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -498,7 +498,7 @@ public static class AzureStorageExtensions
     /// <param name="name">The name of the resource.</param>
     /// <param name="dataLakeFileSystemName">The name of the data lake file system.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/> for the <see cref="AzureDataLakeStorageFileSystemResource"/>.</returns>
-    [AspireExport("addDataLakeFileSystem", Description = "Adds an Azure Data Lake Storage file system resource")]
+    [AspireExport(Description = "Adds an Azure Data Lake Storage file system resource")]
     public static IResourceBuilder<AzureDataLakeStorageFileSystemResource> AddDataLakeFileSystem(this IResourceBuilder<AzureStorageResource> builder, [ResourceName] string name, string? dataLakeFileSystemName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -557,7 +557,7 @@ public static class AzureStorageExtensions
     /// <param name="builder">The <see cref="IResourceBuilder{T}"/> for <see cref="AzureStorageResource"/>.</param>
     /// <param name="name">The name of the resource.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/> for the <see cref="AzureTableStorageResource"/>.</returns>
-    [AspireExport("addTables", Description = "Adds an Azure Table Storage resource")]
+    [AspireExport(Description = "Adds an Azure Table Storage resource")]
     public static IResourceBuilder<AzureTableStorageResource> AddTables(this IResourceBuilder<AzureStorageResource> builder, [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -572,7 +572,7 @@ public static class AzureStorageExtensions
     /// <param name="builder">The <see cref="IResourceBuilder{T}"/> for <see cref="AzureStorageResource"/>.</param>
     /// <param name="name">The name of the resource.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/> for the <see cref="AzureQueueStorageResource"/>.</returns>
-    [AspireExport("addQueues", Description = "Adds an Azure Queue Storage resource")]
+    [AspireExport(Description = "Adds an Azure Queue Storage resource")]
     public static IResourceBuilder<AzureQueueStorageResource> AddQueues(this IResourceBuilder<AzureStorageResource> builder, [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -609,7 +609,7 @@ public static class AzureStorageExtensions
     /// <param name="name">The name of the resource.</param>
     /// <param name="queueName">The name of the queue.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/> for the <see cref="AzureQueueStorageQueueResource"/>.</returns>
-    [AspireExport("addQueue", Description = "Adds an Azure Storage queue resource")]
+    [AspireExport(Description = "Adds an Azure Storage queue resource")]
     public static IResourceBuilder<AzureQueueStorageQueueResource> AddQueue(this IResourceBuilder<AzureStorageResource> builder, [ResourceName] string name, string? queueName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);

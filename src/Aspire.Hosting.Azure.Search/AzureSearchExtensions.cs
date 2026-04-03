@@ -30,7 +30,7 @@ public static class AzureSearchExtensions
     ///
     /// These can be replaced by calling <see cref="WithRoleAssignments{T}(IResourceBuilder{T}, IResourceBuilder{AzureSearchResource}, SearchBuiltInRole[])"/>.
     /// </remarks>
-    [AspireExport("addAzureSearch", Description = "Adds an Azure AI Search service resource")]
+    [AspireExport(Description = "Adds an Azure AI Search service resource")]
     public static IResourceBuilder<AzureSearchResource> AddAzureSearch(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);

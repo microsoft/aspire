@@ -31,7 +31,7 @@ public static class AzureWebPubSubExtensions
     ///
     /// These can be replaced by calling <see cref="WithRoleAssignments{T}(IResourceBuilder{T}, IResourceBuilder{AzureWebPubSubResource}, WebPubSubBuiltInRole[])"/>.
     /// </remarks>
-    [AspireExport("addAzureWebPubSub", Description = "Adds an Azure Web PubSub resource to the distributed application model.")]
+    [AspireExport(Description = "Adds an Azure Web PubSub resource to the distributed application model.")]
     public static IResourceBuilder<AzureWebPubSubResource> AddAzureWebPubSub(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -171,7 +171,7 @@ public static class AzureWebPubSubExtensions
     /// <param name="name">The name of the Azure WebPubSub Hub resource.</param>
     /// <param name="hubName">The name of the Azure WebPubSub Hub. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("addHub", Description = "Adds a hub to the Azure Web PubSub resource.")]
+    [AspireExport(Description = "Adds a hub to the Azure Web PubSub resource.")]
     public static IResourceBuilder<AzureWebPubSubHubResource> AddHub(this IResourceBuilder<AzureWebPubSubResource> builder, [ResourceName] string name, string? hubName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);

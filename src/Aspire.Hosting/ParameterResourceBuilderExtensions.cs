@@ -23,7 +23,7 @@ public static class ParameterResourceBuilderExtensions
     /// <param name="secret">Optional flag indicating whether the parameter should be regarded as secret.</param>
     /// <returns>Resource builder for the parameter.</returns>
     /// <exception cref="DistributedApplicationException"></exception>
-    [AspireExport("addParameter", Description = "Adds a parameter resource")]
+    [AspireExport(Description = "Adds a parameter resource")]
     public static IResourceBuilder<ParameterResource> AddParameter(this IDistributedApplicationBuilder builder, [ResourceName] string name, bool secret = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -108,7 +108,7 @@ public static class ParameterResourceBuilderExtensions
     /// <param name="configurationKey">Configuration key used to get the value of the parameter</param>
     /// <param name="secret">Optional flag indicating whether the parameter should be regarded as secret.</param>
     /// <returns>Resource builder for the parameter.</returns>
-    [AspireExport("addParameterFromConfiguration", Description = "Adds a parameter sourced from configuration")]
+    [AspireExport(Description = "Adds a parameter sourced from configuration")]
     public static IResourceBuilder<ParameterResource> AddParameterFromConfiguration(this IDistributedApplicationBuilder builder, string name, string configurationKey, bool secret = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -170,7 +170,7 @@ public static class ParameterResourceBuilderExtensions
     /// <c>true</c> allows the description to contain Markdown elements such as links, text decoration and lists.
     /// </param>
     /// <returns>Resource builder for the parameter.</returns>
-    [AspireExport("withDescription", Description = "Sets a parameter description")]
+    [AspireExport(Description = "Sets a parameter description")]
     public static IResourceBuilder<ParameterResource> WithDescription(this IResourceBuilder<ParameterResource> builder, string description, bool enableMarkdown = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -252,7 +252,7 @@ public static class ParameterResourceBuilderExtensions
     /// <param name="environmentVariableName">Environment variable name to set when WithReference is used.</param>
     /// <returns>Resource builder for the parameter.</returns>
     /// <exception cref="DistributedApplicationException"></exception>
-    [AspireExport("addConnectionString", Description = "Adds a connection string resource")]
+    [AspireExport(Description = "Adds a connection string resource")]
     public static IResourceBuilder<IResourceWithConnectionString> AddConnectionString(this IDistributedApplicationBuilder builder, [ResourceName] string name, string? environmentVariableName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -273,7 +273,7 @@ public static class ParameterResourceBuilderExtensions
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <returns>The configured <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("publishAsConnectionString", Description = "Publishes the resource as a connection string")]
+    [AspireExport(Description = "Publishes the resource as a connection string")]
     public static IResourceBuilder<T> PublishAsConnectionString<T>(this IResourceBuilder<T> builder)
         where T : ContainerResource, IResourceWithConnectionString
     {

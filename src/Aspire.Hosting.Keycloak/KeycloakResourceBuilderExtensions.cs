@@ -48,7 +48,7 @@ public static class KeycloakResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("addKeycloak", Description = "Adds a Keycloak container resource")]
+    [AspireExport(Description = "Adds a Keycloak container resource")]
     public static IResourceBuilder<KeycloakResource> AddKeycloak(
         this IDistributedApplicationBuilder builder,
         string name,
@@ -147,7 +147,7 @@ public static class KeycloakResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("withDataVolume", Description = "Adds a data volume for Keycloak")]
+    [AspireExport(Description = "Adds a data volume for Keycloak")]
     public static IResourceBuilder<KeycloakResource> WithDataVolume(this IResourceBuilder<KeycloakResource> builder, string? name = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -171,7 +171,7 @@ public static class KeycloakResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("withDataBindMount", Description = "Adds a data bind mount for Keycloak")]
+    [AspireExport(Description = "Adds a data bind mount for Keycloak")]
     public static IResourceBuilder<KeycloakResource> WithDataBindMount(this IResourceBuilder<KeycloakResource> builder, string source)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -249,7 +249,7 @@ public static class KeycloakResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="features">Names of features to enable for the keycloak resource</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withEnabledFeatures", Description = "Enables Keycloak features")]
+    [AspireExport(Description = "Enables Keycloak features")]
     public static IResourceBuilder<KeycloakResource> WithEnabledFeatures(
         this IResourceBuilder<KeycloakResource> builder,
         params string[] features)
@@ -270,7 +270,7 @@ public static class KeycloakResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="features">Names of features to disable for the keycloak resource</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withDisabledFeatures", Description = "Disables Keycloak features")]
+    [AspireExport(Description = "Disables Keycloak features")]
     public static IResourceBuilder<KeycloakResource> WithDisabledFeatures(
         this IResourceBuilder<KeycloakResource> builder,
         params string[] features)
@@ -296,7 +296,7 @@ public static class KeycloakResourceBuilderExtensions
     /// </summary>
     /// <param name="builder">The keycloak resource builder.</param>
     /// <returns>The <see cref="IResourceBuilder{KeycloakResource}"/>.</returns>
-    [AspireExport("withOtlpExporter", Description = "Configures the OTLP exporter for Keycloak")]
+    [AspireExport(Description = "Configures the OTLP exporter for Keycloak")]
     public static IResourceBuilder<KeycloakResource> WithOtlpExporter(this IResourceBuilder<KeycloakResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);

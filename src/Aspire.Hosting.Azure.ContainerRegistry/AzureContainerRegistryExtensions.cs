@@ -27,7 +27,7 @@ public static class AzureContainerRegistryExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureContainerRegistryResource}"/> builder.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="name"/> is null or empty.</exception>
-    [AspireExport("addAzureContainerRegistry", Description = "Adds an Azure Container Registry resource to the distributed application model.")]
+    [AspireExport(Description = "Adds an Azure Container Registry resource to the distributed application model.")]
     public static IResourceBuilder<AzureContainerRegistryResource> AddAzureContainerRegistry(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -123,7 +123,7 @@ public static class AzureContainerRegistryExtensions
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the resource does not have an associated Azure Container Registry,
     /// or when the associated container registry is not an <see cref="AzureContainerRegistryResource"/>.</exception>
-    [AspireExport("getAzureContainerRegistry", Description = "Gets the Azure Container Registry associated with a compute environment resource.")]
+    [AspireExport(Description = "Gets the Azure Container Registry associated with a compute environment resource.")]
     public static IResourceBuilder<AzureContainerRegistryResource> GetAzureContainerRegistry<T>(this IResourceBuilder<T> builder)
         where T : IResource, IAzureComputeEnvironmentResource
     {
@@ -163,7 +163,7 @@ public static class AzureContainerRegistryExtensions
     ///     .WithPurgeTask("0 1 * * *", ago: TimeSpan.FromDays(7), keep: 5);
     /// </code>
     /// </example>
-    [AspireExport("withPurgeTask", Description = "Configures a purge task for the Azure Container Registry resource.")]
+    [AspireExport(Description = "Configures a purge task for the Azure Container Registry resource.")]
     public static IResourceBuilder<AzureContainerRegistryResource> WithPurgeTask(
         this IResourceBuilder<AzureContainerRegistryResource> builder,
         string schedule,
