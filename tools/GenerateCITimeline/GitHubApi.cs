@@ -15,8 +15,12 @@ internal static class GitHubApi
         };
 
         using var process = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start gh process.");
-        var stdout = await process.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
-        var stderr = await process.StandardError.ReadToEndAsync().ConfigureAwait(false);
+        // Read both streams concurrently to avoid deadlock when a pipe buffer fills.
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+        await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
+        var stdout = stdoutTask.Result;
+        var stderr = stderrTask.Result;
         await process.WaitForExitAsync().ConfigureAwait(false);
 
         if (process.ExitCode != 0)
