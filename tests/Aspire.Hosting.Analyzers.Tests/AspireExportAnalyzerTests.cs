@@ -805,10 +805,10 @@ public class AspireExportAnalyzerTests
 
             public static class TestExports
             {
-                [AspireExport("dictMethod")]
+                [AspireExport]
                 public static object? DictMethod(this IDictionary dict, string key) => dict[key];
 
-                [AspireExport("listMethod")]
+                [AspireExport]
                 public static object? ListMethod(this IList list, int index) => list[index];
             }
             """, []);

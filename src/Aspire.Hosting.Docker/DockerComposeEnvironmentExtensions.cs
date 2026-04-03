@@ -102,7 +102,7 @@ public static class DockerComposeEnvironmentExtensions
     /// that will be written to the environment-specific <c>.env</c> file adjacent to the Docker Compose file.
     /// </para>
     /// </remarks>
-    [AspireExport("configureEnvFile", Description = "Configures the captured environment variables written to the Docker Compose .env file")]
+    [AspireExport(Description = "Configures the captured environment variables written to the Docker Compose .env file")]
     public static IResourceBuilder<DockerComposeEnvironmentResource> ConfigureEnvFile(this IResourceBuilder<DockerComposeEnvironmentResource> builder, Action<IDictionary<string, CapturedEnvironmentVariable>> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
