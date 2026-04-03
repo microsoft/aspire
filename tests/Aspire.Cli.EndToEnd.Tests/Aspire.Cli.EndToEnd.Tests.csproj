@@ -8,7 +8,7 @@
     <IsTestProject>true</IsTestProject>
     <IsUnitTestProject>true</IsUnitTestProject>
     <OutputType>Exe</OutputType>
-    <SkipTests Condition="'$(IsGitHubActionsRunner)' == 'true' and '$(IsGithubPullRequest)' != 'true'">true</SkipTests>
+    <SkipTests Condition="'$(IsGitHubActionsRunner)' == 'true' and '$(IsGithubPullRequest)' != 'true' and '$(RunQuarantinedTests)' != 'true' and '$(RunOuterloopTests)' != 'true'">true</SkipTests>
 
     <SplitTestsOnCI>true</SplitTestsOnCI>
     <RequiresNugets>true</RequiresNugets>

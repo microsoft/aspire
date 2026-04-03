@@ -8,7 +8,7 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Execute commands in the context of an Aspire application resource. Starts the apphost, waits for resources to initialize, then runs the specified command in the target resource's environment (Preview)
+        <source>Execute commands in the context of an Aspire application resource. Starts the AppHost, waits for resources to initialize, then runs the specified command in the target resource's environment (Preview)
 
 Examples:
   aspire exec --resource api dotnet build
@@ -35,7 +35,7 @@ Examples:
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire apphost project file. If not specified, searches for a project file in the current directory.</source>
+        <source>The path to the Aspire AppHost project file. If not specified, searches for a project file in the current directory.</source>
         <target state="needs-review-translation">Aspire AppHost 项目文件的路径。如果未指定，则在当前目录中搜索项目文件。</target>
         <note />
       </trans-unit>
@@ -50,12 +50,12 @@ Examples:
         <note />
       </trans-unit>
       <trans-unit id="StoppingAppHost">
-        <source>Stopping app host...</source>
-        <target state="translated">正在停止应用主机...</target>
+        <source>Stopping AppHost...</source>
+        <target state="needs-review-translation">正在停止应用主机...</target>
         <note />
       </trans-unit>
       <trans-unit id="TargetResourceArgumentDescription">
-        <source>The name of the target resource to execute the command against. The command will be executed as soon as the apphost starts, without waiting for the resource to be ready.</source>
+        <source>The name of the target resource to execute the command against. The command will be executed as soon as the AppHost starts, without waiting for the resource to be ready.</source>
         <target state="needs-review-translation">要针对其执行命令的目标资源的名称。该命令将在 AppHost 启动后立即执行，而无需等待资源就绪。</target>
         <note />
       </trans-unit>
