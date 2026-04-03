@@ -883,6 +883,46 @@ func (s *CSharpAppResource) WithReferenceEndpoint(endpointReference *EndpointRef
 	return result.(*IResourceWithEnvironment), nil
 }
 
+// WithEndpointCallback updates a named endpoint via callback
+func (s *CSharpAppResource) WithEndpointCallback(endpointName string, callback func(...any) any, createIfNotExists *bool) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["endpointName"] = SerializeValue(endpointName)
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	if createIfNotExists != nil {
+		reqArgs["createIfNotExists"] = SerializeValue(createIfNotExists)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withEndpointCallback", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
+}
+
+// WithHttpEndpointCallback updates an HTTP endpoint via callback
+func (s *CSharpAppResource) WithHttpEndpointCallback(callback func(...any) any, name *string, createIfNotExists *bool) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if createIfNotExists != nil {
+		reqArgs["createIfNotExists"] = SerializeValue(createIfNotExists)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpEndpointCallback", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
+}
+
 // WithEndpoint adds a network endpoint
 func (s *CSharpAppResource) WithEndpoint(port *float64, targetPort *float64, scheme *string, name *string, env *string, isProxied *bool, isExternal *bool, protocol *ProtocolType) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
@@ -4122,6 +4162,46 @@ func (s *ContainerResource) WithReferenceEndpoint(endpointReference *EndpointRef
 	return result.(*IResourceWithEnvironment), nil
 }
 
+// WithEndpointCallback updates a named endpoint via callback
+func (s *ContainerResource) WithEndpointCallback(endpointName string, callback func(...any) any, createIfNotExists *bool) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["endpointName"] = SerializeValue(endpointName)
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	if createIfNotExists != nil {
+		reqArgs["createIfNotExists"] = SerializeValue(createIfNotExists)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withEndpointCallback", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
+}
+
+// WithHttpEndpointCallback updates an HTTP endpoint via callback
+func (s *ContainerResource) WithHttpEndpointCallback(callback func(...any) any, name *string, createIfNotExists *bool) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if createIfNotExists != nil {
+		reqArgs["createIfNotExists"] = SerializeValue(createIfNotExists)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpEndpointCallback", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
+}
+
 // WithEndpoint adds a network endpoint
 func (s *ContainerResource) WithEndpoint(port *float64, targetPort *float64, scheme *string, name *string, env *string, isProxied *bool, isExternal *bool, protocol *ProtocolType) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
@@ -5772,6 +5852,46 @@ func (s *DotnetToolResource) WithReferenceEndpoint(endpointReference *EndpointRe
 	return result.(*IResourceWithEnvironment), nil
 }
 
+// WithEndpointCallback updates a named endpoint via callback
+func (s *DotnetToolResource) WithEndpointCallback(endpointName string, callback func(...any) any, createIfNotExists *bool) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["endpointName"] = SerializeValue(endpointName)
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	if createIfNotExists != nil {
+		reqArgs["createIfNotExists"] = SerializeValue(createIfNotExists)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withEndpointCallback", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
+}
+
+// WithHttpEndpointCallback updates an HTTP endpoint via callback
+func (s *DotnetToolResource) WithHttpEndpointCallback(callback func(...any) any, name *string, createIfNotExists *bool) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if createIfNotExists != nil {
+		reqArgs["createIfNotExists"] = SerializeValue(createIfNotExists)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpEndpointCallback", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
+}
+
 // WithEndpoint adds a network endpoint
 func (s *DotnetToolResource) WithEndpoint(port *float64, targetPort *float64, scheme *string, name *string, env *string, isProxied *bool, isExternal *bool, protocol *ProtocolType) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
@@ -7073,6 +7193,280 @@ func (s *EndpointReferenceExpression) ValueExpression() (*string, error) {
 	return result.(*string), nil
 }
 
+// EndpointUpdateContext wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext.
+type EndpointUpdateContext struct {
+	HandleWrapperBase
+}
+
+// NewEndpointUpdateContext creates a new EndpointUpdateContext.
+func NewEndpointUpdateContext(handle *Handle, client *AspireClient) *EndpointUpdateContext {
+	return &EndpointUpdateContext{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// Name gets the Name property
+func (s *EndpointUpdateContext) Name() (*string, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.name", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*string), nil
+}
+
+// Protocol gets the Protocol property
+func (s *EndpointUpdateContext) Protocol() (*ProtocolType, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.protocol", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ProtocolType), nil
+}
+
+// SetProtocol sets the Protocol property
+func (s *EndpointUpdateContext) SetProtocol(value ProtocolType) (*EndpointUpdateContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setProtocol", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*EndpointUpdateContext), nil
+}
+
+// Port gets the Port property
+func (s *EndpointUpdateContext) Port() (*float64, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.port", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*float64), nil
+}
+
+// SetPort sets the Port property
+func (s *EndpointUpdateContext) SetPort(value float64) (*EndpointUpdateContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setPort", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*EndpointUpdateContext), nil
+}
+
+// TargetPort gets the TargetPort property
+func (s *EndpointUpdateContext) TargetPort() (*float64, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.targetPort", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*float64), nil
+}
+
+// SetTargetPort sets the TargetPort property
+func (s *EndpointUpdateContext) SetTargetPort(value float64) (*EndpointUpdateContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setTargetPort", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*EndpointUpdateContext), nil
+}
+
+// UriScheme gets the UriScheme property
+func (s *EndpointUpdateContext) UriScheme() (*string, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.uriScheme", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*string), nil
+}
+
+// SetUriScheme sets the UriScheme property
+func (s *EndpointUpdateContext) SetUriScheme(value string) (*EndpointUpdateContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setUriScheme", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*EndpointUpdateContext), nil
+}
+
+// TargetHost gets the TargetHost property
+func (s *EndpointUpdateContext) TargetHost() (*string, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.targetHost", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*string), nil
+}
+
+// SetTargetHost sets the TargetHost property
+func (s *EndpointUpdateContext) SetTargetHost(value string) (*EndpointUpdateContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setTargetHost", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*EndpointUpdateContext), nil
+}
+
+// Transport gets the Transport property
+func (s *EndpointUpdateContext) Transport() (*string, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.transport", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*string), nil
+}
+
+// SetTransport sets the Transport property
+func (s *EndpointUpdateContext) SetTransport(value string) (*EndpointUpdateContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setTransport", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*EndpointUpdateContext), nil
+}
+
+// IsExternal gets the IsExternal property
+func (s *EndpointUpdateContext) IsExternal() (*bool, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.isExternal", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*bool), nil
+}
+
+// SetIsExternal sets the IsExternal property
+func (s *EndpointUpdateContext) SetIsExternal(value bool) (*EndpointUpdateContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setIsExternal", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*EndpointUpdateContext), nil
+}
+
+// IsProxied gets the IsProxied property
+func (s *EndpointUpdateContext) IsProxied() (*bool, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.isProxied", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*bool), nil
+}
+
+// SetIsProxied sets the IsProxied property
+func (s *EndpointUpdateContext) SetIsProxied(value bool) (*EndpointUpdateContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setIsProxied", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*EndpointUpdateContext), nil
+}
+
+// ExcludeReferenceEndpoint gets the ExcludeReferenceEndpoint property
+func (s *EndpointUpdateContext) ExcludeReferenceEndpoint() (*bool, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.excludeReferenceEndpoint", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*bool), nil
+}
+
+// SetExcludeReferenceEndpoint sets the ExcludeReferenceEndpoint property
+func (s *EndpointUpdateContext) SetExcludeReferenceEndpoint(value bool) (*EndpointUpdateContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setExcludeReferenceEndpoint", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*EndpointUpdateContext), nil
+}
+
+// TlsEnabled gets the TlsEnabled property
+func (s *EndpointUpdateContext) TlsEnabled() (*bool, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.tlsEnabled", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*bool), nil
+}
+
+// SetTlsEnabled sets the TlsEnabled property
+func (s *EndpointUpdateContext) SetTlsEnabled(value bool) (*EndpointUpdateContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setTlsEnabled", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*EndpointUpdateContext), nil
+}
+
 // EnvironmentCallbackContext wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext.
 type EnvironmentCallbackContext struct {
 	HandleWrapperBase
@@ -7496,6 +7890,46 @@ func (s *ExecutableResource) WithReferenceEndpoint(endpointReference *EndpointRe
 		return nil, err
 	}
 	return result.(*IResourceWithEnvironment), nil
+}
+
+// WithEndpointCallback updates a named endpoint via callback
+func (s *ExecutableResource) WithEndpointCallback(endpointName string, callback func(...any) any, createIfNotExists *bool) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["endpointName"] = SerializeValue(endpointName)
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	if createIfNotExists != nil {
+		reqArgs["createIfNotExists"] = SerializeValue(createIfNotExists)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withEndpointCallback", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
+}
+
+// WithHttpEndpointCallback updates an HTTP endpoint via callback
+func (s *ExecutableResource) WithHttpEndpointCallback(callback func(...any) any, name *string, createIfNotExists *bool) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if createIfNotExists != nil {
+		reqArgs["createIfNotExists"] = SerializeValue(createIfNotExists)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpEndpointCallback", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
 }
 
 // WithEndpoint adds a network endpoint
@@ -12319,6 +12753,46 @@ func (s *ProjectResource) WithReferenceEndpoint(endpointReference *EndpointRefer
 	return result.(*IResourceWithEnvironment), nil
 }
 
+// WithEndpointCallback updates a named endpoint via callback
+func (s *ProjectResource) WithEndpointCallback(endpointName string, callback func(...any) any, createIfNotExists *bool) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["endpointName"] = SerializeValue(endpointName)
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	if createIfNotExists != nil {
+		reqArgs["createIfNotExists"] = SerializeValue(createIfNotExists)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withEndpointCallback", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
+}
+
+// WithHttpEndpointCallback updates an HTTP endpoint via callback
+func (s *ProjectResource) WithHttpEndpointCallback(callback func(...any) any, name *string, createIfNotExists *bool) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if createIfNotExists != nil {
+		reqArgs["createIfNotExists"] = SerializeValue(createIfNotExists)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpEndpointCallback", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
+}
+
 // WithEndpoint adds a network endpoint
 func (s *ProjectResource) WithEndpoint(port *float64, targetPort *float64, scheme *string, name *string, env *string, isProxied *bool, isExternal *bool, protocol *ProtocolType) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
@@ -14500,6 +14974,46 @@ func (s *TestDatabaseResource) WithReferenceEndpoint(endpointReference *Endpoint
 	return result.(*IResourceWithEnvironment), nil
 }
 
+// WithEndpointCallback updates a named endpoint via callback
+func (s *TestDatabaseResource) WithEndpointCallback(endpointName string, callback func(...any) any, createIfNotExists *bool) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["endpointName"] = SerializeValue(endpointName)
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	if createIfNotExists != nil {
+		reqArgs["createIfNotExists"] = SerializeValue(createIfNotExists)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withEndpointCallback", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
+}
+
+// WithHttpEndpointCallback updates an HTTP endpoint via callback
+func (s *TestDatabaseResource) WithHttpEndpointCallback(callback func(...any) any, name *string, createIfNotExists *bool) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if createIfNotExists != nil {
+		reqArgs["createIfNotExists"] = SerializeValue(createIfNotExists)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpEndpointCallback", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
+}
+
 // WithEndpoint adds a network endpoint
 func (s *TestDatabaseResource) WithEndpoint(port *float64, targetPort *float64, scheme *string, name *string, env *string, isProxied *bool, isExternal *bool, protocol *ProtocolType) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
@@ -16223,6 +16737,46 @@ func (s *TestRedisResource) WithReferenceEndpoint(endpointReference *EndpointRef
 		return nil, err
 	}
 	return result.(*IResourceWithEnvironment), nil
+}
+
+// WithEndpointCallback updates a named endpoint via callback
+func (s *TestRedisResource) WithEndpointCallback(endpointName string, callback func(...any) any, createIfNotExists *bool) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["endpointName"] = SerializeValue(endpointName)
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	if createIfNotExists != nil {
+		reqArgs["createIfNotExists"] = SerializeValue(createIfNotExists)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withEndpointCallback", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
+}
+
+// WithHttpEndpointCallback updates an HTTP endpoint via callback
+func (s *TestRedisResource) WithHttpEndpointCallback(callback func(...any) any, name *string, createIfNotExists *bool) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if createIfNotExists != nil {
+		reqArgs["createIfNotExists"] = SerializeValue(createIfNotExists)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpEndpointCallback", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
 }
 
 // WithEndpoint adds a network endpoint
@@ -18093,6 +18647,46 @@ func (s *TestVaultResource) WithReferenceEndpoint(endpointReference *EndpointRef
 	return result.(*IResourceWithEnvironment), nil
 }
 
+// WithEndpointCallback updates a named endpoint via callback
+func (s *TestVaultResource) WithEndpointCallback(endpointName string, callback func(...any) any, createIfNotExists *bool) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["endpointName"] = SerializeValue(endpointName)
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	if createIfNotExists != nil {
+		reqArgs["createIfNotExists"] = SerializeValue(createIfNotExists)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withEndpointCallback", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
+}
+
+// WithHttpEndpointCallback updates an HTTP endpoint via callback
+func (s *TestVaultResource) WithHttpEndpointCallback(callback func(...any) any, name *string, createIfNotExists *bool) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	if name != nil {
+		reqArgs["name"] = SerializeValue(name)
+	}
+	if createIfNotExists != nil {
+		reqArgs["createIfNotExists"] = SerializeValue(createIfNotExists)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpEndpointCallback", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
+}
+
 // WithEndpoint adds a network endpoint
 func (s *TestVaultResource) WithEndpoint(port *float64, targetPort *float64, scheme *string, name *string, env *string, isProxied *bool, isExternal *bool, protocol *ProtocolType) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
@@ -19335,6 +19929,9 @@ func init() {
 	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression", func(h *Handle, c *AspireClient) any {
 		return NewEndpointReferenceExpression(h, c)
+	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext", func(h *Handle, c *AspireClient) any {
+		return NewEndpointUpdateContext(h, c)
 	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext", func(h *Handle, c *AspireClient) any {
 		return NewEnvironmentCallbackContext(h, c)

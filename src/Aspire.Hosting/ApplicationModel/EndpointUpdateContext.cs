@@ -6,10 +6,10 @@ using System.Net.Sockets;
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
-/// Represents a mutable callback context for updating an endpoint in polyglot app hosts.
+/// Provides a mutable callback context for updating an endpoint in polyglot app hosts.
 /// </summary>
 [AspireExport(ExposeProperties = true)]
-public sealed class EndpointUpdateContext(EndpointAnnotation endpointAnnotation)
+internal sealed class EndpointUpdateContext(EndpointAnnotation endpointAnnotation)
 {
     private readonly EndpointAnnotation _endpointAnnotation = endpointAnnotation ?? throw new ArgumentNullException(nameof(endpointAnnotation));
 
