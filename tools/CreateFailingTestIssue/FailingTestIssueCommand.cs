@@ -855,8 +855,7 @@ internal static class FailingTestIssueCommand
             candidateArtifacts = artifacts;
         }
 
-        var tempRoot = Path.Combine(Path.GetTempPath(), "aspire-failing-test-issue", Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture));
-        Directory.CreateDirectory(tempRoot);
+        var tempRoot = Directory.CreateTempSubdirectory("aspire-failing-test-issue").FullName;
 
         try
         {

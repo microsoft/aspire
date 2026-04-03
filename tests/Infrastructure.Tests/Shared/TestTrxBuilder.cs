@@ -57,8 +57,7 @@ public static class TestTrxBuilder
         ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
         ArgumentException.ThrowIfNullOrWhiteSpace(trxEntryPath);
 
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "aspire-test-trx", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDirectory);
+        var tempDirectory = Directory.CreateTempSubdirectory("aspire-test-trx").FullName;
 
         try
         {

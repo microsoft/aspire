@@ -113,7 +113,8 @@ jobs:
           args+=(--force-new)
         fi
 
-        dotnet run --project tools/CreateFailingTestIssue -- "${args[@]}" > "$RUNNER_TEMP/failing-test-result.json"
+        dotnet build tools/CreateFailingTestIssue --no-restore -v:q
+        dotnet run --no-build --project tools/CreateFailingTestIssue -- "${args[@]}" --output "$RUNNER_TEMP/failing-test-result.json"
 
     - name: Create or update failing-test issue
       if: success()
