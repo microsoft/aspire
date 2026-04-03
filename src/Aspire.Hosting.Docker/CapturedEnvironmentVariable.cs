@@ -33,7 +33,7 @@ public sealed class CapturedEnvironmentVariable
     /// This could be a <see cref="ParameterResource"/>,
     /// <see cref="ContainerMountAnnotation"/>, or other source types.
     /// </summary>
-    [AspireExportIgnore(Reason = "Source projection is out of scope for the Docker Compose env file callback polyglot surface.")]
+    [AspireExportIgnore(Reason = "Source can be arbitrary provenance data (ParameterResource, ContainerMountAnnotation, etc.); exporting it here would require projecting a much broader heterogeneous source surface that configureEnvFile does not need.")]
     public object? Source { get; set; }
 
     /// <summary>
@@ -41,6 +41,6 @@ public sealed class CapturedEnvironmentVariable
     /// This is useful when the source is an annotation on a resource, allowing you to 
     /// identify which resource this environment variable is related to.
     /// </summary>
-    [AspireExportIgnore(Reason = "Resource projection is out of scope for the Docker Compose env file callback polyglot surface.")]
+    [AspireExportIgnore(Reason = "Resource is provenance metadata only; exporting it here would pull the broader IResource surface into the callback even though polyglot configureEnvFile only needs to mutate Description and DefaultValue.")]
     public IResource? Resource { get; set; }
 }
