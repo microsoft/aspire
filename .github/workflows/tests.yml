@@ -383,7 +383,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          python3 ${{ github.workspace }}/eng/scripts/generate-ci-timeline.py \
+          ${{ github.workspace }}/dotnet.sh run \
+            --project ${{ github.workspace }}/tools/GenerateCITimeline/GenerateCITimeline.csproj \
+            -- \
             --repo ${{ github.repository }} \
             --min-total 8
 
