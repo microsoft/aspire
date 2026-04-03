@@ -1,4 +1,4 @@
-﻿FROM node:22-slim AS build
+FROM node:22-slim AS build
 WORKDIR /app
 RUN corepack enable pnpm
 COPY package.json pnpm-lock.yaml ./

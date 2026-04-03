@@ -8,6 +8,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -129,6 +130,57 @@ public class AddViteAppTests
 
         var dockerfilePath = Path.Combine(tempDir.Path, "vite.Dockerfile");
         await Verify(File.ReadAllText(dockerfilePath));
+    }
+
+    [Fact]
+    public async Task PublishAsStaticWebsiteSetsYarpEnvironmentVariables()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var viteDir = Path.Combine(tempDir.Path, "vite");
+        Directory.CreateDirectory(viteDir);
+        File.WriteAllText(Path.Combine(viteDir, "package-lock.json"), "empty");
+
+        var nodeApp = builder.AddViteApp("vite", viteDir)
+            .WithNpm(install: true)
+            .PublishAsStaticWebsite();
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(nodeApp.Resource, DistributedApplicationOperation.Publish);
+
+        Assert.Equal("true", env["YARP_ENABLE_STATIC_FILES"]);
+        // PORT is set by the endpoint — verify it's present
+        Assert.True(env.ContainsKey("PORT"), "PORT should be set by the HTTP endpoint");
+    }
+
+    [Fact]
+    public async Task PublishAsStaticWebsiteWithApiProxySetsReverseProxyEnvironmentVariables()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var viteDir = Path.Combine(tempDir.Path, "vite");
+        Directory.CreateDirectory(viteDir);
+        File.WriteAllText(Path.Combine(viteDir, "package-lock.json"), "empty");
+
+        var apiDir = Path.Combine(tempDir.Path, "api");
+        Directory.CreateDirectory(apiDir);
+        File.WriteAllText(Path.Combine(apiDir, "package-lock.json"), "empty");
+
+        var api = builder.AddNodeApp("api", apiDir, "server.js")
+            .WithHttpEndpoint(name: "http", targetPort: 3001);
+
+        var nodeApp = builder.AddViteApp("vite", viteDir)
+            .WithNpm(install: true)
+            .PublishAsStaticWebsite("/api", api);
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(nodeApp.Resource, DistributedApplicationOperation.Publish);
+
+        Assert.Equal("true", env["YARP_ENABLE_STATIC_FILES"]);
+        Assert.Equal("api", env["REVERSEPROXY__ROUTES__api__CLUSTERID"]);
+        Assert.Equal("/api/{**catch-all}", env["REVERSEPROXY__ROUTES__api__MATCH__PATH"]);
+        Assert.False(env.ContainsKey("REVERSEPROXY__ROUTES__api__TRANSFORMS__0__PATHREMOVEPREFIX"), "StripPrefix defaults to false");
+        Assert.True(env.ContainsKey("REVERSEPROXY__CLUSTERS__api__DESTINATIONS__destination1__ADDRESS"));
     }
 
     [Fact]

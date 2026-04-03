@@ -75,16 +75,10 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("PIPELINE SUCCEEDED", timeout: TimeSpan.FromMinutes(5));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Wait for API to be ready (retry loop)
-        await auto.TypeAsync("for i in $(seq 1 30); do curl -sf http://localhost:3001/ > /dev/null 2>&1 && break; sleep 1; done && echo 'READY'");
+        // Wait for services and verify — verify.sh captures diagnostics first, then asserts
+        await auto.TypeAsync("bash verify.sh");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("READY", timeout: TimeSpan.FromSeconds(60));
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        // Verify API
-        await auto.TypeAsync("curl -sf http://localhost:3001/ | head -c 200");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("temperatureC", timeout: TimeSpan.FromSeconds(15));
+        await auto.WaitUntilTextAsync("ALL_OK", timeout: TimeSpan.FromSeconds(90));
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Clean up

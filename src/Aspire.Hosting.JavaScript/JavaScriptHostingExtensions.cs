@@ -29,7 +29,7 @@ public static class JavaScriptHostingExtensions
 {
     private const string BrowserCapability = "browser";
     private const string DefaultNodeVersion = "22";
-    private const string DefaultYarpImage = "mcr.microsoft.com/dotnet/nightly/yarp:2.3-preview";
+    private const string DefaultYarpImage = JavaScriptContainerImageTags.YarpRegistry + "/" + JavaScriptContainerImageTags.YarpImage + ":" + JavaScriptContainerImageTags.YarpTag;
 
     // This is the order of config files that Vite will look for by default
     // See https://github.com/vitejs/vite/blob/main/packages/vite/src/node/constants.ts#L97
@@ -417,7 +417,7 @@ public static class JavaScriptHostingExtensions
         string? apiPath = null,
         IResourceBuilder<IResourceWithServiceDiscovery>? apiTarget = null,
         string outputPath = "dist",
-        bool stripPrefix = true,
+        bool stripPrefix = false,
         string? targetEndpointName = null)
         where TResource : JavaScriptAppResource
     {
@@ -468,6 +468,15 @@ public static class JavaScriptHostingExtensions
             builder.WithReference(apiTarget);
         }
 
+        if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            return builder;
+        }
+
+        // YARP listens on port 5000 by default in the base image, so configure an endpoint for that port
+        // and set ASPNETCORE_URLS to ensure Kestrel listens on the correct port as well for static file serving and API reverse-proxy to work correctly.
+        builder.WithEndpoint("http", e => e.TargetPort = 5000, createIfNotExists: true);
+
         var annotation = new JavaScriptPublishModeAnnotation(JavaScriptPublishMode.StaticWebsite)
         {
             OutputPath = options.OutputPath,
@@ -476,14 +485,6 @@ public static class JavaScriptHostingExtensions
         builder.WithEnvironment(ctx =>
         {
             ctx.EnvironmentVariables["YARP_ENABLE_STATIC_FILES"] = "true";
-
-            // Kestrel needs ASPNETCORE_HTTP_PORTS to listen on the correct port.
-            // The JS app's HTTP endpoint target port is what Docker Compose maps to.
-            var httpEndpoint = builder.Resource.GetEndpoint("http");
-            if (httpEndpoint.Exists)
-            {
-                ctx.EnvironmentVariables["ASPNETCORE_HTTP_PORTS"] = httpEndpoint.Property(EndpointProperty.TargetPort);
-            }
 
             if (apiPath is not null && apiTarget is not null)
             {
@@ -541,7 +542,7 @@ public static class JavaScriptHostingExtensions
     /// the built output directory is copied into the runtime container, not the full application source.
     /// </para>
     /// </remarks>
-    [AspireExport("publishAsNodeServer", Description = "Publishes the JavaScript application as a standalone Node.js server that runs a built artifact directly.")]
+    [AspireExport(Description = "Publishes the JavaScript application as a standalone Node.js server that runs a built artifact directly.")]
     public static IResourceBuilder<TResource> PublishAsNodeServer<TResource>(this IResourceBuilder<TResource> builder, string entryPoint, string outputPath = ".")
         where TResource : JavaScriptAppResource
     {
@@ -558,7 +559,9 @@ public static class JavaScriptHostingExtensions
         builder.WithAnnotation(annotation)
                .ClearContainerFilesSources()
                .WithContainerFilesSource(GetContainerFilesSourcePath(outputPath))
-               .WithOtlpExporter();
+               .WithOtlpExporter()
+               .WithEnvironment("HOST", "0.0.0.0")
+               .WithEnvironment("HOSTNAME", "0.0.0.0");
 
         if (builder.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation))
         {
@@ -597,7 +600,7 @@ public static class JavaScriptHostingExtensions
     /// use <see cref="PublishAsNodeServer{TResource}"/> instead for a smaller runtime image.
     /// </para>
     /// </remarks>
-    [AspireExport("publishAsNpmScript", Description = "Publishes the JavaScript application as a Node.js server that uses a package manager script at runtime.")]
+    [AspireExport(Description = "Publishes the JavaScript application as a Node.js server that uses a package manager script at runtime.")]
     public static IResourceBuilder<TResource> PublishAsNpmScript<TResource>(this IResourceBuilder<TResource> builder, string startScriptName = "start", string? runScriptArguments = null)
         where TResource : JavaScriptAppResource
     {
@@ -612,7 +615,9 @@ public static class JavaScriptHostingExtensions
 
         builder.WithAnnotation(annotation)
                .ClearContainerFilesSources()
-               .WithOtlpExporter();
+               .WithOtlpExporter()
+               .WithEnvironment("HOST", "0.0.0.0")
+               .WithEnvironment("HOSTNAME", "0.0.0.0");
 
         if (builder.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation))
         {
@@ -1064,7 +1069,7 @@ public static class JavaScriptHostingExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("addNextJsApp", Description = "Adds a Next.js application resource")]
+    [AspireExport(Description = "Adds a Next.js application resource")]
     public static IResourceBuilder<NextJsAppResource> AddNextJsApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, string runScriptName = "dev")
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -1145,7 +1150,7 @@ public static class JavaScriptHostingExtensions
     /// to suppress those checks when the configuration is set dynamically or via an external
     /// mechanism that cannot be detected by static file inspection.
     /// </remarks>
-    [AspireExport("disableBuildValidation", Description = "Disables deploy-time build validation checks for the Next.js application.")]
+    [AspireExport(Description = "Disables deploy-time build validation checks for the Next.js application.")]
     public static IResourceBuilder<NextJsAppResource> DisableBuildValidation(this IResourceBuilder<NextJsAppResource> builder)
     {
         return builder.WithAnnotation<SuppressPublishValidationAnnotation>(new());

@@ -21,7 +21,7 @@ public class PublishAsStaticWebsiteOptions
     /// <c>/api/weatherforecast</c> is forwarded as <c>/weatherforecast</c>.
     /// Defaults to <see langword="true"/>.
     /// </summary>
-    public bool StripPrefix { get; set; } = true;
+    public bool StripPrefix { get; set; }
 
     /// <summary>
     /// Gets or sets the name of a specific endpoint on the API target resource to proxy to.
