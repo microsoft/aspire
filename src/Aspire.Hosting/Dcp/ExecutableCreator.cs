@@ -16,6 +16,8 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Dcp;
 
+using ExecutableConfiguration = (IExecutionConfigurationResult Configuration, ExecutablePemCertificates? PemCertificates);
+
 /// <summary>
 /// Handles preparation and creation of Executable DCP resources (project executables and plain executables).
 /// </summary>
@@ -290,8 +292,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         }
     }
 
-    private async Task<(IExecutionConfigurationResult Configuration, ExecutablePemCertificates? PemCertificates)>
-    BuildExecutableConfiguration(RenderedModelResource<Executable> er, ILogger resourceLogger, CancellationToken cancellationToken)
+    private async Task<ExecutableConfiguration> BuildExecutableConfiguration(RenderedModelResource<Executable> er, ILogger resourceLogger, CancellationToken cancellationToken)
     {
         var exe = (Executable)er.DcpResource;
 
