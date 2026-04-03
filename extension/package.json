@@ -116,7 +116,12 @@
               "command": {
                 "type": "string",
                 "description": "%extension.debug.command%",
-                "enum": ["run", "deploy", "publish", "do"],
+                "enum": [
+                  "run",
+                  "deploy",
+                  "publish",
+                  "do"
+                ],
                 "default": "run"
               },
               "step": {
@@ -656,7 +661,11 @@
         },
         "aspire.enableAspireDashboardAutoLaunch": {
           "type": "string",
-          "enum": ["launch", "notification", "off"],
+          "enum": [
+            "launch",
+            "notification",
+            "off"
+          ],
           "default": "launch",
           "description": "%configuration.aspire.enableAspireDashboardAutoLaunch%",
           "enumDescriptions": [
@@ -668,7 +677,12 @@
         },
         "aspire.dashboardBrowser": {
           "type": "string",
-          "enum": ["openExternalBrowser", "debugChrome", "debugEdge", "debugFirefox"],
+          "enum": [
+            "openExternalBrowser",
+            "debugChrome",
+            "debugEdge",
+            "debugFirefox"
+          ],
           "default": "openExternalBrowser",
           "description": "%configuration.aspire.dashboardBrowser%",
           "enumDescriptions": [
@@ -866,7 +880,6 @@
     "lodash": "^4.18.0",
     "undici": "^6.24.0",
     "path-to-regexp": "^8.4.0",
-    "minimatch": "^3.1.4",
     "@sinonjs/fake-timers": "13.0.5",
     "picomatch": "^2.3.2",
     "underscore": "^1.13.8"
@@ -877,7 +890,6 @@
     "lodash": "^4.18.0",
     "undici": "^6.24.0",
     "path-to-regexp": "^8.4.0",
-    "minimatch": "^3.1.4",
     "@sinonjs/fake-timers": "13.0.5",
     "picomatch": "^2.3.2",
     "underscore": "^1.13.8"
