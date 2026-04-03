@@ -1,0 +1,228 @@
+name: Create Failing-Test Issue
+
+on:
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: create-failing-test-issue-${{ github.event.issue.pull_request && 'pr' || 'issue' }}-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  create_failing_test_issue:
+    if: >-
+      github.repository == 'microsoft/aspire' &&
+      startsWith(github.event.comment.body, '/create-issue')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+      actions: read
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+    - name: Extract command
+      id: extract-command
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      with:
+        script: |
+          const helper = require(`${process.env.GITHUB_WORKSPACE}/.github/workflows/create-failing-test-issue.js`);
+          const defaultSourceUrl = context.payload.issue.pull_request
+            ? `https://github.com/${context.repo.owner}/${context.repo.repo}/pull/${context.issue.number}`
+            : null;
+
+          const parsed = helper.parseCommand(context.payload.comment.body, defaultSourceUrl);
+          if (!parsed.success) {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `@${context.payload.comment.user.login} ❌ ${parsed.errorMessage}`
+            });
+            core.setOutput('error_message', parsed.errorMessage);
+            core.setFailed(parsed.errorMessage);
+            return;
+          }
+
+          core.setOutput('test_query', parsed.testQuery);
+          core.setOutput('source_url', parsed.sourceUrl ?? '');
+          core.setOutput('workflow', parsed.workflow);
+          core.setOutput('force_new', parsed.forceNew ? 'true' : 'false');
+
+    - name: Verify user has write access
+      if: success()
+      id: verify-permission
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      with:
+        script: |
+          const commentUser = context.payload.comment.user.login;
+          const { data: permission } = await github.rest.repos.getCollaboratorPermissionLevel({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            username: commentUser
+          });
+
+          const writePermissions = ['admin', 'maintain', 'write'];
+          if (!writePermissions.includes(permission.permission)) {
+            const message = `@${commentUser} The \`/create-issue\` command requires write, maintain, or admin access to this repository.`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: message
+            });
+            core.setOutput('error_message', message);
+            core.setFailed(message);
+            return;
+          }
+
+    - name: Add processing reaction
+      if: success()
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      with:
+        script: |
+          await github.rest.reactions.createForIssueComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            comment_id: context.payload.comment.id,
+            content: 'eyes'
+          });
+
+    - name: Restore SDK
+      if: success()
+      run: ./restore.sh
+
+    - name: Resolve failing test details
+      if: success()
+      id: resolve-failure
+      continue-on-error: true
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TEST_QUERY: ${{ steps.extract-command.outputs.test_query }}
+        SOURCE_URL: ${{ steps.extract-command.outputs.source_url }}
+        WORKFLOW_SELECTOR: ${{ steps.extract-command.outputs.workflow }}
+        FORCE_NEW: ${{ steps.extract-command.outputs.force_new }}
+      run: |
+        args=(--test "$TEST_QUERY" --workflow "$WORKFLOW_SELECTOR" --repo "${GITHUB_REPOSITORY}")
+        if [ -n "$SOURCE_URL" ]; then
+          args+=(--url "$SOURCE_URL")
+        fi
+        if [ "$FORCE_NEW" = "true" ]; then
+          args+=(--force-new)
+        fi
+
+        dotnet run --project tools/CreateFailingTestIssue -- "${args[@]}" > "$RUNNER_TEMP/failing-test-result.json"
+
+    - name: Create or update failing-test issue
+      if: success()
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      env:
+        RESULT_PATH: ${{ runner.temp }}/failing-test-result.json
+        FORCE_NEW: ${{ steps.extract-command.outputs.force_new }}
+      with:
+        script: |
+          const fs = require('fs');
+          const helper = require(`${process.env.GITHUB_WORKSPACE}/.github/workflows/create-failing-test-issue.js`);
+
+          if (!fs.existsSync(process.env.RESULT_PATH) || fs.statSync(process.env.RESULT_PATH).size === 0) {
+            const message = `@${context.payload.comment.user.login} ❌ The failing-test resolver did not produce a JSON result. See the workflow run for details.`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: message
+            });
+            core.setFailed(message);
+            return;
+          }
+
+          const result = JSON.parse(fs.readFileSync(process.env.RESULT_PATH, 'utf8'));
+          if (!result.success) {
+            const candidates = result.diagnostics?.availableFailedTests?.length
+              ? `\n\n**Available failed tests:**\n${result.diagnostics.availableFailedTests.map(name => `- \`${name}\``).join('\n')}`
+              : '';
+            const message = `@${context.payload.comment.user.login} ❌ ${result.errorMessage ?? 'The failing-test resolver could not create an issue.'}${candidates}`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: message
+            });
+            core.setFailed(result.errorMessage ?? 'The failing-test resolver failed.');
+            return;
+          }
+
+          let targetIssue = null;
+          if (process.env.FORCE_NEW !== 'true') {
+            const query = helper.buildIssueSearchQuery(context.repo.owner, context.repo.repo, result.issue.metadataMarker);
+            const { data: search } = await github.rest.search.issuesAndPullRequests({
+              q: query,
+              per_page: 20
+            });
+
+            const issues = search.items.filter(item => !item.pull_request);
+            targetIssue = issues.find(item => item.state === 'open') ?? issues.find(item => item.state === 'closed') ?? null;
+          }
+
+          let action;
+          let issueNumber;
+          let issueUrl;
+
+          if (targetIssue && targetIssue.state === 'open') {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: targetIssue.number,
+              body: result.issue.commentBody
+            });
+
+            action = 'updated';
+            issueNumber = targetIssue.number;
+            issueUrl = targetIssue.html_url;
+          } else if (targetIssue && targetIssue.state === 'closed') {
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: targetIssue.number,
+              state: 'open'
+            });
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: targetIssue.number,
+              body: result.issue.commentBody
+            });
+
+            action = 'reopened';
+            issueNumber = targetIssue.number;
+            issueUrl = targetIssue.html_url;
+          } else {
+            const { data: issue } = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: result.issue.title,
+              body: result.issue.body,
+              labels: result.issue.labels
+            });
+
+            action = 'created';
+            issueNumber = issue.number;
+            issueUrl = issue.html_url;
+          }
+
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            body: `✅ ${action[0].toUpperCase()}${action.slice(1)} failing-test issue #${issueNumber}: ${issueUrl}`
+          });
+
+          await github.rest.reactions.createForIssueComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            comment_id: context.payload.comment.id,
+            content: 'rocket'
+          });
