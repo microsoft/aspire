@@ -8,6 +8,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console;
+using Spectre.Console.Rendering;
 
 using System.Text;
 
@@ -1037,5 +1038,113 @@ public class ConsoleInteractionServiceTests
 
         // Assert - markup is stripped, brackets in data are replaced
         Assert.Equal("Service (Prod)", result);
+    }
+
+    [Theory]
+    [InlineData(true, "[Y/n]")]
+    [InlineData(false, "[y/N]")]
+    public async Task ConfirmAsync_DisplaysCapitalizedDefaultChoice(bool defaultValue, string expectedChoiceSuffix)
+    {
+        // Arrange - simulate pressing Enter (accepts default)
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "\n");
+        var executionContext = new CliExecutionContext(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var interactionService = CreateInteractionService(console, executionContext);
+
+        // Act
+        await interactionService.ConfirmAsync("Proceed?", defaultValue, CancellationToken.None);
+
+        // Assert - the output should contain the [Y/n] or [y/N] suffix
+        var outputString = output.ToString();
+        Assert.Contains(expectedChoiceSuffix, outputString);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ConfirmAsync_WhenUserPressesEnter_ReturnsDefaultValue(bool defaultValue)
+    {
+        // Arrange - simulate pressing Enter (empty input selects default)
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "\n");
+        var executionContext = new CliExecutionContext(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var interactionService = CreateInteractionService(console, executionContext);
+
+        // Act
+        var result = await interactionService.ConfirmAsync("Proceed?", defaultValue, CancellationToken.None);
+
+        // Assert - pressing Enter should accept the default value
+        Assert.Equal(defaultValue, result);
+    }
+
+    private static IAnsiConsole CreateInteractiveConsoleWithInput(StringBuilder output, string input)
+    {
+        var settings = new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Interactive = InteractionSupport.Yes,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+        };
+        var console = AnsiConsole.Create(settings);
+        console.Profile.Width = int.MaxValue;
+        return new TestAnsiConsoleWithInput(console, new StringReader(input));
+    }
+}
+
+/// <summary>
+/// A test <see cref="IAnsiConsole"/> wrapper that redirects input reads to a <see cref="TextReader"/>,
+/// allowing prompts to be answered in unit tests without blocking on real console input.
+/// </summary>
+file sealed class TestAnsiConsoleWithInput : IAnsiConsole
+{
+    private readonly IAnsiConsole _inner;
+    private readonly IAnsiConsoleInput _testInput;
+
+    public TestAnsiConsoleWithInput(IAnsiConsole inner, TextReader inputReader)
+    {
+        _inner = inner;
+        _testInput = new TextReaderInput(inputReader);
+    }
+
+    public Profile Profile => _inner.Profile;
+    public IAnsiConsoleCursor Cursor => _inner.Cursor;
+    public IAnsiConsoleInput Input => _testInput;
+    public IExclusivityMode ExclusivityMode => _inner.ExclusivityMode;
+    public RenderPipeline Pipeline => _inner.Pipeline;
+
+    public void Clear(bool home) => _inner.Clear(home);
+    public void Write(IRenderable renderable) => _inner.Write(renderable);
+
+    private sealed class TextReaderInput : IAnsiConsoleInput
+    {
+        private readonly TextReader _reader;
+
+        public TextReaderInput(TextReader reader) => _reader = reader;
+
+        public bool IsKeyAvailable() => true;
+
+        public ConsoleKeyInfo? ReadKey(bool intercept)
+        {
+            var read = _reader.Read();
+            if (read == -1)
+            {
+                // End of stream - return Enter as a safe fallback
+                return new ConsoleKeyInfo('\r', ConsoleKey.Enter, shift: false, alt: false, control: false);
+            }
+
+            var ch = (char)read;
+            var key = ch switch
+            {
+                '\n' or '\r' => ConsoleKey.Enter,
+                'y' or 'Y'   => ConsoleKey.Y,
+                'n' or 'N'   => ConsoleKey.N,
+                _            => ConsoleKey.Enter,
+            };
+            return new ConsoleKeyInfo(ch, key, shift: char.IsUpper(ch), alt: false, control: false);
+        }
+
+        public Task<ConsoleKeyInfo?> ReadKeyAsync(bool intercept, CancellationToken cancellationToken)
+            => Task.FromResult(ReadKey(intercept));
     }
 }
