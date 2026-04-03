@@ -36,7 +36,7 @@
       </trans-unit>
       <trans-unit id="extension.debug.defaultConfiguration.name">
         <source xml:lang="en">Aspire: Launch default apphost</source>
-        <target state="translated">Aspire: Standard-Apphost starten</target>
+        <target state="translated">Aspire: Standard-AppHost starten</target>
       </trans-unit>
       <trans-unit id="aspire-vscode.strings.unsupportedResourceType">
         <source xml:lang="en">Attempted to start unsupported resource type: {0}.</source>
@@ -88,7 +88,7 @@
       </trans-unit>
       <trans-unit id="aspire-vscode.strings.errorRetrievingAppHosts">
         <source xml:lang="en">Error retrieving apphosts in the current workspace. Debug options may be incomplete.</source>
-        <target state="translated">Fehler beim Abrufen von Apphosts im aktuellen Arbeitsbereich. Debugoptionen sind möglicherweise unvollständig.</target>
+        <target state="translated">Fehler beim Abrufen von AppHosts im aktuellen Arbeitsbereich. Debugoptionen sind möglicherweise unvollständig.</target>
       </trans-unit>
       <trans-unit id="aspire-vscode.strings.error">
         <source xml:lang="en">Error: {0}</source>
@@ -144,15 +144,15 @@
       </trans-unit>
       <trans-unit id="extension.debug.defaultConfiguration.description">
         <source xml:lang="en">Launch the effective Aspire apphost in your workspace</source>
-        <target state="translated">Starten sie den effektiven Aspire-Apphost in Ihrem Arbeitsbereich</target>
+        <target state="translated">Starten sie den effektiven Aspire-AppHost in Ihrem Arbeitsbereich</target>
       </trans-unit>
       <trans-unit id="aspire-vscode.strings.launchingWithAppHost">
         <source xml:lang="en">Launching Aspire debug session for apphost {0}...</source>
-        <target state="translated">Die Aspire-Debugsitzung für Apphost {0} wird gestartet …</target>
+        <target state="translated">Die Aspire-Debugsitzung für AppHost {0} wird gestartet …</target>
       </trans-unit>
       <trans-unit id="aspire-vscode.strings.launchingWithDirectory">
         <source xml:lang="en">Launching Aspire debug session using directory {0}: attempting to determine effective apphost...</source>
-        <target state="translated">Die Aspire-Debugsitzung wird mithilfe des Verzeichnisses {0} gestartet: es wird versucht, einen effektiven Apphost zu ermitteln …</target>
+        <target state="translated">Die Aspire-Debugsitzung wird mithilfe des Verzeichnisses {0} gestartet: es wird versucht, einen effektiven AppHost zu ermitteln …</target>
       </trans-unit>
       <trans-unit id="command.config">
         <source xml:lang="en">Manage configuration settings</source>
@@ -172,7 +172,7 @@
       </trans-unit>
       <trans-unit id="aspire-vscode.strings.noCsprojFound">
         <source xml:lang="en">No apphost found in the current workspace.</source>
-        <target state="translated">Im aktuellen Arbeitsbereich wurde kein Apphost gefunden.</target>
+        <target state="translated">Im aktuellen Arbeitsbereich wurde kein AppHost gefunden.</target>
       </trans-unit>
       <trans-unit id="aspire-vscode.strings.noOutputFromMsbuild">
         <source xml:lang="en">No output from msbuild.</source>
@@ -208,7 +208,7 @@
       </trans-unit>
       <trans-unit id="extension.debug.program">
         <source xml:lang="en">Path to the apphost to run</source>
-        <target state="translated">Pfad zum auszuführenden Apphost</target>
+        <target state="translated">Pfad zum auszuführenden AppHost</target>
       </trans-unit>
       <trans-unit id="aspire-vscode.strings.processExitedWithCode">
         <source xml:lang="en">Process exited with code {0}.</source>
@@ -232,7 +232,7 @@
       </trans-unit>
       <trans-unit id="aspire-vscode.strings.incompatibleAppHostError">
         <source xml:lang="en">The apphost is not compatible. Consider upgrading the apphost or Aspire CLI.</source>
-        <target state="translated">Der Apphost ist nicht kompatibel. Erwägen Sie ein Upgrade des App-Hosts oder von Aspire CLI.</target>
+        <target state="translated">Der AppHost ist nicht kompatibel. Erwägen Sie ein Upgrade des App-Hosts oder von Aspire CLI.</target>
       </trans-unit>
       <trans-unit id="aspire-vscode.strings.fieldRequired">
         <source xml:lang="en">This field is required.</source>

@@ -33,8 +33,8 @@
         <note />
       </trans-unit>
       <trans-unit id="LanguageOptionDescription">
-        <source>The programming language for the apphost</source>
-        <target state="new">The programming language for the apphost</target>
+        <source>The programming language for the AppHost</source>
+        <target state="new">The programming language for the AppHost</target>
         <note />
       </trans-unit>
       <trans-unit id="NameArgumentDescription">

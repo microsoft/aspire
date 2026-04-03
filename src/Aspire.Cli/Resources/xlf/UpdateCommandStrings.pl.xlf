@@ -8,12 +8,12 @@
         <note />
       </trans-unit>
       <trans-unit id="AnalyzeAppHost">
-        <source>Analyze apphost</source>
+        <source>Analyze AppHost</source>
         <target state="needs-review-translation">Analizowanie hosta aplikacji</target>
         <note />
       </trans-unit>
       <trans-unit id="AnalyzeAppHostSdk">
-        <source>Analyze apphost SDK</source>
+        <source>Analyze AppHost SDK</source>
         <target state="needs-review-translation">Analizowanie zestawu SDK hosta aplikacji</target>
         <note />
       </trans-unit>
@@ -113,7 +113,7 @@
         <note />
       </trans-unit>
       <trans-unit id="FallbackParsingWarning">
-        <source>Note: Update plan generated using fallback parsing due to unresolvable apphost SDK. Dependency analysis may have reduced accuracy.</source>
+        <source>Note: Update plan generated using fallback parsing due to unresolvable AppHost SDK. Dependency analysis may have reduced accuracy.</source>
         <target state="needs-review-translation">Uwaga: plan aktualizacji został wygenerowany przy użyciu analizy zapasowej z powodu nierozpoznanego zestawu AppHost SDK. Analiza zależności może być mniej dokładna.</target>
         <note />
       </trans-unit>
@@ -138,7 +138,7 @@
         <note />
       </trans-unit>
       <trans-unit id="NoAppHostFoundUpdateCliPrompt">
-        <source>No Aspire apphost project found. Would you like to update the Aspire CLI instead?</source>
+        <source>No Aspire AppHost project found. Would you like to update the Aspire CLI instead?</source>
         <target state="needs-review-translation">Nie znaleziono projektu Aspire AppHost. Czy chcesz zamiast tego zaktualizować narzędzie Aspire CLI?</target>
         <note />
       </trans-unit>
@@ -173,7 +173,7 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire apphost project file</source>
+        <source>The path to the Aspire AppHost project file</source>
         <target state="needs-review-translation">Ścieżka do pliku projektu hosta AppHost platformy Aspire.</target>
         <note />
       </trans-unit>

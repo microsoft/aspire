@@ -8,7 +8,7 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Execute commands in the context of an Aspire application resource. Starts the apphost, waits for resources to initialize, then runs the specified command in the target resource's environment (Preview)
+        <source>Execute commands in the context of an Aspire application resource. Starts the AppHost, waits for resources to initialize, then runs the specified command in the target resource's environment (Preview)
 
 Examples:
   aspire exec --resource api dotnet build
@@ -35,7 +35,7 @@ Examples:
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire apphost project file. If not specified, searches for a project file in the current directory.</source>
+        <source>The path to the Aspire AppHost project file. If not specified, searches for a project file in the current directory.</source>
         <target state="needs-review-translation">Aspire AppHost プロセス プロジェクト ファイルへのパス。指定しない場合は、現在のディレクトリ内のプロジェクトファイルを検索します。</target>
         <note />
       </trans-unit>
@@ -50,12 +50,12 @@ Examples:
         <note />
       </trans-unit>
       <trans-unit id="StoppingAppHost">
-        <source>Stopping app host...</source>
-        <target state="translated">アプリ ホストを停止しています...</target>
+        <source>Stopping AppHost...</source>
+        <target state="needs-review-translation">アプリ ホストを停止しています...</target>
         <note />
       </trans-unit>
       <trans-unit id="TargetResourceArgumentDescription">
-        <source>The name of the target resource to execute the command against. The command will be executed as soon as the apphost starts, without waiting for the resource to be ready.</source>
+        <source>The name of the target resource to execute the command against. The command will be executed as soon as the AppHost starts, without waiting for the resource to be ready.</source>
         <target state="needs-review-translation">コマンドを実行するターゲット リソースの名前。このコマンドは、リソースの準備が整うのを待たずに、AppHost が起動するとすぐに実行されます。</target>
         <note />
       </trans-unit>

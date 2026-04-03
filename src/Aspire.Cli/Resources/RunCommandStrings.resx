@@ -118,19 +118,19 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>Run an Aspire apphost interactively for development</value>
+    <value>Run an Aspire AppHost interactively for development</value>
   </data>
   <data name="ForceArgumentDescription" xml:space="preserve">
-    <value>Stop any running instance of the apphost without prompting</value>
+    <value>Stop any running instance of the AppHost without prompting</value>
   </data>
   <data name="ProjectArgumentDescription" xml:space="preserve">
-    <value>The path to the Aspire apphost project file</value>
+    <value>The path to the Aspire AppHost project file</value>
   </data>
   <data name="DetachArgumentDescription" xml:space="preserve">
-    <value>Run the apphost in the background and exit after it starts</value>
+    <value>Run the AppHost in the background and exit after it starts</value>
   </data>
   <data name="JsonArgumentDescription" xml:space="preserve">
-    <value>Output format for detached apphost results</value>
+    <value>Output format for detached AppHost results</value>
   </data>
   <data name="WatchArgumentDescription" xml:space="preserve">
     <value>Start project resources in watch mode</value>
@@ -142,7 +142,7 @@
     <value>IsCompatibleAppHost is null</value>
   </data>
   <data name="StartingAppHost" xml:space="preserve">
-    <value>Starting Aspire apphost...</value>
+    <value>Starting Aspire AppHost...</value>
   </data>
   <data name="StartingDashboard" xml:space="preserve">
     <value>Starting dashboard...</value>
@@ -166,7 +166,7 @@
     <value>Endpoints</value>
   </data>
   <data name="PressCtrlCToStopAppHost" xml:space="preserve">
-    <value>Press [bold]CTRL+C[/] to stop the apphost and exit.</value>
+    <value>Press [bold]CTRL+C[/] to stop the AppHost and exit.</value>
     <comment>[bold] should not be localized</comment>
   </data>
   <data name="ProjectCouldNotBeRun" xml:space="preserve">
@@ -179,7 +179,7 @@
     <value>Logs</value>
   </data>
   <data name="ConnectingToAppHost" xml:space="preserve">
-    <value>Connecting to apphost...</value>
+    <value>Connecting to AppHost...</value>
   </data>
   <data name="DashboardFailedToStart" xml:space="preserve">
     <value>Aspire Dashboard failed to start.</value>
@@ -209,25 +209,25 @@
     <value>Running instance stopped successfully.</value>
   </data>
   <data name="StartingAppHostInBackground" xml:space="preserve">
-    <value>Starting Aspire apphost in the background...</value>
+    <value>Starting Aspire AppHost in the background...</value>
   </data>
   <data name="AppHostStartedSuccessfully" xml:space="preserve">
-    <value>Apphost started successfully.</value>
+    <value>AppHost started successfully.</value>
   </data>
   <data name="FailedToStartAppHost" xml:space="preserve">
-    <value>Failed to start the apphost.</value>
+    <value>Failed to start the AppHost.</value>
   </data>
   <data name="WaitingForAppHostToStart" xml:space="preserve">
-    <value>Waiting for apphost to start...</value>
+    <value>Waiting for AppHost to start...</value>
   </data>
   <data name="AppHostExitedWithCode" xml:space="preserve">
-    <value>Apphost process exited with code {0}.</value>
+    <value>AppHost process exited with code {0}.</value>
   </data>
   <data name="AppHostFailedToBuild" xml:space="preserve">
-    <value>Apphost failed to build.</value>
+    <value>AppHost failed to build.</value>
   </data>
   <data name="TimeoutWaitingForAppHost" xml:space="preserve">
-    <value>Timeout waiting for apphost to start.</value>
+    <value>Timeout waiting for AppHost to start.</value>
   </data>
   <data name="CheckLogsForDetails" xml:space="preserve">
     <value>Check logs for details: {0}</value>
@@ -245,7 +245,7 @@
     <value>Copying user secrets for isolated mode...</value>
   </data>
   <data name="IsolatedModeRunningInstanceWarning" xml:space="preserve">
-    <value>A running instance of this apphost was found and will be stopped. To run multiple isolated instances simultaneously, run from different directories such as git worktree directories.</value>
+    <value>A running instance of this AppHost was found and will be stopped. To run multiple isolated instances simultaneously, run from different directories such as git worktree directories.</value>
   </data>
   <data name="NoBuildArgumentDescription" xml:space="preserve">
     <value>Do not build or restore the project before running</value>
