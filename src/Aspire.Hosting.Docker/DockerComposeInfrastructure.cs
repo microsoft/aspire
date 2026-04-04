@@ -50,25 +50,38 @@ internal sealed class DockerComposeInfrastructure(
                 });
             }
 
+            // First pass: register ALL container/executable/project resources in the
+            // resource mapping with endpoint resolution only. This ensures that environment
+            // variable references from compute resources can resolve endpoints on build-only,
+            // excluded, or cross-environment resources without KeyNotFoundException.
+            foreach (var r in @event.Model.Resources)
+            {
+                if (!r.IsContainer() && !r.IsEmulator() && r is not ProjectResource)
+                {
+                    continue;
+                }
+
+                dockerComposeEnvironmentContext.EnsureResourceRegistered(r);
+            }
+
+            // Second pass: fully process compute resources (env vars, args, volumes) and
+            // mark them as deployable with DeploymentTargetAnnotation.
             foreach (var r in @event.Model.GetComputeResources())
             {
-                // Skip resources that are explicitly targeted to a different compute environment
                 var resourceComputeEnvironment = r.GetComputeEnvironment();
                 if (resourceComputeEnvironment is not null && resourceComputeEnvironment != environment)
                 {
                     continue;
                 }
 
-                // Configure OTLP for resources if dashboard is enabled (before creating the service resource)
                 if (environment.DashboardEnabled && environment.Dashboard?.Resource.OtlpGrpcEndpoint is EndpointReference otlpGrpcEndpoint)
                 {
                     ConfigureOtlp(r, otlpGrpcEndpoint);
                 }
 
-                // Create a Docker Compose compute resource for the resource
+                // Full processing: env vars, args, volumes (upgrades the lightweight registration)
                 var serviceResource = await dockerComposeEnvironmentContext.CreateDockerComposeServiceResourceAsync(r, executionContext, cancellationToken).ConfigureAwait(false);
 
-                // Add deployment target annotation to the resource
                 r.Annotations.Add(new DeploymentTargetAnnotation(serviceResource)
                 {
                     ComputeEnvironment = environment,

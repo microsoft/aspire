@@ -107,6 +107,12 @@ public class DockerComposeServiceResource : Resource, IResourceWithParent<Docker
     /// </summary>
     internal Dictionary<string, EndpointMapping> EndpointMappings { get; } = [];
 
+    /// <summary>
+    /// Tracks whether full processing (env vars, args, volumes) has been completed,
+    /// as opposed to lightweight registration (endpoints only).
+    /// </summary>
+    internal bool IsFullyProcessed { get; set; }
+
     /// <inheritdoc/>
     public DockerComposeEnvironmentResource Parent => _composeEnvironmentResource;
 

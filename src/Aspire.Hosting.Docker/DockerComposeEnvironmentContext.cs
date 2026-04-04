@@ -9,10 +9,46 @@ namespace Aspire.Hosting.Docker;
 
 internal sealed class DockerComposeEnvironmentContext(DockerComposeEnvironmentResource environment, ILogger logger)
 {
+    /// <summary>
+    /// Registers a resource in the mapping with endpoint resolution only — no environment
+    /// variable or argument processing. Used for non-compute resources (build-only, excluded,
+    /// cross-environment) that need to be in the mapping so that references from compute
+    /// resources can resolve their endpoints without KeyNotFoundException.
+    /// </summary>
+    public DockerComposeServiceResource EnsureResourceRegistered(IResource resource)
+    {
+        if (environment.ResourceMapping.TryGetValue(resource, out var existingResource))
+        {
+            return existingResource;
+        }
+
+        var serviceResource = new DockerComposeServiceResource(resource.Name, resource, environment);
+        environment.ResourceMapping[resource] = serviceResource;
+
+        // Only process endpoints — these are needed for reference resolution.
+        // Skip env vars, volumes, and args — those are only needed for deployable services.
+        ProcessEndpoints(serviceResource);
+
+        return serviceResource;
+    }
+
     public async Task<DockerComposeServiceResource> CreateDockerComposeServiceResourceAsync(IResource resource, DistributedApplicationExecutionContext executionContext, CancellationToken cancellationToken)
     {
         if (environment.ResourceMapping.TryGetValue(resource, out var existingResource))
         {
+            if (existingResource.IsFullyProcessed)
+            {
+                return existingResource;
+            }
+
+            // Resource was pre-registered (endpoints only) — now do full processing
+            logger.LogInformation("Creating Docker Compose resource for {ResourceName}", resource.Name);
+
+            ProcessVolumes(existingResource);
+            await ProcessEnvironmentVariablesAsync(existingResource, executionContext, cancellationToken).ConfigureAwait(false);
+            await ProcessArgumentsAsync(existingResource, executionContext, cancellationToken).ConfigureAwait(false);
+            existingResource.IsFullyProcessed = true;
+
             return existingResource;
         }
 
@@ -32,6 +68,8 @@ internal sealed class DockerComposeEnvironmentContext(DockerComposeEnvironmentRe
 
         // Process command line arguments
         await ProcessArgumentsAsync(serviceResource, executionContext, cancellationToken).ConfigureAwait(false);
+
+        serviceResource.IsFullyProcessed = true;
 
         return serviceResource;
     }
