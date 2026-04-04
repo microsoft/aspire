@@ -137,6 +137,7 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
                 Action = ctx => PublishAsync(ctx)
             };
             publishStep.RequiredBy(WellKnownPipelineSteps.Publish);
+            publishStep.DependsOn($"init-{Name}");
             steps.Add(publishStep);
 
             // Expand deployment target steps — uses the lightweight registration

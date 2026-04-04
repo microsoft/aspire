@@ -1,3 +1,8 @@
-﻿networks:
+﻿services:
+  api:
+    image: "my-api:latest"
+    networks:
+      - "aspire"
+networks:
   aspire:
     driver: "bridge"

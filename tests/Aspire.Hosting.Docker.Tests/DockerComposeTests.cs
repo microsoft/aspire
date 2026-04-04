@@ -26,7 +26,8 @@ public class DockerComposeTests(ITestOutputHelper output)
     [Fact]
     public async Task DockerComposeSetsComputeEnvironment()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
@@ -37,7 +38,7 @@ public class DockerComposeTests(ITestOutputHelper output)
 
         var app = builder.Build();
 
-        await ExecuteBeforeStartHooksAsync(app, default);
+        app.Run();
 
         Assert.Same(composeEnv.Resource, container.Resource.GetDeploymentTargetAnnotation()?.ComputeEnvironment);
     }
@@ -486,7 +487,8 @@ public class DockerComposeTests(ITestOutputHelper output)
     [Fact]
     public async Task FullRemoteImageName_WithNoRegistry_UsesLocalImageName()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
@@ -496,7 +498,7 @@ public class DockerComposeTests(ITestOutputHelper output)
 
         using var app = builder.Build();
 
-        await ExecuteBeforeStartHooksAsync(app, default);
+        app.Run();
 
         // With no registry, the local container registry is used which has an empty endpoint
         // This results in just the image name and tag
@@ -829,7 +831,8 @@ public class DockerComposeTests(ITestOutputHelper output)
     [Fact]
     public async Task MultipleComputeEnvironmentsOnlyProcessTargetedResources()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
@@ -858,9 +861,9 @@ public class DockerComposeTests(ITestOutputHelper output)
 
         using var app = builder.Build();
 
-        await ExecuteBeforeStartHooksAsync(app, default);
-
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        app.Run();
 
         // Verify containerForDocker has a deployment target for Docker Compose
         var containerDockerResource = model.Resources.First(r => r.Name == "containerdocker");
