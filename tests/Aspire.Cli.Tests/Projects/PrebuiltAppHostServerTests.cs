@@ -155,7 +155,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var nugetService = new BundleNuGetService(new NullLayoutDiscovery(), Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
+        var nugetService = new BundleNuGetService(new NullLayoutDiscovery(), new LayoutProcessRunner(new TestProcessExecutionFactory()), Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
         var server = new PrebuiltAppHostServer(
             workspace.WorkspaceRoot.FullName,
             "test.sock",

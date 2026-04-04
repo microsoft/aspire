@@ -334,7 +334,8 @@ public class Program
         builder.Services.AddSingleton(BuildConfigurationService);
         builder.Services.AddSingleton<IFeatures, Features>();
         builder.Services.AddTelemetryServices();
-        builder.Services.AddTransient<IDotNetCliExecutionFactory, DotNetCliExecutionFactory>();
+        builder.Services.AddTransient<IProcessExecutionFactory, ProcessExecutionFactory>();
+        builder.Services.AddTransient<LayoutProcessRunner>();
 
         // Register certificate tool runner - uses native CertificateManager directly (no subprocess needed)
         builder.Services.AddSingleton(sp => CertificateManager.Create(sp.GetRequiredService<ILogger<NativeCertificateToolRunner>>()));
@@ -465,6 +466,8 @@ public class Program
         builder.Services.AddTransient<CertificatesCleanCommand>();
         builder.Services.AddTransient<CertificatesTrustCommand>();
         builder.Services.AddTransient<DoctorCommand>();
+        builder.Services.AddTransient<DashboardCommand>();
+        builder.Services.AddTransient<DashboardRunCommand>();
         builder.Services.AddTransient<UpdateCommand>();
         builder.Services.AddTransient<DeployCommand>();
         builder.Services.AddTransient<DoCommand>();

@@ -4,9 +4,9 @@
 namespace Aspire.Cli.DotNet;
 
 /// <summary>
-/// Represents a configured dotnet CLI execution that can be started and awaited.
+/// Represents a configured process execution that can be started and awaited.
 /// </summary>
-internal interface IDotNetCliExecution
+internal interface IProcessExecution : IDisposable
 {
     /// <summary>
     /// Gets the file name of the executable to run.
@@ -45,4 +45,10 @@ internal interface IDotNetCliExecution
     /// Gets the exit code of the process. Only valid after <see cref="HasExited"/> returns <c>true</c>.
     /// </summary>
     int ExitCode { get; }
+
+    /// <summary>
+    /// Kills the process.
+    /// </summary>
+    /// <param name="entireProcessTree">When <c>true</c>, kills the entire process tree; otherwise kills only the root process.</param>
+    void Kill(bool entireProcessTree);
 }

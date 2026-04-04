@@ -13,31 +13,31 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Tests.TestServices;
 
-internal sealed class TestDotNetCliExecutionFactory : IDotNetCliExecutionFactory
+internal sealed class TestProcessExecutionFactory : IProcessExecutionFactory
 {
     private int _attemptCount;
 
     /// <summary>
     /// Gets or sets a callback that is invoked when <see cref="CreateExecution"/> is called.
-    /// If this returns an <see cref="IDotNetCliExecution"/>, that execution is returned directly.
+    /// If this returns an <see cref="IProcessExecution"/>, that execution is returned directly.
     /// </summary>
-    public Func<string[], IDictionary<string, string>?, DirectoryInfo, DotNetCliRunnerInvocationOptions, IDotNetCliExecution>? CreateExecutionCallback { get; set; }
+    public Func<string[], IDictionary<string, string>?, DirectoryInfo, ProcessInvocationOptions, IProcessExecution>? CreateExecutionCallback { get; set; }
 
     /// <summary>
     /// Gets or sets an action that is invoked when <see cref="CreateExecution"/> is called,
     /// typically used for assertions on the arguments.
     /// </summary>
-    public Action<string[], IDictionary<string, string>?, DirectoryInfo, DotNetCliRunnerInvocationOptions>? AssertionCallback { get; set; }
+    public Action<string[], IDictionary<string, string>?, DirectoryInfo, ProcessInvocationOptions>? AssertionCallback { get; set; }
 
     /// <summary>
     /// Gets or sets a callback that is invoked for each execution attempt, receiving the attempt number (1-based)
     /// and options, and returning the exit code and optional stdout content.
     /// This is used for testing retry scenarios.
     /// </summary>
-    public Func<int, DotNetCliRunnerInvocationOptions, (int ExitCode, string? Stdout)>? AttemptCallback { get; set; }
+    public Func<int, ProcessInvocationOptions, (int ExitCode, string? Stdout)>? AttemptCallback { get; set; }
 
     /// <summary>
-    /// When set, the execution will use this exit code when <see cref="IDotNetCliExecution.WaitForExitAsync"/> is called.
+    /// When set, the execution will use this exit code when <see cref="IProcessExecution.WaitForExitAsync"/> is called.
     /// </summary>
     public int DefaultExitCode { get; set; }
 
@@ -51,7 +51,7 @@ internal sealed class TestDotNetCliExecutionFactory : IDotNetCliExecutionFactory
     /// </summary>
     public int AttemptCount => _attemptCount;
 
-    public IDotNetCliExecution CreateExecution(string[] args, IDictionary<string, string>? env, DirectoryInfo workingDirectory, DotNetCliRunnerInvocationOptions options)
+    public IProcessExecution CreateExecution(string fileName, string[] args, IDictionary<string, string>? env, DirectoryInfo workingDirectory, ProcessInvocationOptions options)
     {
         _attemptCount++;
 
@@ -66,24 +66,26 @@ internal sealed class TestDotNetCliExecutionFactory : IDotNetCliExecutionFactory
 
         // Use AttemptCallback if provided, otherwise create a simple callback that returns the default exit code
         var callback = AttemptCallback ?? ((_, _) => (DefaultExitCode, null));
-        return new TestDotNetCliExecution(args, env, options, callback, () => _attemptCount);
+        return new TestProcessExecution(fileName, args, env, options, callback, () => _attemptCount);
     }
 }
 
-internal sealed class TestDotNetCliExecution : IDotNetCliExecution
+internal sealed class TestProcessExecution : IProcessExecution
 {
-    private readonly DotNetCliRunnerInvocationOptions _options;
-    private readonly Func<int, DotNetCliRunnerInvocationOptions, (int ExitCode, string? Stdout)> _attemptCallback;
+    private readonly ProcessInvocationOptions _options;
+    private readonly Func<int, ProcessInvocationOptions, (int ExitCode, string? Stdout)> _attemptCallback;
     private readonly Func<int> _attemptCounter;
     private bool _started;
 
-    public TestDotNetCliExecution(
+    public TestProcessExecution(
+        string fileName,
         string[] args,
         IDictionary<string, string>? env,
-        DotNetCliRunnerInvocationOptions options,
-        Func<int, DotNetCliRunnerInvocationOptions, (int ExitCode, string? Stdout)> attemptCallback,
+        ProcessInvocationOptions options,
+        Func<int, ProcessInvocationOptions, (int ExitCode, string? Stdout)> attemptCallback,
         Func<int> attemptCounter)
     {
+        FileName = fileName;
         Arguments = args;
         EnvironmentVariables = env?.ToDictionary(kvp => kvp.Key, kvp => (string?)kvp.Value)
             ?? new Dictionary<string, string?>();
@@ -92,7 +94,7 @@ internal sealed class TestDotNetCliExecution : IDotNetCliExecution
         _attemptCounter = attemptCounter;
     }
 
-    public string FileName => "dotnet";
+    public string FileName { get; }
 
     public IReadOnlyList<string> Arguments { get; }
 
@@ -102,8 +104,15 @@ internal sealed class TestDotNetCliExecution : IDotNetCliExecution
 
     public int ExitCode => 0;
 
+    public bool StartReturnValue { get; init; } = true;
+
     public bool Start()
     {
+        if (!StartReturnValue)
+        {
+            return false;
+        }
+
         _started = true;
         return true;
     }
@@ -123,10 +132,18 @@ internal sealed class TestDotNetCliExecution : IDotNetCliExecution
         }
         return Task.FromResult(exitCode);
     }
+
+    public void Kill(bool entireProcessTree)
+    {
+    }
+
+    public void Dispose()
+    {
+    }
 }
 
 /// <summary>
-/// Helper class for creating a <see cref="DotNetCliRunner"/> with a <see cref="TestDotNetCliExecutionFactory"/>
+/// Helper class for creating a <see cref="DotNetCliRunner"/> with a <see cref="TestProcessExecutionFactory"/>
 /// configured for assertion-based testing.
 /// </summary>
 internal static class DotNetCliRunnerTestHelper
@@ -137,14 +154,14 @@ internal static class DotNetCliRunnerTestHelper
     public static DotNetCliRunner Create(
         IServiceProvider serviceProvider,
         CliExecutionContext executionContext,
-        Action<string[], IDictionary<string, string>?, DirectoryInfo, DotNetCliRunnerInvocationOptions> assertionCallback,
+        Action<string[], IDictionary<string, string>?, DirectoryInfo, ProcessInvocationOptions> assertionCallback,
         int exitCode = 0,
         ILogger<DotNetCliRunner>? logger = null,
         AspireCliTelemetry? telemetry = null,
         IConfiguration? configuration = null,
         IDiskCache? diskCache = null)
     {
-        var executionFactory = new TestDotNetCliExecutionFactory
+        var executionFactory = new TestProcessExecutionFactory
         {
             AssertionCallback = assertionCallback,
             DefaultExitCode = exitCode
@@ -164,18 +181,18 @@ internal static class DotNetCliRunnerTestHelper
 
     /// <summary>
     /// Creates a <see cref="DotNetCliRunner"/> with an attempt callback for testing retry scenarios.
-    /// Returns both the runner and the factory so the test can check <see cref="TestDotNetCliExecutionFactory.AttemptCount"/>.
+    /// Returns both the runner and the factory so the test can check <see cref="TestProcessExecutionFactory.AttemptCount"/>.
     /// </summary>
-    public static (DotNetCliRunner Runner, TestDotNetCliExecutionFactory ExecutionFactory) CreateWithRetry(
+    public static (DotNetCliRunner Runner, TestProcessExecutionFactory ExecutionFactory) CreateWithRetry(
         IServiceProvider serviceProvider,
         CliExecutionContext executionContext,
-        Func<int, DotNetCliRunnerInvocationOptions, (int ExitCode, string? Stdout)> attemptCallback,
+        Func<int, ProcessInvocationOptions, (int ExitCode, string? Stdout)> attemptCallback,
         ILogger<DotNetCliRunner>? logger = null,
         AspireCliTelemetry? telemetry = null,
         IConfiguration? configuration = null,
         IDiskCache? diskCache = null)
     {
-        var executionFactory = new TestDotNetCliExecutionFactory
+        var executionFactory = new TestProcessExecutionFactory
         {
             AttemptCallback = attemptCallback
         };
