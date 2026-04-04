@@ -4,26 +4,59 @@ on:
   issue_comment:
     types: [created]
 
+permissions: {}
+
 concurrency:
   group: create-failing-test-issue-${{ github.event.issue.pull_request && 'pr' || 'issue' }}-${{ github.event.issue.number }}
   cancel-in-progress: false
 
 jobs:
   create_failing_test_issue:
+    name: Create failing-test issue
     if: >-
       github.repository == 'microsoft/aspire' &&
       startsWith(github.event.comment.body, '/create-issue')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      contents: read
-      issues: write
-      pull-requests: write
-      actions: read
+      contents: read # checkout repository
+      issues: write # create/reopen/comment on issues
+      pull-requests: write # comment on PRs
+      actions: read # list workflow runs and download artifacts
     steps:
+    - name: Verify user has write access
+      id: verify-permission
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      with:
+        script: |
+          const commentUser = context.payload.comment.user.login;
+          const { data: permission } = await github.rest.repos.getCollaboratorPermissionLevel({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            username: commentUser
+          });
+
+          const writePermissions = ['admin', 'maintain', 'write'];
+          if (!writePermissions.includes(permission.permission)) {
+            const message = `@${commentUser} The \`/create-issue\` command requires write, maintain, or admin access to this repository.`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: message
+            });
+            core.setOutput('error_message', message);
+            core.setFailed(message);
+            return;
+          }
+
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      if: success()
+      with:
+        persist-credentials: false
 
     - name: Extract command
+      if: success()
       id: extract-command
       uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
       with:
@@ -51,33 +84,6 @@ jobs:
           core.setOutput('workflow', parsed.workflow);
           core.setOutput('force_new', parsed.forceNew ? 'true' : 'false');
           core.setOutput('list_only', parsed.listOnly ? 'true' : 'false');
-
-    - name: Verify user has write access
-      if: success()
-      id: verify-permission
-      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
-      with:
-        script: |
-          const commentUser = context.payload.comment.user.login;
-          const { data: permission } = await github.rest.repos.getCollaboratorPermissionLevel({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            username: commentUser
-          });
-
-          const writePermissions = ['admin', 'maintain', 'write'];
-          if (!writePermissions.includes(permission.permission)) {
-            const message = `@${commentUser} The \`/create-issue\` command requires write, maintain, or admin access to this repository.`;
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: message
-            });
-            core.setOutput('error_message', message);
-            core.setFailed(message);
-            return;
-          }
 
     - name: Add processing reaction
       if: success()
