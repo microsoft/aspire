@@ -381,9 +381,9 @@ internal static class FailingTestIssueCommand
 
     private static async Task<WorkflowMetadata> ResolveWorkflowAsync(string repository, string workflowFile, CancellationToken cancellationToken)
     {
-            using var workflowDocument = await GitHubCli.GetJsonAsync(
-                $"repos/{repository}/actions/workflows/{Path.GetFileName(workflowFile)}",
-                cancellationToken).ConfigureAwait(false);
+        using var workflowDocument = await GitHubCli.GetJsonAsync(
+            $"repos/{repository}/actions/workflows/{Path.GetFileName(workflowFile)}",
+            cancellationToken).ConfigureAwait(false);
 
         var root = workflowDocument.RootElement;
         return new WorkflowMetadata(
@@ -872,6 +872,7 @@ internal static class FailingTestIssueCommand
                     cancellationToken).ConfigureAwait(false);
 
                 var extractDirectory = Path.Combine(tempRoot, artifact.Id.ToString(CultureInfo.InvariantCulture));
+                ValidateZipEntries(zipPath, extractDirectory);
                 ZipFile.ExtractToDirectory(zipPath, extractDirectory, overwriteFiles: true);
 
                 foreach (var trxPath in Directory.EnumerateFiles(extractDirectory, "*.trx", SearchOption.AllDirectories))
@@ -1048,6 +1049,20 @@ internal static class FailingTestIssueCommand
         GitHubActionsJob Job,
         HashSet<string> FailedTests,
         IReadOnlyList<FailedTestOccurrence> Occurrences);
+
+    private static void ValidateZipEntries(string zipPath, string extractDirectory)
+    {
+        var fullExtractPath = Path.GetFullPath(extractDirectory);
+        using var archive = ZipFile.OpenRead(zipPath);
+        foreach (var entry in archive.Entries)
+        {
+            var destinationPath = Path.GetFullPath(Path.Combine(extractDirectory, entry.FullName));
+            if (!destinationPath.StartsWith(fullExtractPath, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException($"Zip entry '{entry.FullName}' would extract outside the target directory.");
+            }
+        }
+    }
 }
 
 public static class FailingTestIssueLogic

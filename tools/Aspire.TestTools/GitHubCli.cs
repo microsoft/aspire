@@ -208,8 +208,13 @@ public static class GitHubCli
         return false;
     }
 
+    private static readonly TimeSpan s_defaultProcessTimeout = TimeSpan.FromMinutes(5);
+
     private static async Task<string> RunGhAsync(IReadOnlyList<string> arguments, CancellationToken cancellationToken)
     {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(s_defaultProcessTimeout);
+
         ProcessStartInfo processStartInfo = new()
         {
             FileName = "gh",
@@ -230,10 +235,18 @@ public static class GitHubCli
 
         process.Start();
 
-        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(cts.Token);
+        var stderrTask = process.StandardError.ReadToEndAsync(cts.Token);
 
-        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await process.WaitForExitAsync(cts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            process.Kill(entireProcessTree: true);
+            throw;
+        }
 
         var stdout = await stdoutTask.ConfigureAwait(false);
         var stderr = await stderrTask.ConfigureAwait(false);
@@ -249,6 +262,9 @@ public static class GitHubCli
 
     private static async Task RunGhToFileAsync(IReadOnlyList<string> arguments, string outputPath, CancellationToken cancellationToken)
     {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(s_defaultProcessTimeout);
+
         ProcessStartInfo processStartInfo = new()
         {
             FileName = "gh",
@@ -272,12 +288,24 @@ public static class GitHubCli
         string stderr;
         {
             using var outputStream = File.Create(outputPath);
-            var stdoutTask = process.StandardOutput.BaseStream.CopyToAsync(outputStream, cancellationToken);
-            var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+            var stdoutTask = process.StandardOutput.BaseStream.CopyToAsync(outputStream, cts.Token);
+            var stderrTask = process.StandardError.ReadToEndAsync(cts.Token);
 
-            await Task.WhenAll(process.WaitForExitAsync(cancellationToken), stdoutTask, stderrTask).ConfigureAwait(false);
-
-            stderr = await stderrTask.ConfigureAwait(false);
+            try
+            {
+                await Task.WhenAll(process.WaitForExitAsync(cts.Token), stdoutTask, stderrTask).ConfigureAwait(false);
+                stderr = await stderrTask.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                process.Kill(entireProcessTree: true);
+                throw;
+            }
+            catch
+            {
+                try { stderr = await stderrTask.ConfigureAwait(false); } catch { stderr = string.Empty; }
+                throw;
+            }
         }
 
         // Stream is disposed above so file handle is released before delete (required on Windows).
