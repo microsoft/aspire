@@ -8,7 +8,7 @@
         <note />
       </trans-unit>
       <trans-unit id="DashboardApiNotAvailable">
-        <source>Dashboard API is not available. Ensure the apphost is running with Dashboard enabled.</source>
+        <source>Dashboard API is not available. Ensure the AppHost is running with Dashboard enabled.</source>
         <target state="needs-review-translation">儀表板 API 無法使用。確保 AppHost 執行中且儀表板功能已啟用。</target>
         <note />
       </trans-unit>
@@ -48,7 +48,7 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>View OpenTelemetry data (logs, spans, traces) from a running apphost</source>
+        <source>View OpenTelemetry data (logs, spans, traces) from a running AppHost</source>
         <target state="needs-review-translation">從執行中的 Aspire 應用程式檢視遙測資料 (記錄、範圍、追蹤)。</target>
         <note />
       </trans-unit>

@@ -13,7 +13,7 @@ public static class RequestHeadersTransformExtensions
     /// <summary>
     /// Adds the transform which will enable or suppress copying request headers to the proxy request.
     /// </summary>
-    [AspireExport("withTransformCopyRequestHeaders", Description = "Adds the transform which will enable or suppress copying request headers to the proxy request.")]
+    [AspireExport(Description = "Adds the transform which will enable or suppress copying request headers to the proxy request.")]
     public static YarpRoute WithTransformCopyRequestHeaders(this YarpRoute route, bool copy = true)
     {
         route.Configure(r => r.WithTransformCopyRequestHeaders(copy));
@@ -23,7 +23,7 @@ public static class RequestHeadersTransformExtensions
     /// <summary>
     /// Adds the transform which will copy the incoming request Host header to the proxy request.
     /// </summary>
-    [AspireExport("withTransformUseOriginalHostHeader", Description = "Adds the transform which will copy the incoming request Host header to the proxy request.")]
+    [AspireExport(Description = "Adds the transform which will copy the incoming request Host header to the proxy request.")]
     public static YarpRoute WithTransformUseOriginalHostHeader(this YarpRoute route, bool useOriginal = true)
     {
         route.Configure(r => r.WithTransformUseOriginalHostHeader(useOriginal));
@@ -33,7 +33,7 @@ public static class RequestHeadersTransformExtensions
     /// <summary>
     /// Adds the transform which will append or set the request header.
     /// </summary>
-    [AspireExport("withTransformRequestHeader", Description = "Adds the transform which will append or set the request header.")]
+    [AspireExport(Description = "Adds the transform which will append or set the request header.")]
     public static YarpRoute WithTransformRequestHeader(this YarpRoute route, string headerName, string value, bool append = true)
     {
         route.Configure(r => r.WithTransformRequestHeader(headerName, value, append));
@@ -43,7 +43,7 @@ public static class RequestHeadersTransformExtensions
     /// <summary>
     /// Adds the transform which will append or set the request header from a route value.
     /// </summary>
-    [AspireExport("withTransformRequestHeaderRouteValue", Description = "Adds the transform which will append or set the request header from a route value.")]
+    [AspireExport(Description = "Adds the transform which will append or set the request header from a route value.")]
     public static YarpRoute WithTransformRequestHeaderRouteValue(this YarpRoute route, string headerName, string routeValueKey, bool append = true)
     {
         route.Configure(r => r.WithTransformRequestHeaderRouteValue(headerName, routeValueKey, append));
@@ -53,7 +53,7 @@ public static class RequestHeadersTransformExtensions
     /// <summary>
     /// Adds the transform which will remove the request header.
     /// </summary>
-    [AspireExport("withTransformRequestHeaderRemove", Description = "Adds the transform which will remove the request header.")]
+    [AspireExport(Description = "Adds the transform which will remove the request header.")]
     public static YarpRoute WithTransformRequestHeaderRemove(this YarpRoute route, string headerName)
     {
         route.Configure(r => r.WithTransformRequestHeaderRemove(headerName));
@@ -64,7 +64,7 @@ public static class RequestHeadersTransformExtensions
     /// Adds the transform which will only copy the allowed request headers. Other transforms
     /// that modify or append to existing headers may be affected if not included in the allow list.
     /// </summary>
-    [AspireExport("withTransformRequestHeadersAllowed", Description = "Adds the transform which will only copy the allowed request headers. Other transforms")]
+    [AspireExport(Description = "Adds the transform which will only copy the allowed request headers. Other transforms")]
     public static YarpRoute WithTransformRequestHeadersAllowed(this YarpRoute route, params string[] allowedHeaders)
     {
         route.Configure(r => r.WithTransformRequestHeadersAllowed(allowedHeaders));

@@ -28,12 +28,14 @@ await env2.withHttpsUpgrade();
 const laws = await builder.addAzureLogAnalyticsWorkspace("laws");
 const env3 = builder.addAzureContainerAppEnvironment("myenv3");
 await env3.withAzureLogAnalyticsWorkspace(laws);
+const customDomain = await builder.addParameter("customDomain");
+const certificateName = await builder.addParameter("certificateName");
 
 // === PublishAsAzureContainerApp ===
 // Test publishAsAzureContainerApp on a container resource with callback
 const web = builder.addContainer("web", "myregistry/web:latest");
 await web.publishAsAzureContainerApp(async (infrastructure, app) => {
-    // Configure container app via callback
+    await app.configureCustomDomain(customDomain, certificateName);
 });
 
 // Test publishAsAzureContainerAppJob on an executable resource

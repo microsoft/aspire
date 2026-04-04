@@ -1,7 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
+using System.Text;
+using Aspire.Cli.DotNet;
 using Aspire.Shared;
 
 namespace Aspire.Cli.Layout;
@@ -24,92 +25,62 @@ internal static class RuntimeIdentifierHelper
 }
 
 /// <summary>
-/// Utilities for running processes using layout tools.
-/// All layout tools are self-contained executables — no muxer needed.
+/// Runs processes using layout tools via an <see cref="IProcessExecutionFactory"/>.
 /// </summary>
-internal static class LayoutProcessRunner
+internal sealed class LayoutProcessRunner(IProcessExecutionFactory executionFactory)
 {
-    /// <summary>
-    /// Runs a tool and captures output. The tool is always run directly as a native executable.
-    /// </summary>
-    public static async Task<(int ExitCode, string Output, string Error)> RunAsync(
+    /// <inheritdoc />
+    public async Task<(int ExitCode, string Output, string Error)> RunAsync(
         string toolPath,
         IEnumerable<string> arguments,
         string? workingDirectory = null,
         IDictionary<string, string>? environmentVariables = null,
         CancellationToken ct = default)
     {
-        using var process = CreateProcess(toolPath, arguments, workingDirectory, environmentVariables, redirectOutput: true);
+        var outputBuilder = new StringBuilder();
+        var errorBuilder = new StringBuilder();
 
-        process.Start();
+        var options = new ProcessInvocationOptions
+        {
+            SuppressLogging = true,
+            StandardOutputCallback = line => outputBuilder.AppendLine(line),
+            StandardErrorCallback = line => errorBuilder.AppendLine(line),
+        };
 
-        var outputTask = process.StandardOutput.ReadToEndAsync(ct);
-        var errorTask = process.StandardError.ReadToEndAsync(ct);
+        var args = arguments.ToArray();
+        var workDir = new DirectoryInfo(workingDirectory ?? Directory.GetCurrentDirectory());
 
-        await process.WaitForExitAsync(ct);
+        using var execution = executionFactory.CreateExecution(toolPath, args, environmentVariables, workDir, options);
 
-        return (process.ExitCode, await outputTask, await errorTask);
+        if (!execution.Start())
+        {
+            throw new InvalidOperationException($"Failed to start process: {toolPath}");
+        }
+
+        var exitCode = await execution.WaitForExitAsync(ct).ConfigureAwait(false);
+
+        return (exitCode, outputBuilder.ToString(), errorBuilder.ToString());
     }
 
-    /// <summary>
-    /// Starts a process without waiting for it to exit.
-    /// Returns the Process object for the caller to manage.
-    /// </summary>
-    public static Process Start(
+    /// <inheritdoc />
+    public IProcessExecution Start(
         string toolPath,
         IEnumerable<string> arguments,
         string? workingDirectory = null,
         IDictionary<string, string>? environmentVariables = null,
-        bool redirectOutput = false)
+        ProcessInvocationOptions? options = null)
     {
-        var process = CreateProcess(toolPath, arguments, workingDirectory, environmentVariables, redirectOutput);
-        process.Start();
-        return process;
-    }
+        var args = arguments.ToArray();
+        var workDir = new DirectoryInfo(workingDirectory ?? Directory.GetCurrentDirectory());
 
-    /// <summary>
-    /// Creates a configured Process for running a bundle tool.
-    /// Tools are always self-contained executables — run directly.
-    /// </summary>
-    private static Process CreateProcess(
-        string toolPath,
-        IEnumerable<string> arguments,
-        string? workingDirectory,
-        IDictionary<string, string>? environmentVariables,
-        bool redirectOutput)
-    {
-        var process = new Process();
+        var execution = executionFactory.CreateExecution(toolPath, args, environmentVariables, workDir, options ?? new ProcessInvocationOptions());
 
-        process.StartInfo.UseShellExecute = false;
-        process.StartInfo.CreateNoWindow = true;
-        process.StartInfo.FileName = toolPath;
-
-        if (redirectOutput)
+        if (!execution.Start())
         {
-            process.StartInfo.RedirectStandardOutput = true;
-            process.StartInfo.RedirectStandardError = true;
+            execution.Dispose();
+            throw new InvalidOperationException($"Failed to start process: {toolPath}");
         }
 
-        // Add custom environment variables
-        if (environmentVariables is not null)
-        {
-            foreach (var (key, value) in environmentVariables)
-            {
-                process.StartInfo.Environment[key] = value;
-            }
-        }
-
-        if (workingDirectory is not null)
-        {
-            process.StartInfo.WorkingDirectory = workingDirectory;
-        }
-
-        // Add arguments
-        foreach (var arg in arguments)
-        {
-            process.StartInfo.ArgumentList.Add(arg);
-        }
-
-        return process;
+        return execution;
     }
 }

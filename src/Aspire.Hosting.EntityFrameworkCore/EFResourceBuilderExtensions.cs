@@ -45,7 +45,7 @@ public static class EFResourceBuilderExtensions
     /// using runtime-discovered context types.
     /// </para>
     /// </remarks>
-    [AspireExport]
+    [AspireExport("addEFMigrationsWithContextType", MethodName = "addEFMigrations", Description = "Adds EF Core migration management for a specific DbContext type identified by name")]
     public static IResourceBuilder<EFMigrationResource> AddEFMigrations(
         this IResourceBuilder<ProjectResource> builder,
         [ResourceName] string name,

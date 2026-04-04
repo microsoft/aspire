@@ -93,10 +93,10 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
         }
     }
 
-    public Task ConnectAsync(string socketPath, CancellationToken cancellationToken)
-        => ConnectAsync(socketPath, autoReconnect: false, cancellationToken);
+    public Task ConnectAsync(string socketPath, int retryCount, CancellationToken cancellationToken)
+        => ConnectAsync(socketPath, autoReconnect: false, retryCount: retryCount, cancellationToken);
 
-    public async Task ConnectAsync(string socketPath, bool autoReconnect, CancellationToken cancellationToken)
+    public async Task ConnectAsync(string socketPath, bool autoReconnect, int retryCount, CancellationToken cancellationToken)
     {
         ConnectAsyncCalled?.SetResult();
         if (ConnectAsyncCallback != null)

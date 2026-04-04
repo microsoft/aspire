@@ -206,7 +206,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                         var document = JsonDocument.Parse(json);
                         return (0, document);
                     },
-                    // FileInfo, string, string, string?, DotNetCliRunnerInvocationOptions, CancellationToken, int
+                    // FileInfo, string, string, string?, ProcessInvocationOptions, CancellationToken, int
                     AddPackageAsyncCallback = (projectFile, packageId, packageVersion, source, noRestore, _, _) =>
                     {
                         packagesAddsExecuted.Add((projectFile, packageId, packageVersion, source!, noRestore));
@@ -345,7 +345,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                         var document = JsonDocument.Parse(json);
                         return (0, document);
                     },
-                    // FileInfo, string, string, string?, DotNetCliRunnerInvocationOptions, CancellationToken, int
+                    // FileInfo, string, string, string?, ProcessInvocationOptions, CancellationToken, int
                     AddPackageAsyncCallback = (projectFile, packageId, packageVersion, source, noRestore, _, _) =>
                     {
                         packagesAddsExecuted.Add((projectFile, packageId, packageVersion, source!, noRestore));

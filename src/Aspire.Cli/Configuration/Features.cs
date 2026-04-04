@@ -14,7 +14,7 @@ internal sealed class Features(IConfiguration configuration, ILogger<Features> l
         
         var value = configuration[configKey];
         
-        logger.LogDebug("Feature check: {Feature}, ConfigKey: {ConfigKey}, Value: '{Value}', DefaultValue: {DefaultValue}",
+        logger.LogTrace("Feature check: {Feature}, ConfigKey: {ConfigKey}, Value: '{Value}', DefaultValue: {DefaultValue}",
             feature, configKey, value ?? "(null)", defaultValue);
         
         if (string.IsNullOrEmpty(value))

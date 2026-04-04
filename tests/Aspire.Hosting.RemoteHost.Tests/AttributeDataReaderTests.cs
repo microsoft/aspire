@@ -209,7 +209,7 @@ public class AttributeDataReaderTests
             _ = resource;
         }
 
-        [AspireExport("officialUnionMethod")]
+        [AspireExport]
         public static void OfficialUnionMethod([AspireUnion(typeof(string), typeof(int))] object value)
         {
             _ = value;

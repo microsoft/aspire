@@ -61,7 +61,7 @@ public class PipelineStep
     /// Adds a dependency on another step.
     /// </summary>
     /// <param name="stepName">The name of the step to depend on.</param>
-    [AspireExport("dependsOn", Description = "Adds a dependency on another step by name")]
+    [AspireExport(Description = "Adds a dependency on another step by name")]
     public void DependsOn(string stepName)
     {
         DependsOnSteps.Add(stepName);
@@ -81,7 +81,7 @@ public class PipelineStep
     /// This creates the inverse relationship where the other step will depend on this step.
     /// </summary>
     /// <param name="stepName">The name of the step that requires this step.</param>
-    [AspireExport("requiredBy", Description = "Specifies that another step requires this step by name")]
+    [AspireExport(Description = "Specifies that another step requires this step by name")]
     public void RequiredBy(string stepName)
     {
         RequiredBySteps.Add(stepName);

@@ -58,7 +58,7 @@ internal static class PipelineExports
     /// <param name="summary">The pipeline summary handle.</param>
     /// <param name="key">The key or label for the item.</param>
     /// <param name="markdownString">The Markdown-formatted value for the item.</param>
-    [AspireExport("addMarkdown", Description = "Adds a Markdown-formatted value to the pipeline summary")]
+    [AspireExport(Description = "Adds a Markdown-formatted value to the pipeline summary")]
     public static void AddMarkdown(this PipelineSummary summary, string key, string markdownString)
     {
         ArgumentNullException.ThrowIfNull(summary);
@@ -71,7 +71,7 @@ internal static class PipelineExports
     /// <summary>
     /// Creates a reporting task with plain-text status text.
     /// </summary>
-    [AspireExport("createTask", Description = "Creates a reporting task with plain-text status text")]
+    [AspireExport(Description = "Creates a reporting task with plain-text status text")]
     public static Task<IReportingTask> CreateTask(this IReportingStep reportingStep, string statusText, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(reportingStep);
@@ -83,7 +83,7 @@ internal static class PipelineExports
     /// <summary>
     /// Creates a reporting task with Markdown-formatted status text.
     /// </summary>
-    [AspireExport("createMarkdownTask", Description = "Creates a reporting task with Markdown-formatted status text")]
+    [AspireExport(Description = "Creates a reporting task with Markdown-formatted status text")]
     public static Task<IReportingTask> CreateMarkdownTask(this IReportingStep reportingStep, string markdownString, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(reportingStep);
@@ -95,7 +95,7 @@ internal static class PipelineExports
     /// <summary>
     /// Logs a plain-text message for the reporting step.
     /// </summary>
-    [AspireExport("logStep", Description = "Logs a plain-text message for the reporting step")]
+    [AspireExport(Description = "Logs a plain-text message for the reporting step")]
     public static void LogStep(this IReportingStep reportingStep, string level, string message)
     {
         ArgumentNullException.ThrowIfNull(reportingStep);
@@ -108,7 +108,7 @@ internal static class PipelineExports
     /// <summary>
     /// Logs a Markdown-formatted message for the reporting step.
     /// </summary>
-    [AspireExport("logStepMarkdown", Description = "Logs a Markdown-formatted message for the reporting step")]
+    [AspireExport(Description = "Logs a Markdown-formatted message for the reporting step")]
     public static void LogStepMarkdown(this IReportingStep reportingStep, string level, string markdownString)
     {
         ArgumentNullException.ThrowIfNull(reportingStep);
@@ -121,7 +121,7 @@ internal static class PipelineExports
     /// <summary>
     /// Completes the reporting step with plain-text completion text.
     /// </summary>
-    [AspireExport("completeStep", Description = "Completes the reporting step with plain-text completion text")]
+    [AspireExport(Description = "Completes the reporting step with plain-text completion text")]
     public static Task CompleteStep(this IReportingStep reportingStep, string completionText, string completionState = "completed", CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(reportingStep);
@@ -133,7 +133,7 @@ internal static class PipelineExports
     /// <summary>
     /// Completes the reporting step with Markdown-formatted completion text.
     /// </summary>
-    [AspireExport("completeStepMarkdown", Description = "Completes the reporting step with Markdown-formatted completion text")]
+    [AspireExport(Description = "Completes the reporting step with Markdown-formatted completion text")]
     public static Task CompleteStepMarkdown(this IReportingStep reportingStep, string markdownString, string completionState = "completed", CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(reportingStep);
@@ -145,7 +145,7 @@ internal static class PipelineExports
     /// <summary>
     /// Updates the reporting task with plain-text status text.
     /// </summary>
-    [AspireExport("updateTask", Description = "Updates the reporting task with plain-text status text")]
+    [AspireExport(Description = "Updates the reporting task with plain-text status text")]
     public static Task UpdateTask(this IReportingTask reportingTask, string statusText, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(reportingTask);
@@ -157,7 +157,7 @@ internal static class PipelineExports
     /// <summary>
     /// Updates the reporting task with Markdown-formatted status text.
     /// </summary>
-    [AspireExport("updateTaskMarkdown", Description = "Updates the reporting task with Markdown-formatted status text")]
+    [AspireExport(Description = "Updates the reporting task with Markdown-formatted status text")]
     public static Task UpdateTaskMarkdown(this IReportingTask reportingTask, string markdownString, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(reportingTask);
@@ -169,7 +169,7 @@ internal static class PipelineExports
     /// <summary>
     /// Completes the reporting task with plain-text completion text.
     /// </summary>
-    [AspireExport("completeTask", Description = "Completes the reporting task with plain-text completion text")]
+    [AspireExport(Description = "Completes the reporting task with plain-text completion text")]
     public static Task CompleteTask(this IReportingTask reportingTask, string? completionMessage = null, string completionState = "completed", CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(reportingTask);
@@ -180,7 +180,7 @@ internal static class PipelineExports
     /// <summary>
     /// Completes the reporting task with Markdown-formatted completion text.
     /// </summary>
-    [AspireExport("completeTaskMarkdown", Description = "Completes the reporting task with Markdown-formatted completion text")]
+    [AspireExport(Description = "Completes the reporting task with Markdown-formatted completion text")]
     public static Task CompleteTaskMarkdown(this IReportingTask reportingTask, string markdownString, string completionState = "completed", CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(reportingTask);

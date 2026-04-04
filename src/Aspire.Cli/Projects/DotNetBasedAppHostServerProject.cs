@@ -395,7 +395,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         var projectFileName = Path.Combine(_projectModelPath, ProjectFileName);
 
         // Log the full project XML for debugging
-        _logger.LogDebug("Generated AppHostServer project file:\n{ProjectXml}", doc.ToString());
+        _logger.LogTrace("Generated AppHostServer project file:\n{ProjectXml}", doc.ToString());
 
         doc.Save(projectFileName);
 
@@ -410,7 +410,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         var outputCollector = new OutputCollector();
         var projectFile = new FileInfo(Path.Combine(_projectModelPath, ProjectFileName));
 
-        var options = new DotNetCliRunnerInvocationOptions
+        var options = new ProcessInvocationOptions
         {
             StandardOutputCallback = outputCollector.AppendOutput,
             StandardErrorCallback = outputCollector.AppendError
@@ -510,7 +510,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         {
             if (e.Data is not null)
             {
-                _logger.LogDebug("AppHostServer({ProcessId}) stdout: {Line}", process.Id, e.Data);
+                _logger.LogTrace("AppHostServer({ProcessId}) stdout: {Line}", process.Id, e.Data);
                 outputCollector.AppendOutput(e.Data);
             }
         };
@@ -518,7 +518,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         {
             if (e.Data is not null)
             {
-                _logger.LogDebug("AppHostServer({ProcessId}) stderr: {Line}", process.Id, e.Data);
+                _logger.LogTrace("AppHostServer({ProcessId}) stderr: {Line}", process.Id, e.Data);
                 outputCollector.AppendError(e.Data);
             }
         };

@@ -33,17 +33,17 @@
         <note />
       </trans-unit>
       <trans-unit id="AppHostExitedWithCode">
-        <source>Apphost process exited with code {0}.</source>
+        <source>AppHost process exited with code {0}.</source>
         <target state="needs-review-translation">Proces AppHost byl ukončen s kódem {0}.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostFailedToBuild">
-        <source>Apphost failed to build.</source>
-        <target state="new">Apphost failed to build.</target>
+        <source>AppHost failed to build.</source>
+        <target state="new">AppHost failed to build.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostStartedSuccessfully">
-        <source>Apphost started successfully.</source>
+        <source>AppHost started successfully.</source>
         <target state="needs-review-translation">Hostitel aplikací (AppHost) se úspěšně spustil.</target>
         <note />
       </trans-unit>
@@ -53,8 +53,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ConnectingToAppHost">
-        <source>Connecting to apphost...</source>
-        <target state="translated">Připojování k hostiteli aplikací...</target>
+        <source>Connecting to AppHost...</source>
+        <target state="needs-review-translation">Připojování k hostiteli aplikací...</target>
         <note />
       </trans-unit>
       <trans-unit id="CopyingUserSecrets">
@@ -73,12 +73,12 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Run an Aspire apphost interactively for development</source>
+        <source>Run an Aspire AppHost interactively for development</source>
         <target state="needs-review-translation">Spusťte hostitele aplikací Aspire ve vývojovém režimu.</target>
         <note />
       </trans-unit>
       <trans-unit id="DetachArgumentDescription">
-        <source>Run the apphost in the background and exit after it starts</source>
+        <source>Run the AppHost in the background and exit after it starts</source>
         <target state="needs-review-translation">Spusťte AppHost na pozadí a po spuštění ho ukončete.</target>
         <note />
       </trans-unit>
@@ -88,12 +88,12 @@
         <note />
       </trans-unit>
       <trans-unit id="FailedToStartAppHost">
-        <source>Failed to start the apphost.</source>
+        <source>Failed to start the AppHost.</source>
         <target state="needs-review-translation">Nepovedlo se spustit AppHost.</target>
         <note />
       </trans-unit>
       <trans-unit id="ForceArgumentDescription">
-        <source>Stop any running instance of the apphost without prompting</source>
+        <source>Stop any running instance of the AppHost without prompting</source>
         <target state="needs-review-translation">Zastavte všechny běžící instance AppHost bez výzvy.</target>
         <note />
       </trans-unit>
@@ -113,7 +113,7 @@
         <note />
       </trans-unit>
       <trans-unit id="JsonArgumentDescription">
-        <source>Output format for detached apphost results</source>
+        <source>Output format for detached AppHost results</source>
         <target state="needs-review-translation">Výsledek výstupu ve formátu JSON (platný jenom s parametrem --detach).</target>
         <note />
       </trans-unit>
@@ -123,7 +123,7 @@
         <note />
       </trans-unit>
       <trans-unit id="IsolatedModeRunningInstanceWarning">
-        <source>A running instance of this apphost was found and will be stopped. To run multiple isolated instances simultaneously, run from different directories such as git worktree directories.</source>
+        <source>A running instance of this AppHost was found and will be stopped. To run multiple isolated instances simultaneously, run from different directories such as git worktree directories.</source>
         <target state="needs-review-translation">Byla nalezena spuštěná instance tohoto hostitele aplikací a bude zastavena. Pokud chcete spustit více izolovaných instancí současně, spusťte je z různých adresářů, jako jsou adresáře pracovního stromu Gitu.</target>
         <note />
       </trans-unit>
@@ -143,8 +143,8 @@
         <note />
       </trans-unit>
       <trans-unit id="PressCtrlCToStopAppHost">
-        <source>Press [bold]CTRL+C[/] to stop the apphost and exit.</source>
-        <target state="translated">Stisknutím kláves [bold]Ctrl+C[/] zastavíte hostitele aplikací a provedete ukončení.</target>
+        <source>Press [bold]CTRL+C[/] to stop the AppHost and exit.</source>
+        <target state="needs-review-translation">Stisknutím kláves [bold]Ctrl+C[/] zastavíte hostitele aplikací a provedete ukončení.</target>
         <note>[bold] should not be localized</note>
       </trans-unit>
       <trans-unit id="ProcessId">
@@ -153,7 +153,7 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire apphost project file</source>
+        <source>The path to the Aspire AppHost project file</source>
         <target state="needs-review-translation">Cesta k souboru projektu Aspire AppHost.</target>
         <note />
       </trans-unit>
@@ -178,13 +178,13 @@
         <note />
       </trans-unit>
       <trans-unit id="StartingAppHost">
-        <source>Starting Aspire apphost...</source>
-        <target state="translated">Spouští se hostitel aplikací Aspire...</target>
+        <source>Starting Aspire AppHost...</source>
+        <target state="needs-review-translation">Spouští se hostitel aplikací Aspire...</target>
         <note />
       </trans-unit>
       <trans-unit id="StartingAppHostInBackground">
-        <source>Starting Aspire apphost in the background...</source>
-        <target state="translated">Spouští se hostitel aplikací Aspire na pozadí...</target>
+        <source>Starting Aspire AppHost in the background...</source>
+        <target state="needs-review-translation">Spouští se hostitel aplikací Aspire na pozadí...</target>
         <note />
       </trans-unit>
       <trans-unit id="StartingDashboard">
@@ -203,7 +203,7 @@
         <note>The state of the resource, eg Running</note>
       </trans-unit>
       <trans-unit id="TimeoutWaitingForAppHost">
-        <source>Timeout waiting for apphost to start.</source>
+        <source>Timeout waiting for AppHost to start.</source>
         <target state="needs-review-translation">Při čekání na spuštění hostitele aplikací (AppHost) vypršel časový limit.</target>
         <note />
       </trans-unit>
@@ -213,8 +213,8 @@
         <note>The type of the resource, eg Project</note>
       </trans-unit>
       <trans-unit id="WaitingForAppHostToStart">
-        <source>Waiting for apphost to start...</source>
-        <target state="translated">Čeká se na spuštění hostitele aplikace...</target>
+        <source>Waiting for AppHost to start...</source>
+        <target state="needs-review-translation">Čeká se na spuštění hostitele aplikace...</target>
         <note />
       </trans-unit>
       <trans-unit id="WatchArgumentDescription">

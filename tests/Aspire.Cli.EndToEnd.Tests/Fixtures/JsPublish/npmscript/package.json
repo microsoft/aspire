@@ -1,0 +1,12 @@
+{
+  "name": "npmscript",
+  "private": true,
+  "scripts": {
+    "dev": "node server.js",
+    "build": "echo 'build complete'",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0"
+  }
+}

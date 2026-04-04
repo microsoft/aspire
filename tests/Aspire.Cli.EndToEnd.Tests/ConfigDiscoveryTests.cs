@@ -78,12 +78,12 @@ public sealed class ConfigDiscoveryTests(ITestOutputHelper output)
         await auto.WaitUntilAsync(s =>
         {
             // If a "Select an apphost" prompt appears, the bug may have caused multiple detection
-            if (s.ContainsText("Select an apphost to use:"))
+            if (s.ContainsText("Select an AppHost to use:"))
             {
                 throw new InvalidOperationException("Multiple apphosts incorrectly detected");
             }
 
-            return s.ContainsText("Press CTRL+C to stop the apphost and exit.")
+            return s.ContainsText("Press CTRL+C to stop the AppHost and exit.")
                 || s.ContainsText("ERR:");
         }, timeout: TimeSpan.FromMinutes(3), description: "aspire run started or errored");
 

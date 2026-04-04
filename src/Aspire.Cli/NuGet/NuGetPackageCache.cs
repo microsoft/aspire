@@ -101,7 +101,7 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
                 skip,
                 nugetConfigFile,
                 useCache, // Pass through the useCache parameter
-                new DotNetCliRunnerInvocationOptions { SuppressLogging = true },
+                new ProcessInvocationOptions { SuppressLogging = true },
                 cancellationToken
                 );
 

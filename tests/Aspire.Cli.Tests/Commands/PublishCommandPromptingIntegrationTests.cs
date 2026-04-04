@@ -828,8 +828,8 @@ internal sealed class TestPromptBackchannel : IAppHostCliBackchannel
         await Task.CompletedTask; // Suppress CS1998
         yield break;
     }
-    public Task ConnectAsync(string socketPath, CancellationToken cancellationToken) => Task.CompletedTask;
-    public Task ConnectAsync(string socketPath, bool autoReconnect, CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task ConnectAsync(string socketPath, int retryCount, CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task ConnectAsync(string socketPath, bool autoReconnect, int retryCount, CancellationToken cancellationToken) => Task.CompletedTask;
     public Task<string[]> GetCapabilitiesAsync(CancellationToken cancellationToken) => Task.FromResult(new[] { "baseline.v2" });
 
     public async IAsyncEnumerable<CommandOutput> ExecAsync([EnumeratorCancellation] CancellationToken cancellationToken)

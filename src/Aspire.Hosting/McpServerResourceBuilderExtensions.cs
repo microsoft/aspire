@@ -38,7 +38,7 @@ public static class McpServerResourceBuilderExtensions
     /// </code>
     /// </example>
     [Experimental("ASPIREMCP001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExport("withMcpServer", Description = "Configures an MCP server endpoint on the resource")]
+    [AspireExport(Description = "Configures an MCP server endpoint on the resource")]
     public static IResourceBuilder<T> WithMcpServer<T>(
         this IResourceBuilder<T> builder,
         string? path = "/mcp",

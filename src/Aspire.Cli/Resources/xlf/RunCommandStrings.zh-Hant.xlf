@@ -33,17 +33,17 @@
         <note />
       </trans-unit>
       <trans-unit id="AppHostExitedWithCode">
-        <source>Apphost process exited with code {0}.</source>
+        <source>AppHost process exited with code {0}.</source>
         <target state="needs-review-translation">AppHost 程序以返回碼 {0} 結束。</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostFailedToBuild">
-        <source>Apphost failed to build.</source>
-        <target state="new">Apphost failed to build.</target>
+        <source>AppHost failed to build.</source>
+        <target state="new">AppHost failed to build.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostStartedSuccessfully">
-        <source>Apphost started successfully.</source>
+        <source>AppHost started successfully.</source>
         <target state="needs-review-translation">已成功啟動 AppHost。</target>
         <note />
       </trans-unit>
@@ -53,8 +53,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ConnectingToAppHost">
-        <source>Connecting to apphost...</source>
-        <target state="translated">正線連線到 AppHost...</target>
+        <source>Connecting to AppHost...</source>
+        <target state="needs-review-translation">正線連線到 AppHost...</target>
         <note />
       </trans-unit>
       <trans-unit id="CopyingUserSecrets">
@@ -73,12 +73,12 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Run an Aspire apphost interactively for development</source>
+        <source>Run an Aspire AppHost interactively for development</source>
         <target state="needs-review-translation">在開發模式中執行 Aspire AppHost。</target>
         <note />
       </trans-unit>
       <trans-unit id="DetachArgumentDescription">
-        <source>Run the apphost in the background and exit after it starts</source>
+        <source>Run the AppHost in the background and exit after it starts</source>
         <target state="needs-review-translation">在背景執行 AppHost，啟動後即退出。</target>
         <note />
       </trans-unit>
@@ -88,12 +88,12 @@
         <note />
       </trans-unit>
       <trans-unit id="FailedToStartAppHost">
-        <source>Failed to start the apphost.</source>
+        <source>Failed to start the AppHost.</source>
         <target state="needs-review-translation">無法啟動 AppHost。</target>
         <note />
       </trans-unit>
       <trans-unit id="ForceArgumentDescription">
-        <source>Stop any running instance of the apphost without prompting</source>
+        <source>Stop any running instance of the AppHost without prompting</source>
         <target state="needs-review-translation">停止任何正在執行的 AppHost 執行個體，且不顯示提示。</target>
         <note />
       </trans-unit>
@@ -113,7 +113,7 @@
         <note />
       </trans-unit>
       <trans-unit id="JsonArgumentDescription">
-        <source>Output format for detached apphost results</source>
+        <source>Output format for detached AppHost results</source>
         <target state="needs-review-translation">輸出結果為 JSON (僅於使用 --detach 時有效)。</target>
         <note />
       </trans-unit>
@@ -123,7 +123,7 @@
         <note />
       </trans-unit>
       <trans-unit id="IsolatedModeRunningInstanceWarning">
-        <source>A running instance of this apphost was found and will be stopped. To run multiple isolated instances simultaneously, run from different directories such as git worktree directories.</source>
+        <source>A running instance of this AppHost was found and will be stopped. To run multiple isolated instances simultaneously, run from different directories such as git worktree directories.</source>
         <target state="needs-review-translation">找到此 AppHost 的一個執行中執行個體，將會停止。若要同時執行多個隔離的執行個體，請從 git worktree 目錄等不同目錄執行。</target>
         <note />
       </trans-unit>
@@ -143,8 +143,8 @@
         <note />
       </trans-unit>
       <trans-unit id="PressCtrlCToStopAppHost">
-        <source>Press [bold]CTRL+C[/] to stop the apphost and exit.</source>
-        <target state="translated">按 [bold]CTRL+C[/] 停止 apphost 並結束。</target>
+        <source>Press [bold]CTRL+C[/] to stop the AppHost and exit.</source>
+        <target state="needs-review-translation">按 [bold]CTRL+C[/] 停止 apphost 並結束。</target>
         <note>[bold] should not be localized</note>
       </trans-unit>
       <trans-unit id="ProcessId">
@@ -153,7 +153,7 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire apphost project file</source>
+        <source>The path to the Aspire AppHost project file</source>
         <target state="needs-review-translation">Aspire AppHost 專案檔案的路徑。</target>
         <note />
       </trans-unit>
@@ -178,13 +178,13 @@
         <note />
       </trans-unit>
       <trans-unit id="StartingAppHost">
-        <source>Starting Aspire apphost...</source>
-        <target state="translated">正在啟動 Aspire AppHost...</target>
+        <source>Starting Aspire AppHost...</source>
+        <target state="needs-review-translation">正在啟動 Aspire AppHost...</target>
         <note />
       </trans-unit>
       <trans-unit id="StartingAppHostInBackground">
-        <source>Starting Aspire apphost in the background...</source>
-        <target state="translated">正在背景啟動 Aspire apphost...</target>
+        <source>Starting Aspire AppHost in the background...</source>
+        <target state="needs-review-translation">正在背景啟動 Aspire apphost...</target>
         <note />
       </trans-unit>
       <trans-unit id="StartingDashboard">
@@ -203,7 +203,7 @@
         <note>The state of the resource, eg Running</note>
       </trans-unit>
       <trans-unit id="TimeoutWaitingForAppHost">
-        <source>Timeout waiting for apphost to start.</source>
+        <source>Timeout waiting for AppHost to start.</source>
         <target state="needs-review-translation">等候 AppHost 啟動時發生逾時。</target>
         <note />
       </trans-unit>
@@ -213,8 +213,8 @@
         <note>The type of the resource, eg Project</note>
       </trans-unit>
       <trans-unit id="WaitingForAppHostToStart">
-        <source>Waiting for apphost to start...</source>
-        <target state="translated">正在等待 apphost 啟動...</target>
+        <source>Waiting for AppHost to start...</source>
+        <target state="needs-review-translation">正在等待 apphost 啟動...</target>
         <note />
       </trans-unit>
       <trans-unit id="WatchArgumentDescription">

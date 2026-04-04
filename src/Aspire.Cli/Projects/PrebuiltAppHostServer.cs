@@ -241,7 +241,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         var exitCode = await _dotNetCliRunner.BuildAsync(
             new FileInfo(projectFilePath),
             noRestore: false,
-            new DotNetCliRunnerInvocationOptions
+            new ProcessInvocationOptions
             {
                 StandardOutputCallback = buildOutput.AppendOutput,
                 StandardErrorCallback = buildOutput.AppendError
@@ -484,7 +484,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         {
             if (e.Data is not null)
             {
-                _logger.LogDebug("PrebuiltAppHostServer({ProcessId}) stdout: {Line}", process.Id, e.Data);
+                _logger.LogTrace("PrebuiltAppHostServer({ProcessId}) stdout: {Line}", process.Id, e.Data);
                 outputCollector.AppendOutput(e.Data);
             }
         };
@@ -492,7 +492,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         {
             if (e.Data is not null)
             {
-                _logger.LogDebug("PrebuiltAppHostServer({ProcessId}) stderr: {Line}", process.Id, e.Data);
+                _logger.LogTrace("PrebuiltAppHostServer({ProcessId}) stderr: {Line}", process.Id, e.Data);
                 outputCollector.AppendError(e.Data);
             }
         };

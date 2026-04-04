@@ -215,6 +215,16 @@ public class Program
                 builder.AddFilter("Aspire.Cli", consoleLogLevel.Value);
                 builder.AddFilter("Microsoft.Hosting.Lifetime", LogLevel.Warning);
             }
+            else
+            {
+                // Default writing debug level logs to file.
+                builder.AddFilter<FileLoggerProvider>(null, LogLevel.Debug);
+
+                // These categories are very verbose at Debug; suppress their Debug output by
+                // raising the minimum to Information unless an explicit log level is requested.
+                builder.AddFilter<FileLoggerProvider>("Microsoft.Extensions.Http.DefaultHttpClientFactory", LogLevel.Information);
+                builder.AddFilter<FileLoggerProvider>("Aspire.Cli.Certificates.NativeCertificateToolRunner", LogLevel.Information);
+            }
 
             // Configure console logging based on --verbosity or --debug
             if (consoleLogLevel is not null && !isMcpStartCommand && extensionEndpoint is null)
@@ -285,6 +295,9 @@ public class Program
         // Register file logger provider for components that write directly to the log file
         builder.Services.AddSingleton(startupContext.FileLoggerProvider);
 
+        // Register logging options so components can read the user's chosen log level
+        builder.Services.AddSingleton(startupContext.LoggingOptions);
+
         // Configure OpenTelemetry tracing. TelemetryManager reads configuration and creates
         // separate TracerProvider instances:
         // - Azure Monitor provider with filtering (only exports activities with EXTERNAL_TELEMETRY=true)
@@ -321,7 +334,8 @@ public class Program
         builder.Services.AddSingleton(BuildConfigurationService);
         builder.Services.AddSingleton<IFeatures, Features>();
         builder.Services.AddTelemetryServices();
-        builder.Services.AddTransient<IDotNetCliExecutionFactory, DotNetCliExecutionFactory>();
+        builder.Services.AddTransient<IProcessExecutionFactory, ProcessExecutionFactory>();
+        builder.Services.AddTransient<LayoutProcessRunner>();
 
         // Register certificate tool runner - uses native CertificateManager directly (no subprocess needed)
         builder.Services.AddSingleton(sp => CertificateManager.Create(sp.GetRequiredService<ILogger<NativeCertificateToolRunner>>()));
@@ -452,6 +466,8 @@ public class Program
         builder.Services.AddTransient<CertificatesCleanCommand>();
         builder.Services.AddTransient<CertificatesTrustCommand>();
         builder.Services.AddTransient<DoctorCommand>();
+        builder.Services.AddTransient<DashboardCommand>();
+        builder.Services.AddTransient<DashboardRunCommand>();
         builder.Services.AddTransient<UpdateCommand>();
         builder.Services.AddTransient<DeployCommand>();
         builder.Services.AddTransient<DoCommand>();

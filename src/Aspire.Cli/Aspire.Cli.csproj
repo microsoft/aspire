@@ -77,6 +77,7 @@
     <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Layout\BundleDiscovery.cs" />
     <Compile Include="$(SharedDir)EnumerableExtensions.cs" Link="Utils\EnumerableExtensions.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />
+    <Compile Include="$(SharedDir)DashboardExitCodes.cs" Link="Utils\DashboardExitCodes.cs" />
     <Compile Include="$(SharedDir)KnownOtelConfigNames.cs" Link="Utils\KnownOtelConfigNames.cs" />
     <Compile Include="$(SharedDir)KnownFormats.cs" Link="Utils\KnownFormats.cs" />
     <Compile Include="$(SharedDir)TokenGenerator.cs" Link="Utils\TokenGenerator.cs" />

@@ -34,7 +34,7 @@ public static class AzureNetworkSecurityGroupExtensions
     ///     });
     /// </code>
     /// </example>
-    [AspireExport("addNetworkSecurityGroup", Description = "Adds an Azure Network Security Group resource to the application model.")]
+    [AspireExport(Description = "Adds an Azure Network Security Group resource to the application model.")]
     public static IResourceBuilder<AzureNetworkSecurityGroupResource> AddNetworkSecurityGroup(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name)
@@ -84,7 +84,7 @@ public static class AzureNetworkSecurityGroupExtensions
     ///     });
     /// </code>
     /// </example>
-    [AspireExport("withSecurityRule", Description = "Adds a security rule to an Azure Network Security Group resource.")]
+    [AspireExport(Description = "Adds a security rule to an Azure Network Security Group resource.")]
     public static IResourceBuilder<AzureNetworkSecurityGroupResource> WithSecurityRule(
         this IResourceBuilder<AzureNetworkSecurityGroupResource> builder,
         AzureSecurityRule rule)

@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="zh-Hant" original="../LogsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Display logs from resources in a running apphost</source>
-        <target state="needs-review-translation">顯示正在執行 Aspire Apphost 中的資源記錄。</target>
+        <source>Display logs from resources in a running AppHost</source>
+        <target state="needs-review-translation">顯示正在執行 Aspire AppHost 中的資源記錄。</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">

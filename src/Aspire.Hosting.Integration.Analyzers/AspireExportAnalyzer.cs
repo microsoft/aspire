@@ -187,12 +187,34 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
 
         // Rule 2: Validate export ID format
         var exportId = GetExportId(exportAttribute);
-        if (exportId is not null && !s_exportIdPattern.IsMatch(exportId))
+        var isExportIdFormatValid = exportId is not null && s_exportIdPattern.IsMatch(exportId);
+        if (exportId is not null && !isExportIdFormatValid)
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 Diagnostics.s_invalidExportIdFormat,
                 location,
                 exportId));
+        }
+
+        // Compute the effective export ID: either from the explicit attribute or auto-derived from method name (camelCase)
+        // Normalize empty/invalid exportId to null so the fallback applies
+        var derivedExportId = GetDerivedExportId(method, containingTypeExportAttribute);
+        var normalizedExportId = isExportIdFormatValid ? exportId : null;
+        var effectiveExportId = normalizedExportId ?? derivedExportId;
+
+        // Rule 2b (ASPIREEXPORT011): Warn when explicit id matches the convention-derived name.
+        // Suppressed when Rule 7 (ASPIREEXPORT009) also fires — the two give contradictory advice
+        // (ASPIREEXPORT011 says "remove the id"; ASPIREEXPORT009 says "make the id more specific"),
+        // so only the actionable ASPIREEXPORT009 should appear.
+        if (isExportIdFormatValid &&
+            string.Equals(exportId, derivedExportId, StringComparison.Ordinal) &&
+            !HasConcreteResourceBuilderTargetParameter(method, wellKnownTypes))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                Diagnostics.s_redundantExportId,
+                location,
+                exportId,
+                method.Name));
         }
 
         // Rule 3: Validate return type is ATS-compatible
@@ -226,19 +248,19 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         }
 
         // Rule 6 (ASPIREEXPORT007): Track export for duplicate detection
-        if (exportId is not null && method.IsExtensionMethod && method.Parameters.Length > 0)
+        if (effectiveExportId is not null && method.IsExtensionMethod && method.Parameters.Length > 0)
         {
             var targetType = method.Parameters[0].Type;
             var targetTypeName = targetType.ToDisplayString();
-            var key = (exportId, targetTypeName);
+            var key = (effectiveExportId, targetTypeName);
             var bag = exportsByKey.GetOrAdd(key, _ => new ConcurrentBag<(IMethodSymbol, Location)>());
             bag.Add((method, location));
         }
 
         // Rule 7 (ASPIREEXPORT009): Warn when export name may collide across integrations
-        if (exportId is not null && method.IsExtensionMethod && method.Parameters.Length > 0)
+        if (effectiveExportId is not null && method.IsExtensionMethod && method.Parameters.Length > 0)
         {
-            AnalyzeExportNameUniqueness(context, method, exportId, wellKnownTypes, location);
+            AnalyzeExportNameUniqueness(context, method, effectiveExportId, wellKnownTypes, location);
         }
     }
 
@@ -276,6 +298,35 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
             location,
             method.Name,
             reason ?? "Add [AspireExport] if ATS-compatible, or [AspireExportIgnore] with a reason."));
+    }
+
+    /// <summary>
+    /// Returns true when the method satisfies the ASPIREEXPORT009 preconditions (open-generic
+    /// <c>IResourceBuilder&lt;T&gt;</c> first parameter plus at least one concrete
+    /// <c>IResourceBuilder&lt;ConcreteType&gt;</c> parameter), independently of what the export ID is.
+    /// Used to suppress ASPIREEXPORT011 when ASPIREEXPORT009 would fire for the same method.
+    /// </summary>
+    private static bool HasConcreteResourceBuilderTargetParameter(IMethodSymbol method, WellKnownTypes wellKnownTypes)
+    {
+        if (!method.IsExtensionMethod || method.Parameters.Length < 2)
+        {
+            return false;
+        }
+
+        if (!IsOpenGenericResourceBuilder(method.Parameters[0].Type, wellKnownTypes))
+        {
+            return false;
+        }
+
+        for (var i = 1; i < method.Parameters.Length; i++)
+        {
+            if (GetConcreteResourceBuilderTypeName(method.Parameters[i].Type, wellKnownTypes) is not null)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void AnalyzeExportNameUniqueness(
@@ -805,6 +856,43 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
             return id;
         }
         return null;
+    }
+
+    private static string? GetDerivedExportId(IMethodSymbol method, AttributeData? containingTypeExportAttribute)
+    {
+        if (string.IsNullOrEmpty(method.Name))
+        {
+            return null;
+        }
+
+        var camelCaseName = char.ToLowerInvariant(method.Name[0]) + method.Name.Substring(1);
+
+        // Non-static methods auto-exposed via ExposeMethods=true use TypeName.methodName to avoid collisions
+        if (!method.IsStatic && IsExposeMethodsEnabled(containingTypeExportAttribute))
+        {
+            return $"{method.ContainingType.Name}.{camelCaseName}";
+        }
+
+        return camelCaseName;
+    }
+
+    private static bool IsExposeMethodsEnabled(AttributeData? exportAttribute)
+    {
+        if (exportAttribute is null)
+        {
+            return false;
+        }
+
+        foreach (var namedArgument in exportAttribute.NamedArguments)
+        {
+            if (namedArgument.Key == "ExposeMethods" &&
+                namedArgument.Value.Value is bool enabled)
+            {
+                return enabled;
+            }
+        }
+
+        return false;
     }
 
     private static bool TryGetEffectiveAspireExportAttribute(IMethodSymbol method, INamedTypeSymbol aspireExportAttribute, out AttributeData? exportAttribute, out AttributeData? containingTypeExportAttribute)

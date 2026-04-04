@@ -23,7 +23,7 @@ public static class AzureUserAssignedIdentityExtensions
     /// The resource is added to the infrastructure only if the application is not in run mode.
     /// </remarks>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureUserAssignedIdentityResource}"/> builder.</returns>
-    [AspireExport("addAzureUserAssignedIdentity", Description = "Adds an Azure user-assigned identity resource")]
+    [AspireExport(Description = "Adds an Azure user-assigned identity resource")]
     public static IResourceBuilder<AzureUserAssignedIdentityResource> AddAzureUserAssignedIdentity(
         this IDistributedApplicationBuilder builder,
         string name)
