@@ -18,6 +18,7 @@ function parseCommand(body, defaultSourceUrl = null) {
         sourceUrl: defaultSourceUrl,
         workflow: 'ci',
         forceNew: false,
+        listOnly: false,
     };
 
     const hasFlags = tokens.some(token => token.startsWith('--'));
@@ -63,14 +64,15 @@ function parseCommand(body, defaultSourceUrl = null) {
         }
 
         if (!result.testQuery) {
-            return { success: false, errorMessage: 'The flag-based form requires --test "<test-name>".' };
+            result.listOnly = true;
         }
 
         return result;
     }
 
     if (tokens.length === 0) {
-        return { success: false, errorMessage: 'The command requires a test name. Use /create-issue --test "<test-name>".' };
+        result.listOnly = true;
+        return result;
     }
 
     if (tokens.length === 1) {

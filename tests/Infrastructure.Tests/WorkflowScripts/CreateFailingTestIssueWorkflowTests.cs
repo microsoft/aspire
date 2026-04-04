@@ -97,6 +97,42 @@ public sealed class CreateFailingTestIssueWorkflowTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task ParseCommandReturnsListOnlyWhenNoArgumentsProvided()
+    {
+        var result = await InvokeHarnessAsync<ParseCommandResult>(
+            "parseCommand",
+            new
+            {
+                body = "/create-issue",
+                defaultSourceUrl = "https://github.com/microsoft/aspire/pull/999"
+            });
+
+        Assert.True(result.Success);
+        Assert.True(result.ListOnly);
+        Assert.Equal(string.Empty, result.TestQuery);
+        Assert.Equal("https://github.com/microsoft/aspire/pull/999", result.SourceUrl);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ParseCommandReturnsListOnlyWhenFlagBasedWithoutTest()
+    {
+        var result = await InvokeHarnessAsync<ParseCommandResult>(
+            "parseCommand",
+            new
+            {
+                body = "/create-issue --workflow custom.yml --url https://github.com/microsoft/aspire/actions/runs/123"
+            });
+
+        Assert.True(result.Success);
+        Assert.True(result.ListOnly);
+        Assert.Equal(string.Empty, result.TestQuery);
+        Assert.Equal("https://github.com/microsoft/aspire/actions/runs/123", result.SourceUrl);
+        Assert.Equal("custom.yml", result.Workflow);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task BuildIssueSearchQueryTargetsFailingTestIssuesByMetadataMarker()
     {
         var query = await InvokeHarnessAsync<string>(
@@ -147,5 +183,5 @@ public sealed class CreateFailingTestIssueWorkflowTests : IDisposable
 
     private sealed record HarnessResponse<T>(T Result);
 
-    private sealed record ParseCommandResult(bool Success, string TestQuery, string? SourceUrl, string Workflow, bool ForceNew, string? ErrorMessage);
+    private sealed record ParseCommandResult(bool Success, string TestQuery, string? SourceUrl, string Workflow, bool ForceNew, bool ListOnly, string? ErrorMessage);
 }
