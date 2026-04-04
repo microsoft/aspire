@@ -6,7 +6,6 @@
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
-using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Docker;
 
@@ -15,70 +14,27 @@ namespace Aspire.Hosting.Docker;
 /// Implements <see cref="IDistributedApplicationEventingSubscriber"/> and subscribes to <see cref="BeforeStartEvent"/> to configure Docker Compose resources before publish.
 /// </summary>
 internal sealed class DockerComposeInfrastructure(
-    ILogger<DockerComposeInfrastructure> logger,
     DistributedApplicationExecutionContext executionContext) : IDistributedApplicationEventingSubscriber
 {
-    private async Task OnBeforeStartAsync(BeforeStartEvent @event, CancellationToken cancellationToken = default)
+    private Task OnBeforeStartAsync(BeforeStartEvent @event, CancellationToken cancellationToken = default)
     {
         if (executionContext.IsRunMode)
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        // Find Docker Compose environment resources
+        // Validate that resources configured for Docker Compose have a compose environment
         var dockerComposeEnvironments = @event.Model.Resources.OfType<DockerComposeEnvironmentResource>().ToArray();
 
         if (dockerComposeEnvironments.Length == 0)
         {
             EnsureNoPublishAsDockerComposeServiceAnnotations(@event.Model);
-            return;
         }
 
-        foreach (var environment in dockerComposeEnvironments)
-        {
-            var dockerComposeEnvironmentContext = new DockerComposeEnvironmentContext(environment, logger);
-
-            if (environment.DashboardEnabled && environment.Dashboard?.Resource is DockerComposeAspireDashboardResource dashboard)
-            {
-                // Ensure the dashboard resource is created (even though it's not part of the main application model)
-                var dashboardService = await dockerComposeEnvironmentContext.CreateDockerComposeServiceResourceAsync(dashboard, executionContext, cancellationToken).ConfigureAwait(false);
-
-                dashboard.Annotations.Add(new DeploymentTargetAnnotation(dashboardService)
-                {
-                    ComputeEnvironment = environment,
-                    ContainerRegistry = GetContainerRegistry(environment, @event.Model)
-                });
-            }
-
-            foreach (var r in @event.Model.GetComputeResources())
-            {
-                // Skip resources that are explicitly targeted to a different compute environment
-                var resourceComputeEnvironment = r.GetComputeEnvironment();
-                if (resourceComputeEnvironment is not null && resourceComputeEnvironment != environment)
-                {
-                    continue;
-                }
-
-                // Configure OTLP for resources if dashboard is enabled (before creating the service resource)
-                if (environment.DashboardEnabled && environment.Dashboard?.Resource.OtlpGrpcEndpoint is EndpointReference otlpGrpcEndpoint)
-                {
-                    ConfigureOtlp(r, otlpGrpcEndpoint);
-                }
-
-                // Create a Docker Compose compute resource for the resource
-                var serviceResource = await dockerComposeEnvironmentContext.CreateDockerComposeServiceResourceAsync(r, executionContext, cancellationToken).ConfigureAwait(false);
-
-                // Add deployment target annotation to the resource
-                r.Annotations.Add(new DeploymentTargetAnnotation(serviceResource)
-                {
-                    ComputeEnvironment = environment,
-                    ContainerRegistry = GetContainerRegistry(environment, @event.Model)
-                });
-            }
-        }
+        return Task.CompletedTask;
     }
 
-    private static IContainerRegistry GetContainerRegistry(DockerComposeEnvironmentResource environment, DistributedApplicationModel appModel)
+    internal static IContainerRegistry GetContainerRegistry(DockerComposeEnvironmentResource environment, DistributedApplicationModel appModel)
     {
         // Check for explicit container registry reference annotation on the environment
         if (environment.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var annotation))
@@ -108,7 +64,7 @@ internal sealed class DockerComposeInfrastructure(
         }
     }
 
-    private static void ConfigureOtlp(IResource resource, EndpointReference otlpEndpoint)
+    internal static void ConfigureOtlp(IResource resource, EndpointReference otlpEndpoint)
     {
         // Only configure OTLP for resources that have the OtlpExporterAnnotation and implement IResourceWithEnvironment
         if (resource is IResourceWithEnvironment resourceWithEnv && resource.Annotations.OfType<OtlpExporterAnnotation>().Any())

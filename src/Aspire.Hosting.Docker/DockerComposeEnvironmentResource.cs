@@ -60,7 +60,50 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
         Annotations.Add(new PipelineStepAnnotation(async (factoryContext) =>
         {
             var model = factoryContext.PipelineContext.Model;
+            var executionContext = factoryContext.PipelineContext.ExecutionContext;
+            var logger = factoryContext.PipelineContext.Logger;
             var steps = new List<PipelineStep>();
+
+            // Process resources during step factory creation (not in a deferred step action).
+            // This runs after BeforeStartEvent, so all user modifications to the model are
+            // already applied. We create deployment targets here so that child step expansion
+            // below can find them.
+            var dockerComposeEnvironmentContext = new DockerComposeEnvironmentContext(this, logger);
+
+            if (DashboardEnabled && Dashboard?.Resource is DockerComposeAspireDashboardResource dashboardResource)
+            {
+                var dashboardService = await dockerComposeEnvironmentContext.CreateDockerComposeServiceResourceAsync(dashboardResource, executionContext, default).ConfigureAwait(false);
+
+                dashboardResource.Annotations.Add(new DeploymentTargetAnnotation(dashboardService)
+                {
+                    ComputeEnvironment = this,
+                    ContainerRegistry = DockerComposeInfrastructure.GetContainerRegistry(this, model)
+                });
+            }
+
+            foreach (var r in model.GetComputeResources())
+            {
+                var resourceComputeEnvironment = r.GetComputeEnvironment();
+                if (resourceComputeEnvironment is not null && resourceComputeEnvironment != this)
+                {
+                    continue;
+                }
+
+                if (DashboardEnabled && Dashboard?.Resource.OtlpGrpcEndpoint is EndpointReference otlpGrpcEndpoint)
+                {
+                    DockerComposeInfrastructure.ConfigureOtlp(r, otlpGrpcEndpoint);
+                }
+
+                var serviceResource = await dockerComposeEnvironmentContext.CreateDockerComposeServiceResourceAsync(r, executionContext, default).ConfigureAwait(false);
+
+                r.Annotations.Add(new DeploymentTargetAnnotation(serviceResource)
+                {
+                    ComputeEnvironment = this,
+                    ContainerRegistry = DockerComposeInfrastructure.GetContainerRegistry(this, model)
+                });
+            }
+
+            // Now deployment targets exist — build the pipeline steps.
 
             var publishStep = new PipelineStep
             {
@@ -72,8 +115,8 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
             steps.Add(publishStep);
 
             // Expand deployment target steps for all compute resources (including dashboard if enabled)
-            var resources = DashboardEnabled && Dashboard?.Resource is DockerComposeAspireDashboardResource dashboard
-                ? [.. model.GetComputeResources(), dashboard]
+            var resources = DashboardEnabled && Dashboard?.Resource is DockerComposeAspireDashboardResource db
+                ? [.. model.GetComputeResources(), db]
                 : model.GetComputeResources();
 
             foreach (var resource in resources)
