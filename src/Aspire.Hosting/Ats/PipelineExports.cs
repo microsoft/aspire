@@ -21,7 +21,7 @@ internal static class PipelineExports
     /// <param name="callback">The callback to execute when the step runs.</param>
     /// <param name="dependsOn">Optional step names that this step depends on.</param>
     /// <param name="requiredBy">Optional step names that require this step.</param>
-    [AspireExport("addStep", Description = "Adds a pipeline step to the application")]
+    [AspireExport(Description = "Adds a pipeline step to the application")]
     public static void AddStep(
         this global::Aspire.Hosting.Pipelines.IDistributedApplicationPipeline pipeline,
         string stepName,
@@ -41,7 +41,7 @@ internal static class PipelineExports
     /// </summary>
     /// <param name="pipeline">The distributed application pipeline.</param>
     /// <param name="callback">The callback to execute during pipeline configuration.</param>
-    [AspireExport("configure", Description = "Configures the application pipeline via a callback")]
+    [AspireExport(Description = "Configures the application pipeline via a callback")]
     public static void Configure(
         this global::Aspire.Hosting.Pipelines.IDistributedApplicationPipeline pipeline,
         Func<PipelineConfigurationContext, Task> callback)
