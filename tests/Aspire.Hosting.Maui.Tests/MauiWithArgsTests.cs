@@ -298,5 +298,4 @@ public class MauiWithArgsTests
             MauiTestHelper.CleanupTempFile(tempFile);
         }
     }
-
 }

@@ -119,5 +119,4 @@ public class MauiOtlpTemplateTests
             _ => throw new ArgumentException($"Unknown platform: {platform}")
         };
     }
-
 }

@@ -8,6 +8,10 @@ namespace Aspire.Hosting.Tests;
 /// </summary>
 internal static class MauiTestHelper
 {
+    /// <summary>
+    /// Creates a minimal project file with only the specified TFM.
+    /// Each test targets a single platform, so multi-TFM is not needed here.
+    /// </summary>
     public static string CreateProjectContent(string requiredTfm)
     {
         return $$"""

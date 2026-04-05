@@ -173,5 +173,4 @@ public class MauiUnsupportedPlatformTests
 
         Assert.Equal(reason, annotation.Reason);
     }
-
 }

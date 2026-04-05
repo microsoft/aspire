@@ -175,5 +175,4 @@ public class MauiiOSValidationTests
             MauiTestHelper.CleanupTempFile(tempFile);
         }
     }
-
 }
