@@ -128,6 +128,8 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
                 }
             };
             initStep.RequiredBy(WellKnownPipelineSteps.PublishPrereq);
+            initStep.RequiredBy(WellKnownPipelineSteps.BuildPrereq);
+            initStep.RequiredBy(WellKnownPipelineSteps.PushPrereq);
             steps.Add(initStep);
 
             var publishStep = new PipelineStep
