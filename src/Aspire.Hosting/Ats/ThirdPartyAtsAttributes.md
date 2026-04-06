@@ -40,7 +40,7 @@ public sealed class AspireExportAttribute : Attribute
     }
 
     /// <summary>
-    /// Type export (parameterless). The type ID is derived as {AssemblyName}/{TypeName}.
+    /// Type export (parameterless). The type ID is derived as {AssemblyName}/{FullTypeName}.
     /// </summary>
     public AspireExportAttribute()
     {
@@ -189,5 +189,6 @@ public sealed class AddMyDatabaseOptions
 - **Constructor signatures must match by arity and argument type**: `()`, `(string)`, `(Type)` for `AspireExportAttribute`; `(params Type[])` for `AspireUnionAttribute`. Parameter names can differ.
 - **Property names must match exactly**: `Type`, `Description`, `MethodName`, `ExposeProperties`, `ExposeMethods`, `Reason`, `DtoTypeId`, `Types`.
 - **Namespaces must match exactly**: copied attributes need to be declared in the `Aspire.Hosting` namespace so their full names match the built-in ATS attributes.
+- For end-to-end behavior of assembly-level exports across multiple assemblies, see [Cross-Assembly Type Exports](../../../docs/specs/polyglot-apphost.md#cross-assembly-type-exports).
 - If you later add a reference to `Aspire.Hosting` and both your custom attribute and the official one are applied to the same member, both will be detected (the scanner takes the first match).
 - The scanner uses `CustomAttributeData` which reads metadata without instantiating the attribute, so your attribute types don't need to be loadable at scan time — only the full name and supported members must match.

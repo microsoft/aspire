@@ -187,6 +187,7 @@ extension/.localization/
 extension/out/
 extension/node_modules/
 extension/.vscode-test/
+extension/.version
 
 # Generated extension localization files (regenerated from XLF during build)
 extension/l10n/bundle.l10n.json

@@ -21,6 +21,7 @@
   "symbols/LocalhostTld/displayName": "Используйте домен верхнего уровня .dev.localhost в URL-адресе приложения",
   "symbols/LocalhostTld/description": "Следует ли объединять имя проекта с доменом верхнего уровня .dev.localhost в URL-адресе приложения для локальной разработки, например https://myapp.dev.localhost:12345. Поддерживается в .NET 10 и более поздних версиях.",
   "postActions/set-startup-project/description": "Устанавливает проект запуска в решении",
+  "postActions/set-startup-project/manualInstructions/default/text": "",
   "postActions/restore/description": "Восстановление пакетов NuGet, необходимых для этого проекта.",
   "postActions/restore/manualInstructions/default/text": "Выполнить команду \"dotnet restore\""
 }

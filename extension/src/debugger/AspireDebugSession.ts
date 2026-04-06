@@ -20,7 +20,7 @@ import path from "path";
 import os from "os";
 import { EnvironmentVariables } from "../utils/environment";
 
-export type DashboardBrowserType = 'openExternalBrowser' | 'debugChrome' | 'debugEdge' | 'debugFirefox';
+export type DashboardBrowserType = 'openExternalBrowser' | 'integratedBrowser' | 'debugChrome' | 'debugEdge' | 'debugFirefox';
 
 export class AspireDebugSession implements vscode.DebugAdapter {
   private readonly _onDidSendMessage = new EventEmitter<any>();
@@ -389,6 +389,10 @@ export class AspireDebugSession implements vscode.DebugAdapter {
 
       case 'debugFirefox':
         await this.launchDebugBrowser(url, 'firefox');
+        break;
+
+      case 'integratedBrowser':
+        await vscode.commands.executeCommand('simpleBrowser.show', url);
         break;
 
       case 'openExternalBrowser':
