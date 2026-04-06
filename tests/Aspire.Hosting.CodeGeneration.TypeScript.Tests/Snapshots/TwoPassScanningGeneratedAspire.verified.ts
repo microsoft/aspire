@@ -382,6 +382,13 @@ export interface CommandOptions {
     updateState?: any;
 }
 
+/** DTO interface for CommandResultData */
+export interface CommandResultData {
+    value?: string;
+    format?: CommandResultFormat;
+    displayImmediately?: boolean;
+}
+
 /** DTO interface for CreateBuilderOptions */
 export interface CreateBuilderOptions {
     args?: string[];
@@ -399,8 +406,8 @@ export interface ExecuteCommandResult {
     success?: boolean;
     canceled?: boolean;
     errorMessage?: string;
-    result?: string;
-    resultFormat?: CommandResultFormat;
+    message?: string;
+    value?: CommandResultData;
 }
 
 /** DTO interface for ResourceEventDto */

@@ -1,4 +1,4 @@
-// ===== AddDockerfileOptions.java =====
+﻿// ===== AddDockerfileOptions.java =====
 // AddDockerfileOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
@@ -2830,6 +2830,36 @@ public class CommandOptions {
         map.put("IconVariant", AspireClient.serializeValue(iconVariant));
         map.put("IsHighlighted", AspireClient.serializeValue(isHighlighted));
         map.put("UpdateState", AspireClient.serializeValue(updateState));
+        return map;
+    }
+}
+
+// ===== CommandResultData.java =====
+// CommandResultData.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** CommandResultData DTO. */
+public class CommandResultData {
+    private String value;
+    private CommandResultFormat format;
+    private boolean displayImmediately;
+
+    public String getValue() { return value; }
+    public void setValue(String value) { this.value = value; }
+    public CommandResultFormat getFormat() { return format; }
+    public void setFormat(CommandResultFormat value) { this.format = value; }
+    public boolean getDisplayImmediately() { return displayImmediately; }
+    public void setDisplayImmediately(boolean value) { this.displayImmediately = value; }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("Value", AspireClient.serializeValue(value));
+        map.put("Format", AspireClient.serializeValue(format));
+        map.put("DisplayImmediately", AspireClient.serializeValue(displayImmediately));
         return map;
     }
 }
@@ -9458,8 +9488,8 @@ public class ExecuteCommandResult {
     private boolean success;
     private boolean canceled;
     private String errorMessage;
-    private String result;
-    private CommandResultFormat resultFormat;
+    private String message;
+    private CommandResultData value;
 
     public boolean getSuccess() { return success; }
     public void setSuccess(boolean value) { this.success = value; }
@@ -9467,18 +9497,18 @@ public class ExecuteCommandResult {
     public void setCanceled(boolean value) { this.canceled = value; }
     public String getErrorMessage() { return errorMessage; }
     public void setErrorMessage(String value) { this.errorMessage = value; }
-    public String getResult() { return result; }
-    public void setResult(String value) { this.result = value; }
-    public CommandResultFormat getResultFormat() { return resultFormat; }
-    public void setResultFormat(CommandResultFormat value) { this.resultFormat = value; }
+    public String getMessage() { return message; }
+    public void setMessage(String value) { this.message = value; }
+    public CommandResultData getValue() { return value; }
+    public void setValue(CommandResultData value) { this.value = value; }
 
     public Map<String, Object> toMap() {
         Map<String, Object> map = new HashMap<>();
         map.put("Success", AspireClient.serializeValue(success));
         map.put("Canceled", AspireClient.serializeValue(canceled));
         map.put("ErrorMessage", AspireClient.serializeValue(errorMessage));
-        map.put("Result", AspireClient.serializeValue(result));
-        map.put("ResultFormat", AspireClient.serializeValue(resultFormat));
+        map.put("Message", AspireClient.serializeValue(message));
+        map.put("Value", AspireClient.serializeValue(value));
         return map;
     }
 }
@@ -20708,6 +20738,7 @@ public final class WithVolumeOptions {
 .modules/CertificateTrustScope.java
 .modules/CommandLineArgsCallbackContext.java
 .modules/CommandOptions.java
+.modules/CommandResultData.java
 .modules/CommandResultFormat.java
 .modules/CompleteStepMarkdownOptions.java
 .modules/CompleteStepOptions.java

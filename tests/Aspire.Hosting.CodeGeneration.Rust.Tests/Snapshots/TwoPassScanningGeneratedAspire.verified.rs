@@ -512,10 +512,10 @@ pub struct ExecuteCommandResult {
     pub canceled: bool,
     #[serde(rename = "ErrorMessage")]
     pub error_message: String,
-    #[serde(rename = "Result")]
-    pub result: String,
-    #[serde(rename = "ResultFormat")]
-    pub result_format: CommandResultFormat,
+    #[serde(rename = "Message")]
+    pub message: String,
+    #[serde(rename = "Value")]
+    pub value: CommandResultData,
 }
 
 impl ExecuteCommandResult {
@@ -524,8 +524,29 @@ impl ExecuteCommandResult {
         map.insert("Success".to_string(), serde_json::to_value(&self.success).unwrap_or(Value::Null));
         map.insert("Canceled".to_string(), serde_json::to_value(&self.canceled).unwrap_or(Value::Null));
         map.insert("ErrorMessage".to_string(), serde_json::to_value(&self.error_message).unwrap_or(Value::Null));
-        map.insert("Result".to_string(), serde_json::to_value(&self.result).unwrap_or(Value::Null));
-        map.insert("ResultFormat".to_string(), serde_json::to_value(&self.result_format).unwrap_or(Value::Null));
+        map.insert("Message".to_string(), serde_json::to_value(&self.message).unwrap_or(Value::Null));
+        map.insert("Value".to_string(), serde_json::to_value(&self.value).unwrap_or(Value::Null));
+        map
+    }
+}
+
+/// CommandResultData
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CommandResultData {
+    #[serde(rename = "Value")]
+    pub value: String,
+    #[serde(rename = "Format")]
+    pub format: CommandResultFormat,
+    #[serde(rename = "DisplayImmediately")]
+    pub display_immediately: bool,
+}
+
+impl CommandResultData {
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        let mut map = HashMap::new();
+        map.insert("Value".to_string(), serde_json::to_value(&self.value).unwrap_or(Value::Null));
+        map.insert("Format".to_string(), serde_json::to_value(&self.format).unwrap_or(Value::Null));
+        map.insert("DisplayImmediately".to_string(), serde_json::to_value(&self.display_immediately).unwrap_or(Value::Null));
         map
     }
 }
