@@ -441,6 +441,7 @@
     <Project Path="tests/Aspire.Keycloak.Authentication.Tests/Aspire.Keycloak.Authentication.Tests.csproj" />
     <Project Path="tests/Aspire.Microsoft.Azure.Cosmos.Tests/Aspire.Microsoft.Azure.Cosmos.Tests.csproj" />
     <Project Path="tests/Aspire.Microsoft.Azure.StackExchangeRedis.Tests/Aspire.Microsoft.Azure.StackExchangeRedis.Tests.csproj" />
+    <Project Path="tests/Aspire.Microsoft.DurableTask.AzureManaged.Tests/Aspire.Microsoft.DurableTask.AzureManaged.Tests.csproj" />
     <Project Path="tests/Aspire.Microsoft.Data.SqlClient.Tests/Aspire.Microsoft.Data.SqlClient.Tests.csproj" />
     <Project Path="tests/Aspire.Microsoft.EntityFrameworkCore.Cosmos.Tests/Aspire.Microsoft.EntityFrameworkCore.Cosmos.Tests.csproj" />
     <Project Path="tests/Aspire.Microsoft.EntityFrameworkCore.SqlServer.Tests/Aspire.Microsoft.EntityFrameworkCore.SqlServer.Tests.csproj" />

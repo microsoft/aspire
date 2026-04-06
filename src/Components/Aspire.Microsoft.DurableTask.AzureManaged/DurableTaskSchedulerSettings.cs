@@ -6,6 +6,30 @@ namespace Aspire.Microsoft.DurableTask.AzureManaged;
 /// <summary>
 /// Provides the client configuration settings for connecting to a Durable Task Scheduler.
 /// </summary>
+/// <remarks>
+/// <para>
+/// Settings are read from the <c>Aspire:Microsoft:DurableTask:AzureManaged</c> configuration section.
+/// Named instances use <c>Aspire:Microsoft:DurableTask:AzureManaged:{name}</c>, which takes precedence
+/// over the top-level section when both are present.
+/// </para>
+/// </remarks>
+/// <example>
+/// Configure settings via <c>appsettings.json</c>:
+/// <code>
+/// {
+///   "Aspire": {
+///     "Microsoft": {
+///       "DurableTask": {
+///         "AzureManaged": {
+///           "DisableHealthChecks": false,
+///           "DisableTracing": false
+///         }
+///       }
+///     }
+///   }
+/// }
+/// </code>
+/// </example>
 public sealed class DurableTaskSchedulerSettings
 {
     /// <summary>
