@@ -126,7 +126,7 @@ var nsp = builder.AddNetworkSecurityPerimeter("my-nsp")
     {
         Name = "allow-my-ip",
         Direction = NetworkSecurityPerimeterAccessRuleDirection.Inbound,
-        AddressPrefixes = ["203.0.113.0/24"]
+        AddressPrefixes = { "203.0.113.0/24" }
     });
 
 var storage = builder.AddAzureStorage("storage");

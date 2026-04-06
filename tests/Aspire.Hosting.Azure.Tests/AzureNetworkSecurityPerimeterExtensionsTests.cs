@@ -55,13 +55,13 @@ public class AzureNetworkSecurityPerimeterExtensionsTests
             {
                 Name = "allow-my-ip",
                 Direction = NetworkSecurityPerimeterAccessRuleDirection.Inbound,
-                AddressPrefixes = ["203.0.113.0/24"]
+                AddressPrefixes = { "203.0.113.0/24" }
             })
             .WithAccessRule(new AzureNspAccessRule
             {
                 Name = "allow-outbound-fqdn",
                 Direction = NetworkSecurityPerimeterAccessRuleDirection.Outbound,
-                FullyQualifiedDomainNames = ["*.blob.core.windows.net"]
+                FullyQualifiedDomainNames = { "*.blob.core.windows.net" }
             });
 
         var manifest = await AzureManifestUtils.GetManifestWithBicep(nsp.Resource);
@@ -79,7 +79,7 @@ public class AzureNetworkSecurityPerimeterExtensionsTests
             {
                 Name = "allow-subscription",
                 Direction = NetworkSecurityPerimeterAccessRuleDirection.Inbound,
-                Subscriptions = ["/subscriptions/00000000-0000-0000-0000-000000000001"]
+                Subscriptions = { "/subscriptions/00000000-0000-0000-0000-000000000001" }
             });
 
         var manifest = await AzureManifestUtils.GetManifestWithBicep(nsp.Resource);
@@ -112,7 +112,7 @@ public class AzureNetworkSecurityPerimeterExtensionsTests
             {
                 Name = "allow-my-ip",
                 Direction = NetworkSecurityPerimeterAccessRuleDirection.Inbound,
-                AddressPrefixes = ["203.0.113.0/24"]
+                AddressPrefixes = { "203.0.113.0/24" }
             });
 
         var storage = builder.AddAzureStorage("storage");
@@ -136,14 +136,14 @@ public class AzureNetworkSecurityPerimeterExtensionsTests
             {
                 Name = "allow-my-ip",
                 Direction = NetworkSecurityPerimeterAccessRuleDirection.Inbound,
-                AddressPrefixes = ["203.0.113.0/24"]
+                AddressPrefixes = { "203.0.113.0/24" }
             });
 
         var exception = Assert.Throws<ArgumentException>(() => nsp.WithAccessRule(new AzureNspAccessRule
         {
             Name = "ALLOW-MY-IP",
             Direction = NetworkSecurityPerimeterAccessRuleDirection.Inbound,
-            AddressPrefixes = ["10.0.0.0/8"]
+            AddressPrefixes = { "10.0.0.0/8" }
         }));
 
         Assert.Contains("allow-my-ip", exception.Message, StringComparison.OrdinalIgnoreCase);

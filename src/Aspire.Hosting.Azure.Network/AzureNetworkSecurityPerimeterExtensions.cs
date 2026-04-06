@@ -3,8 +3,10 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
+using Azure.Core;
 using Azure.Provisioning;
 using Azure.Provisioning.Network;
+using Azure.Provisioning.Resources;
 
 namespace Aspire.Hosting;
 
@@ -61,13 +63,13 @@ public static class AzureNetworkSecurityPerimeterExtensions
     ///     {
     ///         Name = "allow-my-ip",
     ///         Direction = NetworkSecurityPerimeterAccessRuleDirection.Inbound,
-    ///         AddressPrefixes = ["203.0.113.0/24"]
+    ///         AddressPrefixes = { "203.0.113.0/24" }
     ///     })
     ///     .WithAccessRule(new AzureNspAccessRule
     ///     {
     ///         Name = "allow-outbound-fqdn",
     ///         Direction = NetworkSecurityPerimeterAccessRuleDirection.Outbound,
-    ///         FullyQualifiedDomainNames = ["*.blob.core.windows.net"]
+    ///         FullyQualifiedDomainNames = { "*.blob.core.windows.net" }
     ///     });
     /// </code>
     /// </example>
@@ -176,28 +178,19 @@ public static class AzureNetworkSecurityPerimeterExtensions
                 Parent = profile,
             };
 
-            if (rule.AddressPrefixes is { Count: > 0 })
+            foreach (var prefix in rule.AddressPrefixes)
             {
-                foreach (var prefix in rule.AddressPrefixes)
-                {
-                    accessRule.AddressPrefixes.Add(prefix);
-                }
+                accessRule.AddressPrefixes.Add(prefix);
             }
 
-            if (rule.Subscriptions is { Count: > 0 })
+            foreach (var sub in rule.Subscriptions)
             {
-                foreach (var sub in rule.Subscriptions)
-                {
-                    accessRule.Subscriptions.Add(new global::Azure.Provisioning.Resources.WritableSubResource { Id = new global::Azure.Core.ResourceIdentifier(sub) });
-                }
+                accessRule.Subscriptions.Add(new WritableSubResource { Id = new ResourceIdentifier(sub) });
             }
 
-            if (rule.FullyQualifiedDomainNames is { Count: > 0 })
+            foreach (var fqdn in rule.FullyQualifiedDomainNames)
             {
-                foreach (var fqdn in rule.FullyQualifiedDomainNames)
-                {
-                    accessRule.FullyQualifiedDomainNames.Add(fqdn);
-                }
+                accessRule.FullyQualifiedDomainNames.Add(fqdn);
             }
 
             infra.Add(accessRule);

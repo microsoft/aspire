@@ -28,27 +28,27 @@ public sealed class AzureNspAccessRule
     public required NetworkSecurityPerimeterAccessRuleDirection Direction { get; set; }
 
     /// <summary>
-    /// Gets or sets the list of inbound address prefixes (CIDR ranges) allowed by this rule.
+    /// Gets the list of inbound address prefixes (CIDR ranges) allowed by this rule.
     /// </summary>
     /// <remarks>
     /// Only applicable for <see cref="NetworkSecurityPerimeterAccessRuleDirection.Inbound"/> rules.
     /// </remarks>
-    public List<string>? AddressPrefixes { get; set; }
+    public List<string> AddressPrefixes { get; } = [];
 
     /// <summary>
-    /// Gets or sets the list of subscription IDs allowed by this rule.
+    /// Gets the list of subscription IDs allowed by this rule.
     /// </summary>
     /// <remarks>
     /// Only applicable for <see cref="NetworkSecurityPerimeterAccessRuleDirection.Inbound"/> rules.
     /// Subscription IDs should be in the format of a resource ID: <c>/subscriptions/{subscriptionId}</c>.
     /// </remarks>
-    public List<string>? Subscriptions { get; set; }
+    public List<string> Subscriptions { get; } = [];
 
     /// <summary>
-    /// Gets or sets the list of fully qualified domain names (FQDNs) allowed by this rule.
+    /// Gets the list of fully qualified domain names (FQDNs) allowed by this rule.
     /// </summary>
     /// <remarks>
     /// Only applicable for <see cref="NetworkSecurityPerimeterAccessRuleDirection.Outbound"/> rules.
     /// </remarks>
-    public List<string>? FullyQualifiedDomainNames { get; set; }
+    public List<string> FullyQualifiedDomainNames { get; } = [];
 }
