@@ -4,7 +4,6 @@
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable AZPROVISION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
-using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning.Network;
 
@@ -150,18 +149,4 @@ public class AzureNetworkSecurityPerimeterExtensionsTests
         Assert.Contains("allow-my-ip", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact]
-    public void AssociateWith_AddsNspAnnotationToTarget()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-
-        var nsp = builder.AddNetworkSecurityPerimeter("my-nsp");
-        var storage = builder.AddAzureStorage("storage");
-
-        storage.AssociateWith(nsp);
-
-        Assert.True(storage.Resource.TryGetAnnotationsOfType<NspAssociationTargetAnnotation>(out var annotations));
-        var annotation = Assert.Single(annotations);
-        Assert.Same(nsp.Resource, annotation.NspResource);
-    }
 }

@@ -267,6 +267,4 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["Sql"];
 
     string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() => "privatelink.documents.azure.com";
-
-    BicepOutputReference IAzureNspAssociationTarget.Id => Id;
 }

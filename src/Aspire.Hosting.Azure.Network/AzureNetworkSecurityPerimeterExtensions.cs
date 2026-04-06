@@ -5,7 +5,6 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Azure.Provisioning;
 using Azure.Provisioning.Network;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting;
 
@@ -28,7 +27,7 @@ public static class AzureNetworkSecurityPerimeterExtensions
     /// storage.AssociateWith(nsp);
     /// </code>
     /// </example>
-    [AspireExport("addNetworkSecurityPerimeter", Description = "Adds an Azure Network Security Perimeter resource to the application model.")]
+    [AspireExport(Description = "Adds an Azure Network Security Perimeter resource to the application model.")]
     public static IResourceBuilder<AzureNetworkSecurityPerimeterResource> AddNetworkSecurityPerimeter(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name)
@@ -72,7 +71,7 @@ public static class AzureNetworkSecurityPerimeterExtensions
     ///     });
     /// </code>
     /// </example>
-    [AspireExport("withAccessRule", Description = "Adds an access rule to an Azure Network Security Perimeter resource.")]
+    [AspireExport(Description = "Adds an access rule to an Azure Network Security Perimeter resource.")]
     public static IResourceBuilder<AzureNetworkSecurityPerimeterResource> WithAccessRule(
         this IResourceBuilder<AzureNetworkSecurityPerimeterResource> builder,
         AzureNspAccessRule rule)
@@ -135,63 +134,7 @@ public static class AzureNetworkSecurityPerimeterExtensions
             associationName,
             target.Resource.Id));
 
-        // Add annotation to the target resource to signal that it is associated with an NSP.
-        // This is used by the provisioning infrastructure to set publicNetworkAccess and
-        // establish provisioning dependency ordering.
-        target.Resource.Annotations.Add(new NspAssociationTargetAnnotation(nsp.Resource));
-
         return target;
-    }
-
-    /// <summary>
-    /// Automatically associates all PaaS resources that implement <see cref="IAzureNspAssociationTarget"/>
-    /// with this Network Security Perimeter.
-    /// </summary>
-    /// <param name="builder">The Network Security Perimeter resource builder.</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{AzureNetworkSecurityPerimeterResource}"/> for chaining.</returns>
-    /// <remarks>
-    /// This method uses a callback that runs before the application starts to discover all resources
-    /// that implement <see cref="IAzureNspAssociationTarget"/> and associates them with the perimeter.
-    /// Resources added after this call will also be included.
-    /// </remarks>
-    /// <example>
-    /// This example associates all PaaS resources with the NSP:
-    /// <code>
-    /// var nsp = builder.AddNetworkSecurityPerimeter("my-nsp")
-    ///     .AssociateAllPaaSResources();
-    /// </code>
-    /// </example>
-    [AspireExport("associateAllPaaSResources", Description = "Automatically associates all PaaS resources with a Network Security Perimeter.")]
-    public static IResourceBuilder<AzureNetworkSecurityPerimeterResource> AssociateAllPaaSResources(
-        this IResourceBuilder<AzureNetworkSecurityPerimeterResource> builder)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-
-        builder.ApplicationBuilder.Eventing.Subscribe<BeforeResourceStartedEvent>(builder.Resource, (@event, ct) =>
-        {
-            var appModel = @event.Services.GetRequiredService<DistributedApplicationModel>();
-
-            foreach (var resource in appModel.Resources.OfType<IAzureNspAssociationTarget>())
-            {
-                // Skip if already associated
-                if (builder.Resource.Associations.Any(a => a.Name == $"{resource.Name}-assoc"))
-                {
-                    continue;
-                }
-
-                var associationName = $"{resource.Name}-assoc";
-
-                builder.Resource.Associations.Add(new AzureNetworkSecurityPerimeterResource.NspAssociationConfig(
-                    associationName,
-                    resource.Id));
-
-                resource.Annotations.Add(new NspAssociationTargetAnnotation(builder.Resource));
-            }
-
-            return Task.CompletedTask;
-        });
-
-        return builder;
     }
 
     private static void ConfigureNetworkSecurityPerimeter(AzureResourceInfrastructure infra)

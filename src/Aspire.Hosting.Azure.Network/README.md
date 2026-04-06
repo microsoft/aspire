@@ -136,13 +136,6 @@ storage.AssociateWith(nsp);
 keyVault.AssociateWith(nsp);
 ```
 
-You can also auto-associate all PaaS resources in your application model:
-
-```csharp
-var nsp = builder.AddNetworkSecurityPerimeter("my-nsp")
-    .AssociateAllPaaSResources();
-```
-
 Associations use `Enforced` access mode by default. Use `ConfigureInfrastructure` for advanced customization.
 
 ### Adding Private Endpoints

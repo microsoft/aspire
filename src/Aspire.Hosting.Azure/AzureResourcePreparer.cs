@@ -185,15 +185,6 @@ internal sealed class AzureResourcePreparer(
                         }
                     }
 
-                    // Find NSP associations that target Azure resources referenced by this compute resource.
-                    // These must be provisioned before the compute resource is deployed.
-                    if (azureReference.TryGetAnnotationsOfType<NspAssociationTargetAnnotation>(out var nspAnnotations))
-                    {
-                        foreach (var nspAnnotation in nspAnnotations)
-                        {
-                            prerequisiteResources.Add(nspAnnotation.NspResource);
-                        }
-                    }
                 }
 
                 // in PublishMode with SupportsTargetedRoleAssignments, we need to create the identity and role assignment resources
