@@ -177,7 +177,7 @@
     <!-- playground apps dependencies for AzureFunctionsWithDts -->
     <PackageVersion Include="Microsoft.Azure.Functions.Worker.Extensions.DurableTask" Version="1.11.0" />
     <PackageVersion Include="Microsoft.Azure.Functions.Worker.Extensions.DurableTask.AzureManaged" Version="1.0.1" />
-    <!-- playground apps dependencies for DurableTaskWorkerWithDts -->
+    <!-- Durable Task Scheduler dependencies (component + playground) -->
     <PackageVersion Include="Microsoft.DurableTask.Worker.AzureManaged" Version="1.23.3" />
     <PackageVersion Include="Microsoft.DurableTask.Client.AzureManaged" Version="1.23.3" />
     <!-- playground apps dependencies for javascript -->

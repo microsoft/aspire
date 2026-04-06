@@ -1,0 +1,55 @@
+{
+  "definitions": {
+    "logLevel": {
+      "properties": {
+        "Microsoft.DurableTask": {
+          "$ref": "#/definitions/logLevelThreshold"
+        },
+        "Microsoft.DurableTask.Client": {
+          "$ref": "#/definitions/logLevelThreshold"
+        },
+        "Microsoft.DurableTask.Worker": {
+          "$ref": "#/definitions/logLevelThreshold"
+        }
+      }
+    }
+  },
+  "type": "object",
+  "properties": {
+    "Aspire": {
+      "type": "object",
+      "properties": {
+        "Microsoft": {
+          "type": "object",
+          "properties": {
+            "DurableTask": {
+              "type": "object",
+              "properties": {
+                "AzureManaged": {
+                  "type": "object",
+                  "properties": {
+                    "ConnectionString": {
+                      "type": "string",
+                      "description": "Gets or sets the connection string for the Durable Task Scheduler."
+                    },
+                    "DisableHealthChecks": {
+                      "type": "boolean",
+                      "description": "Gets or sets a boolean value that indicates whether the health check is disabled or not.",
+                      "default": false
+                    },
+                    "DisableTracing": {
+                      "type": "boolean",
+                      "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not.",
+                      "default": false
+                    }
+                  },
+                  "description": "Provides the client configuration settings for connecting to a Durable Task Scheduler."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

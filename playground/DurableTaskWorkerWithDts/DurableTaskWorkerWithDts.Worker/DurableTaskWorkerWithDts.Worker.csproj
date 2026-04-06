@@ -7,8 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.DurableTask.Worker.AzureManaged" />
-    <PackageReference Include="Microsoft.DurableTask.Client.AzureManaged" />
+    <AspireProjectOrPackageReference Include="Aspire.Microsoft.DurableTask.AzureManaged" />
   </ItemGroup>
 
   <ItemGroup>
