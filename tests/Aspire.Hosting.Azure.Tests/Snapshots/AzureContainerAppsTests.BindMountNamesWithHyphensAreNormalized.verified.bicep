@@ -13,7 +13,7 @@ param env_outputs_azure_container_registry_endpoint string
 
 param env_outputs_azure_container_registry_managed_identity_id string
 
-resource with_bind_mount 'Microsoft.App/containerApps@2025-01-01' = {
+resource with_bind_mount 'Microsoft.App/containerApps@2025-07-01' = {
   name: 'with-bind-mount'
   location: location
   properties: {
