@@ -62,7 +62,7 @@ body:
       label: Anything else?
       description: |
         - .NET, JS, etc versions: 
-        - The devenv (VS Code / CLI / VS or Rider / Other) you're running on, and its version (and any extension versions):
+        - The development environment or tooling (VS Code / CLI / VS or Rider / Other) you're running on, and its version (and any extension versions):
 
         Links? References? Anything that will give us more context about the issue you are encountering!
 
