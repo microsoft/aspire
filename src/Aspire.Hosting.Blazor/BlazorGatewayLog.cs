@@ -35,7 +35,10 @@ internal static partial class BlazorGatewayLog
     public static partial void MsBuildTargetFailed(ILogger logger, string projectPath, string stdout, string stderr);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "ResolveStaticWebAssetsConfiguration returned incomplete paths: Endpoints='{EndpointsPath}', Runtime='{RuntimePath}'")]
-    public static partial void IncompletManifestPaths(ILogger logger, string? endpointsPath, string? runtimePath);
+    public static partial void IncompleteManifestPaths(ILogger logger, string? endpointsPath, string? runtimePath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to start '{Command}' while processing {ProjectPath}: {ErrorMessage}")]
+    public static partial void ProcessStartFailed(ILogger logger, string command, string projectPath, string errorMessage);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Runtime manifest not found: {ManifestPath}")]
     public static partial void RuntimeManifestNotFound(ILogger logger, string manifestPath);

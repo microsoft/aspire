@@ -81,7 +81,10 @@ public static class BlazorHostedExtensions
 
         host.WithEnvironment(context =>
         {
-            var hostEndpoint = host.GetEndpoint("https");
+            var httpsHostEndpoint = GetEndpointIfDefined(host.Resource, "https");
+            var httpHostEndpoint = GetEndpointIfDefined(host.Resource, "http");
+            var hostEndpoint = httpsHostEndpoint ?? httpHostEndpoint
+                ?? throw new InvalidOperationException($"The host '{host.Resource.Name}' must define an HTTP or HTTPS endpoint.");
 
             // Resolve the HTTP OTLP endpoint for WASM client proxying.
             // WASM clients use HTTP/protobuf (not gRPC), so we need the HTTP endpoint.
@@ -91,6 +94,7 @@ public static class BlazorHostedExtensions
             GatewayConfigurationBuilder.EmitHostedProxyConfiguration(
                 context.EnvironmentVariables,
                 hostEndpoint,
+                httpHostEndpoint,
                 $"{host.Resource.Name} (client)",
                 annotation.ServiceNames.ToArray(),
                 annotation.ProxyTelemetry,
@@ -126,6 +130,12 @@ public static class BlazorHostedExtensions
             }
         }
         return names;
+    }
+
+    private static EndpointReference? GetEndpointIfDefined(IResourceWithEndpoints resource, string endpointName)
+    {
+        var endpoint = resource.GetEndpoint(endpointName);
+        return endpoint.Exists ? endpoint : null;
     }
 }
 

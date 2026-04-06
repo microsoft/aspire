@@ -178,6 +178,7 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+            .WithHttpEndpoint()
             .WithHttpsEndpoint();
 
         var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
@@ -186,14 +187,63 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
         var apps = new List<GatewayAppRegistration> { registration };
         var env = new Dictionary<string, object>();
         var gatewayEndpoint = gateway.GetEndpoint("https");
+        var httpGatewayEndpoint = gateway.GetEndpoint("http");
 
-        GatewayConfigurationBuilder.EmitProxyConfiguration(env, apps, gatewayEndpoint);
+        GatewayConfigurationBuilder.EmitProxyConfiguration(env, apps, gatewayEndpoint, httpGatewayEndpoint);
 
         // The config response is an IValueProvider/IManifestExpressionProvider
         Assert.True(env.ContainsKey("ClientApps__store__ConfigResponse"));
         var configResponse = env["ClientApps__store__ConfigResponse"];
         Assert.IsAssignableFrom<IValueProvider>(configResponse);
         Assert.IsAssignableFrom<IManifestExpressionProvider>(configResponse);
+    }
+
+    [Fact]
+    public void EmitProxyConfiguration_ClientConfig_ContainsHttpAndHttpsServiceUrls()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+            .WithHttpEndpoint()
+            .WithHttpsEndpoint();
+
+        var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
+
+        var registration = new GatewayAppRegistration(wasmApp, "store", ["weatherapi"]);
+        var apps = new List<GatewayAppRegistration> { registration };
+        var env = new Dictionary<string, object>();
+
+        GatewayConfigurationBuilder.EmitProxyConfiguration(env, apps, gateway.GetEndpoint("https"), gateway.GetEndpoint("http"));
+
+        var configResponse = (IManifestExpressionProvider)env["ClientApps__store__ConfigResponse"];
+        var manifestExpression = configResponse.ValueExpression;
+
+        Assert.Contains("services__weatherapi__https__0", manifestExpression);
+        Assert.Contains("services__weatherapi__http__0", manifestExpression);
+    }
+
+    [Fact]
+    public void EmitProxyConfiguration_DoesNotEmitOtlpProxy_WhenTelemetryDisabled()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+            .WithHttpEndpoint()
+            .WithHttpsEndpoint();
+
+        var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
+
+        var registration = new GatewayAppRegistration(wasmApp, "store", [], ProxyTelemetry: false);
+        var apps = new List<GatewayAppRegistration> { registration };
+        var env = new Dictionary<string, object>();
+
+        GatewayConfigurationBuilder.EmitProxyConfiguration(env, apps, gateway.GetEndpoint("https"), gateway.GetEndpoint("http"));
+
+        Assert.DoesNotContain("ReverseProxy__Routes__route-otlp-store__ClusterId", env.Keys);
+
+        var configResponse = (IManifestExpressionProvider)env["ClientApps__store__ConfigResponse"];
+        var manifestExpression = configResponse.ValueExpression;
+        Assert.DoesNotContain("OTEL_EXPORTER_OTLP_ENDPOINT", manifestExpression);
     }
 
     [Fact]

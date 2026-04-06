@@ -161,6 +161,24 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("storefront", annotation.Apps[0].PathPrefix);
     }
 
+    [Fact]
+    public void WithClient_CanDisableTelemetryProxy()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+            .WithHttpEndpoint()
+            .WithHttpsEndpoint();
+
+        var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
+
+        gateway.WithClient(wasmApp, proxyTelemetry: false);
+
+        var annotation = gateway.Resource.Annotations.OfType<GatewayAppsAnnotation>().SingleOrDefault();
+        Assert.NotNull(annotation);
+        Assert.False(annotation.Apps[0].ProxyTelemetry);
+    }
+
     private sealed class TestProjectMetadata : IProjectMetadata
     {
         public string ProjectPath => "TestProject/TestProject.csproj";

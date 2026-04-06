@@ -36,6 +36,7 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi");
 
         builder.AddProject<TestProjectMetadata>("blazorapp")
+            .WithHttpEndpoint()
             .WithHttpsEndpoint()
             .ProxyService(weatherApi);
 
@@ -45,6 +46,7 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         Assert.True(env.ContainsKey("Client__ConfigResponse"));
         var configJson = ResolveManifestExpression(env["Client__ConfigResponse"]);
         Assert.Contains("services__weatherapi__https__0", configJson);
+        Assert.Contains("services__weatherapi__http__0", configJson);
         Assert.Contains("/_api/weatherapi", configJson);
         Assert.Equal("/_blazor/_configuration", env["Client__ConfigEndpointPath"]);
     }

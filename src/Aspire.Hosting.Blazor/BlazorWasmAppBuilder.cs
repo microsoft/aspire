@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
@@ -20,7 +21,7 @@ internal static class BlazorWasmAppBuilder
     {
         var psi = new ProcessStartInfo
         {
-            FileName = "dotnet",
+            FileName = GetDotNetCommandPath(),
             Arguments = $"build \"{projectPath}\"",
             WorkingDirectory = Path.GetDirectoryName(projectPath)!,
             RedirectStandardOutput = true,
@@ -30,7 +31,7 @@ internal static class BlazorWasmAppBuilder
         };
 
         BlazorGatewayLog.BuildStarted(logger, projectPath);
-        using var process = Process.Start(psi);
+        using var process = StartProcess(psi, logger, projectPath);
         if (process == null)
         {
             return false;
@@ -59,7 +60,7 @@ internal static class BlazorWasmAppBuilder
     {
         var psi = new ProcessStartInfo
         {
-            FileName = "dotnet",
+            FileName = GetDotNetCommandPath(),
             Arguments = $"msbuild \"{projectPath}\" -t:ResolveStaticWebAssetsConfiguration -getProperty:StaticWebAssetEndpointsBuildManifestPath -getProperty:StaticWebAssetDevelopmentManifestPath",
             WorkingDirectory = Path.GetDirectoryName(projectPath)!,
             RedirectStandardOutput = true,
@@ -68,7 +69,7 @@ internal static class BlazorWasmAppBuilder
             CreateNoWindow = true
         };
 
-        using var process = Process.Start(psi);
+        using var process = StartProcess(psi, logger, projectPath);
         if (process == null)
         {
             return null;
@@ -91,7 +92,7 @@ internal static class BlazorWasmAppBuilder
             || string.IsNullOrEmpty(props.StaticWebAssetEndpointsBuildManifestPath)
             || string.IsNullOrEmpty(props.StaticWebAssetDevelopmentManifestPath))
         {
-            BlazorGatewayLog.IncompletManifestPaths(logger,
+            BlazorGatewayLog.IncompleteManifestPaths(logger,
                 props?.StaticWebAssetEndpointsBuildManifestPath, props?.StaticWebAssetDevelopmentManifestPath);
             return null;
         }
@@ -101,5 +102,25 @@ internal static class BlazorWasmAppBuilder
         var runtime = Path.GetFullPath(Path.Combine(projectDir, props.StaticWebAssetDevelopmentManifestPath));
 
         return (endpoints, runtime);
+    }
+
+    private static string GetDotNetCommandPath()
+    {
+        return Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") is { Length: > 0 } dotnetHostPath
+            ? dotnetHostPath
+            : "dotnet";
+    }
+
+    private static Process? StartProcess(ProcessStartInfo startInfo, ILogger logger, string projectPath)
+    {
+        try
+        {
+            return Process.Start(startInfo);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or Win32Exception)
+        {
+            BlazorGatewayLog.ProcessStartFailed(logger, startInfo.FileName, projectPath, ex.Message);
+            return null;
+        }
     }
 }
