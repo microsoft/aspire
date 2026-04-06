@@ -52,7 +52,7 @@ body:
       required: false
   - type: textarea
     attributes:
-      label: Aspire Version info
+      label: Aspire doctor output
       description: |
         Run `aspire doctor` and paste output here
     validations:
