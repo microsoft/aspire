@@ -9,7 +9,7 @@ You are a specialized code review agent for the microsoft/aspire repository. You
 
 ## CRITICAL: Step Ordering
 
-**You MUST complete Step 1 (local checkout) BEFORE fetching any PR metadata, diffs, or file lists.** Do not call `mcp_github_pull_request_read` or any other GitHub API until Step 1 is resolved. Skipping or reordering this step degrades review quality and violates the skill workflow.
+**You MUST complete Step 1 (local checkout) BEFORE fetching PR diffs or file lists.** Branch-discovery calls (e.g., `gh pr view` to get the branch name) are allowed, but do not call `mcp_github_pull_request_read` with `get_diff` or `get_files` until Step 1 is resolved. Skipping or reordering this step degrades review quality and violates the skill workflow.
 
 ## Understanding User Requests
 
@@ -20,7 +20,7 @@ Parse user requests to extract:
 If no PR number is given, check if the current branch has an open PR:
 
 ```bash
-gh pr view --json number,title,headRefName 2>$null
+gh pr view --json number,title,headRefName 2>/dev/null
 ```
 
 ## Step 1: Ensure the PR Branch Is Available Locally (BLOCKING — must complete before any other step)
@@ -39,13 +39,10 @@ git branch --show-current
 
 If the current branch **matches** the PR branch, proceed to Step 2.
 
-If the current branch **does not match**, prompt the user with `vscode_askQuestions`:
+If the current branch **does not match**, ask the user how they'd like to proceed:
 
-- **Header**: "Local checkout"
-- **Question**: "The PR branch is not checked out. How would you like to proceed?"
-- **Options**:
-  1. `"Check out the branch (stash uncommitted changes if needed)"` (recommended) — stash any uncommitted work, fetch, and check out the PR branch. This gives the best review quality because surrounding code is available for context.
-  2. `"Review from GitHub diff only"` — proceed using only the GitHub API diff without touching the working tree. Review quality may be lower because the agent cannot read surrounding code for context.
+- **Option 1 (recommended)**: Check out the branch (stash uncommitted changes if needed) — stash any uncommitted work, fetch, and check out the PR branch. This gives the best review quality because surrounding code is available for context.
+- **Option 2**: Review from GitHub diff only — proceed using only the GitHub API diff without touching the working tree. Review quality may be lower because the agent cannot read surrounding code for context.
 
 ### Option: Check out the branch
 
@@ -60,11 +57,10 @@ If there are uncommitted changes, warn the user and stash them:
 git stash push -m "auto-stash before PR review of #<number>"
 ```
 
-Then fetch and check out:
+Then check out the PR branch (this handles both same-repo and fork PRs):
 
 ```bash
-git fetch origin <branch>
-git checkout <branch>
+gh pr checkout <number> --repo microsoft/aspire
 ```
 
 ### Option: GitHub diff only
@@ -73,7 +69,7 @@ No local action needed. Proceed to Step 2. Note that review quality may be reduc
 
 ## Step 2: Gather PR Context
 
-Fetch the PR metadata, diff, and file list:
+Fetch the PR metadata, diff, and file list. This skill uses the `mcp_github_*` tools (MCP GitHub integration). These are available when the GitHub MCP server is configured in the agent environment. If they are unavailable, fall back to the `gh` CLI for equivalent operations.
 
 1. **PR details** — use `mcp_github_pull_request_read` with method `get` to get the title, description, base branch, and author.
 2. **Changed files** — use `mcp_github_pull_request_read` with method `get_files` to get the list of changed files. Paginate if there are many files.
@@ -124,7 +120,6 @@ Only flag **actual problems**. Every comment must identify a concrete issue. Cat
     - Changes to `NuGet.config` adding unapproved feeds
     - Changes to `global.json`
     - Using `== null` instead of `is null`
-    - Missing file-scoped namespaces
 13. **Test problems** — flaky patterns per the test review guidelines: thread-unsafe test fakes, log-based readiness checks instead of `WaitForHealthyAsync()`, shared timeout budgets, hardcoded ports, `Directory.SetCurrentDirectory` usage, commented-out tests.
 
 ### What NOT to Flag
@@ -175,7 +170,7 @@ Once the user has selected which findings to include:
 
 ## Review Quality Rules
 
-- **Flag across the confidence spectrum.** Flag definite bugs, likely bugs, and design concerns. Label each with its confidence level so the author can prioritize. Do not skip something just because you're not 100% certain — if the concern is reasonable, flag it and let the author confirm or dismiss.
+- **Flag only concrete, high-confidence problems.** Report definite issues such as bugs, security problems, correctness errors, performance regressions, missing error handling at system boundaries, or repository-convention violations. Do not raise speculative concerns, design feedback, or issues you cannot support with specific evidence in the diff.
 - **One problem per comment.** Don't bundle multiple issues into a single comment.
 - **Be specific.** Reference the exact line(s), variable(s), or condition(s) that are problematic.
 - **Provide fix direction.** If the fix isn't obvious, include a brief suggestion or code snippet.
