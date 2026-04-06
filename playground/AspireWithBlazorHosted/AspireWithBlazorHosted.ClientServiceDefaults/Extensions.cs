@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Components.Infrastructure;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
@@ -17,9 +16,6 @@ public static class BlazorClientExtensions
 {
     public static WebAssemblyHostBuilder AddBlazorClientServiceDefaults(this WebAssemblyHostBuilder builder)
     {
-        ComponentsMetricsServiceCollectionExtensions.AddComponentsMetrics(builder.Services);
-        ComponentsMetricsServiceCollectionExtensions.AddComponentsTracing(builder.Services);
-
         builder.ConfigureBlazorClientOpenTelemetry();
 
         builder.Services.AddServiceDiscovery();
