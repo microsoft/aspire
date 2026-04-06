@@ -63,6 +63,9 @@ public sealed class GenerateTestSummaryToolTests : IClassFixture<GenerateTestSum
         processStartInfo.ArgumentList.Add("--");
         processStartInfo.ArgumentList.Add(trxPath);
 
+        // Prevent the tool from writing sample data to the real GitHub Actions job summary.
+        processStartInfo.Environment.Remove("GITHUB_STEP_SUMMARY");
+
         using var process = new Process { StartInfo = processStartInfo };
         process.Start();
 
