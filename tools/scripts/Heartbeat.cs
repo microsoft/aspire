@@ -35,8 +35,6 @@ Console.WriteLine($"[{DateTime.UtcNow:O}] HEARTBEAT | Platform: {RuntimeInformat
 Console.Out.Flush();
 
 // For CPU calculation, we need previous values
-var prevCpuTime = TimeSpan.Zero;
-var prevTime = DateTime.UtcNow;
 long prevIdleTime = 0;
 long prevTotalTime = 0;
 
@@ -50,7 +48,7 @@ try
         // CPU Usage
         try
         {
-            var cpuInfo = GetCpuUsage(ref prevIdleTime, ref prevTotalTime, ref prevCpuTime, ref prevTime);
+            var cpuInfo = GetCpuUsage(ref prevIdleTime, ref prevTotalTime);
             parts.Add($"CPU: {cpuInfo}");
         }
         catch (Exception ex)
@@ -161,7 +159,7 @@ catch (OperationCanceledException)
 Console.WriteLine($"[{DateTime.UtcNow:O}] HEARTBEAT | Monitor stopped");
 Console.Out.Flush();
 
-string GetCpuUsage(ref long prevIdle, ref long prevTotal, ref TimeSpan prevCpu, ref DateTime prevDateTime)
+string GetCpuUsage(ref long prevIdle, ref long prevTotal)
 {
     if (os == "Linux")
     {
@@ -425,12 +423,17 @@ string GetDcpProcesses(Process[]? sharedProcesses = null)
         bool shouldDispose = sharedProcesses is null;
         try
         {
-            foreach (var proc in processes.Where(p => p.ProcessName.StartsWith("dcp", StringComparison.OrdinalIgnoreCase)))
+            foreach (var proc in processes)
             {
-                double cpu = 0;
-                double memMb = 0;
                 try
                 {
+                    if (!proc.ProcessName.StartsWith("dcp", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    double cpu = 0;
+                    double memMb = 0;
                     var uptimeSec = (DateTime.UtcNow - proc.StartTime.ToUniversalTime()).TotalSeconds;
                     if (uptimeSec > 0)
                     {
@@ -438,10 +441,9 @@ string GetDcpProcesses(Process[]? sharedProcesses = null)
                     }
 
                     memMb = proc.WorkingSet64 / 1024.0 / 1024.0;
+                    dcpProcesses.Add((proc.ProcessName, proc.Id, cpu, memMb));
                 }
                 catch { /* process may have exited or access may be denied */ }
-
-                dcpProcesses.Add((proc.ProcessName, proc.Id, cpu, memMb));
             }
         }
         finally
@@ -520,21 +522,26 @@ string GetTopProcesses(Process[]? sharedProcesses = null)
             var processInfos = processes
                 .Select(p =>
                 {
-                    double cpu = 0;
-                    double memMb = 0;
                     try
                     {
+                        double cpu = 0;
                         var uptimeSec = (now - p.StartTime.ToUniversalTime()).TotalSeconds;
                         if (uptimeSec > 0)
                         {
                             cpu = Math.Round(p.TotalProcessorTime.TotalSeconds / uptimeSec * 100, 1);
                         }
 
-                        memMb = p.WorkingSet64 / 1024.0 / 1024.0;
+                        var memMb = p.WorkingSet64 / 1024.0 / 1024.0;
+                        return ((string Name, int Pid, double Cpu, double MemMb)?)(p.ProcessName, p.Id, cpu, memMb);
                     }
-                    catch { /* process may have exited or access may be denied */ }
-                    return (Name: p.ProcessName, Pid: p.Id, Cpu: cpu, MemMb: memMb);
+                    catch
+                    {
+                        // Process may have exited or access may be denied.
+                        return null;
+                    }
                 })
+                .Where(p => p.HasValue)
+                .Select(p => p!.Value)
                 .OrderByDescending(p => p.Cpu)
                 .Take(10);
 
