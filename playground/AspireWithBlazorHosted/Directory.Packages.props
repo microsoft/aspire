@@ -1,15 +1,13 @@
 <Project>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Packages.props', '$(MSBuildThisFileDirectory)../'))" />
 
-  <!-- Pin all packages to 8.x versions compatible with net8.0 shared framework.
-       The repo CPM uses 10.x versions, but these assemblies get loaded by the
-       hosted Blazor server which runs on net8.0 ASP.NET Core shared framework. -->
+  <!-- Pin packages compatible with net10.0 and the WASM client.
+       OpenTelemetry alpha versions from myget support browser export. -->
   <ItemGroup>
-    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly" Version="8.0.16" />
-    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="8.0.16" />
-    <PackageVersion Update="Microsoft.Extensions.Http" Version="8.0.1" />
-    <PackageVersion Update="Microsoft.Extensions.Http.Resilience" Version="8.10.0" />
-    <PackageVersion Update="Microsoft.Extensions.ServiceDiscovery" Version="8.2.2" />
-    <PackageVersion Update="Microsoft.Extensions.ServiceDiscovery.Yarp" Version="8.2.2" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.0" />
+    <PackageVersion Update="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.15.2-alpha.0.19" />
+    <PackageVersion Update="OpenTelemetry.Extensions.Hosting" Version="1.15.2-alpha.0.19" />
+    <PackageVersion Update="OpenTelemetry.Instrumentation.Http" Version="1.15.1-alpha.0.224" />
   </ItemGroup>
 </Project>

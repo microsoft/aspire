@@ -39,7 +39,7 @@ app.MapDefaultEndpoints();
 
 app.UseAntiforgery();
 
-app.UseStaticFiles();
+app.MapStaticAssets();
 app.MapReverseProxy();
 
 app.MapRazorComponents<App>()

@@ -1,16 +1,15 @@
+using Microsoft.AspNetCore.Components.Infrastructure;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using OpenTelemetry;
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Polly;
-using Polly.Retry;
 
 namespace Microsoft.Extensions.Hosting;
 
@@ -68,12 +67,12 @@ public static class BlazorClientExtensions
         {
             logging.IncludeFormattedMessage = true;
             logging.IncludeScopes = true;
-            logging.SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("blazorapp"));
+            logging.SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("blazorapp.Client"));
             logging.AddOtlpExporter();
         });
 
         builder.Services.AddOpenTelemetry()
-            .ConfigureResource(r => r.AddService("blazorapp"))
+            .ConfigureResource(r => r.AddService("blazorapp.Client"))
             .WithMetrics(metrics =>
             {
                 metrics.AddMeter("Microsoft.AspNetCore.Components");
