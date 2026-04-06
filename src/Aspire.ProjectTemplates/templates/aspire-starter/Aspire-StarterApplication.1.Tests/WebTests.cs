@@ -16,7 +16,7 @@ public class WebTests
 #elif (TestFx == "xUnit.net")
     [Fact]
 #endif
-    public async Task GetWebResourceRootReturnsOkStatusCode()
+    public async Task GetWebResourceRootReturnsOkStatusCodeAsync()
     {
         // Arrange
 #if (TestFx == "MSTest")
