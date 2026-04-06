@@ -124,8 +124,8 @@ public class ConsoleInteractionServiceTests
         Assert.Null(exception);
         var outputString = output.ToString();
         Assert.Contains("Command output with <angle> brackets", outputString);
-        // Square brackets get escaped to [[square]] when using EscapeMarkup()
-        Assert.Contains("Error output with [[square]] brackets", outputString);
+        // EscapeMarkup() escapes [ to [[ for Spectre's parser, but Spectre renders [[ back to literal [
+        Assert.Contains("Error output with [square] brackets", outputString);
     }
 
     [Fact]

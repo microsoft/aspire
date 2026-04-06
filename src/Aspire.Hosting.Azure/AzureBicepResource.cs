@@ -573,7 +573,7 @@ public readonly struct BicepTemplateFile(string path, bool deleteFileOnDispose) 
 /// <param name="name">The name of the KeyVault secret.</param>
 /// <param name="resource">The <see cref="AzureBicepResource"/>.</param>
 [Obsolete("BicepSecretOutputReference is no longer supported. Use IAzureKeyVaultResource instead.")]
-public sealed class BicepSecretOutputReference(string name, AzureBicepResource resource) : IManifestExpressionProvider, IValueProvider, IValueWithReferences
+public sealed class BicepSecretOutputReference(string name, AzureBicepResource resource) : IExpressionValue, IManifestExpressionProvider, IValueProvider, IValueWithReferences
 {
     /// <summary>
     /// Name of the KeyVault secret.
@@ -628,7 +628,7 @@ public sealed class BicepSecretOutputReference(string name, AzureBicepResource r
 /// <param name="name">The name of the output</param>
 /// <param name="resource">The <see cref="AzureBicepResource"/>.</param>
 [AspireExport(ExposeProperties = true)]
-public sealed class BicepOutputReference(string name, AzureBicepResource resource) : IManifestExpressionProvider, IValueProvider, IValueWithReferences, IEquatable<BicepOutputReference>
+public sealed class BicepOutputReference(string name, AzureBicepResource resource) : IExpressionValue, IManifestExpressionProvider, IValueProvider, IValueWithReferences, IEquatable<BicepOutputReference>
 {
     /// <summary>
     /// Name of the output.

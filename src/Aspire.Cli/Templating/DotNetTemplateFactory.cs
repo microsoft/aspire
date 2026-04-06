@@ -496,7 +496,7 @@ internal class DotNetTemplateFactory(
                 TemplatingStrings.GettingTemplates,
                 async () =>
                 {
-                    var options = new DotNetCliRunnerInvocationOptions()
+                    var options = new ProcessInvocationOptions()
                     {
                         StandardOutputCallback = templateInstallCollector.AppendOutput,
                         StandardErrorCallback = templateInstallCollector.AppendOutput,
@@ -533,7 +533,7 @@ internal class DotNetTemplateFactory(
                 TemplatingStrings.CreatingNewProject,
                 async () =>
                 {
-                    var options = new DotNetCliRunnerInvocationOptions()
+                    var options = new ProcessInvocationOptions()
                     {
                         StandardOutputCallback = newProjectCollector.AppendOutput,
                         StandardErrorCallback = newProjectCollector.AppendOutput,

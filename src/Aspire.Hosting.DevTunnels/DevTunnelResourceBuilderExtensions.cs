@@ -357,7 +357,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
     /// </remarks>
     /// <param name="tunnelBuilder">The resource builder.</param>
     /// <returns>The resource builder.</returns>
-    [AspireExport("withAnonymousAccess", Description = "Configures the dev tunnel to allow anonymous access.")]
+    [AspireExport(Description = "Configures the dev tunnel to allow anonymous access.")]
     public static IResourceBuilder<DevTunnelResource> WithAnonymousAccess(this IResourceBuilder<DevTunnelResource> tunnelBuilder)
     {
         tunnelBuilder.Resource.Options.AllowAnonymous = true;

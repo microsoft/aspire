@@ -11,6 +11,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
@@ -28,6 +29,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
     private readonly IAgentEnvironmentDetector _agentEnvironmentDetector;
     private readonly PlaywrightCliInstaller _playwrightCliInstaller;
     private readonly IGitRepository _gitRepository;
+    private readonly ILanguageDiscovery _languageDiscovery;
 
     /// <summary>
     /// AgentInitCommand does not need template package metadata prefetching.
@@ -47,6 +49,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         IAgentEnvironmentDetector agentEnvironmentDetector,
         PlaywrightCliInstaller playwrightCliInstaller,
         IGitRepository gitRepository,
+        ILanguageDiscovery languageDiscovery,
         AspireCliTelemetry telemetry)
         : base("init", AgentCommandStrings.InitCommand_Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
@@ -54,6 +57,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         _agentEnvironmentDetector = agentEnvironmentDetector;
         _playwrightCliInstaller = playwrightCliInstaller;
         _gitRepository = gitRepository;
+        _languageDiscovery = languageDiscovery;
     }
 
     protected override bool UpdateNotificationsEnabled => false;
@@ -149,6 +153,15 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             McpCommandStrings.InitCommand_DetectingAgentEnvironments,
             async () => await _agentEnvironmentDetector.DetectAsync(context, cancellationToken));
 
+        // Detect the AppHost language to determine which skills to offer.
+        // When no language is detected (e.g., standalone `aspire agent init`), language-restricted skills are excluded.
+        var detectedLanguage = await _languageDiscovery.DetectLanguageRecursiveAsync(workspaceRoot, cancellationToken);
+
+        // Filter skills based on language applicability
+        var availableSkills = SkillDefinition.All
+            .Where(s => s.IsApplicableToLanguage(detectedLanguage))
+            .ToList();
+
         // Apply deprecated config migrations silently (these are fixes, not choices)
         var configUpdates = applicators.Where(a => a.PromptGroup == McpInitPromptGroup.ConfigUpdates).ToList();
         var userChoices = applicators.Where(a => a.PromptGroup != McpInitPromptGroup.ConfigUpdates).ToList();
@@ -184,7 +197,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         {
             // Build prompt items: skills first, then MCP as a separate non-default item
             var skillChoices = new List<object>();
-            skillChoices.AddRange(SkillDefinition.All);
+            skillChoices.AddRange(availableSkills);
 
             if (mcpApplicators.Count > 0)
             {
@@ -203,7 +216,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             }
 
             var preSelectedItems = new List<object>();
-            preSelectedItems.AddRange(SkillDefinition.All.Where(s => s.IsDefault));
+            preSelectedItems.AddRange(availableSkills.Where(s => s.IsDefault));
             // MCP is intentionally NOT pre-selected
 
             var selectedItems = await _interactionService.PromptForSelectionsAsync(

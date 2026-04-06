@@ -149,7 +149,7 @@ public static class MauiiOSExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
-    [AspireExport("addiOSDevice", Description = "Adds an iOS device resource for a .NET MAUI project.")]
+    [AspireExport(Description = "Adds an iOS device resource for a .NET MAUI project.")]
     public static IResourceBuilder<MauiiOSDeviceResource> AddiOSDevice(
         this IResourceBuilder<MauiProjectResource> builder,
         [ResourceName] string name,
@@ -344,7 +344,7 @@ public static class MauiiOSExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
-    [AspireExport("addiOSSimulator", Description = "Adds an iOS simulator resource for a .NET MAUI project.")]
+    [AspireExport(Description = "Adds an iOS simulator resource for a .NET MAUI project.")]
     public static IResourceBuilder<MauiiOSSimulatorResource> AddiOSSimulator(
         this IResourceBuilder<MauiProjectResource> builder,
         [ResourceName] string name,

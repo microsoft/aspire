@@ -15,6 +15,10 @@ var dbsetup = builder.AddProject<Projects.SqlServerEndToEnd_DbSetup>("dbsetup")
                      .WithReference(db1).WaitFor(sql1)
                      .WithReference(db2).WaitFor(sql2);
 
+// Add EF migrations resource for the dbsetup project
+// This adds dashboard commands for managing EF migrations
+var dbMigrations = dbsetup.AddEFMigrations("db-migrations");
+
 builder.AddProject<Projects.SqlServerEndToEnd_ApiService>("api")
        .WithExternalHttpEndpoints()
        .WithReference(db1).WaitFor(db1)

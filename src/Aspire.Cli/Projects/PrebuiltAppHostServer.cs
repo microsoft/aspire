@@ -24,7 +24,7 @@ namespace Aspire.Cli.Projects;
 /// </summary>
 internal sealed class PrebuiltAppHostServer : IAppHostServerProject
 {
-    private readonly string _appPath;
+    private readonly string _appDirectoryPath;
     private readonly string _socketPath;
     private readonly LayoutConfiguration _layout;
     private readonly BundleNuGetService _nugetService;
@@ -41,7 +41,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
     /// <summary>
     /// Initializes a new instance of the PrebuiltAppHostServer class.
     /// </summary>
-    /// <param name="appPath">The path to the user's polyglot app host directory.</param>
+    /// <param name="appPath">The path to the user's polyglot app host directory (must be a directory path).</param>
     /// <param name="socketPath">The socket path for JSON-RPC communication.</param>
     /// <param name="layout">The bundle layout configuration.</param>
     /// <param name="nugetService">The NuGet service for restoring integration packages (NuGet-only path).</param>
@@ -61,7 +61,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         IConfigurationService configurationService,
         ILogger logger)
     {
-        _appPath = Path.GetFullPath(appPath);
+        _appDirectoryPath = Path.GetFullPath(appPath);
         _socketPath = socketPath;
         _layout = layout;
         _nugetService = nugetService;
@@ -72,14 +72,14 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         _logger = logger;
 
         // Create a working directory for this app host session
-        var pathHash = SHA256.HashData(Encoding.UTF8.GetBytes(_appPath));
+        var pathHash = SHA256.HashData(Encoding.UTF8.GetBytes(_appDirectoryPath));
         var pathDir = Convert.ToHexString(pathHash)[..12].ToLowerInvariant();
-        _workingDirectory = Path.Combine(Path.GetTempPath(), ".aspire", "bundle-hosts", pathDir);
+        _workingDirectory = Path.Combine(CliPathHelper.GetAspireHomeDirectory(), "bundle-hosts", pathDir);
         Directory.CreateDirectory(_workingDirectory);
     }
 
     /// <inheritdoc />
-    public string AppPath => _appPath;
+    public string AppDirectoryPath => _appDirectoryPath;
 
     /// <summary>
     /// Gets the path to the aspire-managed executable (used as the server).
@@ -171,13 +171,11 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         var packages = packageRefs.Select(r => (r.Name, r.Version!)).ToList();
         var sources = await GetNuGetSourcesAsync(channelName, cancellationToken);
 
-        var appHostDirectory = Path.GetDirectoryName(_appPath);
-
         return await _nugetService.RestorePackagesAsync(
             packages,
             DotNetBasedAppHostServerProject.TargetFramework,
             sources: sources,
-            workingDirectory: appHostDirectory,
+            workingDirectory: _appDirectoryPath,
             ct: cancellationToken);
     }
 
@@ -243,7 +241,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         var exitCode = await _dotNetCliRunner.BuildAsync(
             new FileInfo(projectFilePath),
             noRestore: false,
-            new DotNetCliRunnerInvocationOptions
+            new ProcessInvocationOptions
             {
                 StandardOutputCallback = buildOutput.AppendOutput,
                 StandardErrorCallback = buildOutput.AppendError
@@ -337,7 +335,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
     private async Task<string?> ResolveChannelNameAsync(CancellationToken cancellationToken)
     {
         // Check local settings.json first
-        var localConfig = AspireJsonConfiguration.Load(Path.GetDirectoryName(_appPath)!);
+        var localConfig = AspireJsonConfiguration.Load(_appDirectoryPath);
         var channelName = localConfig?.Channel;
 
         // Fall back to global config
@@ -486,7 +484,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         {
             if (e.Data is not null)
             {
-                _logger.LogDebug("PrebuiltAppHostServer({ProcessId}) stdout: {Line}", process.Id, e.Data);
+                _logger.LogTrace("PrebuiltAppHostServer({ProcessId}) stdout: {Line}", process.Id, e.Data);
                 outputCollector.AppendOutput(e.Data);
             }
         };
@@ -494,7 +492,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         {
             if (e.Data is not null)
             {
-                _logger.LogDebug("PrebuiltAppHostServer({ProcessId}) stderr: {Line}", process.Id, e.Data);
+                _logger.LogTrace("PrebuiltAppHostServer({ProcessId}) stderr: {Line}", process.Id, e.Data);
                 outputCollector.AppendError(e.Data);
             }
         };
@@ -506,7 +504,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
     }
 
     /// <inheritdoc />
-    public string GetInstanceIdentifier() => _appPath;
+    public string GetInstanceIdentifier() => _appDirectoryPath;
 
     /// <summary>
     /// Reads the project reference assembly names written by the MSBuild target during build.

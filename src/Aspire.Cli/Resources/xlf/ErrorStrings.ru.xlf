@@ -3,23 +3,23 @@
   <file datatype="xml" source-language="en" target-language="ru" original="../ErrorStrings.resx">
     <body>
       <trans-unit id="AlreadyConnectedToBackchannel">
-        <source>Already connected to apphost backchannel.</source>
+        <source>Already connected to AppHost backchannel.</source>
         <target state="needs-review-translation">Подключение к тайному входу AppHost уже установлено.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostIncompatibleWithCli">
-        <source>Apphost is incompatible with the CLI. The apphost must be updated to a version that supports the {0} capability.</source>
+        <source>AppHost is incompatible with the CLI. The AppHost must be updated to a version that supports the {0} capability.</source>
         <target state="needs-review-translation">AppHost несовместим с CLI. AppHost необходимо обновить до версии, которая поддерживает возможность {0}.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostWasSpecifiedButDoesntExist">
-        <source>Apphost file was specified in '{0}' but it does not exist at '{1}'.</source>
+        <source>AppHost file was specified in '{0}' but it does not exist at '{1}'.</source>
         <target state="needs-review-translation">Файл AppHost указан в "{0}", но не существует в пути "{1}".</target>
         <note>{0} is a path</note>
       </trans-unit>
       <trans-unit id="AppHostsMayNotBeBuildable">
-        <source>No buildable app hosts were found, but there may have been unbuildable app hosts.</source>
-        <target state="translated">Не найдены хосты приложений с возможностью сборки, но могут быть хосты приложений без возможности сборки.</target>
+        <source>No buildable AppHosts were found, but there may have been unbuildable AppHosts.</source>
+        <target state="needs-review-translation">Не найдены хосты приложений с возможностью сборки, но могут быть хосты приложений без возможности сборки.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireHostingVersionNull">
@@ -43,7 +43,7 @@
         <note />
       </trans-unit>
       <trans-unit id="CommandNotSupportedWithSingleFileAppHost">
-        <source>This command is not yet supported with single file apphosts.</source>
+        <source>This command is not yet supported with single file AppHosts.</source>
         <target state="needs-review-translation">Эта команда пока не поддерживается для одиночных файлов AppHost.</target>
         <note />
       </trans-unit>
@@ -123,8 +123,8 @@
         <note />
       </trans-unit>
       <trans-unit id="MinimumSdkVersionNotMet">
-        <source>The Aspire CLI requires .NET SDK version {0} or later. Detected: {1}.</source>
-        <target state="translated">Для Aspire CLI требуется версия .NET SDK {0} или более поздняя. Обнаружено: {1}.</target>
+        <source>C# AppHost requires .NET SDK version {0} or later. Detected: {1}.</source>
+        <target state="needs-review-translation">Для Aspire CLI требуется версия .NET SDK {0} или более поздняя. Обнаружено: {1}.</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleProjectFilesFound">
@@ -158,7 +158,7 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectFileNotAppHostProject">
-        <source>Project file is not an Aspire apphost project.</source>
+        <source>Project file is not an Aspire AppHost project.</source>
         <target state="needs-review-translation">Файл проекта не является проектом Aspire AppHost.</target>
         <note />
       </trans-unit>
@@ -168,12 +168,12 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectIsNotAppHost">
-        <source>The project does not contain an Aspire apphost.</source>
-        <target state="translated">Проект не содержит хост приложений Aspire.</target>
+        <source>The project does not contain an Aspire AppHost.</source>
+        <target state="needs-review-translation">Проект не содержит хост приложений Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="SingleFileAppHostFeatureNotEnabled">
-        <source>Single file apphost feature is not enabled. To use .cs apphost files, enable the feature using configuration.</source>
+        <source>Single file AppHost feature is not enabled. To use .cs AppHost files, enable the feature using configuration.</source>
         <target state="needs-review-translation">Функция одиночного файла AppHost не включена. Чтобы использовать CS-файлы AppHost, включите эту функцию с помощью конфигурации.</target>
         <note />
       </trans-unit>

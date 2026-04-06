@@ -161,7 +161,7 @@ public class AtsJavaCodeGeneratorTests
         var withReference = Assert.Single(capabilities, c => c.CapabilityId == "Aspire.Hosting/withReference");
         Assert.True(withReference.ReturnsBuilder);
 
-        var waitFor = Assert.Single(capabilities, c => c.CapabilityId == "Aspire.Hosting/waitFor");
+        var waitFor = Assert.Single(capabilities, c => c.CapabilityId == "Aspire.Hosting/waitForResource");
         Assert.True(waitFor.ReturnsBuilder);
     }
 

@@ -3,6 +3,7 @@
   MethodName: addTestRedis,
   QualifiedMethodName: addTestRedis,
   Description: Adds a test Redis resource,
+  IsObsolete: false,
   Parameters: [
     {
       Name: name,
@@ -208,8 +209,40 @@
             IsDistributedApplication: false
           },
           {
-            TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IManifestExpressionProvider,
-            ClrType: IManifestExpressionProvider,
+            TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExpressionValue,
+            ClrType: IExpressionValue,
+            Category: Handle,
+            IsInterface: true,
+            IsReadOnly: false,
+            IsResourceBuilder: false,
+            IsDistributedApplicationBuilder: false,
+            IsDistributedApplication: false,
+            ImplementedInterfaces: [
+              {
+                TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IValueProvider,
+                ClrType: IValueProvider,
+                Category: Handle,
+                IsInterface: true,
+                IsReadOnly: false,
+                IsResourceBuilder: false,
+                IsDistributedApplicationBuilder: false,
+                IsDistributedApplication: false
+              },
+              {
+                TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IManifestExpressionProvider,
+                ClrType: IManifestExpressionProvider,
+                Category: Handle,
+                IsInterface: true,
+                IsReadOnly: false,
+                IsResourceBuilder: false,
+                IsDistributedApplicationBuilder: false,
+                IsDistributedApplication: false
+              }
+            ]
+          },
+          {
+            TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IValueProvider,
+            ClrType: IValueProvider,
             Category: Handle,
             IsInterface: true,
             IsReadOnly: false,
@@ -218,8 +251,8 @@
             IsDistributedApplication: false
           },
           {
-            TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IValueProvider,
-            ClrType: IValueProvider,
+            TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IManifestExpressionProvider,
+            ClrType: IManifestExpressionProvider,
             Category: Handle,
             IsInterface: true,
             IsReadOnly: false,
@@ -240,8 +273,40 @@
         ]
       },
       {
-        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IManifestExpressionProvider,
-        ClrType: IManifestExpressionProvider,
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExpressionValue,
+        ClrType: IExpressionValue,
+        Category: Handle,
+        IsInterface: true,
+        IsReadOnly: false,
+        IsResourceBuilder: false,
+        IsDistributedApplicationBuilder: false,
+        IsDistributedApplication: false,
+        ImplementedInterfaces: [
+          {
+            TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IValueProvider,
+            ClrType: IValueProvider,
+            Category: Handle,
+            IsInterface: true,
+            IsReadOnly: false,
+            IsResourceBuilder: false,
+            IsDistributedApplicationBuilder: false,
+            IsDistributedApplication: false
+          },
+          {
+            TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IManifestExpressionProvider,
+            ClrType: IManifestExpressionProvider,
+            Category: Handle,
+            IsInterface: true,
+            IsReadOnly: false,
+            IsResourceBuilder: false,
+            IsDistributedApplicationBuilder: false,
+            IsDistributedApplication: false
+          }
+        ]
+      },
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IValueProvider,
+        ClrType: IValueProvider,
         Category: Handle,
         IsInterface: true,
         IsReadOnly: false,
@@ -250,8 +315,8 @@
         IsDistributedApplication: false
       },
       {
-        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IValueProvider,
-        ClrType: IValueProvider,
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IManifestExpressionProvider,
+        ClrType: IManifestExpressionProvider,
         Category: Handle,
         IsInterface: true,
         IsReadOnly: false,

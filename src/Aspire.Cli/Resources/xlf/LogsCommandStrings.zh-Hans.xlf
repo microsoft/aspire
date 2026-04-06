@@ -3,7 +3,7 @@
   <file datatype="xml" source-language="en" target-language="zh-Hans" original="../LogsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Display logs from resources in a running apphost</source>
+        <source>Display logs from resources in a running AppHost</source>
         <target state="needs-review-translation">显示正在运行的 Aspire 应用主机中资源的日志。</target>
         <note />
       </trans-unit>

@@ -140,7 +140,7 @@ export default class AspireDcpServer {
                     const config = await createDebugSessionConfiguration(
                         aspireDebugSession.configuration,
                         launchConfig,
-                        payload.args ?? [],
+                        payload.args,
                         payload.env ?? [],
                         { debug: launchConfig.mode === "Debug", runId, debugSessionId: dcpId, isApphost: false, debugSession: aspireDebugSession },
                         foundDebuggerExtension
@@ -206,7 +206,7 @@ export default class AspireDcpServer {
             });
 
             app.delete('/run_session/:id', requireHeaders, async (req: Request, res: Response) => {
-                const runId = req.params.id;
+                const runId = req.params.id as string;
                 if (runsBySession.has(runId)) {
                     const baseDebugSessions = runsBySession.get(runId);
                     for (const debugSession of baseDebugSessions || []) {

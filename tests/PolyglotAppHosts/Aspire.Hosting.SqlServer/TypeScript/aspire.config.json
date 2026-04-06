@@ -1,0 +1,20 @@
+{
+  "appHost": {
+    "path": "apphost.ts",
+    "language": "typescript/nodejs"
+  },
+  "profiles": {
+    "https": {
+      "applicationUrl": "https://localhost:55686;http://localhost:57768",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development",
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:51980",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:28684"
+      }
+    }
+  },
+  "packages": {
+    "Aspire.Hosting.SqlServer": ""
+  }
+}

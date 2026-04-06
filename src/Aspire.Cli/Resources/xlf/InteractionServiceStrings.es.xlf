@@ -3,12 +3,12 @@
   <file datatype="xml" source-language="en" target-language="es" original="../InteractionServiceStrings.resx">
     <body>
       <trans-unit id="AppHostConnectionLost">
-        <source>The connection to the app host was lost: {0}.</source>
-        <target state="translated">Se perdió la conexión con el host de la aplicación: {0}.</target>
+        <source>The connection to the AppHost was lost: {0}.</source>
+        <target state="needs-review-translation">Se perdió la conexión con el host de la aplicación: {0}.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostNotCompatibleConsiderUpgrading">
-        <source>The apphost version is not compatible. Please upgrade the apphost or Aspire CLI.</source>
+        <source>The AppHost version is not compatible. Please upgrade the AppHost or Aspire CLI.</source>
         <target state="needs-review-translation">La versión de AppHost no es compatible. Actualice el apphost o la CLI de Aspire.</target>
         <note />
       </trans-unit>
@@ -23,8 +23,8 @@
         <note />
       </trans-unit>
       <trans-unit id="BuildingAppHost">
-        <source>Building apphost...</source>
-        <target state="translated">Compilando apphost...</target>
+        <source>Building AppHost...</source>
+        <target state="needs-review-translation">Compilando apphost...</target>
         <note />
       </trans-unit>
       <trans-unit id="CheckingCertificates">
@@ -63,13 +63,13 @@
         <note>Represents a type of link</note>
       </trans-unit>
       <trans-unit id="ErrorConnectingToAppHost">
-        <source>An error occurred while connecting to the app host. The app host possibly crashed before it was available: {0}.</source>
-        <target state="translated">Se produjo un error al conectarse al host de aplicaciones. Es posible que el host de la aplicación se haya bloqueado antes de que estuviera disponible: {0}.</target>
+        <source>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}.</source>
+        <target state="needs-review-translation">Se produjo un error al conectarse al host de aplicaciones. Es posible que el host de la aplicación se haya bloqueado antes de que estuviera disponible: {0}.</target>
         <note />
       </trans-unit>
       <trans-unit id="FindingAppHosts">
-        <source>Finding apphosts...</source>
-        <target state="translated">Buscando apphosts...</target>
+        <source>Finding AppHosts...</source>
+        <target state="needs-review-translation">Buscando apphosts...</target>
         <note />
       </trans-unit>
       <trans-unit id="InteractiveInputNotSupported">
@@ -102,19 +102,24 @@
         <target state="translated">No se pudo compilar el proyecto. Consulte los registros en {0}</target>
         <note />
       </trans-unit>
+      <trans-unit id="ProjectCouldNotBeCreated">
+        <source>The app could not be created. See logs at {0}</source>
+        <target state="new">The app could not be created. See logs at {0}</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ProjectOptionDoesntExist">
         <source>The --apphost option specified a project that does not exist.</source>
         <target state="translated">La opción --apphost especificó un proyecto que no existe.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionNotSpecifiedMultipleAppHostsFound">
-        <source>The --apphost option was not specified and multiple app host project files were detected.</source>
-        <target state="translated">No se especificó la opción --apphost y se detectaron varios archivos de proyecto de host de aplicación.</target>
+        <source>The --apphost option was not specified and multiple AppHost project files were detected.</source>
+        <target state="needs-review-translation">No se especificó la opción --apphost y se detectaron varios archivos de proyecto de host de aplicación.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionNotSpecifiedNoCsprojFound">
-        <source>The project argument was not specified and no app host project files were detected.</source>
-        <target state="translated">No se especificó el argumento del proyecto y no se detectaron archivos de proyecto de host de aplicaciones.</target>
+        <source>The project argument was not specified and no AppHost project files were detected.</source>
+        <target state="needs-review-translation">No se especificó el argumento del proyecto y no se detectaron archivos de proyecto de host de aplicaciones.</target>
         <note />
       </trans-unit>
       <trans-unit id="RequiredCapability">
@@ -133,12 +138,12 @@
         <note>{0} is the log file path</note>
       </trans-unit>
       <trans-unit id="SelectAppHostToUse">
-        <source>Select an apphost to use:</source>
-        <target state="translated">Seleccione un apphost para usar:</target>
+        <source>Select an AppHost to use:</source>
+        <target state="needs-review-translation">Seleccione un apphost para usar:</target>
         <note />
       </trans-unit>
       <trans-unit id="SpecifiedProjectFileNotAppHostProject">
-        <source>The specified project file is not an Aspire apphost project.</source>
+        <source>The specified project file is not an Aspire AppHost project.</source>
         <target state="needs-review-translation">El archivo de proyecto especificado no es un proyecto AppHost d Aspire.</target>
         <note />
       </trans-unit>
@@ -158,8 +163,8 @@
         <note />
       </trans-unit>
       <trans-unit id="UnbuildableAppHostsDetected">
-        <source>No app hosts were found (there may be app hosts project files with syntax errors/invalid SDK versions).</source>
-        <target state="translated">No se encontraron hosts de aplicación (puede que existan archivos de proyecto de hosts de aplicación con errores de sintaxis o versiones de SDK no válidas).</target>
+        <source>No AppHosts were found (there may be AppHost project files with syntax errors/invalid SDK versions).</source>
+        <target state="needs-review-translation">No se encontraron hosts de aplicación (puede que existan archivos de proyecto de hosts de aplicación con errores de sintaxis o versiones de SDK no válidas).</target>
         <note />
       </trans-unit>
       <trans-unit id="UnexpectedErrorOccurred">
@@ -173,8 +178,8 @@
         <note>{0} is a path</note>
       </trans-unit>
       <trans-unit id="WaitingForDebuggerToAttachToAppHost">
-        <source>Waiting for debugger to attach to app host process</source>
-        <target state="translated">Esperando a que el depurador se conecte al proceso del host de aplicaciones</target>
+        <source>Waiting for debugger to attach to AppHost process</source>
+        <target state="needs-review-translation">Esperando a que el depurador se conecte al proceso del host de aplicaciones</target>
         <note />
       </trans-unit>
     </body>

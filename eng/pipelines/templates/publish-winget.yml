@@ -21,6 +21,7 @@ steps:
   - powershell: |
       $ErrorActionPreference = 'Stop'
       $manifestRoot = '${{ parameters.manifestArtifactPath }}'
+      $packageId = '${{ parameters.packageIdentifier }}'
 
       Write-Host "=== WinGet Manifests ==="
       Get-ChildItem -Path $manifestRoot -Recurse | Format-Table FullName
@@ -35,14 +36,36 @@ steps:
         exit 1
       }
 
-      Write-Host "Manifest directory: $manifestDir"
-      Write-Host "##vso[task.setvariable variable=WinGetManifestDir]$manifestDir"
+      $submissionDir = Join-Path '$(Build.StagingDirectory)' 'winget-submit-manifests'
+      if (Test-Path $submissionDir) {
+        Remove-Item -Path $submissionDir -Recurse -Force
+      }
 
-      # Extract version from manifest directory name (e.g., .../Microsoft.Aspire/13.2.0/)
+      New-Item -ItemType Directory -Path $submissionDir -Force | Out-Null
+      Get-ChildItem -Path $manifestDir -File -Filter "*.yaml" | ForEach-Object {
+        Copy-Item -Path $_.FullName -Destination (Join-Path $submissionDir $_.Name) -Force
+      }
+
+      Write-Host "Manifest directory: $submissionDir"
+      Write-Host "##vso[task.setvariable variable=WinGetManifestDir]$submissionDir"
+
+      $versionManifestPath = Join-Path $submissionDir "$packageId.yaml"
+
+      # Extract version from the version manifest when no explicit version is provided.
       $version = '${{ parameters.version }}'
       if ([string]::IsNullOrWhiteSpace($version)) {
-        $version = Split-Path $manifestDir -Leaf
-        Write-Host "Extracted version from directory: $version"
+        if (Test-Path $versionManifestPath) {
+          $versionMatch = Select-String -Path $versionManifestPath -Pattern '^\s*PackageVersion:\s*(.+)\s*$' | Select-Object -First 1
+          if ($versionMatch) {
+            $version = $versionMatch.Matches[0].Groups[1].Value.Trim()
+            Write-Host "Extracted version from version manifest: $version"
+          }
+        }
+
+        if ([string]::IsNullOrWhiteSpace($version)) {
+          $version = Split-Path $manifestDir -Leaf
+          Write-Host "Fell back to directory name for version: $version"
+        }
       } else {
         Write-Host "Using provided version: $version"
       }
@@ -160,8 +183,30 @@ steps:
       Write-Host "Submitting WinGet manifests for $packageId version $version"
       Write-Host "Manifest directory: $manifestDir"
       Write-Host "Manifest files:"
-      Get-ChildItem -Path $manifestDir -Filter "*.yaml" | ForEach-Object { Write-Host "  - $($_.Name)" }
+      Get-ChildItem -Path $manifestDir -File -Filter "*.yaml" | Sort-Object Name | ForEach-Object { Write-Host "  - $($_.Name)" }
 
+      $versionManifest = Join-Path $manifestDir "$packageId.yaml"
+      $installerManifest = Join-Path $manifestDir "$packageId.installer.yaml"
+      $localeManifests = Get-ChildItem -Path $manifestDir -File -Filter "$packageId.locale.*.yaml" | Sort-Object Name
+
+      $missingManifests = @()
+      foreach ($requiredManifest in @($versionManifest, $installerManifest)) {
+        if (-not (Test-Path $requiredManifest)) {
+          $missingManifests += $requiredManifest
+        }
+      }
+
+      if ($localeManifests.Count -eq 0) {
+        Write-Error "No locale manifests were found for $packageId in $manifestDir"
+        exit 1
+      }
+
+      if ($missingManifests.Count -gt 0) {
+        Write-Error "Missing required manifest files: $($missingManifests -join ', ')"
+        exit 1
+      }
+
+      Write-Host "Submitting clean manifest directory to wingetcreate: $manifestDir"
       $output = & "$(Build.StagingDirectory)/wingetcreate.exe" submit $manifestDir `
         --token $token `
         --prtitle "Update $packageId to version $version" 2>&1

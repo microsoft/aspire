@@ -137,8 +137,8 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.WaitUntilAsync(
             s => s.ContainsText("skills should be installed"),
             timeout: TimeSpan.FromSeconds(30), description: "skill selection prompt");
-        await auto.DownAsync();
-        await auto.TypeAsync(" "); // Deselect playwright-cli to avoid npm dependency in CI
+        // Playwright and dotnet-inspect are no longer pre-selected, so just accept
+        // the defaults (only the aspire skill is selected).
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptFailFastAsync(counter);
@@ -237,8 +237,8 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.WaitUntilAsync(
             s => s.ContainsText("skills should be installed"),
             timeout: TimeSpan.FromSeconds(30), description: "skill selection prompt");
-        await auto.DownAsync();
-        await auto.TypeAsync(" "); // Deselect playwright-cli to avoid npm dependency in CI
+        // Playwright and dotnet-inspect are no longer pre-selected, so just accept
+        // the defaults (only the aspire skill is selected).
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptFailFastAsync(counter);

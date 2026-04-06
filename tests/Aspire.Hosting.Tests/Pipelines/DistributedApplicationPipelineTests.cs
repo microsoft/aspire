@@ -2100,6 +2100,29 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     }
 
     [Fact]
+    public async Task ExecuteAsync_PassesStepHierarchyMetadataToActivityReporter()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
+        builder.Services.AddSingleton(testOutputHelper);
+
+        var activityReporter = new TestPipelineActivityReporter(testOutputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter>(activityReporter);
+
+        var pipeline = new DistributedApplicationPipeline();
+        pipeline.AddStep("root", _ => Task.CompletedTask);
+        pipeline.AddStep("child", _ => Task.CompletedTask, dependsOn: "root");
+        pipeline.AddStep("grandchild", _ => Task.CompletedTask, dependsOn: "child");
+
+        var context = CreateDeployingContext(builder.Build());
+
+        await pipeline.ExecuteAsync(context).DefaultTimeout();
+
+        Assert.Contains(activityReporter.CreatedStepHierarchy, step => step.StepTitle == "root" && step.ParentStepId is null && step.HierarchyLevel == 0);
+        Assert.Contains(activityReporter.CreatedStepHierarchy, step => step.StepTitle == "child" && step.ParentStepId == "root" && step.HierarchyLevel == 1);
+        Assert.Contains(activityReporter.CreatedStepHierarchy, step => step.StepTitle == "grandchild" && step.ParentStepId == "child" && step.HierarchyLevel == 2);
+    }
+
+    [Fact]
     public async Task PushPrereq_SkipsRegistryCheckForNonDockerImageFormat()
     {
         // Arrange

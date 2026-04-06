@@ -67,7 +67,7 @@
     <value>Solution detected: {0}</value>
   </data>
   <data name="CreatingAppHostProject" xml:space="preserve">
-    <value>Creating apphost project...</value>
+    <value>Creating AppHost project...</value>
   </data>
   <data name="CreatingServiceDefaultsProject" xml:space="preserve">
     <value>Creating ServiceDefaults project...</value>
@@ -76,7 +76,7 @@
     <value>Adding projects to solution...</value>
   </data>
   <data name="NoSolutionFoundCreatingSingleFileAppHost" xml:space="preserve">
-    <value>No solution file found. Creating single-file apphost...</value>
+    <value>No solution file found. Creating single-file AppHost...</value>
   </data>
   <data name="AspireInitializationComplete" xml:space="preserve">
     <value>Aspire initialization complete!</value>
@@ -88,7 +88,7 @@
     <value>Solution has already been initialized with Aspire.</value>
   </data>
   <data name="AddingAppHostProjectToSolution" xml:space="preserve">
-    <value>Adding apphost project to solution...</value>
+    <value>Adding AppHost project to solution...</value>
   </data>
   <data name="AddingServiceDefaultsProjectToSolution" xml:space="preserve">
     <value>Adding ServiceDefaults project to solution...</value>
@@ -97,9 +97,9 @@
     <value>Resolving template version...</value>
   </data>
   <data name="SolutionAndProjectInSameDirectory" xml:space="preserve">
-    <value>The solution file '{0}' and project file '{1}' are in the same directory. The apphost and ServiceDefaults projects cannot be created inside an existing project directory. Move the solution file to a parent directory or the project file to a subdirectory.</value>
+    <value>The solution file '{0}' and project file '{1}' are in the same directory. The AppHost and ServiceDefaults projects cannot be created inside an existing project directory. Move the solution file to a parent directory or the project file to a subdirectory.</value>
   </data>
   <data name="LanguageOptionDescription" xml:space="preserve">
-    <value>The programming language for the apphost (csharp, typescript)</value>
+    <value>The programming language for the AppHost (csharp, typescript)</value>
   </data>
 </root>

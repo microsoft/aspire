@@ -5,13 +5,13 @@ PackageVersion: "${VERSION}"
 PackageLocale: en-US
 Publisher: Microsoft Corporation
 PublisherUrl: https://aspire.dev/
-PublisherSupportUrl: https://github.com/dotnet/aspire/issues
+PublisherSupportUrl: https://github.com/microsoft/aspire/issues
 PrivacyUrl: https://privacy.microsoft.com/privacystatement
 Moniker: aspire
 PackageName: Aspire CLI
 PackageUrl: https://aspire.dev/
 License: MIT
-LicenseUrl: https://github.com/dotnet/aspire/blob/main/LICENSE.TXT
+LicenseUrl: https://github.com/microsoft/aspire/blob/main/LICENSE.TXT
 Copyright: (c) Microsoft ${YEAR}
 ShortDescription: CLI tool for building observable, production-ready distributed applications with Aspire
 Description: >

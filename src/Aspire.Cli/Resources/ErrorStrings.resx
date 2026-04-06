@@ -118,7 +118,7 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="MinimumSdkVersionNotMet" xml:space="preserve">
-    <value>The Aspire CLI requires .NET SDK version {0} or later. Detected: {1}.</value>
+    <value>C# AppHost requires .NET SDK version {0} or later. Detected: {1}.</value>
   </data>
   <data name="InvalidLocaleProvided" xml:space="preserve">
     <value>Invalid locale {0} provided will not be used.</value>
@@ -128,10 +128,10 @@
     <comment>{1} is a comma-separated list of locales.</comment>
   </data>
   <data name="AlreadyConnectedToBackchannel" xml:space="preserve">
-    <value>Already connected to apphost backchannel.</value>
+    <value>Already connected to AppHost backchannel.</value>
   </data>
   <data name="AppHostIncompatibleWithCli" xml:space="preserve">
-    <value>Apphost is incompatible with the CLI. The apphost must be updated to a version that supports the {0} capability.</value>
+    <value>AppHost is incompatible with the CLI. The AppHost must be updated to a version that supports the {0} capability.</value>
   </data>
   <data name="ExtensionIncompatibleWithCli" xml:space="preserve">
     <value>Aspire Extension is incompatible with the CLI. The Extension must be updated to a version that supports the {0} capability.</value>
@@ -150,7 +150,7 @@
     <comment>{0} is a number</comment>
   </data>
   <data name="AppHostWasSpecifiedButDoesntExist" xml:space="preserve">
-    <value>Apphost file was specified in '{0}' but it does not exist at '{1}'.</value>
+    <value>AppHost file was specified in '{0}' but it does not exist at '{1}'.</value>
     <comment>{0} is a path</comment>
   </data>
   <data name="ProjectFileDoesntExist" xml:space="preserve">
@@ -160,7 +160,7 @@
     <value>The project could not be analyzed due to a build error. See logs at {0}</value>
   </data>
   <data name="ProjectIsNotAppHost" xml:space="preserve">
-    <value>The project does not contain an Aspire apphost.</value>
+    <value>The project does not contain an Aspire AppHost.</value>
   </data>
   <data name="CouldNotParseAspireSDKVersion" xml:space="preserve">
     <value>Could not parse Aspire.Hosting package version.</value>
@@ -184,7 +184,7 @@
     <value>No project file found.</value>
   </data>
   <data name="ProjectFileNotAppHostProject" xml:space="preserve">
-    <value>Project file is not an Aspire apphost project.</value>
+    <value>Project file is not an Aspire AppHost project.</value>
   </data>
   <data name="AspireHostingVersionNull" xml:space="preserve">
     <value>AspireHostingVersion is null</value>
@@ -218,13 +218,13 @@
     <value>Could not build: {0}</value>
   </data>
   <data name="AppHostsMayNotBeBuildable" xml:space="preserve">
-    <value>No buildable app hosts were found, but there may have been unbuildable app hosts.</value>
+    <value>No buildable AppHosts were found, but there may have been unbuildable AppHosts.</value>
   </data>
   <data name="SingleFileAppHostFeatureNotEnabled" xml:space="preserve">
-    <value>Single file apphost feature is not enabled. To use .cs apphost files, enable the feature using configuration.</value>
+    <value>Single file AppHost feature is not enabled. To use .cs AppHost files, enable the feature using configuration.</value>
   </data>
   <data name="CommandNotSupportedWithSingleFileAppHost" xml:space="preserve">
-    <value>This command is not yet supported with single file apphosts.</value>
+    <value>This command is not yet supported with single file AppHosts.</value>
   </data>
   <data name="ProjectFileUnsupportedInCurrentEnvironment" xml:space="preserve">
     <value>Project is not supported in the current environment: {0}</value>

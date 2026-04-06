@@ -94,8 +94,6 @@ public class AzureSignalRResource(string name, Action<AzureResourceInfrastructur
         yield return new("Uri", UriExpression);
     }
 
-    BicepOutputReference IAzurePrivateEndpointTarget.Id => Id;
-
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["signalr"];
 
     string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() => "privatelink.service.signalr.net";

@@ -9,7 +9,7 @@ namespace Aspire.Hosting.CodeGeneration.TypeScript;
 /// Provides language support for TypeScript AppHosts.
 /// Implements scaffolding, detection, and runtime configuration.
 /// </summary>
-public sealed class TypeScriptLanguageSupport : ILanguageSupport
+internal sealed class TypeScriptLanguageSupport : ILanguageSupport
 {
     /// <summary>
     /// The language/runtime identifier for TypeScript with Node.js.

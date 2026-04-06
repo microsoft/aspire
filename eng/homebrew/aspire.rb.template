@@ -2,16 +2,14 @@ cask "aspire" do
   arch arm: "arm64", intel: "x64"
 
   version "${VERSION}"
-  sha256 arm:          "${SHA256_OSX_ARM64}",
-         intel:        "${SHA256_OSX_X64}"
+  sha256 arm:   "${SHA256_OSX_ARM64}",
+         intel: "${SHA256_OSX_X64}"
 
-  url "https://ci.dot.net/public/aspire/#{version}/aspire-cli-osx-#{arch}-#{version}.tar.gz",
+  url "https://ci.dot.net/public/aspire/${ARTIFACT_VERSION}/aspire-cli-osx-#{arch}-#{version}.tar.gz",
       verified: "ci.dot.net/public/aspire/"
   name "Aspire CLI"
-  desc "CLI tool for building observable, production-ready distributed applications with Aspire"
+  desc "CLI for building observable, production-ready distributed applications"
   homepage "https://aspire.dev/"
-
-  conflicts_with cask: "aspire@prerelease"
 
   binary "aspire"
 

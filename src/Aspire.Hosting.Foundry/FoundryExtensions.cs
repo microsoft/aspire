@@ -23,6 +23,7 @@ namespace Aspire.Hosting;
 public static class FoundryExtensions
 {
     private const string DefaultCapabilityHostName = "foundry-caphost";
+    internal const string LocalProjectsNotSupportedMessage = "Microsoft Foundry projects are not supported when the parent Foundry resource is configured with RunAsFoundryLocal().";
 
     /// <summary>
     /// Adds a Microsoft Foundry resource to the application model.
@@ -30,7 +31,7 @@ public static class FoundryExtensions
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("addFoundry", Description = "Adds a Microsoft Foundry resource to the distributed application model.")]
+    [AspireExport(Description = "Adds a Microsoft Foundry resource to the distributed application model.")]
     public static IResourceBuilder<FoundryResource> AddFoundry(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         builder.AddAzureProvisioning();
@@ -50,7 +51,7 @@ public static class FoundryExtensions
     /// <param name="modelVersion">The version of the model to deploy.</param>
     /// <param name="format">The format of the model to deploy.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("addDeployment", Description = "Adds a Microsoft Foundry deployment resource to a Microsoft Foundry resource.")]
+    [AspireExport(Description = "Adds a Microsoft Foundry deployment resource to a Microsoft Foundry resource.")]
     public static IResourceBuilder<FoundryDeploymentResource> AddDeployment(this IResourceBuilder<FoundryResource> builder, [ResourceName] string name, string modelName, string modelVersion, string format)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -129,7 +130,7 @@ public static class FoundryExtensions
     /// </summary>
     /// <param name="builder">The distributed application builder.</param>
     /// <returns>A resource builder for the Foundry Local resource.</returns>
-    [AspireExport("runAsFoundryLocal", Description = "Configures the Microsoft Foundry resource to run by using Foundry Local.")]
+    [AspireExport(Description = "Configures the Microsoft Foundry resource to run by using Foundry Local.")]
     public static IResourceBuilder<FoundryResource> RunAsFoundryLocal(this IResourceBuilder<FoundryResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder, nameof(builder));
@@ -140,6 +141,7 @@ public static class FoundryExtensions
         }
 
         var resource = builder.Resource;
+        ThrowIfProjectsConfiguredForLocal(builder, resource);
         resource.Annotations.Add(new EmulatorResourceAnnotation());
 
         builder.ApplicationBuilder.Services.AddSingleton<FoundryLocalManager>();
@@ -167,6 +169,16 @@ public static class FoundryExtensions
         builder.WithHealthCheck(healthCheckKey);
 
         return builder;
+    }
+
+    internal static void ThrowIfProjectsConfiguredForLocal(IResourceBuilder<FoundryResource> builder, FoundryResource resource)
+    {
+        if (builder.ApplicationBuilder.Resources
+            .OfType<AzureCognitiveServicesProjectResource>()
+            .Any(project => ReferenceEquals(project.Parent, resource)))
+        {
+            throw new InvalidOperationException(LocalProjectsNotSupportedMessage);
+        }
     }
 
     /// <summary>

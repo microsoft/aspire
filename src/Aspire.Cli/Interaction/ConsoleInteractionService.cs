@@ -386,15 +386,24 @@ internal class ConsoleInteractionService : IInteractionService
 
     public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines)
     {
-        foreach (var (stream, line) in lines)
+        var linesArray = lines.ToArray();
+
+        // Special case one stderr line to include error icon.
+        if (linesArray.Length == 1 && linesArray[0].Stream == OutputLineStream.StdErr)
+        {
+            DisplayError(linesArray[0].Line);
+            return;
+        }
+
+        foreach (var (stream, line) in linesArray)
         {
             if (stream == OutputLineStream.StdOut)
             {
-                MessageConsole.MarkupLineInterpolated($"{line.EscapeMarkup()}");
+                MessageConsole.MarkupLine(line.EscapeMarkup());
             }
             else
             {
-                MessageConsole.MarkupLineInterpolated($"[red]{line.EscapeMarkup()}[/]");
+                MessageConsole.MarkupLine($"[red]{line.EscapeMarkup()}[/]");
             }
         }
     }

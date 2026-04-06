@@ -3,13 +3,13 @@
   <file datatype="xml" source-language="en" target-language="cs" original="../SharedCommandStrings.resx">
     <body>
       <trans-unit id="AppHostNotRunning">
-        <source>No running apphost found. Use 'aspire run' to start one first.</source>
-        <target state="new">No running apphost found. Use 'aspire run' to start one first.</target>
+        <source>No running AppHost found. Use 'aspire run' to start one first.</source>
+        <target state="new">No running AppHost found. Use 'aspire run' to start one first.</target>
         <note />
       </trans-unit>
       <trans-unit id="FormatOptionDescription">
-        <source>Output format for detached apphost results</source>
-        <target state="new">Output format for detached apphost results</target>
+        <source>Output format for detached AppHost results</source>
+        <target state="new">Output format for detached AppHost results</target>
         <note />
       </trans-unit>
       <trans-unit id="IsolatedOptionDescription">
@@ -18,18 +18,18 @@
         <note />
       </trans-unit>
       <trans-unit id="MultipleInScopeAppHosts">
-        <source>Multiple running apphosts found in the current directory. Select from running apphosts.</source>
-        <target state="new">Multiple running apphosts found in the current directory. Select from running apphosts.</target>
+        <source>Multiple running AppHosts found in the current directory. Select from running AppHosts.</source>
+        <target state="new">Multiple running AppHosts found in the current directory. Select from running AppHosts.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoInScopeAppHostsShowingAll">
-        <source>No running apphosts found in the current directory. Select from all running apphosts.</source>
-        <target state="new">No running apphosts found in the current directory. Select from all running apphosts.</target>
+        <source>No running AppHosts found in the current directory. Select from all running AppHosts.</source>
+        <target state="new">No running AppHosts found in the current directory. Select from all running AppHosts.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostOptionDescription">
-        <source>The path to the Aspire apphost project file</source>
-        <target state="new">The path to the Aspire apphost project file</target>
+        <source>The path to the Aspire AppHost project file</source>
+        <target state="new">The path to the Aspire AppHost project file</target>
         <note />
       </trans-unit>
       <trans-unit id="PipelineEnvironmentOptionDescription">
@@ -47,19 +47,29 @@
         <target state="new">Set the minimum log level for pipeline logging (trace, debug, information, warning, error, critical). The default is 'information'.</target>
         <note />
       </trans-unit>
+      <trans-unit id="PipelineStepTimelineLabel">
+        <source>Step timeline:</source>
+        <target state="new">Step timeline:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PipelineStepsSummaryTitle">
+        <source>Steps Summary:</source>
+        <target state="new">Steps Summary:</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ScanningForRunningAppHosts">
-        <source>Scanning for running apphosts...</source>
-        <target state="new">Scanning for running apphosts...</target>
+        <source>Scanning for running AppHosts...</source>
+        <target state="new">Scanning for running AppHosts...</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHost">
-        <source>Select an apphost to {0}:</source>
-        <target state="new">Select an apphost to {0}:</target>
+        <source>Select an AppHost to {0}:</source>
+        <target state="new">Select an AppHost to {0}:</target>
         <note />
       </trans-unit>
       <trans-unit id="UsingAppHost">
-        <source>Using apphost: {0}</source>
-        <target state="new">Using apphost: {0}</target>
+        <source>Using AppHost: {0}</source>
+        <target state="new">Using AppHost: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="PromptRunAgentInit">

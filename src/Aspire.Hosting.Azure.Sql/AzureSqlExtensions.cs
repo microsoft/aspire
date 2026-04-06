@@ -76,7 +76,7 @@ public static class AzureSqlExtensions
     /// <param name="builder">The builder for the distributed application.</param>
     /// <param name="name">The name of the resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureSqlServerResource}"/> builder.</returns>
-    [AspireExport("addAzureSqlServer", Description = "Adds an Azure SQL Database server resource")]
+    [AspireExport(Description = "Adds an Azure SQL Database server resource")]
     public static IResourceBuilder<AzureSqlServerResource> AddAzureSqlServer(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -106,7 +106,7 @@ public static class AzureSqlExtensions
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <param name="databaseName">The name of the database. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("addDatabase", Description = "Adds an Azure SQL database resource")]
+    [AspireExport(Description = "Adds an Azure SQL database resource")]
     public static IResourceBuilder<AzureSqlDatabaseResource> AddDatabase(this IResourceBuilder<AzureSqlServerResource> builder, [ResourceName] string name, string? databaseName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -142,7 +142,7 @@ public static class AzureSqlExtensions
     /// </summary>
     /// <param name="builder">The builder for the Azure SQL resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withDefaultAzureSku", Description = "Configures the Azure SQL database to use the default Azure SKU")]
+    [AspireExport(Description = "Configures the Azure SQL database to use the default Azure SKU")]
     public static IResourceBuilder<AzureSqlDatabaseResource> WithDefaultAzureSku(this IResourceBuilder<AzureSqlDatabaseResource> builder)
     {
         builder.Resource.UseDefaultAzureSku = true;
@@ -172,7 +172,7 @@ public static class AzureSqlExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("runAsContainer", Description = "Configures the Azure SQL server to run locally in a SQL Server container", RunSyncOnBackgroundThread = true)]
+    [AspireExport(Description = "Configures the Azure SQL server to run locally in a SQL Server container", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureSqlServerResource> RunAsContainer(this IResourceBuilder<AzureSqlServerResource> builder, Action<IResourceBuilder<SqlServerServerResource>>? configureContainer = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -389,7 +389,7 @@ public static class AzureSqlExtensions
     /// peSubnet.AddPrivateEndpoint(sql);
     /// </code>
     /// </example>
-    [AspireExport("withAdminDeploymentScriptSubnet", Description = "Configures the Azure SQL server to use a specific subnet for deployment scripts")]
+    [AspireExport(Description = "Configures the Azure SQL server to use a specific subnet for deployment scripts")]
     [Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/dotnet/aspire/diagnostics#{0}")]
     public static IResourceBuilder<AzureSqlServerResource> WithAdminDeploymentScriptSubnet(
         this IResourceBuilder<AzureSqlServerResource> builder,
@@ -438,7 +438,7 @@ public static class AzureSqlExtensions
     /// peSubnet.AddPrivateEndpoint(sql);
     /// </code>
     /// </example>
-    [AspireExport("withAdminDeploymentScriptStorage", Description = "Configures the Azure SQL server to use a specific storage account for deployment scripts")]
+    [AspireExport(Description = "Configures the Azure SQL server to use a specific storage account for deployment scripts")]
     [Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/dotnet/aspire/diagnostics#{0}")]
     public static IResourceBuilder<AzureSqlServerResource> WithAdminDeploymentScriptStorage(
         this IResourceBuilder<AzureSqlServerResource> builder,

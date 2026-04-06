@@ -365,6 +365,8 @@ jobs:
             -NoNewWindow -PassThru
 
           try {
+            # Ensure UTF-8 encoding for all output on Windows
+            [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
             # Run tests
             dotnet ${{ env.TEST_ASSEMBLY_NAME }}.dll `
               --ignore-exit-code 8 `
@@ -451,6 +453,8 @@ jobs:
             -NoNewWindow -PassThru
 
           try {
+            # Ensure UTF-8 encoding for all output on Windows
+            [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
             # Run tests
             & ${{ env.DOTNET_SCRIPT }} test ${{ env.TEST_PROJECT_PATH }} `
               /p:ContinuousIntegrationBuild=true `

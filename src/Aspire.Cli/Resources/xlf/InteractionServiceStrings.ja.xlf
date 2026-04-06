@@ -3,12 +3,12 @@
   <file datatype="xml" source-language="en" target-language="ja" original="../InteractionServiceStrings.resx">
     <body>
       <trans-unit id="AppHostConnectionLost">
-        <source>The connection to the app host was lost: {0}.</source>
-        <target state="translated">アプリ ホストへの接続が失われました: {0}。</target>
+        <source>The connection to the AppHost was lost: {0}.</source>
+        <target state="needs-review-translation">アプリ ホストへの接続が失われました: {0}。</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostNotCompatibleConsiderUpgrading">
-        <source>The apphost version is not compatible. Please upgrade the apphost or Aspire CLI.</source>
+        <source>The AppHost version is not compatible. Please upgrade the AppHost or Aspire CLI.</source>
         <target state="needs-review-translation">AppHost のバージョンに互換性がありません。AppHost または Aspire CLI をアップグレードしてください。</target>
         <note />
       </trans-unit>
@@ -23,8 +23,8 @@
         <note />
       </trans-unit>
       <trans-unit id="BuildingAppHost">
-        <source>Building apphost...</source>
-        <target state="translated">Apphost をビルドしています...</target>
+        <source>Building AppHost...</source>
+        <target state="needs-review-translation">AppHost をビルドしています...</target>
         <note />
       </trans-unit>
       <trans-unit id="CheckingCertificates">
@@ -63,13 +63,13 @@
         <note>Represents a type of link</note>
       </trans-unit>
       <trans-unit id="ErrorConnectingToAppHost">
-        <source>An error occurred while connecting to the app host. The app host possibly crashed before it was available: {0}.</source>
-        <target state="translated">アプリ ホスティング プロセスへの接続でエラーが発生しました。アプリ ホスティング プロセスが、利用可能になる前にクラッシュした可能性があります: {0}。</target>
+        <source>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}.</source>
+        <target state="needs-review-translation">アプリ ホスティング プロセスへの接続でエラーが発生しました。アプリ ホスティング プロセスが、利用可能になる前にクラッシュした可能性があります: {0}。</target>
         <note />
       </trans-unit>
       <trans-unit id="FindingAppHosts">
-        <source>Finding apphosts...</source>
-        <target state="translated">Apphost を検索しています...</target>
+        <source>Finding AppHosts...</source>
+        <target state="needs-review-translation">AppHost を検索しています...</target>
         <note />
       </trans-unit>
       <trans-unit id="InteractiveInputNotSupported">
@@ -102,19 +102,24 @@
         <target state="translated">プロジェクトを構築できませんでした。{0} でログを表示する</target>
         <note />
       </trans-unit>
+      <trans-unit id="ProjectCouldNotBeCreated">
+        <source>The app could not be created. See logs at {0}</source>
+        <target state="new">The app could not be created. See logs at {0}</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ProjectOptionDoesntExist">
         <source>The --apphost option specified a project that does not exist.</source>
         <target state="translated">--apphost オプションで、存在しないプロジェクトが指定されています。</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionNotSpecifiedMultipleAppHostsFound">
-        <source>The --apphost option was not specified and multiple app host project files were detected.</source>
-        <target state="translated">--apphost オプションが指定されておらず、アプリ ホスティング プロセスのプロジェクト ファイルが複数検出されました。</target>
+        <source>The --apphost option was not specified and multiple AppHost project files were detected.</source>
+        <target state="needs-review-translation">--apphost オプションが指定されておらず、アプリ ホスティング プロセスのプロジェクト ファイルが複数検出されました。</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionNotSpecifiedNoCsprojFound">
-        <source>The project argument was not specified and no app host project files were detected.</source>
-        <target state="translated">プロジェクト引数が指定されておらず、アプリ ホスト プロジェクト ファイルが検出されませんでした。</target>
+        <source>The project argument was not specified and no AppHost project files were detected.</source>
+        <target state="needs-review-translation">プロジェクト引数が指定されておらず、アプリ ホスト プロジェクト ファイルが検出されませんでした。</target>
         <note />
       </trans-unit>
       <trans-unit id="RequiredCapability">
@@ -133,12 +138,12 @@
         <note>{0} is the log file path</note>
       </trans-unit>
       <trans-unit id="SelectAppHostToUse">
-        <source>Select an apphost to use:</source>
-        <target state="translated">使用する Apphost を選択してください: </target>
+        <source>Select an AppHost to use:</source>
+        <target state="needs-review-translation">使用する AppHost を選択してください: </target>
         <note />
       </trans-unit>
       <trans-unit id="SpecifiedProjectFileNotAppHostProject">
-        <source>The specified project file is not an Aspire apphost project.</source>
+        <source>The specified project file is not an Aspire AppHost project.</source>
         <target state="needs-review-translation">指定されたプロジェクト ファイルは、Aspire AppHost のプロジェクトではありません。</target>
         <note />
       </trans-unit>
@@ -158,8 +163,8 @@
         <note />
       </trans-unit>
       <trans-unit id="UnbuildableAppHostsDetected">
-        <source>No app hosts were found (there may be app hosts project files with syntax errors/invalid SDK versions).</source>
-        <target state="translated">アプリ ホストが見つかりませんでした (構文エラーがあるか SDK バージョンが無効であるアプリ ホスト プロジェクト ファイルが存在する可能性があります)。</target>
+        <source>No AppHosts were found (there may be AppHost project files with syntax errors/invalid SDK versions).</source>
+        <target state="needs-review-translation">アプリ ホストが見つかりませんでした (構文エラーがあるか SDK バージョンが無効であるアプリ ホスト プロジェクト ファイルが存在する可能性があります)。</target>
         <note />
       </trans-unit>
       <trans-unit id="UnexpectedErrorOccurred">
@@ -173,8 +178,8 @@
         <note>{0} is a path</note>
       </trans-unit>
       <trans-unit id="WaitingForDebuggerToAttachToAppHost">
-        <source>Waiting for debugger to attach to app host process</source>
-        <target state="translated">デバッガーがアプリ ホスティング プロセスにアタッチされるのを待機しています</target>
+        <source>Waiting for debugger to attach to AppHost process</source>
+        <target state="needs-review-translation">デバッガーがアプリ ホスティング プロセスにアタッチされるのを待機しています</target>
         <note />
       </trans-unit>
     </body>

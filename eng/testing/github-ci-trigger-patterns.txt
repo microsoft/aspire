@@ -26,6 +26,8 @@ eng/testing/github-ci-trigger-patterns.txt
 
 # Engineering pipeline scripts (Azure DevOps, not used in the GitHub CI build)
 eng/pipelines/**
+eng/homebrew/**
+eng/winget/**
 eng/test-configuration.json
 
 Aspire-Core.slnf

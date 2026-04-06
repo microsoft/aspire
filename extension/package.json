@@ -19,15 +19,24 @@
     "Other"
   ],
   "keywords": [
+    "aspire",
     "dotnet",
+    "typescript",
+    "distributed",
     "orchestrator",
     "apphost"
   ],
+  "galleryBanner": {
+    "color": "#512BD4",
+    "theme": "dark"
+  },
   "activationEvents": [
     "onDebugResolve:aspire",
     "onDebugInitialConfigurations:aspire",
     "onDebugDynamicConfigurations:aspire",
     "workspaceContains:**/*.csproj",
+    "workspaceContains:**/aspire.config.json",
+    "workspaceContains:**/.aspire/**",
     "onView:workbench.view.debug",
     "workspaceContains:**/apphost.cs",
     "workspaceContains:**/apphost.ts",
@@ -107,7 +116,12 @@
               "command": {
                 "type": "string",
                 "description": "%extension.debug.command%",
-                "enum": ["run", "deploy", "publish", "do"],
+                "enum": [
+                  "run",
+                  "deploy",
+                  "publish",
+                  "do"
+                ],
                 "default": "run"
               },
               "step": {
@@ -194,6 +208,12 @@
         "command": "aspire-vscode.configureLaunchJson",
         "enablement": "workspaceFolderCount > 0",
         "title": "%command.configureLaunchJson%",
+        "category": "Aspire"
+      },
+      {
+        "command": "aspire-vscode.restore",
+        "enablement": "workspaceFolderCount > 0",
+        "title": "%command.restore%",
         "category": "Aspire"
       },
       {
@@ -291,8 +311,8 @@
         "icon": "$(link-external)"
       },
       {
-        "command": "aspire-vscode.openInSimpleBrowser",
-        "title": "%command.openInSimpleBrowser%",
+        "command": "aspire-vscode.openInIntegratedBrowser",
+        "title": "%command.openInIntegratedBrowser%",
         "category": "Aspire",
         "icon": "$(browser)"
       },
@@ -485,7 +505,7 @@
           "when": "false"
         },
         {
-          "command": "aspire-vscode.openInSimpleBrowser",
+          "command": "aspire-vscode.openInIntegratedBrowser",
           "when": "false"
         },
         {
@@ -579,7 +599,7 @@
           "group": "1_open@1"
         },
         {
-          "command": "aspire-vscode.openInSimpleBrowser",
+          "command": "aspire-vscode.openInIntegratedBrowser",
           "when": "view == aspire-vscode.runningAppHosts && viewItem == endpointUrl",
           "group": "1_open@2"
         },
@@ -641,7 +661,11 @@
         },
         "aspire.enableAspireDashboardAutoLaunch": {
           "type": "string",
-          "enum": ["launch", "notification", "off"],
+          "enum": [
+            "launch",
+            "notification",
+            "off"
+          ],
           "default": "launch",
           "description": "%configuration.aspire.enableAspireDashboardAutoLaunch%",
           "enumDescriptions": [
@@ -653,11 +677,18 @@
         },
         "aspire.dashboardBrowser": {
           "type": "string",
-          "enum": ["openExternalBrowser", "debugChrome", "debugEdge", "debugFirefox"],
-          "default": "openExternalBrowser",
+          "enum": [
+            "openExternalBrowser",
+            "integratedBrowser",
+            "debugChrome",
+            "debugEdge",
+            "debugFirefox"
+          ],
+          "default": "integratedBrowser",
           "description": "%configuration.aspire.dashboardBrowser%",
           "enumDescriptions": [
             "%configuration.aspire.dashboardBrowser.openExternalBrowser%",
+            "%configuration.aspire.dashboardBrowser.integratedBrowser%",
             "%configuration.aspire.dashboardBrowser.debugChrome%",
             "%configuration.aspire.dashboardBrowser.debugEdge%",
             "%configuration.aspire.dashboardBrowser.debugFirefox%"
@@ -699,6 +730,12 @@
           "type": "boolean",
           "default": true,
           "description": "%configuration.aspire.enableGutterDecorations%",
+          "scope": "window"
+        },
+        "aspire.enableAutoRestore": {
+          "type": "boolean",
+          "default": true,
+          "description": "%configuration.aspire.enableAutoRestore%",
           "scope": "window"
         }
       }
@@ -793,52 +830,72 @@
     "l10n:export": "gulp prepare",
     "l10n:import": "gulp localizationBundle",
     "generate-schema": "node scripts/generate-schema.js",
-    "precompile": "npm run generate-schema && npm run l10n:export && npm run l10n:import",
-    "prewatch": "npm run generate-schema && npm run l10n:export && npm run l10n:import",
+    "generate-version": "node scripts/generate-version.js",
+    "precompile": "npm run generate-version && npm run generate-schema && npm run l10n:export && npm run l10n:import",
+    "prepackage": "npm run generate-version && npm run generate-schema && npm run l10n:export && npm run l10n:import",
+    "prewatch": "npm run generate-version && npm run generate-schema && npm run l10n:export && npm run l10n:import",
     "localize": "npm run l10n:export && npm run l10n:import"
   },
   "devDependencies": {
-    "@eslint/js": "^9.27.0",
-    "@types/express": "^5.0.3",
-    "@types/mocha": "^10.0.10",
+    "@eslint/js": "9.39.4",
+    "@types/express": "5.0.3",
+    "@types/mocha": "10.0.10",
     "@types/node": "20.x",
-    "@types/node-forge": "^1.3.11",
-    "@types/sinon": "^17.0.4",
-    "@types/vscode": "^1.98.0",
-    "@types/ws": "^8.18.1",
-    "@typescript-eslint/eslint-plugin": "^8.28.0",
-    "@typescript-eslint/parser": "^8.28.0",
-    "@vscode/l10n-dev": "^0.0.35",
-    "@vscode/test-cli": "^0.0.10",
-    "@vscode/test-electron": "^2.4.1",
-    "@vscode/vsce": "^3.7.1",
-    "copyfiles": "^2.4.1",
-    "cross-env": "^10.1.0",
-    "eslint": "^9.27.0",
-    "gulp": "^5.0.1",
-    "gulp-concat": "^2.6.1",
-    "gulp-filter": "^7.0.0",
-    "gulp-sourcemaps": "^3.0.0",
-    "gulp-typescript": "^6.0.0-alpha.1",
-    "postcss": "^8.5.6",
-    "sinon": "^21.0.0",
-    "ts-loader": "^9.5.2",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.8.3",
-    "typescript-eslint": "^8.32.1",
-    "wait-for-expect": "^4.0.0",
-    "webpack": "^5.98.0",
-    "webpack-cli": "^6.0.1"
+    "@types/node-forge": "1.3.14",
+    "@types/sinon": "17.0.4",
+    "@types/vscode": "1.98.0",
+    "@types/ws": "8.18.1",
+    "@typescript-eslint/eslint-plugin": "8.58.0",
+    "@typescript-eslint/parser": "8.58.0",
+    "@vscode/l10n-dev": "0.0.35",
+    "@vscode/test-cli": "0.0.12",
+    "@vscode/test-electron": "2.4.1",
+    "@vscode/vsce": "3.7.1",
+    "copyfiles": "2.4.1",
+    "cross-env": "10.1.0",
+    "eslint": "9.39.4",
+    "gulp": "5.0.1",
+    "gulp-concat": "2.6.1",
+    "gulp-filter": "7.0.0",
+    "gulp-sourcemaps": "3.0.0",
+    "gulp-typescript": "6.0.0-alpha.1",
+    "postcss": "8.5.8",
+    "sinon": "21.0.3",
+    "ts-loader": "9.5.7",
+    "ts-node": "10.9.2",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.58.0",
+    "wait-for-expect": "4.0.0",
+    "webpack": "5.105.4",
+    "webpack-cli": "6.0.1"
   },
   "dependencies": {
-    "@vscode/extension-telemetry": "^1.0.0",
-    "express": "^5.1.0",
-    "jsonc-parser": "^3.3.1",
-    "node-forge": "^1.3.1",
-    "vscode-jsonrpc": "^8.2.1",
-    "ws": "^8.18.3"
+    "@vscode/extension-telemetry": "1.5.1",
+    "express": "5.2.1",
+    "jsonc-parser": "3.3.1",
+    "node-forge": "1.4.0",
+    "vscode-jsonrpc": "8.2.1",
+    "ws": "8.20.0"
   },
   "resolutions": {
-    "braces": "^3.0.3"
+    "braces": "3.0.3",
+    "serialize-javascript": "7.0.5",
+    "flatted": "3.4.2",
+    "lodash": "4.18.1",
+    "undici": "6.24.1",
+    "path-to-regexp": "8.4.2",
+    "@sinonjs/fake-timers": "13.0.5",
+    "picomatch": "2.3.2",
+    "underscore": "1.13.8"
+  },
+  "overrides": {
+    "serialize-javascript": "7.0.5",
+    "flatted": "3.4.2",
+    "lodash": "4.18.1",
+    "undici": "6.24.1",
+    "path-to-regexp": "8.4.2",
+    "@sinonjs/fake-timers": "13.0.5",
+    "picomatch": "2.3.2",
+    "underscore": "1.13.8"
   }
 }

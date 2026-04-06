@@ -115,7 +115,7 @@ public static class GitHubModelsExtensions
     /// <param name="model">The known model name from the <see cref="GitHubModelName"/> enumeration.</param>
     /// <param name="organization">The organization login associated with the organization to which the request is to be attributed.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("addGitHubModel", Description = "Adds a GitHub Model resource to the distributed application model.")]
+    [AspireExport(Description = "Adds a GitHub Model resource to the distributed application model.")]
     internal static IResourceBuilder<GitHubModelResource> AddGitHubModel(this IDistributedApplicationBuilder builder, [ResourceName] string name, GitHubModelName model, IResourceBuilder<ParameterResource>? organization = null)
     {
         return AddGitHubModel(builder, name, GitHubModel.GetModelId(model), organization);
@@ -129,7 +129,7 @@ public static class GitHubModelsExtensions
     /// <param name="modelId">The model identifier string, for example <c>"openai/gpt-4o"</c>.</param>
     /// <param name="organization">The organization login associated with the organization to which the request is to be attributed.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("addGitHubModelById", Description = "Adds a GitHub Model resource using a model identifier string.")]
+    [AspireExport(Description = "Adds a GitHub Model resource using a model identifier string.")]
     internal static IResourceBuilder<GitHubModelResource> AddGitHubModelById(this IDistributedApplicationBuilder builder, [ResourceName] string name, string modelId, IResourceBuilder<ParameterResource>? organization = null)
     {
         return AddGitHubModel(builder, name, modelId, organization);
@@ -142,7 +142,7 @@ public static class GitHubModelsExtensions
     /// <param name="apiKey">The API key parameter.</param>
     /// <returns>The resource builder.</returns>
     /// <exception cref="ArgumentException">Thrown when the provided parameter is not marked as secret.</exception>
-    [AspireExport("withApiKey", Description = "Configures the API key for the GitHub Model resource.")]
+    [AspireExport(Description = "Configures the API key for the GitHub Model resource.")]
     public static IResourceBuilder<GitHubModelResource> WithApiKey(this IResourceBuilder<GitHubModelResource> builder, IResourceBuilder<ParameterResource> apiKey)
     {
         ArgumentNullException.ThrowIfNull(builder);

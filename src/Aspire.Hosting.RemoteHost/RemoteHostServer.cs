@@ -46,11 +46,12 @@ public static class RemoteHostServer
         services.AddSingleton<AtsContextFactory>();
         services.AddSingleton(sp => sp.GetRequiredService<AtsContextFactory>().GetContext());
         services.AddSingleton<CodeGeneratorResolver>();
-        services.AddSingleton<CodeGenerationService>();
         services.AddSingleton<LanguageSupportResolver>();
-        services.AddSingleton<LanguageService>();
 
-        // Register scoped services for per-client state
+        // Scoped services
+        services.AddScoped<CodeGenerationService>();
+        services.AddScoped<LanguageService>();
+        services.AddScoped<JsonRpcAuthenticationState>();
         services.AddScoped<HandleRegistry>();
         services.AddScoped<CancellationTokenRegistry>();
         services.AddScoped<JsonRpcCallbackInvoker>();

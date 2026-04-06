@@ -86,7 +86,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         // Step 6: Run the apphost
         await auto.TypeAsync("aspire run");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Press CTRL+C to stop the apphost and exit.", timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitUntilTextAsync("Press CTRL+C to stop the AppHost and exit.", timeout: TimeSpan.FromMinutes(3));
 
         // Step 7: Stop the apphost
         await auto.Ctrl().KeyAsync(Hex1bKey.C);

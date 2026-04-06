@@ -250,6 +250,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to The app could not be created. See logs at {0}.
+        /// </summary>
+        public static string ProjectCouldNotBeCreated {
+            get {
+                return ResourceManager.GetString("ProjectCouldNotBeCreated", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to The --apphost option specified a project that does not exist..
         /// </summary>
         public static string ProjectOptionDoesntExist {

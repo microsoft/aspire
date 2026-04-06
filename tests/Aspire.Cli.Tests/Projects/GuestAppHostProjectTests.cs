@@ -302,7 +302,7 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
     [Fact]
     public void GetServerEnvironmentVariables_ParsesLaunchSettingsWithComments()
     {
-        var project = CreateGuestAppHostProject(_workspace.WorkspaceRoot);
+        var project = CreateGuestAppHostProject();
 
         var propertiesDir = _workspace.CreateDirectory("Properties");
         var launchSettingsPath = Path.Combine(propertiesDir.FullName, "launchSettings.json");
@@ -333,7 +333,7 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
         Assert.False(envVars.ContainsKey("ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"));
     }
 
-    private static GuestAppHostProject CreateGuestAppHostProject(DirectoryInfo workspaceRoot)
+    private static GuestAppHostProject CreateGuestAppHostProject()
     {
         var language = new LanguageInfo(
             LanguageId: "typescript/nodejs",
@@ -341,13 +341,6 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
             PackageName: "Aspire.Hosting.CodeGeneration.TypeScript",
             DetectionPatterns: ["apphost.ts"],
             CodeGenerator: "TypeScript");
-
-        // Point the config service at a non-existent file so GetConfigDirectory
-        // falls back to the directory we pass to GetServerEnvironmentVariables.
-        var configService = new TestConfigurationService
-        {
-            SettingsFilePath = Path.Combine(workspaceRoot.FullName, "nonexistent", "settings.json")
-        };
 
         var configuration = new ConfigurationBuilder().Build();
 
@@ -362,7 +355,6 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
             runner: new TestDotNetCliRunner(),
             packagingService: new TestPackagingService(),
             configuration: configuration,
-            configurationService: configService,
             features: new Features(configuration, NullLogger<Features>.Instance),
             languageDiscovery: new TestLanguageDiscovery(),
             logger: NullLogger<GuestAppHostProject>.Instance,

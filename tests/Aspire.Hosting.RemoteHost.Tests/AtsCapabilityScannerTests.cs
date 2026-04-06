@@ -400,21 +400,21 @@ public class AtsCapabilityScannerTests
 
     private static class TestExports
     {
-        [AspireExport("testEnumerableParameter")]
+        [AspireExport]
         public static void TestEnumerableParameter(IDistributedApplicationBuilder builder, IEnumerable<string> items)
         {
             _ = builder;
             _ = items;
         }
 
-        [AspireExport("testEnumerableReturn")]
+        [AspireExport]
         public static IEnumerable<string> TestEnumerableReturn(IDistributedApplicationBuilder builder)
         {
             _ = builder;
             return [];
         }
 
-        [AspireExport("testMultiParamHandleCallback")]
+        [AspireExport]
         public static IResourceBuilder<TestResource> TestMultiParamHandleCallback(
             IResourceBuilder<TestResource> builder,
             Func<ContainerResource, ProjectResource, Task> callback)

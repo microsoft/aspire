@@ -13,14 +13,21 @@ namespace Aspire.Hosting.Utils;
 #pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 internal static class ExtensionUtils
 {
+    [AspireExportIgnore(Reason = "Debug support inspection is a local .NET helper and is not part of the ATS surface.")]
     public static bool SupportsDebugging(this IResource builder, IConfiguration configuration, [NotNullWhen(true)] out SupportsDebuggingAnnotation? supportsDebuggingAnnotation)
     {
         var supportedLaunchConfigurations = GetSupportedLaunchConfigurations(configuration);
 
-        return builder.TryGetLastAnnotation(out supportsDebuggingAnnotation)
-            && !string.IsNullOrEmpty(configuration[DcpExecutor.DebugSessionPortVar])
-            && ((supportedLaunchConfigurations is null && supportsDebuggingAnnotation.LaunchConfigurationType == "project") // per DCP spec, project resources support debugging if no launch configurations are specified
-                || (supportedLaunchConfigurations is not null && supportedLaunchConfigurations.Contains(supportsDebuggingAnnotation.LaunchConfigurationType)));
+        if (!builder.TryGetLastAnnotation(out supportsDebuggingAnnotation)
+            || string.IsNullOrEmpty(configuration[DcpExecutor.DebugSessionPortVar]))
+        {
+            return false;
+        }
+
+        // Per DCP IDE execution spec, project launch configuration support is implicit.
+        // Custom launch types (for example, azure-functions) must be explicitly advertised.
+        return supportsDebuggingAnnotation.LaunchConfigurationType == "project"
+            || (supportedLaunchConfigurations is not null && supportedLaunchConfigurations.Contains(supportsDebuggingAnnotation.LaunchConfigurationType));
     }
 
     private static string[]? GetSupportedLaunchConfigurations(IConfiguration configuration)

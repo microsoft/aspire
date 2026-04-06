@@ -3,23 +3,23 @@
   <file datatype="xml" source-language="en" target-language="ko" original="../ErrorStrings.resx">
     <body>
       <trans-unit id="AlreadyConnectedToBackchannel">
-        <source>Already connected to apphost backchannel.</source>
+        <source>Already connected to AppHost backchannel.</source>
         <target state="needs-review-translation">AppHost 백채널에 이미 연결되었습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostIncompatibleWithCli">
-        <source>Apphost is incompatible with the CLI. The apphost must be updated to a version that supports the {0} capability.</source>
+        <source>AppHost is incompatible with the CLI. The AppHost must be updated to a version that supports the {0} capability.</source>
         <target state="needs-review-translation">AppHost가 CLI와 호환되지 않습니다. AppHost를 {0} 기능을 지원하는 버전으로 업데이트해야 합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostWasSpecifiedButDoesntExist">
-        <source>Apphost file was specified in '{0}' but it does not exist at '{1}'.</source>
+        <source>AppHost file was specified in '{0}' but it does not exist at '{1}'.</source>
         <target state="needs-review-translation">appHost 파일이 '{0}'에 지정되었지만, '{1}'에 존재하지 않습니다.</target>
         <note>{0} is a path</note>
       </trans-unit>
       <trans-unit id="AppHostsMayNotBeBuildable">
-        <source>No buildable app hosts were found, but there may have been unbuildable app hosts.</source>
-        <target state="translated">빌드 가능한 앱 호스트를 찾을 수 없지만, 빌드할 수 없는 앱 호스트가 있을 수 있습니다.</target>
+        <source>No buildable AppHosts were found, but there may have been unbuildable AppHosts.</source>
+        <target state="needs-review-translation">빌드 가능한 앱 호스트를 찾을 수 없지만, 빌드할 수 없는 앱 호스트가 있을 수 있습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireHostingVersionNull">
@@ -43,7 +43,7 @@
         <note />
       </trans-unit>
       <trans-unit id="CommandNotSupportedWithSingleFileAppHost">
-        <source>This command is not yet supported with single file apphosts.</source>
+        <source>This command is not yet supported with single file AppHosts.</source>
         <target state="needs-review-translation">이 명령은 단일 파일 AppHosts에서 아직 지원되지 않습니다.</target>
         <note />
       </trans-unit>
@@ -123,8 +123,8 @@
         <note />
       </trans-unit>
       <trans-unit id="MinimumSdkVersionNotMet">
-        <source>The Aspire CLI requires .NET SDK version {0} or later. Detected: {1}.</source>
-        <target state="translated">Aspire CLI를 사용하려면 .NET SDK 버전 {0} 이상이 필요합니다. 감지됨: {1}.</target>
+        <source>C# AppHost requires .NET SDK version {0} or later. Detected: {1}.</source>
+        <target state="needs-review-translation">Aspire CLI를 사용하려면 .NET SDK 버전 {0} 이상이 필요합니다. 감지됨: {1}.</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleProjectFilesFound">
@@ -158,7 +158,7 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectFileNotAppHostProject">
-        <source>Project file is not an Aspire apphost project.</source>
+        <source>Project file is not an Aspire AppHost project.</source>
         <target state="needs-review-translation">프로젝트 파일이 Aspire AppHost 프로젝트가 아닙니다.</target>
         <note />
       </trans-unit>
@@ -168,12 +168,12 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectIsNotAppHost">
-        <source>The project does not contain an Aspire apphost.</source>
-        <target state="translated">프로젝트에 Aspire AppHost가 포함되어 있지 않습니다.</target>
+        <source>The project does not contain an Aspire AppHost.</source>
+        <target state="needs-review-translation">프로젝트에 Aspire AppHost가 포함되어 있지 않습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="SingleFileAppHostFeatureNotEnabled">
-        <source>Single file apphost feature is not enabled. To use .cs apphost files, enable the feature using configuration.</source>
+        <source>Single file AppHost feature is not enabled. To use .cs AppHost files, enable the feature using configuration.</source>
         <target state="needs-review-translation">단일 파일 AppHost 기능을 사용할 수 없습니다. .cs AppHost 파일을 사용하려면 설정을 사용하여 기능을 활성화해야 합니다.</target>
         <note />
       </trans-unit>

@@ -12,15 +12,18 @@ namespace Aspire.Hosting.RemoteHost.CodeGeneration;
 /// </summary>
 internal sealed class CodeGenerationService
 {
+    private readonly JsonRpcAuthenticationState _authenticationState;
     private readonly AtsContextFactory _atsContextFactory;
     private readonly CodeGeneratorResolver _resolver;
     private readonly ILogger<CodeGenerationService> _logger;
 
     public CodeGenerationService(
+        JsonRpcAuthenticationState authenticationState,
         AtsContextFactory atsContextFactory,
         CodeGeneratorResolver resolver,
         ILogger<CodeGenerationService> logger)
     {
+        _authenticationState = authenticationState;
         _atsContextFactory = atsContextFactory;
         _resolver = resolver;
         _logger = logger;
@@ -38,6 +41,7 @@ internal sealed class CodeGenerationService
     [JsonRpcMethod("getCapabilities")]
     public CapabilitiesResponse GetCapabilities(string[]? assemblyNames = null)
     {
+        _authenticationState.ThrowIfNotAuthenticated();
         _logger.LogDebug(">> getCapabilities()");
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
@@ -160,6 +164,7 @@ internal sealed class CodeGenerationService
     [JsonRpcMethod("generateCode")]
     public Dictionary<string, string> GenerateCode(string language, string? assemblyName = null)
     {
+        _authenticationState.ThrowIfNotAuthenticated();
         _logger.LogDebug(">> generateCode({Language})", language);
         var sw = System.Diagnostics.Stopwatch.StartNew();
 

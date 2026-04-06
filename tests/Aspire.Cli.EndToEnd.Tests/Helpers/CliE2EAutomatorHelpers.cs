@@ -152,23 +152,34 @@ internal static class CliE2EAutomatorHelpers
     }
 
     /// <summary>
-    /// Verifies the installed Aspire CLI version matches the expected commit SHA.
+    /// Verifies the installed Aspire CLI version matches the expected build.
+    /// Always checks the dynamic version prefix from eng/Versions.props.
+    /// For non-stabilized builds (all normal PR builds), also verifies the commit SHA suffix.
     /// </summary>
     internal static async Task VerifyAspireCliVersionAsync(
         this Hex1bTerminalAutomator auto,
         string commitSha,
         SequenceCounter counter)
     {
-        if (commitSha.Length != 40)
-        {
-            throw new ArgumentException($"Commit SHA must be exactly 40 characters, got {commitSha.Length}: '{commitSha}'", nameof(commitSha));
-        }
+        var versionPrefix = CliE2ETestHelpers.GetVersionPrefix();
+        var isStabilized = CliE2ETestHelpers.IsStabilizedBuild();
 
-        var shortCommitSha = commitSha[..8];
-        var expectedVersionSuffix = $"g{shortCommitSha}";
         await auto.TypeAsync("aspire --version");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(expectedVersionSuffix, timeout: TimeSpan.FromSeconds(10));
+
+        // Always verify the version prefix matches the branch's version (e.g., "13.3.0").
+        await auto.WaitUntilTextAsync(versionPrefix, timeout: TimeSpan.FromSeconds(10));
+
+        // For non-stabilized builds (all PR CI builds), also verify the commit SHA suffix
+        // to uniquely identify the exact build. Stabilized builds (official releases only)
+        // produce versions without SHA suffixes, so we skip this check.
+        if (!isStabilized && commitSha.Length == 40)
+        {
+            var shortCommitSha = commitSha[..8];
+            var expectedVersionSuffix = $"g{shortCommitSha}";
+            await auto.WaitUntilTextAsync(expectedVersionSuffix, timeout: TimeSpan.FromSeconds(10));
+        }
+
         await auto.WaitForSuccessPromptAsync(counter);
     }
 
