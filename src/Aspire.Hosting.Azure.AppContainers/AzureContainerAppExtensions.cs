@@ -56,7 +56,7 @@ public static class AzureContainerAppExtensions
     /// <param name="builder">The distributed application builder.</param>
     /// <param name="name">The name of the resource.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
-    [AspireExport("addAzureContainerAppEnvironment", Description = "Adds an Azure Container App Environment resource")]
+    [AspireExport(Description = "Adds an Azure Container App Environment resource")]
     public static IResourceBuilder<AzureContainerAppEnvironmentResource> AddAzureContainerAppEnvironment(this IDistributedApplicationBuilder builder, string name)
     {
         builder.AddAzureContainerAppsInfrastructureCore();
@@ -410,7 +410,7 @@ public static class AzureContainerAppExtensions
     /// This method allows for reusing the previously deployed resources if the application was deployed using
     /// azd without calling <see cref="AddAzureContainerAppEnvironment"/>
     /// </remarks>
-    [AspireExport("withAzdResourceNaming", Description = "Configures resources to use azd naming conventions")]
+    [AspireExport(Description = "Configures resources to use azd naming conventions")]
     public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithAzdResourceNaming(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder)
     {
         builder.Resource.UseAzdNamingConvention = true;
@@ -440,7 +440,7 @@ public static class AzureContainerAppExtensions
     /// Use <see cref="WithAzdResourceNaming"/> to change those names as well.
     /// </para>
     /// </remarks>
-    [AspireExport("withCompactResourceNaming", Description = "Configures resources to use compact naming for length-constrained Azure resources")]
+    [AspireExport(Description = "Configures resources to use compact naming for length-constrained Azure resources")]
     [Experimental("ASPIREACANAMING001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithCompactResourceNaming(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder)
     {
@@ -454,7 +454,7 @@ public static class AzureContainerAppExtensions
     /// <param name="builder">The AzureContainerAppEnvironmentResource to configure.</param>
     /// <param name="enable">Whether to include the Aspire dashboard. Default is true.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
-    [AspireExport("withDashboard", Description = "Configures whether the Aspire dashboard is included in the container app environment")]
+    [AspireExport(Description = "Configures whether the Aspire dashboard is included in the container app environment")]
     public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithDashboard(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder, bool enable = true)
     {
         builder.Resource.EnableDashboard = enable;
@@ -473,7 +473,7 @@ public static class AzureContainerAppExtensions
     /// Note that explicit ports specified for development (e.g., port 8080) are still normalized
     /// to standard ports (80/443) as required by Azure Container Apps.
     /// </remarks>
-    [AspireExport("withHttpsUpgrade", Description = "Configures whether HTTP endpoints are upgraded to HTTPS")]
+    [AspireExport(Description = "Configures whether HTTP endpoints are upgraded to HTTPS")]
     public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithHttpsUpgrade(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder, bool upgrade = true)
     {
         builder.Resource.PreserveHttpEndpoints = !upgrade;
@@ -487,7 +487,7 @@ public static class AzureContainerAppExtensions
     /// <param name="workspaceBuilder">The resource builder for the <see cref="AzureLogAnalyticsWorkspaceResource"/> to use.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="workspaceBuilder"/> is null.</exception>
-    [AspireExport("withAzureLogAnalyticsWorkspace", Description = "Configures the container app environment to use a specific Log Analytics Workspace")]
+    [AspireExport(Description = "Configures the container app environment to use a specific Log Analytics Workspace")]
     public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithAzureLogAnalyticsWorkspace(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder, IResourceBuilder<AzureLogAnalyticsWorkspaceResource> workspaceBuilder)
     {
         ArgumentNullException.ThrowIfNull(builder);

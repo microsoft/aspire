@@ -41,10 +41,10 @@ public class CliSmokeTests(ITestOutputHelper outputHelper)
             Console.SetError(errorWriter);
             Environment.SetEnvironmentVariable(envVar, loc);
             // Suppress first-time use notice to avoid extra lines in stderr
-            Environment.SetEnvironmentVariable(CliConfigNames.NoLogo, "true");
+            Environment.SetEnvironmentVariable(Aspire.Cli.CliConfigNames.NoLogo, "true");
             await Program.Main([]).DefaultTimeout();
             Environment.SetEnvironmentVariable(envVar, null);
-            Environment.SetEnvironmentVariable(CliConfigNames.NoLogo, null);
+            Environment.SetEnvironmentVariable(Aspire.Cli.CliConfigNames.NoLogo, null);
             Console.SetError(oldErrorOutput);
 
             var errorOutput = errorWriter.ToString();
@@ -120,4 +120,41 @@ public class CliSmokeTests(ITestOutputHelper outputHelper)
 
         outputHelper.WriteLine(result.Process.StandardOutput.ReadToEnd());
     }
+
+#if DEBUG
+    [Fact]
+    public void RenderScenarioOutputsPublishSummaryStressCase()
+    {
+        using var result = RemoteExecutor.Invoke(async () =>
+        {
+            await using var outputWriter = new StringWriter();
+            await using var errorWriter = new StringWriter();
+            var oldOut = Console.Out;
+            var oldError = Console.Error;
+            Console.SetOut(outputWriter);
+            Console.SetError(errorWriter);
+
+            Environment.SetEnvironmentVariable(CliConfigNames.NoLogo, "true");
+
+            var exitCode = await Program.Main(["--non-interactive", "render", "--scenario", "publish-summary-duration-extremes", "--console-width", "80"]).DefaultTimeout();
+
+            Environment.SetEnvironmentVariable(CliConfigNames.NoLogo, null);
+            Console.SetOut(oldOut);
+            Console.SetError(oldError);
+
+            var combinedOutput = outputWriter.ToString() + errorWriter.ToString();
+
+            Console.WriteLine(combinedOutput);
+
+            Assert.Equal(ExitCodeConstants.Success, exitCode);
+            Assert.Contains("=== Duration extremes ===", combinedOutput);
+            Assert.Contains("Steps Summary:", combinedOutput);
+            Assert.Contains("Tiny 0.2ms event", combinedOutput);
+            Assert.Contains("Zero event", combinedOutput);
+            Assert.Contains('╴', combinedOutput);
+        }, options: s_remoteInvokeOptions);
+
+        outputHelper.WriteLine(result.Process.StandardOutput.ReadToEnd());
+    }
+#endif
 }

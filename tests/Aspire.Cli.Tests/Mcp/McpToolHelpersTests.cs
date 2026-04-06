@@ -14,11 +14,15 @@ public class McpToolHelpersTests
     [InlineData("http://localhost:18888/login", "http://localhost:18888")]
     [InlineData("http://localhost:18888/login?t=authtoken123", "http://localhost:18888")]
     [InlineData("https://localhost:16319/login?t=d8d8255df4c79aebcb5b7325828ccb20", "https://localhost:16319")]
-    [InlineData("https://example.com:8080/path/to/resource?param=value", "https://example.com:8080")]
+    [InlineData("https://example.com:8080/path/to/resource?param=value", "https://example.com:8080/path/to/resource")]
+    [InlineData("https://example.com:8080/dashboard", "https://example.com:8080/dashboard")]
+    [InlineData("http://localhost/base/login", "http://localhost/base")]
+    [InlineData("http://localhost/base/login?t=token123", "http://localhost/base")]
+    [InlineData("https://example.com:8080/app/deep/login?t=abc", "https://example.com:8080/app/deep")]
     [InlineData("invalid-url", "invalid-url")] // Falls back to returning the original string
-    public void GetBaseUrl_ExtractsBaseUrl_RemovingPathAndQueryString(string? input, string? expected)
+    public void StripLoginPath_RemovesOnlyLoginSegment(string? input, string? expected)
     {
-        var result = McpToolHelpers.GetBaseUrl(input);
+        var result = McpToolHelpers.StripLoginPath(input);
         Assert.Equal(expected, result);
     }
 }

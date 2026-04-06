@@ -5,6 +5,7 @@ using System.IO.Compression;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -23,7 +24,6 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
     public async Task ExportCommand_WritesZipWithExpectedData()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var outputWriter = new TestOutputTextWriter(outputHelper);
         var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "export.zip");
 
         var resources = new[]
@@ -39,7 +39,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
         var tracesJson = BuildTracesJson(
             ("apiservice", null, "span001", "GET /api/products", s_testTime, s_testTime.AddMilliseconds(50), false));
 
-        var provider = CreateExportTestServices(workspace, outputWriter, resources,
+        var provider = CreateExportTestServices(workspace, resources,
             telemetryEndpoints: new Dictionary<string, string>
             {
                 ["/api/telemetry/logs"] = logsJson,
@@ -112,11 +112,10 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
     public async Task ExportCommand_OutputOption_ConfiguresArchiveOutputLocation()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var outputWriter = new TestOutputTextWriter(outputHelper);
         var customDir = Path.Combine(workspace.WorkspaceRoot.FullName, "custom", "nested");
         var outputPath = Path.Combine(customDir, "my-export.zip");
 
-        var provider = CreateExportTestServices(workspace, outputWriter,
+        var provider = CreateExportTestServices(workspace,
             resources: [new ResourceInfoJson { Name = "redis", InstanceId = null }],
             telemetryEndpoints: new Dictionary<string, string>
             {
@@ -299,7 +298,6 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
     public async Task ExportCommand_ReplicaResources_GroupsDataByResolvedResourceName()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var outputWriter = new TestOutputTextWriter(outputHelper);
         var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "export.zip");
 
         // 3 telemetry resources: redis (singleton) + apiservice with 2 replicas
@@ -321,7 +319,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
             ("apiservice", "abc", "span001", "GET /api/products", s_testTime, s_testTime.AddMilliseconds(50), false),
             ("apiservice", "def", "span002", "GET /api/orders", s_testTime.AddSeconds(1), s_testTime.AddSeconds(1).AddMilliseconds(80), false));
 
-        var provider = CreateExportTestServices(workspace, outputWriter, resources,
+        var provider = CreateExportTestServices(workspace, resources,
             telemetryEndpoints: new Dictionary<string, string>
             {
                 ["/api/telemetry/logs"] = logsJson,
@@ -426,7 +424,6 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
     public async Task ExportCommand_ResourceFilter_ExportsOnlyFilteredResource()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var outputWriter = new TestOutputTextWriter(outputHelper);
         var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "export.zip");
 
         var resources = new[]
@@ -442,7 +439,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
         var filteredTracesJson = BuildTracesJson(
             ("redis", null, "span001", "SET mykey", s_testTime, s_testTime.AddMilliseconds(10), false));
 
-        var provider = CreateExportTestServices(workspace, outputWriter, resources,
+        var provider = CreateExportTestServices(workspace, resources,
             telemetryEndpoints: new Dictionary<string, string>
             {
                 ["/api/telemetry/logs"] = filteredLogsJson,
@@ -485,7 +482,6 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
     public async Task ExportCommand_ResourceFilter_NoTelemetryData_SkipsStructuredLogsAndTraces()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var outputWriter = new TestOutputTextWriter(outputHelper);
         var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "export.zip");
 
         // Telemetry resources do NOT include "webfrontend" - it hasn't sent any telemetry yet
@@ -500,7 +496,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
         var tracesJson = BuildTracesJson(
             ("apiservice", null, "span001", "GET /api/products", s_testTime, s_testTime.AddMilliseconds(50), false));
 
-        var provider = CreateExportTestServices(workspace, outputWriter, resources,
+        var provider = CreateExportTestServices(workspace, resources,
             telemetryEndpoints: new Dictionary<string, string>
             {
                 ["/api/telemetry/logs"] = logsJson,
@@ -540,7 +536,6 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
     public async Task ExportCommand_ResourceFilter_ReplicasByDisplayName_ExportsAllReplicas()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var outputWriter = new TestOutputTextWriter(outputHelper);
         var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "export.zip");
 
         var resources = new[]
@@ -559,7 +554,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
             ("apiservice", "abc", "span002", "GET /api/products", s_testTime, s_testTime.AddMilliseconds(50), false),
             ("apiservice", "def", "span003", "GET /api/orders", s_testTime.AddSeconds(1), s_testTime.AddSeconds(1).AddMilliseconds(80), false));
 
-        var provider = CreateExportTestServices(workspace, outputWriter, resources,
+        var provider = CreateExportTestServices(workspace, resources,
             telemetryEndpoints: new Dictionary<string, string>
             {
                 ["/api/telemetry/logs"] = filteredLogsJson,
@@ -606,10 +601,9 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
     public async Task ExportCommand_ResourceFilter_NonExistentResource_ReturnsError()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var outputWriter = new TestOutputTextWriter(outputHelper);
         var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "export.zip");
 
-        var provider = CreateExportTestServices(workspace, outputWriter,
+        var provider = CreateExportTestServices(workspace,
             resources: [new ResourceInfoJson { Name = "redis", InstanceId = null }],
             telemetryEndpoints: new Dictionary<string, string>
             {
@@ -632,13 +626,67 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ExportCommand_DashboardUrl_ExportsTelemetryData()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "export.zip");
+
+        var resources = new[]
+        {
+            new ResourceInfoJson { Name = "redis", InstanceId = null },
+        };
+
+        var logsJson = BuildLogsJson(
+            ("redis", null, 9, "Information", "Ready to accept connections", s_testTime));
+
+        // CreateExportTestServices sets up a backchannel, but --dashboard-url bypasses it entirely
+        var provider = CreateExportTestServices(workspace, resources,
+            telemetryEndpoints: new Dictionary<string, string>
+            {
+                ["/api/telemetry/logs"] = logsJson,
+                ["/api/telemetry/traces"] = BuildTracesJson(),
+            },
+            resourceSnapshots:
+            [
+                new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
+            ],
+            logLines:
+            [
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 1, Content = "Redis is starting" },
+            ]);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"export --dashboard-url http://localhost:18888 --api-key test-token --output {outputPath}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.True(File.Exists(outputPath), "Export zip file should be created");
+
+        using var archive = ZipFile.OpenRead(outputPath);
+        var entryNames = archive.Entries.Select(e => e.FullName).OrderBy(n => n).ToList();
+
+        // With --dashboard-url there is no backchannel, so no resources or console logs
+        Assert.Collection(entryNames,
+            entry => Assert.Equal("structuredlogs/redis.json", entry));
+
+        // Verify structured log content
+        var redisLogs = JsonSerializer.Deserialize(
+            ReadEntryText(archive, "structuredlogs/redis.json"),
+            OtlpJsonSerializerContext.Default.OtlpTelemetryDataJson);
+        Assert.NotNull(redisLogs?.ResourceLogs);
+        Assert.Single(redisLogs.ResourceLogs);
+    }
+
+    [Fact]
     public async Task ExportCommand_DashboardUnavailable_ExportsResourcesAndConsoleLogs()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var outputWriter = new TestOutputTextWriter(outputHelper);
         var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "export.zip");
 
-        var provider = CreateExportTestServices(workspace, outputWriter,
+        var testInteractionService = new TestInteractionService();
+
+        var provider = CreateExportTestServices(workspace,
             resources: [],
             telemetryEndpoints: new Dictionary<string, string>(),
             resourceSnapshots:
@@ -651,7 +699,8 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
                 new ResourceLogLine { ResourceName = "redis", LineNumber = 1, Content = "Redis is starting" },
                 new ResourceLogLine { ResourceName = "apiservice", LineNumber = 1, Content = "Now listening on: https://localhost:5001" },
             ],
-            dashboardAvailable: false);
+            dashboardAvailable: false,
+            interactionService: testInteractionService);
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"export --output {outputPath}");
@@ -676,7 +725,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains("Redis is starting", redisConsoleLog);
 
         // Verify warning was displayed
-        Assert.Contains(outputWriter.Logs, line => line.Contains(ExportCommandStrings.DashboardNotAvailable));
+        Assert.Contains(testInteractionService.DisplayedMessages, m => m.Message.Contains(ExportCommandStrings.DashboardNotAvailable));
     }
 
     /// <summary>
@@ -685,12 +734,12 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
     /// </summary>
     private ServiceProvider CreateExportTestServices(
         TemporaryWorkspace workspace,
-        TestOutputTextWriter outputWriter,
         ResourceInfoJson[] resources,
         Dictionary<string, string> telemetryEndpoints,
         List<ResourceSnapshot> resourceSnapshots,
         List<ResourceLogLine> logLines,
-        bool dashboardAvailable = true)
+        bool dashboardAvailable = true,
+        IInteractionService? interactionService = null)
     {
         var resourcesJson = JsonSerializer.Serialize(resources, OtlpJsonSerializerContext.Default.ResourceInfoJsonArray);
 
@@ -743,7 +792,10 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
-            options.OutputTextWriter = outputWriter;
+            if (interactionService is not null)
+            {
+                options.InteractionServiceFactory = _ => interactionService;
+            }
             options.DisableAnsi = true;
         });
 

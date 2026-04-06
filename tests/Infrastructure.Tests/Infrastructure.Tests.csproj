@@ -30,4 +30,13 @@
     <Compile Include="$(TestsSharedDir)TempDirectory.cs" Link="shared/TempDirectory.cs" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\..\tools\GenerateCITimeline\GitHubApi.cs" Link="CITimeline\GitHubApi.cs" />
+    <Compile Include="..\..\tools\GenerateCITimeline\TimelineRenderer.cs" Link="CITimeline\TimelineRenderer.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="CITimeline\TestData\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

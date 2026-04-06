@@ -3,12 +3,12 @@
   <file datatype="xml" source-language="en" target-language="zh-Hant" original="../InteractionServiceStrings.resx">
     <body>
       <trans-unit id="AppHostConnectionLost">
-        <source>The connection to the app host was lost: {0}.</source>
-        <target state="translated">與應用程式主機的連線已中斷: {0}。</target>
+        <source>The connection to the AppHost was lost: {0}.</source>
+        <target state="needs-review-translation">與應用程式主機的連線已中斷: {0}。</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostNotCompatibleConsiderUpgrading">
-        <source>The apphost version is not compatible. Please upgrade the apphost or Aspire CLI.</source>
+        <source>The AppHost version is not compatible. Please upgrade the AppHost or Aspire CLI.</source>
         <target state="needs-review-translation">應用程式主機版本不相容。請升級應用程式主機或 Aspire CLI。</target>
         <note />
       </trans-unit>
@@ -23,8 +23,8 @@
         <note />
       </trans-unit>
       <trans-unit id="BuildingAppHost">
-        <source>Building apphost...</source>
-        <target state="translated">正在建置應用程式主機...</target>
+        <source>Building AppHost...</source>
+        <target state="needs-review-translation">正在建置應用程式主機...</target>
         <note />
       </trans-unit>
       <trans-unit id="CheckingCertificates">
@@ -63,13 +63,13 @@
         <note>Represents a type of link</note>
       </trans-unit>
       <trans-unit id="ErrorConnectingToAppHost">
-        <source>An error occurred while connecting to the app host. The app host possibly crashed before it was available: {0}.</source>
-        <target state="translated">連接到應用程式主機時發生錯誤。應用程式主機可能在可用之前當機: {0}。</target>
+        <source>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}.</source>
+        <target state="needs-review-translation">連接到應用程式主機時發生錯誤。應用程式主機可能在可用之前當機: {0}。</target>
         <note />
       </trans-unit>
       <trans-unit id="FindingAppHosts">
-        <source>Finding apphosts...</source>
-        <target state="translated">正在尋找應用程式主機...</target>
+        <source>Finding AppHosts...</source>
+        <target state="needs-review-translation">正在尋找應用程式主機...</target>
         <note />
       </trans-unit>
       <trans-unit id="InteractiveInputNotSupported">
@@ -102,19 +102,24 @@
         <target state="translated">無法建置專案。請參閱 {0} 中的記錄</target>
         <note />
       </trans-unit>
+      <trans-unit id="ProjectCouldNotBeCreated">
+        <source>The app could not be created. See logs at {0}</source>
+        <target state="new">The app could not be created. See logs at {0}</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ProjectOptionDoesntExist">
         <source>The --apphost option specified a project that does not exist.</source>
         <target state="translated">--apphost 選項指定的專案不存在。</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionNotSpecifiedMultipleAppHostsFound">
-        <source>The --apphost option was not specified and multiple app host project files were detected.</source>
-        <target state="translated">未指定 --apphost 選項，且偵測到多個應用程式主機專案檔案。</target>
+        <source>The --apphost option was not specified and multiple AppHost project files were detected.</source>
+        <target state="needs-review-translation">未指定 --apphost 選項，且偵測到多個應用程式主機專案檔案。</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionNotSpecifiedNoCsprojFound">
-        <source>The project argument was not specified and no app host project files were detected.</source>
-        <target state="translated">未指定專案引數，且未偵測到任何主控處理程序專案檔案。</target>
+        <source>The project argument was not specified and no AppHost project files were detected.</source>
+        <target state="needs-review-translation">未指定專案引數，且未偵測到任何主控處理程序專案檔案。</target>
         <note />
       </trans-unit>
       <trans-unit id="RequiredCapability">
@@ -133,12 +138,12 @@
         <note>{0} is the log file path</note>
       </trans-unit>
       <trans-unit id="SelectAppHostToUse">
-        <source>Select an apphost to use:</source>
-        <target state="translated">選擇要使用的應用程式主機:</target>
+        <source>Select an AppHost to use:</source>
+        <target state="needs-review-translation">選擇要使用的應用程式主機:</target>
         <note />
       </trans-unit>
       <trans-unit id="SpecifiedProjectFileNotAppHostProject">
-        <source>The specified project file is not an Aspire apphost project.</source>
+        <source>The specified project file is not an Aspire AppHost project.</source>
         <target state="needs-review-translation">指定的專案檔案不是 Aspire 應用程式主機專案。</target>
         <note />
       </trans-unit>
@@ -158,8 +163,8 @@
         <note />
       </trans-unit>
       <trans-unit id="UnbuildableAppHostsDetected">
-        <source>No app hosts were found (there may be app hosts project files with syntax errors/invalid SDK versions).</source>
-        <target state="translated">找不到應用程式主機 (可能有應用程式主機專案檔案具有語法錯誤/無效的 SDK 版本)。</target>
+        <source>No AppHosts were found (there may be AppHost project files with syntax errors/invalid SDK versions).</source>
+        <target state="needs-review-translation">找不到應用程式主機 (可能有應用程式主機專案檔案具有語法錯誤/無效的 SDK 版本)。</target>
         <note />
       </trans-unit>
       <trans-unit id="UnexpectedErrorOccurred">
@@ -173,8 +178,8 @@
         <note>{0} is a path</note>
       </trans-unit>
       <trans-unit id="WaitingForDebuggerToAttachToAppHost">
-        <source>Waiting for debugger to attach to app host process</source>
-        <target state="translated">正在等候偵錯工具連結到應用程式主機流程</target>
+        <source>Waiting for debugger to attach to AppHost process</source>
+        <target state="needs-review-translation">正在等候偵錯工具連結到應用程式主機流程</target>
         <note />
       </trans-unit>
     </body>

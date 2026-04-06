@@ -118,7 +118,7 @@ foreach ($template in $templates)
 
             try
             {
-                aspire stop *> $preStartStopLogPath
+                aspire stop *>&1 | Out-File -FilePath $preStartStopLogPath -Encoding utf8
             }
             catch
             {
@@ -158,7 +158,7 @@ foreach ($template in $templates)
             $elapsed = (Get-Date) - $startAt
             $startOutput = Get-CombinedProcessOutput -StdOutPath $startStdOutPath -StdErrPath $startStdErrPath
 
-            Set-Content -Path $startCombinedPath -Value $startOutput
+            Set-Content -Path $startCombinedPath -Value $startOutput -Encoding utf8
 
             if ($process.ExitCode -ne 0)
             {
@@ -191,7 +191,7 @@ foreach ($template in $templates)
 
             $resourcesOutput = Get-CombinedProcessOutput -StdOutPath $resourcesStdOutPath -StdErrPath $resourcesStdErrPath
 
-            Set-Content -Path $resourcesCombinedPath -Value $resourcesOutput
+            Set-Content -Path $resourcesCombinedPath -Value $resourcesOutput -Encoding utf8
             Write-Host $resourcesOutput
 
             if ($resourcesProcess.ExitCode -ne 0)
@@ -216,7 +216,7 @@ foreach ($template in $templates)
 
                 $waitOutput = Get-CombinedProcessOutput -StdOutPath $waitStdOutPath -StdErrPath $waitStdErrPath
 
-                Set-Content -Path $waitCombinedPath -Value $waitOutput
+                Set-Content -Path $waitCombinedPath -Value $waitOutput -Encoding utf8
 
                 if ($waitProcess.ExitCode -ne 0)
                 {
@@ -240,7 +240,7 @@ foreach ($template in $templates)
             Push-Location $projectRoot
             try
             {
-                aspire stop *> $stopLogPath
+                aspire stop *>&1 | Out-File -FilePath $stopLogPath -Encoding utf8
             }
             catch
             {

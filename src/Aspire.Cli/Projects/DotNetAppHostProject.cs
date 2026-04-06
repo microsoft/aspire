@@ -32,6 +32,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     private readonly IDotNetSdkInstaller _sdkInstaller;
     private readonly RunningInstanceManager _runningInstanceManager;
     private readonly Diagnostics.FileLoggerProvider _fileLoggerProvider;
+    private readonly Program.CliLoggingOptions _loggingOptions;
 
     private static readonly string[] s_detectionPatterns = ["*.csproj", "*.fsproj", "*.vbproj", "apphost.cs"];
     internal static IReadOnlyCollection<string> ProjectExtensions { get; } =
@@ -47,6 +48,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         IDotNetSdkInstaller sdkInstaller,
         ILogger<DotNetAppHostProject> logger,
         Diagnostics.FileLoggerProvider fileLoggerProvider,
+        Program.CliLoggingOptions loggingOptions,
         TimeProvider? timeProvider = null)
     {
         _runner = runner;
@@ -58,6 +60,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         _sdkInstaller = sdkInstaller;
         _logger = logger;
         _fileLoggerProvider = fileLoggerProvider;
+        _loggingOptions = loggingOptions;
         _timeProvider = timeProvider ?? TimeProvider.System;
         _runningInstanceManager = new RunningInstanceManager(_logger, _interactionService, _timeProvider);
     }
@@ -172,7 +175,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         }
 
         // For project files, check if it's a valid Aspire AppHost using GetAppHostInformationAsync
-        var information = await _runner.GetAppHostInformationAsync(appHostFile, new DotNetCliRunnerInvocationOptions(), cancellationToken);
+        var information = await _runner.GetAppHostInformationAsync(appHostFile, new ProcessInvocationOptions(), cancellationToken);
 
         if (information.ExitCode == 0 && information.IsAspireHost)
         {
@@ -228,6 +231,12 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             _logger.LogInformation("Aspire run isolated. Isolated UserSecretsId: {IsolatedUserSecretsId}", isolatedUserSecretsId);
         }
 
+        // Enable debug logging in the app host so that debug-level output is
+        // captured in the CLI log file for diagnostics. Defaults to Debug but
+        // can be overridden via --log-level.
+        var appHostLogLevel = _loggingOptions.ConsoleLogLevel ?? LogLevel.Debug;
+        env["Logging__LogLevel__Default"] = appHostLogLevel.ToString();
+
         if (context.WaitForDebugger)
         {
             env[KnownConfigNames.WaitForDebugger] = "true";
@@ -261,7 +270,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
                 var shouldBuildInCli = !isExtensionHost || extensionHasBuildCapability;
                 if (shouldBuildInCli)
                 {
-                    var buildOptions = new DotNetCliRunnerInvocationOptions
+                    var buildOptions = new ProcessInvocationOptions
                     {
                         StandardOutputCallback = buildOutputCollector.AppendOutput,
                         StandardErrorCallback = buildOutputCollector.AppendError,
@@ -309,7 +318,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         // Signal that build/preparation is complete
         context.BuildCompletionSource?.TrySetResult(true);
 
-        var runOptions = new DotNetCliRunnerInvocationOptions
+        var runOptions = new ProcessInvocationOptions
         {
             StandardOutputCallback = runOutputCollector.AppendOutput,
             StandardErrorCallback = runOutputCollector.AppendError,
@@ -408,7 +417,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             if (!context.NoBuild)
             {
                 var buildOutputCollector = new OutputCollector(_fileLoggerProvider, "Build");
-                var buildOptions = new DotNetCliRunnerInvocationOptions
+                var buildOptions = new ProcessInvocationOptions
                 {
                     StandardOutputCallback = buildOutputCollector.AppendOutput,
                     StandardErrorCallback = buildOutputCollector.AppendError,
@@ -439,7 +448,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         var runOutputCollector = new OutputCollector(_fileLoggerProvider, "AppHost");
         context.OutputCollector = runOutputCollector;
 
-        var runOptions = new DotNetCliRunnerInvocationOptions
+        var runOptions = new ProcessInvocationOptions
         {
             StandardOutputCallback = runOutputCollector.AppendOutput,
             StandardErrorCallback = runOutputCollector.AppendError,
@@ -473,7 +482,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         var outputCollector = new OutputCollector(_fileLoggerProvider, "Package");
         context.OutputCollector = outputCollector;
 
-        var options = new DotNetCliRunnerInvocationOptions
+        var options = new ProcessInvocationOptions
         {
             StandardOutputCallback = outputCollector.AppendOutput,
             StandardErrorCallback = outputCollector.AppendError,
@@ -539,7 +548,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
         await _runner.InitUserSecretsAsync(
             projectFile,
-            new DotNetCliRunnerInvocationOptions(),
+            new ProcessInvocationOptions(),
             cancellationToken);
 
         // Re-query
@@ -554,7 +563,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
                 projectFile,
                 items: [],
                 properties: ["UserSecretsId"],
-                new DotNetCliRunnerInvocationOptions(),
+                new ProcessInvocationOptions(),
                 cancellationToken);
 
             if (exitCode != 0 || jsonDocument is null)

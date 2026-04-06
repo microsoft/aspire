@@ -39,6 +39,10 @@ internal sealed class AtsContextFactory
             {
                 logger.LogError("[ATS] {Message} at {Location}", diagnostic.Message, diagnostic.Location);
             }
+            else if (diagnostic.Severity == AtsDiagnosticSeverity.Info)
+            {
+                logger.LogDebug("[ATS] {Message} at {Location}", diagnostic.Message, diagnostic.Location);
+            }
             else
             {
                 logger.LogWarning("[ATS] {Message} at {Location}", diagnostic.Message, diagnostic.Location);

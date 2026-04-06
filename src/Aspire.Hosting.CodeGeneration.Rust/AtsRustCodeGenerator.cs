@@ -13,7 +13,7 @@ namespace Aspire.Hosting.CodeGeneration.Rust;
 /// Generates a Rust SDK using the ATS (Aspire Type System) capability-based API.
 /// Produces wrapper structs that proxy capabilities via JSON-RPC.
 /// </summary>
-public sealed class AtsRustCodeGenerator : ICodeGenerator
+internal sealed class AtsRustCodeGenerator : ICodeGenerator
 {
     private static readonly HashSet<string> s_rustKeywords = new(StringComparer.Ordinal)
     {
@@ -573,6 +573,9 @@ public sealed class AtsRustCodeGenerator : ICodeGenerator
         WriteLine("        .map_err(|_| \"REMOTE_APP_HOST_SOCKET_PATH environment variable not set. Run this application using `aspire run`\")?;");
         WriteLine("    let client = Arc::new(AspireClient::new(&socket_path));");
         WriteLine("    client.connect()?;");
+        WriteLine("    let auth_token = std::env::var(\"ASPIRE_REMOTE_APPHOST_TOKEN\")");
+        WriteLine("        .map_err(|_| \"ASPIRE_REMOTE_APPHOST_TOKEN environment variable not set. Run this application using `aspire run`\")?;");
+        WriteLine("    client.authenticate(&auth_token)?;");
         WriteLine("    Ok(client)");
         WriteLine("}");
         WriteLine();

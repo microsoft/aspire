@@ -15,6 +15,7 @@ public static class ContainerResourceExtensions
     /// </summary>
     /// <param name="model">The distributed application model to search for container resources.</param>
     /// <returns>A collection of container resources in the specified distributed application model.</returns>
+    [AspireExportIgnore(Reason = "Application model inspection helper — not part of the ATS surface.")]
     public static IEnumerable<IResource> GetContainerResources(this DistributedApplicationModel model)
     {
         ArgumentNullException.ThrowIfNull(model);
@@ -33,6 +34,7 @@ public static class ContainerResourceExtensions
     /// </summary>
     /// <param name="resource">The resource to check.</param>
     /// <returns>true if the specified resource is a container resource; otherwise, false.</returns>
+    [AspireExportIgnore(Reason = "Application model inspection helper — not part of the ATS surface.")]
     public static bool IsContainer(this IResource resource)
     {
         ArgumentNullException.ThrowIfNull(resource);

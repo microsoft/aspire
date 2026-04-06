@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "NodeJS TypeScript service for PostgresEndToEnd playground",
   "main": "app.ts",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "ts-node app.ts",
     "dev": "ts-node app.ts"

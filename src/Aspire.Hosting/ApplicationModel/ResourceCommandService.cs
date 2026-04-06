@@ -161,7 +161,8 @@ public class ResourceCommandService
                 {
                     ResourceName = resourceId,
                     ServiceProvider = _serviceProvider,
-                    CancellationToken = cancellationToken
+                    CancellationToken = cancellationToken,
+                    Logger = logger
                 };
 
                 var result = await annotation.ExecuteCommand(context).ConfigureAwait(false);

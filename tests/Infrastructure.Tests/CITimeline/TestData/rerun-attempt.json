@@ -1,0 +1,33 @@
+{
+  "run_info": {
+    "run_started_at": "2026-01-15T10:00:00Z",
+    "updated_at": "2026-01-15T11:00:00Z",
+    "conclusion": "success",
+    "status": "completed",
+    "run_attempt": 2
+  },
+  "jobs": [
+    {
+      "name": "Build (ubuntu-latest)",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-01-15T10:30:00Z",
+      "started_at": "2026-01-15T10:00:05Z",
+      "completed_at": "2026-01-15T10:15:00Z",
+      "runner_name": "runner-old",
+      "html_url": "https://github.com/test/run/old",
+      "labels": ["ubuntu-latest"]
+    },
+    {
+      "name": "Build (ubuntu-latest)",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-01-15T10:30:00Z",
+      "started_at": "2026-01-15T10:31:00Z",
+      "completed_at": "2026-01-15T10:45:00Z",
+      "runner_name": "runner-new",
+      "html_url": "https://github.com/test/run/new",
+      "labels": ["ubuntu-latest"]
+    }
+  ]
+}

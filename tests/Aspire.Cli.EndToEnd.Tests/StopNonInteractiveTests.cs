@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
@@ -264,7 +265,9 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
         // Try to stop in non-interactive mode - should get an error about multiple AppHosts
         await auto.TypeAsync("aspire stop --non-interactive");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Multiple apphosts are running", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitUntilTextAsync(
+            string.Format(CultureInfo.InvariantCulture, StopCommandStrings.MultipleAppHostsNonInteractive, "--apphost", "--all"),
+            timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForAnyPromptAsync(counter, TimeSpan.FromSeconds(30));
 
         // Clear screen

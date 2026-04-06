@@ -28,7 +28,7 @@ public static class AzureOpenAIExtensions
     ///
     /// These can be replaced by calling <see cref="WithRoleAssignments{T}(IResourceBuilder{T}, IResourceBuilder{AzureOpenAIResource}, CognitiveServicesBuiltInRole[])"/>.
     /// </remarks>
-    [AspireExport("addAzureOpenAI", Description = "Adds an Azure OpenAI resource")]
+    [AspireExport(Description = "Adds an Azure OpenAI resource")]
     public static IResourceBuilder<AzureOpenAIResource> AddAzureOpenAI(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -171,7 +171,7 @@ public static class AzureOpenAIExtensions
     /// <param name="modelName">The name of the model to deploy.</param>
     /// <param name="modelVersion">The version of the model to deploy.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("addDeployment", Description = "Adds an Azure OpenAI deployment resource")]
+    [AspireExport(Description = "Adds an Azure OpenAI deployment resource")]
     public static IResourceBuilder<AzureOpenAIDeploymentResource> AddDeployment(this IResourceBuilder<AzureOpenAIResource> builder, [ResourceName] string name, string modelName, string modelVersion)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -191,7 +191,7 @@ public static class AzureOpenAIExtensions
     /// <param name="builder">The Azure OpenAI Deployment resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the <see cref="AzureOpenAIDeploymentResource"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withProperties", Description = "Configures properties of an Azure OpenAI deployment", RunSyncOnBackgroundThread = true)]
+    [AspireExport(Description = "Configures properties of an Azure OpenAI deployment", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureOpenAIDeploymentResource> WithProperties(this IResourceBuilder<AzureOpenAIDeploymentResource> builder, Action<AzureOpenAIDeploymentResource> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);

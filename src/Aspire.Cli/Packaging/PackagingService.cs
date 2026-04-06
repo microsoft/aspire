@@ -3,6 +3,7 @@
 
 using Aspire.Cli.Configuration;
 using Aspire.Cli.NuGet;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using System.Reflection;
 
@@ -44,7 +45,7 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
                 // The packages subdirectory contains the actual .nupkg files
                 // Use forward slashes for cross-platform NuGet config compatibility
                 var packagesPath = Path.Combine(prHive.FullName, "packages").Replace('\\', '/');
-                var prChannel = PackageChannel.CreateExplicitChannel(prHive.Name, PackageChannelQuality.Prerelease, new[]
+                var prChannel = PackageChannel.CreateExplicitChannel(prHive.Name, PackageChannelQuality.Both, new[]
                 {
                     new PackageMapping("Aspire*", packagesPath),
                     new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
@@ -109,8 +110,7 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
         if (!string.IsNullOrEmpty(overrideFeed))
         {
             // Validate that the override URL is well-formed
-            if (Uri.TryCreate(overrideFeed, UriKind.Absolute, out var uri) && 
-                (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp))
+            if (UrlHelper.IsHttpUrl(overrideFeed))
             {
                 return overrideFeed;
             }

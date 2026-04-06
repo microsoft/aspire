@@ -3,7 +3,7 @@
   <file datatype="xml" source-language="en" target-language="ja" original="../InitCommandStrings.resx">
     <body>
       <trans-unit id="AddingAppHostProjectToSolution">
-        <source>Adding apphost project to solution...</source>
+        <source>Adding AppHost project to solution...</source>
         <target state="needs-review-translation">AppHost プロジェクトをソリューションに追加しています...</target>
         <note />
       </trans-unit>
@@ -23,7 +23,7 @@
         <note />
       </trans-unit>
       <trans-unit id="CreatingAppHostProject">
-        <source>Creating apphost project...</source>
+        <source>Creating AppHost project...</source>
         <target state="needs-review-translation">AppHost プロジェクトを作成しています...</target>
         <note />
       </trans-unit>
@@ -38,8 +38,8 @@
         <note />
       </trans-unit>
       <trans-unit id="LanguageOptionDescription">
-        <source>The programming language for the apphost (csharp, typescript)</source>
-        <target state="new">The programming language for the apphost (csharp, typescript)</target>
+        <source>The programming language for the AppHost (csharp, typescript)</source>
+        <target state="new">The programming language for the AppHost (csharp, typescript)</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleSolutionsFound">
@@ -48,7 +48,7 @@
         <note />
       </trans-unit>
       <trans-unit id="NoSolutionFoundCreatingSingleFileAppHost">
-        <source>No solution file found. Creating single-file apphost...</source>
+        <source>No solution file found. Creating single-file AppHost...</source>
         <target state="needs-review-translation">ソリューション ファイルが見つかりません。単一ファイルの AppHost を作成しています...</target>
         <note />
       </trans-unit>
@@ -68,8 +68,8 @@
         <note />
       </trans-unit>
       <trans-unit id="SolutionAndProjectInSameDirectory">
-        <source>The solution file '{0}' and project file '{1}' are in the same directory. The apphost and ServiceDefaults projects cannot be created inside an existing project directory. Move the solution file to a parent directory or the project file to a subdirectory.</source>
-        <target state="new">The solution file '{0}' and project file '{1}' are in the same directory. The apphost and ServiceDefaults projects cannot be created inside an existing project directory. Move the solution file to a parent directory or the project file to a subdirectory.</target>
+        <source>The solution file '{0}' and project file '{1}' are in the same directory. The AppHost and ServiceDefaults projects cannot be created inside an existing project directory. Move the solution file to a parent directory or the project file to a subdirectory.</source>
+        <target state="new">The solution file '{0}' and project file '{1}' are in the same directory. The AppHost and ServiceDefaults projects cannot be created inside an existing project directory. Move the solution file to a parent directory or the project file to a subdirectory.</target>
         <note />
       </trans-unit>
     </body>

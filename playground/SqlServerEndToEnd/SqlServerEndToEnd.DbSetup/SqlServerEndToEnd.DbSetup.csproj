@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <AspireProjectOrPackageReference Include="Aspire.Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="$(MicrosoftEntityFrameworkCore)" />
   </ItemGroup>
 
 </Project>

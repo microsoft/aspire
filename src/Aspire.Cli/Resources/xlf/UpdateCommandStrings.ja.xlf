@@ -8,12 +8,12 @@
         <note />
       </trans-unit>
       <trans-unit id="AnalyzeAppHost">
-        <source>Analyze apphost</source>
+        <source>Analyze AppHost</source>
         <target state="needs-review-translation">アプリ ホスティング プロセスの分析</target>
         <note />
       </trans-unit>
       <trans-unit id="AnalyzeAppHostSdk">
-        <source>Analyze apphost SDK</source>
+        <source>Analyze AppHost SDK</source>
         <target state="needs-review-translation">アプリ ホスティング プロセス SDK の分析</target>
         <note />
       </trans-unit>
@@ -113,7 +113,7 @@
         <note />
       </trans-unit>
       <trans-unit id="FallbackParsingWarning">
-        <source>Note: Update plan generated using fallback parsing due to unresolvable apphost SDK. Dependency analysis may have reduced accuracy.</source>
+        <source>Note: Update plan generated using fallback parsing due to unresolvable AppHost SDK. Dependency analysis may have reduced accuracy.</source>
         <target state="needs-review-translation">注: 解決できない AppHost SDK が原因でフォールバック解析を使用して生成されたプランを更新します。依存関係分析の精度が低下する可能性があります。</target>
         <note />
       </trans-unit>
@@ -138,7 +138,7 @@
         <note />
       </trans-unit>
       <trans-unit id="NoAppHostFoundUpdateCliPrompt">
-        <source>No Aspire apphost project found. Would you like to update the Aspire CLI instead?</source>
+        <source>No Aspire AppHost project found. Would you like to update the Aspire CLI instead?</source>
         <target state="needs-review-translation">Aspire AppHost プロジェクトが見つかりませんでした。代わりに Aspire CLI を更新しますか?</target>
         <note />
       </trans-unit>
@@ -173,7 +173,7 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire apphost project file</source>
+        <source>The path to the Aspire AppHost project file</source>
         <target state="needs-review-translation">Aspire アプリ ホスティング プロセス プロジェクト ファイルへのパス。</target>
         <note />
       </trans-unit>

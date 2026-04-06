@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.ApplicationModel;
 
@@ -242,4 +243,9 @@ public sealed class ExecuteCommandContext
     /// The cancellation token.
     /// </summary>
     public required CancellationToken CancellationToken { get; init; }
+
+    /// <summary>
+    /// The logger for the resource.
+    /// </summary>
+    public required ILogger Logger { get; init; }
 }

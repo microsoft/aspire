@@ -255,8 +255,6 @@ public class AzureManagedRedisResource(string name, Action<AzureResourceInfrastr
         }
     }
 
-    BicepOutputReference IAzurePrivateEndpointTarget.Id => Id;
-
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["redisEnterprise"];
 
     string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() => "privatelink.redis.azure.net";

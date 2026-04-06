@@ -147,7 +147,7 @@ public class MySqlFunctionalTests(ITestOutputHelper testOutputHelper)
             }
             else
             {
-                bindMountPath = Directory.CreateTempSubdirectory().FullName;
+                bindMountPath = Path.Combine(Directory.CreateTempSubdirectory().FullName, "data");
 
                 mysql1.WithDataBindMount(bindMountPath);
             }
@@ -285,7 +285,7 @@ public class MySqlFunctionalTests(ITestOutputHelper testOutputHelper)
             {
                 try
                 {
-                    Directory.Delete(bindMountPath);
+                    Directory.Delete(Path.GetDirectoryName(bindMountPath)!, recursive: true);
                 }
                 catch
                 {
@@ -306,9 +306,17 @@ public class MySqlFunctionalTests(ITestOutputHelper testOutputHelper)
             .AddRetry(new() { MaxRetryAttempts = 10, BackoffType = DelayBackoffType.Linear, Delay = TimeSpan.FromSeconds(2), ShouldHandle = new PredicateBuilder().Handle<MySqlException>() })
             .Build();
 
-        var bindMountPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        var bindMountPath = Directory.CreateTempSubdirectory().FullName;
 
-        Directory.CreateDirectory(bindMountPath);
+        if (!OperatingSystem.IsWindows())
+        {
+            const UnixFileMode BindMountPermissions =
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+                UnixFileMode.OtherRead | UnixFileMode.OtherExecute;
+
+            File.SetUnixFileMode(bindMountPath, BindMountPermissions);
+        }
 
         try
         {
@@ -393,9 +401,7 @@ public class MySqlFunctionalTests(ITestOutputHelper testOutputHelper)
             .AddRetry(new() { MaxRetryAttempts = 10, BackoffType = DelayBackoffType.Linear, Delay = TimeSpan.FromSeconds(2), ShouldHandle = new PredicateBuilder().Handle<MySqlException>() })
             .Build();
 
-        var initFilesPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-
-        Directory.CreateDirectory(initFilesPath);
+        var initFilesPath = Directory.CreateTempSubdirectory().FullName;
 
         try
         {

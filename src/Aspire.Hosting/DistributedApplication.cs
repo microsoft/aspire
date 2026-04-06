@@ -150,7 +150,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("createBuilder", Description = "Creates a new distributed application builder")]
+    [AspireExport(Description = "Creates a new distributed application builder")]
     public static IDistributedApplicationBuilder CreateBuilder(string[] args)
     {
         WaitForDebugger();

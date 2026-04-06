@@ -5,8 +5,13 @@ import {
     codeLensResourceRunningWarning,
     codeLensResourceRunningError,
     codeLensResourceStarting,
+    codeLensResourceStopping,
+    codeLensResourceNotStarted,
+    codeLensResourceWaiting,
     codeLensResourceStopped,
+    codeLensResourceStoppedWithExitCode,
     codeLensResourceStoppedError,
+    codeLensResourceStoppedErrorWithExitCode,
     codeLensResourceError,
 } from '../loc/strings';
 import { ResourceState, StateStyle } from '../editor/resourceConstants';
@@ -48,12 +53,12 @@ suite('getCodeLensStateLabel', () => {
         assert.strictEqual(getCodeLensStateLabel(ResourceState.Building, ''), codeLensResourceStarting);
     });
 
-    test('Waiting returns starting label', () => {
-        assert.strictEqual(getCodeLensStateLabel(ResourceState.Waiting, ''), codeLensResourceStarting);
+    test('Waiting returns waiting label', () => {
+        assert.strictEqual(getCodeLensStateLabel(ResourceState.Waiting, ''), codeLensResourceWaiting);
     });
 
-    test('NotStarted returns starting label', () => {
-        assert.strictEqual(getCodeLensStateLabel(ResourceState.NotStarted, ''), codeLensResourceStarting);
+    test('NotStarted returns not-started label', () => {
+        assert.strictEqual(getCodeLensStateLabel(ResourceState.NotStarted, ''), codeLensResourceNotStarted);
     });
 
     // --- Error states ---
@@ -76,8 +81,8 @@ suite('getCodeLensStateLabel', () => {
         assert.strictEqual(getCodeLensStateLabel(ResourceState.Exited, ''), codeLensResourceStopped);
     });
 
-    test('Stopping with no stateStyle returns stopped label', () => {
-        assert.strictEqual(getCodeLensStateLabel(ResourceState.Stopping, ''), codeLensResourceStopped);
+    test('Stopped with no stateStyle returns stopped label', () => {
+        assert.strictEqual(getCodeLensStateLabel(ResourceState.Stopped, ''), codeLensResourceStopped);
     });
 
     test('Finished with error stateStyle returns stopped-error label', () => {
@@ -88,8 +93,30 @@ suite('getCodeLensStateLabel', () => {
         assert.strictEqual(getCodeLensStateLabel(ResourceState.Exited, StateStyle.Error), codeLensResourceStoppedError);
     });
 
-    test('Stopping with error stateStyle returns stopped-error label', () => {
-        assert.strictEqual(getCodeLensStateLabel(ResourceState.Stopping, StateStyle.Error), codeLensResourceStoppedError);
+    test('Stopping returns stopping label', () => {
+        assert.strictEqual(getCodeLensStateLabel(ResourceState.Stopping, ''), codeLensResourceStopping);
+    });
+
+    test('Stopping with error stateStyle still returns stopping label', () => {
+        assert.strictEqual(getCodeLensStateLabel(ResourceState.Stopping, StateStyle.Error), codeLensResourceStopping);
+    });
+
+    // --- Exit code tests ---
+
+    test('Finished with exitCode 0 returns stopped label (no exit code shown)', () => {
+        assert.strictEqual(getCodeLensStateLabel(ResourceState.Finished, '', 0), codeLensResourceStopped);
+    });
+
+    test('Exited with exitCode and error stateStyle returns stopped-error-with-exit-code label', () => {
+        assert.strictEqual(getCodeLensStateLabel(ResourceState.Exited, StateStyle.Error, 1), codeLensResourceStoppedErrorWithExitCode(1));
+    });
+
+    test('Finished with null exitCode returns stopped label', () => {
+        assert.strictEqual(getCodeLensStateLabel(ResourceState.Finished, '', null), codeLensResourceStopped);
+    });
+
+    test('Finished with undefined exitCode returns stopped label', () => {
+        assert.strictEqual(getCodeLensStateLabel(ResourceState.Finished, ''), codeLensResourceStopped);
     });
 
     // --- Default / unknown states ---

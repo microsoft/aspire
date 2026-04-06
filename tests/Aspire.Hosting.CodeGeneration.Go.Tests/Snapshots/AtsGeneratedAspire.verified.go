@@ -476,6 +476,19 @@ func (s *TestDatabaseResource) WithDependency(dependency *IResourceWithConnectio
 	return result.(*IResource), nil
 }
 
+// WithUnionDependency adds a dependency from a string or another resource
+func (s *TestDatabaseResource) WithUnionDependency(dependency any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["dependency"] = SerializeValue(dependency)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
 // WithEndpoints sets the endpoints
 func (s *TestDatabaseResource) WithEndpoints(endpoints []string) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -1026,6 +1039,19 @@ func (s *TestRedisResource) WithDependency(dependency *IResourceWithConnectionSt
 	return result.(*IResource), nil
 }
 
+// WithUnionDependency adds a dependency from a string or another resource
+func (s *TestRedisResource) WithUnionDependency(dependency any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["dependency"] = SerializeValue(dependency)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
 // WithEndpoints sets the endpoints
 func (s *TestRedisResource) WithEndpoints(endpoints []string) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -1534,6 +1560,19 @@ func (s *TestVaultResource) WithDependency(dependency *IResourceWithConnectionSt
 	return result.(*IResource), nil
 }
 
+// WithUnionDependency adds a dependency from a string or another resource
+func (s *TestVaultResource) WithUnionDependency(dependency any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["dependency"] = SerializeValue(dependency)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
 // WithEndpoints sets the endpoints
 func (s *TestVaultResource) WithEndpoints(endpoints []string) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -1777,6 +1816,13 @@ func Connect() (*AspireClient, error) {
 	}
 	client := NewAspireClient(socketPath)
 	if err := client.Connect(); err != nil {
+		return nil, err
+	}
+	authToken := os.Getenv("ASPIRE_REMOTE_APPHOST_TOKEN")
+	if authToken == "" {
+		return nil, fmt.Errorf("ASPIRE_REMOTE_APPHOST_TOKEN environment variable not set. Run this application using `aspire run`")
+	}
+	if err := client.Authenticate(authToken); err != nil {
 		return nil, err
 	}
 	client.OnDisconnect(func() { os.Exit(1) })

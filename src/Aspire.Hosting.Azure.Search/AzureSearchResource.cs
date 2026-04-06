@@ -91,8 +91,6 @@ public class AzureSearchResource(string name, Action<AzureResourceInfrastructure
         yield return new("Uri", UriExpression);
     }
 
-    BicepOutputReference IAzurePrivateEndpointTarget.Id => Id;
-
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["searchService"];
 
     string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() => "privatelink.search.windows.net";

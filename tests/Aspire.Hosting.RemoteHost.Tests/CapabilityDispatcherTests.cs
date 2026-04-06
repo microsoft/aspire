@@ -1452,13 +1452,13 @@ public class CapabilityDispatcherTests
 /// </summary>
 internal static class TestCapabilities
 {
-    [AspireExport("testMethod", Description = "Test method")]
+    [AspireExport(Description = "Test method")]
     public static string TestMethod(string value)
     {
         return value.ToUpperInvariant();
     }
 
-    [AspireExport("withOptional", Description = "Method with optional parameter")]
+    [AspireExport(Description = "Method with optional parameter")]
     public static string WithOptional(string required, string optional = "default")
     {
         return $"{required}:{optional}";
@@ -1471,28 +1471,28 @@ internal static class TestCapabilities
         _ = value; // Use the parameter to avoid warning
     }
 
-    [AspireExport("asyncWithResult", Description = "Async method returning Task<T>")]
+    [AspireExport(Description = "Async method returning Task<T>")]
     public static async Task<string> AsyncWithResult(string value)
     {
         await Task.Delay(1);
         return value.ToUpperInvariant();
     }
 
-    [AspireExport("asyncValueTaskWithResult", Description = "Async method returning ValueTask<T>")]
+    [AspireExport(Description = "Async method returning ValueTask<T>")]
     public static async ValueTask<string> AsyncValueTaskWithResult(string value)
     {
         await Task.Delay(1);
         return value.ToUpperInvariant();
     }
 
-    [AspireExport("asyncThrows", Description = "Async method that throws")]
+    [AspireExport(Description = "Async method that throws")]
     public static async Task<string> AsyncThrows(string value)
     {
         await Task.Delay(1);
         throw new InvalidOperationException("Async error: " + value);
     }
 
-    [AspireExport("canObserveCancellation", Description = "Tests cancellation token round-tripping")]
+    [AspireExport(Description = "Tests cancellation token round-tripping")]
     public static bool CanObserveCancellation(CancellationToken cancellationToken)
     {
         return cancellationToken.IsCancellationRequested;
@@ -1607,7 +1607,7 @@ internal static class TestCapabilitiesWithCallback
     /// <summary>
     /// A method that accepts a callback but doesn't invoke it.
     /// </summary>
-    [AspireExport("withCallback", Description = "Method with callback parameter")]
+    [AspireExport(Description = "Method with callback parameter")]
     public static string WithCallback(string value, Action callback)
     {
         // The callback is provided but we don't invoke it in this test
@@ -1618,7 +1618,7 @@ internal static class TestCapabilitiesWithCallback
     /// <summary>
     /// A method that invokes the callback.
     /// </summary>
-    [AspireExport("invokeCallback", Description = "Method that invokes callback")]
+    [AspireExport(Description = "Method that invokes callback")]
     public static void InvokeCallback(Func<Task> callback)
     {
         callback().GetAwaiter().GetResult();
@@ -1627,7 +1627,7 @@ internal static class TestCapabilitiesWithCallback
     /// <summary>
     /// A method that invokes a typed callback with arguments.
     /// </summary>
-    [AspireExport("invokeTypedCallback", Description = "Method that invokes typed callback")]
+    [AspireExport(Description = "Method that invokes typed callback")]
     public static void InvokeTypedCallback(Func<string, Task> callback)
     {
         callback("hello from C#").GetAwaiter().GetResult();
@@ -1636,7 +1636,7 @@ internal static class TestCapabilitiesWithCallback
     /// <summary>
     /// A method with an async callback that returns a value.
     /// </summary>
-    [AspireExport("withAsyncCallback", Description = "Method with async callback returning value")]
+    [AspireExport(Description = "Method with async callback returning value")]
     public static int WithAsyncCallback(Func<Task<int>> callback)
     {
         return callback().GetAwaiter().GetResult();
@@ -1652,25 +1652,25 @@ internal static class TestCapabilitiesWithBackgroundThreadDispatch
         LastObservedThreadId = 0;
     }
 
-    [AspireExport("syncInlineThreadProbe", Description = "Captures the current thread for inline sync invocation")]
+    [AspireExport(Description = "Captures the current thread for inline sync invocation")]
     public static int SyncInlineThreadProbe()
     {
         return Environment.CurrentManagedThreadId;
     }
 
-    [AspireExport("syncBackgroundThreadProbe", Description = "Captures the current thread for background-thread sync invocation", RunSyncOnBackgroundThread = true)]
+    [AspireExport(Description = "Captures the current thread for background-thread sync invocation", RunSyncOnBackgroundThread = true)]
     public static int SyncBackgroundThreadProbe()
     {
         return Environment.CurrentManagedThreadId;
     }
 
-    [AspireExport("valueTaskBackgroundThreadProbe", Description = "Captures the current thread for ValueTask<T> invocation", RunSyncOnBackgroundThread = true)]
+    [AspireExport(Description = "Captures the current thread for ValueTask<T> invocation", RunSyncOnBackgroundThread = true)]
     public static ValueTask<int> ValueTaskBackgroundThreadProbe()
     {
         return ValueTask.FromResult(Environment.CurrentManagedThreadId);
     }
 
-    [AspireExport("nonGenericValueTaskBackgroundThreadProbe", Description = "Captures the current thread for ValueTask invocation", RunSyncOnBackgroundThread = true)]
+    [AspireExport(Description = "Captures the current thread for ValueTask invocation", RunSyncOnBackgroundThread = true)]
     public static ValueTask NonGenericValueTaskBackgroundThreadProbe()
     {
         LastObservedThreadId = Environment.CurrentManagedThreadId;
@@ -1683,13 +1683,13 @@ internal static class TestCapabilitiesWithBackgroundThreadDispatch
 /// </summary>
 internal static class TestTypeCategoryCapabilities
 {
-    [AspireExport("sumArray", Description = "Sums an integer array")]
+    [AspireExport(Description = "Sums an integer array")]
     public static int SumArray(int[] values)
     {
         return values.Sum();
     }
 
-    [AspireExport("returnArray", Description = "Returns a string array")]
+    [AspireExport(Description = "Returns a string array")]
     public static string[] ReturnArray(int count)
     {
         return Enumerable.Range(0, count).Select(i => $"item{i}").ToArray();
@@ -1701,19 +1701,19 @@ internal static class TestTypeCategoryCapabilities
         return values.Sum();
     }
 
-    [AspireExport("acceptUnion", Description = "Accepts a union of string or int")]
+    [AspireExport(Description = "Accepts a union of string or int")]
     public static string AcceptUnion([AspireUnion(typeof(string), typeof(int))] object value)
     {
         return value.ToString()!;
     }
 
-    [AspireExport("returnMutableList", Description = "Returns a mutable List<string>")]
+    [AspireExport(Description = "Returns a mutable List<string>")]
     public static List<object> ReturnMutableList()
     {
         return ["first", "second", "third"];
     }
 
-    [AspireExport("returnMutableDict", Description = "Returns a mutable Dictionary<string, object>")]
+    [AspireExport(Description = "Returns a mutable Dictionary<string, object>")]
     public static Dictionary<string, object> ReturnMutableDict()
     {
         return new Dictionary<string, object>
@@ -1739,19 +1739,19 @@ internal enum TestDispatchEnum
 /// </summary>
 internal static class TestEnumCapabilities
 {
-    [AspireExport("acceptEnum", Description = "Accepts an enum parameter")]
+    [AspireExport(Description = "Accepts an enum parameter")]
     public static string AcceptEnum(TestDispatchEnum value)
     {
         return $"Received: {value}";
     }
 
-    [AspireExport("returnEnum", Description = "Returns an enum value")]
+    [AspireExport(Description = "Returns an enum value")]
     public static TestDispatchEnum ReturnEnum(string name)
     {
         return Enum.Parse<TestDispatchEnum>(name);
     }
 
-    [AspireExport("acceptOptionalEnum", Description = "Accepts an optional enum parameter")]
+    [AspireExport(Description = "Accepts an optional enum parameter")]
     public static string AcceptOptionalEnum(TestDispatchEnum? value = null)
     {
         return value.HasValue ? $"Received: {value.Value}" : "No value";

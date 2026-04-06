@@ -581,7 +581,7 @@ func (s *CSharpAppResource) WithRequiredCommand(command string, helpLink *string
 }
 
 // WithEnvironment sets an environment variable
-func (s *CSharpAppResource) WithEnvironment(name string, value string) (*IResourceWithEnvironment, error) {
+func (s *CSharpAppResource) WithEnvironment(name string, value any) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
@@ -594,7 +594,7 @@ func (s *CSharpAppResource) WithEnvironment(name string, value string) (*IResour
 	return result.(*IResourceWithEnvironment), nil
 }
 
-// WithEnvironmentExpression adds an environment variable with a reference expression
+// WithEnvironmentExpression sets an environment variable from a reference expression
 func (s *CSharpAppResource) WithEnvironmentExpression(name string, value *ReferenceExpression) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
@@ -968,7 +968,7 @@ func (s *CSharpAppResource) PublishWithContainerFiles(source *IResourceWithConta
 	}
 	reqArgs["source"] = SerializeValue(source)
 	reqArgs["destinationPath"] = SerializeValue(destinationPath)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/publishWithContainerFiles", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/publishWithContainerFilesFromResource", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -993,7 +993,7 @@ func (s *CSharpAppResource) WaitFor(dependency *IResource) (*IResourceWithWaitSu
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitFor", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForResource", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -1020,7 +1020,7 @@ func (s *CSharpAppResource) WaitForStart(dependency *IResource) (*IResourceWithW
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForStart", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForResourceStart", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -1062,7 +1062,7 @@ func (s *CSharpAppResource) WaitForCompletion(dependency *IResource, exitCode *f
 	if exitCode != nil {
 		reqArgs["exitCode"] = SerializeValue(exitCode)
 	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForCompletion", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForResourceCompletion", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -1157,7 +1157,7 @@ func (s *CSharpAppResource) WithHttpsDeveloperCertificate(password *ParameterRes
 	if password != nil {
 		reqArgs["password"] = SerializeValue(password)
 	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpsDeveloperCertificate", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withParameterHttpsDeveloperCertificate", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -1182,7 +1182,7 @@ func (s *CSharpAppResource) WithParentRelationship(parent *IResource) (*IResourc
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["parent"] = SerializeValue(parent)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withParentRelationship", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderParentRelationship", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -1195,7 +1195,7 @@ func (s *CSharpAppResource) WithChildRelationship(child *IResource) (*IResource,
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["child"] = SerializeValue(child)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withChildRelationship", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderChildRelationship", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -1581,6 +1581,19 @@ func (s *CSharpAppResource) WithDependency(dependency *IResourceWithConnectionSt
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withDependency", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithUnionDependency adds a dependency from a string or another resource
+func (s *CSharpAppResource) WithUnionDependency(dependency any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["dependency"] = SerializeValue(dependency)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -1974,6 +1987,19 @@ func (s *ConnectionStringResource) WithConnectionPropertyValue(name string, valu
 	return result.(*IResourceWithConnectionString), nil
 }
 
+// GetConnectionProperty gets a connection property by key
+func (s *ConnectionStringResource) GetConnectionProperty(key string) (*ReferenceExpression, error) {
+	reqArgs := map[string]any{
+		"resource": SerializeValue(s.Handle()),
+	}
+	reqArgs["key"] = SerializeValue(key)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/getConnectionProperty", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ReferenceExpression), nil
+}
+
 // WithUrlsCallback customizes displayed URLs via callback
 func (s *ConnectionStringResource) WithUrlsCallback(callback func(...any) any) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -2055,7 +2081,7 @@ func (s *ConnectionStringResource) WaitFor(dependency *IResource) (*IResourceWit
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitFor", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForResource", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -2082,7 +2108,7 @@ func (s *ConnectionStringResource) WaitForStart(dependency *IResource) (*IResour
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForStart", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForResourceStart", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -2124,7 +2150,7 @@ func (s *ConnectionStringResource) WaitForCompletion(dependency *IResource, exit
 	if exitCode != nil {
 		reqArgs["exitCode"] = SerializeValue(exitCode)
 	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForCompletion", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForResourceCompletion", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -2170,7 +2196,7 @@ func (s *ConnectionStringResource) WithParentRelationship(parent *IResource) (*I
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["parent"] = SerializeValue(parent)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withParentRelationship", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderParentRelationship", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -2183,7 +2209,7 @@ func (s *ConnectionStringResource) WithChildRelationship(child *IResource) (*IRe
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["child"] = SerializeValue(child)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withChildRelationship", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderChildRelationship", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -2520,6 +2546,19 @@ func (s *ConnectionStringResource) WithDependency(dependency *IResourceWithConne
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withDependency", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithUnionDependency adds a dependency from a string or another resource
+func (s *ConnectionStringResource) WithUnionDependency(dependency any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["dependency"] = SerializeValue(dependency)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -2867,7 +2906,7 @@ func (s *ContainerRegistryResource) WithParentRelationship(parent *IResource) (*
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["parent"] = SerializeValue(parent)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withParentRelationship", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderParentRelationship", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -2880,7 +2919,7 @@ func (s *ContainerRegistryResource) WithChildRelationship(child *IResource) (*IR
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["child"] = SerializeValue(child)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withChildRelationship", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderChildRelationship", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -3176,6 +3215,19 @@ func (s *ContainerRegistryResource) WithDependency(dependency *IResourceWithConn
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withDependency", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithUnionDependency adds a dependency from a string or another resource
+func (s *ContainerRegistryResource) WithUnionDependency(dependency any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["dependency"] = SerializeValue(dependency)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -3538,7 +3590,7 @@ func (s *ContainerResource) WithBuildArg(name string, value *ParameterResource) 
 	}
 	reqArgs["name"] = SerializeValue(name)
 	reqArgs["value"] = SerializeValue(value)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuildArg", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withParameterBuildArg", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -3552,7 +3604,7 @@ func (s *ContainerResource) WithBuildSecret(name string, value *ParameterResourc
 	}
 	reqArgs["name"] = SerializeValue(name)
 	reqArgs["value"] = SerializeValue(value)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuildSecret", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withParameterBuildSecret", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -3675,7 +3727,7 @@ func (s *ContainerResource) WithRequiredCommand(command string, helpLink *string
 }
 
 // WithEnvironment sets an environment variable
-func (s *ContainerResource) WithEnvironment(name string, value string) (*IResourceWithEnvironment, error) {
+func (s *ContainerResource) WithEnvironment(name string, value any) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
@@ -3688,7 +3740,7 @@ func (s *ContainerResource) WithEnvironment(name string, value string) (*IResour
 	return result.(*IResourceWithEnvironment), nil
 }
 
-// WithEnvironmentExpression adds an environment variable with a reference expression
+// WithEnvironmentExpression sets an environment variable from a reference expression
 func (s *ContainerResource) WithEnvironmentExpression(name string, value *ReferenceExpression) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
@@ -4073,7 +4125,7 @@ func (s *ContainerResource) WaitFor(dependency *IResource) (*IResourceWithWaitSu
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitFor", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForResource", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -4100,7 +4152,7 @@ func (s *ContainerResource) WaitForStart(dependency *IResource) (*IResourceWithW
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForStart", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForResourceStart", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -4142,7 +4194,7 @@ func (s *ContainerResource) WaitForCompletion(dependency *IResource, exitCode *f
 	if exitCode != nil {
 		reqArgs["exitCode"] = SerializeValue(exitCode)
 	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForCompletion", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForResourceCompletion", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -4237,7 +4289,7 @@ func (s *ContainerResource) WithHttpsDeveloperCertificate(password *ParameterRes
 	if password != nil {
 		reqArgs["password"] = SerializeValue(password)
 	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpsDeveloperCertificate", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withParameterHttpsDeveloperCertificate", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -4262,7 +4314,7 @@ func (s *ContainerResource) WithParentRelationship(parent *IResource) (*IResourc
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["parent"] = SerializeValue(parent)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withParentRelationship", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderParentRelationship", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -4275,7 +4327,7 @@ func (s *ContainerResource) WithChildRelationship(child *IResource) (*IResource,
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["child"] = SerializeValue(child)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withChildRelationship", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderChildRelationship", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -4680,6 +4732,19 @@ func (s *ContainerResource) WithDependency(dependency *IResourceWithConnectionSt
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withDependency", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithUnionDependency adds a dependency from a string or another resource
+func (s *ContainerResource) WithUnionDependency(dependency any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["dependency"] = SerializeValue(dependency)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -5268,7 +5333,7 @@ func (s *DotnetToolResource) WithRequiredCommand(command string, helpLink *strin
 }
 
 // WithEnvironment sets an environment variable
-func (s *DotnetToolResource) WithEnvironment(name string, value string) (*IResourceWithEnvironment, error) {
+func (s *DotnetToolResource) WithEnvironment(name string, value any) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
@@ -5281,7 +5346,7 @@ func (s *DotnetToolResource) WithEnvironment(name string, value string) (*IResou
 	return result.(*IResourceWithEnvironment), nil
 }
 
-// WithEnvironmentExpression adds an environment variable with a reference expression
+// WithEnvironmentExpression sets an environment variable from a reference expression
 func (s *DotnetToolResource) WithEnvironmentExpression(name string, value *ReferenceExpression) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
@@ -5666,7 +5731,7 @@ func (s *DotnetToolResource) WaitFor(dependency *IResource) (*IResourceWithWaitS
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitFor", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForResource", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -5693,7 +5758,7 @@ func (s *DotnetToolResource) WaitForStart(dependency *IResource) (*IResourceWith
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForStart", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForResourceStart", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -5735,7 +5800,7 @@ func (s *DotnetToolResource) WaitForCompletion(dependency *IResource, exitCode *
 	if exitCode != nil {
 		reqArgs["exitCode"] = SerializeValue(exitCode)
 	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForCompletion", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForResourceCompletion", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -5830,7 +5895,7 @@ func (s *DotnetToolResource) WithHttpsDeveloperCertificate(password *ParameterRe
 	if password != nil {
 		reqArgs["password"] = SerializeValue(password)
 	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpsDeveloperCertificate", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withParameterHttpsDeveloperCertificate", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -5855,7 +5920,7 @@ func (s *DotnetToolResource) WithParentRelationship(parent *IResource) (*IResour
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["parent"] = SerializeValue(parent)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withParentRelationship", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderParentRelationship", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -5868,7 +5933,7 @@ func (s *DotnetToolResource) WithChildRelationship(child *IResource) (*IResource
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["child"] = SerializeValue(child)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withChildRelationship", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderChildRelationship", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -6254,6 +6319,19 @@ func (s *DotnetToolResource) WithDependency(dependency *IResourceWithConnectionS
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withDependency", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithUnionDependency adds a dependency from a string or another resource
+func (s *DotnetToolResource) WithUnionDependency(dependency any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["dependency"] = SerializeValue(dependency)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -6937,7 +7015,7 @@ func (s *ExecutableResource) WithRequiredCommand(command string, helpLink *strin
 }
 
 // WithEnvironment sets an environment variable
-func (s *ExecutableResource) WithEnvironment(name string, value string) (*IResourceWithEnvironment, error) {
+func (s *ExecutableResource) WithEnvironment(name string, value any) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
@@ -6950,7 +7028,7 @@ func (s *ExecutableResource) WithEnvironment(name string, value string) (*IResou
 	return result.(*IResourceWithEnvironment), nil
 }
 
-// WithEnvironmentExpression adds an environment variable with a reference expression
+// WithEnvironmentExpression sets an environment variable from a reference expression
 func (s *ExecutableResource) WithEnvironmentExpression(name string, value *ReferenceExpression) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
@@ -7335,7 +7413,7 @@ func (s *ExecutableResource) WaitFor(dependency *IResource) (*IResourceWithWaitS
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitFor", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForResource", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -7362,7 +7440,7 @@ func (s *ExecutableResource) WaitForStart(dependency *IResource) (*IResourceWith
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForStart", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForResourceStart", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -7404,7 +7482,7 @@ func (s *ExecutableResource) WaitForCompletion(dependency *IResource, exitCode *
 	if exitCode != nil {
 		reqArgs["exitCode"] = SerializeValue(exitCode)
 	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForCompletion", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForResourceCompletion", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -7499,7 +7577,7 @@ func (s *ExecutableResource) WithHttpsDeveloperCertificate(password *ParameterRe
 	if password != nil {
 		reqArgs["password"] = SerializeValue(password)
 	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpsDeveloperCertificate", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withParameterHttpsDeveloperCertificate", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -7524,7 +7602,7 @@ func (s *ExecutableResource) WithParentRelationship(parent *IResource) (*IResour
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["parent"] = SerializeValue(parent)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withParentRelationship", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderParentRelationship", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -7537,7 +7615,7 @@ func (s *ExecutableResource) WithChildRelationship(child *IResource) (*IResource
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["child"] = SerializeValue(child)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withChildRelationship", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderChildRelationship", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -7929,6 +8007,19 @@ func (s *ExecutableResource) WithDependency(dependency *IResourceWithConnectionS
 	return result.(*IResource), nil
 }
 
+// WithUnionDependency adds a dependency from a string or another resource
+func (s *ExecutableResource) WithUnionDependency(dependency any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["dependency"] = SerializeValue(dependency)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
 // WithEndpoints sets the endpoints
 func (s *ExecutableResource) WithEndpoints(endpoints []string) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -8187,6 +8278,31 @@ func (s *ExecuteCommandContext) SetCancellationToken(value *CancellationToken) (
 	return result.(*ExecuteCommandContext), nil
 }
 
+// Logger gets the Logger property
+func (s *ExecuteCommandContext) Logger() (*ILogger, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.logger", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ILogger), nil
+}
+
+// SetLogger sets the Logger property
+func (s *ExecuteCommandContext) SetLogger(value *ILogger) (*ExecuteCommandContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setLogger", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ExecuteCommandContext), nil
+}
+
 // ExternalServiceResource wraps a handle for Aspire.Hosting/Aspire.Hosting.ExternalServiceResource.
 type ExternalServiceResource struct {
 	ResourceBuilderBase
@@ -8390,7 +8506,7 @@ func (s *ExternalServiceResource) WithParentRelationship(parent *IResource) (*IR
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["parent"] = SerializeValue(parent)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withParentRelationship", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderParentRelationship", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -8403,7 +8519,7 @@ func (s *ExternalServiceResource) WithChildRelationship(child *IResource) (*IRes
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["child"] = SerializeValue(child)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withChildRelationship", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderChildRelationship", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -8699,6 +8815,19 @@ func (s *ExternalServiceResource) WithDependency(dependency *IResourceWithConnec
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withDependency", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithUnionDependency adds a dependency from a string or another resource
+func (s *ExternalServiceResource) WithUnionDependency(dependency any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["dependency"] = SerializeValue(dependency)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -9472,6 +9601,18 @@ type IDistributedApplicationResourceEvent struct {
 // NewIDistributedApplicationResourceEvent creates a new IDistributedApplicationResourceEvent.
 func NewIDistributedApplicationResourceEvent(handle *Handle, client *AspireClient) *IDistributedApplicationResourceEvent {
 	return &IDistributedApplicationResourceEvent{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// IExpressionValue wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExpressionValue.
+type IExpressionValue struct {
+	HandleWrapperBase
+}
+
+// NewIExpressionValue creates a new IExpressionValue.
+func NewIExpressionValue(handle *Handle, client *AspireClient) *IExpressionValue {
+	return &IExpressionValue{
 		HandleWrapperBase: NewHandleWrapperBase(handle, client),
 	}
 }
@@ -10360,7 +10501,7 @@ func (s *ParameterResource) WithParentRelationship(parent *IResource) (*IResourc
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["parent"] = SerializeValue(parent)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withParentRelationship", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderParentRelationship", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -10373,7 +10514,7 @@ func (s *ParameterResource) WithChildRelationship(child *IResource) (*IResource,
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["child"] = SerializeValue(child)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withChildRelationship", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderChildRelationship", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -10669,6 +10810,19 @@ func (s *ParameterResource) WithDependency(dependency *IResourceWithConnectionSt
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withDependency", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithUnionDependency adds a dependency from a string or another resource
+func (s *ParameterResource) WithUnionDependency(dependency any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["dependency"] = SerializeValue(dependency)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -11576,7 +11730,7 @@ func (s *ProjectResource) WithRequiredCommand(command string, helpLink *string) 
 }
 
 // WithEnvironment sets an environment variable
-func (s *ProjectResource) WithEnvironment(name string, value string) (*IResourceWithEnvironment, error) {
+func (s *ProjectResource) WithEnvironment(name string, value any) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
@@ -11589,7 +11743,7 @@ func (s *ProjectResource) WithEnvironment(name string, value string) (*IResource
 	return result.(*IResourceWithEnvironment), nil
 }
 
-// WithEnvironmentExpression adds an environment variable with a reference expression
+// WithEnvironmentExpression sets an environment variable from a reference expression
 func (s *ProjectResource) WithEnvironmentExpression(name string, value *ReferenceExpression) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
@@ -11963,7 +12117,7 @@ func (s *ProjectResource) PublishWithContainerFiles(source *IResourceWithContain
 	}
 	reqArgs["source"] = SerializeValue(source)
 	reqArgs["destinationPath"] = SerializeValue(destinationPath)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/publishWithContainerFiles", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/publishWithContainerFilesFromResource", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -11988,7 +12142,7 @@ func (s *ProjectResource) WaitFor(dependency *IResource) (*IResourceWithWaitSupp
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitFor", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForResource", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -12015,7 +12169,7 @@ func (s *ProjectResource) WaitForStart(dependency *IResource) (*IResourceWithWai
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForStart", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForResourceStart", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -12057,7 +12211,7 @@ func (s *ProjectResource) WaitForCompletion(dependency *IResource, exitCode *flo
 	if exitCode != nil {
 		reqArgs["exitCode"] = SerializeValue(exitCode)
 	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForCompletion", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForResourceCompletion", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -12152,7 +12306,7 @@ func (s *ProjectResource) WithHttpsDeveloperCertificate(password *ParameterResou
 	if password != nil {
 		reqArgs["password"] = SerializeValue(password)
 	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpsDeveloperCertificate", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withParameterHttpsDeveloperCertificate", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -12177,7 +12331,7 @@ func (s *ProjectResource) WithParentRelationship(parent *IResource) (*IResource,
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["parent"] = SerializeValue(parent)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withParentRelationship", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderParentRelationship", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -12190,7 +12344,7 @@ func (s *ProjectResource) WithChildRelationship(child *IResource) (*IResource, e
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["child"] = SerializeValue(child)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withChildRelationship", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderChildRelationship", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -12576,6 +12730,19 @@ func (s *ProjectResource) WithDependency(dependency *IResourceWithConnectionStri
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withDependency", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithUnionDependency adds a dependency from a string or another resource
+func (s *ProjectResource) WithUnionDependency(dependency any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["dependency"] = SerializeValue(dependency)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -13542,7 +13709,7 @@ func (s *TestDatabaseResource) WithBuildArg(name string, value *ParameterResourc
 	}
 	reqArgs["name"] = SerializeValue(name)
 	reqArgs["value"] = SerializeValue(value)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuildArg", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withParameterBuildArg", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -13556,7 +13723,7 @@ func (s *TestDatabaseResource) WithBuildSecret(name string, value *ParameterReso
 	}
 	reqArgs["name"] = SerializeValue(name)
 	reqArgs["value"] = SerializeValue(value)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuildSecret", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withParameterBuildSecret", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -13679,7 +13846,7 @@ func (s *TestDatabaseResource) WithRequiredCommand(command string, helpLink *str
 }
 
 // WithEnvironment sets an environment variable
-func (s *TestDatabaseResource) WithEnvironment(name string, value string) (*IResourceWithEnvironment, error) {
+func (s *TestDatabaseResource) WithEnvironment(name string, value any) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
@@ -13692,7 +13859,7 @@ func (s *TestDatabaseResource) WithEnvironment(name string, value string) (*IRes
 	return result.(*IResourceWithEnvironment), nil
 }
 
-// WithEnvironmentExpression adds an environment variable with a reference expression
+// WithEnvironmentExpression sets an environment variable from a reference expression
 func (s *TestDatabaseResource) WithEnvironmentExpression(name string, value *ReferenceExpression) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
@@ -14077,7 +14244,7 @@ func (s *TestDatabaseResource) WaitFor(dependency *IResource) (*IResourceWithWai
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitFor", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForResource", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -14104,7 +14271,7 @@ func (s *TestDatabaseResource) WaitForStart(dependency *IResource) (*IResourceWi
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForStart", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForResourceStart", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -14146,7 +14313,7 @@ func (s *TestDatabaseResource) WaitForCompletion(dependency *IResource, exitCode
 	if exitCode != nil {
 		reqArgs["exitCode"] = SerializeValue(exitCode)
 	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForCompletion", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForResourceCompletion", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -14241,7 +14408,7 @@ func (s *TestDatabaseResource) WithHttpsDeveloperCertificate(password *Parameter
 	if password != nil {
 		reqArgs["password"] = SerializeValue(password)
 	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpsDeveloperCertificate", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withParameterHttpsDeveloperCertificate", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -14266,7 +14433,7 @@ func (s *TestDatabaseResource) WithParentRelationship(parent *IResource) (*IReso
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["parent"] = SerializeValue(parent)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withParentRelationship", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderParentRelationship", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -14279,7 +14446,7 @@ func (s *TestDatabaseResource) WithChildRelationship(child *IResource) (*IResour
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["child"] = SerializeValue(child)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withChildRelationship", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderChildRelationship", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -14684,6 +14851,19 @@ func (s *TestDatabaseResource) WithDependency(dependency *IResourceWithConnectio
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withDependency", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithUnionDependency adds a dependency from a string or another resource
+func (s *TestDatabaseResource) WithUnionDependency(dependency any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["dependency"] = SerializeValue(dependency)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -15148,7 +15328,7 @@ func (s *TestRedisResource) WithBuildArg(name string, value *ParameterResource) 
 	}
 	reqArgs["name"] = SerializeValue(name)
 	reqArgs["value"] = SerializeValue(value)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuildArg", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withParameterBuildArg", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -15162,7 +15342,7 @@ func (s *TestRedisResource) WithBuildSecret(name string, value *ParameterResourc
 	}
 	reqArgs["name"] = SerializeValue(name)
 	reqArgs["value"] = SerializeValue(value)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuildSecret", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withParameterBuildSecret", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -15285,7 +15465,7 @@ func (s *TestRedisResource) WithRequiredCommand(command string, helpLink *string
 }
 
 // WithEnvironment sets an environment variable
-func (s *TestRedisResource) WithEnvironment(name string, value string) (*IResourceWithEnvironment, error) {
+func (s *TestRedisResource) WithEnvironment(name string, value any) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
@@ -15298,7 +15478,7 @@ func (s *TestRedisResource) WithEnvironment(name string, value string) (*IResour
 	return result.(*IResourceWithEnvironment), nil
 }
 
-// WithEnvironmentExpression adds an environment variable with a reference expression
+// WithEnvironmentExpression sets an environment variable from a reference expression
 func (s *TestRedisResource) WithEnvironmentExpression(name string, value *ReferenceExpression) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
@@ -15445,6 +15625,19 @@ func (s *TestRedisResource) WithReference(source *IResource, connectionName *str
 		return nil, err
 	}
 	return result.(*IResourceWithEnvironment), nil
+}
+
+// GetConnectionProperty gets a connection property by key
+func (s *TestRedisResource) GetConnectionProperty(key string) (*ReferenceExpression, error) {
+	reqArgs := map[string]any{
+		"resource": SerializeValue(s.Handle()),
+	}
+	reqArgs["key"] = SerializeValue(key)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/getConnectionProperty", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ReferenceExpression), nil
 }
 
 // WithReferenceUri adds a reference to a URI
@@ -15711,7 +15904,7 @@ func (s *TestRedisResource) WaitFor(dependency *IResource) (*IResourceWithWaitSu
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitFor", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForResource", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -15738,7 +15931,7 @@ func (s *TestRedisResource) WaitForStart(dependency *IResource) (*IResourceWithW
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForStart", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForResourceStart", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -15780,7 +15973,7 @@ func (s *TestRedisResource) WaitForCompletion(dependency *IResource, exitCode *f
 	if exitCode != nil {
 		reqArgs["exitCode"] = SerializeValue(exitCode)
 	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForCompletion", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForResourceCompletion", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -15875,7 +16068,7 @@ func (s *TestRedisResource) WithHttpsDeveloperCertificate(password *ParameterRes
 	if password != nil {
 		reqArgs["password"] = SerializeValue(password)
 	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpsDeveloperCertificate", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withParameterHttpsDeveloperCertificate", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -15900,7 +16093,7 @@ func (s *TestRedisResource) WithParentRelationship(parent *IResource) (*IResourc
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["parent"] = SerializeValue(parent)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withParentRelationship", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderParentRelationship", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -15913,7 +16106,7 @@ func (s *TestRedisResource) WithChildRelationship(child *IResource) (*IResource,
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["child"] = SerializeValue(child)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withChildRelationship", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderChildRelationship", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -16431,6 +16624,19 @@ func (s *TestRedisResource) WithDependency(dependency *IResourceWithConnectionSt
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withDependency", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithUnionDependency adds a dependency from a string or another resource
+func (s *TestRedisResource) WithUnionDependency(dependency any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["dependency"] = SerializeValue(dependency)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -16966,7 +17172,7 @@ func (s *TestVaultResource) WithBuildArg(name string, value *ParameterResource) 
 	}
 	reqArgs["name"] = SerializeValue(name)
 	reqArgs["value"] = SerializeValue(value)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuildArg", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withParameterBuildArg", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -16980,7 +17186,7 @@ func (s *TestVaultResource) WithBuildSecret(name string, value *ParameterResourc
 	}
 	reqArgs["name"] = SerializeValue(name)
 	reqArgs["value"] = SerializeValue(value)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuildSecret", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withParameterBuildSecret", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -17103,7 +17309,7 @@ func (s *TestVaultResource) WithRequiredCommand(command string, helpLink *string
 }
 
 // WithEnvironment sets an environment variable
-func (s *TestVaultResource) WithEnvironment(name string, value string) (*IResourceWithEnvironment, error) {
+func (s *TestVaultResource) WithEnvironment(name string, value any) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
@@ -17116,7 +17322,7 @@ func (s *TestVaultResource) WithEnvironment(name string, value string) (*IResour
 	return result.(*IResourceWithEnvironment), nil
 }
 
-// WithEnvironmentExpression adds an environment variable with a reference expression
+// WithEnvironmentExpression sets an environment variable from a reference expression
 func (s *TestVaultResource) WithEnvironmentExpression(name string, value *ReferenceExpression) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
@@ -17501,7 +17707,7 @@ func (s *TestVaultResource) WaitFor(dependency *IResource) (*IResourceWithWaitSu
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitFor", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForResource", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -17528,7 +17734,7 @@ func (s *TestVaultResource) WaitForStart(dependency *IResource) (*IResourceWithW
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["dependency"] = SerializeValue(dependency)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForStart", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForResourceStart", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -17570,7 +17776,7 @@ func (s *TestVaultResource) WaitForCompletion(dependency *IResource, exitCode *f
 	if exitCode != nil {
 		reqArgs["exitCode"] = SerializeValue(exitCode)
 	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForCompletion", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/waitForResourceCompletion", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -17665,7 +17871,7 @@ func (s *TestVaultResource) WithHttpsDeveloperCertificate(password *ParameterRes
 	if password != nil {
 		reqArgs["password"] = SerializeValue(password)
 	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpsDeveloperCertificate", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withParameterHttpsDeveloperCertificate", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -17690,7 +17896,7 @@ func (s *TestVaultResource) WithParentRelationship(parent *IResource) (*IResourc
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["parent"] = SerializeValue(parent)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withParentRelationship", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderParentRelationship", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -17703,7 +17909,7 @@ func (s *TestVaultResource) WithChildRelationship(child *IResource) (*IResource,
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["child"] = SerializeValue(child)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withChildRelationship", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBuilderChildRelationship", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -18114,6 +18320,19 @@ func (s *TestVaultResource) WithDependency(dependency *IResourceWithConnectionSt
 	return result.(*IResource), nil
 }
 
+// WithUnionDependency adds a dependency from a string or another resource
+func (s *TestVaultResource) WithUnionDependency(dependency any) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["dependency"] = SerializeValue(dependency)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
 // WithEndpoints sets the endpoints
 func (s *TestVaultResource) WithEndpoints(endpoints []string) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -18479,6 +18698,9 @@ func init() {
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext", func(h *Handle, c *AspireClient) any {
 		return NewEnvironmentCallbackContext(h, c)
 	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExpressionValue", func(h *Handle, c *AspireClient) any {
+		return NewIExpressionValue(h, c)
+	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent", func(h *Handle, c *AspireClient) any {
 		return NewInitializeResourceEvent(h, c)
 	})
@@ -18583,6 +18805,13 @@ func Connect() (*AspireClient, error) {
 	}
 	client := NewAspireClient(socketPath)
 	if err := client.Connect(); err != nil {
+		return nil, err
+	}
+	authToken := os.Getenv("ASPIRE_REMOTE_APPHOST_TOKEN")
+	if authToken == "" {
+		return nil, fmt.Errorf("ASPIRE_REMOTE_APPHOST_TOKEN environment variable not set. Run this application using `aspire run`")
+	}
+	if err := client.Authenticate(authToken); err != nil {
 		return nil, err
 	}
 	client.OnDisconnect(func() { os.Exit(1) })

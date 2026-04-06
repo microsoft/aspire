@@ -33,17 +33,20 @@ EOF
   exit 0
 }
 
+is_cask_installed() {
+  local caskName="$1"
+
+  brew list --cask --versions 2>/dev/null | awk '{print $1}' | grep -Fx -- "$caskName" >/dev/null
+}
+
 uninstall() {
   echo "Uninstalling dogfooded Aspire CLI..."
 
-  # Determine which cask is installed
-  for caskName in "aspire" "aspire@prerelease"; do
-    if brew list --cask "$TAP_NAME/$caskName" &>/dev/null; then
-      echo "  Uninstalling $TAP_NAME/$caskName..."
-      brew uninstall --cask "$TAP_NAME/$caskName"
-      echo "  Uninstalled."
-    fi
-  done
+  if brew list --cask "$TAP_NAME/aspire" &>/dev/null; then
+    echo "  Uninstalling $TAP_NAME/aspire..."
+    brew uninstall --cask "$TAP_NAME/aspire"
+    echo "  Uninstalled."
+  fi
 
   if brew tap-info "$TAP_NAME" &>/dev/null; then
     echo "  Removing tap $TAP_NAME..."
@@ -74,16 +77,14 @@ fi
 
 # Auto-detect cask file if not specified
 if [[ -z "$CASK_FILE" ]]; then
-  for candidate in "$SCRIPT_DIR/aspire.rb" "$SCRIPT_DIR/aspire@prerelease.rb"; do
-    if [[ -f "$candidate" ]]; then
-      CASK_FILE="$candidate"
-      break
-    fi
-  done
+  candidate="$SCRIPT_DIR/aspire.rb"
+  if [[ -f "$candidate" ]]; then
+    CASK_FILE="$candidate"
+  fi
 
   if [[ -z "$CASK_FILE" ]]; then
     echo "Error: No cask file found in $SCRIPT_DIR"
-    echo "Expected aspire.rb or aspire@prerelease.rb"
+    echo "Expected aspire.rb"
     exit 1
   fi
 fi
@@ -97,20 +98,24 @@ CASK_FILE="$(cd "$(dirname "$CASK_FILE")" && pwd)/$(basename "$CASK_FILE")"
 CASK_FILENAME="$(basename "$CASK_FILE")"
 CASK_NAME="${CASK_FILENAME%.rb}"
 
+if [[ "$CASK_NAME" != "aspire" ]]; then
+  echo "Error: Only the stable Homebrew cask is supported."
+  echo "Expected aspire.rb"
+  exit 1
+fi
+
 echo "Aspire CLI Homebrew Dogfood Installer"
 echo "======================================"
 echo "  Cask file: $CASK_FILE"
 echo "  Cask name: $CASK_NAME"
 echo ""
 
-# Check for conflicts with official installs
-for check in "aspire" "aspire@prerelease"; do
-  if brew list --cask "$check" &>/dev/null; then
-    echo "Error: '$check' is already installed from the official Homebrew tap."
-    echo "Uninstall it first with: brew uninstall --cask $check"
-    exit 1
-  fi
-done
+if is_cask_installed "aspire"; then
+  echo "Error: 'aspire' is already installed."
+  echo "If this is a previous dogfood install, remove it with: $(basename "$0") --uninstall"
+  echo "Otherwise uninstall it first with: brew uninstall --cask aspire"
+  exit 1
+fi
 
 # Check for leftover local/aspire tap from pipeline testing
 if brew tap-info "local/aspire" &>/dev/null 2>&1; then
@@ -128,12 +133,9 @@ fi
 # Clean up any previous dogfood tap
 if brew tap-info "$TAP_NAME" &>/dev/null 2>&1; then
   echo "Removing previous dogfood tap..."
-  # Uninstall any casks from the old tap first
-  for old in "aspire" "aspire@prerelease"; do
-    if brew list --cask "$TAP_NAME/$old" &>/dev/null; then
-      brew uninstall --cask "$TAP_NAME/$old" || true
-    fi
-  done
+  if is_cask_installed "aspire"; then
+    brew uninstall --cask "aspire" || true
+  fi
   brew untap "$TAP_NAME"
 fi
 

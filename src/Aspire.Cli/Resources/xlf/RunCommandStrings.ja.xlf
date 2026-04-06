@@ -33,17 +33,17 @@
         <note />
       </trans-unit>
       <trans-unit id="AppHostExitedWithCode">
-        <source>Apphost process exited with code {0}.</source>
+        <source>AppHost process exited with code {0}.</source>
         <target state="needs-review-translation">AppHost プロセスが終了し、コード {0} を返しました。</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostFailedToBuild">
-        <source>Apphost failed to build.</source>
-        <target state="new">Apphost failed to build.</target>
+        <source>AppHost failed to build.</source>
+        <target state="new">AppHost failed to build.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostStartedSuccessfully">
-        <source>Apphost started successfully.</source>
+        <source>AppHost started successfully.</source>
         <target state="needs-review-translation">AppHost が正常に起動しました。</target>
         <note />
       </trans-unit>
@@ -53,8 +53,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ConnectingToAppHost">
-        <source>Connecting to apphost...</source>
-        <target state="translated">AppHost に接続しています...</target>
+        <source>Connecting to AppHost...</source>
+        <target state="needs-review-translation">AppHost に接続しています...</target>
         <note />
       </trans-unit>
       <trans-unit id="CopyingUserSecrets">
@@ -73,12 +73,12 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Run an Aspire apphost interactively for development</source>
+        <source>Run an Aspire AppHost interactively for development</source>
         <target state="needs-review-translation">開発モードで Aspire AppHost を実行します。</target>
         <note />
       </trans-unit>
       <trans-unit id="DetachArgumentDescription">
-        <source>Run the apphost in the background and exit after it starts</source>
+        <source>Run the AppHost in the background and exit after it starts</source>
         <target state="needs-review-translation">AppHost をバックグラウンドで実行し、起動後に終了させます。</target>
         <note />
       </trans-unit>
@@ -88,12 +88,12 @@
         <note />
       </trans-unit>
       <trans-unit id="FailedToStartAppHost">
-        <source>Failed to start the apphost.</source>
+        <source>Failed to start the AppHost.</source>
         <target state="needs-review-translation">AppHost を起動できませんでした。</target>
         <note />
       </trans-unit>
       <trans-unit id="ForceArgumentDescription">
-        <source>Stop any running instance of the apphost without prompting</source>
+        <source>Stop any running instance of the AppHost without prompting</source>
         <target state="needs-review-translation">プロンプトを表示せずに AppHost の実行中のインスタンスを停止します。</target>
         <note />
       </trans-unit>
@@ -113,7 +113,7 @@
         <note />
       </trans-unit>
       <trans-unit id="JsonArgumentDescription">
-        <source>Output format for detached apphost results</source>
+        <source>Output format for detached AppHost results</source>
         <target state="needs-review-translation">結果を JSON 形式で出力します (--detach オプション指定時のみ有効)。</target>
         <note />
       </trans-unit>
@@ -123,7 +123,7 @@
         <note />
       </trans-unit>
       <trans-unit id="IsolatedModeRunningInstanceWarning">
-        <source>A running instance of this apphost was found and will be stopped. To run multiple isolated instances simultaneously, run from different directories such as git worktree directories.</source>
+        <source>A running instance of this AppHost was found and will be stopped. To run multiple isolated instances simultaneously, run from different directories such as git worktree directories.</source>
         <target state="needs-review-translation">この AppHost の実行中のインスタンスが見つかったため、停止します。複数の分離したインスタンスを同時に実行するには、異なるディレクトリ (git worktree ディレクトリなど) から実行してください。</target>
         <note />
       </trans-unit>
@@ -143,8 +143,8 @@
         <note />
       </trans-unit>
       <trans-unit id="PressCtrlCToStopAppHost">
-        <source>Press [bold]CTRL+C[/] to stop the apphost and exit.</source>
-        <target state="translated">[bold]Ctrl+C[/] キーを押して AppHost を停止して終了します。</target>
+        <source>Press [bold]CTRL+C[/] to stop the AppHost and exit.</source>
+        <target state="needs-review-translation">[bold]Ctrl+C[/] キーを押して AppHost を停止して終了します。</target>
         <note>[bold] should not be localized</note>
       </trans-unit>
       <trans-unit id="ProcessId">
@@ -153,7 +153,7 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire apphost project file</source>
+        <source>The path to the Aspire AppHost project file</source>
         <target state="needs-review-translation">Aspire AppHost プロジェクト ファイルへのパス。</target>
         <note />
       </trans-unit>
@@ -178,13 +178,13 @@
         <note />
       </trans-unit>
       <trans-unit id="StartingAppHost">
-        <source>Starting Aspire apphost...</source>
-        <target state="translated">Aspire AppHost を開始しています...</target>
+        <source>Starting Aspire AppHost...</source>
+        <target state="needs-review-translation">Aspire AppHost を開始しています...</target>
         <note />
       </trans-unit>
       <trans-unit id="StartingAppHostInBackground">
-        <source>Starting Aspire apphost in the background...</source>
-        <target state="translated">バックグラウンドで Aspire apphost を起動しています...</target>
+        <source>Starting Aspire AppHost in the background...</source>
+        <target state="needs-review-translation">バックグラウンドで Aspire apphost を起動しています...</target>
         <note />
       </trans-unit>
       <trans-unit id="StartingDashboard">
@@ -203,7 +203,7 @@
         <note>The state of the resource, eg Running</note>
       </trans-unit>
       <trans-unit id="TimeoutWaitingForAppHost">
-        <source>Timeout waiting for apphost to start.</source>
+        <source>Timeout waiting for AppHost to start.</source>
         <target state="needs-review-translation">AppHost の起動待機中にタイムアウトしました。</target>
         <note />
       </trans-unit>
@@ -213,8 +213,8 @@
         <note>The type of the resource, eg Project</note>
       </trans-unit>
       <trans-unit id="WaitingForAppHostToStart">
-        <source>Waiting for apphost to start...</source>
-        <target state="translated">apphost の起動を待っています...</target>
+        <source>Waiting for AppHost to start...</source>
+        <target state="needs-review-translation">apphost の起動を待っています...</target>
         <note />
       </trans-unit>
       <trans-unit id="WatchArgumentDescription">

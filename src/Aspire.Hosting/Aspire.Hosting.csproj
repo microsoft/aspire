@@ -132,11 +132,6 @@
     <InternalsVisibleTo Include="Aspire.Hosting.RemoteHost.Tests" />
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- Reference the analyzer to ensure it's built but don't reference its output -->
-    <ProjectReference Include="..\Aspire.Hosting.Integration.Analyzers\Aspire.Hosting.Integration.Analyzers.csproj" ReferenceOutputAssembly="false" Private="true" />
-  </ItemGroup>
-
   <!-- Include the integration analyzer in the package -->
   <PropertyGroup>
     <BeforePack>$(BeforePack);IncludeIntegrationAnalyzerInPackage</BeforePack>

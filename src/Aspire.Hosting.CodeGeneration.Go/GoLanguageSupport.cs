@@ -9,7 +9,7 @@ namespace Aspire.Hosting.CodeGeneration.Go;
 /// Provides language support for Go AppHosts.
 /// Implements scaffolding, detection, and runtime configuration.
 /// </summary>
-public sealed class GoLanguageSupport : ILanguageSupport
+internal sealed class GoLanguageSupport : ILanguageSupport
 {
     /// <summary>
     /// The language/runtime identifier for Go.
