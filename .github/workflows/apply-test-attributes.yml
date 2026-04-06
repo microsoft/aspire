@@ -132,8 +132,12 @@ jobs:
               return;
             }
           } else {
-            // For unquarantine/enable: test names only
-            testNames = parts;
+            // For unquarantine/enable: test names only, ignore any trailing URLs
+            testNames = parts.filter(p => !urlPattern.test(p));
+            if (testNames.length === 0) {
+              failWithError('No test name(s) provided. Only URLs were found in the arguments.');
+              return;
+            }
           }
 
           // Validate target PR URL is from the same repo if provided

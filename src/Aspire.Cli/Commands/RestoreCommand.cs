@@ -137,7 +137,7 @@ internal sealed class RestoreCommand : BaseCommand
 
                 var restoreExitCode = await _interactionService.ShowStatusAsync(
                     RestoreCommandStrings.RestoringSdkCode,
-                    async () => await _runner.RestoreAsync(effectiveAppHostFile, new DotNetCliRunnerInvocationOptions(), cancellationToken),
+                    async () => await _runner.RestoreAsync(effectiveAppHostFile, new ProcessInvocationOptions(), cancellationToken),
                     emoji: KnownEmojis.Gear);
 
                 if (restoreExitCode == 0)

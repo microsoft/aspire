@@ -140,6 +140,7 @@ internal static class CliTestHelper
         // Bundle layout services - return null/no-op implementations to trigger SDK mode fallback
         // This ensures backward compatibility: no layout found = use legacy SDK mode
         services.AddSingleton(options.LayoutDiscoveryFactory);
+        services.AddTransient<LayoutProcessRunner>();
         services.AddSingleton(options.BundleServiceFactory);
         services.AddSingleton<BundleNuGetService>();
 
@@ -191,6 +192,8 @@ internal static class CliTestHelper
         services.AddTransient<CertificatesCleanCommand>();
         services.AddTransient<CertificatesTrustCommand>();
         services.AddTransient<DoctorCommand>();
+        services.AddTransient<DashboardCommand>();
+        services.AddTransient<DashboardRunCommand>();
         services.AddTransient<UpdateCommand>();
         services.AddTransient<SetupCommand>();
         services.AddTransient<McpCommand>();
@@ -415,9 +418,9 @@ internal sealed class CliServiceCollectionTestOptions
         return new CertificateService(certificateToolRunner, interactiveService, telemetry, hostEnvironment);
     };
 
-    public Func<IServiceProvider, IDotNetCliExecutionFactory> DotNetCliExecutionFactoryFactory { get; set; } = (IServiceProvider serviceProvider) =>
+    public Func<IServiceProvider, IProcessExecutionFactory> DotNetCliExecutionFactoryFactory { get; set; } = (IServiceProvider serviceProvider) =>
     {
-        return new TestDotNetCliExecutionFactory();
+        return new TestProcessExecutionFactory();
     };
 
     public Func<IServiceProvider, IDotNetCliRunner> DotNetCliRunnerFactory { get; set; } = (IServiceProvider serviceProvider) =>
@@ -428,7 +431,7 @@ internal sealed class CliServiceCollectionTestOptions
         var features = serviceProvider.GetRequiredService<IFeatures>();
         var diskCache = serviceProvider.GetRequiredService<IDiskCache>();
         var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
-        var executionFactory = serviceProvider.GetRequiredService<IDotNetCliExecutionFactory>();
+        var executionFactory = serviceProvider.GetRequiredService<IProcessExecutionFactory>();
         var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
 
         return new DotNetCliRunner(logger, serviceProvider, telemetry, configuration, diskCache, features, interactionService, executionContext, executionFactory);
@@ -619,13 +622,15 @@ internal sealed class TestBundleService(bool isBundle) : IBundleService
 {
     public bool IsBundle => isBundle;
 
+    public Layout.LayoutConfiguration? Layout { get; set; }
+
     public Task EnsureExtractedAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 
     public Task<BundleExtractResult> ExtractAsync(string destinationPath, bool force = false, CancellationToken cancellationToken = default)
         => Task.FromResult(isBundle ? BundleExtractResult.AlreadyUpToDate : BundleExtractResult.NoPayload);
 
     public Task<Layout.LayoutConfiguration?> EnsureExtractedAndGetLayoutAsync(CancellationToken cancellationToken = default)
-        => Task.FromResult<Layout.LayoutConfiguration?>(null);
+        => Task.FromResult(Layout);
 }
 
 internal sealed class TestOutputTextWriter : TextWriter

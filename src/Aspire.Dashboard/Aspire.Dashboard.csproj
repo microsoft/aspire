@@ -298,6 +298,7 @@
     <Compile Include="$(SharedDir)Model\ResourceSourceViewModel.cs" Link="Model\ResourceSourceViewModel.shared.cs" />
     <Compile Include="$(SharedDir)CircularBuffer.cs" Link="Otlp\Storage\CircularBuffer.cs" />
     <Compile Include="$(SharedDir)DashboardConfigNames.cs" Link="Utils\DashboardConfigNames.cs" />
+    <Compile Include="$(SharedDir)DashboardExitCodes.cs" Link="Utils\DashboardExitCodes.cs" />
     <Compile Include="$(SharedDir)DurationFormatter.cs" Link="Utils\DurationFormatter.cs" />
     <Compile Include="$(SharedDir)TokenGenerator.cs" Link="Utils\TokenGenerator.cs" />
     <Compile Include="$(SharedDir)LoggingHelpers.cs" Link="Utils\LoggingHelpers.cs" />

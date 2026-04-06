@@ -277,6 +277,33 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Created or updated NuGet.config in the project directory with required package sources..
+        /// </summary>
+        public static string NuGetConfigCreatedOrUpdatedConfirmationMessage {
+            get {
+                return ResourceManager.GetString("NuGetConfigCreatedOrUpdatedConfirmationMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Updated NuGet.config with required package sources..
+        /// </summary>
+        public static string NuGetConfigUpdatedConfirmationMessage {
+            get {
+                return ResourceManager.GetString("NuGetConfigUpdatedConfirmationMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Update NuGet.config to add missing package sources for the selected channel?.
+        /// </summary>
+        public static string UpdateNuGetConfigConfirmation {
+            get {
+                return ResourceManager.GetString("UpdateNuGetConfigConfirmation", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to The new project cannot be created because it would overwrite existing files in the output folder. Please remove or move the conflicting files, or choose a different location..
         /// </summary>
         public static string ProjectAlreadyExists {

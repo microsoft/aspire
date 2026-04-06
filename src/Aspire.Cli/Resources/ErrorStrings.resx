@@ -217,6 +217,10 @@
   <data name="ProjectFileMayBeUnbuildableAppHost" xml:space="preserve">
     <value>Could not build: {0}</value>
   </data>
+  <data name="ProjectFilesCreatedButNodeToolsNotFound" xml:space="preserve">
+    <value>Project files were created, but Aspire could not run 'npm install' automatically because the required Node.js tools were not found on PATH. You may see missing package errors or red squiggles in your IDE until you install Node.js and run 'npm install' in the project directory.</value>
+    <comment>Do not translate 'npm install', 'Node.js', or 'PATH'.</comment>
+  </data>
   <data name="AppHostsMayNotBeBuildable" xml:space="preserve">
     <value>No buildable AppHosts were found, but there may have been unbuildable AppHosts.</value>
   </data>
