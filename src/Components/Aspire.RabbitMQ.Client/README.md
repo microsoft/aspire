@@ -89,22 +89,6 @@ You can also setup the [ConnectionFactory](https://rabbitmq.github.io/rabbitmq-d
 builder.AddRabbitMQClient("messaging", configureConnectionFactory: factory => factory.ClientProvidedName = "MyApp");
 ```
 
-## Observability
-
-### Tracing
-
-The Aspire RabbitMQ Client integration includes the following activity sources for OpenTelemetry tracing:
-
-- `Aspire.RabbitMQ.Client` - Tracks connection establishment and retry attempts.
-- `RabbitMQ.Client.Publisher` - Tracks message publishing operations.
-- `RabbitMQ.Client.Subscriber` - Tracks message consumption operations.
-
-Tracing is enabled by default. To disable it, set `DisableTracing` to `true` in the settings:
-
-```csharp
-builder.AddRabbitMQClient("messaging", settings => settings.DisableTracing = true);
-```
-
 ## AppHost extensions
 
 In your AppHost project, install the `Aspire.Hosting.RabbitMQ` library with [NuGet](https://www.nuget.org):
