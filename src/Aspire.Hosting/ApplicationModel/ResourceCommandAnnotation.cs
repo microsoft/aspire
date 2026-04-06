@@ -147,7 +147,14 @@ public static class CommandResults
     /// <param name="message">The message associated with the result.</param>
     /// <param name="result">The result data.</param>
     /// <param name="resultFormat">The format of the result data. Defaults to <see cref="CommandResultFormat.Text"/>.</param>
-    public static ExecuteCommandResult Success(string message, string result, CommandResultFormat resultFormat = CommandResultFormat.Text) => new() { Success = true, Message = message, Result = result, ResultFormat = resultFormat };
+    public static ExecuteCommandResult Success(string message, string result, CommandResultFormat resultFormat = CommandResultFormat.Text) => new() { Success = true, Message = message, Value = new CommandResultData { Value = result, Format = resultFormat } };
+
+    /// <summary>
+    /// Produces a success result with a message and a value.
+    /// </summary>
+    /// <param name="message">The message associated with the result.</param>
+    /// <param name="value">The value produced by the command.</param>
+    public static ExecuteCommandResult Success(string message, CommandResultData value) => new() { Success = true, Message = message, Value = value };
 
     /// <summary>
     /// Produces an unsuccessful result with an error message.
@@ -161,7 +168,14 @@ public static class CommandResults
     /// <param name="errorMessage">The error message.</param>
     /// <param name="result">The result data.</param>
     /// <param name="resultFormat">The format of the result data. Defaults to <see cref="CommandResultFormat.Text"/>.</param>
-    public static ExecuteCommandResult Failure(string errorMessage, string result, CommandResultFormat resultFormat = CommandResultFormat.Text) => new() { Success = false, Message = errorMessage, Result = result, ResultFormat = resultFormat };
+    public static ExecuteCommandResult Failure(string errorMessage, string result, CommandResultFormat resultFormat = CommandResultFormat.Text) => new() { Success = false, Message = errorMessage, Value = new CommandResultData { Value = result, Format = resultFormat } };
+
+    /// <summary>
+    /// Produces an unsuccessful result with an error message and a value.
+    /// </summary>
+    /// <param name="errorMessage">The error message.</param>
+    /// <param name="value">The value produced by the command.</param>
+    public static ExecuteCommandResult Failure(string errorMessage, CommandResultData value) => new() { Success = false, Message = errorMessage, Value = value };
 
     /// <summary>
     /// Produces a canceled result.
@@ -203,14 +217,31 @@ public sealed class ExecuteCommandResult
     public string? Message { get; init; }
 
     /// <summary>
-    /// An optional result value produced by the command.
+    /// An optional value produced by the command.
     /// </summary>
-    public string? Result { get; init; }
+    public CommandResultData? Value { get; init; }
+}
+
+/// <summary>
+/// Represents a value produced by a command.
+/// </summary>
+[AspireDto]
+public sealed class CommandResultData
+{
+    /// <summary>
+    /// The value data.
+    /// </summary>
+    public required string Value { get; init; }
 
     /// <summary>
-    /// The format of the <see cref="Result"/> value.
+    /// The format of the <see cref="Value"/> data.
     /// </summary>
-    public CommandResultFormat? ResultFormat { get; init; }
+    public CommandResultFormat Format { get; init; }
+
+    /// <summary>
+    /// When <see langword="true"/>, the dashboard will immediately display the value in a dialog when the command completes.
+    /// </summary>
+    public bool DisplayImmediately { get; init; }
 }
 
 /// <summary>

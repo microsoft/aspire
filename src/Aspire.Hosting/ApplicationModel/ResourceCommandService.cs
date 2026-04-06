@@ -106,12 +106,11 @@ public class ResourceCommandService
 
         if (failures.Count == 0 && cancellations.Count == 0)
         {
-            var successWithResult = results.FirstOrDefault(r => r.Result is not null);
+            var successWithResult = results.FirstOrDefault(r => r.Value is not null);
             return new ExecuteCommandResult
             {
                 Success = true,
-                Result = successWithResult?.Result,
-                ResultFormat = successWithResult?.ResultFormat
+                Value = successWithResult?.Value
             };
         }
         else if (failures.Count == 0 && cancellations.Count > 0)

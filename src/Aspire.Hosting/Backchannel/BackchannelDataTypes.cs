@@ -293,14 +293,30 @@ internal sealed class ExecuteResourceCommandResponse
     public string? Message { get; init; }
 
     /// <summary>
-    /// Gets the result data produced by the command.
+    /// Gets the value produced by the command.
     /// </summary>
-    public string? Result { get; init; }
+    public ExecuteResourceCommandResult? Value { get; init; }
+}
+
+/// <summary>
+/// Value produced by a resource command.
+/// </summary>
+internal sealed class ExecuteResourceCommandResult
+{
+    /// <summary>
+    /// Gets the value data.
+    /// </summary>
+    public required string Value { get; init; }
 
     /// <summary>
-    /// Gets the format of the result data (e.g. "none", "text", "json").
+    /// Gets the format of the value data (e.g. "text", "json").
     /// </summary>
-    public string? ResultFormat { get; init; }
+    public string? Format { get; init; }
+
+    /// <summary>
+    /// Gets whether to immediately display the value in the dashboard.
+    /// </summary>
+    public bool DisplayImmediately { get; init; }
 }
 
 #endregion

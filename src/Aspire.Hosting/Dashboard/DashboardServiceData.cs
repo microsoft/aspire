@@ -94,23 +94,21 @@ internal sealed class DashboardServiceData : IDisposable
         _cts.Dispose();
     }
 
-    internal async Task<(ExecuteCommandResultType result, string? message, string? commandResult, ApplicationModel.CommandResultFormat? resultFormat)> ExecuteCommandAsync(string resourceId, string type, CancellationToken cancellationToken)
+    internal async Task<(ExecuteCommandResultType result, string? message, ApplicationModel.CommandResultData? value)> ExecuteCommandAsync(string resourceId, string type, CancellationToken cancellationToken)
     {
         try
         {
             var result = await _resourceCommandService.ExecuteCommandAsync(resourceId, type, cancellationToken).ConfigureAwait(false);
             if (result.Canceled)
             {
-                return (ExecuteCommandResultType.Canceled, result.Message, null, null);
+                return (ExecuteCommandResultType.Canceled, result.Message, null);
             }
-#pragma warning disable CS0618 // Type or member is obsolete
-            return (result.Success ? ExecuteCommandResultType.Success : ExecuteCommandResultType.Failure, string.IsNullOrEmpty(result.Message) ? result.ErrorMessage : result.Message, result.Result, result.ResultFormat);
-#pragma warning restore CS0618 // Type or member is obsolete
+            return (result.Success ? ExecuteCommandResultType.Success : ExecuteCommandResultType.Failure, result.Message, result.Value);
         }
         catch
         {
             // Note: Exception is already logged in the command executor.
-            return (ExecuteCommandResultType.Failure, "Unhandled exception thrown while executing command.", null, null);
+            return (ExecuteCommandResultType.Failure, "Unhandled exception thrown while executing command.", null);
         }
     }
 

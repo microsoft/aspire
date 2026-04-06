@@ -79,9 +79,9 @@ internal sealed class ExecuteResourceCommandTool(
                     new() { Text = $"Command '{commandName}' executed successfully on resource '{resourceName}'." }
                 };
 
-                if (response.Result is not null)
+                if (response.Value is not null)
                 {
-                    content.Add(new TextContentBlock { Text = response.Result });
+                    content.Add(new TextContentBlock { Text = response.Value.Value });
                 }
 
                 return new CallToolResult
@@ -104,9 +104,9 @@ internal sealed class ExecuteResourceCommandTool(
                     new() { Text = $"Command '{commandName}' failed for resource '{resourceName}': {message}" }
                 };
 
-                if (response.Result is not null)
+                if (response.Value is not null)
                 {
-                    content.Add(new TextContentBlock { Text = response.Result });
+                    content.Add(new TextContentBlock { Text = response.Value.Value });
                 }
 
                 return new CallToolResult

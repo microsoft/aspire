@@ -140,7 +140,7 @@ builder.AddProject<Projects.Stress_TelemetryService>("stress-telemetryservice")
                    issuedAt = DateTime.UtcNow
                };
                var json = JsonSerializer.Serialize(token, new JsonSerializerOptions { WriteIndented = true });
-               return Task.FromResult(CommandResults.Success(json, CommandResultFormat.Json));
+               return Task.FromResult(CommandResults.Success("Generated token.", new CommandResultData { Value = json, Format = CommandResultFormat.Json }));
            },
            commandOptions: new() { IconName = "Key", Description = "Generate a temporary access token" })
        .WithCommand(
@@ -149,7 +149,7 @@ builder.AddProject<Projects.Stress_TelemetryService>("stress-telemetryservice")
            executeCommand: (c) =>
            {
                var connectionString = $"Server=localhost,1433;Database=StressDb;User Id=sa;Password={Guid.NewGuid():N};TrustServerCertificate=true";
-               return Task.FromResult(CommandResults.Success(connectionString, CommandResultFormat.Text));
+               return Task.FromResult(CommandResults.Success("Retrieved connection string.", connectionString));
            },
            commandOptions: new() { IconName = "LinkMultiple", Description = "Get the connection string for this resource" })
        .WithCommand(

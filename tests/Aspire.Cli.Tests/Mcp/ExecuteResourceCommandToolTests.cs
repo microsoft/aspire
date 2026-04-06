@@ -160,8 +160,11 @@ public class ExecuteResourceCommandToolTests
             ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
             {
                 Success = true,
-                Result = "{\"token\": \"abc123\"}",
-                ResultFormat = "json"
+                Value = new ExecuteResourceCommandResult
+                {
+                    Value = "{\"token\": \"abc123\"}",
+                    Format = "json"
+                }
             }
         };
         monitor.AddConnection("hash1", "socket.hash1", connection);

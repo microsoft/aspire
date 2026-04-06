@@ -384,8 +384,9 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         var result = await app.ResourceCommands.ExecuteCommandAsync(custom.Resource, "generate-token");
 
         Assert.True(result.Success);
-        Assert.Equal("{\"token\": \"abc123\"}", result.Result);
-        Assert.Equal(CommandResultFormat.Json, result.ResultFormat);
+        Assert.NotNull(result.Value);
+        Assert.Equal("{\"token\": \"abc123\"}", result.Value.Value);
+        Assert.Equal(CommandResultFormat.Json, result.Value.Format);
     }
 
     [Fact]
@@ -404,8 +405,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         var result = await app.ResourceCommands.ExecuteCommandAsync(custom.Resource, "mycommand");
 
         Assert.True(result.Success);
-        Assert.Null(result.Result);
-        Assert.Null(result.ResultFormat);
+        Assert.Null(result.Value);
     }
 
     [Fact]
@@ -433,9 +433,9 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         var result = await app.ResourceCommands.ExecuteCommandAsync(custom.Resource, "generate-token");
 
         Assert.True(result.Success);
-        Assert.NotNull(result.Result);
-        Assert.StartsWith("token-", result.Result);
-        Assert.Equal(CommandResultFormat.Text, result.ResultFormat);
+        Assert.NotNull(result.Value);
+        Assert.StartsWith("token-", result.Value.Value);
+        Assert.Equal(CommandResultFormat.Text, result.Value.Format);
     }
 
     [Fact]
@@ -444,8 +444,9 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         var result = CommandResults.Success("Success.", "{\"key\": \"value\"}", CommandResultFormat.Json);
 
         Assert.True(result.Success);
-        Assert.Equal("{\"key\": \"value\"}", result.Result);
-        Assert.Equal(CommandResultFormat.Json, result.ResultFormat);
+        Assert.NotNull(result.Value);
+        Assert.Equal("{\"key\": \"value\"}", result.Value.Value);
+        Assert.Equal(CommandResultFormat.Json, result.Value.Format);
     }
 
     [Fact]
@@ -454,8 +455,9 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         var result = CommandResults.Success("Success.", "hello world");
 
         Assert.True(result.Success);
-        Assert.Equal("hello world", result.Result);
-        Assert.Equal(CommandResultFormat.Text, result.ResultFormat);
+        Assert.NotNull(result.Value);
+        Assert.Equal("hello world", result.Value.Value);
+        Assert.Equal(CommandResultFormat.Text, result.Value.Format);
     }
 
     private sealed class CustomResource(string name) : Resource(name), IResourceWithEndpoints, IResourceWithWaitSupport

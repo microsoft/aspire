@@ -360,7 +360,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
 
     public override async Task<ResourceCommandResponse> ExecuteResourceCommand(ResourceCommandRequest request, ServerCallContext context)
     {
-        var (result, message, commandResult, resultFormat) = await serviceData.ExecuteCommandAsync(request.ResourceName, request.CommandName, context.CancellationToken).ConfigureAwait(false);
+        var (result, message, value) = await serviceData.ExecuteCommandAsync(request.ResourceName, request.CommandName, context.CancellationToken).ConfigureAwait(false);
         var responseKind = result switch
         {
             ExecuteCommandResultType.Success => ResourceCommandResponseKind.Succeeded,
@@ -369,24 +369,31 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             _ => ResourceCommandResponseKind.Undefined
         };
 
-#pragma warning disable CS0612 // Type or member is obsolete
         var response = new ResourceCommandResponse
         {
             Kind = responseKind,
             Message = message ?? string.Empty,
-            ErrorMessage = result == ExecuteCommandResultType.Failure ? message ?? string.Empty : string.Empty,
-            ResultFormat = resultFormat switch
+        };
+
+#pragma warning disable CS0612 // Type or member is obsolete
+        response.ErrorMessage = message ?? string.Empty;
+#pragma warning restore CS0612 // Type or member is obsolete
+
+        if (value is not null)
+        {
+            static Aspire.DashboardService.Proto.V1.CommandResultFormat MapFormat(ApplicationModel.CommandResultFormat format) => format switch
             {
                 ApplicationModel.CommandResultFormat.Text => Aspire.DashboardService.Proto.V1.CommandResultFormat.Text,
                 ApplicationModel.CommandResultFormat.Json => Aspire.DashboardService.Proto.V1.CommandResultFormat.Json,
                 _ => Aspire.DashboardService.Proto.V1.CommandResultFormat.None
-            }
-        };
-#pragma warning restore CS0612 // Type or member is obsolete
+            };
 
-        if (commandResult is not null)
-        {
-            response.Result = commandResult;
+            response.Value = new ResourceCommandResult
+            {
+                Value = value.Value,
+                Format = MapFormat(value.Format),
+                DisplayImmediately = value.DisplayImmediately
+            };
         }
 
         return response;

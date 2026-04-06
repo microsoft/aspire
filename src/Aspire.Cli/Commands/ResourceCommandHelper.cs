@@ -83,9 +83,9 @@ internal static class ResourceCommandHelper
             interactionService.DisplayError($"Failed to execute command '{commandName}' on resource '{resourceName}': {errorMessage}");
         }
 
-        if (response.Result is not null)
+        if (response.Value is not null)
         {
-            interactionService.DisplayRawText(response.Result, ConsoleOutput.Standard);
+            interactionService.DisplayRawText(response.Value.Value, ConsoleOutput.Standard);
         }
 
         return response.Success ? ExitCodeConstants.Success : ExitCodeConstants.FailedToExecuteResourceCommand;
@@ -116,9 +116,9 @@ internal static class ResourceCommandHelper
             interactionService.DisplayError($"Failed to {baseVerb} resource '{resourceName}': {errorMessage}");
         }
 
-        if (response.Result is not null)
+        if (response.Value is not null)
         {
-            interactionService.DisplayRawText(response.Result, ConsoleOutput.Standard);
+            interactionService.DisplayRawText(response.Value.Value, ConsoleOutput.Standard);
         }
 
         return response.Success ? ExitCodeConstants.Success : ExitCodeConstants.FailedToExecuteResourceCommand;
