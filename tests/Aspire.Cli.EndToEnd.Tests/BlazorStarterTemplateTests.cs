@@ -10,8 +10,8 @@ namespace Aspire.Cli.EndToEnd.Tests;
 
 /// <summary>
 /// End-to-end tests for the default Blazor starter template created by <c>aspire new</c>.
-/// Validates the full CLI workflow from project creation through detached startup and
-/// frontend/API verification.
+/// Validates the full CLI workflow from project creation through detached startup,
+/// frontend/API verification, and dashboard telemetry (traces, structured logs, metrics).
 /// </summary>
 public sealed class BlazorStarterTemplateTests(ITestOutputHelper output)
 {
@@ -83,6 +83,34 @@ public sealed class BlazorStarterTemplateTests(ITestOutputHelper output)
         await auto.TypeAsync("curl -ksSL \"$API_URL/weatherforecast\" | grep -q 'temperatureC' && echo 'apiservice-weather-ok'");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("apiservice-weather-ok", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        // Verify dashboard telemetry: traces should show webfrontend and apiservice
+        // Use --format json and grep for resource names in the OTLP trace output
+        await auto.TypeAsync("aspire otel traces --format json > traces.json 2>&1 && echo 'otel-traces-ok' || echo 'otel-traces-failed'");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("otel-traces-ok", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync("grep -q 'webfrontend' traces.json && echo 'traces-webfrontend-ok' || echo 'traces-webfrontend-missing'");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("traces-webfrontend-ok", timeout: TimeSpan.FromSeconds(15));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync("grep -q 'apiservice' traces.json && echo 'traces-apiservice-ok' || echo 'traces-apiservice-missing'");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("traces-apiservice-ok", timeout: TimeSpan.FromSeconds(15));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        // Verify structured logs exist for webfrontend
+        await auto.TypeAsync("aspire otel logs webfrontend --format json > logs.json 2>&1 && echo 'otel-logs-ok' || echo 'otel-logs-failed'");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("otel-logs-ok", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync("grep -q 'webfrontend' logs.json && echo 'logs-webfrontend-ok' || echo 'logs-webfrontend-missing'");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("logs-webfrontend-ok", timeout: TimeSpan.FromSeconds(15));
         await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.AspireStopAsync(counter);
