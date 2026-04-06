@@ -305,8 +305,15 @@ internal static class GatewayConfigurationBuilder
                 var telemetryBaseUrl = normalizedHttpsBaseUrl ?? normalizedHttpBaseUrl ?? normalizedPrimaryBaseUrl;
                 if (telemetryBaseUrl is not null)
                 {
-                    environment["OTEL_EXPORTER_OTLP_ENDPOINT"] = $"{telemetryBaseUrl}{pathBase}/{otlpPrefix}/";
+                    var otlpBase = $"{telemetryBaseUrl}{pathBase}/{otlpPrefix}";
+                    environment["OTEL_EXPORTER_OTLP_ENDPOINT"] = $"{otlpBase}/";
                     environment["OTEL_EXPORTER_OTLP_PROTOCOL"] = "http/protobuf";
+
+                    // Per-signal endpoints so that parameterless AddOtlpExporter() works
+                    // without needing UseOtlpExporter (which has WASM compatibility issues).
+                    environment["OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"] = $"{otlpBase}/v1/metrics";
+                    environment["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"] = $"{otlpBase}/v1/traces";
+                    environment["OTEL_EXPORTER_OTLP_LOGS_ENDPOINT"] = $"{otlpBase}/v1/logs";
                 }
 
                 if (!string.IsNullOrEmpty(resolvedHeaders))
