@@ -2640,9 +2640,8 @@ public static class ResourceBuilderExtensions
             {
                 if (!endpoint.IsAllocated)
                 {
-                    return new ExecuteCommandResult { Success = false, ErrorMessage = "Endpoints are not yet allocated." };
+                    return new ExecuteCommandResult { Success = false, Message = "Endpoints are not yet allocated." };
                 }
-
                 var uri = new UriBuilder(endpoint.Url) { Path = path }.Uri;
                 var httpClient = context.ServiceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(commandOptions.HttpClientName ?? Options.DefaultName);
                 var request = new HttpRequestMessage(commandOptions.Method, uri);

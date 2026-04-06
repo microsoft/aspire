@@ -77,7 +77,9 @@ internal static class ResourceCommandHelper
         }
         else
         {
-            var errorMessage = GetFriendlyErrorMessage(response.ErrorMessage);
+#pragma warning disable CS0618 // Type or member is obsolete
+            var errorMessage = GetFriendlyErrorMessage(response.Message ?? response.ErrorMessage);
+#pragma warning restore CS0618 // Type or member is obsolete
             interactionService.DisplayError($"Failed to execute command '{commandName}' on resource '{resourceName}': {errorMessage}");
         }
 
@@ -108,7 +110,9 @@ internal static class ResourceCommandHelper
         }
         else
         {
-            var errorMessage = GetFriendlyErrorMessage(response.ErrorMessage);
+#pragma warning disable CS0618 // Type or member is obsolete
+            var errorMessage = GetFriendlyErrorMessage(response.Message ?? response.ErrorMessage);
+#pragma warning restore CS0618 // Type or member is obsolete
             interactionService.DisplayError($"Failed to {baseVerb} resource '{resourceName}': {errorMessage}");
         }
 

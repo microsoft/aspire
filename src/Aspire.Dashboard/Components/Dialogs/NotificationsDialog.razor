@@ -1,20 +1,10 @@
-@using Aspire.Dashboard.Model
-@using Aspire.Dashboard.Resources
+﻿@using Aspire.Dashboard.Resources
+@using Aspire.Dashboard.Utils
 @inject IStringLocalizer<Dialogs> Loc
 
 <FluentDialogBody>
-    <div>
-        <FluentStack>
-            <FluentSpacer />
-            @if (_notifications.Count > 0)
-            {
-                <FluentAnchor Appearance="Appearance.Hypertext" Href="#" OnClick="@DismissAll">
-                    @Loc[nameof(Dialogs.NotificationCenterDismissAll)]
-                </FluentAnchor>
-            }
-        </FluentStack>
-        <br />
-        @if (_notifications.Count == 0)
+    <div class="notifications-container">
+        @if (!_hasNotifications)
         {
             <div class="notification-center-empty">
                 <FluentIcon Value="@(new Icons.Regular.Size24.Alert())" Color="Color.Neutral" />
@@ -23,38 +13,14 @@
         }
         else
         {
-            @foreach (var notification in _notifications)
-            {
-                <div class="notification-item">
-                    <div class="notification-item-icon">
-                        @switch (notification.Intent)
-                        {
-                            case NotificationIntent.Success:
-                                <FluentIcon Value="@(new Icons.Filled.Size20.CheckmarkCircle())" Color="Color.Success" />
-                                break;
-                            case NotificationIntent.Error:
-                                <FluentIcon Value="@(new Icons.Filled.Size20.DismissCircle())" Color="Color.Error" />
-                                break;
-                            case NotificationIntent.Progress:
-                                <FluentIcon Value="@(new Icons.Regular.Size20.Flash())" Color="Color.Neutral" />
-                                break;
-                            default:
-                                <FluentIcon Value="@(new Icons.Filled.Size20.Info())" Color="Color.Info" />
-                                break;
-                        }
-                    </div>
-                    <div class="notification-item-content">
-                        <div class="notification-item-title">@notification.Title</div>
-                        @if (!string.IsNullOrEmpty(notification.Message))
-                        {
-                            <div class="notification-item-message">@notification.Message</div>
-                        }
-                        <div class="notification-item-timestamp">
-                            @FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, notification.Timestamp.ToLocalTime())
-                        </div>
-                    </div>
-                </div>
-            }
+            <div class="notifications-dismiss">
+                <FluentAnchor Appearance="Appearance.Hypertext" Href="#" OnClick="@DismissAll">
+                    @Loc[nameof(Dialogs.NotificationCenterDismissAll)]
+                </FluentAnchor>
+            </div>
+            <div class="notifications-scroll">
+                <FluentMessageBarProvider Section="@DashboardUIHelpers.NotificationSection" MaxMessageCount="-1" Type="@MessageType.Notification" />
+            </div>
         }
     </div>
 </FluentDialogBody>

@@ -1,19 +1,19 @@
-﻿@using Aspire.Dashboard.Model
-@using Aspire.Dashboard.Resources
+﻿@using Aspire.Dashboard.Resources
 
-@if (NotificationService.UnreadCount > 0)
+@if (UnreadCount > 0)
 {
     <FluentButton Class="header-button"
-                  Appearance="Appearance.Stealth" OnClick="@OnClick"
+                  Appearance="Appearance.Stealth" OnClick="@HandleClick"
                   Title="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]">
-        <FluentCounterBadge Count="@NotificationService.UnreadCount"
+        <FluentCounterBadge Count="@UnreadCount"
                             Max="9"
                             ShowOverflow="true"
                             BackgroundColor="@Color.FillInverse"
                             Color="Color.Fill"
-                            Appearance="Appearance.Accent">
+                            Appearance="Appearance.Accent"
+                            Style="border: 0;">
             <ChildContent>
-                <FluentIcon Value="@(new Icons.Regular.Size24.Alert())" Color="Color.Neutral" Style="vertical-align: sub;" />
+                <FluentIcon Value="@(new Icons.Regular.Size24.Alert())" Color="Color.Neutral" Style="vertical-align: bottom;" />
             </ChildContent>
         </FluentCounterBadge>
     </FluentButton>
@@ -21,7 +21,7 @@
 else
 {
     <FluentButton Class="header-button"
-                  Appearance="Appearance.Stealth" OnClick="@OnClick"
+                  Appearance="Appearance.Stealth" OnClick="@HandleClick"
                   Title="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]">
         <FluentIcon Value="@(new Icons.Regular.Size24.Alert())" Color="Color.Neutral" />
     </FluentButton>

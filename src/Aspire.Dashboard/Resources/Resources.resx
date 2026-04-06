@@ -209,15 +209,18 @@
     <value>State</value>
   </data>
   <data name="ResourceCommandFailed" xml:space="preserve">
-    <value>{0} "{1}" failed</value>
-    <comment>{0} is the resource. {1} is the display name of the command.</comment>
+    <value>"{0}" failed</value>
+    <comment>{0} is the display name of the command.</comment>
   </data>
   <data name="ResourceCommandSuccess" xml:space="preserve">
-    <value>{0} "{1}" succeeded</value>
-    <comment>{0} is the resource. {1} is the display name of the command.</comment>
+    <value>"{0}" succeeded</value>
+    <comment>{0} is the display name of the command.</comment>
   </data>
   <data name="ResourceCommandToastViewLogs" xml:space="preserve">
     <value>View console logs</value>
+  </data>
+  <data name="ResourceCommandViewResponse" xml:space="preserve">
+    <value>View response</value>
   </data>
   <data name="ResourcesActionsColumnHeader" xml:space="preserve">
     <value>Actions</value>
@@ -238,8 +241,8 @@
     <value>Stop time</value>
   </data>
   <data name="ResourceCommandStarting" xml:space="preserve">
-    <value>{0} "{1}" starting</value>
-    <comment>{0} is the resource. {1} is the display name of the command.</comment>
+    <value>"{0}" starting</value>
+    <comment>{0} is the display name of the command.</comment>
   </data>
   <data name="ResourceActionTracesText" xml:space="preserve">
     <value>Traces</value>

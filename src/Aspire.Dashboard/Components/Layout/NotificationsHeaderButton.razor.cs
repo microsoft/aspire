@@ -23,6 +23,14 @@ public partial class NotificationsHeaderButton : ComponentBase, IDisposable
         NotificationService.OnChange += HandleNotificationsChanged;
     }
 
+    private int UnreadCount => NotificationService.UnreadCount;
+
+    private async Task HandleClick()
+    {
+        NotificationService.ResetUnreadCount();
+        await OnClick();
+    }
+
     private void HandleNotificationsChanged()
     {
         InvokeAsync(StateHasChanged);

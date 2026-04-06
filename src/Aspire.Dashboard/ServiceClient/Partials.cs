@@ -196,9 +196,15 @@ partial class ResourceCommandResponse
 {
     public ResourceCommandResponseViewModel ToViewModel()
     {
+        // Map deprecated error_message to message for backward compatibility.
+#pragma warning disable CS0612 // Type or member is obsolete
+        var resolvedMessage = HasMessage ? Message : ErrorMessage;
+#pragma warning restore CS0612 // Type or member is obsolete
+
         return new ResourceCommandResponseViewModel()
         {
-            ErrorMessage = ErrorMessage,
+            ErrorMessage = resolvedMessage,
+            Message = resolvedMessage,
             Kind = (Dashboard.Model.ResourceCommandResponseKind)Kind,
             Result = HasResult ? Result : null,
             ResultFormat = ResultFormat switch

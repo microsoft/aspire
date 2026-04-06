@@ -14,6 +14,7 @@ namespace Aspire.Dashboard.Utils;
 internal static class DashboardUIHelpers
 {
     public const string MessageBarSection = "MessagesTop";
+    public const string NotificationSection = "MessagesNotifications";
 
     // these are language names supported by highlight.js
     public const string XmlFormat = "xml";

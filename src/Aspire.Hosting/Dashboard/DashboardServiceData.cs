@@ -94,16 +94,18 @@ internal sealed class DashboardServiceData : IDisposable
         _cts.Dispose();
     }
 
-    internal async Task<(ExecuteCommandResultType result, string? errorMessage, string? commandResult, ApplicationModel.CommandResultFormat? resultFormat)> ExecuteCommandAsync(string resourceId, string type, CancellationToken cancellationToken)
+    internal async Task<(ExecuteCommandResultType result, string? message, string? commandResult, ApplicationModel.CommandResultFormat? resultFormat)> ExecuteCommandAsync(string resourceId, string type, CancellationToken cancellationToken)
     {
         try
         {
             var result = await _resourceCommandService.ExecuteCommandAsync(resourceId, type, cancellationToken).ConfigureAwait(false);
             if (result.Canceled)
             {
-                return (ExecuteCommandResultType.Canceled, result.ErrorMessage, null, null);
+                return (ExecuteCommandResultType.Canceled, result.Message, null, null);
             }
-            return (result.Success ? ExecuteCommandResultType.Success : ExecuteCommandResultType.Failure, result.ErrorMessage, result.Result, result.ResultFormat);
+#pragma warning disable CS0618 // Type or member is obsolete
+            return (result.Success ? ExecuteCommandResultType.Success : ExecuteCommandResultType.Failure, string.IsNullOrEmpty(result.Message) ? result.ErrorMessage : result.Message, result.Result, result.ResultFormat);
+#pragma warning restore CS0618 // Type or member is obsolete
         }
         catch
         {

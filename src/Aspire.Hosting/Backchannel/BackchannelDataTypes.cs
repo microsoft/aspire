@@ -284,7 +284,13 @@ internal sealed class ExecuteResourceCommandResponse
     /// <summary>
     /// Gets the error message if the command failed.
     /// </summary>
+    [Obsolete("Use Message instead.")]
     public string? ErrorMessage { get; init; }
+
+    /// <summary>
+    /// Gets the message associated with the command result.
+    /// </summary>
+    public string? Message { get; init; }
 
     /// <summary>
     /// Gets the result data produced by the command.

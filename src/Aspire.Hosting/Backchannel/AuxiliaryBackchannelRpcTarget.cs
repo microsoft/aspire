@@ -218,7 +218,10 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         {
             Success = result.Success,
             Canceled = result.Canceled,
-            ErrorMessage = result.ErrorMessage,
+#pragma warning disable CS0618 // Type or member is obsolete
+            ErrorMessage = result.Message,
+#pragma warning restore CS0618 // Type or member is obsolete
+            Message = result.Message,
             Result = result.Result,
             ResultFormat = result.ResultFormat?.ToString().ToLowerInvariant()
         };

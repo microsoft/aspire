@@ -95,7 +95,9 @@ internal sealed class ExecuteResourceCommandTool(
             }
             else
             {
-                var message = response.ErrorMessage is { Length: > 0 } ? response.ErrorMessage : "Unknown error. See logs for details.";
+#pragma warning disable CS0618 // Type or member is obsolete
+                var message = (response.Message ?? response.ErrorMessage) is { Length: > 0 } errorMsg ? errorMsg : "Unknown error. See logs for details.";
+#pragma warning restore CS0618 // Type or member is obsolete
 
                 var content = new List<TextContentBlock>
                 {

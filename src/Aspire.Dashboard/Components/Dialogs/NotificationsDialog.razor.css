@@ -1,3 +1,10 @@
+.notifications-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    gap: 16px;
+}
+
 .notification-center-empty {
     display: flex;
     flex-direction: column;
@@ -8,42 +15,33 @@
     gap: 8px;
 }
 
-.notification-item {
+.notifications-dismiss {
     display: flex;
-    gap: 12px;
-    padding: 12px 0;
-    border-bottom: 1px solid var(--neutral-stroke-divider-rest);
+    justify-content: flex-end;
 }
 
-.notification-item:last-child {
-    border-bottom: none;
-}
-
-.notification-item-icon {
-    flex-shrink: 0;
-    padding-top: 2px;
-}
-
-.notification-item-content {
+.notifications-scroll {
+    overflow-y: auto;
     flex: 1;
-    min-width: 0;
+    min-height: 0;
 }
 
-.notification-item-title {
-    font-size: var(--type-ramp-base-font-size);
-    font-weight: 600;
-    line-height: var(--type-ramp-base-line-height);
+.notifications-container ::deep .fluent-messagebar-notification {
+    grid-template-rows: unset;
 }
 
-.notification-item-message {
-    font-size: var(--type-ramp-minus-1-font-size);
-    color: var(--neutral-foreground-hint);
-    margin-top: 4px;
-    word-break: break-word;
+.notifications-container ::deep .fluent-messagebar-notification-message {
+    white-space: unset;
 }
 
-.notification-item-timestamp {
-    font-size: var(--type-ramp-minus-1-font-size);
-    color: var(--neutral-foreground-hint);
-    margin-top: 4px;
+.notifications-container ::deep .fluent-messagebar-notification-content {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12px;
+}
+
+.notifications-container ::deep .fluent-messagebar-notification-time {
+    color: var(--foreground-subtext-rest);
 }

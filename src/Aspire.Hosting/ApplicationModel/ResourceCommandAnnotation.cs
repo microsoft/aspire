@@ -142,17 +142,18 @@ public static class CommandResults
     public static ExecuteCommandResult Success() => new() { Success = true };
 
     /// <summary>
-    /// Produces a success result with result data.
+    /// Produces a success result with a message and result data.
     /// </summary>
+    /// <param name="message">The message associated with the result.</param>
     /// <param name="result">The result data.</param>
     /// <param name="resultFormat">The format of the result data. Defaults to <see cref="CommandResultFormat.Text"/>.</param>
-    public static ExecuteCommandResult Success(string result, CommandResultFormat resultFormat = CommandResultFormat.Text) => new() { Success = true, Result = result, ResultFormat = resultFormat };
+    public static ExecuteCommandResult Success(string message, string result, CommandResultFormat resultFormat = CommandResultFormat.Text) => new() { Success = true, Message = message, Result = result, ResultFormat = resultFormat };
 
     /// <summary>
     /// Produces an unsuccessful result with an error message.
     /// </summary>
     /// <param name="errorMessage">An optional error message.</param>
-    public static ExecuteCommandResult Failure(string? errorMessage = null) => new() { Success = false, ErrorMessage = errorMessage };
+    public static ExecuteCommandResult Failure(string? errorMessage = null) => new() { Success = false, Message = errorMessage };
 
     /// <summary>
     /// Produces an unsuccessful result with an error message and result data.
@@ -160,7 +161,7 @@ public static class CommandResults
     /// <param name="errorMessage">The error message.</param>
     /// <param name="result">The result data.</param>
     /// <param name="resultFormat">The format of the result data. Defaults to <see cref="CommandResultFormat.Text"/>.</param>
-    public static ExecuteCommandResult Failure(string errorMessage, string result, CommandResultFormat resultFormat = CommandResultFormat.Text) => new() { Success = false, ErrorMessage = errorMessage, Result = result, ResultFormat = resultFormat };
+    public static ExecuteCommandResult Failure(string errorMessage, string result, CommandResultFormat resultFormat = CommandResultFormat.Text) => new() { Success = false, Message = errorMessage, Result = result, ResultFormat = resultFormat };
 
     /// <summary>
     /// Produces a canceled result.
@@ -193,7 +194,13 @@ public sealed class ExecuteCommandResult
     /// <summary>
     /// An optional error message that can be set when the command is unsuccessful.
     /// </summary>
+    [Obsolete("Use Message instead.")]
     public string? ErrorMessage { get; init; }
+
+    /// <summary>
+    /// An optional message associated with the command result.
+    /// </summary>
+    public string? Message { get; init; }
 
     /// <summary>
     /// An optional result value produced by the command.

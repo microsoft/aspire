@@ -360,7 +360,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
 
     public override async Task<ResourceCommandResponse> ExecuteResourceCommand(ResourceCommandRequest request, ServerCallContext context)
     {
-        var (result, errorMessage, commandResult, resultFormat) = await serviceData.ExecuteCommandAsync(request.ResourceName, request.CommandName, context.CancellationToken).ConfigureAwait(false);
+        var (result, message, commandResult, resultFormat) = await serviceData.ExecuteCommandAsync(request.ResourceName, request.CommandName, context.CancellationToken).ConfigureAwait(false);
         var responseKind = result switch
         {
             ExecuteCommandResultType.Success => ResourceCommandResponseKind.Succeeded,
@@ -369,10 +369,12 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             _ => ResourceCommandResponseKind.Undefined
         };
 
+#pragma warning disable CS0612 // Type or member is obsolete
         var response = new ResourceCommandResponse
         {
             Kind = responseKind,
-            ErrorMessage = errorMessage ?? string.Empty,
+            Message = message ?? string.Empty,
+            ErrorMessage = message ?? string.Empty,
             ResultFormat = resultFormat switch
             {
                 ApplicationModel.CommandResultFormat.Text => Aspire.DashboardService.Proto.V1.CommandResultFormat.Text,
@@ -380,6 +382,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
                 _ => Aspire.DashboardService.Proto.V1.CommandResultFormat.None
             }
         };
+#pragma warning restore CS0612 // Type or member is obsolete
 
         if (commandResult is not null)
         {
