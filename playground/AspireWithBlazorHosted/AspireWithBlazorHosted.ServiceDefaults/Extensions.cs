@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
@@ -101,6 +102,16 @@ public static class Extensions
             {
                 Predicate = r => r.Tags.Contains("live")
             });
+        }
+
+        // Map the configuration endpoint for WebAssembly clients.
+        // The Aspire host sets Client__ConfigEndpointPath and Client__ConfigResponse
+        // as environment variables; the server reads them and serves the response.
+        var configEndpointPath = app.Configuration["Client:ConfigEndpointPath"];
+        var configResponse = app.Configuration["Client:ConfigResponse"];
+        if (!string.IsNullOrEmpty(configEndpointPath) && !string.IsNullOrEmpty(configResponse))
+        {
+            app.MapGet(configEndpointPath, () => Results.Content(configResponse, "application/json"));
         }
 
         return app;
