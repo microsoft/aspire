@@ -212,6 +212,7 @@ public sealed class DashboardCommandExecutor(
             toastParameters.Icon = GetIntentIcon(ToastIntent.Error);
             toastParameters.PrimaryAction = loc[nameof(Dashboard.Resources.Resources.ResourceCommandToastViewLogs)];
             toastParameters.OnPrimaryAction = EventCallback.Factory.Create<ToastResult>(this, () => navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: getResourceName(resource))));
+            toastParameters.Content.Details = response.Message;
 
             if (response.Value is not null)
             {

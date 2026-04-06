@@ -214,14 +214,18 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         var resourceCommandService = serviceProvider.GetRequiredService<ResourceCommandService>();
         var result = await resourceCommandService.ExecuteCommandAsync(request.ResourceName, request.CommandName, cancellationToken).ConfigureAwait(false);
 
+#pragma warning disable CS0618 // Type or member is obsolete
+        var resolvedMessage = result.Message ?? result.ErrorMessage;
+#pragma warning restore CS0618 // Type or member is obsolete
+
         return new ExecuteResourceCommandResponse
         {
             Success = result.Success,
             Canceled = result.Canceled,
 #pragma warning disable CS0618 // Type or member is obsolete
-            ErrorMessage = result.Message,
+            ErrorMessage = resolvedMessage,
 #pragma warning restore CS0618 // Type or member is obsolete
-            Message = result.Message,
+            Message = resolvedMessage,
             Value = result.Value is { } v ? new ExecuteResourceCommandResult
             {
                 Value = v.Value,

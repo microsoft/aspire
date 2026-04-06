@@ -209,12 +209,22 @@ public sealed class ExecuteCommandResult
     /// An optional error message that can be set when the command is unsuccessful.
     /// </summary>
     [Obsolete("Use Message instead.")]
-    public string? ErrorMessage { get; init; }
+    public string? ErrorMessage
+    {
+        get => _message;
+        init => _message ??= value;
+    }
 
     /// <summary>
     /// An optional message associated with the command result.
     /// </summary>
-    public string? Message { get; init; }
+    public string? Message
+    {
+        get => _message;
+        init => _message = value;
+    }
+
+    private string? _message;
 
     /// <summary>
     /// An optional value produced by the command.
