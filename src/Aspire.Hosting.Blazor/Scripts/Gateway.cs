@@ -131,13 +131,7 @@ static class ServiceDefaultsExtensions
                         options.Filter = context =>
                             !context.Request.Path.StartsWithSegments("/health")
                             && !context.Request.Path.StartsWithSegments("/alive")
-                            // Filter out static asset requests (WASM DLLs, JS, CSS, etc.)
-                            // to avoid flooding the dashboard with per-file download traces.
-                            && !context.Request.Path.Value!.Contains("/_framework/")
-                            && !context.Request.Path.Value!.Contains("/_content/")
-                            // Filter out OTLP ingestion requests from WASM clients.
-                            // Paths are prefixed per-app (e.g. /app/_otlp/v1/traces).
-                            && !context.Request.Path.Value!.Contains("/_otlp/")
+                            && !IsStaticAssetOrOtlpRequest(context.Request.Path)
                     )
                     .AddHttpClientInstrumentation(options =>
                         // Filter out the gateway's own OTLP export calls to the dashboard
@@ -155,6 +149,15 @@ static class ServiceDefaultsExtensions
         }
 
         return builder;
+    }
+
+    private static bool IsStaticAssetOrOtlpRequest(PathString path)
+    {
+        var pathValue = path.Value;
+        return pathValue is not null
+            && (pathValue.Contains("/_framework/", StringComparison.Ordinal)
+                || pathValue.Contains("/_content/", StringComparison.Ordinal)
+                || pathValue.Contains("/_otlp/", StringComparison.Ordinal));
     }
 
     public static TBuilder AddDefaultHealthChecks<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder

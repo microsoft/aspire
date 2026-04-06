@@ -120,12 +120,18 @@ public static class BlazorGatewayExtensions
     /// Service references from the WASM app are automatically forwarded to the gateway
     /// so the gateway can resolve service endpoints for YARP proxying.
     /// </summary>
+    /// <param name="gateway">The gateway resource builder.</param>
+    /// <param name="wasmApp">The Blazor WebAssembly app to attach to the gateway.</param>
+    /// <param name="apiPrefix">The URL path prefix for API proxy routes. Defaults to <c>"_api"</c>.</param>
+    /// <param name="otlpPrefix">The URL path prefix for OTLP proxy routes. Defaults to <c>"_otlp"</c>.</param>
+    /// <param name="proxyTelemetry"><see langword="true"/> to expose the OTLP proxy for the client app; otherwise, <see langword="false"/>.</param>
     [AspireExportIgnore(Reason = "Blazor gateway APIs are not yet stable for ATS export.")]
     public static IResourceBuilder<ProjectResource> WithClient(
         this IResourceBuilder<ProjectResource> gateway,
         IResourceBuilder<BlazorWasmAppResource> wasmApp,
         string apiPrefix = GatewayConfigurationBuilder.DefaultApiPrefix,
-        string otlpPrefix = GatewayConfigurationBuilder.DefaultOtlpPrefix)
+        string otlpPrefix = GatewayConfigurationBuilder.DefaultOtlpPrefix,
+        bool proxyTelemetry = true)
     {
         var pathPrefix = wasmApp.Resource.Name;
 
@@ -150,7 +156,7 @@ public static class BlazorGatewayExtensions
             }
         }
 
-        return gateway.WithBlazorApp(wasmApp, pathPrefix, serviceNames, apiPrefix, otlpPrefix);
+        return gateway.WithBlazorApp(wasmApp, pathPrefix, serviceNames, apiPrefix, otlpPrefix, proxyTelemetry);
     }
 
     /// <summary>
@@ -159,6 +165,13 @@ public static class BlazorGatewayExtensions
     /// transformed (AssetFile prefixed, runtime tree wrapped under prefix), then injected
     /// into the Gateway as environment variables.
     /// </summary>
+    /// <param name="gateway">The gateway resource builder.</param>
+    /// <param name="wasmApp">The Blazor WebAssembly app to serve behind the gateway.</param>
+    /// <param name="pathPrefix">The URL path prefix under which the app is served.</param>
+    /// <param name="serviceNames">Optional service names to expose to the client through the gateway proxy.</param>
+    /// <param name="apiPrefix">The URL path prefix for API proxy routes. Defaults to <c>"_api"</c>.</param>
+    /// <param name="otlpPrefix">The URL path prefix for OTLP proxy routes. Defaults to <c>"_otlp"</c>.</param>
+    /// <param name="proxyTelemetry"><see langword="true"/> to expose the OTLP proxy for the client app; otherwise, <see langword="false"/>.</param>
     [AspireExportIgnore(Reason = "Blazor gateway APIs are not yet stable for ATS export.")]
     public static IResourceBuilder<ProjectResource> WithBlazorApp(
         this IResourceBuilder<ProjectResource> gateway,
@@ -166,9 +179,10 @@ public static class BlazorGatewayExtensions
         string pathPrefix,
         string[]? serviceNames = null,
         string apiPrefix = GatewayConfigurationBuilder.DefaultApiPrefix,
-        string otlpPrefix = GatewayConfigurationBuilder.DefaultOtlpPrefix)
+        string otlpPrefix = GatewayConfigurationBuilder.DefaultOtlpPrefix,
+        bool proxyTelemetry = true)
     {
-        var registration = new GatewayAppRegistration(wasmApp, pathPrefix, serviceNames ?? [], apiPrefix, otlpPrefix);
+        var registration = new GatewayAppRegistration(wasmApp, pathPrefix, serviceNames ?? [], apiPrefix, otlpPrefix, proxyTelemetry);
 
         // Get or create the annotation on the gateway resource
         var annotation = GetOrAddGatewayAppsAnnotation(gateway.Resource);
@@ -181,16 +195,19 @@ public static class BlazorGatewayExtensions
             gateway.WithEnvironment(async context =>
             {
                 var registeredApps = GetRegisteredApps(gateway.Resource);
-                var gatewayEndpoint = gateway.GetEndpoint("https");
+                var httpsGatewayEndpoint = GetEndpointIfDefined(gateway.Resource, "https");
+                var httpGatewayEndpoint = GetEndpointIfDefined(gateway.Resource, "http");
+                var gatewayEndpoint = httpsGatewayEndpoint ?? httpGatewayEndpoint
+                    ?? throw new InvalidOperationException($"The gateway '{gateway.Resource.Name}' must define an HTTP or HTTPS endpoint.");
 
                 if (context.ExecutionContext.IsPublishMode)
                 {
-                    ConfigurePublishEnvironment(context, registeredApps, gatewayEndpoint);
+                    ConfigurePublishEnvironment(context, registeredApps, gatewayEndpoint, httpGatewayEndpoint);
                     return;
                 }
 
-                var outputDir = Path.Combine(Path.GetTempPath(), "BlazorGateway", gateway.Resource.Name);
-                Directory.CreateDirectory(outputDir);
+                var outputDir = Directory.CreateTempSubdirectory($"aspire-blazor-gateway-{gateway.Resource.Name}-")
+                    .FullName;
 
                 var manifests = await BuildAndDiscoverManifestsAsync(registeredApps, context.Logger, context.CancellationToken).ConfigureAwait(false);
                 if (manifests == null)
@@ -207,7 +224,7 @@ public static class BlazorGatewayExtensions
                 await EndpointsManifestTransformer.MergeRuntimeManifestsAsync(manifests, mergedRuntimePath, context.Logger, context.CancellationToken).ConfigureAwait(false);
                 context.EnvironmentVariables["staticWebAssets"] = mergedRuntimePath;
 
-                GatewayConfigurationBuilder.EmitProxyConfiguration(context.EnvironmentVariables, registeredApps, gatewayEndpoint);
+                GatewayConfigurationBuilder.EmitProxyConfiguration(context.EnvironmentVariables, registeredApps, gatewayEndpoint, httpGatewayEndpoint);
             });
         }
 
@@ -262,7 +279,8 @@ public static class BlazorGatewayExtensions
     private static void ConfigurePublishEnvironment(
         EnvironmentCallbackContext context,
         List<GatewayAppRegistration> apps,
-        EndpointReference gatewayEndpoint)
+        EndpointReference gatewayEndpoint,
+        EndpointReference? httpGatewayEndpoint)
     {
         foreach (var reg in apps)
         {
@@ -272,7 +290,7 @@ public static class BlazorGatewayExtensions
             context.EnvironmentVariables[$"{envPrefix}__ConfigEndpointPath"] = $"{reg.PathPrefix}/_blazor/_configuration";
         }
 
-        GatewayConfigurationBuilder.EmitProxyConfiguration(context.EnvironmentVariables, apps, gatewayEndpoint);
+        GatewayConfigurationBuilder.EmitProxyConfiguration(context.EnvironmentVariables, apps, gatewayEndpoint, httpGatewayEndpoint);
     }
 
     private static async Task<List<AppManifestPaths>?> BuildAndDiscoverManifestsAsync(
@@ -344,10 +362,13 @@ public static class BlazorGatewayExtensions
         var relativeProjectPath = Path.GetRelativePath(
             project.SolutionRoot, wasmApp.Resource.ProjectPath).Replace('\\', '/');
 
-        // Copy the PrefixEndpoints.cs script into the Docker build context so it's
-        // available inside the container build. The script ships alongside this assembly.
+        // Copy the PrefixEndpoints.cs script into a project-local build folder so it's
+        // available inside the Docker build context without clobbering the solution root.
         var scriptSource = GetScriptPath("PrefixEndpoints.cs");
-        var scriptDest = Path.Combine(project.SolutionRoot, "PrefixEndpoints.cs");
+        var scriptRelativePath = Path.Combine(project.RelativeProjectPath, "obj", "Aspire.Hosting.Blazor", "PrefixEndpoints.cs")
+            .Replace('\\', '/');
+        var scriptDest = Path.Combine(project.SolutionRoot, scriptRelativePath.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(scriptDest)!);
         File.Copy(scriptSource, scriptDest, overwrite: true);
 
         var companion = gateway.ApplicationBuilder.AddResource(
@@ -366,7 +387,7 @@ public static class BlazorGatewayExtensions
                 # Prefix asset paths and add SPA fallback endpoint
                 RUN mkdir -p /app/output/wwwroot/{{pathPrefix}} && \
                     cp -r /app/publish/wwwroot/* /app/output/wwwroot/{{pathPrefix}}/ && \
-                    dotnet run PrefixEndpoints.cs -- \
+                    dotnet run "{{scriptRelativePath}}" -- \
                         /app/publish/*.staticwebassets.endpoints.json \
                         {{pathPrefix}} \
                         /app/output/{{pathPrefix}}.endpoints.json
@@ -430,6 +451,12 @@ public static class BlazorGatewayExtensions
             }
         }
         return names;
+    }
+
+    private static EndpointReference? GetEndpointIfDefined(IResourceWithEndpoints resource, string endpointName)
+    {
+        var endpoint = resource.GetEndpoint(endpointName);
+        return endpoint.Exists ? endpoint : null;
     }
 
     private static GatewayAppsAnnotation GetOrAddGatewayAppsAnnotation(IResource resource)
