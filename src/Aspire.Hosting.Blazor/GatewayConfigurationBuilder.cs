@@ -19,9 +19,12 @@ internal static class GatewayConfigurationBuilder
     public static void EmitProxyConfiguration(
         IDictionary<string, object> env,
         List<GatewayAppRegistration> apps,
-        EndpointReference gatewayEndpoint)
+        EndpointReference gatewayEndpoint,
+        EndpointReference? httpGatewayEndpoint = null)
     {
         var addedClusters = new HashSet<string>();
+        var httpClientEndpoint = httpGatewayEndpoint ?? (gatewayEndpoint.IsHttp ? gatewayEndpoint : null);
+        var httpsClientEndpoint = gatewayEndpoint.IsHttps ? gatewayEndpoint : null;
 
         // Capture OTLP headers so the WASM client can send them directly
         env.TryGetValue("OTEL_EXPORTER_OTLP_HEADERS", out var otlpHeaders);
@@ -34,14 +37,25 @@ internal static class GatewayConfigurationBuilder
             // Per-app client config: use an IValueProvider that resolves the gateway URL
             // at startup and builds the final JSON response.
             env[$"{envPrefix}__ConfigResponse"] = new ClientConfigValueProvider(
-                gatewayEndpoint, prefix, reg.Resource.Name, reg.ServiceNames, proxyTelemetry: true, otlpHeaders,
-                reg.ApiPrefix, reg.OtlpPrefix);
+                gatewayEndpoint,
+                httpClientEndpoint,
+                httpsClientEndpoint,
+                prefix,
+                reg.Resource.Name,
+                reg.ServiceNames,
+                reg.ProxyTelemetry,
+                otlpHeaders,
+                reg.ApiPrefix,
+                reg.OtlpPrefix);
 
-            EmitYarpRoutes(env, prefix, reg.Resource.Name, reg.ServiceNames, proxyTelemetry: true, addedClusters,
+            EmitYarpRoutes(env, prefix, reg.Resource.Name, reg.ServiceNames, reg.ProxyTelemetry, addedClusters,
                 reg.ApiPrefix, reg.OtlpPrefix);
         }
 
-        EmitOtlpCluster(env);
+        if (apps.Any(app => app.ProxyTelemetry))
+        {
+            EmitOtlpCluster(env);
+        }
     }
 
     /// <summary>
@@ -51,6 +65,7 @@ internal static class GatewayConfigurationBuilder
     public static void EmitHostedProxyConfiguration(
         IDictionary<string, object> env,
         EndpointReference hostEndpoint,
+        EndpointReference? httpHostEndpoint,
         string resourceName,
         string[] serviceNames,
         bool proxyTelemetry,
@@ -58,12 +73,23 @@ internal static class GatewayConfigurationBuilder
         string apiPrefix = DefaultApiPrefix,
         string otlpPrefix = DefaultOtlpPrefix)
     {
+        var httpClientEndpoint = httpHostEndpoint ?? (hostEndpoint.IsHttp ? hostEndpoint : null);
+        var httpsClientEndpoint = hostEndpoint.IsHttps ? hostEndpoint : null;
+
         // Capture OTLP headers so the WASM client can send them directly
         env.TryGetValue("OTEL_EXPORTER_OTLP_HEADERS", out var otlpHeaders);
 
         env["Client__ConfigResponse"] = new ClientConfigValueProvider(
-            hostEndpoint, prefix: null, resourceName, serviceNames, proxyTelemetry, otlpHeaders,
-            apiPrefix, otlpPrefix);
+            hostEndpoint,
+            httpClientEndpoint,
+            httpsClientEndpoint,
+            prefix: null,
+            resourceName,
+            serviceNames,
+            proxyTelemetry,
+            otlpHeaders,
+            apiPrefix,
+            otlpPrefix);
         env["Client__ConfigEndpointPath"] = "/_blazor/_configuration";
 
         EmitYarpRoutes(env, prefix: null, resourceName, serviceNames, proxyTelemetry, addedClusters: null,
@@ -161,7 +187,9 @@ internal static class GatewayConfigurationBuilder
     /// Used by both the standalone gateway and hosted Blazor models.
     /// </summary>
     internal sealed class ClientConfigValueProvider(
-        EndpointReference endpoint,
+        EndpointReference primaryEndpoint,
+        EndpointReference? httpEndpoint,
+        EndpointReference? httpsEndpoint,
         string? prefix,
         string resourceName,
         string[] serviceNames,
@@ -171,20 +199,28 @@ internal static class GatewayConfigurationBuilder
         string otlpPrefix = DefaultOtlpPrefix) : IValueProvider, IManifestExpressionProvider
     {
         string IManifestExpressionProvider.ValueExpression =>
-            BuildJson(((IManifestExpressionProvider)endpoint).ValueExpression, ResolveHeadersExpression());
+            BuildJson(
+                ((IManifestExpressionProvider)primaryEndpoint).ValueExpression,
+                ResolveEndpointExpression(httpEndpoint),
+                ResolveEndpointExpression(httpsEndpoint),
+                ResolveHeadersExpression());
 
         async ValueTask<string?> IValueProvider.GetValueAsync(CancellationToken cancellationToken)
         {
-            var url = await endpoint.GetValueAsync(cancellationToken).ConfigureAwait(false);
+            var primaryUrl = await primaryEndpoint.GetValueAsync(cancellationToken).ConfigureAwait(false);
+            var httpUrl = await ResolveEndpointAsync(httpEndpoint, cancellationToken).ConfigureAwait(false);
+            var httpsUrl = await ResolveEndpointAsync(httpsEndpoint, cancellationToken).ConfigureAwait(false);
             var headers = await ResolveHeadersAsync(cancellationToken).ConfigureAwait(false);
-            return BuildJson(url!.TrimEnd('/'), headers);
+            return BuildJson(primaryUrl, httpUrl, httpsUrl, headers);
         }
 
         async ValueTask<string?> IValueProvider.GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken)
         {
-            var url = await endpoint.GetValueAsync(context, cancellationToken).ConfigureAwait(false);
-            var headers = await ResolveHeadersAsync(cancellationToken).ConfigureAwait(false);
-            return BuildJson(url!.TrimEnd('/'), headers);
+            var primaryUrl = await primaryEndpoint.GetValueAsync(context, cancellationToken).ConfigureAwait(false);
+            var httpUrl = await ResolveEndpointAsync(httpEndpoint, context, cancellationToken).ConfigureAwait(false);
+            var httpsUrl = await ResolveEndpointAsync(httpsEndpoint, context, cancellationToken).ConfigureAwait(false);
+            var headers = await ResolveHeadersAsync(context, cancellationToken).ConfigureAwait(false);
+            return BuildJson(primaryUrl, httpUrl, httpsUrl, headers);
         }
 
         private async ValueTask<string?> ResolveHeadersAsync(CancellationToken cancellationToken)
@@ -196,6 +232,42 @@ internal static class GatewayConfigurationBuilder
             return otlpHeaders as string;
         }
 
+        private async ValueTask<string?> ResolveHeadersAsync(ValueProviderContext context, CancellationToken cancellationToken)
+        {
+            if (otlpHeaders is IValueProvider vp)
+            {
+                return await vp.GetValueAsync(context, cancellationToken).ConfigureAwait(false);
+            }
+            return otlpHeaders as string;
+        }
+
+        private static async ValueTask<string?> ResolveEndpointAsync(EndpointReference? endpoint, CancellationToken cancellationToken)
+        {
+            if (endpoint is null)
+            {
+                return null;
+            }
+
+            return await endpoint.GetValueAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        private static async ValueTask<string?> ResolveEndpointAsync(EndpointReference? endpoint, ValueProviderContext context, CancellationToken cancellationToken)
+        {
+            if (endpoint is null)
+            {
+                return null;
+            }
+
+            return await endpoint.GetValueAsync(context, cancellationToken).ConfigureAwait(false);
+        }
+
+        private static string? ResolveEndpointExpression(EndpointReference? endpoint)
+        {
+            return endpoint is IManifestExpressionProvider manifestExpressionProvider
+                ? manifestExpressionProvider.ValueExpression
+                : null;
+        }
+
         private string? ResolveHeadersExpression()
         {
             if (otlpHeaders is IManifestExpressionProvider mep)
@@ -205,30 +277,55 @@ internal static class GatewayConfigurationBuilder
             return otlpHeaders as string;
         }
 
-        private string BuildJson(string baseUrl, string? resolvedHeaders)
+        private string BuildJson(string? primaryBaseUrl, string? httpBaseUrl, string? httpsBaseUrl, string? resolvedHeaders)
         {
             var pathBase = prefix != null ? $"/{prefix}" : "";
             var environment = new Dictionary<string, string>();
+            var normalizedPrimaryBaseUrl = NormalizeUrl(primaryBaseUrl);
+            var normalizedHttpBaseUrl = NormalizeUrl(httpBaseUrl ?? (primaryEndpoint.IsHttp ? normalizedPrimaryBaseUrl : null));
+            var normalizedHttpsBaseUrl = NormalizeUrl(httpsBaseUrl ?? (primaryEndpoint.IsHttps ? normalizedPrimaryBaseUrl : null));
+
             foreach (var svc in serviceNames)
             {
-                environment[$"services__{svc}__https__0"] = $"{baseUrl}{pathBase}/{apiPrefix}/{svc}";
+                if (normalizedHttpsBaseUrl is not null)
+                {
+                    environment[$"services__{svc}__https__0"] = $"{normalizedHttpsBaseUrl}{pathBase}/{apiPrefix}/{svc}";
+                }
+
+                if (normalizedHttpBaseUrl is not null)
+                {
+                    environment[$"services__{svc}__http__0"] = $"{normalizedHttpBaseUrl}{pathBase}/{apiPrefix}/{svc}";
+                }
             }
+
             if (proxyTelemetry)
             {
-                environment["OTEL_EXPORTER_OTLP_ENDPOINT"] = $"{baseUrl}{pathBase}/{otlpPrefix}/";
-                environment["OTEL_EXPORTER_OTLP_PROTOCOL"] = "http/protobuf";
                 environment["OTEL_SERVICE_NAME"] = resourceName;
+
+                var telemetryBaseUrl = normalizedHttpsBaseUrl ?? normalizedHttpBaseUrl ?? normalizedPrimaryBaseUrl;
+                if (telemetryBaseUrl is not null)
+                {
+                    environment["OTEL_EXPORTER_OTLP_ENDPOINT"] = $"{telemetryBaseUrl}{pathBase}/{otlpPrefix}/";
+                    environment["OTEL_EXPORTER_OTLP_PROTOCOL"] = "http/protobuf";
+                }
+
                 if (!string.IsNullOrEmpty(resolvedHeaders))
                 {
                     environment["OTEL_EXPORTER_OTLP_HEADERS"] = resolvedHeaders;
                 }
             }
+
             return JsonSerializer.Serialize(
                 new ClientConfiguration
                 {
                     WebAssembly = new WebAssemblyConfiguration { Environment = environment }
                 },
                 ManifestJsonContext.Default.ClientConfiguration);
+        }
+
+        private static string? NormalizeUrl(string? url)
+        {
+            return string.IsNullOrEmpty(url) ? null : url.TrimEnd('/');
         }
     }
 }

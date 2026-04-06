@@ -20,7 +20,8 @@ internal record GatewayAppRegistration(
     string PathPrefix,
     string[] ServiceNames,
     string ApiPrefix = GatewayConfigurationBuilder.DefaultApiPrefix,
-    string OtlpPrefix = GatewayConfigurationBuilder.DefaultOtlpPrefix)
+    string OtlpPrefix = GatewayConfigurationBuilder.DefaultOtlpPrefix,
+    bool ProxyTelemetry = true)
 {
     public BlazorWasmAppResource Resource => AppBuilder.Resource;
 }
