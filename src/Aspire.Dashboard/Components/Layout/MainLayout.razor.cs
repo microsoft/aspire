@@ -30,7 +30,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     private IDisposable? _aiDisplayChangedSubscription;
     private const string SettingsDialogId = "SettingsDialog";
     private const string HelpDialogId = "HelpDialog";
-    private const string NotificationCenterDialogId = "NotificationCenterDialog";
+    private const string NotificationsDialogId = "NotificationsDialog";
 
     [Inject]
     public required ThemeManager ThemeManager { get; init; }
@@ -298,13 +298,13 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             Alignment = HorizontalAlignment.Right,
             Width = "350px",
             Height = "auto",
-            Id = NotificationCenterDialogId,
+            Id = NotificationsDialogId,
             OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, HandleDialogClose)
         };
 
         if (_openPageDialog is not null)
         {
-            if (Equals(_openPageDialog.Id, NotificationCenterDialogId) && !_openPageDialog.Result.IsCompleted)
+            if (Equals(_openPageDialog.Id, NotificationsDialogId) && !_openPageDialog.Result.IsCompleted)
             {
                 return;
             }
