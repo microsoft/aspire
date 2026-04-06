@@ -47,30 +47,16 @@ internal sealed class SkillDefinition
         applicableLanguages: [KnownLanguageId.CSharp]);
 
     /// <summary>
-    /// One-time skill for completing Aspire initialization in a TypeScript AppHost workspace.
-    /// Installed by <c>aspire init</c> when the user selects TypeScript.
+    /// One-time skill for completing Aspire initialization.
+    /// Installed by <c>aspire init</c> to scan the repo, wire up the AppHost, and configure dependencies.
     /// </summary>
-    public static readonly SkillDefinition AspireInitTypeScript = new(
-        CommonAgentApplicators.AspireInitTypeScriptSkillName,
-        AgentCommandStrings.SkillDescription_AspireInitTypeScript,
+    public static readonly SkillDefinition AspireInit = new(
+        CommonAgentApplicators.AspireInitSkillName,
+        AgentCommandStrings.SkillDescription_AspireInit,
         skillContent: null,
-        embeddedResourceRoot: CommonAgentApplicators.AspireInitTypeScriptSkillResourceRoot,
+        embeddedResourceRoot: CommonAgentApplicators.AspireInitSkillResourceRoot,
         installExcludedRelativePaths: [],
-        isDefault: false,
-        applicableLanguages: [KnownLanguageId.TypeScript]);
-
-    /// <summary>
-    /// One-time skill for completing Aspire initialization in a C# AppHost workspace.
-    /// Installed by <c>aspire init</c> when the user selects C#.
-    /// </summary>
-    public static readonly SkillDefinition AspireInitCSharp = new(
-        CommonAgentApplicators.AspireInitCSharpSkillName,
-        AgentCommandStrings.SkillDescription_AspireInitCSharp,
-        skillContent: null,
-        embeddedResourceRoot: CommonAgentApplicators.AspireInitCSharpSkillResourceRoot,
-        installExcludedRelativePaths: [],
-        isDefault: false,
-        applicableLanguages: [KnownLanguageId.CSharp]);
+        isDefault: false);
 
     private SkillDefinition(string name, string description, string? skillContent, string? embeddedResourceRoot, IReadOnlyList<string> installExcludedRelativePaths, bool isDefault, IReadOnlyList<string>? applicableLanguages = null)
     {
@@ -176,5 +162,5 @@ internal sealed class SkillDefinition
     /// <summary>
     /// Gets all available skill definitions.
     /// </summary>
-    public static IReadOnlyList<SkillDefinition> All { get; } = [Aspire, PlaywrightCli, DotnetInspect, AspireInitTypeScript, AspireInitCSharp];
+    public static IReadOnlyList<SkillDefinition> All { get; } = [Aspire, PlaywrightCli, DotnetInspect, AspireInit];
 }

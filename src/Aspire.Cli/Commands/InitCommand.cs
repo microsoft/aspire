@@ -86,7 +86,7 @@ internal sealed class InitCommand : BaseCommand
         }
 
         // Step 4: Install the appropriate init skill.
-        var initSkill = isCSharp ? SkillDefinition.AspireInitCSharp : SkillDefinition.AspireInitTypeScript;
+        var initSkill = SkillDefinition.AspireInit;
         var skillInstalled = await InstallInitSkillAsync(workingDirectory, initSkill, cancellationToken);
         if (!skillInstalled)
         {

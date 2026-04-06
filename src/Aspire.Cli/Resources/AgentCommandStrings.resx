@@ -126,11 +126,8 @@
   <data name="SkillDescription_DotnetInspect" xml:space="preserve">
     <value>Query .NET API surfaces across NuGet packages and platform libraries</value>
   </data>
-  <data name="SkillDescription_AspireInitTypeScript" xml:space="preserve">
-    <value>One-time setup: wire up TypeScript AppHost with discovered projects</value>
-  </data>
-  <data name="SkillDescription_AspireInitCSharp" xml:space="preserve">
-    <value>One-time setup: wire up C# AppHost with discovered projects</value>
+  <data name="SkillDescription_AspireInit" xml:space="preserve">
+    <value>One-time setup: wire up AppHost with discovered projects</value>
   </data>
   <data name="SkillLocation_StandardName" xml:space="preserve">
     <value>Standard (.agents/skills/)</value>

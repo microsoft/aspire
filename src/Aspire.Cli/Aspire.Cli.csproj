@@ -221,10 +221,7 @@
     <EmbeddedResource Include="..\..\.agents\skills\aspire\**\*" LogicalName="skills.aspire/%(RecursiveDir)%(Filename)%(Extension)">
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
-    <EmbeddedResource Include="..\..\.agents\skills\aspire-init-typescript\**\*" LogicalName="skills.aspire-init-typescript/%(RecursiveDir)%(Filename)%(Extension)">
-      <WithCulture>false</WithCulture>
-    </EmbeddedResource>
-    <EmbeddedResource Include="..\..\.agents\skills\aspire-init-csharp\**\*" LogicalName="skills.aspire-init-csharp/%(RecursiveDir)%(Filename)%(Extension)">
+    <EmbeddedResource Include="..\..\.agents\skills\aspire-init\**\*" LogicalName="skills.aspire-init/%(RecursiveDir)%(Filename)%(Extension)">
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
   </ItemGroup>

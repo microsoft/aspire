@@ -107,14 +107,9 @@
         <target state="new">Aspire CLI commands and workflows for distributed apps</target>
         <note />
       </trans-unit>
-      <trans-unit id="SkillDescription_AspireInitCSharp">
-        <source>One-time setup: wire up C# AppHost with discovered projects</source>
-        <target state="new">One-time setup: wire up C# AppHost with discovered projects</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillDescription_AspireInitTypeScript">
-        <source>One-time setup: wire up TypeScript AppHost with discovered projects</source>
-        <target state="new">One-time setup: wire up TypeScript AppHost with discovered projects</target>
+      <trans-unit id="SkillDescription_AspireInit">
+        <source>One-time setup: wire up AppHost with discovered projects</source>
+        <target state="new">One-time setup: wire up AppHost with discovered projects</target>
         <note />
       </trans-unit>
       <trans-unit id="SkillDescription_DotnetInspect">
