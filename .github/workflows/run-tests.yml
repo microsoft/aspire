@@ -333,8 +333,8 @@ jobs:
           GITHUB_PR_HEAD_SHA: ${{ inputs.requiresCliArchive && github.event.pull_request.head.sha || '' }}
           GH_TOKEN: ${{ inputs.requiresCliArchive && github.token || '' }}
         run: |
-          # Start heartbeat monitor in background
-          ${{ github.workspace }}/${{ env.DOTNET_SCRIPT }} ${{ github.workspace }}/tools/scripts/Heartbeat.cs &
+          # Start heartbeat monitor in background (60s interval to reduce log noise)
+          ${{ github.workspace }}/${{ env.DOTNET_SCRIPT }} ${{ github.workspace }}/tools/scripts/Heartbeat.cs 60 &
           HEARTBEAT_PID=$!
 
           # Run tests
@@ -425,8 +425,8 @@ jobs:
           GITHUB_PR_HEAD_SHA: ${{ inputs.requiresCliArchive && github.event.pull_request.head.sha || '' }}
           GH_TOKEN: ${{ inputs.requiresCliArchive && github.token || '' }}
         run: |
-          # Start heartbeat monitor in background
-          ${{ env.DOTNET_SCRIPT }} ${{ github.workspace }}/tools/scripts/Heartbeat.cs &
+          # Start heartbeat monitor in background (60s interval to reduce log noise)
+          ${{ env.DOTNET_SCRIPT }} ${{ github.workspace }}/tools/scripts/Heartbeat.cs 60 &
           HEARTBEAT_PID=$!
 
           # Run tests
