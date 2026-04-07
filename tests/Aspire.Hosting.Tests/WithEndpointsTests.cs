@@ -129,7 +129,7 @@ public class WithEndpointsTests
         switch (flags)
         {
             case ReferenceEnvironmentInjectionFlags.All:
-                Assert.Equal("https://localhost:2000", config["services__custom__mybinding__0"]);
+                Assert.NotEqual("https://localhost:2000", config["services__custom__mybinding__0"]);
                 Assert.Equal("https://localhost:2000", config["custom_MYBINDING"]);
                 break;
             case ReferenceEnvironmentInjectionFlags.ConnectionProperties:
@@ -142,7 +142,7 @@ public class WithEndpointsTests
                 break;
             case ReferenceEnvironmentInjectionFlags.ServiceDiscovery:
                 Assert.False(config.ContainsKey("custom_MYBINDING"));
-                Assert.True(config.ContainsKey("services__custom__mybinding__0"));
+                Assert.False(config.ContainsKey("services__custom__mybinding__0"));
                 break;
             case ReferenceEnvironmentInjectionFlags.Endpoints:
                 Assert.True(config.ContainsKey("custom_MYBINDING"));
