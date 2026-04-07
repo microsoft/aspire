@@ -410,10 +410,12 @@ internal sealed class ConsoleActivityLogger
                 ActivityState.Failure => _enableColor ? "[red]" + FailureSymbol + "[/]" : FailureSymbol,
                 _ => _enableColor ? "[cyan]" + InProgressSymbol + "[/]" : InProgressSymbol
             };
+            // DisplayName and FailureReason are already Spectre-safe (pre-processed
+            // through ConvertTextWithMarkdownFlag which escapes or converts markdown).
             var displayName = GetIndentedDisplayName(rec);
             var name = (renderTimeline ? displayName.PadRight(nameWidth) : displayName).EscapeMarkup();
             var reason = rec.State == ActivityState.Failure && !string.IsNullOrEmpty(rec.FailureReason)
-                ? (_enableColor ? $" [red]— {HighlightMessage(rec.FailureReason!.EscapeMarkup())}[/]" : $" — {rec.FailureReason!.EscapeMarkup()}")
+                ? (_enableColor ? $" [red]— {HighlightMessage(rec.FailureReason!)}[/]" : $" — {rec.FailureReason!}")
                 : string.Empty;
 
             var lineSb = new StringBuilder();
