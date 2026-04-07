@@ -606,6 +606,8 @@ internal sealed class NullBundleService : IBundleService
 {
     public bool IsBundle => false;
 
+    public bool IsSelfExtracting => false;
+
     public Task EnsureExtractedAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 
     public Task<BundleExtractResult> ExtractAsync(string destinationPath, bool force = false, CancellationToken cancellationToken = default)
@@ -618,9 +620,11 @@ internal sealed class NullBundleService : IBundleService
 /// <summary>
 /// A configurable bundle service for testing bundle-dependent behavior.
 /// </summary>
-internal sealed class TestBundleService(bool isBundle) : IBundleService
+internal sealed class TestBundleService(bool isBundle, bool isSelfExtracting = false) : IBundleService
 {
     public bool IsBundle => isBundle;
+
+    public bool IsSelfExtracting => isSelfExtracting;
 
     public Layout.LayoutConfiguration? Layout { get; set; }
 

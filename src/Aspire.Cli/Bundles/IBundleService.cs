@@ -16,6 +16,12 @@ internal interface IBundleService
     bool IsBundle { get; }
 
     /// <summary>
+    /// Gets whether the CLI binary should perform self-extraction of the embedded bundle at runtime.
+    /// When <see langword="false"/>, the layout is expected to already be on disk (e.g. archive/installer distributions).
+    /// </summary>
+    bool IsSelfExtracting { get; }
+
+    /// <summary>
     /// Ensures the bundle is extracted for the current CLI binary if it contains an embedded payload.
     /// No-ops if no payload is embedded, or if the layout is already extracted and up to date.
     /// </summary>

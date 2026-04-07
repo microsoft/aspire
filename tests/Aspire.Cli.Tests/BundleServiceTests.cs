@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Bundles;
+using Aspire.Cli.Layout;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests;
 
@@ -73,5 +75,15 @@ public class BundleServiceTests
         var version = BundleService.GetCurrentVersion();
         Assert.NotNull(version);
         Assert.NotEqual("unknown", version);
+    }
+
+    [Fact]
+    public void IsSelfExtracting_ReturnsFalse_WhenMetadataNotSetToTrue()
+    {
+        // Test assembly builds with default SelfExtractingBundle=false,
+        // so IsSelfExtracting should be false.
+        var layoutDiscovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance);
+        var service = new BundleService(layoutDiscovery, NullLogger<BundleService>.Instance);
+        Assert.False(service.IsSelfExtracting);
     }
 }
