@@ -157,7 +157,7 @@ public class AzureNetworkSecurityPerimeterExtensionsTests
         var keyVault = builder.AddAzureKeyVault("kv");
 
         storage.AssociateWith(nsp);
-        keyVault.AssociateWith(nsp);
+        keyVault.AssociateWith(nsp, NetworkSecurityPerimeterAssociationAccessMode.Learning);
 
         var manifest = await AzureManifestUtils.GetManifestWithBicep(nsp.Resource);
 

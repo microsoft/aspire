@@ -65,5 +65,6 @@ public class AzureNetworkSecurityPerimeterResource(string name, Action<AzureReso
 
     internal sealed record NspAssociationConfig(
         string Name,
-        BicepOutputReference TargetResourceId);
+        BicepOutputReference TargetResourceId,
+        NetworkSecurityPerimeterAssociationAccessMode AccessMode);
 }

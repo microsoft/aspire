@@ -98,12 +98,21 @@ public static class AzureNetworkSecurityPerimeterExtensions
     /// </summary>
     /// <param name="target">The target PaaS resource builder to associate.</param>
     /// <param name="nsp">The Network Security Perimeter to associate with.</param>
+    /// <param name="accessMode">
+    /// The access mode for the association. Defaults to <see cref="NetworkSecurityPerimeterAssociationAccessMode.Enforced"/>.
+    /// Use <see cref="NetworkSecurityPerimeterAssociationAccessMode.Learning"/> to log violations without blocking traffic.
+    /// </param>
     /// <returns>A reference to the target resource builder for chaining.</returns>
     /// <remarks>
     /// <para>
-    /// The association uses <see cref="NetworkSecurityPerimeterAssociationAccessMode.Enforced"/> mode,
-    /// which means resources within the perimeter can communicate with each other, but public access
-    /// is restricted to the rules defined in the perimeter profile.
+    /// In <see cref="NetworkSecurityPerimeterAssociationAccessMode.Enforced"/> mode, resources within the
+    /// perimeter can communicate with each other, but public access is restricted to the rules defined
+    /// in the perimeter profile.
+    /// </para>
+    /// <para>
+    /// In <see cref="NetworkSecurityPerimeterAssociationAccessMode.Learning"/> mode, traffic that would
+    /// be blocked by the perimeter rules is logged but not denied. This is useful when onboarding
+    /// resources to identify required access rules before switching to enforced mode.
     /// </para>
     /// <para>
     /// When a resource is associated with an NSP, the resource's <c>publicNetworkAccess</c> is automatically
@@ -125,7 +134,8 @@ public static class AzureNetworkSecurityPerimeterExtensions
     [AspireExport("associateWithNsp", Description = "Associates an Azure PaaS resource with a Network Security Perimeter.")]
     public static IResourceBuilder<T> AssociateWith<T>(
         this IResourceBuilder<T> target,
-        IResourceBuilder<AzureNetworkSecurityPerimeterResource> nsp) where T : IResource, IAzureNspAssociationTarget
+        IResourceBuilder<AzureNetworkSecurityPerimeterResource> nsp,
+        NetworkSecurityPerimeterAssociationAccessMode accessMode = NetworkSecurityPerimeterAssociationAccessMode.Enforced) where T : IResource, IAzureNspAssociationTarget
     {
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(nsp);
@@ -134,7 +144,8 @@ public static class AzureNetworkSecurityPerimeterExtensions
 
         nsp.Resource.Associations.Add(new AzureNetworkSecurityPerimeterResource.NspAssociationConfig(
             associationName,
-            target.Resource.Id));
+            target.Resource.Id,
+            accessMode));
 
         return target;
     }
@@ -219,7 +230,7 @@ public static class AzureNetworkSecurityPerimeterExtensions
             {
                 Name = association.Name,
                 Parent = nsp,
-                AccessMode = NetworkSecurityPerimeterAssociationAccessMode.Enforced,
+                AccessMode = association.AccessMode,
                 PrivateLinkResourceId = association.TargetResourceId.AsProvisioningParameter(infra),
                 ProfileId = profile.Id,
             };

@@ -46,7 +46,7 @@ resource my_nsp_storage_assoc 'Microsoft.Network/networkSecurityPerimeters/resou
 resource my_nsp_kv_assoc 'Microsoft.Network/networkSecurityPerimeters/resourceAssociations@2025-05-01' = {
   name: 'kv-assoc'
   properties: {
-    accessMode: 'Enforced'
+    accessMode: 'Learning'
     privateLinkResource: {
       id: kv_outputs_id
     }
