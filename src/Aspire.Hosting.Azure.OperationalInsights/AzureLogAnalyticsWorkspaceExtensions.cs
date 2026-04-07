@@ -55,6 +55,11 @@ public static class AzureLogAnalyticsWorkspaceExtensions
             {
                 Value = workspace.Name.ToBicepExpression()
             });
+
+            infrastructure.Add(new ProvisioningOutput("id", typeof(string))
+            {
+                Value = workspace.Id.ToBicepExpression()
+            });
         };
 
         var resource = new AzureLogAnalyticsWorkspaceResource(name, configureInfrastructure);

@@ -452,6 +452,8 @@ public static class FoundryExtensions
 
         infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = cogServicesAccount.Name.ToBicepExpression() });
 
+        infrastructure.Add(new ProvisioningOutput("id", typeof(string)) { Value = cogServicesAccount.Id.ToBicepExpression() });
+
         var resource = (FoundryResource)infrastructure.AspireResource;
 
         if (resource.CapabilityHost != null)

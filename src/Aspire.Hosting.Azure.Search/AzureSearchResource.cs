@@ -15,7 +15,7 @@ namespace Aspire.Hosting.Azure;
 /// <param name="name">The name of the resource</param>
 /// <param name="configureInfrastructure">Callback to configure the Azure AI Search resource.</param>
 public class AzureSearchResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
-    : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString, IAzurePrivateEndpointTarget
+    : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString, IAzurePrivateEndpointTarget, IAzureNspAssociationTarget
 {
     /// <summary>
     /// Gets the "connectionString" output reference from the Azure AI Search resource.

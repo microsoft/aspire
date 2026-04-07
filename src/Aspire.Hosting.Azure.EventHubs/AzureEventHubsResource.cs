@@ -15,7 +15,7 @@ namespace Aspire.Hosting.Azure;
 /// <param name="name">The name of the resource.</param>
 /// <param name="configureInfrastructure">Callback to configure the Azure Event Hubs resource.</param>
 public class AzureEventHubsResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
-    : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString, IResourceWithEndpoints, IResourceWithAzureFunctionsConfig, IAzurePrivateEndpointTarget
+    : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString, IResourceWithEndpoints, IResourceWithAzureFunctionsConfig, IAzurePrivateEndpointTarget, IAzureNspAssociationTarget
 {
     private static readonly string[] s_eventHubClientNames =
     [
