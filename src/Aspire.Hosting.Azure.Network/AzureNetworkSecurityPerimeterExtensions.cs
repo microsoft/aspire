@@ -102,6 +102,9 @@ public static class AzureNetworkSecurityPerimeterExtensions
     /// The access mode for the association. Defaults to <see cref="NetworkSecurityPerimeterAssociationAccessMode.Enforced"/>.
     /// Use <see cref="NetworkSecurityPerimeterAssociationAccessMode.Learning"/> to log violations without blocking traffic.
     /// </param>
+    /// <param name="associationName">
+    /// An optional name for the association. If not provided, defaults to <c>"{resourceName}-assoc"</c>.
+    /// </param>
     /// <returns>A reference to the target resource builder for chaining.</returns>
     /// <remarks>
     /// <para>
@@ -114,11 +117,6 @@ public static class AzureNetworkSecurityPerimeterExtensions
     /// be blocked by the perimeter rules is logged but not denied. This is useful when onboarding
     /// resources to identify required access rules before switching to enforced mode.
     /// </para>
-    /// <para>
-    /// When a resource is associated with an NSP, the resource's <c>publicNetworkAccess</c> is automatically
-    /// set to <c>"SecuredByPerimeter"</c>. To override this, use
-    /// <see cref="AzureProvisioningResourceExtensions.ConfigureInfrastructure{T}(IResourceBuilder{T}, Action{AzureResourceInfrastructure})"/>.
-    /// </para>
     /// </remarks>
     /// <example>
     /// This example associates storage and key vault resources with an NSP:
@@ -128,19 +126,27 @@ public static class AzureNetworkSecurityPerimeterExtensions
     /// var keyVault = builder.AddAzureKeyVault("kv");
     ///
     /// storage.AssociateWith(nsp);
-    /// keyVault.AssociateWith(nsp);
+    /// keyVault.AssociateWith(nsp, NetworkSecurityPerimeterAssociationAccessMode.Learning);
     /// </code>
     /// </example>
     [AspireExport("associateWithNsp", Description = "Associates an Azure PaaS resource with a Network Security Perimeter.")]
     public static IResourceBuilder<T> AssociateWith<T>(
         this IResourceBuilder<T> target,
         IResourceBuilder<AzureNetworkSecurityPerimeterResource> nsp,
-        NetworkSecurityPerimeterAssociationAccessMode accessMode = NetworkSecurityPerimeterAssociationAccessMode.Enforced) where T : IResource, IAzureNspAssociationTarget
+        NetworkSecurityPerimeterAssociationAccessMode accessMode = NetworkSecurityPerimeterAssociationAccessMode.Enforced,
+        string? associationName = null) where T : IResource, IAzureNspAssociationTarget
     {
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(nsp);
 
-        var associationName = $"{target.Resource.Name}-assoc";
+        associationName ??= $"{target.Resource.Name}-assoc";
+
+        if (nsp.Resource.Associations.Any(a => string.Equals(a.Name, associationName, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new ArgumentException(
+                $"An association named '{associationName}' already exists in Network Security Perimeter '{nsp.Resource.Name}'.",
+                nameof(associationName));
+        }
 
         nsp.Resource.Associations.Add(new AzureNetworkSecurityPerimeterResource.NspAssociationConfig(
             associationName,

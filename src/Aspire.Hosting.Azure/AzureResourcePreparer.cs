@@ -184,7 +184,6 @@ internal sealed class AzureResourcePreparer(
                             prerequisiteResources.Add(peAnnotation.PrivateEndpointResource);
                         }
                     }
-
                 }
 
                 // in PublishMode with SupportsTargetedRoleAssignments, we need to create the identity and role assignment resources

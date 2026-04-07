@@ -136,7 +136,12 @@ storage.AssociateWith(nsp);
 keyVault.AssociateWith(nsp);
 ```
 
-Associations use `Enforced` access mode by default. Use `ConfigureInfrastructure` for advanced customization.
+Associations use `Enforced` access mode by default, which blocks non-compliant public traffic. Use `Learning` mode to log violations without blocking, which is useful when onboarding resources to identify required access rules:
+
+```csharp
+// Learning mode — logs violations without blocking traffic
+storage.AssociateWith(nsp, NetworkSecurityPerimeterAssociationAccessMode.Learning);
+```
 
 ### Adding Private Endpoints
 
