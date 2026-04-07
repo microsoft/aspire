@@ -191,7 +191,7 @@ Check which mode you're in by looking at what exists at the `appHost.path` locat
 
 ## Workflow
 
-Follow these steps in order. If any step fails, diagnose and fix before continuing.
+Follow these steps in order. If any step fails, diagnose and fix before continuing. **The goal is a working `aspire start` — keep going until every resource starts cleanly and the dashboard is accessible. Do not stop at partial success.**
 
 ### Step 1: Scan the repository
 
@@ -647,7 +647,9 @@ Once the app is running, use the Aspire CLI to verify everything is wired up cor
 4. **No startup errors**: `aspire logs <resource>` — check logs for each resource to ensure clean startup with no crashes, missing config, or connection failures.
 5. **Dashboard is accessible**: Confirm the dashboard URL is printed and can be opened.
 
-If anything fails, diagnose and iterate. Common issues:
+**This skill is not done until `aspire start` runs without errors and all resources are healthy.** If anything fails, diagnose, fix, and run `aspire start` again. Keep iterating until it works — do not move on to Step 10 with a broken app.
+
+Common issues:
 
 - **TypeScript**: missing dependency install, TS compilation errors, port conflicts
 - **C# project mode**: missing project references, NuGet restore needed, TFM mismatches, build errors
