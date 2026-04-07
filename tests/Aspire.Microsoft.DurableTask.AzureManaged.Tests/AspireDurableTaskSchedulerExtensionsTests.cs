@@ -205,6 +205,30 @@ public class AspireDurableTaskSchedulerExtensionsTests
     }
 
     [Fact]
+    public void AddDurableTaskSchedulerWorker_ThrowsWhenEndpointMissingFromConnectionString()
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Configuration.AddInMemoryCollection([
+            new KeyValuePair<string, string?>("ConnectionStrings:scheduler", "Authentication=None;TaskHub=TestHub")
+        ]);
+
+        Assert.ThrowsAny<Exception>(() =>
+            builder.AddDurableTaskSchedulerWorker("scheduler", _ => { }));
+    }
+
+    [Fact]
+    public void AddDurableTaskSchedulerWorker_ThrowsWhenTaskHubMissingFromConnectionString()
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Configuration.AddInMemoryCollection([
+            new KeyValuePair<string, string?>("ConnectionStrings:scheduler", "Endpoint=http://localhost:8080;Authentication=None")
+        ]);
+
+        Assert.ThrowsAny<Exception>(() =>
+            builder.AddDurableTaskSchedulerWorker("scheduler", _ => { }));
+    }
+
+    [Fact]
     public void AddKeyedDurableTaskSchedulerWorker_ThrowsWhenBuilderIsNull()
     {
         IHostApplicationBuilder builder = null!;

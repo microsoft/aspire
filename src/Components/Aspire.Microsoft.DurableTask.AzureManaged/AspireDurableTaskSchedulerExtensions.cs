@@ -252,7 +252,7 @@ public static class AspireDurableTaskSchedulerExtensions
         configureSettings?.Invoke(settings);
 
         ConnectionStringValidation.ValidateConnectionString(
-            settings.ConnectionString, connectionName, DefaultConfigSectionName);
+            settings.ConnectionString, connectionName, DefaultConfigSectionName, $"{DefaultConfigSectionName}:{connectionName}");
 
         return settings;
     }
@@ -268,16 +268,25 @@ public static class AspireDurableTaskSchedulerExtensions
             var endpoint = DurableTaskSchedulerConnectionString.GetEndpoint(connectionString);
             var taskHubName = DurableTaskSchedulerConnectionString.GetTaskHubName(connectionString);
 
-            if (endpoint is not null && taskHubName is not null)
+            if (endpoint is null)
             {
-                var healthCheckName = $"DurableTaskScheduler_{connectionName}";
-
-                builder.TryAddHealthCheck(new HealthCheckRegistration(
-                    healthCheckName,
-                    _ => new DurableTaskSchedulerHealthCheck(endpoint, taskHubName),
-                    failureStatus: default,
-                    tags: default));
+                throw new InvalidOperationException(
+                    $"Health checks are enabled for Durable Task Scheduler connection '{connectionName}', but the connection string is missing the 'Endpoint' value.");
             }
+
+            if (taskHubName is null)
+            {
+                throw new InvalidOperationException(
+                    $"Health checks are enabled for Durable Task Scheduler connection '{connectionName}', but the connection string is missing the 'TaskHub' value.");
+            }
+
+            var healthCheckName = $"DurableTaskScheduler_{connectionName}";
+
+            builder.TryAddHealthCheck(new HealthCheckRegistration(
+                healthCheckName,
+                _ => new DurableTaskSchedulerHealthCheck(endpoint, taskHubName),
+                failureStatus: default,
+                tags: default));
         }
 
         if (!settings.DisableTracing)

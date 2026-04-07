@@ -1,6 +1,6 @@
 # Aspire.Microsoft.DurableTask.AzureManaged library
 
-Registers a [Durable Task](https://learn.microsoft.com/azure/azure-functions/durable/durable-task-scheduler/durable-task-scheduler) worker and optionally a `DurableTaskClient` in the DI container for connecting to a Durable Task Scheduler. Enables corresponding health check, logging, and telemetry.
+Registers a `DurableTaskClient` and a Durable Task worker in the DI container for connecting to a [Durable Task Scheduler](https://learn.microsoft.com/azure/azure-functions/durable/durable-task-scheduler/durable-task-scheduler). Enables corresponding health check, logging, and telemetry.
 
 ## Getting started
 
