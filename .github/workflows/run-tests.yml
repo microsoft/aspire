@@ -338,7 +338,6 @@ jobs:
             --report-trx --report-trx-filename "${{ inputs.testShortName }}.trx" \
             --crashdump \
             --hangdump \
-            --hangdump-filename ${{ github.workspace }}/testresults/${{ inputs.testShortName }}.hangdump \
             --hangdump-timeout ${{ inputs.testHangTimeout }} \
             --results-directory ${{ github.workspace }}/testresults \
             --filter-not-trait "category=failing" \
@@ -386,6 +385,8 @@ jobs:
               --ignore-exit-code 8 `
               --report-trx --report-trx-filename "${{ inputs.testShortName }}.trx" `
               --crashdump `
+              --hangdump `
+              --hangdump-timeout ${{ inputs.testHangTimeout }} `
               --results-directory ${{ github.workspace }}/testresults `
               --filter-not-trait "category=failing" `
               --timeout ${{ inputs.testSessionTimeout }} `
@@ -435,6 +436,8 @@ jobs:
             --ignore-exit-code 8 \
             --report-trx \
             --crashdump \
+            --hangdump \
+            --hangdump-timeout ${{ inputs.testHangTimeout }} \
             --results-directory ${{ github.workspace }}/testresults \
             --timeout ${{ inputs.testSessionTimeout }} \
             ${{ inputs.extraTestArgs }} \
@@ -488,6 +491,8 @@ jobs:
               --ignore-exit-code 8 `
               --report-trx `
               --crashdump `
+              --hangdump `
+              --hangdump-timeout ${{ inputs.testHangTimeout }} `
               --results-directory ${{ github.workspace }}/testresults `
               --timeout ${{ inputs.testSessionTimeout }} `
               ${{ inputs.extraTestArgs }}
