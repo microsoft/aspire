@@ -20,13 +20,24 @@ dotnet run --project tools/CreateFailingTestIssue -- \
   > /tmp/cfti-list.log 2>&1
 ```
 
+```powershell
+dotnet run --project tools/CreateFailingTestIssue -- `
+  --url "<the-url-the-user-gave>" `
+  --output $env:TEMP/cfti-result.json `
+  > $env:TEMP/cfti-list.log 2>&1
+```
+
 Then read the result with `jq`:
 
 ```bash
 jq '{ success, availableFailedTests: .diagnostics.availableFailedTests, errorMessage: .errorMessage }' /tmp/cfti-result.json
 ```
 
-If `success` is `false`, inspect the full log: `cat /tmp/cfti-list.log`.
+```powershell
+Get-Content $env:TEMP/cfti-result.json | ConvertFrom-Json | Select-Object success, errorMessage, @{N='availableFailedTests';E={$_.diagnostics.availableFailedTests}}
+```
+
+If `success` is `false`, inspect the full log: `cat /tmp/cfti-list.log` (bash) or `Get-Content $env:TEMP/cfti-list.log` (PowerShell).
 
 Ask the user which test to file for, then proceed to Step 2.
 
@@ -41,13 +52,26 @@ dotnet run --project tools/CreateFailingTestIssue -- \
   > /tmp/cfti-create.log 2>&1
 ```
 
+```powershell
+dotnet run --project tools/CreateFailingTestIssue -- `
+  --url "<the-url-the-user-gave>" `
+  --test "<test-name>" `
+  --create `
+  --output $env:TEMP/cfti-result.json `
+  > $env:TEMP/cfti-create.log 2>&1
+```
+
 Then read the result:
 
 ```bash
 jq '{ success, issue: .issue.createdIssue, errorMessage: .errorMessage }' /tmp/cfti-result.json
 ```
 
-If `success` is `false`, inspect the full log: `cat /tmp/cfti-create.log`.
+```powershell
+Get-Content $env:TEMP/cfti-result.json | ConvertFrom-Json | Select-Object success, errorMessage, @{N='issue';E={$_.issue.createdIssue}}
+```
+
+If `success` is `false`, inspect the full log: `cat /tmp/cfti-create.log` (bash) or `Get-Content $env:TEMP/cfti-create.log` (PowerShell).
 
 That's it — do not add analysis comments, do not use `--dry-run` unless the user explicitly asks for a preview.
 
@@ -68,6 +92,11 @@ To download and inspect failure artifacts without creating an issue:
 
 ```bash
 cd tools/scripts
+dotnet run DownloadFailingJobLogs.cs -- <run-id>
+```
+
+```powershell
+Set-Location tools/scripts
 dotnet run DownloadFailingJobLogs.cs -- <run-id>
 ```
 
@@ -112,10 +141,27 @@ gh run list --repo microsoft/aspire --branch <branch-name> --limit 1 --json data
 gh pr checks <pr-number> --repo microsoft/aspire
 ```
 
+```powershell
+# From URL: https://github.com/microsoft/aspire/actions/runs/19846215629
+#                                                        ^^^^^^^^^^
+#                                                        run ID
+
+# Or find the latest run on a branch
+gh run list --repo microsoft/aspire --branch <branch-name> --limit 1 --json databaseId --jq '.[0].databaseId'
+
+# Or for a PR
+gh pr checks <pr-number> --repo microsoft/aspire
+```
+
 ### Step 2: Run the Tool
 
 ```bash
 cd tools/scripts
+dotnet run DownloadFailingJobLogs.cs -- <run-id>
+```
+
+```powershell
+Set-Location tools/scripts
 dotnet run DownloadFailingJobLogs.cs -- <run-id>
 ```
 
@@ -195,6 +241,14 @@ dotnet run --project tools/CreateFailingTestIssue -- \
   --output /tmp/cfti-result.json
 ```
 
+```powershell
+dotnet run --project tools/CreateFailingTestIssue -- `
+  --url "https://github.com/microsoft/aspire/actions/runs/123" `
+  --test "<test-name>" `
+  --repo "microsoft/aspire" `
+  --output $env:TEMP/cfti-result.json
+```
+
 To resolve the failure **and create the issue on GitHub** in one step:
 
 ```bash
@@ -206,10 +260,23 @@ dotnet run --project tools/CreateFailingTestIssue -- \
   --output /tmp/cfti-result.json
 ```
 
+```powershell
+dotnet run --project tools/CreateFailingTestIssue -- `
+  --url "https://github.com/microsoft/aspire/actions/runs/123" `
+  --test "<test-name>" `
+  --repo "microsoft/aspire" `
+  --create `
+  --output $env:TEMP/cfti-result.json
+```
+
 Read the result with `jq`:
 
 ```bash
 jq '{ success, issue: .issue, availableFailedTests: .diagnostics.availableFailedTests }' /tmp/cfti-result.json
+```
+
+```powershell
+Get-Content $env:TEMP/cfti-result.json | ConvertFrom-Json | Select-Object success, @{N='issue';E={$_.issue}}, @{N='availableFailedTests';E={$_.diagnostics.availableFailedTests}}
 ```
 
 If `--test` is omitted, the tool emits structured JSON for all failing tests it found in the run (useful for picking which test to file).
@@ -455,6 +522,11 @@ cd tools/scripts
 dotnet run DownloadFailingJobLogs.cs -- <run-id>
 ```
 
+```powershell
+Set-Location tools/scripts
+dotnet run DownloadFailingJobLogs.cs -- <run-id>
+```
+
 ### Don't Commit Log Files
 
 The downloaded log files can be large. Don't commit them to the repository:
@@ -464,6 +536,13 @@ The downloaded log files can be large. Don't commit them to the repository:
 rm tools/scripts/*.log
 rm tools/scripts/*.zip
 rm -rf tools/scripts/artifact_*
+```
+
+```powershell
+# Before committing
+Remove-Item tools/scripts/*.log -Force -ErrorAction SilentlyContinue
+Remove-Item tools/scripts/*.zip -Force -ErrorAction SilentlyContinue
+Remove-Item tools/scripts/artifact_* -Recurse -Force -ErrorAction SilentlyContinue
 ```
 
 ## Prerequisites

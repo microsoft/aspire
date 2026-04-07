@@ -4,6 +4,7 @@ function parseCommand(body, defaultSourceUrl = null) {
         return { success: false, errorMessage: 'No /create-issue command was found in the comment.' };
     }
 
+    const { tokenizeArguments } = require('./workflow-command-helpers.js');
     let tokens;
     try {
         tokens = tokenizeArguments(match.groups?.args ?? '');
@@ -106,61 +107,6 @@ function isSupportedSourceUrl(value) {
     return /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+(?:\/.*)?$/i.test(value)
         || /^https:\/\/github\.com\/[^/]+\/[^/]+\/actions\/runs\/\d+(?:\/attempts\/\d+)?(?:\/.*)?$/i.test(value)
         || /^https:\/\/github\.com\/[^/]+\/[^/]+\/actions\/runs\/\d+\/job\/\d+(?:\/.*)?$/i.test(value);
-}
-
-function tokenizeArguments(input) {
-    const tokens = [];
-    let current = '';
-    let quote = null;
-
-    for (let index = 0; index < input.length; index++) {
-        const character = input[index];
-
-        if (quote) {
-            if (character === '\\' && index + 1 < input.length) {
-                const next = input[index + 1];
-                if (next === quote || next === '\\') {
-                    current += next;
-                    index++;
-                    continue;
-                }
-            }
-
-            if (character === quote) {
-                quote = null;
-                continue;
-            }
-
-            current += character;
-            continue;
-        }
-
-        if (character === '"' || character === '\'') {
-            quote = character;
-            continue;
-        }
-
-        if (/\s/.test(character)) {
-            if (current.length > 0) {
-                tokens.push(current);
-                current = '';
-            }
-
-            continue;
-        }
-
-        current += character;
-    }
-
-    if (quote) {
-        throw new Error(`Unterminated ${quote} quote in command arguments.`);
-    }
-
-    if (current.length > 0) {
-        tokens.push(current);
-    }
-
-    return tokens;
 }
 
 module.exports = {

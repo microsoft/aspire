@@ -157,6 +157,7 @@ for (var counter = 0; counter < failedJobs.Count; counter++)
                 Directory.Delete(extractDir, recursive: true);
             }
 
+            ValidateZipEntries(artifactZip, extractDir);
             ZipFile.ExtractToDirectory(artifactZip, extractDir, overwriteFiles: true);
             Console.WriteLine($"Extracted artifact to: {extractDir}");
 
@@ -190,3 +191,17 @@ Console.WriteLine($"Total jobs: {jobs.Count}");
 Console.WriteLine($"Failed jobs: {failedJobs.Count}");
 Console.WriteLine($"Logs downloaded: {logsDownloaded}");
 Console.WriteLine("\nAll logs saved in current directory with pattern: failed_job_*.log");
+
+static void ValidateZipEntries(string zipPath, string extractDirectory)
+{
+    var fullExtractPath = Path.GetFullPath(extractDirectory);
+    using var archive = ZipFile.OpenRead(zipPath);
+    foreach (var entry in archive.Entries)
+    {
+        var destinationPath = Path.GetFullPath(Path.Combine(extractDirectory, entry.FullName));
+        if (!destinationPath.StartsWith(fullExtractPath, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"Zip entry '{entry.FullName}' would extract outside the target directory.");
+        }
+    }
+}

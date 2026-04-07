@@ -3,7 +3,7 @@
 
 using System.Globalization;
 using System.IO.Compression;
-using System.Security.Cryptography;
+using System.IO.Hashing;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -1246,7 +1246,7 @@ public static class FailingTestIssueLogic
         var normalizedTestName = NormalizeName(canonicalTestName);
         var normalizedWorkflowFile = workflowFile.Trim().Replace('\\', '/').ToLowerInvariant();
         var payload = $"{normalizedTestName}|{normalizedWorkflowFile}";
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(payload));
+        var hash = XxHash3.Hash(Encoding.UTF8.GetBytes(payload));
         return Convert.ToHexStringLower(hash);
     }
 

@@ -45,11 +45,22 @@ public sealed class CreateFailingTestIssueFixture : IAsyncLifetime
         using var process = new Process { StartInfo = processStartInfo };
         process.Start();
 
-        var stdout = await process.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
-        var stderr = await process.StandardError.ReadToEndAsync().ConfigureAwait(false);
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
 
         using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromMinutes(3));
-        await process.WaitForExitAsync(cancellationTokenSource.Token).ConfigureAwait(false);
+        try
+        {
+            await process.WaitForExitAsync(cancellationTokenSource.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            process.Kill(entireProcessTree: true);
+            throw;
+        }
+
+        var stdout = await stdoutTask.ConfigureAwait(false);
+        var stderr = await stderrTask.ConfigureAwait(false);
 
         if (process.ExitCode != 0)
         {
