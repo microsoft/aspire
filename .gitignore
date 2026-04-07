@@ -1,5 +1,8 @@
 syntax: glob
 
+### GitHub Agentic Workflows ###
+.github/aw/logs/
+
 ### VisualStudio ###
 
 # Tools directory
