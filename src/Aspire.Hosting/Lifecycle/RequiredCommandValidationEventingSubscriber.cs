@@ -15,7 +15,7 @@ namespace Aspire.Hosting.Lifecycle;
 /// This subscriber processes <see cref="RequiredCommandAnnotation"/> on resources and delegates
 /// validation to <see cref="IRequiredCommandValidator"/>.
 /// </remarks>
-internal sealed class RequiredCommandValidationLifecycleHook(
+internal sealed class RequiredCommandValidationEventingSubscriber(
     IRequiredCommandValidator validator) : IDistributedApplicationEventingSubscriber
 {
     private readonly IRequiredCommandValidator _validator = validator ?? throw new ArgumentNullException(nameof(validator));

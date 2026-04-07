@@ -9,14 +9,14 @@ using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Devcontainers;
 
-internal sealed class DevcontainerPortForwardingLifecycleHook : IDistributedApplicationEventingSubscriber
+internal sealed class DevcontainerPortForwardingEventingSubscriber : IDistributedApplicationEventingSubscriber
 {
     private readonly IOptions<CodespacesOptions> _codespacesOptions;
     private readonly IOptions<DevcontainersOptions> _devcontainersOptions;
     private readonly IOptions<SshRemoteOptions> _sshRemoteOptions;
     private readonly DevcontainerSettingsWriter _settingsWriter;
 
-    public DevcontainerPortForwardingLifecycleHook(
+    public DevcontainerPortForwardingEventingSubscriber(
         IOptions<CodespacesOptions> codespacesOptions,
         IOptions<DevcontainersOptions> devcontainersOptions,
         IOptions<SshRemoteOptions> sshRemoteOptions,

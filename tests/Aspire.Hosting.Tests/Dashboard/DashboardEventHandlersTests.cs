@@ -23,7 +23,7 @@ using Microsoft.Extensions.Options;
 namespace Aspire.Hosting.Tests.Dashboard;
 
 [Trait("Partition", "3")]
-public class DashboardLifecycleHookTests(ITestOutputHelper testOutputHelper)
+public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
 {
     [Theory]
     [MemberData(nameof(Data))]
