@@ -14,7 +14,7 @@ This is a **one-time setup skill**. It completes the Aspire initialization that 
 The default stance is **adapt the AppHost to fit the app, not the other way around**. The user's services already work — the goal is to model them in Aspire without breaking anything.
 
 - Prefer `WithEnvironment()` to match existing env var names over asking users to rename vars in their code
-- Use `WithHttpEndpoint(port: <existing-port>)` to match hardcoded ports rather than changing the service
+- Use `WithHttpsEndpoint(port: <existing-port>)` to match hardcoded ports rather than changing the service
 - Map existing `docker-compose.yml` config 1:1 before optimizing
 - Don't restructure project directories, rename files, or change build scripts
 
@@ -25,7 +25,7 @@ Sometimes a small code change unlocks significantly better Aspire integration. W
 - **Connection strings**: A service reads `DATABASE_URL` but Aspire injects `ConnectionStrings__mydb`. You can use `WithEnvironment("DATABASE_URL", db.Resource.ConnectionStringExpression)` (zero code change) or suggest the service reads from config so `WithReference(db)` just works (enables service discovery, health checks, auto-retry).
   → Ask: *"Your API reads DATABASE_URL. I can map that with WithEnvironment (no code change) or you could switch to reading ConnectionStrings:mydb which unlocks WithReference and automatic service discovery. Which do you prefer?"*
 
-- **Port binding**: A service hardcodes `PORT=3000`. You can match it with `WithHttpEndpoint(port: 3000)` (zero change) or suggest reading from env so Aspire can assign ports dynamically and avoid conflicts.
+- **Port binding**: A service hardcodes `PORT=3000`. You can match it with `WithHttpsEndpoint(port: 3000)` (zero change) or suggest reading from env so Aspire can assign ports dynamically and avoid conflicts.
   → Ask: *"Your frontend hardcodes port 3000. I can match that, but if you read PORT from env instead, Aspire can assign ports dynamically and avoid conflicts when running multiple services. Want me to make that change?"*
 
 - **OTel setup**: Service has its own tracing config pointing to Jaeger. You can leave it (Aspire won't show its traces) or suggest switching the exporter to read `OTEL_EXPORTER_OTLP_ENDPOINT` (which Aspire injects).
@@ -87,6 +87,28 @@ Before writing any builder call:
 **Don't invent APIs** — if the docs search and integration list don't return it, it doesn't exist. Fall back to Tier 3 and note the limitation to the user.
 
 **API shapes differ between C# and TypeScript** — always check the correct language docs.
+
+### Prefer HTTPS over HTTP
+
+Always set up HTTPS endpoints by default. Use `WithHttpsEndpoint()` instead of `WithHttpEndpoint()` unless HTTPS doesn't work for a specific integration.
+
+For JavaScript and Python apps, call `WithHttpsDeveloperCertificate()` to configure the ASP.NET Core dev cert for serving HTTPS. Some apps may also need `WithDeveloperCertificateTrust(true)` so they trust the dev cert for outbound calls (e.g., to the dashboard OTLP collector). If HTTPS causes issues for a specific resource, fall back to HTTP and leave a comment explaining why.
+
+```csharp
+// JavaScript/Vite — HTTPS with dev cert
+var frontend = builder.AddViteApp("frontend", "../frontend")
+    .WithHttpsDeveloperCertificate()
+    .WithHttpsEndpoint(env: "PORT");
+
+// Python — HTTPS with dev cert
+var pyApi = builder.AddUvicornApp("py-api", "../py-api", "app:main")
+    .WithHttpsDeveloperCertificate();
+
+// .NET — HTTPS works out of the box, no extra config needed
+var api = builder.AddCsharpApp("api", "../src/Api");
+```
+
+> **Note**: These certificate APIs are experimental (`ASPIRECERTIFICATES001`). Use `aspire docs search "certificate configuration"` to check the latest API shape. If `WithHttpsDeveloperCertificate` causes errors for a resource type, fall back to `WithHttpEndpoint()`.
 
 ### Optimize for local dev, not deployment
 
@@ -190,7 +212,7 @@ Analyze the repository to discover all projects and services that could be model
 - **Docker Compose**: `docker-compose.yml` or `compose.yml` files — these are a goldmine. Parse them to extract:
   - **Services**: each named service maps to a potential AppHost resource
   - **Images**: container images used (e.g., `postgres:16`, `redis:7`) → these become `AddContainer()` or typed Aspire integrations (e.g., `AddPostgres()`, `AddRedis()`)
-  - **Ports**: published port mappings → `WithHttpEndpoint()` or `WithEndpoint()`
+  - **Ports**: published port mappings → `WithHttpsEndpoint()` or `WithEndpoint()`
   - **Environment variables**: env vars and `.env` file references → `WithEnvironment()`
   - **Volumes**: named/bind volumes → `WithVolume()` or `WithBindMount()`
   - **Dependencies**: `depends_on` → `WithReference()` and `WaitFor()`
@@ -249,18 +271,20 @@ import { createBuilder } from './.modules/aspire.js';
 
 const builder = await createBuilder();
 
-// Node.js/TypeScript app
+// Node.js/TypeScript app — HTTPS with dev cert
 const api = await builder
     .addNodeApp("api", "./api", "src/index.ts")
-    .withHttpEndpoint({ env: "PORT" });
+    .withHttpsDeveloperCertificate()
+    .withHttpsEndpoint({ env: "PORT" });
 
-// Vite frontend
+// Vite frontend — HTTPS with dev cert
 const frontend = await builder
     .addViteApp("frontend", "./frontend")
+    .withHttpsDeveloperCertificate()
     .withReference(api)
     .waitFor(api);
 
-// .NET project
+// .NET project — HTTPS works out of the box
 const dotnetSvc = await builder
     .addCsharpApp("catalog", "./src/Catalog");
 
@@ -268,9 +292,10 @@ const dotnetSvc = await builder
 const worker = await builder
     .addDockerfile("worker", "./worker");
 
-// Python app
+// Python app — HTTPS with dev cert
 const pyApi = await builder
-    .addPythonApp("py-api", "./py-api", "app.py");
+    .addPythonApp("py-api", "./py-api", "app.py")
+    .withHttpsDeveloperCertificate();
 
 await builder.build().run();
 ```
@@ -318,15 +343,17 @@ dotnet add <AppHost.csproj> reference <Web.csproj>
 #### Non-.NET services in a C# AppHost
 
 ```csharp
-// Node.js app (Tier 1: Aspire.Hosting.JavaScript)
-var frontend = builder.AddViteApp("frontend", "../frontend");
+// Node.js app (Tier 1: Aspire.Hosting.JavaScript) — HTTPS with dev cert
+var frontend = builder.AddViteApp("frontend", "../frontend")
+    .WithHttpsDeveloperCertificate();
 
-// Python app (Tier 1: Aspire.Hosting.Python)
-var pyApi = builder.AddPythonApp("py-api", "../py-api", "app.py");
+// Python app (Tier 1: Aspire.Hosting.Python) — HTTPS with dev cert
+var pyApi = builder.AddPythonApp("py-api", "../py-api", "app.py")
+    .WithHttpsDeveloperCertificate();
 
 // Go app (Tier 2: CommunityToolkit.Aspire.Hosting.Golang)
 var goApi = builder.AddGolangApp("go-api", "../go-api")
-    .WithHttpEndpoint(env: "PORT");
+    .WithHttpsEndpoint(env: "PORT");
 
 // Dockerfile-based service (Tier 3: fallback for unsupported languages)
 var worker = builder.AddDockerfile("worker", "../worker");
@@ -584,20 +611,22 @@ Before validating, present the user with optional quality-of-life improvements. 
    ```csharp
    // C#
    var frontend = builder.AddViteApp("frontend", "../frontend")
-       .WithHttpEndpoint(env: "PORT")
-       .WithUrlForEndpoint("http", url => url.Host = "frontend.dev.localhost");
+       .WithHttpsDeveloperCertificate()
+       .WithHttpsEndpoint(env: "PORT")
+       .WithUrlForEndpoint("https", url => url.Host = "frontend.dev.localhost");
    ```
 
    ```typescript
    // TypeScript
    const frontend = builder.addViteApp("frontend", "../frontend")
-       .withHttpEndpoint({ env: "PORT" })
-       .withUrlForEndpoint("http", url => { url.host = "frontend.dev.localhost"; });
+       .withHttpsDeveloperCertificate()
+       .withHttpsEndpoint({ env: "PORT" })
+       .withUrlForEndpoint("https", url => { url.host = "frontend.dev.localhost"; });
    ```
 
 2. **Custom URL labels in the dashboard**: Rename endpoint URLs in the Aspire dashboard for clarity:
    ```csharp
-   .WithUrlForEndpoint("http", url => url.DisplayText = "Web UI")
+   .WithUrlForEndpoint("https", url => url.DisplayText = "Web UI")
    ```
 
 3. **OpenTelemetry** (if not done in Step 7): "Would you like me to add observability to your services so they appear in the Aspire dashboard's traces and metrics views?"
@@ -737,23 +766,44 @@ var api = builder.AddCsharpApp("api", "../src/Api")
 
 ### Endpoints and ports
 
-**`WithHttpEndpoint()`** — expose an HTTP endpoint. For services that serve HTTP traffic:
+**Prefer HTTPS by default.** Use `WithHttpsEndpoint()` for all services and fall back to `WithHttpEndpoint()` only if HTTPS doesn't work for that resource.
+
+**`WithHttpsEndpoint()`** — expose an HTTPS endpoint. For services that serve traffic:
 
 ```csharp
 // Let Aspire assign a random port (recommended for most cases)
 var api = builder.AddCsharpApp("api", "../src/Api")
-    .WithHttpEndpoint();
+    .WithHttpsEndpoint();
 
 // Use a specific port
 var api = builder.AddCsharpApp("api", "../src/Api")
-    .WithHttpEndpoint(port: 5000);
+    .WithHttpsEndpoint(port: 5001);
 
 // For services that read the port from an env var
 var nodeApi = builder.AddJavaScriptApp("api", "../api", "start")
-    .WithHttpEndpoint(env: "PORT");  // Aspire injects PORT=<assigned-port>
+    .WithHttpsDeveloperCertificate()
+    .WithHttpsEndpoint(env: "PORT");  // Aspire injects PORT=<assigned-port>
 ```
 
-**`WithHttpsEndpoint()`** — same as above but for HTTPS.
+**`WithHttpsDeveloperCertificate()`** — required for JavaScript and Python apps to serve HTTPS. Configures the ASP.NET Core dev cert. .NET apps handle this automatically.
+
+```csharp
+var frontend = builder.AddViteApp("frontend", "../frontend")
+    .WithHttpsDeveloperCertificate();
+
+var pyApi = builder.AddUvicornApp("api", "../api", "app:main")
+    .WithHttpsDeveloperCertificate();
+```
+
+> If `WithHttpsDeveloperCertificate()` causes issues for a resource, fall back to `WithHttpEndpoint()` and leave a comment explaining why.
+
+**`WithHttpEndpoint()`** — fallback for HTTP when HTTPS doesn't work:
+
+```csharp
+// Use when HTTPS causes issues with a specific integration
+var legacy = builder.AddJavaScriptApp("legacy", "../legacy", "start")
+    .WithHttpEndpoint(env: "PORT");  // HTTP fallback
+```
 
 **`WithEndpoint()`** — expose a non-HTTP endpoint (gRPC, TCP, custom protocols):
 
@@ -770,13 +820,14 @@ var grpcService = builder.AddCsharpApp("grpc", "../src/GrpcService")
 
 ```csharp
 var frontend = builder.AddViteApp("frontend", "../frontend")
-    .WithHttpEndpoint(env: "PORT")
+    .WithHttpsDeveloperCertificate()
+    .WithHttpsEndpoint(env: "PORT")
     .WithExternalHttpEndpoints();
 ```
 
 **Port injection**: Many frameworks (Express, Vite, Flask) need to know which port to listen on. Use the `env:` parameter:
-- `withHttpEndpoint({ env: "PORT" })` (TypeScript)
-- `.WithHttpEndpoint(env: "PORT")` (C#)
+- `withHttpsEndpoint({ env: "PORT" })` (TypeScript)
+- `.WithHttpsEndpoint(env: "PORT")` (C#)
 
 Aspire assigns a port and injects it as the specified environment variable. The service should read it and listen on that port.
 
@@ -787,19 +838,20 @@ Customize how endpoints appear in the Aspire dashboard:
 ```csharp
 // Named endpoints for clarity
 var api = builder.AddCsharpApp("api", "../src/Api")
-    .WithHttpEndpoint(name: "public", port: 8080)
-    .WithHttpEndpoint(name: "internal", port: 8081);
+    .WithHttpsEndpoint(name: "public", port: 8443)
+    .WithHttpsEndpoint(name: "internal", port: 8444);
 ```
 
 **Cookie/session isolation with `dev.localhost`**: When multiple services share `localhost`, cookies and session storage can leak between them. Using `*.dev.localhost` subdomains gives each service its own cookie scope. URLs still have ports (e.g., `frontend.dev.localhost:5173`), but the subdomain isolation prevents cross-service collisions:
 
 ```csharp
 var frontend = builder.AddViteApp("frontend", "../frontend")
-    .WithHttpEndpoint(env: "PORT")
-    .WithUrlForEndpoint("http", url => url.Host = "frontend.dev.localhost");
+    .WithHttpsDeveloperCertificate()
+    .WithHttpsEndpoint(env: "PORT")
+    .WithUrlForEndpoint("https", url => url.Host = "frontend.dev.localhost");
 
 var api = builder.AddCsharpApp("api", "../src/Api")
-    .WithUrlForEndpoint("http", url => url.Host = "api.dev.localhost");
+    .WithUrlForEndpoint("https", url => url.Host = "api.dev.localhost");
 ```
 
 > Note: `*.dev.localhost` resolves to `127.0.0.1` on most systems without any `/etc/hosts` changes.
