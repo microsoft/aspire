@@ -71,11 +71,11 @@ extends:
       name: NetCore1ESPool-Internal
       image: windows.vs2026preview.scout.amd64
       os: windows
-    # Required for publishing to external feeds like nuget.org
-    # Pattern from dotnet-workload-versions/official.yml
-    # Note: 'Permissive,CFSClean' blocks NuGet.org - must use just 'Permissive'
+    # Network isolation policy: match main build pipeline for ES4.2.4 CFS compliance.
+    # releaseJob templateContext provides approved network access for external publishing
+    # (NuGet.org, GitHub API for WinGet/Homebrew, Maestro).
     settings:
-      networkIsolationPolicy: Permissive
+      networkIsolationPolicy: Permissive,CFSClean,CFSClean2
 
     stages:
       # ===== STAGE 1: PREPARE ARTIFACTS =====
