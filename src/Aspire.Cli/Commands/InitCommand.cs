@@ -16,10 +16,11 @@ using Aspire.Cli.Utils;
 namespace Aspire.Cli.Commands;
 
 /// <summary>
-/// Drops a skeleton AppHost and aspire.config.json, then installs the appropriate
-/// init skill for an agent to complete the wiring. This is a thin launcher — the
-/// heavy lifting (project discovery, dependency configuration, validation) is
-/// delegated to the <c>aspire-init-typescript</c> or <c>aspire-init-csharp</c> skill.
+/// Drops a skeleton AppHost and, when applicable, an <c>aspire.config.json</c>, then
+/// installs the appropriate init skill for an agent to complete the wiring. This is a
+/// thin launcher — the heavy lifting (project discovery, dependency configuration,
+/// validation) is delegated to the <c>aspire-init-typescript</c> or
+/// <c>aspire-init-csharp</c> skill.
 /// </summary>
 internal sealed class InitCommand : BaseCommand
 {
@@ -76,7 +77,7 @@ internal sealed class InitCommand : BaseCommand
             solutionFile = await _solutionLocator.FindSolutionFileAsync(workingDirectory, cancellationToken);
         }
 
-        // Step 3: Drop the skeleton AppHost + aspire.config.json.
+        // Step 3: Drop the skeleton AppHost and any related config files needed for that mode.
         var dropResult = isCSharp
             ? await DropCSharpSkeletonAsync(workingDirectory, solutionFile, cancellationToken)
             : await DropPolyglotSkeletonAsync(selectedProject.LanguageId, workingDirectory, cancellationToken);
@@ -227,10 +228,6 @@ internal sealed class InitCommand : BaseCommand
         File.WriteAllText(Path.Combine(appHostDirPath, $"{appHostDirName}.csproj"), csprojContent);
 
         InteractionService.DisplayMessage(KnownEmojis.CheckMark, $"Created {appHostDirName}/");
-
-        // Drop aspire.config.json at solution root
-        var relativeAppHostPath = Path.Combine(appHostDirName, "apphost.cs");
-        DropAspireConfig(solutionDir, relativeAppHostPath, language: null);
 
         return Task.FromResult(ExitCodeConstants.Success);
     }
