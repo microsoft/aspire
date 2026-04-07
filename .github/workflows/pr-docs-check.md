@@ -29,6 +29,8 @@ checkout:
   # workspace with aspire.dev because that is where documentation changes are
   # authored. Read aspire PR details via GitHub tools instead of relying on
   # local files from the initial workflow-repository checkout.
+  # Recompile this workflow with gh-aw v0.67.2+; v0.67.1 emits a broken
+  # cross-job checkout token handoff that GitHub Actions strips as a secret.
   - repository: microsoft/aspire.dev
     github-app:
       app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}

@@ -84,7 +84,6 @@ jobs:
       contents: read
     outputs:
       body: ${{ steps.sanitized.outputs.body }}
-      checkout_app_token_0: ${{ steps.checkout-app-token-0.outputs.token }}
       comment_id: ""
       comment_repo: ""
       lockdown_check_failed: ${{ steps.generate_aw_info.outputs.lockdown_check_failed == 'true' }}
@@ -127,18 +126,6 @@ jobs:
             setupGlobals(core, github, context, exec, io);
             const { main } = require('${{ runner.temp }}/gh-aw/actions/generate_aw_info.cjs');
             await main(core, context);
-      - name: Generate GitHub App token for checkout (0)
-        id: checkout-app-token-0
-        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3
-        with:
-          app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
-          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
-          owner: microsoft
-          repositories: aspire.dev
-          github-api-url: ${{ github.api_url }}
-          permission-contents: read
-          permission-issues: read
-          permission-pull-requests: read
       - name: Validate COPILOT_GITHUB_TOKEN secret
         id: validate-secret
         run: ${RUNNER_TEMP}/gh-aw/actions/validate_multi_secret.sh COPILOT_GITHUB_TOKEN 'GitHub Copilot CLI' https://github.github.com/gh-aw/reference/engines/#github-copilot-default
@@ -367,12 +354,24 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
+      - name: Generate GitHub App token for checkout (0)
+        id: checkout-app-token-0
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3
+        with:
+          app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+          owner: microsoft
+          repositories: aspire.dev
+          github-api-url: ${{ github.api_url }}
+          permission-contents: read
+          permission-issues: read
+          permission-pull-requests: read
       - name: Checkout microsoft/aspire.dev
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
           repository: microsoft/aspire.dev
-          token: ${{ needs.activation.outputs.checkout_app_token_0 }}
+          token: ${{ steps.checkout-app-token-0.outputs.token }}
       - name: Create gh-aw temp directory
         run: bash ${RUNNER_TEMP}/gh-aw/actions/create_gh_aw_tmp_dir.sh
       - name: Configure gh CLI for GitHub Enterprise
@@ -896,9 +895,9 @@ jobs:
           
           echo "Token invalidation step complete."
       - name: Invalidate checkout app token (0)
-        if: always() && needs.activation.outputs.checkout_app_token_0 != ''
+        if: always() && steps.checkout-app-token-0.outputs.token != ''
         env:
-          TOKEN: ${{ needs.activation.outputs.checkout_app_token_0 }}
+          TOKEN: ${{ steps.checkout-app-token-0.outputs.token }}
         run: |
           echo "Revoking GitHub App installation token..."
           # GitHub CLI will auth with the token being revoked.
