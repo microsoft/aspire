@@ -163,6 +163,23 @@ var api = builder.AddCSharpApp("api", "../src/Api");
 
 > **Note**: These certificate APIs are experimental (`ASPIRECERTIFICATES001`). Use `aspire docs search "certificate configuration"` to check the latest API shape. If `WithHttpsDeveloperCertificate` causes errors for a resource type, fall back to `WithHttpEndpoint()`.
 
+### Never hardcode URLs — use endpoint references
+
+When a service needs another service's URL as an environment variable, **always** pass an endpoint reference — never a hardcoded string. Hardcoded URLs break whenever Aspire assigns different ports.
+
+```typescript
+// ✅ CORRECT — endpoint reference, Aspire resolves the actual URL at runtime
+const roomEndpoint = await room.getEndpoint("http");
+builder.addViteApp("frontend", "./frontend")
+    .withEnvironment("VITE_APP_WS_SERVER_URL", roomEndpoint);
+
+// ❌ WRONG — hardcoded URL, breaks when ports change
+builder.addViteApp("frontend", "./frontend")
+    .withEnvironment("VITE_APP_WS_SERVER_URL", "http://localhost:3002");
+```
+
+Similarly, **never use `withUrlForEndpoint` / `WithUrlForEndpoint` to set `dev.localhost` URLs**. That API is ONLY for setting display labels in the dashboard (e.g., `url.DisplayText = "Web UI"`). `dev.localhost` configuration belongs in `aspire.config.json` profiles — see Step 9.
+
 ### Optimize for local dev, not deployment
 
 This skill is about getting a great **local development experience**. Don't worry about production deployment manifests, cloud provisioning, or publish configuration — that's a separate concern for later.
@@ -693,7 +710,11 @@ Before validating, present the user with optional quality-of-life improvements. 
 1. **Cookie and session isolation with `dev.localhost`**: When multiple services run on `localhost`, they share cookies and session storage — which can cause hard-to-debug auth problems. Using `*.dev.localhost` subdomains isolates each service's cookies and storage. Note: URLs still include ports (e.g., `frontend.dev.localhost:5173`), but the subdomain isolation prevents cross-service cookie collisions.
    > "Would you like me to set up `dev.localhost` subdomains for your services? This gives each service its own cookie/session scope so they don't interfere with each other. URLs will look like `frontend.dev.localhost:5173` — the `*.dev.localhost` domain resolves to 127.0.0.1 automatically on most systems, no `/etc/hosts` changes needed."
 
-   **How to do it:** Update the `profiles` section in `aspire.config.json` — replace `localhost` with `<projectname>.dev.localhost` in all URLs. This is the same mechanism `aspire new` uses. **Do NOT use `withUrlForEndpoint` in the AppHost for this** — the config file is the right place.
+   **How to do it:** Update the `profiles` section in `aspire.config.json` — replace `localhost` with `<projectname>.dev.localhost` in `applicationUrl`, and use descriptive subdomains like `otlp.dev.localhost` and `resources.dev.localhost` for the infrastructure URLs. This is the same mechanism `aspire new` uses.
+
+   > ⚠️ **Do NOT use `withUrlForEndpoint` / `WithUrlForEndpoint` in the AppHost for `dev.localhost`** — the config file is the right place. `withUrlForEndpoint` is ONLY for dashboard display labels.
+
+   Real-world example:
 
    ```json
    {
@@ -701,28 +722,21 @@ Before validating, present the user with optional quality-of-life improvements. 
        "https": {
          "applicationUrl": "https://myproject.dev.localhost:17042;http://myproject.dev.localhost:15042",
          "environmentVariables": {
-           "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://myproject.dev.localhost:21042",
-           "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://myproject.dev.localhost:22042"
-         }
-       },
-       "http": {
-         "applicationUrl": "http://myproject.dev.localhost:15042",
-         "environmentVariables": {
-           "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://myproject.dev.localhost:19042",
-           "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://myproject.dev.localhost:20042",
-           "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true"
+           "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://otlp.dev.localhost:21042",
+           "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://resources.dev.localhost:22042"
          }
        }
      }
    }
    ```
 
-   Use the project/repo name (lowercased) as the subdomain prefix. Keep the existing port numbers — just swap `localhost` for `<name>.dev.localhost`.
+   Use the project/repo name (lowercased) as the subdomain prefix for `applicationUrl`. Use `otlp` and `resources` for the infrastructure URLs. Keep the existing port numbers — just swap `localhost` for the appropriate `*.dev.localhost` subdomain.
 
-2. **Custom URL labels in the dashboard**: Rename endpoint URLs in the Aspire dashboard for clarity:
+2. **Custom URL labels in the dashboard** (display text only): Rename endpoint URLs in the Aspire dashboard for clarity. This is the ONLY valid use of `withUrlForEndpoint` — setting `DisplayText`, nothing else:
    ```csharp
    .WithUrlForEndpoint("https", url => url.DisplayText = "Web UI")
    ```
+   Never set `url.Url` in this callback — that's what `aspire.config.json` profiles are for.
 
 3. **OpenTelemetry** (if not done in Step 8): "Would you like me to add observability to your services so they appear in the Aspire dashboard's traces and metrics views?"
 
@@ -794,6 +808,8 @@ After successful validation:
 - **Respect existing project structure** — don't reorganize the repo
 - **This is a one-time skill** — delete it after successful init
 - **If stuck, use `aspire doctor`** to diagnose environment issues
+- **Never hardcode URLs in `withEnvironment`** — when a service needs another service's URL (e.g., `VITE_APP_WS_SERVER_URL`), pass an endpoint reference, NOT a string literal. Use `room.getEndpoint("http")` (TS) or `room.GetEndpoint("http")` (C#) and pass that to `withEnvironment`. Hardcoded URLs break when ports change.
+- **Never use `withUrlForEndpoint` to set `dev.localhost` URLs** — `dev.localhost` configuration belongs in `aspire.config.json` profiles, not in AppHost code. `withUrlForEndpoint` is ONLY for setting display labels (e.g., `url.DisplayText = "Web UI"`).
 
 ## Looking up APIs and integrations
 
@@ -948,18 +964,20 @@ Aspire assigns a port and injects it as the specified environment variable. The 
 
 ### Cross-service environment variable wiring
 
-When a service expects a **specific env var name** for a dependency's URL (not the standard `services__` format from `WithReference`), use `WithEnvironment` with an endpoint reference:
+When a service expects a **specific env var name** for a dependency's URL (not the standard `services__` format from `WithReference`), use `WithEnvironment` with an endpoint reference — **never a hardcoded string**:
 
 ```typescript
-// Get the endpoint from the dependency
+// ✅ CORRECT — endpoint reference resolves to the actual URL at runtime
 const roomEndpoint = await room.getEndpoint("http");
 
-// Pass it as the specific env var the consuming app expects
 const frontend = await builder
     .addViteApp("frontend", "./frontend")
-    .withEnvironment("VITE_APP_WS_SERVER_URL", roomEndpoint)  // EndpointReference accepted
+    .withEnvironment("VITE_APP_WS_SERVER_URL", roomEndpoint)  // EndpointReference, not a string
     .withReference(room)   // also sets up standard service discovery
     .waitFor(room);
+
+// ❌ WRONG — hardcoded URL breaks when Aspire assigns different ports
+    .withEnvironment("VITE_APP_WS_SERVER_URL", "http://localhost:3002")  // NEVER DO THIS
 ```
 
 ```csharp
@@ -986,13 +1004,17 @@ var api = builder.AddCSharpApp("api", "../src/Api")
 
 **Cookie/session isolation with `dev.localhost`**: When multiple services share `localhost`, cookies and session storage can leak between them. Using `*.dev.localhost` subdomains gives each service its own cookie scope. URLs still have ports (e.g., `frontend.dev.localhost:5173`), but the subdomain isolation prevents cross-service collisions.
 
-**The right way**: Update `applicationUrl` in the `profiles` section of `aspire.config.json` — replace `localhost` with `<projectname>.dev.localhost`. Do NOT use `withUrlForEndpoint` in the AppHost for this. Example:
+**The right way**: Update `applicationUrl` in the `profiles` section of `aspire.config.json` — replace `localhost` with `<projectname>.dev.localhost`, and use `otlp.dev.localhost` / `resources.dev.localhost` for infrastructure URLs. **Never** use `withUrlForEndpoint` to set `dev.localhost` URLs — that API is ONLY for dashboard display labels. Example:
 
 ```json
 {
   "profiles": {
     "https": {
-      "applicationUrl": "https://myapp.dev.localhost:17042;http://myapp.dev.localhost:15042"
+      "applicationUrl": "https://myapp.dev.localhost:17042;http://myapp.dev.localhost:15042",
+      "environmentVariables": {
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://otlp.dev.localhost:21042",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://resources.dev.localhost:22042"
+      }
     }
   }
 }
