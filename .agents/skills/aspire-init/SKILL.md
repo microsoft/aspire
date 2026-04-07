@@ -355,8 +355,249 @@ After successful validation:
 ## Key rules
 
 - **Never overwrite existing files** — always augment/merge
-- **Use `aspire docs search` before guessing APIs** — look up the correct builder methods
 - **Ask the user before modifying service code** (especially OTel and ServiceDefaults injection)
 - **Respect existing project structure** — don't reorganize the repo
 - **This is a one-time skill** — delete it after successful init
 - **If stuck, use `aspire doctor`** to diagnose environment issues
+
+## Looking up APIs and integrations
+
+Before writing AppHost code for an unfamiliar resource type or integration, **always** look it up:
+
+```bash
+# Search for documentation on a topic
+aspire docs search "redis"
+aspire docs search "node app endpoints"
+
+# Get a specific doc page by slug (returned from search results)
+aspire docs get "redis-integration"
+```
+
+Use `aspire docs search` to find the right builder methods, configuration options, and patterns. Use `aspire docs get <slug>` to read the full doc page. Do not guess API shapes — Aspire has many resource types with specific overloads.
+
+To add an integration package (which unlocks typed builder methods):
+
+```bash
+aspire add Aspire.Hosting.Redis
+aspire add Aspire.Hosting.NodeJs
+aspire add Aspire.Hosting.Python
+```
+
+After adding, run `aspire restore` (TypeScript) or `dotnet restore` (C#) to update available APIs, then check what methods are now available.
+
+## AppHost wiring reference
+
+This section covers the patterns you'll need when writing Step 4 (Wire up the AppHost). Refer back to it as needed.
+
+### Service communication: `WithReference` vs `WithEnvironment`
+
+**`WithReference()`** is the primary way to connect services. It does two things:
+
+1. Injects the referenced resource's connection information (connection string or URL) into the consuming service
+2. Enables Aspire service discovery — .NET services can resolve the referenced resource by name
+
+```csharp
+// C#: api gets the database connection string injected automatically
+var db = builder.AddPostgres("pg").AddDatabase("mydb");
+var api = builder.AddProject<Projects.Api>("api")
+    .WithReference(db);
+
+// C#: frontend gets service discovery URL for api
+var frontend = builder.AddProject<Projects.Web>("web")
+    .WithReference(api);
+```
+
+```typescript
+// TypeScript equivalent
+const db = await builder.addPostgres("pg").addDatabase("mydb");
+const api = await builder.addProject("api", "./src/Api/Api.csproj")
+    .withReference(db);
+```
+
+**How non-.NET services consume references**: They receive environment variables. The naming convention is:
+- Connection strings: `ConnectionStrings__<resourceName>` (e.g., `ConnectionStrings__mydb=Host=...`)
+- Service URLs: `services__<resourceName>__<endpointName>__0` (e.g., `services__api__http__0=http://localhost:5123`)
+
+**`WithEnvironment()`** injects raw environment variables. Use this for custom config that isn't a service reference:
+
+```csharp
+var api = builder.AddProject<Projects.Api>("api")
+    .WithEnvironment("FEATURE_FLAG_X", "true")
+    .WithEnvironment("API_KEY", someParameter);
+```
+
+**When to use which:**
+- Connecting service A to service B or a database/cache/queue → `WithReference()`
+- Passing configuration values, feature flags, API keys → `WithEnvironment()`
+- Never manually construct connection strings with `WithEnvironment()` when `WithReference()` would work
+
+### Endpoints and ports
+
+**`WithHttpEndpoint()`** — expose an HTTP endpoint. For services that serve HTTP traffic:
+
+```csharp
+// Let Aspire assign a random port (recommended for most cases)
+var api = builder.AddProject<Projects.Api>("api")
+    .WithHttpEndpoint();
+
+// Use a specific port
+var api = builder.AddProject<Projects.Api>("api")
+    .WithHttpEndpoint(port: 5000);
+
+// For non-.NET services that read the port from an env var
+var nodeApi = builder.AddNpmApp("api", "../api", "start")
+    .WithHttpEndpoint(env: "PORT");  // Aspire injects PORT=<assigned-port>
+```
+
+**`WithHttpsEndpoint()`** — same as above but for HTTPS.
+
+**`WithEndpoint()`** — expose a non-HTTP endpoint (gRPC, TCP, custom protocols):
+
+```csharp
+var grpcService = builder.AddProject<Projects.GrpcService>("grpc")
+    .WithEndpoint("grpc", endpoint =>
+    {
+        endpoint.Port = 5050;
+        endpoint.Protocol = "grpc";
+    });
+```
+
+**`WithExternalHttpEndpoints()`** — mark a resource's HTTP endpoints as externally visible. Use this for user-facing frontends so the URL appears prominently in the dashboard:
+
+```csharp
+var frontend = builder.AddNpmApp("frontend", "../frontend", "dev")
+    .WithHttpEndpoint(env: "PORT")
+    .WithExternalHttpEndpoints();
+```
+
+**Port injection for non-.NET services**: Many frameworks (Express, Vite, Flask) need to know which port to listen on. Use the `env:` parameter:
+- `withHttpEndpoint({ env: "PORT" })` (TypeScript)
+- `.WithHttpEndpoint(env: "PORT")` (C#)
+
+Aspire assigns a port and injects it as the specified environment variable. The service should read it and listen on that port.
+
+### URL labels and dashboard niceties
+
+Customize how endpoints appear in the Aspire dashboard:
+
+```csharp
+// Named endpoints for clarity
+var api = builder.AddProject<Projects.Api>("api")
+    .WithHttpEndpoint(name: "public", port: 8080)
+    .WithHttpEndpoint(name: "internal", port: 8081);
+```
+
+**Custom domains with `dev.localhost`**: For a nicer local dev experience, use `WithUrlForEndpoint()` to give services friendly URLs that resolve to localhost:
+
+```csharp
+var frontend = builder.AddNpmApp("frontend", "../frontend", "dev")
+    .WithHttpEndpoint(env: "PORT")
+    .WithUrlForEndpoint("http", url => url.Host = "frontend.dev.localhost");
+
+var api = builder.AddProject<Projects.Api>("api")
+    .WithUrlForEndpoint("http", url => url.Host = "api.dev.localhost");
+```
+
+> Note: `*.dev.localhost` resolves to `127.0.0.1` on most systems without any `/etc/hosts` changes.
+
+Use `aspire docs search "url for endpoint"` to check the latest API shape if unsure.
+
+### Dependency ordering: `WaitFor` and `WaitForCompletion`
+
+**`WaitFor()`** — delay starting a resource until another resource is healthy/ready:
+
+```csharp
+var db = builder.AddPostgres("pg").AddDatabase("mydb");
+var api = builder.AddProject<Projects.Api>("api")
+    .WithReference(db)
+    .WaitFor(db);  // Don't start api until db is healthy
+```
+
+Always pair `WithReference()` with `WaitFor()` for infrastructure dependencies (databases, caches, queues). Services that depend on other services should generally also wait for them.
+
+**`WaitForCompletion()`** — wait for a resource to run to completion (exit successfully). Use for init containers, database migrations, or seed data scripts:
+
+```csharp
+var migration = builder.AddProject<Projects.MigrationRunner>("migration")
+    .WithReference(db)
+    .WaitFor(db);
+
+var api = builder.AddProject<Projects.Api>("api")
+    .WithReference(db)
+    .WaitFor(db)
+    .WaitForCompletion(migration);  // Don't start until migration finishes
+```
+
+### Container lifetimes
+
+By default, containers are stopped when the AppHost stops. Use **persistent lifetime** to keep containers running across restarts (useful for databases during development):
+
+```csharp
+var db = builder.AddPostgres("pg")
+    .WithLifetime(ContainerLifetime.Persistent);
+```
+
+This prevents data loss when restarting the AppHost — the container stays running and the AppHost reconnects.
+
+**TypeScript equivalent:**
+
+```typescript
+const db = await builder.addPostgres("pg")
+    .withLifetime("persistent");
+```
+
+Recommend persistent lifetime for databases and caches during local development.
+
+### Explicit start (manual start)
+
+Some resources shouldn't auto-start with the AppHost. Mark them for explicit start:
+
+```csharp
+var debugTool = builder.AddContainer("profiler", "myregistry/profiler")
+    .WithLifetime(ContainerLifetime.Persistent)
+    .ExcludeFromManifest()
+    .WithExplicitStart();
+```
+
+The resource appears in the dashboard but stays stopped until the user manually starts it. Useful for debugging tools, admin UIs, or optional services.
+
+### Parent resources (grouping in the dashboard)
+
+Group related resources under a parent for a cleaner dashboard:
+
+```csharp
+var postgres = builder.AddPostgres("pg");
+var ordersDb = postgres.AddDatabase("orders");
+var inventoryDb = postgres.AddDatabase("inventory");
+// ordersDb and inventoryDb appear nested under pg in the dashboard
+```
+
+This happens automatically for databases added to a server resource. For custom grouping of arbitrary resources, use `WithParentRelationship()`:
+
+```csharp
+var backend = builder.AddResource(new ContainerResource("backend-group"));
+var api = builder.AddProject<Projects.Api>("api")
+    .WithParentRelationship(backend);
+var worker = builder.AddProject<Projects.Worker>("worker")
+    .WithParentRelationship(backend);
+```
+
+Use `aspire docs search "parent relationship"` to verify the current API shape.
+
+### Volumes and data persistence
+
+```csharp
+// Named volume (managed by Docker, persists across container recreations)
+var db = builder.AddPostgres("pg")
+    .WithDataVolume("pg-data");
+
+// Bind mount (maps to a host directory)
+var db = builder.AddPostgres("pg")
+    .WithBindMount("./data/pg", "/var/lib/postgresql/data");
+```
+
+```typescript
+const db = await builder.addPostgres("pg")
+    .withDataVolume("pg-data");
+```
+
