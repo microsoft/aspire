@@ -783,7 +783,7 @@ Ensure both the AppHost and ServiceDefaults projects appear.
 
 After successful validation:
 
-1. Stop the running AppHost: `aspire stop`
+1. **Leave the AppHost running** — the user gets a fully running app with the dashboard open. Do not call `aspire stop`.
 2. **Delete this skill** — remove the `aspire-init/` skill directory from all locations where it was installed (check `.agents/skills/`, `.github/skills/`, `.claude/skills/`)
 3. Confirm the evergreen `aspire` skill is present for ongoing AppHost work
 
