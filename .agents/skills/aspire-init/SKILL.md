@@ -53,7 +53,7 @@ Packages named `Aspire.Hosting.*` — these are maintained by the Aspire team an
 | Package | Unlocks |
 |---------|---------|
 | `Aspire.Hosting.Python` | `AddPythonApp()`, `AddUvicornApp()` |
-| `Aspire.Hosting.NodeJs` | `AddNodeApp()`, `AddNpmApp()`, `AddViteApp()` |
+| `Aspire.Hosting.JavaScript` | `AddJavaScriptApp()`, `AddNodeApp()`, `AddViteApp()` |
 | `Aspire.Hosting.JavaScript` | Additional JavaScript hosting support |
 | `Aspire.Hosting.PostgreSQL` | `AddPostgres()`, `AddDatabase()` |
 | `Aspire.Hosting.Redis` | `AddRedis()` |
@@ -96,7 +96,7 @@ This means:
 
 - Prefer `ContainerLifetime.Persistent` for databases and caches so data survives AppHost restarts
 - Use `WithDataVolume()` to persist data across container recreations
-- Dev-friendly URLs with `*.dev.localhost` are encouraged
+- Cookie and session isolation with `*.dev.localhost` subdomains is encouraged
 - Don't add production health check probes, scaling config, or cloud resource definitions
 - If services reference external third-party APIs/services (e.g., a hardcoded Stripe URL, an external database host, a SaaS webhook endpoint), consider modeling those as parameters or connection strings in the AppHost so they're visible and configurable from one place:
 
@@ -222,7 +222,7 @@ Ask the user:
 
 ### Step 3: Create ServiceDefaults (C# only)
 
-> **Skip this step for TypeScript AppHosts.** OTel for non-.NET services is handled in Step 7.
+> **Skip this step for TypeScript AppHosts.** OTel is handled in Step 7.
 
 If no ServiceDefaults project exists in the repo, create one:
 
@@ -318,8 +318,8 @@ dotnet add <AppHost.csproj> reference <Web.csproj>
 #### Non-.NET services in a C# AppHost
 
 ```csharp
-// Node.js app (Tier 1: Aspire.Hosting.NodeJs)
-var frontend = builder.AddNpmApp("frontend", "../frontend", "start");
+// Node.js app (Tier 1: Aspire.Hosting.JavaScript)
+var frontend = builder.AddViteApp("frontend", "../frontend");
 
 // Python app (Tier 1: Aspire.Hosting.Python)
 var pyApi = builder.AddPythonApp("py-api", "../py-api", "app.py");
@@ -336,8 +336,8 @@ Add required hosting packages — use `aspire add` or `dotnet add package`:
 
 ```bash
 # Tier 1: first-party
-aspire add nodejs    # or: dotnet add <AppHost.csproj> package Aspire.Hosting.NodeJs
-aspire add python    # or: dotnet add <AppHost.csproj> package Aspire.Hosting.Python
+aspire add javascript    # or: dotnet add <AppHost.csproj> package Aspire.Hosting.JavaScript
+aspire add python        # or: dotnet add <AppHost.csproj> package Aspire.Hosting.Python
 
 # Tier 2: community toolkit
 aspire add communitytoolkit-golang
@@ -452,13 +452,13 @@ app.MapDefaultEndpoints();
 
 Be careful with code placement — look at existing structure (top-level statements vs `Startup.cs` vs `Program.Main`). Do not duplicate if already present.
 
-### Step 7: Wire up OpenTelemetry for non-.NET services
+### Step 7: Wire up OpenTelemetry
 
-For non-.NET services included in the AppHost, OpenTelemetry makes their traces, metrics, and logs visible in the Aspire dashboard. This is the equivalent of what ServiceDefaults does for .NET. Aspire automatically injects `OTEL_EXPORTER_OTLP_ENDPOINT` into all managed resources — the services just need to read it.
+OpenTelemetry makes your services' traces, metrics, and logs visible in the Aspire dashboard. For .NET services, ServiceDefaults handles this automatically. For everything else, the services need a small setup to export telemetry. Aspire automatically injects `OTEL_EXPORTER_OTLP_ENDPOINT` into all managed resources — the services just need to read it.
 
 **Present this to the user as an option, not a mandatory step.** Some users may want to add OTel later, and that's fine — their services will still run, they just won't appear in the dashboard's trace/metrics views.
 
-**For each non-.NET service, ask:**
+**For each service that doesn't already have OTel, ask:**
 > "Would you like me to add OpenTelemetry instrumentation to `<service>`? This lets the Aspire dashboard show its traces, metrics, and logs. I'll need to add a few packages and an instrumentation setup file."
 
 If they say yes, follow the per-language guide below.
@@ -578,19 +578,19 @@ Before validating, present the user with optional quality-of-life improvements. 
 
 **Suggest each of these individually — don't apply without asking:**
 
-1. **Friendly URLs with `dev.localhost`**: Give services memorable URLs instead of random ports:
-   > "Would you like friendly local URLs like `frontend.dev.localhost` and `api.dev.localhost` instead of `localhost:<random-port>`? These resolve to 127.0.0.1 automatically on most systems — no `/etc/hosts` changes needed."
+1. **Cookie and session isolation with `dev.localhost`**: When multiple services run on `localhost`, they share cookies and session storage — which can cause hard-to-debug auth problems. Using `*.dev.localhost` subdomains isolates each service's cookies and storage. Note: URLs still include ports (e.g., `frontend.dev.localhost:5173`), but the subdomain isolation prevents cross-service cookie collisions.
+   > "Would you like me to set up `dev.localhost` subdomains for your services? This gives each service its own cookie/session scope so they don't interfere with each other. URLs will look like `frontend.dev.localhost:5173` — the `*.dev.localhost` domain resolves to 127.0.0.1 automatically on most systems, no `/etc/hosts` changes needed."
 
    ```csharp
    // C#
-   var frontend = builder.AddNpmApp("frontend", "../frontend")
+   var frontend = builder.AddViteApp("frontend", "../frontend")
        .WithHttpEndpoint(env: "PORT")
        .WithUrlForEndpoint("http", url => url.Host = "frontend.dev.localhost");
    ```
 
    ```typescript
    // TypeScript
-   const frontend = builder.addNpmApp("frontend", "../frontend")
+   const frontend = builder.addViteApp("frontend", "../frontend")
        .withHttpEndpoint({ env: "PORT" })
        .withUrlForEndpoint("http", url => { url.host = "frontend.dev.localhost"; });
    ```
@@ -600,7 +600,7 @@ Before validating, present the user with optional quality-of-life improvements. 
    .WithUrlForEndpoint("http", url => url.DisplayText = "Web UI")
    ```
 
-3. **OpenTelemetry** (if not done in Step 7): "Would you like to add observability to your non-.NET services so they appear in the Aspire dashboard's traces and metrics views?"
+3. **OpenTelemetry** (if not done in Step 7): "Would you like me to add observability to your services so they appear in the Aspire dashboard's traces and metrics views?"
 
 Present these as a batch: "I have a few optional dev experience improvements I can make. Want to hear about them?"
 
@@ -610,13 +610,15 @@ Present these as a batch: "I have a few optional dev experience improvements I c
 aspire start
 ```
 
-Check that:
+Once the app is running, use the Aspire CLI to verify everything is wired up correctly:
 
-1. The dashboard URL is printed
-2. All modeled resources appear in `aspire describe`
-3. No startup errors in `aspire logs`
+1. **Resources are modeled**: `aspire describe` — confirm all expected resources appear with correct types, endpoints, and states.
+2. **Environment flows correctly**: `aspire describe` — check that environment variables (connection strings, ports, secrets from parameters) are injected into each resource as expected. Verify `.env` values that were migrated to parameters are present.
+3. **OTel is flowing** (if configured in Step 7): `aspire otel` — verify that services instrumented with OpenTelemetry are exporting traces and metrics to the Aspire dashboard collector.
+4. **No startup errors**: `aspire logs <resource>` — check logs for each resource to ensure clean startup with no crashes, missing config, or connection failures.
+5. **Dashboard is accessible**: Confirm the dashboard URL is printed and can be opened.
 
-If it fails, diagnose and iterate. Common issues:
+If anything fails, diagnose and iterate. Common issues:
 
 - **TypeScript**: missing dependency install, TS compilation errors, port conflicts
 - **C# project mode**: missing project references, NuGet restore needed, TFM mismatches, build errors
@@ -716,7 +718,7 @@ const api = await builder.addCsharpApp("api", "./src/Api")
     .withReference(db);
 ```
 
-**How non-.NET services consume references**: They receive environment variables. The naming convention is:
+**How services consume references**: Services receive connection info as environment variables. The naming convention is:
 - Connection strings: `ConnectionStrings__<resourceName>` (e.g., `ConnectionStrings__mydb=Host=...`)
 - Service URLs: `services__<resourceName>__<endpointName>__0` (e.g., `services__api__http__0=http://localhost:5123`)
 
@@ -746,8 +748,8 @@ var api = builder.AddCsharpApp("api", "../src/Api")
 var api = builder.AddCsharpApp("api", "../src/Api")
     .WithHttpEndpoint(port: 5000);
 
-// For non-.NET services that read the port from an env var
-var nodeApi = builder.AddNpmApp("api", "../api", "start")
+// For services that read the port from an env var
+var nodeApi = builder.AddJavaScriptApp("api", "../api", "start")
     .WithHttpEndpoint(env: "PORT");  // Aspire injects PORT=<assigned-port>
 ```
 
@@ -767,12 +769,12 @@ var grpcService = builder.AddCsharpApp("grpc", "../src/GrpcService")
 **`WithExternalHttpEndpoints()`** — mark a resource's HTTP endpoints as externally visible. Use this for user-facing frontends so the URL appears prominently in the dashboard:
 
 ```csharp
-var frontend = builder.AddNpmApp("frontend", "../frontend", "dev")
+var frontend = builder.AddViteApp("frontend", "../frontend")
     .WithHttpEndpoint(env: "PORT")
     .WithExternalHttpEndpoints();
 ```
 
-**Port injection for non-.NET services**: Many frameworks (Express, Vite, Flask) need to know which port to listen on. Use the `env:` parameter:
+**Port injection**: Many frameworks (Express, Vite, Flask) need to know which port to listen on. Use the `env:` parameter:
 - `withHttpEndpoint({ env: "PORT" })` (TypeScript)
 - `.WithHttpEndpoint(env: "PORT")` (C#)
 
@@ -789,10 +791,10 @@ var api = builder.AddCsharpApp("api", "../src/Api")
     .WithHttpEndpoint(name: "internal", port: 8081);
 ```
 
-**Custom domains with `dev.localhost`**: For a nicer local dev experience, use `WithUrlForEndpoint()` to give services friendly URLs that resolve to localhost:
+**Cookie/session isolation with `dev.localhost`**: When multiple services share `localhost`, cookies and session storage can leak between them. Using `*.dev.localhost` subdomains gives each service its own cookie scope. URLs still have ports (e.g., `frontend.dev.localhost:5173`), but the subdomain isolation prevents cross-service collisions:
 
 ```csharp
-var frontend = builder.AddNpmApp("frontend", "../frontend", "dev")
+var frontend = builder.AddViteApp("frontend", "../frontend")
     .WithHttpEndpoint(env: "PORT")
     .WithUrlForEndpoint("http", url => url.Host = "frontend.dev.localhost");
 
