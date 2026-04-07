@@ -1,0 +1,67 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="zh-Hant" original="../WaitCommandStrings.resx">
+    <body>
+      <trans-unit id="Description">
+        <source>Wait for a resource to reach a target status</source>
+        <target state="new">Wait for a resource to reach a target status</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InvalidStatusValue">
+        <source>Invalid status value '{0}'. Valid values are: healthy, up, down.</source>
+        <target state="translated">無效的狀態值 '{0}'。有效的值為: 良好、開啟、關閉。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceArgumentDescription">
+        <source>The name of the resource to wait for</source>
+        <target state="new">The name of the resource to wait for</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceEnteredFailedState">
+        <source>Resource '{0}' entered a failed state: {1}.</source>
+        <target state="translated">資源 '{0}' 已進入失敗狀態: {1}。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceNotFound">
+        <source>Resource '{0}' was not found.</source>
+        <target state="translated">找不到資源 '{0}'。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceReachedTargetStatus">
+        <source>Resource '{0}' is {1}. ({2:F1}s)</source>
+        <target state="translated">資源 '{0}' 為 {1}。({2:F1}秒)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SelectAppHostAction">
+        <source>connect to</source>
+        <target state="translated">連線至</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StatusOptionDescription">
+        <source>The target status to wait for (healthy, up, down). Defaults to healthy.</source>
+        <target state="translated">要等候的目標狀態 (良好、開啟、關閉)。預設為良好。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TimeoutMustBePositive">
+        <source>Timeout must be a positive number of seconds.</source>
+        <target state="translated">逾時必須是正數的秒數。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TimeoutOptionDescription">
+        <source>Maximum time to wait in seconds. Defaults to 120.</source>
+        <target state="translated">等候的時間上限 (秒)。預設為 120。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WaitTimedOut">
+        <source>Timed out waiting for resource '{0}' to be {1} after {2}s.</source>
+        <target state="translated">等候資源 '{0}' 於 {2} 後成為 {1} 已逾時。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WaitingForResource">
+        <source>Waiting for resource '{0}' to be {1}...</source>
+        <target state="translated">正在等候資源 '{0}' 成為 {1}...</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

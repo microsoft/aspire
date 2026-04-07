@@ -1,0 +1,732 @@
+﻿[  
+PIPELINE DEPENDENCY GRAPH DIAGNOSTICS
+=====================================
+
+This diagnostic output shows the complete pipeline dependency graph structure.
+Use this to understand step relationships and troubleshoot execution issues.
+
+Total steps defined: 40
+
+Analysis for full pipeline execution (showing all steps and their relationships)
+
+EXECUTION ORDER
+===============
+This shows the order in which steps would execute, respecting all dependencies.
+Steps with no dependencies run first, followed by steps that depend on them.
+
+  1. process-parameters
+  2. build-prereq
+  3. deploy-prereq
+  4. build-api
+  5. build
+  6. validate-azure-login
+  7. create-provisioning-context
+  8. provision-api-identity
+  9. provision-cosmos
+ 10. provision-api-roles-cosmos
+ 11. provision-sql-nsg
+ 12. provision-vnet
+ 13. provision-privatelink-file-core-windows-net
+ 14. provision-sql-store
+ 15. provision-pe-subnet-files-pe
+ 16. provision-privatelink-database-windows-net
+ 17. provision-sql
+ 18. provision-pe-subnet-sql-pe
+ 19. provision-api-roles-sql
+ 20. provision-env-acr
+ 21. provision-env
+ 22. provision-privatelink-documents-azure-com
+ 23. provision-pe-subnet-cosmos-pe
+ 24. login-to-acr-env-acr
+ 25. push-prereq
+ 26. push-api
+ 27. provision-api-containerapp
+ 28. print-api-summary
+ 29. provision-sql-admin-identity
+ 30. provision-sql-admin-identity-roles-sql-store
+ 31. provision-azure-bicep-resources
+ 32. print-dashboard-url-env
+ 33. deploy
+ 34. deploy-api
+ 35. diagnostics
+ 36. publish-prereq
+ 37. publish-azure634f9
+ 38. publish
+ 39. publish-manifest
+ 40. push
+
+DETAILED STEP ANALYSIS
+======================
+Shows each step's dependencies, associated resources, tags, and descriptions.
+✓ = dependency exists, ? = dependency missing
+
+Step: build
+    Description: Aggregation step for all build operations. All build steps should be required by this step.
+    Dependencies: ✓ build-api
+
+Step: build-api
+    Description: Builds the container image for the api project.
+    Dependencies: ✓ build-prereq, ✓ deploy-prereq
+    Resource: api (ProjectResource)
+    Tags: build-compute
+
+Step: build-prereq
+    Description: Prerequisite step that runs before any build operations.
+    Dependencies: ✓ process-parameters
+
+Step: create-provisioning-context
+    Description: Creates the Azure provisioning context for infrastructure deployment.
+    Dependencies: ✓ deploy-prereq, ✓ validate-azure-login
+    Resource: azure634f9 (AzureEnvironmentResource)
+
+Step: deploy
+    Description: Aggregation step for all deploy operations. All deploy steps should be required by this step.
+    Dependencies: ✓ build-api, ✓ create-provisioning-context, ✓ print-api-summary, ✓ print-dashboard-url-env, ✓ provision-azure-bicep-resources, ✓ validate-azure-login
+
+Step: deploy-api
+    Description: Aggregation step for deploying api to Azure Container Apps.
+    Dependencies: ✓ print-api-summary
+    Resource: api-containerapp (AzureContainerAppResource)
+    Tags: deploy-compute
+
+Step: deploy-prereq
+    Description: Prerequisite step that runs before any deploy operations. Initializes deployment environment and manages deployment state.
+    Dependencies: ✓ process-parameters
+
+Step: diagnostics
+    Description: Dumps dependency graph information for troubleshooting pipeline execution.
+    Dependencies: none
+
+Step: login-to-acr-env-acr
+    Dependencies: ✓ provision-env-acr
+    Resource: env-acr (AzureContainerRegistryResource)
+    Tags: acr-login
+
+Step: print-api-summary
+    Description: Prints the deployment summary and URL for api.
+    Dependencies: ✓ provision-api-containerapp
+    Resource: api-containerapp (AzureContainerAppResource)
+    Tags: print-summary
+
+Step: print-dashboard-url-env
+    Description: Prints the deployment summary and dashboard URL for env.
+    Dependencies: ✓ provision-azure-bicep-resources, ✓ provision-env
+    Resource: env (AzureContainerAppEnvironmentResource)
+    Tags: print-summary
+
+Step: process-parameters
+    Description: Prompts for parameter values before build, publish, or deployment operations.
+    Dependencies: none
+
+Step: provision-api-containerapp
+    Description: Provisions the Azure Bicep resource api-containerapp using Azure infrastructure.
+    Dependencies: ✓ create-provisioning-context, ✓ provision-api-identity, ✓ provision-api-roles-cosmos, ✓ provision-api-roles-sql, ✓ provision-cosmos, ✓ provision-env, ✓ provision-pe-subnet-cosmos-pe, ✓ provision-pe-subnet-sql-pe, ✓ provision-sql, ✓ push-api
+    Resource: api-containerapp (AzureContainerAppResource)
+    Tags: provision-infra
+
+Step: provision-api-identity
+    Description: Provisions the Azure Bicep resource api-identity using Azure infrastructure.
+    Dependencies: ✓ create-provisioning-context
+    Resource: api-identity (AzureUserAssignedIdentityResource)
+    Tags: provision-infra
+
+Step: provision-api-roles-cosmos
+    Description: Provisions the Azure Bicep resource api-roles-cosmos using Azure infrastructure.
+    Dependencies: ✓ create-provisioning-context, ✓ provision-api-identity, ✓ provision-cosmos
+    Resource: api-roles-cosmos (AzureProvisioningResource)
+    Tags: provision-infra
+
+Step: provision-api-roles-sql
+    Description: Provisions the Azure Bicep resource api-roles-sql using Azure infrastructure.
+    Dependencies: ✓ create-provisioning-context, ✓ provision-api-identity, ✓ provision-pe-subnet-files-pe, ✓ provision-pe-subnet-sql-pe, ✓ provision-sql, ✓ provision-sql-store, ✓ provision-vnet
+    Resource: api-roles-sql (AzureProvisioningResource)
+    Tags: provision-infra
+
+Step: provision-azure-bicep-resources
+    Description: Aggregation step for all Azure infrastructure provisioning operations.
+    Dependencies: ✓ create-provisioning-context, ✓ deploy-prereq, ✓ provision-api-containerapp, ✓ provision-api-identity, ✓ provision-api-roles-cosmos, ✓ provision-api-roles-sql, ✓ provision-cosmos, ✓ provision-env, ✓ provision-env-acr, ✓ provision-pe-subnet-cosmos-pe, ✓ provision-pe-subnet-files-pe, ✓ provision-pe-subnet-sql-pe, ✓ provision-privatelink-database-windows-net, ✓ provision-privatelink-documents-azure-com, ✓ provision-privatelink-file-core-windows-net, ✓ provision-sql, ✓ provision-sql-admin-identity, ✓ provision-sql-admin-identity-roles-sql-store, ✓ provision-sql-nsg, ✓ provision-sql-store, ✓ provision-vnet
+    Resource: azure634f9 (AzureEnvironmentResource)
+    Tags: provision-infra
+
+Step: provision-cosmos
+    Description: Provisions the Azure Bicep resource cosmos using Azure infrastructure.
+    Dependencies: ✓ create-provisioning-context
+    Resource: cosmos (AzureCosmosDBResource)
+    Tags: provision-infra
+
+Step: provision-env
+    Description: Provisions the Azure Bicep resource env using Azure infrastructure.
+    Dependencies: ✓ create-provisioning-context, ✓ provision-env-acr
+    Resource: env (AzureContainerAppEnvironmentResource)
+    Tags: provision-infra
+
+Step: provision-env-acr
+    Description: Provisions the Azure Bicep resource env-acr using Azure infrastructure.
+    Dependencies: ✓ create-provisioning-context
+    Resource: env-acr (AzureContainerRegistryResource)
+    Tags: provision-infra
+
+Step: provision-pe-subnet-cosmos-pe
+    Description: Provisions the Azure Bicep resource pe-subnet-cosmos-pe using Azure infrastructure.
+    Dependencies: ✓ create-provisioning-context, ✓ provision-cosmos, ✓ provision-privatelink-documents-azure-com, ✓ provision-vnet
+    Resource: pe-subnet-cosmos-pe (AzurePrivateEndpointResource)
+    Tags: provision-infra
+
+Step: provision-pe-subnet-files-pe
+    Description: Provisions the Azure Bicep resource pe-subnet-files-pe using Azure infrastructure.
+    Dependencies: ✓ create-provisioning-context, ✓ provision-privatelink-file-core-windows-net, ✓ provision-sql-store, ✓ provision-vnet
+    Resource: pe-subnet-files-pe (AzurePrivateEndpointResource)
+    Tags: provision-infra
+
+Step: provision-pe-subnet-sql-pe
+    Description: Provisions the Azure Bicep resource pe-subnet-sql-pe using Azure infrastructure.
+    Dependencies: ✓ create-provisioning-context, ✓ provision-privatelink-database-windows-net, ✓ provision-sql, ✓ provision-vnet
+    Resource: pe-subnet-sql-pe (AzurePrivateEndpointResource)
+    Tags: provision-infra
+
+Step: provision-privatelink-database-windows-net
+    Description: Provisions the Azure Bicep resource privatelink-database-windows-net using Azure infrastructure.
+    Dependencies: ✓ create-provisioning-context, ✓ provision-vnet
+    Resource: privatelink-database-windows-net (AzurePrivateDnsZoneResource)
+    Tags: provision-infra
+
+Step: provision-privatelink-documents-azure-com
+    Description: Provisions the Azure Bicep resource privatelink-documents-azure-com using Azure infrastructure.
+    Dependencies: ✓ create-provisioning-context, ✓ provision-vnet
+    Resource: privatelink-documents-azure-com (AzurePrivateDnsZoneResource)
+    Tags: provision-infra
+
+Step: provision-privatelink-file-core-windows-net
+    Description: Provisions the Azure Bicep resource privatelink-file-core-windows-net using Azure infrastructure.
+    Dependencies: ✓ create-provisioning-context, ✓ provision-vnet
+    Resource: privatelink-file-core-windows-net (AzurePrivateDnsZoneResource)
+    Tags: provision-infra
+
+Step: provision-sql
+    Description: Provisions the Azure Bicep resource sql using Azure infrastructure.
+    Dependencies: ✓ create-provisioning-context
+    Resource: sql (AzureSqlServerResource)
+    Tags: provision-infra
+
+Step: provision-sql-admin-identity
+    Description: Provisions the Azure Bicep resource sql-admin-identity using Azure infrastructure.
+    Dependencies: ✓ create-provisioning-context, ✓ provision-sql
+    Resource: sql-admin-identity (AzureUserAssignedIdentityResource)
+    Tags: provision-infra
+
+Step: provision-sql-admin-identity-roles-sql-store
+    Description: Provisions the Azure Bicep resource sql-admin-identity-roles-sql-store using Azure infrastructure.
+    Dependencies: ✓ create-provisioning-context, ✓ provision-sql-admin-identity, ✓ provision-sql-store
+    Resource: sql-admin-identity-roles-sql-store (AzureProvisioningResource)
+    Tags: provision-infra
+
+Step: provision-sql-nsg
+    Description: Provisions the Azure Bicep resource sql-nsg using Azure infrastructure.
+    Dependencies: ✓ create-provisioning-context
+    Resource: sql-nsg (AzureNetworkSecurityGroupResource)
+    Tags: provision-infra
+
+Step: provision-sql-store
+    Description: Provisions the Azure Bicep resource sql-store using Azure infrastructure.
+    Dependencies: ✓ create-provisioning-context
+    Resource: sql-store (AzureStorageResource)
+    Tags: provision-infra
+
+Step: provision-vnet
+    Description: Provisions the Azure Bicep resource vnet using Azure infrastructure.
+    Dependencies: ✓ create-provisioning-context, ✓ provision-sql-nsg
+    Resource: vnet (AzureVirtualNetworkResource)
+    Tags: provision-infra
+
+Step: publish
+    Description: Aggregation step for all publish operations. All publish steps should be required by this step.
+    Dependencies: ✓ publish-azure634f9
+
+Step: publish-azure634f9
+    Description: Publishes the Azure environment configuration for azure634f9.
+    Dependencies: ✓ publish-prereq
+    Resource: azure634f9 (AzureEnvironmentResource)
+
+Step: publish-manifest
+    Description: Publishes the Aspire application model as a JSON manifest file.
+    Dependencies: none
+
+Step: publish-prereq
+    Description: Prerequisite step that runs before any publish operations.
+    Dependencies: ✓ process-parameters
+
+Step: push
+    Description: Aggregation step for all push operations. All push steps should be required by this step.
+    Dependencies: ✓ push-api, ✓ push-prereq
+
+Step: push-api
+    Dependencies: ✓ build-api, ✓ push-prereq
+    Resource: api (ProjectResource)
+    Tags: push-container-image
+
+Step: push-prereq
+    Description: Prerequisite step that runs before any push operations.
+    Dependencies: ✓ login-to-acr-env-acr
+
+Step: validate-azure-login
+    Description: Validates Azure CLI authentication before deployment.
+    Dependencies: ✓ deploy-prereq
+    Resource: azure634f9 (AzureEnvironmentResource)
+
+POTENTIAL ISSUES:
+Identifies problems in the pipeline configuration that could prevent execution.
+─────────────────
+INFO: Orphaned steps (no dependencies, not required by others):
+   - diagnostics
+   - publish-manifest
+
+EXECUTION SIMULATION ("What If" Analysis):
+Shows what steps would run for each possible target step and in what order.
+Steps at the same level can run concurrently.
+─────────────────────────────────────────────────────────────────────────────
+If targeting 'build':
+  Direct dependencies: build-api
+  Total steps: 5
+  Execution order:
+    [0] process-parameters
+    [1] build-prereq | deploy-prereq (parallel)
+    [2] build-api
+    [3] build
+
+If targeting 'build-api':
+  Direct dependencies: build-prereq, deploy-prereq
+  Total steps: 4
+  Execution order:
+    [0] process-parameters
+    [1] build-prereq | deploy-prereq (parallel)
+    [2] build-api
+
+If targeting 'build-prereq':
+  Direct dependencies: process-parameters
+  Total steps: 2
+  Execution order:
+    [0] process-parameters
+    [1] build-prereq
+
+If targeting 'create-provisioning-context':
+  Direct dependencies: deploy-prereq, validate-azure-login
+  Total steps: 4
+  Execution order:
+    [0] process-parameters
+    [1] deploy-prereq
+    [2] validate-azure-login
+    [3] create-provisioning-context
+
+If targeting 'deploy':
+  Direct dependencies: build-api, create-provisioning-context, print-api-summary, print-dashboard-url-env, provision-azure-bicep-resources, validate-azure-login
+  Total steps: 32
+  Execution order:
+    [0] process-parameters
+    [1] build-prereq | deploy-prereq (parallel)
+    [2] build-api | validate-azure-login (parallel)
+    [3] create-provisioning-context
+    [4] provision-api-identity | provision-cosmos | provision-env-acr | provision-sql | provision-sql-nsg | provision-sql-store (parallel)
+    [5] login-to-acr-env-acr | provision-api-roles-cosmos | provision-env | provision-sql-admin-identity | provision-vnet (parallel)
+    [6] provision-privatelink-database-windows-net | provision-privatelink-documents-azure-com | provision-privatelink-file-core-windows-net | provision-sql-admin-identity-roles-sql-store | push-prereq (parallel)
+    [7] provision-pe-subnet-cosmos-pe | provision-pe-subnet-files-pe | provision-pe-subnet-sql-pe | push-api (parallel)
+    [8] provision-api-roles-sql
+    [9] provision-api-containerapp
+    [10] print-api-summary | provision-azure-bicep-resources (parallel)
+    [11] print-dashboard-url-env
+    [12] deploy
+
+If targeting 'deploy-api':
+  Direct dependencies: print-api-summary
+  Total steps: 28
+  Execution order:
+    [0] process-parameters
+    [1] build-prereq | deploy-prereq (parallel)
+    [2] build-api | validate-azure-login (parallel)
+    [3] create-provisioning-context
+    [4] provision-api-identity | provision-cosmos | provision-env-acr | provision-sql | provision-sql-nsg | provision-sql-store (parallel)
+    [5] login-to-acr-env-acr | provision-api-roles-cosmos | provision-env | provision-vnet (parallel)
+    [6] provision-privatelink-database-windows-net | provision-privatelink-documents-azure-com | provision-privatelink-file-core-windows-net | push-prereq (parallel)
+    [7] provision-pe-subnet-cosmos-pe | provision-pe-subnet-files-pe | provision-pe-subnet-sql-pe | push-api (parallel)
+    [8] provision-api-roles-sql
+    [9] provision-api-containerapp
+    [10] print-api-summary
+    [11] deploy-api
+
+If targeting 'deploy-prereq':
+  Direct dependencies: process-parameters
+  Total steps: 2
+  Execution order:
+    [0] process-parameters
+    [1] deploy-prereq
+
+If targeting 'diagnostics':
+  Direct dependencies: none
+  Total steps: 1
+  Execution order:
+    [0] diagnostics
+
+If targeting 'login-to-acr-env-acr':
+  Direct dependencies: provision-env-acr
+  Total steps: 6
+  Execution order:
+    [0] process-parameters
+    [1] deploy-prereq
+    [2] validate-azure-login
+    [3] create-provisioning-context
+    [4] provision-env-acr
+    [5] login-to-acr-env-acr
+
+If targeting 'print-api-summary':
+  Direct dependencies: provision-api-containerapp
+  Total steps: 27
+  Execution order:
+    [0] process-parameters
+    [1] build-prereq | deploy-prereq (parallel)
+    [2] build-api | validate-azure-login (parallel)
+    [3] create-provisioning-context
+    [4] provision-api-identity | provision-cosmos | provision-env-acr | provision-sql | provision-sql-nsg | provision-sql-store (parallel)
+    [5] login-to-acr-env-acr | provision-api-roles-cosmos | provision-env | provision-vnet (parallel)
+    [6] provision-privatelink-database-windows-net | provision-privatelink-documents-azure-com | provision-privatelink-file-core-windows-net | push-prereq (parallel)
+    [7] provision-pe-subnet-cosmos-pe | provision-pe-subnet-files-pe | provision-pe-subnet-sql-pe | push-api (parallel)
+    [8] provision-api-roles-sql
+    [9] provision-api-containerapp
+    [10] print-api-summary
+
+If targeting 'print-dashboard-url-env':
+  Direct dependencies: provision-azure-bicep-resources, provision-env
+  Total steps: 30
+  Execution order:
+    [0] process-parameters
+    [1] build-prereq | deploy-prereq (parallel)
+    [2] build-api | validate-azure-login (parallel)
+    [3] create-provisioning-context
+    [4] provision-api-identity | provision-cosmos | provision-env-acr | provision-sql | provision-sql-nsg | provision-sql-store (parallel)
+    [5] login-to-acr-env-acr | provision-api-roles-cosmos | provision-env | provision-sql-admin-identity | provision-vnet (parallel)
+    [6] provision-privatelink-database-windows-net | provision-privatelink-documents-azure-com | provision-privatelink-file-core-windows-net | provision-sql-admin-identity-roles-sql-store | push-prereq (parallel)
+    [7] provision-pe-subnet-cosmos-pe | provision-pe-subnet-files-pe | provision-pe-subnet-sql-pe | push-api (parallel)
+    [8] provision-api-roles-sql
+    [9] provision-api-containerapp
+    [10] provision-azure-bicep-resources
+    [11] print-dashboard-url-env
+
+If targeting 'process-parameters':
+  Direct dependencies: none
+  Total steps: 1
+  Execution order:
+    [0] process-parameters
+
+If targeting 'provision-api-containerapp':
+  Direct dependencies: create-provisioning-context, provision-api-identity, provision-api-roles-cosmos, provision-api-roles-sql, provision-cosmos, provision-env, provision-pe-subnet-cosmos-pe, provision-pe-subnet-sql-pe, provision-sql, push-api
+  Total steps: 26
+  Execution order:
+    [0] process-parameters
+    [1] build-prereq | deploy-prereq (parallel)
+    [2] build-api | validate-azure-login (parallel)
+    [3] create-provisioning-context
+    [4] provision-api-identity | provision-cosmos | provision-env-acr | provision-sql | provision-sql-nsg | provision-sql-store (parallel)
+    [5] login-to-acr-env-acr | provision-api-roles-cosmos | provision-env | provision-vnet (parallel)
+    [6] provision-privatelink-database-windows-net | provision-privatelink-documents-azure-com | provision-privatelink-file-core-windows-net | push-prereq (parallel)
+    [7] provision-pe-subnet-cosmos-pe | provision-pe-subnet-files-pe | provision-pe-subnet-sql-pe | push-api (parallel)
+    [8] provision-api-roles-sql
+    [9] provision-api-containerapp
+
+If targeting 'provision-api-identity':
+  Direct dependencies: create-provisioning-context
+  Total steps: 5
+  Execution order:
+    [0] process-parameters
+    [1] deploy-prereq
+    [2] validate-azure-login
+    [3] create-provisioning-context
+    [4] provision-api-identity
+
+If targeting 'provision-api-roles-cosmos':
+  Direct dependencies: create-provisioning-context, provision-api-identity, provision-cosmos
+  Total steps: 7
+  Execution order:
+    [0] process-parameters
+    [1] deploy-prereq
+    [2] validate-azure-login
+    [3] create-provisioning-context
+    [4] provision-api-identity | provision-cosmos (parallel)
+    [5] provision-api-roles-cosmos
+
+If targeting 'provision-api-roles-sql':
+  Direct dependencies: create-provisioning-context, provision-api-identity, provision-pe-subnet-files-pe, provision-pe-subnet-sql-pe, provision-sql, provision-sql-store, provision-vnet
+  Total steps: 14
+  Execution order:
+    [0] process-parameters
+    [1] deploy-prereq
+    [2] validate-azure-login
+    [3] create-provisioning-context
+    [4] provision-api-identity | provision-sql | provision-sql-nsg | provision-sql-store (parallel)
+    [5] provision-vnet
+    [6] provision-privatelink-database-windows-net | provision-privatelink-file-core-windows-net (parallel)
+    [7] provision-pe-subnet-files-pe | provision-pe-subnet-sql-pe (parallel)
+    [8] provision-api-roles-sql
+
+If targeting 'provision-azure-bicep-resources':
+  Direct dependencies: create-provisioning-context, deploy-prereq, provision-api-containerapp, provision-api-identity, provision-api-roles-cosmos, provision-api-roles-sql, provision-cosmos, provision-env, provision-env-acr, provision-pe-subnet-cosmos-pe, provision-pe-subnet-files-pe, provision-pe-subnet-sql-pe, provision-privatelink-database-windows-net, provision-privatelink-documents-azure-com, provision-privatelink-file-core-windows-net, provision-sql, provision-sql-admin-identity, provision-sql-admin-identity-roles-sql-store, provision-sql-nsg, provision-sql-store, provision-vnet
+  Total steps: 29
+  Execution order:
+    [0] process-parameters
+    [1] build-prereq | deploy-prereq (parallel)
+    [2] build-api | validate-azure-login (parallel)
+    [3] create-provisioning-context
+    [4] provision-api-identity | provision-cosmos | provision-env-acr | provision-sql | provision-sql-nsg | provision-sql-store (parallel)
+    [5] login-to-acr-env-acr | provision-api-roles-cosmos | provision-env | provision-sql-admin-identity | provision-vnet (parallel)
+    [6] provision-privatelink-database-windows-net | provision-privatelink-documents-azure-com | provision-privatelink-file-core-windows-net | provision-sql-admin-identity-roles-sql-store | push-prereq (parallel)
+    [7] provision-pe-subnet-cosmos-pe | provision-pe-subnet-files-pe | provision-pe-subnet-sql-pe | push-api (parallel)
+    [8] provision-api-roles-sql
+    [9] provision-api-containerapp
+    [10] provision-azure-bicep-resources
+
+If targeting 'provision-cosmos':
+  Direct dependencies: create-provisioning-context
+  Total steps: 5
+  Execution order:
+    [0] process-parameters
+    [1] deploy-prereq
+    [2] validate-azure-login
+    [3] create-provisioning-context
+    [4] provision-cosmos
+
+If targeting 'provision-env':
+  Direct dependencies: create-provisioning-context, provision-env-acr
+  Total steps: 6
+  Execution order:
+    [0] process-parameters
+    [1] deploy-prereq
+    [2] validate-azure-login
+    [3] create-provisioning-context
+    [4] provision-env-acr
+    [5] provision-env
+
+If targeting 'provision-env-acr':
+  Direct dependencies: create-provisioning-context
+  Total steps: 5
+  Execution order:
+    [0] process-parameters
+    [1] deploy-prereq
+    [2] validate-azure-login
+    [3] create-provisioning-context
+    [4] provision-env-acr
+
+If targeting 'provision-pe-subnet-cosmos-pe':
+  Direct dependencies: create-provisioning-context, provision-cosmos, provision-privatelink-documents-azure-com, provision-vnet
+  Total steps: 9
+  Execution order:
+    [0] process-parameters
+    [1] deploy-prereq
+    [2] validate-azure-login
+    [3] create-provisioning-context
+    [4] provision-cosmos | provision-sql-nsg (parallel)
+    [5] provision-vnet
+    [6] provision-privatelink-documents-azure-com
+    [7] provision-pe-subnet-cosmos-pe
+
+If targeting 'provision-pe-subnet-files-pe':
+  Direct dependencies: create-provisioning-context, provision-privatelink-file-core-windows-net, provision-sql-store, provision-vnet
+  Total steps: 9
+  Execution order:
+    [0] process-parameters
+    [1] deploy-prereq
+    [2] validate-azure-login
+    [3] create-provisioning-context
+    [4] provision-sql-nsg | provision-sql-store (parallel)
+    [5] provision-vnet
+    [6] provision-privatelink-file-core-windows-net
+    [7] provision-pe-subnet-files-pe
+
+If targeting 'provision-pe-subnet-sql-pe':
+  Direct dependencies: create-provisioning-context, provision-privatelink-database-windows-net, provision-sql, provision-vnet
+  Total steps: 9
+  Execution order:
+    [0] process-parameters
+    [1] deploy-prereq
+    [2] validate-azure-login
+    [3] create-provisioning-context
+    [4] provision-sql | provision-sql-nsg (parallel)
+    [5] provision-vnet
+    [6] provision-privatelink-database-windows-net
+    [7] provision-pe-subnet-sql-pe
+
+If targeting 'provision-privatelink-database-windows-net':
+  Direct dependencies: create-provisioning-context, provision-vnet
+  Total steps: 7
+  Execution order:
+    [0] process-parameters
+    [1] deploy-prereq
+    [2] validate-azure-login
+    [3] create-provisioning-context
+    [4] provision-sql-nsg
+    [5] provision-vnet
+    [6] provision-privatelink-database-windows-net
+
+If targeting 'provision-privatelink-documents-azure-com':
+  Direct dependencies: create-provisioning-context, provision-vnet
+  Total steps: 7
+  Execution order:
+    [0] process-parameters
+    [1] deploy-prereq
+    [2] validate-azure-login
+    [3] create-provisioning-context
+    [4] provision-sql-nsg
+    [5] provision-vnet
+    [6] provision-privatelink-documents-azure-com
+
+If targeting 'provision-privatelink-file-core-windows-net':
+  Direct dependencies: create-provisioning-context, provision-vnet
+  Total steps: 7
+  Execution order:
+    [0] process-parameters
+    [1] deploy-prereq
+    [2] validate-azure-login
+    [3] create-provisioning-context
+    [4] provision-sql-nsg
+    [5] provision-vnet
+    [6] provision-privatelink-file-core-windows-net
+
+If targeting 'provision-sql':
+  Direct dependencies: create-provisioning-context
+  Total steps: 5
+  Execution order:
+    [0] process-parameters
+    [1] deploy-prereq
+    [2] validate-azure-login
+    [3] create-provisioning-context
+    [4] provision-sql
+
+If targeting 'provision-sql-admin-identity':
+  Direct dependencies: create-provisioning-context, provision-sql
+  Total steps: 6
+  Execution order:
+    [0] process-parameters
+    [1] deploy-prereq
+    [2] validate-azure-login
+    [3] create-provisioning-context
+    [4] provision-sql
+    [5] provision-sql-admin-identity
+
+If targeting 'provision-sql-admin-identity-roles-sql-store':
+  Direct dependencies: create-provisioning-context, provision-sql-admin-identity, provision-sql-store
+  Total steps: 8
+  Execution order:
+    [0] process-parameters
+    [1] deploy-prereq
+    [2] validate-azure-login
+    [3] create-provisioning-context
+    [4] provision-sql | provision-sql-store (parallel)
+    [5] provision-sql-admin-identity
+    [6] provision-sql-admin-identity-roles-sql-store
+
+If targeting 'provision-sql-nsg':
+  Direct dependencies: create-provisioning-context
+  Total steps: 5
+  Execution order:
+    [0] process-parameters
+    [1] deploy-prereq
+    [2] validate-azure-login
+    [3] create-provisioning-context
+    [4] provision-sql-nsg
+
+If targeting 'provision-sql-store':
+  Direct dependencies: create-provisioning-context
+  Total steps: 5
+  Execution order:
+    [0] process-parameters
+    [1] deploy-prereq
+    [2] validate-azure-login
+    [3] create-provisioning-context
+    [4] provision-sql-store
+
+If targeting 'provision-vnet':
+  Direct dependencies: create-provisioning-context, provision-sql-nsg
+  Total steps: 6
+  Execution order:
+    [0] process-parameters
+    [1] deploy-prereq
+    [2] validate-azure-login
+    [3] create-provisioning-context
+    [4] provision-sql-nsg
+    [5] provision-vnet
+
+If targeting 'publish':
+  Direct dependencies: publish-azure634f9
+  Total steps: 4
+  Execution order:
+    [0] process-parameters
+    [1] publish-prereq
+    [2] publish-azure634f9
+    [3] publish
+
+If targeting 'publish-azure634f9':
+  Direct dependencies: publish-prereq
+  Total steps: 3
+  Execution order:
+    [0] process-parameters
+    [1] publish-prereq
+    [2] publish-azure634f9
+
+If targeting 'publish-manifest':
+  Direct dependencies: none
+  Total steps: 1
+  Execution order:
+    [0] publish-manifest
+
+If targeting 'publish-prereq':
+  Direct dependencies: process-parameters
+  Total steps: 2
+  Execution order:
+    [0] process-parameters
+    [1] publish-prereq
+
+If targeting 'push':
+  Direct dependencies: push-api, push-prereq
+  Total steps: 11
+  Execution order:
+    [0] process-parameters
+    [1] build-prereq | deploy-prereq (parallel)
+    [2] build-api | validate-azure-login (parallel)
+    [3] create-provisioning-context
+    [4] provision-env-acr
+    [5] login-to-acr-env-acr
+    [6] push-prereq
+    [7] push-api
+    [8] push
+
+If targeting 'push-api':
+  Direct dependencies: build-api, push-prereq
+  Total steps: 10
+  Execution order:
+    [0] process-parameters
+    [1] build-prereq | deploy-prereq (parallel)
+    [2] build-api | validate-azure-login (parallel)
+    [3] create-provisioning-context
+    [4] provision-env-acr
+    [5] login-to-acr-env-acr
+    [6] push-prereq
+    [7] push-api
+
+If targeting 'push-prereq':
+  Direct dependencies: login-to-acr-env-acr
+  Total steps: 7
+  Execution order:
+    [0] process-parameters
+    [1] deploy-prereq
+    [2] validate-azure-login
+    [3] create-provisioning-context
+    [4] provision-env-acr
+    [5] login-to-acr-env-acr
+    [6] push-prereq
+
+If targeting 'validate-azure-login':
+  Direct dependencies: deploy-prereq
+  Total steps: 3
+  Execution order:
+    [0] process-parameters
+    [1] deploy-prereq
+    [2] validate-azure-login
+
+
+]

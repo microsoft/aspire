@@ -1,4 +1,4 @@
-﻿{
+{
   "author": "Microsoft",
   "name": "App Starter Aspire (ASP.NET Core/React)",
   "description": "Modello di progetto per la creazione di un'app Aspire con front-end React e servizio back-end Minimal API in C#, con cache Redis opzionale.",
@@ -10,11 +10,9 @@
   "symbols/UseRedisCache/description": "Configura se impostare l'applicazione per l'utilizzo di Redis per la memorizzazione nella cache. Richiede l'esecuzione locale di un runtime del contenitore supportato. Per altri dettagli, vedere https://aka.ms/aspire/containers.",
   "symbols/appHostHttpPort/description": "Numero di porta da usare per l'endpoint HTTP in launchSettings.json. del progetto AppHost.",
   "symbols/appHostOtlpHttpPort/description": "Numero di porta da usare per l'endpoint OTLP HTTP in launchSettings.json. del progetto AppHost.",
-  "symbols/appHostMcpHttpPort/description": "Numero di porta da usare per l'endpoint MCP HTTP in launchSettings.json. del progetto AppHost.",
   "symbols/appHostResourceHttpPort/description": "Numero di porta da usare per l'endpoint HTTP del servizio risorse in launchSettings.json del progetto AppHost.",
   "symbols/appHostHttpsPort/description": "Numero di porta da usare per l'endpoint HTTPS in launchSettings.json. del progetto AppHost. Questa opzione è applicabile solo quando il parametro no-https non viene usato.",
   "symbols/appHostOtlpHttpsPort/description": "Numero di porta da usare per l'endpoint OTLP HTTPS in launchSettings.json. del progetto AppHost.",
-  "symbols/appHostMcpHttpsPort/description": "Numero di porta da usare per l'endpoint MCP HTTPS in launchSettings.json. del progetto AppHost.",
   "symbols/appHostResourceHttpsPort/description": "Numero di porta da usare per l'endpoint HTTPS del servizio risorse in launchSettings.json del progetto AppHost.",
   "symbols/serverHttpPort/description": "Numero di porta da usare per l'endpoint HTTP in launchSettings.json. del progetto Server.",
   "symbols/serverHttpsPort/description": "Numero di porta da usare per l'endpoint HTTPS in launchSettings.json del progetto Server. Questa opzione è applicabile solo quando il parametro no-https non viene usato.",
@@ -23,6 +21,7 @@
   "symbols/LocalhostTld/displayName": "Usa il TLD .dev.localhost nell'URL dell'applicazione",
   "symbols/LocalhostTld/description": "Indica se combinare il nome del progetto con il dominio di primo livello .dev.localhost nell'URL dell'applicazione per lo sviluppo in locale, ad esempio https://myapp.dev.localhost:12345. Supportato in .NET 10 e versioni successive.",
   "postActions/set-startup-project/description": "Imposta il progetto di avvio nella soluzione",
+  "postActions/set-startup-project/manualInstructions/default/text": "",
   "postActions/restore/description": "Ripristinare i pacchetti NuGet richiesti da questo progetto.",
   "postActions/restore/manualInstructions/default/text": "Esegui \"dotnet restore\""
 }

@@ -13,7 +13,7 @@ using Polly;
 
 namespace Aspire.Hosting.Oracle.Tests;
 
-[ActiveIssue("https://github.com/dotnet/aspire/issues/5362", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningOnCI))]
+[ActiveIssue("https://github.com/microsoft/aspire/issues/5362", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningOnCI))]
 public class OracleFunctionalTests(ITestOutputHelper testOutputHelper)
 {
     // Folders created for mounted folders need to be granted specific permissions
@@ -69,7 +69,7 @@ public class OracleFunctionalTests(ITestOutputHelper testOutputHelper)
 
     [Theory]
     [InlineData(true)]
-    [InlineData(false, Skip = "https://github.com/dotnet/aspire/issues/5191")]
+    [InlineData(false, Skip = "https://github.com/microsoft/aspire/issues/5191")]
     [RequiresFeature(TestFeature.Docker)]
     public async Task WithDataShouldPersistStateBetweenUsages(bool useVolume)
     {
@@ -344,7 +344,7 @@ public class OracleFunctionalTests(ITestOutputHelper testOutputHelper)
 
     [Theory]
     [InlineData(true)]
-    [InlineData(false, Skip = "https://github.com/dotnet/aspire/issues/5190")]
+    [InlineData(false, Skip = "https://github.com/microsoft/aspire/issues/5190")]
     [RequiresFeature(TestFeature.Docker)]
     public async Task VerifyWithInitFiles(bool init)
     {

@@ -4,18 +4,18 @@
     <body>
       <trans-unit id="CommandArgumentDescription">
         <source>The command to execute in the target resource's context. Commands can be specified directly after options or after a -- separator.</source>
-        <target state="translated">Команда для выполнения в контексте целевого ресурса. Команды можно указывать непосредственно после параметров или после разделителя --.</target>
+        <target state="needs-review-translation">Команда для выполнения в контексте целевого ресурса. Команды можно указывать непосредственно после параметров или после разделителя --.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Execute commands in the context of an Aspire application resource. Starts the AppHost, waits for resources to initialize, then runs the specified command in the target resource's environment. (Preview)
+        <source>Execute commands in the context of an Aspire application resource. Starts the AppHost, waits for resources to initialize, then runs the specified command in the target resource's environment (Preview)
 
 Examples:
   aspire exec --resource api dotnet build
   aspire exec --resource api -- dotnet test --logger console
   aspire exec --start-resource worker pwsh -c "Get-Process"
     </source>
-        <target state="translated">Выполнение команд в контексте ресурса приложения Aspire. Запускает AppHost, ждет инициализации ресурсов, затем запускает указанную команду в среде целевого ресурса. (Предварительная версия)
+        <target state="needs-review-translation">Выполнение команд в контексте ресурса приложения Aspire. Запускает AppHost, ждет инициализации ресурсов, затем запускает указанную команду в среде целевого ресурса. (Предварительная версия)
 
 Примеры
   aspire exec --resource api dotnet build
@@ -36,7 +36,7 @@ Examples:
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
         <source>The path to the Aspire AppHost project file. If not specified, searches for a project file in the current directory.</source>
-        <target state="translated">Путь к файлу проекта Aspire AppHost. Если не указано иное, ищет файл проекта в текущем каталоге.</target>
+        <target state="needs-review-translation">Путь к файлу проекта Aspire AppHost. Если не указано иное, ищет файл проекта в текущем каталоге.</target>
         <note />
       </trans-unit>
       <trans-unit id="Running">
@@ -46,17 +46,17 @@ Examples:
       </trans-unit>
       <trans-unit id="StartTargetResourceArgumentDescription">
         <source>The name of the target resource to execute the command against. The command will only be executed after the target resource has successfully started and is running.</source>
-        <target state="translated">Имя целевого ресурса для выполнения команды. Команда будет выполнена только после успешного запуска и работы целевого ресурса.</target>
+        <target state="needs-review-translation">Имя целевого ресурса для выполнения команды. Команда будет выполнена только после успешного запуска и работы целевого ресурса.</target>
         <note />
       </trans-unit>
       <trans-unit id="StoppingAppHost">
-        <source>Stopping app host...</source>
-        <target state="translated">Остановка хоста приложения...</target>
+        <source>Stopping AppHost...</source>
+        <target state="needs-review-translation">Остановка хоста приложения...</target>
         <note />
       </trans-unit>
       <trans-unit id="TargetResourceArgumentDescription">
         <source>The name of the target resource to execute the command against. The command will be executed as soon as the AppHost starts, without waiting for the resource to be ready.</source>
-        <target state="translated">Имя целевого ресурса для выполнения команды. Команда будет выполнена сразу после запуска AppHost, не дожидаясь готовности ресурса.</target>
+        <target state="needs-review-translation">Имя целевого ресурса для выполнения команды. Команда будет выполнена сразу после запуска AppHost, не дожидаясь готовности ресурса.</target>
         <note />
       </trans-unit>
       <trans-unit id="TargetResourceNotSpecified">
@@ -65,8 +65,8 @@ Examples:
         <note />
       </trans-unit>
       <trans-unit id="WorkdirArgumentDescription">
-        <source>The working directory to execute the command in.</source>
-        <target state="translated">Рабочий каталог, в котором будет выполнена команда.</target>
+        <source>The working directory to execute the command in</source>
+        <target state="needs-review-translation">Рабочий каталог, в котором будет выполнена команда.</target>
         <note />
       </trans-unit>
     </body>

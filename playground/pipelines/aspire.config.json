@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "Pipelines.AppHost/Pipelines.AppHost.csproj"
+  }
+}

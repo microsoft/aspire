@@ -8,6 +8,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using RootCommand = Aspire.Cli.Commands.RootCommand;
+using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -32,7 +33,7 @@ public class ExecCommandTests
 
         var result = command.Parse("exec --help");
 
-        var exitCode = await result.InvokeAsync(invokeConfiguration).WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync(invokeConfiguration).DefaultTimeout();
         Assert.Equal(ExitCodeConstants.Success, exitCode);
     }
 
@@ -50,7 +51,7 @@ public class ExecCommandTests
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("exec --resource api cmd");
 
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.FailedToFindProject, exitCode);
     }
 
@@ -68,7 +69,7 @@ public class ExecCommandTests
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("exec --resource api cmd");
 
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.FailedToFindProject, exitCode);
     }
 
@@ -86,7 +87,7 @@ public class ExecCommandTests
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("exec --resource api cmd");
 
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.FailedToFindProject, exitCode);
     }
 
@@ -107,7 +108,7 @@ public class ExecCommandTests
 
         var result = command.Parse("exec --help");
 
-        var exitCode = await result.InvokeAsync(invokeConfiguration).WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync(invokeConfiguration).DefaultTimeout();
 
         // Should succeed because exec command is registered when feature flag is enabled
         Assert.Equal(ExitCodeConstants.Success, exitCode);
@@ -128,9 +129,9 @@ public class ExecCommandTests
         var testOutputWriter = new TestOutputTextWriter(_outputHelper);
         invokeConfiguration.Output = testOutputWriter;
 
-        var result = command.Parse("exec --project test.csproj echo hello");
+        var result = command.Parse("exec --apphost test.csproj echo hello");
 
-        var exitCode = await result.InvokeAsync(invokeConfiguration).WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync(invokeConfiguration).DefaultTimeout();
         Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
 
         // attempt to find app host should not happen
@@ -148,7 +149,7 @@ public class ExecCommandTests
 
             options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
             {
-                RunAsyncCallback = (projectFile, watch, noBuild, args, env, backchannelCompletionSource, runnerOptions, cancellationToken) =>
+                RunAsyncCallback = (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, runnerOptions, cancellationToken) =>
                 {
                     var backchannel = new TestAppHostBackchannel();
                     backchannelCompletionSource?.SetResult(backchannel);
@@ -159,9 +160,9 @@ public class ExecCommandTests
         var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("exec --project test.csproj --resource myresource --command echo");
+        var result = command.Parse("exec --apphost test.csproj --resource myresource --command echo");
 
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.Success, exitCode);
     }
 
@@ -169,38 +170,44 @@ public class ExecCommandTests
     {
         public Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, CancellationToken cancellationToken)
         {
-            throw new Aspire.Cli.Projects.ProjectLocatorException("No project file found.");
+            throw new Aspire.Cli.Projects.ProjectLocatorException("No project file found.", Aspire.Cli.Projects.ProjectLocatorFailureReason.NoProjectFileFound);
         }
 
         public Task<FileInfo?> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, bool createSettingsFile, CancellationToken cancellationToken)
         {
-            throw new Aspire.Cli.Projects.ProjectLocatorException("No project file found.");
+            throw new Aspire.Cli.Projects.ProjectLocatorException("No project file found.", Aspire.Cli.Projects.ProjectLocatorFailureReason.NoProjectFileFound);
         }
+
+        public Task<FileInfo?> GetAppHostFromSettingsAsync(CancellationToken cancellationToken = default) => Task.FromResult<FileInfo?>(null);
     }
 
     private sealed class MultipleProjectFilesProjectLocator : Aspire.Cli.Projects.IProjectLocator
     {
         public Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, CancellationToken cancellationToken)
         {
-            throw new Aspire.Cli.Projects.ProjectLocatorException("Multiple project files found.");
+            throw new Aspire.Cli.Projects.ProjectLocatorException("Multiple project files found.", Aspire.Cli.Projects.ProjectLocatorFailureReason.MultipleProjectFilesFound);
         }
 
         public Task<FileInfo?> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, bool createSettingsFile, CancellationToken cancellationToken)
         {
-            throw new Aspire.Cli.Projects.ProjectLocatorException("Multiple project files found.");
+            throw new Aspire.Cli.Projects.ProjectLocatorException("Multiple project files found.", Aspire.Cli.Projects.ProjectLocatorFailureReason.MultipleProjectFilesFound);
         }
+
+        public Task<FileInfo?> GetAppHostFromSettingsAsync(CancellationToken cancellationToken = default) => Task.FromResult<FileInfo?>(null);
     }
 
     private sealed class ProjectFileDoesNotExistLocator : Aspire.Cli.Projects.IProjectLocator
     {
         public Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, CancellationToken cancellationToken)
         {
-            throw new Aspire.Cli.Projects.ProjectLocatorException("Project file does not exist.");
+            throw new Aspire.Cli.Projects.ProjectLocatorException("Project file does not exist.", Aspire.Cli.Projects.ProjectLocatorFailureReason.ProjectFileDoesntExist);
         }
 
         public Task<FileInfo?> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, bool createSettingsFile, CancellationToken cancellationToken)
         {
-            throw new Aspire.Cli.Projects.ProjectLocatorException("Project file does not exist.");
+            throw new Aspire.Cli.Projects.ProjectLocatorException("Project file does not exist.", Aspire.Cli.Projects.ProjectLocatorFailureReason.ProjectFileDoesntExist);
         }
+
+        public Task<FileInfo?> GetAppHostFromSettingsAsync(CancellationToken cancellationToken = default) => Task.FromResult<FileInfo?>(null);
     }
 }

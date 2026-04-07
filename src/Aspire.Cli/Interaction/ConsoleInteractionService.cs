@@ -5,7 +5,9 @@ using System.Globalization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
+using Microsoft.Extensions.Logging;
 using Spectre.Console;
+using Spectre.Console.Rendering;
 
 namespace Aspire.Cli.Interaction;
 
@@ -21,21 +23,46 @@ internal class ConsoleInteractionService : IInteractionService
     private readonly IAnsiConsole _errorConsole;
     private readonly CliExecutionContext _executionContext;
     private readonly ICliHostEnvironment _hostEnvironment;
+    private readonly ILogger _stdoutLogger;
+    private readonly ILogger _stderrLogger;
     private int _inStatus;
 
-    public ConsoleInteractionService(ConsoleEnvironment consoleEnvironment, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment)
+    /// <summary>
+    /// Console used for human-readable messages; routes to stderr when <see cref="Console"/> is set to <see cref="ConsoleOutput.Error"/>.
+    /// </summary>
+    private IAnsiConsole MessageConsole => Console == ConsoleOutput.Error ? _errorConsole : _outConsole;
+
+    // Limit logging to prompts and messages. Don't log raw text output since it may contain sensitive information.
+    private ILogger MessageLogger => Console == ConsoleOutput.Error ? _stderrLogger : _stdoutLogger;
+
+    public ConsoleOutput Console { get; set; }
+
+    public ConsoleInteractionService(ConsoleEnvironment consoleEnvironment, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, ILoggerFactory loggerFactory)
     {
         ArgumentNullException.ThrowIfNull(consoleEnvironment);
         ArgumentNullException.ThrowIfNull(executionContext);
         ArgumentNullException.ThrowIfNull(hostEnvironment);
+        ArgumentNullException.ThrowIfNull(loggerFactory);
         _outConsole = consoleEnvironment.Out;
         _errorConsole = consoleEnvironment.Error;
         _executionContext = executionContext;
         _hostEnvironment = hostEnvironment;
+        _stdoutLogger = loggerFactory.CreateLogger("Aspire.Cli.Console.Stdout");
+        _stderrLogger = loggerFactory.CreateLogger("Aspire.Cli.Console.Stderr");
     }
 
-    public async Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action)
+    public async Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false)
     {
+        if (!allowMarkup)
+        {
+            statusText = statusText.EscapeMarkup();
+        }
+
+        if (emoji is { } e)
+        {
+            statusText = ConsoleHelpers.FormatEmojiPrefix(e, MessageConsole) + statusText;
+        }
+
         // Use atomic check-and-set to prevent nested Spectre.Console Status operations.
         // Spectre.Console throws if multiple interactive operations run concurrently.
         // If already in a status, or in debug/non-interactive mode, fall back to subtle message.
@@ -48,14 +75,19 @@ internal class ConsoleInteractionService : IInteractionService
             // Skip displaying if status text is empty (e.g., when outputting JSON)
             if (!string.IsNullOrEmpty(statusText))
             {
-                DisplaySubtleMessage(statusText);
+                // Text has already been escaped and emoji prepended, so pass as markup
+                DisplaySubtleMessage(statusText, allowMarkup: true);
+            }
+            else
+            {
+                MessageLogger.LogInformation("Status: {StatusText}", statusText);
             }
             return await action();
         }
 
         try
         {
-            return await _outConsole.Status()
+            return await MessageConsole.Status()
                 .Spinner(Spinner.Known.Dots3)
                 .StartAsync(statusText, (context) => action());
         }
@@ -65,8 +97,20 @@ internal class ConsoleInteractionService : IInteractionService
         }
     }
 
-    public void ShowStatus(string statusText, Action action)
+    public void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false)
     {
+        MessageLogger.LogInformation("Status: {StatusText}", statusText);
+
+        if (!allowMarkup)
+        {
+            statusText = statusText.EscapeMarkup();
+        }
+
+        if (emoji is { } e)
+        {
+            statusText = ConsoleHelpers.FormatEmojiPrefix(e, MessageConsole) + statusText;
+        }
+
         // Use atomic check-and-set to prevent nested Spectre.Console Status operations.
         // Spectre.Console throws if multiple interactive operations run concurrently.
         // If already in a status, or in debug/non-interactive mode, fall back to subtle message.
@@ -78,7 +122,8 @@ internal class ConsoleInteractionService : IInteractionService
         {
             if (!string.IsNullOrEmpty(statusText))
             {
-                DisplaySubtleMessage(statusText);
+                // Text has already been escaped and emoji prepended, so pass as markup
+                DisplaySubtleMessage(statusText, allowMarkup: true);
             }
             action();
             return;
@@ -86,7 +131,7 @@ internal class ConsoleInteractionService : IInteractionService
 
         try
         {
-            _outConsole.Status()
+            MessageConsole.Status()
                 .Spinner(Spinner.Known.Dots3)
                 .Start(statusText, (context) => action());
         }
@@ -104,6 +149,8 @@ internal class ConsoleInteractionService : IInteractionService
         {
             throw new InvalidOperationException(InteractionServiceStrings.InteractiveInputNotSupported);
         }
+
+        MessageLogger.LogInformation("Prompt: {PromptText} (default: {DefaultValue}, secret: {IsSecret})", promptText, isSecret ? "****" : defaultValue ?? "(none)", isSecret);
 
         var prompt = new TextPrompt<string>(promptText)
         {
@@ -123,7 +170,14 @@ internal class ConsoleInteractionService : IInteractionService
             prompt.Validate(validator);
         }
 
-        return await _outConsole.PromptAsync(prompt, cancellationToken);
+        var result = await MessageConsole.PromptAsync(prompt, cancellationToken);
+        MessageLogger.LogInformation("Prompt result: {Result}", isSecret ? "****" : result);
+        return result;
+    }
+
+    public Task<string> PromptForFilePathAsync(string promptText, string? defaultValue = null, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, CancellationToken cancellationToken = default)
+    {
+        return PromptForStringAsync(promptText, defaultValue, validator, isSecret: false, required, cancellationToken);
     }
 
     public async Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, CancellationToken cancellationToken = default) where T : notnull
@@ -143,19 +197,30 @@ internal class ConsoleInteractionService : IInteractionService
             throw new EmptyChoicesException(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NoItemsAvailableForSelection, promptText));
         }
 
+        // Wrap the caller's formatter to produce safe plain text for Spectre.Console.
+        // Spectre's SelectionPrompt treats converter output as markup and its search
+        // highlighting manipulates the markup string directly, which breaks escaped
+        // bracket sequences like [[Prod]]. Stripping markup after formatting ensures
+        // the text is safe for both rendering and search highlighting.
+        var safeFormatter = MakeSafeFormatter(choiceFormatter);
+
+        MessageLogger.LogInformation("Selection prompt: {PromptText}", promptText);
+
         var prompt = new SelectionPrompt<T>()
             .Title(promptText)
-            .UseConverter(choiceFormatter)
+            .UseConverter(safeFormatter)
             .AddChoices(choices)
             .PageSize(10)
             .EnableSearch();
-        
+
         prompt.SearchHighlightStyle = s_searchHighlightStyle;
 
-        return await _outConsole.PromptAsync(prompt, cancellationToken);
+        var result = await MessageConsole.PromptAsync(prompt, cancellationToken);
+        MessageLogger.LogInformation("Selection result: {Result}", safeFormatter(result));
+        return result;
     }
 
-    public async Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, CancellationToken cancellationToken = default) where T : notnull
+    public async Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, CancellationToken cancellationToken = default) where T : notnull
     {
         ArgumentNullException.ThrowIfNull(promptText, nameof(promptText));
         ArgumentNullException.ThrowIfNull(choices, nameof(choices));
@@ -166,20 +231,77 @@ internal class ConsoleInteractionService : IInteractionService
             throw new InvalidOperationException(InteractionServiceStrings.InteractiveInputNotSupported);
         }
 
-        // Check if the choices collection is empty to avoid throwing an InvalidOperationException
-        if (!choices.Any())
+        var choicesList = choices.ToList();
+
+        if (choicesList.Count == 0)
         {
             throw new EmptyChoicesException(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NoItemsAvailableForSelection, promptText));
         }
 
+        var preSelectedSet = preSelected is not null ? new HashSet<T>(preSelected) : null;
+
+        var safeFormatter = MakeSafeFormatter(choiceFormatter);
+
+        MessageLogger.LogInformation("Selection prompt: {PromptText}", promptText);
+
         var prompt = new MultiSelectionPrompt<T>()
             .Title(promptText)
-            .UseConverter(choiceFormatter)
-            .AddChoices(choices)
+            .UseConverter(safeFormatter)
             .PageSize(10);
 
-        var result = await _outConsole.PromptAsync(prompt, cancellationToken);
+        prompt.Required = !optional;
+
+        foreach (var choice in choicesList)
+        {
+            var item = prompt.AddChoice(choice);
+            if (preSelectedSet?.Contains(choice) == true)
+            {
+                item.Select();
+            }
+        }
+
+        var result = await MessageConsole.PromptAsync(prompt, cancellationToken);
+        MessageLogger.LogInformation("Selection results: {Results}", string.Join(", ", result.Select(safeFormatter)));
         return result;
+    }
+
+    /// <summary>
+    /// Wraps a choice formatter to produce output that is safe for Spectre.Console's
+    /// SelectionPrompt and MultiSelectionPrompt with search enabled. Spectre's search
+    /// highlighting manipulates the markup string directly, which breaks escaped bracket
+    /// sequences like <c>[[Prod]]</c>. This method strips all markup from the formatted
+    /// text and then replaces square brackets with parentheses so that Spectre never
+    /// encounters bracket characters in the display text.
+    /// </summary>
+    /// <remarks>
+    /// This is a workaround for https://github.com/spectreconsole/spectre.console/issues/2054.
+    /// Once the upstream fix is available, this method should be removed and callers should
+    /// use EscapeMarkup() directly. See https://github.com/microsoft/aspire/issues/15309.
+    /// </remarks>
+    internal static Func<T, string> MakeSafeFormatter<T>(Func<T, string> choiceFormatter)
+    {
+        return item =>
+        {
+            var formatted = choiceFormatter(item);
+
+            // Try to strip Spectre markup to get the intended display text.
+            // Markup.Remove() can throw if the formatted text contains unescaped
+            // brackets (e.g. raw "[Prod]"), so fall back to using the text as-is.
+            string plainText;
+            try
+            {
+                plainText = Markup.Remove(formatted);
+            }
+            catch (Exception)
+            {
+                plainText = formatted;
+            }
+
+            // Replace square brackets with parentheses. EscapeMarkup() alone is not
+            // sufficient because Spectre's search highlighting splits the escaped
+            // sequences [[...]] when inserting highlight tags, producing invalid markup.
+            return plainText.Replace('[', '(').Replace(']', ')');
+        };
     }
 
     public int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion)
@@ -187,51 +309,58 @@ internal class ConsoleInteractionService : IInteractionService
         var cliInformationalVersion = VersionHelper.GetDefaultTemplateVersion();
 
         DisplayError(InteractionServiceStrings.AppHostNotCompatibleConsiderUpgrading);
-        Console.WriteLine();
-        _outConsole.MarkupLine(
-            $"\t[bold]{InteractionServiceStrings.AspireHostingSDKVersion}[/]: {appHostHostingVersion}");
-        _outConsole.MarkupLine($"\t[bold]{InteractionServiceStrings.AspireCLIVersion}[/]: {cliInformationalVersion}");
-        _outConsole.MarkupLine($"\t[bold]{InteractionServiceStrings.RequiredCapability}[/]: {ex.RequiredCapability}");
-        Console.WriteLine();
+        MessageConsole.WriteLine();
+        MessageConsole.MarkupLine(
+            $"\t[bold]{InteractionServiceStrings.AspireHostingSDKVersion}[/]: {appHostHostingVersion.EscapeMarkup()}");
+        MessageConsole.MarkupLine($"\t[bold]{InteractionServiceStrings.AspireCLIVersion}[/]: {cliInformationalVersion.EscapeMarkup()}");
+        MessageConsole.MarkupLine($"\t[bold]{InteractionServiceStrings.RequiredCapability}[/]: {ex.RequiredCapability.EscapeMarkup()}");
+        MessageConsole.WriteLine();
         return ExitCodeConstants.AppHostIncompatible;
     }
 
     public void DisplayError(string errorMessage)
     {
-        DisplayMessage("cross_mark", $"[red bold]{errorMessage.EscapeMarkup()}[/]");
+        DisplayMessage(KnownEmojis.CrossMark, $"[red bold]{errorMessage.EscapeMarkup()}[/]", allowMarkup: true);
     }
 
-    public void DisplayMessage(string emoji, string message)
+    public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false)
     {
-        // This is a hack to deal with emoji of different size. We write the emoji then move the cursor to aboslute column 4
-        // on the same line before writing the message. This ensures that the message starts at the same position regardless
-        // of the emoji used. I'm not OCD .. you are!
-        _outConsole.Markup($":{emoji}:");
-        _outConsole.Write("\u001b[4G");
-        _outConsole.MarkupLine(message);
+        if (MessageLogger.IsEnabled(LogLevel.Information))
+        {
+            // Only attempt to parse/remove markup when the message is expected to contain it.
+            // Plain text messages may contain characters like '[' that would be rejected by the markup parser.
+            var logMessage = allowMarkup ? message.RemoveMarkup() : message;
+            MessageLogger.LogInformation("{Message}", ConsoleHelpers.FormatEmojiPrefix(emoji, MessageConsole, replaceEmoji: true) + logMessage);
+        }
+
+        var displayMessage = allowMarkup ? message : message.EscapeMarkup();
+        MessageConsole.MarkupLine(ConsoleHelpers.FormatEmojiPrefix(emoji, MessageConsole) + displayMessage);
     }
 
     public void DisplayPlainText(string message)
     {
         // Write directly to avoid Spectre.Console line wrapping
-        _outConsole.Profile.Out.Writer.WriteLine(message);
+        MessageConsole.Profile.Out.Writer.WriteLine(message);
     }
 
-    public void DisplayRawText(string text)
+    public void DisplayRawText(string text, ConsoleOutput? consoleOverride = null)
     {
-        // Write raw text directly to avoid console wrapping
-        _outConsole.Profile.Out.Writer.WriteLine(text);
+        var effectiveConsole = consoleOverride ?? Console;
+        // Write raw text directly to avoid console wrapping.
+        // When consoleOverride is null, respect the Console setting.
+        var target = effectiveConsole == ConsoleOutput.Error ? _errorConsole : _outConsole;
+        target.Profile.Out.Writer.WriteLine(text);
     }
 
     public void DisplayMarkdown(string markdown)
     {
         var spectreMarkup = MarkdownToSpectreConverter.ConvertToSpectre(markdown);
-        _outConsole.MarkupLine(spectreMarkup);
+        MessageConsole.MarkupLine(spectreMarkup);
     }
 
     public void DisplayMarkupLine(string markup)
     {
-        _outConsole.MarkupLine(markup);
+        MessageConsole.MarkupLine(markup);
     }
 
     public void WriteConsoleLog(string message, int? lineNumber = null, string? type = null, bool isErrorMessage = false)
@@ -239,62 +368,90 @@ internal class ConsoleInteractionService : IInteractionService
         var style = isErrorMessage ? s_errorMessageStyle
             : type switch
             {
-                "waiting" => s_waitingMessageStyle,
-                "running" => s_infoMessageStyle,
-                "exitCode" => s_exitCodeMessageStyle,
-                "failedToStart" => s_errorMessageStyle,
+                ConsoleLogTypes.Waiting => s_waitingMessageStyle,
+                ConsoleLogTypes.Running => s_infoMessageStyle,
+                ConsoleLogTypes.ExitCode => s_exitCodeMessageStyle,
+                ConsoleLogTypes.FailedToStart => s_errorMessageStyle,
                 _ => s_infoMessageStyle
             };
 
         var prefix = lineNumber.HasValue ? $"#{lineNumber.Value}: " : "";
-        _outConsole.WriteLine($"{prefix}{message}", style);
+        MessageConsole.WriteLine($"{prefix}{message}", style);
     }
 
-    public void DisplaySuccess(string message)
+    public void DisplaySuccess(string message, bool allowMarkup = false)
     {
-        DisplayMessage("check_mark", message);
+        DisplayMessage(KnownEmojis.CheckMark, message, allowMarkup);
     }
 
-    public void DisplayLines(IEnumerable<(string Stream, string Line)> lines)
+    public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines)
     {
-        foreach (var (stream, line) in lines)
+        var linesArray = lines.ToArray();
+
+        // Special case one stderr line to include error icon.
+        if (linesArray.Length == 1 && linesArray[0].Stream == OutputLineStream.StdErr)
         {
-            if (stream == "stdout")
+            DisplayError(linesArray[0].Line);
+            return;
+        }
+
+        foreach (var (stream, line) in linesArray)
+        {
+            if (stream == OutputLineStream.StdOut)
             {
-                _outConsole.MarkupLineInterpolated($"{line.EscapeMarkup()}");
+                MessageConsole.MarkupLine(line.EscapeMarkup());
             }
             else
             {
-                _outConsole.MarkupLineInterpolated($"[red]{line.EscapeMarkup()}[/]");
+                MessageConsole.MarkupLine($"[red]{line.EscapeMarkup()}[/]");
             }
         }
     }
 
-    public void DisplayCancellationMessage()
+    public void DisplayRenderable(IRenderable renderable)
     {
-        _outConsole.WriteLine();
-        DisplayMessage("stop_sign", $"[teal bold]{InteractionServiceStrings.StoppingAspire}[/]");
+        MessageConsole.Write(renderable);
     }
 
-    public Task<bool> ConfirmAsync(string promptText, bool defaultValue = true, CancellationToken cancellationToken = default)
+    public async Task DisplayLiveAsync(IRenderable initialRenderable, Func<Action<IRenderable>, Task> callback)
+    {
+        await MessageConsole.Live(initialRenderable)
+            .AutoClear(false)
+            .StartAsync(async ctx =>
+            {
+                await callback(renderable => ctx.UpdateTarget(renderable));
+            });
+    }
+
+    public void DisplayCancellationMessage()
+    {
+        MessageConsole.WriteLine();
+        DisplayMessage(KnownEmojis.StopSign, $"[teal bold]{InteractionServiceStrings.StoppingAspire}[/]", allowMarkup: true);
+    }
+
+    public async Task<bool> ConfirmAsync(string promptText, bool defaultValue = true, CancellationToken cancellationToken = default)
     {
         if (!_hostEnvironment.SupportsInteractiveInput)
         {
             throw new InvalidOperationException(InteractionServiceStrings.InteractiveInputNotSupported);
         }
 
-        return _outConsole.ConfirmAsync(promptText, defaultValue, cancellationToken);
+        MessageLogger.LogInformation("Confirm: {PromptText} (default: {DefaultValue})", promptText, defaultValue);
+        var result = await MessageConsole.ConfirmAsync(promptText, defaultValue, cancellationToken);
+        MessageLogger.LogInformation("Confirm result: {Result}", result);
+        return result;
     }
 
-    public void DisplaySubtleMessage(string message, bool escapeMarkup = true)
+    public void DisplaySubtleMessage(string message, bool allowMarkup = false)
     {
-        var displayMessage = escapeMarkup ? message.EscapeMarkup() : message;
-        _outConsole.MarkupLine($"[dim]{displayMessage}[/]");
+        MessageLogger.LogInformation("{Message}", message);
+        var displayMessage = allowMarkup ? message : message.EscapeMarkup();
+        MessageConsole.MarkupLine($"[dim]{displayMessage}[/]");
     }
 
     public void DisplayEmptyLine()
     {
-        _outConsole.WriteLine();
+        MessageConsole.WriteLine();
     }
 
     private const string UpdateUrl = "https://aka.ms/aspire/update";
@@ -303,13 +460,13 @@ internal class ConsoleInteractionService : IInteractionService
     {
         // Write to stderr to avoid corrupting stdout when JSON output is used
         _errorConsole.WriteLine();
-        _errorConsole.MarkupLine(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NewCliVersionAvailable, newerVersion));
-        
+        _errorConsole.MarkupLine(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NewCliVersionAvailable, newerVersion.EscapeMarkup()));
+
         if (!string.IsNullOrEmpty(updateCommand))
         {
-            _errorConsole.MarkupLine(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ToUpdateRunCommand, updateCommand));
+            _errorConsole.MarkupLine(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ToUpdateRunCommand, updateCommand.EscapeMarkup()));
         }
-        
+
         _errorConsole.MarkupLine(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.MoreInfoNewCliVersion, UpdateUrl));
     }
 }

@@ -2,7 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Diagnostics;
+using Aspire.Cli.Projects;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Projects;
 
@@ -123,7 +128,7 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
     }
 
     [Fact]
-    public void AspireJsonConfiguration_GetAllPackages_IncludesBasePackages()
+    public void AspireJsonConfiguration_GetIntegrationReferences_IncludesBasePackages()
     {
         // Arrange
         var config = new AspireJsonConfiguration
@@ -137,16 +142,16 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
         };
 
         // Act
-        var packages = config.GetAllPackages().ToList();
+        var refs = config.GetIntegrationReferences("13.1.0", "/tmp").ToList();
 
-        // Assert - should include base packages plus explicit packages
-        Assert.Contains(packages, p => p.Name == "Aspire.Hosting" && p.Version == "13.1.0");
-        Assert.Contains(packages, p => p.Name == "Aspire.Hosting.AppHost" && p.Version == "13.1.0");
-        Assert.Contains(packages, p => p.Name == "Aspire.Hosting.Redis" && p.Version == "13.1.0");
+        // Assert - should include base package (Aspire.Hosting) plus explicit packages
+        Assert.Contains(refs, r => r.Name == "Aspire.Hosting" && r.Version == "13.1.0" && !r.IsProjectReference);
+        Assert.Contains(refs, r => r.Name == "Aspire.Hosting.Redis" && r.Version == "13.1.0" && !r.IsProjectReference);
+        Assert.Equal(2, refs.Count);
     }
 
     [Fact]
-    public void AspireJsonConfiguration_GetAllPackages_WithNoExplicitPackages_ReturnsBasePackagesOnly()
+    public void AspireJsonConfiguration_GetIntegrationReferences_WithNoExplicitPackages_ReturnsBasePackagesOnly()
     {
         // Arrange
         var config = new AspireJsonConfiguration
@@ -156,12 +161,83 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
         };
 
         // Act
-        var packages = config.GetAllPackages().ToList();
+        var refs = config.GetIntegrationReferences("13.1.0", "/tmp").ToList();
 
-        // Assert - should include base packages only
-        Assert.Equal(2, packages.Count);
-        Assert.Contains(packages, p => p.Name == "Aspire.Hosting" && p.Version == "13.1.0");
-        Assert.Contains(packages, p => p.Name == "Aspire.Hosting.AppHost" && p.Version == "13.1.0");
+        // Assert - should include base package only (Aspire.Hosting)
+        Assert.Single(refs);
+        Assert.Contains(refs, r => r.Name == "Aspire.Hosting" && r.Version == "13.1.0");
+    }
+
+    [Fact]
+    public void AspireJsonConfiguration_GetIntegrationReferences_WithEmptyVersion_UsesFallbackVersion()
+    {
+        // Arrange
+        var config = new AspireJsonConfiguration
+        {
+            Language = "typescript",
+            Packages = new Dictionary<string, string>
+            {
+                ["Aspire.Hosting.Redis"] = string.Empty
+            }
+        };
+
+        // Act
+        var refs = config.GetIntegrationReferences("13.1.0", "/tmp").ToList();
+
+        // Assert
+        Assert.Contains(refs, r => r.Name == "Aspire.Hosting" && r.Version == "13.1.0");
+        Assert.Contains(refs, r => r.Name == "Aspire.Hosting.Redis" && r.Version == "13.1.0");
+    }
+
+    [Fact]
+    public void AspireJsonConfiguration_GetIntegrationReferences_WithConfiguredSdkVersion_ReturnsConfiguredVersions()
+    {
+        // Arrange
+        var config = new AspireJsonConfiguration
+        {
+            SdkVersion = "13.1.0",
+            Language = "typescript",
+            Channel = "daily",
+            Packages = new Dictionary<string, string>
+            {
+                ["Aspire.Hosting.Redis"] = "13.1.0"
+            }
+        };
+
+        // Act
+        var refs = config.GetIntegrationReferences("13.1.0", "/tmp").ToList();
+
+        // Assert
+        Assert.Contains(refs, r => r.Name == "Aspire.Hosting" && r.Version == "13.1.0");
+        Assert.Contains(refs, r => r.Name == "Aspire.Hosting.Redis" && r.Version == "13.1.0");
+    }
+
+    [Fact]
+    public void AspireJsonConfiguration_GetIntegrationReferences_WithProjectReference_ReturnsProjectRef()
+    {
+        // Arrange
+        var config = new AspireJsonConfiguration
+        {
+            SdkVersion = "13.1.0",
+            Language = "typescript",
+            Packages = new Dictionary<string, string>
+            {
+                ["Aspire.Hosting.Redis"] = "13.1.0",
+                ["Aspire.Hosting.MyCustom"] = "../src/Aspire.Hosting.MyCustom/Aspire.Hosting.MyCustom.csproj"
+            }
+        };
+
+        // Act
+        var refs = config.GetIntegrationReferences("13.1.0", "/home/user/app").ToList();
+
+        // Assert
+        Assert.Contains(refs, r => r.Name == "Aspire.Hosting" && r.IsPackageReference);
+        Assert.Contains(refs, r => r.Name == "Aspire.Hosting.Redis" && r.IsPackageReference);
+        var projectRef = Assert.Single(refs, r => r.IsProjectReference);
+        Assert.Equal("Aspire.Hosting.MyCustom", projectRef.Name);
+        Assert.Null(projectRef.Version);
+        Assert.NotNull(projectRef.ProjectPath);
+        Assert.EndsWith(".csproj", projectRef.ProjectPath);
     }
 
     [Fact]
@@ -221,5 +297,67 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
 
         await Verify(content, extension: "json")
             .UseFileName("AspireJsonConfiguration_SettingsJson");
+    }
+
+    [Fact]
+    public void GetServerEnvironmentVariables_ParsesLaunchSettingsWithComments()
+    {
+        var project = CreateGuestAppHostProject();
+
+        var propertiesDir = _workspace.CreateDirectory("Properties");
+        var launchSettingsPath = Path.Combine(propertiesDir.FullName, "launchSettings.json");
+        File.WriteAllText(launchSettingsPath, """
+            {
+              "profiles": {
+                "https": {
+                  "commandName": "Project",
+                  "applicationUrl": "https://localhost:16319;http://localhost:16320",
+                  "environmentVariables": {
+                    "ASPNETCORE_ENVIRONMENT": "Development",
+                    "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:17269",
+                    // This is a commented-out environment variable
+                    //"ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "https://localhost:17269",
+                    "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:17269"
+                  }
+                }
+              }
+            }
+            """);
+
+        var envVars = project.GetServerEnvironmentVariables(_workspace.WorkspaceRoot);
+
+        Assert.Equal("https://localhost:16319;http://localhost:16320", envVars["ASPNETCORE_URLS"]);
+        Assert.Equal("Development", envVars["ASPNETCORE_ENVIRONMENT"]);
+        Assert.Equal("https://localhost:17269", envVars["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]);
+        Assert.Equal("https://localhost:17269", envVars["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]);
+        Assert.False(envVars.ContainsKey("ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"));
+    }
+
+    private static GuestAppHostProject CreateGuestAppHostProject()
+    {
+        var language = new LanguageInfo(
+            LanguageId: "typescript/nodejs",
+            DisplayName: "TypeScript (Node.js)",
+            PackageName: "Aspire.Hosting.CodeGeneration.TypeScript",
+            DetectionPatterns: ["apphost.ts"],
+            CodeGenerator: "TypeScript");
+
+        var configuration = new ConfigurationBuilder().Build();
+
+        var logFilePath = Path.Combine(Path.GetTempPath(), $"test-guest-{Guid.NewGuid()}.log");
+
+        return new GuestAppHostProject(
+            language: language,
+            interactionService: new TestInteractionService(),
+            backchannel: new TestAppHostBackchannel(),
+            appHostServerProjectFactory: new TestAppHostServerProjectFactory(),
+            certificateService: new TestCertificateService(),
+            runner: new TestDotNetCliRunner(),
+            packagingService: new TestPackagingService(),
+            configuration: configuration,
+            features: new Features(configuration, NullLogger<Features>.Instance),
+            languageDiscovery: new TestLanguageDiscovery(),
+            logger: NullLogger<GuestAppHostProject>.Instance,
+            fileLoggerProvider: new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()));
     }
 }

@@ -600,6 +600,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         {
             // Create a TaskCompletionSource for each step
             var stepCompletions = new Dictionary<string, TaskCompletionSource>(steps.Count, StringComparer.Ordinal);
+            var stepHierarchyByName = GetStepHierarchyByStep(steps, stepsByName);
             foreach (var step in steps)
             {
                 stepCompletions[step.Name] = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -641,7 +642,8 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                 try
                 {
                     var activityReporter = context.Services.GetRequiredService<IPipelineActivityReporter>();
-                    var reportingStep = await activityReporter.CreateStepAsync(step.Name, context.CancellationToken).ConfigureAwait(false);
+                    var stepHierarchy = stepHierarchyByName.GetValueOrDefault(step.Name);
+                    var reportingStep = await activityReporter.CreateStepAsync(step.Name, stepHierarchy.ParentStepName, stepHierarchy.Level, context.CancellationToken).ConfigureAwait(false);
 
                     await using (reportingStep.ConfigureAwait(false))
                     {
@@ -840,6 +842,13 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         try
         {
             await step.Action(stepContext).ConfigureAwait(false);
+        }
+        catch (DistributedApplicationException)
+        {
+            // DistributedApplicationException subtypes already have clean, user-friendly messages.
+            // Re-throw without wrapping to avoid verbose error output (e.g. raw HTTP headers
+            // from Azure SDK RequestFailedException leaking into step failure messages).
+            throw;
         }
         catch (Exception ex)
         {
@@ -1049,7 +1058,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             sb.AppendLine();
         }
 
-        context.ReportingStep.Log(LogLevel.Information, sb.ToString(), enableMarkdown: false);
+        context.ReportingStep.Log(LogLevel.Information, sb.ToString());
     }
 
     /// <summary>
@@ -1078,6 +1087,30 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                 result.UnionWith(transitiveDeps);
                 visited.Remove(depName);
             }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Gets the display hierarchy information for a set of steps.
+    /// </summary>
+    private static Dictionary<string, StepHierarchyInfo> GetStepHierarchyByStep(
+        List<PipelineStep> steps,
+        Dictionary<string, PipelineStep> stepsByName)
+    {
+        var executionLevels = GetExecutionLevelsByStep(steps, stepsByName);
+        var result = new Dictionary<string, StepHierarchyInfo>(StringComparer.Ordinal);
+
+        foreach (var step in steps)
+        {
+            var parentStepName = step.DependsOnSteps
+                .Where(stepsByName.ContainsKey)
+                .OrderByDescending(dep => executionLevels.GetValueOrDefault(dep))
+                .ThenBy(dep => dep, StringComparer.Ordinal)
+                .FirstOrDefault();
+
+            result[step.Name] = new StepHierarchyInfo(parentStepName, executionLevels.GetValueOrDefault(step.Name));
         }
 
         return result;
@@ -1139,6 +1172,8 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         visited.Remove(step.Name);
         return maxLevel;
     }
+
+    private readonly record struct StepHierarchyInfo(string? ParentStepName, int Level);
 
     /// <summary>
     /// Gets the topological order of steps for execution.

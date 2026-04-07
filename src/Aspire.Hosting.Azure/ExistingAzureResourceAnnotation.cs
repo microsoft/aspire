@@ -15,7 +15,7 @@ public sealed class ExistingAzureResourceAnnotation(object name, object? resourc
     /// Gets the name of the existing resource.
     /// </summary>
     /// <remarks>
-    /// Supports a <see cref="string"/> or a <see cref="ParameterResource"/> via runtime validation.
+    /// Supports a <see cref="string"/>, <see cref="ParameterResource"/>, or a <see cref="BicepOutputReference"/> via runtime validation.
     /// </remarks>
     public object Name { get; } = name;
 

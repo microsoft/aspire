@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
+using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes.Extensions;
 using Aspire.Hosting.Pipelines;
@@ -14,8 +15,11 @@ namespace Aspire.Hosting.Kubernetes;
 /// Represents a Kubernetes environment resource that can host application resources.
 /// </summary>
 /// <remarks>
-/// Initializes a new instance of the <see cref="KubernetesEnvironmentResource"/> class.
+/// This resource models the Kubernetes publishing environment used by Aspire when generating
+/// Helm charts and other Kubernetes manifests for application resources that will run on a
+/// Kubernetes cluster.
 /// </remarks>
+[AspireExport(ExposeProperties = true)]
 public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmentResource
 {
     /// <summary>
@@ -83,6 +87,9 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
     internal IPortAllocator PortAllocator { get; } = new PortAllocator();
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="KubernetesEnvironmentResource"/> class.
+    /// </summary>
     /// <param name="name">The name of the Kubernetes environment.</param>
     public KubernetesEnvironmentResource(string name) : base(name)
     {
@@ -99,12 +106,9 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         }));
     }
 
-    /// <summary>
-    /// Computes the host URL <see cref="ReferenceExpression"/> for the given <see cref="EndpointReference"/>.
-    /// </summary>
-    /// <param name="endpointReference">The endpoint reference to compute the host address for.</param>
-    /// <returns>A <see cref="ReferenceExpression"/> representing the host address.</returns>
-    ReferenceExpression IComputeEnvironmentResource.GetHostAddressExpression(EndpointReference endpointReference)
+    /// <inheritdoc/>
+    [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference)
     {
         var resource = endpointReference.Resource;
 

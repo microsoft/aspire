@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using Aspire.Hosting.Ats;
+using Aspire.TypeSystem;
 using Microsoft.Extensions.Logging;
 using StreamJsonRpc;
 
@@ -13,13 +13,16 @@ namespace Aspire.Hosting.RemoteHost.Language;
 /// </summary>
 internal sealed class LanguageService
 {
+    private readonly JsonRpcAuthenticationState _authenticationState;
     private readonly LanguageSupportResolver _resolver;
     private readonly ILogger<LanguageService> _logger;
 
     public LanguageService(
+        JsonRpcAuthenticationState authenticationState,
         LanguageSupportResolver resolver,
         ILogger<LanguageService> logger)
     {
+        _authenticationState = authenticationState;
         _resolver = resolver;
         _logger = logger;
     }
@@ -34,6 +37,7 @@ internal sealed class LanguageService
     [JsonRpcMethod("scaffoldAppHost")]
     public Dictionary<string, string> ScaffoldAppHost(string language, string targetPath, string? projectName = null)
     {
+        _authenticationState.ThrowIfNotAuthenticated();
         _logger.LogDebug(">> scaffoldAppHost({Language}, {TargetPath}, {ProjectName})", language, targetPath, projectName);
         var sw = Stopwatch.StartNew();
 
@@ -71,6 +75,7 @@ internal sealed class LanguageService
     [JsonRpcMethod("detectAppHostType")]
     public DetectionResult DetectAppHostType(string directoryPath)
     {
+        _authenticationState.ThrowIfNotAuthenticated();
         _logger.LogDebug(">> detectAppHostType({DirectoryPath})", directoryPath);
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
@@ -104,6 +109,7 @@ internal sealed class LanguageService
     [JsonRpcMethod("getRuntimeSpec")]
     public RuntimeSpec GetRuntimeSpec(string language)
     {
+        _authenticationState.ThrowIfNotAuthenticated();
         _logger.LogDebug(">> getRuntimeSpec({Language})", language);
         var sw = System.Diagnostics.Stopwatch.StartNew();
 

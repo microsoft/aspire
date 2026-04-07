@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "5")]
 public class WithReferenceTests
 {
     [Theory]
@@ -27,7 +28,7 @@ public class WithReferenceTests
         // Call environment variable callbacks.
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectB.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
 
-        Assert.Equal("https://localhost:2000", config["services__projecta__mybinding__0"]);
+        Assert.Equal("https://localhost:2000", config["services__projecta__https__0"]);
         Assert.Equal("https://localhost:2000", config["PROJECTA_MYBINDING"]);
 
         Assert.True(projectB.Resource.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relationships));
@@ -50,9 +51,9 @@ public class WithReferenceTests
 
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectB.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
 
-        Assert.Equal("https://localhost:2000", config["services__project-a__mybinding__0"]);
+        Assert.Equal("https://localhost:2000", config["services__project-a__https__0"]);
         Assert.Equal("https://localhost:2000", config["PROJECT_A_MYBINDING"]);
-        Assert.DoesNotContain("services__project_a__mybinding__0", config.Keys);
+        Assert.DoesNotContain("services__project_a__https__0", config.Keys);
         Assert.DoesNotContain("PROJECT-A_MYBINDING", config.Keys);
     }
 
@@ -70,9 +71,9 @@ public class WithReferenceTests
 
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectB.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
 
-        Assert.Equal("https://localhost:2000", config["services__custom-name__mybinding__0"]);
+        Assert.Equal("https://localhost:2000", config["services__custom-name__https__0"]);
         Assert.Equal("https://localhost:2000", config["custom_name_MYBINDING"]);
-        Assert.DoesNotContain("services__custom_name__mybinding__0", config.Keys);
+        Assert.DoesNotContain("services__custom_name__https__0", config.Keys);
         Assert.DoesNotContain("custom-name_MYBINDING", config.Keys);
     }
 
@@ -103,28 +104,28 @@ public class WithReferenceTests
         switch (flags)
         {
             case ReferenceEnvironmentInjectionFlags.All:
-                Assert.Equal("https://localhost:2000", config["services__custom__mybinding__0"]);
+                Assert.Equal("https://localhost:2000", config["services__custom__https__0"]);
                 Assert.Equal("https://localhost:2000", config["custom_MYBINDING"]);
                 break;
             case ReferenceEnvironmentInjectionFlags.ConnectionProperties:
                 Assert.False(config.ContainsKey("custom_MYBINDING"));
-                Assert.False(config.ContainsKey("services__custom__mybinding__0"));
+                Assert.False(config.ContainsKey("services__custom__https__0"));
                 break;
             case ReferenceEnvironmentInjectionFlags.ConnectionString:
                 Assert.False(config.ContainsKey("custom_MYBINDING"));
-                Assert.False(config.ContainsKey("services__custom__mybinding__0"));
+                Assert.False(config.ContainsKey("services__custom__https__0"));
                 break;
             case ReferenceEnvironmentInjectionFlags.ServiceDiscovery:
                 Assert.False(config.ContainsKey("custom_MYBINDING"));
-                Assert.True(config.ContainsKey("services__custom__mybinding__0"));
+                Assert.True(config.ContainsKey("services__custom__https__0"));
                 break;
             case ReferenceEnvironmentInjectionFlags.Endpoints:
                 Assert.True(config.ContainsKey("custom_MYBINDING"));
-                Assert.False(config.ContainsKey("services__custom__mybinding__0"));
+                Assert.False(config.ContainsKey("services__custom__https__0"));
                 break;
             case ReferenceEnvironmentInjectionFlags.None:
                 Assert.False(config.ContainsKey("custom_MYBINDING"));
-                Assert.False(config.ContainsKey("services__custom__mybinding__0"));
+                Assert.False(config.ContainsKey("services__custom__https__0"));
                 break;
         }
     }
@@ -149,8 +150,8 @@ public class WithReferenceTests
         // Call environment variable callbacks.
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectB.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
 
-        Assert.Equal("https://localhost:2000", config["services__projecta__mybinding__0"]);
-        Assert.Equal("https://localhost:3000", config["services__projecta__myconflictingbinding__0"]);
+        Assert.Equal("https://localhost:2000", config["services__projecta__https__0"]);
+        Assert.Equal("https://localhost:3000", config["services__projecta__https__1"]);
 
         Assert.Equal("https://localhost:2000", config["PROJECTA_MYBINDING"]);
         Assert.Equal("https://localhost:3000", config["PROJECTA_MYCONFLICTINGBINDING"]);
@@ -177,8 +178,8 @@ public class WithReferenceTests
         // Call environment variable callbacks.
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectB.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
 
-        Assert.Equal("https://localhost:2000", config["services__projecta__mybinding__0"]);
-        Assert.Equal("http://localhost:3000", config["services__projecta__mynonconflictingbinding__0"]);
+        Assert.Equal("https://localhost:2000", config["services__projecta__https__0"]);
+        Assert.Equal("http://localhost:3000", config["services__projecta__http__0"]);
 
         Assert.Equal("https://localhost:2000", config["PROJECTA_MYBINDING"]);
         Assert.Equal("http://localhost:3000", config["PROJECTA_MYNONCONFLICTINGBINDING"]);
@@ -203,8 +204,8 @@ public class WithReferenceTests
         // Call environment variable callbacks.
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectB.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
 
-        Assert.Equal("https://localhost:2000", config["services__projecta__mybinding__0"]);
-        Assert.Equal("https://localhost:3000", config["services__projecta__mybinding2__0"]);
+        Assert.Equal("https://localhost:2000", config["services__projecta__https__0"]);
+        Assert.Equal("https://localhost:3000", config["services__projecta__https__1"]);
 
         Assert.Equal("https://localhost:2000", config["PROJECTA_MYBINDING"]);
         Assert.Equal("https://localhost:3000", config["PROJECTA_MYBINDING2"]);
@@ -232,8 +233,8 @@ public class WithReferenceTests
         // Call environment variable callbacks.
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectB.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
 
-        Assert.Equal("https://localhost:2000", config["services__projecta__mybinding__0"]);
-        Assert.Equal("http://localhost:3000", config["services__projecta__mybinding2__0"]);
+        Assert.Equal("https://localhost:2000", config["services__projecta__https__0"]);
+        Assert.Equal("http://localhost:3000", config["services__projecta__http__0"]);
 
         Assert.Equal("https://localhost:2000", config["PROJECTA_MYBINDING"]);
         Assert.Equal("http://localhost:3000", config["PROJECTA_MYBINDING2"]);
@@ -242,6 +243,51 @@ public class WithReferenceTests
         var r = Assert.Single(relationships);
         Assert.Equal("Reference", r.Type);
         Assert.Same(projectA.Resource, r.Resource);
+    }
+
+    [Fact]
+    public async Task InternalWithReferenceAddsConnectionStringAndServiceDiscoveryWhenResourceSupportsBoth()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var resource = builder.AddResource(new TestResourceWithConnectionStringAndServiceDiscovery("resource")
+        {
+            ConnectionString = "123"
+        })
+        .WithHttpEndpoint(1000, 2000, "http")
+        .WithEndpoint("http", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 2000));
+
+        var projectB = builder.AddProject<ProjectB>("projectb");
+
+        ResourceBuilderExtensions.WithReference(projectB, (IResourceBuilder<IResource>)resource, connectionName: "db", name: "api");
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectB.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+
+        Assert.Equal("123", config["ConnectionStrings__db"]);
+        Assert.Equal("http://localhost:2000", config["services__api__http__0"]);
+    }
+
+    [Fact]
+    public async Task InternalWithReferenceKeepsDefaultServiceDiscoveryNameWhenOnlyConnectionNameIsProvided()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var resource = builder.AddResource(new TestResourceWithConnectionStringAndServiceDiscovery("resource")
+        {
+            ConnectionString = "123"
+        })
+        .WithHttpEndpoint(1000, 2000, "http")
+        .WithEndpoint("http", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 2000));
+
+        var projectB = builder.AddProject<ProjectB>("projectb");
+
+        ResourceBuilderExtensions.WithReference(projectB, (IResourceBuilder<IResource>)resource, connectionName: "db");
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectB.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+
+        Assert.Equal("123", config["ConnectionStrings__db"]);
+        Assert.Equal("http://localhost:2000", config["services__resource__http__0"]);
+        Assert.DoesNotContain("services__db__http__0", config.Keys);
     }
 
     [Fact]
@@ -748,6 +794,143 @@ public class WithReferenceTests
     }
 
     private sealed class TestResource(string name) : Resource(name), IResourceWithConnectionString
+    {
+        public string? ConnectionString { get; set; }
+
+        public ReferenceExpression ConnectionStringExpression =>
+            ReferenceExpression.Create($"{ConnectionString}");
+    }
+
+    [Fact]
+    public async Task ExcludedReferenceEndpointExcludedFromUseAllEndpoints()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var projectA = builder.AddProject<ProjectA>("projecta")
+                              .WithHttpEndpoint(1000, 2000, "api")
+                              .WithEndpoint("api", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 2000))
+                              .WithHttpEndpoint(1000, 3000, "management")
+                              .WithEndpoint("management", e =>
+                              {
+                                  e.ExcludeReferenceEndpoint = true;
+                                  e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 3000);
+                              });
+
+        var projectB = builder.AddProject<ProjectB>("projectb")
+                              .WithReference(projectA);
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectB.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+
+        // The "api" endpoint should be included (it's not excluded)
+        Assert.Equal("http://localhost:2000", config["services__projecta__http__0"]);
+        Assert.Equal("http://localhost:2000", config["PROJECTA_API"]);
+
+        // The "management" endpoint should NOT be included (ExcludeReferenceEndpoint = true)
+        Assert.False(config.ContainsKey("services__projecta__http__1"));
+        Assert.False(config.ContainsKey("PROJECTA_MANAGEMENT"));
+    }
+
+    [Fact]
+    public async Task ExcludedReferenceEndpointCanBeReferencedExplicitly()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var projectA = builder.AddProject<ProjectA>("projecta")
+                              .WithHttpEndpoint(1000, 2000, "api")
+                              .WithEndpoint("api", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 2000))
+                              .WithHttpEndpoint(1000, 3000, "management")
+                              .WithEndpoint("management", e =>
+                              {
+                                  e.ExcludeReferenceEndpoint = true;
+                                  e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 3000);
+                              });
+
+        // Explicitly reference the excluded endpoint
+        var projectB = builder.AddProject<ProjectB>("projectb")
+                              .WithReference(projectA.GetEndpoint("management"));
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectB.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+
+        // The "management" endpoint should be included because it was explicitly referenced
+        Assert.Equal("http://localhost:3000", config["services__projecta__http__0"]);
+        Assert.Equal("http://localhost:3000", config["PROJECTA_MANAGEMENT"]);
+
+        // The "api" endpoint should NOT be included (wasn't referenced)
+        Assert.False(config.ContainsKey("PROJECTA_API"));
+    }
+
+    [Fact]
+    public async Task CombinedWithReferenceAndExplicitEndpointIncludesBoth()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var projectA = builder.AddProject<ProjectA>("projecta")
+                              .WithHttpEndpoint(1000, 2000, "api")
+                              .WithEndpoint("api", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 2000))
+                              .WithHttpEndpoint(1000, 3000, "management")
+                              .WithEndpoint("management", e =>
+                              {
+                                  e.ExcludeReferenceEndpoint = true;
+                                  e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 3000);
+                              });
+
+        // Reference all default endpoints AND the excluded management endpoint explicitly
+        var projectB = builder.AddProject<ProjectB>("projectb")
+                              .WithReference(projectA)
+                              .WithReference(projectA.GetEndpoint("management"));
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectB.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+
+        // Both endpoints should be included
+        Assert.Equal("http://localhost:2000", config["services__projecta__http__0"]);
+        Assert.Equal("http://localhost:3000", config["services__projecta__http__1"]);
+        Assert.Equal("http://localhost:2000", config["PROJECTA_API"]);
+        Assert.Equal("http://localhost:3000", config["PROJECTA_MANAGEMENT"]);
+    }
+
+    [Fact]
+    public void ExcludeReferenceEndpointDefaultsToFalse()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var container = builder.AddContainer("mycontainer", "myimage")
+                               .WithHttpEndpoint(targetPort: 8080);
+
+        var endpoint = container.Resource.Annotations.OfType<EndpointAnnotation>().Single();
+        Assert.False(endpoint.ExcludeReferenceEndpoint);
+    }
+
+    [Fact]
+    public void WithEndpointCallbackCanSetExcludeReferenceEndpoint()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var container = builder.AddContainer("mycontainer", "myimage")
+                               .WithHttpEndpoint(targetPort: 8080, name: "api")
+                               .WithEndpoint("api", e => e.ExcludeReferenceEndpoint = true);
+
+        var endpoint = container.Resource.Annotations.OfType<EndpointAnnotation>().Single();
+        Assert.True(endpoint.ExcludeReferenceEndpoint);
+    }
+
+    [Fact]
+    public void EndpointReferenceReflectsExcludeReferenceEndpoint()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var container = builder.AddContainer("mycontainer", "myimage")
+                               .WithHttpEndpoint(targetPort: 8080, name: "primary")
+                               .WithHttpEndpoint(targetPort: 9000, name: "management")
+                               .WithEndpoint("management", e => e.ExcludeReferenceEndpoint = true);
+
+        var primaryRef = container.GetEndpoint("primary");
+        var managementRef = container.GetEndpoint("management");
+
+        Assert.False(primaryRef.ExcludeReferenceEndpoint);
+        Assert.True(managementRef.ExcludeReferenceEndpoint);
+    }
+
+    private sealed class TestResourceWithConnectionStringAndServiceDiscovery(string name) : ContainerResource(name), IResourceWithConnectionString, IResourceWithServiceDiscovery
     {
         public string? ConnectionString { get; set; }
 

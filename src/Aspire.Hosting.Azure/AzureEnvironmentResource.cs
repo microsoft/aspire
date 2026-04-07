@@ -95,6 +95,9 @@ public sealed class AzureEnvironmentResource : Resource
                     var provisioningContextProvider = ctx.Services.GetRequiredService<IProvisioningContextProvider>();
                     var provisioningContext = await provisioningContextProvider.CreateProvisioningContextAsync(ctx.CancellationToken).ConfigureAwait(false);
                     ProvisioningContextTask.TrySetResult(provisioningContext);
+
+                    // Add Azure deployment information to the pipeline summary
+                    AddToPipelineSummary(ctx, provisioningContext);
                 },
                 RequiredBySteps = [WellKnownPipelineSteps.Deploy],
                 DependsOnSteps = [WellKnownPipelineSteps.DeployPrereq]
@@ -121,6 +124,28 @@ public sealed class AzureEnvironmentResource : Resource
         Location = location;
         ResourceGroupName = resourceGroupName;
         PrincipalId = principalId;
+    }
+
+    /// <summary>
+    /// Adds Azure deployment information to the pipeline summary.
+    /// </summary>
+    /// <param name="ctx">The pipeline step context.</param>
+    /// <param name="provisioningContext">The Azure provisioning context.</param>
+    private static void AddToPipelineSummary(PipelineStepContext ctx, ProvisioningContext provisioningContext)
+    {
+        var resourceGroupName = provisioningContext.ResourceGroup.Name;
+        var subscriptionId = provisioningContext.Subscription.Id.Name;
+        var location = provisioningContext.Location.Name;
+
+        var tenantId = provisioningContext.Tenant.TenantId;
+        var tenantSegment = tenantId.HasValue ? $"#@{tenantId.Value}" : "#";
+        var portalUrl = $"https://portal.azure.com/{tenantSegment}/resource/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/overview";
+        var resourceGroupValue = $"[{resourceGroupName}]({portalUrl})";
+
+        ctx.Summary.Add("☁️ Target", "Azure");
+        ctx.Summary.Add("📦 Resource Group", new MarkdownString(resourceGroupValue));
+        ctx.Summary.Add("🔑 Subscription", subscriptionId);
+        ctx.Summary.Add("🌐 Location", location);
     }
 
     private Task PublishAsync(PipelineStepContext context)
@@ -155,7 +180,7 @@ public sealed class AzureEnvironmentResource : Resource
         catch (Exception)
         {
             await context.ReportingStep.CompleteAsync(
-                "Azure CLI authentication failed. Please run `az login` to authenticate before deploying. Learn more at [Azure CLI documentation](https://learn.microsoft.com/cli/azure/authenticate-azure-cli).",
+                new MarkdownString("Azure CLI authentication failed. Please run `az login` to authenticate before deploying. Learn more at [Azure CLI documentation](https://learn.microsoft.com/cli/azure/authenticate-azure-cli)."),
                 CompletionState.CompletedWithError,
                 context.CancellationToken).ConfigureAwait(false);
             throw;

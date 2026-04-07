@@ -63,6 +63,9 @@ internal sealed class AzureContainerAppsInfrastructure(
                     ComputeEnvironment = environment
                 });
             }
+
+            // Log once about all HTTP endpoints upgraded to HTTPS
+            containerAppEnvironmentContext.LogHttpsUpgradeIfNeeded();
         }
     }
 

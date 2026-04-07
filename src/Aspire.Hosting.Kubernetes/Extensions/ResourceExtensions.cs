@@ -140,8 +140,22 @@ internal static class ResourceExtensions
             },
         };
 
+        // Defense-in-depth: deduplicate ports by underlying value and protocol.
+        // The primary fix is in ProcessEndpoints() which skips the DefaultHttpsEndpoint
+        // (matching the core framework's SetBothPortsEnvVariables behavior). This dedup
+        // remains as a safety net for edge cases where multiple endpoints might still
+        // resolve to the same port value.
+        // See: https://github.com/microsoft/aspire/issues/14029
+        var addedPorts = new HashSet<(string Port, string Protocol)>();
         foreach (var (_, mapping) in context.EndpointMappings)
         {
+            var portValue = mapping.Port.ValueString ?? mapping.Port.ToScalar();
+            var portKey = (portValue, mapping.Protocol);
+            if (!addedPorts.Add(portKey))
+            {
+                continue; // Skip duplicate port/protocol combinations
+            }
+
             service.Spec.Ports.Add(
                 new()
                 {
@@ -268,8 +282,17 @@ internal static class ResourceExtensions
             return container;
         }
 
+        // Defense-in-depth: deduplicate container ports (same rationale as ToService() above).
+        var addedPorts = new HashSet<(string Port, string Protocol)>();
         foreach (var (_, mapping) in context.EndpointMappings)
         {
+            var portValue = mapping.Port.ValueString ?? mapping.Port.ToScalar();
+            var portKey = (portValue, mapping.Protocol);
+            if (!addedPorts.Add(portKey))
+            {
+                continue;
+            }
+
             container.Ports.Add(
                 new()
                 {

@@ -9,11 +9,13 @@ import * as strings from '../loc/strings';
  * Gets configuration information from the Aspire CLI.
  */
 export async function getConfigInfo(terminalProvider: AspireTerminalProvider): Promise<ConfigInfo | null> {
+    const cliPath = await terminalProvider.getAspireCliExecutablePath();
+
     return new Promise<ConfigInfo | null>((resolve) => {
         const args = ['config', 'info', '--json'];
         let output = '';
 
-        spawnCliProcess(terminalProvider, terminalProvider.getAspireCliExecutablePath(), args, {
+        spawnCliProcess(terminalProvider, cliPath, args, {
             stdoutCallback: (data) => {
                 output += data;
             },

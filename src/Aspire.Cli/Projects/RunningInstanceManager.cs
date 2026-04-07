@@ -11,7 +11,9 @@ using Microsoft.Extensions.Logging;
 namespace Aspire.Cli.Projects;
 
 /// <summary>
-/// Provides shared utilities for managing running AppHost instances.
+/// Manages running AppHost instances when the socket path is already known.
+/// Used for stopping instances during startup conflicts or after user selection.
+/// For discovering and selecting AppHosts, use <see cref="Backchannel.AppHostConnectionResolver"/> instead.
 /// </summary>
 internal sealed class RunningInstanceManager
 {
@@ -56,7 +58,7 @@ internal sealed class RunningInstanceManager
 
             // Display message that we're stopping the previous instance
             var cliPidText = appHostInfo.CliProcessId.HasValue ? appHostInfo.CliProcessId.Value.ToString(CultureInfo.InvariantCulture) : "N/A";
-            _interactionService.DisplayMessage("stop_sign", $"Stopping previous instance (AppHost PID: {appHostInfo.ProcessId.ToString(CultureInfo.InvariantCulture)}, CLI PID: {cliPidText})");
+            _interactionService.DisplayMessage(KnownEmojis.StopSign, $"Stopping previous instance (AppHost PID: {appHostInfo.ProcessId.ToString(CultureInfo.InvariantCulture)}, CLI PID: {cliPidText})");
 
             // Call StopAppHostAsync on the auxiliary backchannel
             await backchannel.StopAppHostAsync(cancellationToken).ConfigureAwait(false);

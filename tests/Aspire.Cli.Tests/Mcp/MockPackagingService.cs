@@ -55,25 +55,28 @@ internal static class TestExecutionContextFactory
             new DirectoryInfo(Path.GetTempPath()),
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "hives")),
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "cache")),
-            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "sdks")));
+            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "sdks")),
+            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "logs")),
+            "test.log");
     }
 }
 
 internal sealed class MockAuxiliaryBackchannelMonitor : IAuxiliaryBackchannelMonitor
 {
-    public IEnumerable<AppHostAuxiliaryBackchannel> Connections => [];
+    public IEnumerable<IAppHostAuxiliaryBackchannel> Connections => [];
 
-    public IEnumerable<AppHostAuxiliaryBackchannel> GetConnectionsByHash(string hash) => [];
+    public IEnumerable<IAppHostAuxiliaryBackchannel> GetConnectionsByHash(string hash) => [];
 
     public string? SelectedAppHostPath { get; set; }
 
-    public AppHostAuxiliaryBackchannel? SelectedConnection => null;
+    public IAppHostAuxiliaryBackchannel? SelectedConnection => null;
 
     public Task ScanAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 
-    public IReadOnlyList<AppHostAuxiliaryBackchannel> GetConnectionsForWorkingDirectory(DirectoryInfo workingDirectory)
+    public IReadOnlyList<IAppHostAuxiliaryBackchannel> GetConnectionsForWorkingDirectory(DirectoryInfo workingDirectory)
     {
         // Return empty list by default (no in-scope AppHosts)
         return [];
     }
 }
+

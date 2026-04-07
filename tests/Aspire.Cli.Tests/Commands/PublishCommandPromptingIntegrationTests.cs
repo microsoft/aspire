@@ -11,8 +11,10 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Spectre.Console;
+using Spectre.Console.Rendering;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
+using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -24,7 +26,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
-        var consoleService = new TestConsoleInteractionServiceWithPromptTracking();
+        var consoleService = new TestInteractionService();
 
         // Set up the prompt that will be sent from AppHost
         promptBackchannel.AddPrompt("text-prompt-1", "Environment Name", InputTypes.Text, "Enter environment name:", isRequired: true);
@@ -45,7 +47,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         // Act
         var result = command.Parse("publish");
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
         Assert.Equal(0, exitCode);
@@ -70,7 +72,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
-        var consoleService = new TestConsoleInteractionServiceWithPromptTracking();
+        var consoleService = new TestInteractionService();
 
         // Set up the prompt that will be sent from AppHost
         promptBackchannel.AddPrompt("secret-prompt-1", "Database Password", InputTypes.SecretText, "Enter secure password:", isRequired: true);
@@ -91,7 +93,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         // Act
         var result = command.Parse("publish");
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
         Assert.Equal(0, exitCode);
@@ -116,7 +118,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
-        var consoleService = new TestConsoleInteractionServiceWithPromptTracking();
+        var consoleService = new TestInteractionService();
 
         // Set up the choice prompt with options
         var options = new List<KeyValuePair<string, string>>
@@ -143,7 +145,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         // Act
         var result = command.Parse("publish");
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
         Assert.Equal(0, exitCode);
@@ -169,7 +171,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
-        var consoleService = new TestConsoleInteractionServiceWithPromptTracking();
+        var consoleService = new TestInteractionService();
 
         // Set up the boolean prompt
         promptBackchannel.AddPrompt("bool-prompt-1", "Enable Verbose Logging", InputTypes.Boolean, "Enable verbose logging?", isRequired: false);
@@ -190,7 +192,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         // Act
         var result = command.Parse("publish");
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
         Assert.Equal(0, exitCode);
@@ -215,7 +217,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
-        var consoleService = new TestConsoleInteractionServiceWithPromptTracking();
+        var consoleService = new TestInteractionService();
 
         // Set up the number prompt
         promptBackchannel.AddPrompt("number-prompt-1", "Instance Count", InputTypes.Number, "Enter number of instances:", isRequired: true);
@@ -236,7 +238,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         // Act
         var result = command.Parse("publish");
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
         Assert.Equal(0, exitCode);
@@ -261,7 +263,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
-        var consoleService = new TestConsoleInteractionServiceWithPromptTracking();
+        var consoleService = new TestInteractionService();
 
         // Set up multiple prompts that will be sent in sequence
         promptBackchannel.AddPrompt("text-prompt-1", "Application Name", InputTypes.Text, "Enter app name:", isRequired: true);
@@ -294,7 +296,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         // Act
         var result = command.Parse("publish");
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
         Assert.Equal(0, exitCode);
@@ -336,7 +338,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
-        var consoleService = new TestConsoleInteractionServiceWithPromptTracking();
+        var consoleService = new TestInteractionService();
 
         // Set up a single prompt with multiple inputs
         promptBackchannel.AddMultiInputPrompt("multi-input-prompt-1", "Configuration Setup", "Please provide the following details:",
@@ -373,7 +375,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         // Act
         var result = command.Parse("publish");
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
         Assert.Equal(0, exitCode);
@@ -420,7 +422,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
-        var consoleService = new TestConsoleInteractionServiceWithPromptTracking();
+        var consoleService = new TestInteractionService();
 
         // Set up the prompt with a default value
         promptBackchannel.AddPrompt("text-prompt-1", "Environment Name", InputTypes.Text, "Enter environment name:", isRequired: true, defaultValue: "development");
@@ -441,7 +443,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         // Act
         var result = command.Parse("publish");
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
         Assert.Equal(0, exitCode);
@@ -472,7 +474,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
-        var consoleService = new TestConsoleInteractionServiceWithPromptTracking();
+        var consoleService = new TestInteractionService();
 
         // Set up the prompt with a default value
         promptBackchannel.AddPrompt("text-prompt-1", "Environment Name", InputTypes.Text, "Enter environment name:", isRequired: true, defaultValue: "de", validationErrors: ["Environment name must be at least 3 characters long."]);
@@ -493,7 +495,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         // Act
         var result = command.Parse("publish");
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
         Assert.Equal(0, exitCode);
@@ -527,7 +529,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
-        var consoleService = new TestConsoleInteractionServiceWithPromptTracking();
+        var consoleService = new TestInteractionService();
 
         // Set up the prompt with markdown in the activity status text
         promptBackchannel.AddPrompt("markdown-prompt-1", "Config Value", InputTypes.Text, "**Enter** the `config` value for [Azure Portal](https://portal.azure.com):", isRequired: true);
@@ -548,7 +550,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         // Act
         var result = command.Parse("publish");
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
         Assert.Equal(0, exitCode);
@@ -573,7 +575,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         var runner = new TestDotNetCliRunner();
 
         // Simulate successful build
-        runner.BuildAsyncCallback = (projectFile, options, cancellationToken) => 0;
+        runner.BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0;
 
         // Simulate compatible app host
         runner.GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) =>
@@ -582,10 +584,10 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         };
 
         // Simulate successful app host run with the prompt backchannel
-        runner.RunAsyncCallback = async (projectFile, watch, noBuild, args, env, backchannelCompletionSource, options, cancellationToken) =>
+        runner.RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
         {
             backchannelCompletionSource?.SetResult(promptBackchannel);
-            await promptBackchannel.WaitForCompletion();
+            await promptBackchannel.WaitForCompletion().DefaultTimeout();
             return 0;
         };
 
@@ -598,7 +600,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
-        var consoleService = new TestConsoleInteractionServiceWithPromptTracking();
+        var consoleService = new TestInteractionService();
 
         // Set up the prompt that will be sent from AppHost
         promptBackchannel.AddPrompt("debug-prompt-1", "Environment Name", InputTypes.Text, "Enter environment name:", isRequired: true);
@@ -619,7 +621,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         // Act - use the --debug flag
         var result = command.Parse("publish --debug");
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
         Assert.Equal(0, exitCode);
@@ -642,7 +644,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
-        var consoleService = new TestConsoleInteractionServiceWithPromptTracking();
+        var consoleService = new TestInteractionService();
 
         // Set up a single-input prompt where StatusText and Label are different
         promptBackchannel.AddPrompt("status-label-prompt", "Target Region", InputTypes.Text, "Configure deployment target", isRequired: true);
@@ -663,7 +665,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         // Act
         var result = command.Parse("publish");
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
         Assert.Equal(0, exitCode);
@@ -685,7 +687,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
-        var consoleService = new TestConsoleInteractionServiceWithPromptTracking();
+        var consoleService = new TestInteractionService();
 
         // Set up a single-input prompt where StatusText and Label are the same
         promptBackchannel.AddPrompt("duplicate-prompt", "Environment Name", InputTypes.Text, "Environment Name", isRequired: true);
@@ -706,7 +708,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         // Act
         var result = command.Parse("publish");
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
         Assert.Equal(0, exitCode);
@@ -718,48 +720,6 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         // Should show: [bold]Environment Name[/]
         Assert.Equal("[bold]Environment Name[/]", promptCall.PromptText);
-    }
-
-    [Fact]
-    public async Task PublishCommand_SingleInputPrompt_EscapesSpectreMarkupInLabels()
-    {
-        // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var promptBackchannel = new TestPromptBackchannel();
-        var consoleService = new TestConsoleInteractionServiceWithPromptTracking();
-
-        // Set up a single-input prompt with Spectre markup characters in both StatusText and Label
-        promptBackchannel.AddPrompt("markup-prompt", "Value [required]", InputTypes.Text, "Enter value [1-10]", isRequired: true);
-
-        // Set up the expected user response
-        consoleService.SetupStringPromptResponse("5");
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
-            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
-        });
-
-        services.AddSingleton<IInteractionService>(consoleService);
-
-        var serviceProvider = services.BuildServiceProvider();
-        var command = serviceProvider.GetRequiredService<RootCommand>();
-
-        // Act
-        var result = command.Parse("publish");
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
-
-        // Assert
-        Assert.Equal(0, exitCode);
-
-        // Verify that square brackets are properly escaped
-        var promptCalls = consoleService.StringPromptCalls;
-        Assert.Single(promptCalls);
-        var promptCall = promptCalls[0];
-
-        // Square brackets should be escaped to [[bracket]]
-        Assert.Contains("[[1-10]]", promptCall.PromptText);
-        Assert.Contains("[[required]]", promptCall.PromptText);
     }
 }
 
@@ -820,7 +780,7 @@ internal sealed class TestPromptBackchannel : IAppHostCliBackchannel
                 }
             };
 
-            await completionSource.Task.WaitAsync(cancellationToken);
+            await completionSource.Task.WaitAsync(cancellationToken).DefaultTimeout();
         }
 
         _completionSource.SetResult();
@@ -868,8 +828,8 @@ internal sealed class TestPromptBackchannel : IAppHostCliBackchannel
         await Task.CompletedTask; // Suppress CS1998
         yield break;
     }
-    public Task ConnectAsync(string socketPath, CancellationToken cancellationToken) => Task.CompletedTask;
-    public Task ConnectAsync(string socketPath, bool autoReconnect, CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task ConnectAsync(string socketPath, int retryCount, CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task ConnectAsync(string socketPath, bool autoReconnect, int retryCount, CancellationToken cancellationToken) => Task.CompletedTask;
     public Task<string[]> GetCapabilitiesAsync(CancellationToken cancellationToken) => Task.FromResult(new[] { "baseline.v2" });
 
     public async IAsyncEnumerable<CommandOutput> ExecAsync([EnumeratorCancellation] CancellationToken cancellationToken)
@@ -891,6 +851,7 @@ internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInterac
     private readonly Queue<(string response, ResponseType type)> _responses = new();
     private bool _shouldCancel;
 
+    public ConsoleOutput Console { get; set; }
     public List<StringPromptCall> StringPromptCalls { get; } = [];
     public List<object> SelectionPromptCalls { get; } = []; // Using object to handle generic types
     public List<BooleanPromptCall> BooleanPromptCalls { get; } = [];
@@ -926,6 +887,9 @@ internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInterac
         return Task.FromResult(defaultValue ?? string.Empty);
     }
 
+    public Task<string> PromptForFilePathAsync(string promptText, string? defaultValue = null, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, CancellationToken cancellationToken = default)
+        => PromptForStringAsync(promptText, defaultValue, validator, isSecret: false, required, cancellationToken);
+
     public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, CancellationToken cancellationToken = default) where T : notnull
     {
         if (_shouldCancel || cancellationToken.IsCancellationRequested)
@@ -946,7 +910,7 @@ internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInterac
         return Task.FromResult(choices.First());
     }
 
-    public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, CancellationToken cancellationToken = default) where T : notnull
+    public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, CancellationToken cancellationToken = default) where T : notnull
     {
         if (_shouldCancel || cancellationToken.IsCancellationRequested)
         {
@@ -954,6 +918,12 @@ internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInterac
         }
 
         _ = _responses.TryDequeue(out _);
+
+        if (preSelected is not null)
+        {
+            return Task.FromResult<IReadOnlyList<T>>(preSelected.ToList());
+        }
+
         // For simplicity, return all choices in the test
         return Task.FromResult<IReadOnlyList<T>>(choices.ToList());
     }
@@ -976,35 +946,31 @@ internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInterac
     }
 
     // Default implementations for other interface methods
-    public Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action) => action();
-    public void ShowStatus(string statusText, Action action) => action();
+    public Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false) => action();
+    public void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false) => action();
     public int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion) => 0;
     public void DisplayError(string errorMessage) => DisplayedErrors.Add(errorMessage);
-    public void DisplayMessage(string emoji, string message) { }
-    public void DisplaySuccess(string message) { }
-    public void DisplaySubtleMessage(string message, bool escapeMarkup = true) { }
-    public void DisplayLines(IEnumerable<(string Stream, string Line)> lines) { }
+    public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false) { }
+    public void DisplaySuccess(string message, bool allowMarkup = false) { }
+    public void DisplaySubtleMessage(string message, bool allowMarkup = false) { }
+    public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines) { }
     public void DisplayCancellationMessage() { }
     public void DisplayEmptyLine() { }
     public void DisplayPlainText(string text) { }
-    public void DisplayRawText(string text) { }
+    public void DisplayRawText(string text, ConsoleOutput? consoleOverride = null) { }
     public void DisplayMarkdown(string markdown) { }
     public void DisplayMarkupLine(string markup) { }
 
     public void DisplayVersionUpdateNotification(string newerVersion, string? updateCommand = null) { }
 
+    public void DisplayRenderable(IRenderable renderable) { }
+    public Task DisplayLiveAsync(IRenderable initialRenderable, Func<Action<IRenderable>, Task> callback) => callback(_ => { });
+
     public void WriteConsoleLog(string message, int? lineNumber = null, string? type = null, bool isErrorMessage = false)
     {
         var messageType = isErrorMessage ? "error" : "info";
-        Console.WriteLine($"#{lineNumber} [{messageType}] {message}");
+        System.Console.WriteLine($"#{lineNumber} [{messageType}] {message}");
     }
-}
-
-internal enum ResponseType
-{
-    String,
-    Selection,
-    Boolean
 }
 
 // Input type constants that match the Aspire CLI implementation
@@ -1016,7 +982,3 @@ internal static class InputTypes
     public const string Boolean = "boolean";
     public const string Number = "number";
 }
-
-internal sealed record StringPromptCall(string PromptText, string? DefaultValue, bool IsSecret);
-internal sealed record SelectionPromptCall<T>(string PromptText, IEnumerable<T> Choices, Func<T, string> ChoiceFormatter);
-internal sealed record BooleanPromptCall(string PromptText, bool DefaultValue);

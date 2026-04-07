@@ -14,7 +14,7 @@ if (args.Length == 0)
 }
 
 var runId = args[0];
-var repo = "dotnet/aspire";
+var repo = "microsoft/aspire";
 
 Console.WriteLine($"Finding failed jobs for run {runId}...");
 

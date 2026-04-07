@@ -21,7 +21,7 @@ namespace Aspire.Cli.Backchannel;
 internal interface IExtensionBackchannel
 {
     Task ConnectAsync(CancellationToken cancellationToken);
-    Task DisplayMessageAsync(string emoji, string message, CancellationToken cancellationToken);
+    Task DisplayMessageAsync(string emojiName, string message, CancellationToken cancellationToken);
     Task DisplaySuccessAsync(string message, CancellationToken cancellationToken);
     Task DisplaySubtleMessageAsync(string message, CancellationToken cancellationToken);
     Task DisplayErrorAsync(string error, CancellationToken cancellationToken);
@@ -36,13 +36,14 @@ internal interface IExtensionBackchannel
     Task<bool> ConfirmAsync(string promptText, bool defaultValue, CancellationToken cancellationToken);
     Task<string> PromptForStringAsync(string promptText, string? defaultValue, Func<string, ValidationResult>? validator, bool required, CancellationToken cancellationToken);
     Task<string> PromptForSecretStringAsync(string promptText, Func<string, ValidationResult>? validator, bool required, CancellationToken cancellationToken);
+    Task<string?> PromptForFilePathAsync(string promptText, string? defaultValue, bool directory, CancellationToken cancellationToken);
     Task OpenEditorAsync(string path, CancellationToken cancellationToken);
     Task LogMessageAsync(LogLevel logLevel, string message, CancellationToken cancellationToken);
     Task<string[]> GetCapabilitiesAsync(CancellationToken cancellationToken);
     Task<bool> HasCapabilityAsync(string capability, CancellationToken cancellationToken);
     Task LaunchAppHostAsync(string projectFile, List<string> arguments, List<EnvVar> environment, bool debug, CancellationToken cancellationToken);
     Task NotifyAppHostStartupCompletedAsync(CancellationToken cancellationToken);
-    Task StartDebugSessionAsync(string workingDirectory, string? projectFile, bool debug, CancellationToken cancellationToken);
+    Task StartDebugSessionAsync(string workingDirectory, string? projectFile, bool debug, DebugSessionOptions? options, CancellationToken cancellationToken);
     Task DisplayPlainTextAsync(string text, CancellationToken cancellationToken);
     Task WriteDebugSessionMessageAsync(string message, bool stdout, string? textStyle, CancellationToken cancellationToken);
 }
@@ -246,7 +247,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
         }
     }
 
-    public async Task DisplayMessageAsync(string emoji, string message, CancellationToken cancellationToken)
+    public async Task DisplayMessageAsync(string emojiName, string message, CancellationToken cancellationToken)
     {
         await ConnectAsync(cancellationToken);
 
@@ -258,7 +259,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         await rpc.InvokeWithCancellationAsync(
             "displayMessage",
-            [_token, emoji, message],
+            [_token, emojiName, message],
             cancellationToken);
     }
 
@@ -543,6 +544,24 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
         return result;
     }
 
+    public async Task<string?> PromptForFilePathAsync(string promptText, string? defaultValue, bool directory, CancellationToken cancellationToken)
+    {
+        await ConnectAsync(cancellationToken);
+
+        using var activity = _activitySource.StartActivity();
+
+        var rpc = await _rpcTaskCompletionSource.Task;
+
+        _logger.LogDebug("Prompting for file path with text: {PromptText}, default value: {DefaultValue}, directory: {Directory}", promptText, defaultValue, directory);
+
+        var result = await rpc.InvokeWithCancellationAsync<string?>(
+            "promptForFilePath",
+            [_token, promptText, defaultValue, directory],
+            cancellationToken);
+
+        return result;
+    }
+
     public async Task OpenEditorAsync(string path, CancellationToken cancellationToken)
     {
         await ConnectAsync(cancellationToken);
@@ -642,7 +661,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         var rpc = await _rpcTaskCompletionSource.Task;
 
-        _logger.LogDebug("Running .NET project at {ProjectFile} with arguments: {Arguments}", projectFile, string.Join(" ", arguments));
+        _logger.LogDebug("Running project at {ProjectFile} with arguments: {Arguments}", projectFile, string.Join(" ", arguments));
 
         await rpc.InvokeWithCancellationAsync(
             "launchAppHost",
@@ -667,7 +686,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
     }
 
     public async Task StartDebugSessionAsync(string workingDirectory, string? projectFile, bool debug,
-        CancellationToken cancellationToken)
+        DebugSessionOptions? options, CancellationToken cancellationToken)
     {
         await ConnectAsync(cancellationToken);
 
@@ -675,12 +694,12 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         var rpc = await _rpcTaskCompletionSource.Task;
 
-        _logger.LogDebug("Starting extension debugging session in directory {WorkingDirectory} for project file {ProjectFile} with debug={Debug}",
-            workingDirectory, projectFile ?? "<none>", debug);
+        _logger.LogDebug("Starting extension debugging session in directory {WorkingDirectory} for project file {ProjectFile} with command={Command} debug={Debug}",
+            workingDirectory, projectFile ?? "<none>", options?.Command ?? "<none>", debug);
 
         await rpc.InvokeWithCancellationAsync(
             "startDebugSession",
-            [_token, workingDirectory, projectFile, debug],
+            [_token, workingDirectory, projectFile, debug, options],
             cancellationToken);
     }
 

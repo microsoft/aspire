@@ -3,10 +3,15 @@
 
 #pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only
 #pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only
+#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only
+#pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.JavaScript.Tests;
 
@@ -72,6 +77,219 @@ public class AddViteAppTests
 
         var containerFilesSource = nodeApp.Resource.Annotations.OfType<ContainerFilesSourceAnnotation>().Single();
         Assert.Equal("/app/dist", containerFilesSource.SourcePath);
+    }
+
+    [Fact]
+    public async Task VerifyDockerfileWhenPublishedAsStaticWebsite()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var viteDir = Path.Combine(tempDir.Path, "vite");
+        Directory.CreateDirectory(viteDir);
+        File.WriteAllText(Path.Combine(viteDir, "package-lock.json"), "empty");
+
+        var nodeApp = builder.AddViteApp("vite", viteDir)
+            .WithNpm(install: true)
+            .PublishAsStaticWebsite();
+
+        await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+
+        var dockerfilePath = Path.Combine(tempDir.Path, "vite.Dockerfile");
+        await Verify(File.ReadAllText(dockerfilePath));
+
+        var dockerBuildAnnotation = nodeApp.Resource.Annotations.OfType<DockerfileBuildAnnotation>().Single();
+        Assert.True(dockerBuildAnnotation.HasEntrypoint);
+
+        var containerFilesSource = nodeApp.Resource.Annotations.OfType<ContainerFilesSourceAnnotation>().Single();
+        Assert.Equal("/app/dist", containerFilesSource.SourcePath);
+    }
+
+    [Fact]
+    public async Task VerifyDockerfileWhenPublishedAsStaticWebsiteWithApiProxy()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var viteDir = Path.Combine(tempDir.Path, "vite");
+        Directory.CreateDirectory(viteDir);
+        File.WriteAllText(Path.Combine(viteDir, "package-lock.json"), "empty");
+
+        var apiDir = Path.Combine(tempDir.Path, "api");
+        Directory.CreateDirectory(apiDir);
+        File.WriteAllText(Path.Combine(apiDir, "package-lock.json"), "empty");
+
+        var api = builder.AddNodeApp("api", apiDir, "server.js")
+            .WithHttpEndpoint(name: "http", targetPort: 3001);
+
+        var nodeApp = builder.AddViteApp("vite", viteDir)
+            .WithNpm(install: true)
+            .PublishAsStaticWebsite("/api", api);
+
+        await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+
+        var dockerfilePath = Path.Combine(tempDir.Path, "vite.Dockerfile");
+        await Verify(File.ReadAllText(dockerfilePath));
+    }
+
+    [Fact]
+    public async Task PublishAsStaticWebsiteSetsYarpEnvironmentVariables()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var viteDir = Path.Combine(tempDir.Path, "vite");
+        Directory.CreateDirectory(viteDir);
+        File.WriteAllText(Path.Combine(viteDir, "package-lock.json"), "empty");
+
+        var nodeApp = builder.AddViteApp("vite", viteDir)
+            .WithNpm(install: true)
+            .PublishAsStaticWebsite();
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(nodeApp.Resource, DistributedApplicationOperation.Publish);
+
+        Assert.Equal("true", env["YARP_ENABLE_STATIC_FILES"]);
+        // PORT is set by the endpoint — verify it's present
+        Assert.True(env.ContainsKey("PORT"), "PORT should be set by the HTTP endpoint");
+    }
+
+    [Fact]
+    public async Task PublishAsStaticWebsiteWithApiProxySetsReverseProxyEnvironmentVariables()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var viteDir = Path.Combine(tempDir.Path, "vite");
+        Directory.CreateDirectory(viteDir);
+        File.WriteAllText(Path.Combine(viteDir, "package-lock.json"), "empty");
+
+        var apiDir = Path.Combine(tempDir.Path, "api");
+        Directory.CreateDirectory(apiDir);
+        File.WriteAllText(Path.Combine(apiDir, "package-lock.json"), "empty");
+
+        var api = builder.AddNodeApp("api", apiDir, "server.js")
+            .WithHttpEndpoint(name: "http", targetPort: 3001);
+
+        var nodeApp = builder.AddViteApp("vite", viteDir)
+            .WithNpm(install: true)
+            .PublishAsStaticWebsite("/api", api);
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(nodeApp.Resource, DistributedApplicationOperation.Publish);
+
+        Assert.Equal("true", env["YARP_ENABLE_STATIC_FILES"]);
+        Assert.Equal("api", env["REVERSEPROXY__ROUTES__api__CLUSTERID"]);
+        Assert.Equal("/api/{**catch-all}", env["REVERSEPROXY__ROUTES__api__MATCH__PATH"]);
+        Assert.False(env.ContainsKey("REVERSEPROXY__ROUTES__api__TRANSFORMS__0__PATHREMOVEPREFIX"), "StripPrefix defaults to false");
+        Assert.True(env.ContainsKey("REVERSEPROXY__CLUSTERS__api__DESTINATIONS__destination1__ADDRESS"));
+    }
+
+    [Fact]
+    public async Task VerifyDockerfileWhenPublishedAsStaticWebsiteWithCustomOutputPath()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(tempDir.Path, "angular");
+        Directory.CreateDirectory(appDir);
+        File.WriteAllText(Path.Combine(appDir, "package-lock.json"), "empty");
+
+        var nodeApp = builder.AddViteApp("angular", appDir)
+            .WithNpm(install: true)
+            .PublishAsStaticWebsite(o => o.OutputPath = "dist/browser");
+
+        await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+
+        var dockerfilePath = Path.Combine(tempDir.Path, "angular.Dockerfile");
+        await Verify(File.ReadAllText(dockerfilePath));
+
+        var dockerBuildAnnotation = nodeApp.Resource.Annotations.OfType<DockerfileBuildAnnotation>().Single();
+        Assert.True(dockerBuildAnnotation.HasEntrypoint);
+
+        var containerFilesSource = nodeApp.Resource.Annotations.OfType<ContainerFilesSourceAnnotation>().Single();
+        Assert.Equal("/app/dist/browser", containerFilesSource.SourcePath);
+    }
+
+    [Fact]
+    public async Task VerifyDockerfileWhenPublishedAsNodeServer()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(tempDir.Path, "vite");
+        Directory.CreateDirectory(appDir);
+        File.WriteAllText(Path.Combine(appDir, "package-lock.json"), "empty");
+
+        var nodeApp = builder.AddViteApp("vite", appDir)
+            .WithNpm(install: true)
+            .PublishAsNodeServer(".output/server/index.mjs", ".output");
+
+        await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+
+        var dockerfilePath = Path.Combine(tempDir.Path, "vite.Dockerfile");
+        await Verify(File.ReadAllText(dockerfilePath));
+
+        var containerFilesSource = nodeApp.Resource.Annotations.OfType<ContainerFilesSourceAnnotation>().Single();
+        Assert.Equal("/app/.output", containerFilesSource.SourcePath);
+    }
+
+    [Fact]
+    public async Task VerifyDockerfileWhenPublishedAsNextStandalone()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var nextDir = Path.Combine(tempDir.Path, "nextjs");
+        Directory.CreateDirectory(nextDir);
+        File.WriteAllText(Path.Combine(nextDir, "package-lock.json"), "empty");
+
+        var nodeApp = builder.AddNextJsApp("nextjs", nextDir)
+            .WithNpm(install: true);
+
+        await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+
+        var dockerfilePath = Path.Combine(tempDir.Path, "nextjs.Dockerfile");
+        await Verify(File.ReadAllText(dockerfilePath));
+
+        Assert.Empty(nodeApp.Resource.Annotations.OfType<ContainerFilesSourceAnnotation>());
+    }
+
+    [Fact]
+    public async Task VerifyDockerfileWhenNextJsAppUsesPnpm()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var nextDir = Path.Combine(tempDir.Path, "nextjs");
+        Directory.CreateDirectory(nextDir);
+        File.WriteAllText(Path.Combine(nextDir, "pnpm-lock.yaml"), "");
+
+        var nodeApp = builder.AddNextJsApp("nextjs", nextDir)
+            .WithPnpm(install: true);
+
+        await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+
+        var dockerfilePath = Path.Combine(tempDir.Path, "nextjs.Dockerfile");
+        await Verify(File.ReadAllText(dockerfilePath));
+    }
+
+    [Fact]
+    public async Task VerifyDockerfileWhenNpmScriptUsesPnpm()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(tempDir.Path, "nuxt");
+        Directory.CreateDirectory(appDir);
+        File.WriteAllText(Path.Combine(appDir, "pnpm-lock.yaml"), "");
+
+        var nodeApp = builder.AddViteApp("nuxt", appDir)
+            .WithPnpm(install: true)
+            .PublishAsNpmScript("start");
+
+        await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+
+        var dockerfilePath = Path.Combine(tempDir.Path, "nuxt.Dockerfile");
+        await Verify(File.ReadAllText(dockerfilePath));
     }
 
     [Fact]
@@ -242,8 +460,8 @@ public class AddViteAppTests
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
         var nodeResource = Assert.Single(appModel.Resources.OfType<ViteAppResource>());
 
-        // Get the command line args annotation to inspect the args callback
-        var commandLineArgsAnnotation = nodeResource.Annotations.OfType<CommandLineArgsCallbackAnnotation>().Single();
+        // Get the first command line args annotation (WithDebugSupport adds additional callbacks)
+        var commandLineArgsAnnotation = nodeResource.Annotations.OfType<CommandLineArgsCallbackAnnotation>().First();
         var args = new List<object>();
         var context = new CommandLineArgsCallbackContext(args, nodeResource);
         commandLineArgsAnnotation.Callback(context);
@@ -267,8 +485,8 @@ public class AddViteAppTests
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
         var nodeResource = Assert.Single(appModel.Resources.OfType<ViteAppResource>());
 
-        // Get the command line args annotation to inspect the args callback
-        var commandLineArgsAnnotation = nodeResource.Annotations.OfType<CommandLineArgsCallbackAnnotation>().Single();
+        // Get the first command line args annotation (WithDebugSupport adds additional callbacks)
+        var commandLineArgsAnnotation = nodeResource.Annotations.OfType<CommandLineArgsCallbackAnnotation>().First();
         var args = new List<object>();
         var context = new CommandLineArgsCallbackContext(args, nodeResource);
         commandLineArgsAnnotation.Callback(context);
@@ -628,6 +846,67 @@ public class AddViteAppTests
         var newConfigPath = args[configIndex + 1] as string;
         Assert.NotNull(newConfigPath);
         Assert.Contains($"aspire.{configFileName}", newConfigPath);
+    }
+
+    [Fact]
+    public void NextJsAppHasBuildValidationStep()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+
+        var nextDir = Path.Combine(tempDir.Path, "nextjs");
+        Directory.CreateDirectory(nextDir);
+        File.WriteAllText(Path.Combine(nextDir, "package-lock.json"), "empty");
+
+        var nodeApp = builder.AddNextJsApp("nextjs", nextDir);
+
+        var stepAnnotations = nodeApp.Resource.Annotations.OfType<PipelineStepAnnotation>().ToList();
+        Assert.NotEmpty(stepAnnotations);
+    }
+
+    [Fact]
+    public void DisableBuildValidationAddsSuppressAnnotation()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+
+        var nextDir = Path.Combine(tempDir.Path, "nextjs");
+        Directory.CreateDirectory(nextDir);
+        File.WriteAllText(Path.Combine(nextDir, "package-lock.json"), "empty");
+
+        var nodeApp = builder.AddNextJsApp("nextjs", nextDir)
+            .DisableBuildValidation();
+
+        Assert.True(nodeApp.Resource.TryGetLastAnnotation<SuppressPublishValidationAnnotation>(out _));
+    }
+
+    [Fact]
+    public async Task NextJsStandaloneCheckFailsInPipelineWhenMissing()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithResourceCleanUp(true);
+        builder.Services.AddSingleton<IPipelineActivityReporter, NullPublishingActivityReporter>();
+
+        var nextDir = Path.Combine(tempDir.Path, "nextjs");
+        Directory.CreateDirectory(nextDir);
+        File.WriteAllText(Path.Combine(nextDir, "package-lock.json"), "empty");
+        File.WriteAllText(Path.Combine(nextDir, "next.config.ts"), "const nextConfig = {}; export default nextConfig;");
+
+        builder.AddNextJsApp("nextjs", nextDir);
+
+        var app = builder.Build();
+        var pipeline = new DistributedApplicationPipeline();
+        var context = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            app.Services.GetRequiredService<ILogger<AddViteAppTests>>(),
+            CancellationToken.None);
+
+        // Pipeline throws AggregateException when multiple steps fail
+        var ex = await Assert.ThrowsAnyAsync<Exception>(() => pipeline.ExecuteAsync(context));
+        // Verify our standalone check step fired with the right message
+        Assert.Contains("output: \"standalone\"", ex.ToString());
     }
 
     // Helper class for testing IValueProvider

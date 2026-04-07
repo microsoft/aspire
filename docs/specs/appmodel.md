@@ -370,7 +370,7 @@ builder.WaitFor(otherResource)
 
 This resource can wait on other resources. A ParameterResource is an example of resources that cannot wait.
 
-> **Source:** These APIs and behaviors are defined in the [Aspire.Hosting](https://github.com/dotnet/aspire/blob/main/src/Aspire.Hosting/api/Aspire.Hosting.cs) package.
+> **Source:** These APIs and behaviors are defined in the [Aspire.Hosting](https://github.com/microsoft/aspire/blob/main/src/Aspire.Hosting/api/Aspire.Hosting.cs) package.
 
 ---
 

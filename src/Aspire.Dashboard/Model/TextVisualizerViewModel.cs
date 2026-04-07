@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Xml;
 using System.Xml.Linq;
@@ -129,7 +130,7 @@ public class TextVisualizerViewModel
 
         // Use a MemoryStream and Utf8JsonWriter to write the formatted JSON
         using var stream = new MemoryStream();
-        using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
+        using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
 
         while (reader.Read())
         {

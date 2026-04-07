@@ -1,11 +1,15 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREUSERSECRETS001
+
 using Aspire;
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp;
+using Aspire.Hosting.Resources;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 internal static class BuiltInDistributedApplicationEventSubscriptionHandlers
 {
@@ -41,7 +45,7 @@ internal static class BuiltInDistributedApplicationEventSubscriptionHandlers
     public static Task ExcludeDashboardFromManifestAsync(BeforeStartEvent beforeStartEvent, CancellationToken _)
     {
         // When developing locally, exclude the dashboard from the manifest. This only affects our playground projects in practice.
-        if (beforeStartEvent.Model.Resources.SingleOrDefault(r => StringComparers.ResourceName.Equals(r.Name, KnownResourceNames.AspireDashboard)) is { } dashboardResource)
+        if (beforeStartEvent.Model.Resources.SingleOrDefault(r => string.Equals(r.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName)) is { } dashboardResource)
         {
             dashboardResource.Annotations.Add(ManifestPublishingCallbackAnnotation.Ignore);
         }
@@ -74,6 +78,31 @@ internal static class BuiltInDistributedApplicationEventSubscriptionHandlers
         foreach (var resourceWithContainerImage in resourcesWithContainerImages)
         {
             resourceWithContainerImage.Annotation.Registry = options.ContainerRegistryOverride;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public static Task WarnPersistentContainersWithoutUserSecrets(BeforeStartEvent beforeStartEvent, CancellationToken _)
+    {
+        var userSecretsManager = beforeStartEvent.Services.GetRequiredService<IUserSecretsManager>();
+
+        if (userSecretsManager.IsAvailable)
+        {
+            return Task.CompletedTask;
+        }
+
+        var logger = beforeStartEvent.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Aspire.Hosting");
+
+        foreach (var resource in beforeStartEvent.Model.Resources)
+        {
+            if (resource.GetContainerLifetimeType() == ContainerLifetime.Persistent)
+            {
+                if (logger.IsEnabled(LogLevel.Warning))
+                {
+                    logger.LogWarning(MessageStrings.PersistentContainerWithoutUserSecrets, resource.Name);
+                }
+            }
         }
 
         return Task.CompletedTask;

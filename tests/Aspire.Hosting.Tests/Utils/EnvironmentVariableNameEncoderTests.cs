@@ -3,6 +3,7 @@
 
 namespace Aspire.Hosting.Tests.Utils;
 
+[Trait("Partition", "4")]
 public class EnvironmentVariableNameEncoderTests
 {
     [Theory]

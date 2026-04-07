@@ -7,6 +7,8 @@
       BuildTestsOnly         - if 'true', builds only test projects, defaults to 'false'
       SkipTestProjects       - if 'true', skips building test projects, defaults to 'false'
       SkipPlaygroundProjects - if 'true', skips building playground projects, defaults to 'false'
+      SkipBundleDeps         - if 'true', skips building eng/dcppack, eng/dashboardpack, Aspire.Dashboard, and Aspire.Cli projects during the main managed build, defaults to 'false'
+      BuildBundleDepsOnly    - if 'true', builds only the RID-specific eng/dcppack and eng/dashboardpack projects for $(TargetRids), plus Aspire.Dashboard for restore, defaults to 'false'
       TargetRids             - colon separated list of RIDs to build native projects for
   -->
 
@@ -21,16 +23,31 @@
     <TargetRids Condition="'$(TargetRids)' == ''">$(BuildRid)</TargetRids>
   </PropertyGroup>
 
+  <!-- `$(BuildBundleDepsOnly)` builds only the RID-specific DCP and Dashboard packaging projects
+        needed by the CLI bundle for $(TargetRids). This allows the CLI native archive build to
+        produce these packages independently without waiting for the full build_packages job. -->
+  <ItemGroup Condition="'$(BuildBundleDepsOnly)' == 'true'">
+    <_BundleDependencyTargetRid Include="$(TargetRids.Split(':'))" />
+    <_BundleDependencyProject Include="@(_BundleDependencyTargetRid -> '$(RepoRoot)eng\dcppack\Aspire.Hosting.Orchestration.%(Identity).csproj')" />
+    <_BundleDependencyProject Include="@(_BundleDependencyTargetRid -> '$(RepoRoot)eng\dashboardpack\Aspire.Dashboard.Sdk.%(Identity).csproj')" />
+    <ProjectToBuild Include="@(_BundleDependencyProject->Exists())" />
+    <!-- Dashboard is invoked by dashboardpack via MSBuild task (not ProjectReference),
+         so it must be explicitly included to ensure restore generates its assets file. -->
+    <ProjectToBuild Include="$(RepoRoot)src\Aspire.Dashboard\Aspire.Dashboard.csproj" />
+  </ItemGroup>
+
   <!-- `$(BuildTestsOnly)` allows building only test projects, skipping the following directories:
         src, playground, eng/dcppack, and eng/dashboardpack. This is useful for reducing disk space
         usage when only test projects need to be built, such as during test runsheet generation. -->
-  <ItemGroup Condition="'$(SkipManagedBuild)' != 'true' and '$(BuildTestsOnly)' != 'true'">
+  <ItemGroup Condition="'$(SkipManagedBuild)' != 'true' and '$(BuildTestsOnly)' != 'true' and '$(BuildBundleDepsOnly)' != 'true'">
     <!-- Project name validation runs once in the outer build -->
     <ProjectToBuild Include="$(RepoRoot)eng\OuterPreBuild.proj" />
 
     <ProjectToBuild Include="$(RepoRoot)src\**\*.csproj" Exclude="$(RepoRoot)src\Aspire.ProjectTemplates\templates\**\*.csproj" />
-    <ProjectToBuild Include="$(RepoRoot)eng\dcppack\**\*.csproj" />
-    <ProjectToBuild Include="$(RepoRoot)eng\dashboardpack\**\*.csproj" />
+    <ProjectToBuild Remove="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.*csproj" Condition="'$(SkipBundleDeps)' == 'true'" />
+    <ProjectToBuild Remove="$(RepoRoot)src\Aspire.Dashboard\Aspire.Dashboard.csproj" Condition="'$(SkipBundleDeps)' == 'true'" />
+    <ProjectToBuild Include="$(RepoRoot)eng\dcppack\**\*.csproj" Condition="'$(SkipBundleDeps)' != 'true'" />
+    <ProjectToBuild Include="$(RepoRoot)eng\dashboardpack\**\*.csproj" Condition="'$(SkipBundleDeps)' != 'true'" />
 
     <!-- Exclude only the MAUI client project as it requires the .NET MAUI workload.
          Other projects in the AspireWithMaui playground can still be built. -->
@@ -42,17 +59,17 @@
   <!-- `$(SkipTestProjects)` allows skipping test projects from being
         included in the build at all. This is useful for cases like when we are
         just building the packages, and don't need to build the test projects. -->
-  <ItemGroup Condition="'$(SkipManagedBuild)' != 'true' and '$(SkipTestProjects)' != 'true'">
+  <ItemGroup Condition="'$(SkipManagedBuild)' != 'true' and '$(SkipTestProjects)' != 'true' and '$(BuildBundleDepsOnly)' != 'true'">
     <ProjectToBuild Include="$(RepoRoot)tests\**\*.csproj" />
   </ItemGroup>
 
   <!-- Extension build project -->
-  <ItemGroup Condition="'$(BuildExtension)' == 'true'">
+  <ItemGroup Condition="'$(BuildExtension)' == 'true' and '$(BuildBundleDepsOnly)' != 'true'">
     <ProjectToBuild Include="$(RepoRoot)extension\Extension.proj" />
   </ItemGroup>
 
   <!-- Native build only -->
-  <ItemGroup Condition="'$(SkipNativeBuild)' != 'true'">
+  <ItemGroup Condition="'$(SkipNativeBuild)' != 'true' and '$(BuildBundleDepsOnly)' != 'true'">
     <!-- Add Aspire.Cli project here for native-only builds so it gets picked
          up Restore, because Aspire.Cli.$(RID).csproj uses MSBuild task to build
          instead of a ProjectReference -->

@@ -2,14 +2,19 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="fr" original="../DeployCommandStrings.resx">
     <body>
+      <trans-unit id="ClearCacheOptionDescription">
+        <source>Clear the deployment cache associated with the current environment and do not save deployment state</source>
+        <target state="new">Clear the deployment cache associated with the current environment and do not save deployment state</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DeploymentCanceled">
         <source>The deployment was canceled.</source>
         <target state="translated">Le déploiement a été annulé.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Deploy the contents of an Aspire apphost to its defined deployment targets. (Preview)</source>
-        <target state="translated">Déployez le contenu d’un Aspire AppHost vers les cibles de déploiement définies. (Préversion)</target>
+        <source>Deploy an AppHost to its deployment targets (Preview)</source>
+        <target state="needs-review-translation">Déployez le contenu d’un Aspire AppHost vers les cibles de déploiement définies. (Préversion)</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationCompletedPrefix">
@@ -23,8 +28,8 @@
         <note />
       </trans-unit>
       <trans-unit id="OutputPathArgumentDescription">
-        <source>The optional output path for deployment artifacts.</source>
-        <target state="translated">Le chemin de sortie optionnel des artefacts de déploiement.</target>
+        <source>The optional output path for deployment artifacts</source>
+        <target state="needs-review-translation">Le chemin de sortie optionnel des artefacts de déploiement.</target>
         <note />
       </trans-unit>
     </body>

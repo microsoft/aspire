@@ -7,7 +7,7 @@ using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Commands.Sdk;
-using Aspire.Hosting.Ats;
+using Aspire.TypeSystem;
 using Spectre.Console;
 using StreamJsonRpc;
 using StreamJsonRpc.Protocol;
@@ -37,9 +37,9 @@ namespace Aspire.Cli.Backchannel;
 [JsonSerializable(typeof(EnvVar))]
 [JsonSerializable(typeof(List<EnvVar>))]
 [JsonSerializable(typeof(List<string>))]
+[JsonSerializable(typeof(DebugSessionOptions))]
 [JsonSerializable(typeof(bool?))]
 [JsonSerializable(typeof(AppHostProjectSearchResultPoco))]
-[JsonSerializable(typeof(DashboardMcpConnectionInfo))]
 [JsonSerializable(typeof(AppHostInformation))]
 [JsonSerializable(typeof(ResourceSnapshot))]
 [JsonSerializable(typeof(ResourceSnapshot[]))]
@@ -72,6 +72,10 @@ namespace Aspire.Cli.Backchannel;
 [JsonSerializable(typeof(McpToolContentItem[]))]
 [JsonSerializable(typeof(StopAppHostRequest))]
 [JsonSerializable(typeof(StopAppHostResponse))]
+[JsonSerializable(typeof(ExecuteResourceCommandRequest))]
+[JsonSerializable(typeof(ExecuteResourceCommandResponse))]
+[JsonSerializable(typeof(WaitForResourceRequest))]
+[JsonSerializable(typeof(WaitForResourceResponse))]
 internal partial class BackchannelJsonSerializerContext : JsonSerializerContext
 {
     [UnconditionalSuppressMessage("ReflectionAnalysis", "IL2026:RequiresUnreferencedCode", Justification = "Using the Json source generator.")]

@@ -6,6 +6,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
+using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.NuGet;
 
@@ -36,7 +37,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
         var provider = services.BuildServiceProvider();
 
         var nuGetPackageCache = provider.GetRequiredService<INuGetPackageCache>();
-        var packages = await nuGetPackageCache.GetCliPackagesAsync(workspace.WorkspaceRoot, prerelease: true, nugetConfigFile: null, CancellationToken.None).WaitAsync(CliTestConstants.DefaultTimeout);
+        var packages = await nuGetPackageCache.GetCliPackagesAsync(workspace.WorkspaceRoot, prerelease: true, nugetConfigFile: null, CancellationToken.None).DefaultTimeout();
 
         Assert.Collection(
             packages,
@@ -59,6 +60,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
                     return (0, [
                         new NuGetPackage { Id = "Aspire.Hosting.Redis", Version = "9.4.0", Source = "nuget.org" },
                         new NuGetPackage { Id = "Aspire.Hosting.Dapr", Version = "9.4.0", Source = "nuget.org" }, // Deprecated
+                        new NuGetPackage { Id = "Aspire.Hosting.NodeJs", Version = "9.4.0", Source = "nuget.org" }, // Deprecated
                         new NuGetPackage { Id = "Aspire.Hosting.PostgreSQL", Version = "9.4.0", Source = "nuget.org" }
                     ]);
                 };
@@ -70,13 +72,14 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
         var provider = services.BuildServiceProvider();
 
         var nuGetPackageCache = provider.GetRequiredService<INuGetPackageCache>();
-        var packages = await nuGetPackageCache.GetPackagesAsync(workspace.WorkspaceRoot, "Aspire.Hosting", null, prerelease: false, nugetConfigFile: null, useCache: true, CancellationToken.None).WaitAsync(CliTestConstants.DefaultTimeout);
+        var packages = await nuGetPackageCache.GetPackagesAsync(workspace.WorkspaceRoot, "Aspire.Hosting", null, prerelease: false, nugetConfigFile: null, useCache: true, CancellationToken.None).DefaultTimeout();
 
         // Should include regular packages but exclude deprecated Dapr package
         var packageIds = packages.Select(p => p.Id).ToList();
         Assert.Contains("Aspire.Hosting.Redis", packageIds);
         Assert.Contains("Aspire.Hosting.PostgreSQL", packageIds);
         Assert.DoesNotContain("Aspire.Hosting.Dapr", packageIds);
+        Assert.DoesNotContain("Aspire.Hosting.NodeJs", packageIds);
     }
 
     [Fact]
@@ -97,6 +100,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
                     return (0, [
                         new NuGetPackage { Id = "Aspire.Hosting.Redis", Version = "9.4.0", Source = "nuget.org" },
                         new NuGetPackage { Id = "Aspire.Hosting.Dapr", Version = "9.4.0", Source = "nuget.org" }, // Deprecated
+                        new NuGetPackage { Id = "Aspire.Hosting.NodeJs", Version = "9.4.0", Source = "nuget.org" }, // Deprecated
                         new NuGetPackage { Id = "Aspire.Hosting.PostgreSQL", Version = "9.4.0", Source = "nuget.org" }
                     ]);
                 };
@@ -108,13 +112,14 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
         var provider = services.BuildServiceProvider();
 
         var nuGetPackageCache = provider.GetRequiredService<INuGetPackageCache>();
-        var packages = await nuGetPackageCache.GetPackagesAsync(workspace.WorkspaceRoot, "Aspire.Hosting", null, prerelease: false, nugetConfigFile: null, useCache: true, CancellationToken.None).WaitAsync(CliTestConstants.DefaultTimeout);
+        var packages = await nuGetPackageCache.GetPackagesAsync(workspace.WorkspaceRoot, "Aspire.Hosting", null, prerelease: false, nugetConfigFile: null, useCache: true, CancellationToken.None).DefaultTimeout();
 
         // Should include all packages including deprecated Dapr package when showing deprecated is enabled
         var packageIds = packages.Select(p => p.Id).ToList();
         Assert.Contains("Aspire.Hosting.Redis", packageIds);
         Assert.Contains("Aspire.Hosting.PostgreSQL", packageIds);
         Assert.Contains("Aspire.Hosting.Dapr", packageIds);
+        Assert.Contains("Aspire.Hosting.NodeJs", packageIds);
     }
 
     [Fact]
@@ -152,7 +157,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
             prerelease: false, 
             nugetConfigFile: null, 
             useCache: true,
-            CancellationToken.None).WaitAsync(CliTestConstants.DefaultTimeout);
+            CancellationToken.None).DefaultTimeout();
 
         // Custom filter should bypass deprecated package filtering
         var packageIds = packages.Select(p => p.Id).ToList();
@@ -187,7 +192,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
         var provider = services.BuildServiceProvider();
 
         var nuGetPackageCache = provider.GetRequiredService<INuGetPackageCache>();
-        var packages = await nuGetPackageCache.GetPackagesAsync(workspace.WorkspaceRoot, "Aspire.Hosting", null, prerelease: false, nugetConfigFile: null, useCache: true, CancellationToken.None).WaitAsync(CliTestConstants.DefaultTimeout);
+        var packages = await nuGetPackageCache.GetPackagesAsync(workspace.WorkspaceRoot, "Aspire.Hosting", null, prerelease: false, nugetConfigFile: null, useCache: true, CancellationToken.None).DefaultTimeout();
 
         // Should filter out all case variations of deprecated package
         var packageIds = packages.Select(p => p.Id).ToList();

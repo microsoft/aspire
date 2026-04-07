@@ -1,0 +1,82 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="ko" original="../SharedCommandStrings.resx">
+    <body>
+      <trans-unit id="AppHostNotRunning">
+        <source>No running AppHost found. Use 'aspire run' to start one first.</source>
+        <target state="new">No running AppHost found. Use 'aspire run' to start one first.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FormatOptionDescription">
+        <source>Output format for detached AppHost results</source>
+        <target state="new">Output format for detached AppHost results</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="IsolatedOptionDescription">
+        <source>Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously</source>
+        <target state="new">Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MultipleInScopeAppHosts">
+        <source>Multiple running AppHosts found in the current directory. Select from running AppHosts.</source>
+        <target state="new">Multiple running AppHosts found in the current directory. Select from running AppHosts.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoInScopeAppHostsShowingAll">
+        <source>No running AppHosts found in the current directory. Select from all running AppHosts.</source>
+        <target state="new">No running AppHosts found in the current directory. Select from all running AppHosts.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostOptionDescription">
+        <source>The path to the Aspire AppHost project file</source>
+        <target state="new">The path to the Aspire AppHost project file</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PipelineEnvironmentOptionDescription">
+        <source>The environment to use for the operation. The default is 'Production'.</source>
+        <target state="new">The environment to use for the operation. The default is 'Production'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PipelineIncludeExceptionDetailsOptionDescription">
+        <source>Include exception details (stack traces) in pipeline logs</source>
+        <target state="new">Include exception details (stack traces) in pipeline logs</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PipelineLogLevelOptionDescription">
+        <source>Set the minimum log level for pipeline logging (trace, debug, information, warning, error, critical). The default is 'information'.</source>
+        <target state="new">Set the minimum log level for pipeline logging (trace, debug, information, warning, error, critical). The default is 'information'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PipelineStepTimelineLabel">
+        <source>Step timeline:</source>
+        <target state="new">Step timeline:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PipelineStepsSummaryTitle">
+        <source>Steps Summary:</source>
+        <target state="new">Steps Summary:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ScanningForRunningAppHosts">
+        <source>Scanning for running AppHosts...</source>
+        <target state="new">Scanning for running AppHosts...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SelectAppHost">
+        <source>Select an AppHost to {0}:</source>
+        <target state="new">Select an AppHost to {0}:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UsingAppHost">
+        <source>Using AppHost: {0}</source>
+        <target state="new">Using AppHost: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PromptRunAgentInit">
+        <source>Would you like to configure AI agent environments for this project?</source>
+        <target state="new">Would you like to configure AI agent environments for this project?</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

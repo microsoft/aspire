@@ -12,8 +12,8 @@ readonly CLI_ARCHIVE_ARTIFACT_NAME_PREFIX="cli-native-archives"
 readonly ASPIRE_CLI_ARTIFACT_NAME_PREFIX="aspire-cli"
 readonly EXTENSION_ARTIFACT_NAME="aspire-extension"
 
-# Repository: Allow override via ASPIRE_REPO env var (owner/name). Default: dotnet/aspire
-readonly REPO="${ASPIRE_REPO:-dotnet/aspire}"
+# Repository: Allow override via ASPIRE_REPO env var (owner/name). Default: microsoft/aspire
+readonly REPO="${ASPIRE_REPO:-microsoft/aspire}"
 readonly GH_REPOS_BASE="repos/${REPO}"
 
 # Global constants
@@ -85,7 +85,7 @@ EXAMPLES:
     ./get-aspire-cli-pr.sh 1234 --skip-path
     ./get-aspire-cli-pr.sh 1234 --dry-run
 
-    curl -fsSL https://raw.githubusercontent.com/dotnet/aspire/main/eng/scripts/get-aspire-cli-pr.sh | bash -s -- <PR_NUMBER>
+    curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.sh | bash -s -- <PR_NUMBER>
 
 REQUIREMENTS:
     - GitHub CLI (gh) must be installed and authenticated
@@ -93,7 +93,7 @@ REQUIREMENTS:
     - VS Code extension installation requires VS Code CLI (code) to be available in PATH
 
 ENVIRONMENT VARIABLES:
-    ASPIRE_REPO            Override repository (owner/name). Default: dotnet/aspire
+    ASPIRE_REPO            Override repository (owner/name). Default: microsoft/aspire
                            Example: export ASPIRE_REPO=myfork/aspire
 
 EOF
@@ -283,7 +283,7 @@ get_cli_architecture_from_architecture() {
             printf "arm64"
             ;;
         *)
-            say_error "Architecture $architecture not supported. If you think this is a bug, report it at https://github.com/dotnet/aspire/issues"
+            say_error "Architecture $architecture not supported. If you think this is a bug, report it at https://github.com/microsoft/aspire/issues"
             return 1
             ;;
     esac
@@ -301,7 +301,7 @@ detect_architecture() {
             printf "arm64"
             ;;
         *)
-            say_error "Architecture $uname_m not supported. If you think this is a bug, report it at https://github.com/dotnet/aspire/issues"
+            say_error "Architecture $uname_m not supported. If you think this is a bug, report it at https://github.com/microsoft/aspire/issues"
             return 1
             ;;
     esac
@@ -582,7 +582,7 @@ check_gh_dependency() {
 
 # Function to make GitHub API calls with proper error handling
 # Parameters:
-#   $1 - endpoint: The GitHub API endpoint (e.g., "repos/dotnet/aspire/pulls/123")
+#   $1 - endpoint: The GitHub API endpoint (e.g., "repos/microsoft/aspire/pulls/123")
 #   $2 - jq_filter: Optional jq filter to apply to the response (e.g., ".head.sha")
 #   $3 - error_message: Optional custom error message prefix
 # Returns:

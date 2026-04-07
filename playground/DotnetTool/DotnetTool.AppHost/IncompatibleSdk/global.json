@@ -1,0 +1,8 @@
+{
+  // DO NOT UPDATE THE SDK VERSION IN THIS FILE
+  // It is very explicitly set to simulate an SDK version without `dotnet tool exec`
+  "sdk": {
+    "version": "9.0.0",
+    "rollForward": "latestFeature"
+  }
+}

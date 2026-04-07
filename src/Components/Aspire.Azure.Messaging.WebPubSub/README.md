@@ -54,7 +54,7 @@ And then the connection information will be retrieved from the `ConnectionString
 
 #### Use the service endpoint
 
-The recommended approach is to use the service endpoint, which works with the `AzureMessagingWebPubSubSettings.Credential` property to establish a connection. If no credential is configured, the [DefaultAzureCredential](https://learn.microsoft.com/dotnet/api/azure.identity.defaultazurecredential) is used.
+The recommended approach is to use the service endpoint, which works with the `AzureMessagingWebPubSubSettings.Credential` property to establish a connection. If no credential is configured, a [default TokenCredential is created based on the current environment](https://aka.ms/aspire/default-azure-credential).
 
 ```json
 {
@@ -129,8 +129,8 @@ builder.AddAzureWebPubSubServiceClient("wps");
 ## Additional documentation
 
 * https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/webpubsub/Azure.Messaging.WebPubSub/README.md
-* https://github.com/dotnet/aspire/tree/main/src/Components/README.md
+* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

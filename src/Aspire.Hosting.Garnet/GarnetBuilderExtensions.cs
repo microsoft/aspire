@@ -51,6 +51,8 @@ public static class GarnetBuilderExtensions
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <param name="port">The host port to bind the underlying container to.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>This overload is not available in polyglot app hosts. Use <see cref="AddGarnetForPolyglot"/> instead.</remarks>
+    [AspireExportIgnore(Reason = "Use the dedicated polyglot overload instead.")]
     public static IResourceBuilder<GarnetResource> AddGarnet(this IDistributedApplicationBuilder builder, [ResourceName] string name,
         int? port)
     {
@@ -94,6 +96,8 @@ public static class GarnetBuilderExtensions
     /// <param name="port">The host port to bind the underlying container to.</param>
     /// <param name="password">The parameter used to provide the password for the Redis resource. If <see langword="null"/> a random password will be generated.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>This overload is not available in polyglot app hosts. Use <see cref="AddGarnetForPolyglot"/> instead.</remarks>
+    [AspireExportIgnore(Reason = "Use the dedicated polyglot overload instead.")]
     public static IResourceBuilder<GarnetResource> AddGarnet(this IDistributedApplicationBuilder builder, [ResourceName] string name,
         int? port = null, IResourceBuilder<ParameterResource>? password = null)
     {
@@ -127,7 +131,7 @@ public static class GarnetBuilderExtensions
             .WithImage(GarnetContainerImageTags.Image, GarnetContainerImageTags.Tag)
             .WithImageRegistry(GarnetContainerImageTags.Registry)
             .WithHealthCheck(healthCheckKey)
-            // see https://github.com/dotnet/aspire/issues/3838 for why the password is passed this way
+            // see https://github.com/microsoft/aspire/issues/3838 for why the password is passed this way
             .WithEntrypoint("/bin/sh")
             .WithEnvironment(context =>
             {
@@ -170,6 +174,14 @@ public static class GarnetBuilderExtensions
             });
     }
 
+    [AspireExport("addGarnet", Description = "Adds a Garnet container resource to the application model.")]
+    internal static IResourceBuilder<GarnetResource> AddGarnetForPolyglot(
+        this IDistributedApplicationBuilder builder,
+        [ResourceName] string name,
+        int? port = null,
+        IResourceBuilder<ParameterResource>? password = null)
+        => AddGarnet(builder, name, port, password);
+
     /// <summary>
     /// Adds a named volume for the data folder to a Garnet container resource and enables Garnet persistence.
     /// </summary>
@@ -190,6 +202,7 @@ public static class GarnetBuilderExtensions
     /// Defaults to <c>false</c>.
     /// </param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport(Description = "Adds a persistent data volume to the Garnet resource.")]
     public static IResourceBuilder<GarnetResource> WithDataVolume(this IResourceBuilder<GarnetResource> builder,
         string? name = null, bool isReadOnly = false)
     {
@@ -225,6 +238,7 @@ public static class GarnetBuilderExtensions
     /// Defaults to <c>false</c>.
     /// </param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport(Description = "Mounts a host directory as the Garnet data directory.")]
     public static IResourceBuilder<GarnetResource> WithDataBindMount(this IResourceBuilder<GarnetResource> builder,
         string source, bool isReadOnly = false)
     {
@@ -278,6 +292,7 @@ public static class GarnetBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="interval">The interval between snapshot exports. Defaults to 60 seconds.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport(Description = "Configures snapshot persistence for the Garnet resource.")]
     public static IResourceBuilder<GarnetResource> WithPersistence(this IResourceBuilder<GarnetResource> builder,
         TimeSpan? interval = null)
     {

@@ -7,7 +7,6 @@
   <Target Name="BuildAndPackageExtension" BeforeTargets="Build" DependsOnTargets="CheckYarnInstalled;CheckVsceInstalled">
     <PropertyGroup>
       <_PackageJsonPath>$([MSBuild]::NormalizePath($(ExtensionSrcDir), 'package.json'))</_PackageJsonPath>
-      <_VsixPath>$([MSBuild]::NormalizePath($(ArtifactsPackagesDir), 'aspire-vscode-$(Version).vsix'))</_VsixPath>
     </PropertyGroup>
 
     <Error Text="$(_PackageJsonPath) not found. Cannot package the extension." Condition="!Exists('$(_PackageJsonPath)')" />
@@ -20,17 +19,38 @@
       <Output TaskParameter="ConsoleOutput" PropertyName="_ExtractedVersion" />
     </Exec>
 
+    <PropertyGroup>
+      <_VscodeOutputDir>$(ArtifactsPackagesDir)vscode</_VscodeOutputDir>
+      <_VsixPath>$(_VscodeOutputDir)\aspire-vscode-$(_ExtractedVersion).vsix</_VsixPath>
+      <_ManifestPath>$(_VscodeOutputDir)\aspire-vscode-$(_ExtractedVersion).manifest</_ManifestPath>
+    </PropertyGroup>
+
     <!-- Install dependencies and compile -->
     <Exec Command="yarn install" WorkingDirectory="$(ExtensionSrcDir)" IgnoreStandardErrorWarningFormat="true" />
     <Exec Command="yarn compile" WorkingDirectory="$(ExtensionSrcDir)" IgnoreStandardErrorWarningFormat="true" />
 
     <!-- Make extension directory -->
-    <MakeDir Directories="$(ArtifactsPackagesDir)\vscode" />
+    <MakeDir Directories="$(_VscodeOutputDir)" />
 
     <!-- Package extension -->
-    <Exec Command="vsce package --out $(ArtifactsPackagesDir)\vscode\aspire-vscode-$(_ExtractedVersion).vsix"
+    <Exec Command="vsce package --out $(_VsixPath)"
           IgnoreStandardErrorWarningFormat="true"
           WorkingDirectory="$(ExtensionSrcDir)" />
+
+    <!-- 
+      VS Code extension signing for marketplace verification:
+      Generate manifest from the VSIX using vsce. The signing project (signing/signVsix.proj)
+      will copy this to .signature.p7s and sign it with the VSCodePublisher certificate.
+      When publishing, vsce needs the VSIX, manifest, and signed .signature.p7s file.
+    -->
+    <Exec Command="vsce generate-manifest -i $(_VsixPath) -o $(_ManifestPath)"
+          IgnoreStandardErrorWarningFormat="true"
+          WorkingDirectory="$(ExtensionSrcDir)" />
+
+    <Message Importance="high" Text="VS Code extension artifacts created in $(_VscodeOutputDir):" />
+    <Message Importance="high" Text="  VSIX: $(_VsixPath)" />
+    <Message Importance="high" Text="  Manifest: $(_ManifestPath)" />
+    <Message Importance="high" Text="  (Signature will be created by signing/signVsix.proj during signing phase)" />
   </Target>
 
   <Target Name="CheckYarnInstalled">

@@ -62,12 +62,14 @@ internal sealed class DocsSearchResponse
 
             if (showScores)
             {
-                sb.AppendLine(CultureInfo.InvariantCulture, $"## Result {i + 1} (Score: {result.Score:F3})");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"## {result.Title} (Score: {result.Score:F3})");
             }
             else
             {
-                sb.AppendLine(CultureInfo.InvariantCulture, $"## Result {i + 1}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"## {result.Title}");
             }
+
+            sb.AppendLine(CultureInfo.InvariantCulture, $"**Slug:** `{result.Slug}`");
 
             if (!string.IsNullOrEmpty(result.Section))
             {
@@ -78,9 +80,10 @@ internal sealed class DocsSearchResponse
             sb.AppendLine(result.Content);
             sb.AppendLine();
             sb.AppendLine("---");
-            sb.AppendLine();
         }
 
+        sb.AppendLine("Use `get_doc` with the slug to retrieve the full content of this page.");
+        sb.AppendLine();
         return sb.ToString();
     }
 }
@@ -90,6 +93,16 @@ internal sealed class DocsSearchResponse
 /// </summary>
 internal sealed class SearchResult
 {
+    /// <summary>
+    /// Gets the title of the matched document.
+    /// </summary>
+    public required string Title { get; init; }
+
+    /// <summary>
+    /// Gets the slug of the matched document, used with get_doc to retrieve full content.
+    /// </summary>
+    public required string Slug { get; init; }
+
     /// <summary>
     /// Gets the matched content.
     /// </summary>
@@ -126,6 +139,8 @@ internal sealed class DocsSearchService(
         // Convert DocsSearchResult to SearchResult
         var results = searchResults.Select(r => new SearchResult
         {
+            Title = r.Title,
+            Slug = r.Slug,
             Content = r.Summary ?? r.Title,
             Section = r.MatchedSection,
             Score = r.Score

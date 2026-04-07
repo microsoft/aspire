@@ -20,8 +20,6 @@ internal sealed class JsonRpcServer : BackgroundService
 {
     private readonly string _socketPath;
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly CodeGenerationService _codeGenerationService;
-    private readonly LanguageService _languageService;
     private readonly ILogger<JsonRpcServer> _logger;
     private Socket? _listenSocket;
     private bool _disposed;
@@ -30,13 +28,9 @@ internal sealed class JsonRpcServer : BackgroundService
     public JsonRpcServer(
         IConfiguration configuration,
         IServiceScopeFactory scopeFactory,
-        CodeGenerationService codeGenerationService,
-        LanguageService languageService,
         ILogger<JsonRpcServer> logger)
     {
         _scopeFactory = scopeFactory;
-        _codeGenerationService = codeGenerationService;
-        _languageService = languageService;
         _logger = logger;
 
         var socketPath = configuration["REMOTE_APP_HOST_SOCKET_PATH"];
@@ -194,6 +188,8 @@ internal sealed class JsonRpcServer : BackgroundService
 
         // Resolve the scoped RemoteAppHostService
         var clientService = scope.ServiceProvider.GetRequiredService<RemoteAppHostService>();
+        var codeGenerationService = scope.ServiceProvider.GetRequiredService<CodeGenerationService>();
+        var languageService = scope.ServiceProvider.GetRequiredService<LanguageService>();
 
         try
         {
@@ -203,10 +199,10 @@ internal sealed class JsonRpcServer : BackgroundService
             using var jsonRpc = new JsonRpc(handler, clientService);
 
             // Add the shared CodeGenerationService as an additional target for generateCode method
-            jsonRpc.AddLocalRpcTarget(_codeGenerationService);
+            jsonRpc.AddLocalRpcTarget(codeGenerationService);
 
             // Add the shared LanguageService as an additional target for language support methods
-            jsonRpc.AddLocalRpcTarget(_languageService);
+            jsonRpc.AddLocalRpcTarget(languageService);
 
             jsonRpc.StartListening();
 

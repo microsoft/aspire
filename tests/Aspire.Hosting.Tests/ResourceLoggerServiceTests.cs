@@ -2,13 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Threading.Channels;
-using Aspire.Hosting.ConsoleLogs;
 using Aspire.Hosting.Tests.Utils;
+using Aspire.Shared.ConsoleLogs;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "3")]
 public class ResourceLoggerServiceTests
 {
     [Fact]

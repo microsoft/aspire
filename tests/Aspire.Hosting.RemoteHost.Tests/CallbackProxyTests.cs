@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Nodes;
-using Aspire.Hosting.Ats;
+using Aspire.TypeSystem;
 using Aspire.Hosting.RemoteHost.Ats;
 using Xunit;
 
@@ -173,9 +173,30 @@ public class CallbackProxyTests
         Assert.Single(invoker.Invocations);
         var args = invoker.Invocations[0].Args as JsonObject;
         Assert.NotNull(args);
-        // Arguments are passed with positional keys (p0, p1, p2, ...)
-        // CancellationToken is not included in positional args, but added as $cancellationToken if not None
         Assert.Equal("test", args["p0"]?.GetValue<string>());
+        var tokenId = args["p1"]?.GetValue<string>();
+        Assert.NotNull(tokenId);
+        Assert.StartsWith("ct_", tokenId);
+        Assert.Equal(tokenId, args["$cancellationToken"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task InvokedProxy_WithOnlyCancellationToken_UsesPositionalTokenId()
+    {
+        var invoker = new TestCallbackInvoker();
+        using var factory = CreateFactory(invoker);
+        using var cts = new CancellationTokenSource();
+
+        var proxy = (TestCallbackWithOnlyCancellation)factory.CreateProxy("test-callback", typeof(TestCallbackWithOnlyCancellation))!;
+
+        await proxy(cts.Token);
+
+        Assert.Single(invoker.Invocations);
+        var args = invoker.Invocations[0].Args as JsonObject;
+        Assert.NotNull(args);
+        var tokenId = args["p0"]?.GetValue<string>();
+        Assert.NotNull(tokenId);
+        Assert.Equal(tokenId, args["$cancellationToken"]?.GetValue<string>());
     }
 
     // Callback error handling tests
@@ -223,11 +244,132 @@ public class CallbackProxyTests
         await Assert.ThrowsAsync<OperationCanceledException>(() => proxy());
     }
 
-    private static AtsCallbackProxyFactory CreateFactory(ICallbackInvoker? invoker = null)
+    [Fact]
+    public void InvokedSyncVoidProxy_AppliesDtoWritebackFromResult()
+    {
+        var dto = new TestCallbackDto { Name = "original", Count = 0 };
+
+        // The invoker returns the modified args (simulating TypeScript returning mutated DTO)
+        var invoker = new TestCallbackInvoker
+        {
+            ResultToReturn = new JsonObject
+            {
+                ["p0"] = new JsonObject { ["name"] = "modified", ["count"] = 42 }
+            }
+        };
+        using var factory = CreateFactory(invoker, registerDtoTypes: true);
+
+        var proxy = (TestSyncVoidCallbackWithDto)factory.CreateProxy("test-callback", typeof(TestSyncVoidCallbackWithDto))!;
+
+        proxy(dto);
+
+        Assert.Equal("modified", dto.Name);
+        Assert.Equal(42, dto.Count);
+    }
+
+    [Fact]
+    public async Task InvokedAsyncVoidProxy_AppliesDtoWritebackFromResult()
+    {
+        var dto = new TestCallbackDto { Name = "original", Count = 0 };
+
+        var invoker = new TestCallbackInvoker
+        {
+            ResultToReturn = new JsonObject
+            {
+                ["p0"] = new JsonObject { ["name"] = "async-modified", ["count"] = 99 }
+            }
+        };
+        using var factory = CreateFactory(invoker, registerDtoTypes: true);
+
+        var proxy = (TestAsyncVoidCallbackWithDto)factory.CreateProxy("test-callback", typeof(TestAsyncVoidCallbackWithDto))!;
+
+        await proxy(dto);
+
+        Assert.Equal("async-modified", dto.Name);
+        Assert.Equal(99, dto.Count);
+    }
+
+    [Fact]
+    public void InvokedSyncVoidProxy_DtoWritebackIgnoresNonDtoArgs()
+    {
+        // Use a delegate with both a non-DTO param (string) and a DTO param to exercise
+        // the writeback path. The non-DTO arg at p0 should be safely skipped, while
+        // the DTO arg at p1 should be written back.
+        var dto = new TestCallbackDto { Name = "original", Count = 0 };
+        var invoker = new TestCallbackInvoker
+        {
+            ResultToReturn = new JsonObject
+            {
+                ["p0"] = JsonValue.Create("some-string"),
+                ["p1"] = new JsonObject { ["name"] = "mixed-modified", ["count"] = 77 }
+            }
+        };
+        using var factory = CreateFactory(invoker, registerDtoTypes: true);
+
+        var proxy = (TestSyncVoidCallbackWithMixedArgs)factory.CreateProxy("test-callback", typeof(TestSyncVoidCallbackWithMixedArgs))!;
+
+        // Should not throw - non-DTO arg at p0 is skipped, DTO arg at p1 is written back
+        proxy("hello", dto);
+
+        Assert.Equal("mixed-modified", dto.Name);
+        Assert.Equal(77, dto.Count);
+    }
+
+    [Fact]
+    public void InvokedSyncVoidProxy_DtoWritebackHandlesNullResult()
+    {
+        var dto = new TestCallbackDto { Name = "original", Count = 0 };
+
+        // Invoker returns null (TypeScript callback returned undefined and no args were sent back)
+        var invoker = new TestCallbackInvoker { ResultToReturn = null };
+        using var factory = CreateFactory(invoker, registerDtoTypes: true);
+
+        var proxy = (TestSyncVoidCallbackWithDto)factory.CreateProxy("test-callback", typeof(TestSyncVoidCallbackWithDto))!;
+
+        proxy(dto);
+
+        // Original values should be unchanged
+        Assert.Equal("original", dto.Name);
+        Assert.Equal(0, dto.Count);
+    }
+
+    [Fact]
+    public void InvokedSyncVoidProxy_AppliesWritebackToMultipleDtos()
+    {
+        var dto1 = new TestCallbackDto { Name = "first", Count = 1 };
+        var dto2 = new TestCallbackDto { Name = "second", Count = 2 };
+
+        var invoker = new TestCallbackInvoker
+        {
+            ResultToReturn = new JsonObject
+            {
+                ["p0"] = new JsonObject { ["name"] = "first-updated", ["count"] = 10 },
+                ["p1"] = new JsonObject { ["name"] = "second-updated", ["count"] = 20 }
+            }
+        };
+        using var factory = CreateFactory(invoker, registerDtoTypes: true);
+
+        var proxy = (TestSyncVoidCallbackWithMultipleDtos)factory.CreateProxy("test-callback", typeof(TestSyncVoidCallbackWithMultipleDtos))!;
+
+        proxy(dto1, dto2);
+
+        Assert.Equal("first-updated", dto1.Name);
+        Assert.Equal(10, dto1.Count);
+        Assert.Equal("second-updated", dto2.Name);
+        Assert.Equal(20, dto2.Count);
+    }
+
+    private static AtsCallbackProxyFactory CreateFactory(ICallbackInvoker? invoker = null, bool registerDtoTypes = false)
     {
         var handles = new HandleRegistry();
         var ctRegistry = new CancellationTokenRegistry();
-        var context = new AtsContext { Capabilities = [], HandleTypes = [], DtoTypes = [], EnumTypes = [] };
+        var dtoTypes = registerDtoTypes
+            ? new List<AtsDtoTypeInfo>
+            {
+                new() { TypeId = "test/TestCallbackDto", Name = "TestCallbackDto", ClrType = typeof(TestCallbackDto), Properties = [] }
+            }
+            : [];
+        var context = new AtsContext { Capabilities = [], HandleTypes = [], DtoTypes = dtoTypes, EnumTypes = [] };
         var marshaller = new AtsMarshaller(handles, context, ctRegistry, new Lazy<AtsCallbackProxyFactory>(() => throw new NotImplementedException()));
         return new AtsCallbackProxyFactory(invoker ?? new TestCallbackInvoker(), handles, ctRegistry, marshaller);
     }
@@ -246,6 +388,23 @@ public class CallbackProxyTests
     public delegate Task<string> TestCallbackWithStringResult(string input);
 
     public delegate Task TestCallbackWithCancellation(string value, CancellationToken cancellationToken);
+
+    public delegate Task TestCallbackWithOnlyCancellation(CancellationToken cancellationToken);
+
+    public delegate void TestSyncVoidCallbackWithDto(TestCallbackDto dto);
+
+    public delegate Task TestAsyncVoidCallbackWithDto(TestCallbackDto dto);
+
+    public delegate void TestSyncVoidCallbackWithMixedArgs(string label, TestCallbackDto dto);
+
+    public delegate void TestSyncVoidCallbackWithMultipleDtos(TestCallbackDto dto1, TestCallbackDto dto2);
+
+    [AspireDto]
+    public sealed class TestCallbackDto
+    {
+        public string? Name { get; set; }
+        public int Count { get; set; }
+    }
 }
 
 internal sealed class TestCallbackInvoker : ICallbackInvoker

@@ -9,6 +9,7 @@ namespace Aspire.Hosting.Backchannel;
 /// <summary>
 /// Tests for JsonElement to object conversion used in MCP tool calls.
 /// </summary>
+[Trait("Partition", "4")]
 public class JsonElementConversionTests
 {
     // Access the private ConvertJsonElementToObject method via reflection for testing

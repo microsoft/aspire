@@ -287,6 +287,16 @@
         <target state="translated">Direcciones URL</target>
         <note />
       </trans-unit>
+      <trans-unit id="TotalItemsFooterParametersPluralText">
+        <source>Showing &lt;strong&gt;{0} parameters&lt;/strong&gt;</source>
+        <target state="translated">Mostrando &lt;strong&gt;{0} parámetros&lt;/strong&gt;</target>
+        <note>{0} is a number. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</note>
+      </trans-unit>
+      <trans-unit id="TotalItemsFooterParametersSingularText">
+        <source>Showing &lt;strong&gt;{0} parameter&lt;/strong&gt;</source>
+        <target state="translated">Mostrando &lt;strong&gt;{0} parámetro&lt;/strong&gt;</target>
+        <note>{0} is a number. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</note>
+      </trans-unit>
       <trans-unit id="TotalItemsFooterPluralText">
         <source>Showing &lt;strong&gt;{0} resources&lt;/strong&gt;</source>
         <target state="translated">Mostrando &lt;strong&gt;{0} recursos&lt;/strong&gt;</target>

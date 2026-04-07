@@ -62,7 +62,7 @@ public sealed class ResourceMenuBuilderTests
         resourceMenuBuilder.AddMenuItems(
             menuItems,
             resource,
-            r => r.Name,
+            new Dictionary<string, ResourceViewModel>(StringComparer.OrdinalIgnoreCase) { [resource.Name] = resource },
             EventCallback.Empty,
             EventCallback<CommandViewModel>.Empty,
             (_, _) => false,
@@ -113,7 +113,7 @@ public sealed class ResourceMenuBuilderTests
         resourceMenuBuilder.AddMenuItems(
             menuItems,
             resource,
-            r => r.Name,
+            new Dictionary<string, ResourceViewModel>(StringComparer.OrdinalIgnoreCase) { [resource.Name] = resource },
             EventCallback.Empty,
             EventCallback<CommandViewModel>.Empty,
             (_, _) => false,
@@ -164,7 +164,7 @@ public sealed class ResourceMenuBuilderTests
         resourceMenuBuilder.AddMenuItems(
             menuItems,
             resource,
-            r => r.Name,
+            new Dictionary<string, ResourceViewModel>(StringComparer.OrdinalIgnoreCase) { [resource.Name] = resource },
             EventCallback.Empty,
             EventCallback<CommandViewModel>.Empty,
             (_, _) => false,
@@ -181,6 +181,73 @@ public sealed class ResourceMenuBuilderTests
             e => Assert.Equal("Localized:ResourceActionStructuredLogsText", e.Text),
             e => Assert.Equal("Localized:ResourceActionTracesText", e.Text),
             e => Assert.Equal("Localized:ResourceActionMetricsText", e.Text));
+    }
+
+    [Fact]
+    public void AddMenuItems_WithFromSpecEnvVars_ExportEnvMenuItemShown()
+    {
+        // Arrange
+        var resource = ModelTestHelpers.CreateResource(
+            environment: [
+                new EnvironmentVariableViewModel("SPEC_VAR", "spec-value", fromSpec: true),
+                new EnvironmentVariableViewModel("RUNTIME_VAR", "runtime-value", fromSpec: false)
+            ]);
+        var repository = TelemetryTestHelpers.CreateRepository();
+        var aiContextProvider = new TestAIContextProvider();
+        var resourceMenuBuilder = CreateResourceMenuBuilder(repository, aiContextProvider);
+
+        // Act
+        var menuItems = new List<MenuButtonItem>();
+        resourceMenuBuilder.AddMenuItems(
+            menuItems,
+            resource,
+            new Dictionary<string, ResourceViewModel>(StringComparer.OrdinalIgnoreCase) { [resource.Name] = resource },
+            EventCallback.Empty,
+            EventCallback<CommandViewModel>.Empty,
+            (_, _) => false,
+            showViewDetails: true,
+            showConsoleLogsItem: true,
+            showUrls: true);
+
+        // Assert
+        Assert.Collection(menuItems,
+            e => Assert.Equal("Localized:ActionViewDetailsText", e.Text),
+            e => Assert.Equal("Localized:ResourceActionConsoleLogsText", e.Text),
+            e => Assert.Equal("Localized:ExportJson", e.Text),
+            e => Assert.Equal("Localized:ExportEnv", e.Text));
+    }
+
+    [Fact]
+    public void AddMenuItems_WithoutFromSpecEnvVars_ExportEnvMenuItemNotShown()
+    {
+        // Arrange - only runtime env vars (fromSpec: false), no spec env vars
+        var resource = ModelTestHelpers.CreateResource(
+            environment: [
+                new EnvironmentVariableViewModel("RUNTIME_VAR1", "value1", fromSpec: false),
+                new EnvironmentVariableViewModel("RUNTIME_VAR2", "value2", fromSpec: false)
+            ]);
+        var repository = TelemetryTestHelpers.CreateRepository();
+        var aiContextProvider = new TestAIContextProvider();
+        var resourceMenuBuilder = CreateResourceMenuBuilder(repository, aiContextProvider);
+
+        // Act
+        var menuItems = new List<MenuButtonItem>();
+        resourceMenuBuilder.AddMenuItems(
+            menuItems,
+            resource,
+            new Dictionary<string, ResourceViewModel>(StringComparer.OrdinalIgnoreCase) { [resource.Name] = resource },
+            EventCallback.Empty,
+            EventCallback<CommandViewModel>.Empty,
+            (_, _) => false,
+            showViewDetails: true,
+            showConsoleLogsItem: true,
+            showUrls: true);
+
+        // Assert - ExportEnv should NOT be in the menu
+        Assert.Collection(menuItems,
+            e => Assert.Equal("Localized:ActionViewDetailsText", e.Text),
+            e => Assert.Equal("Localized:ResourceActionConsoleLogsText", e.Text),
+            e => Assert.Equal("Localized:ExportJson", e.Text));
     }
 
     private sealed class TestNavigationManager : NavigationManager

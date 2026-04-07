@@ -13,13 +13,13 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Create a new Aspire project.</source>
-        <target state="translated">建立新的 Aspire 專案。</target>
+        <source>Create a new app from an Aspire starter template</source>
+        <target state="needs-review-translation">建立新的 Aspire 專案。</target>
         <note />
       </trans-unit>
       <trans-unit id="EnterTheOutputPath">
-        <source>Enter the output path:</source>
-        <target state="translated">輸入輸出路徑:</target>
+        <source>Enter the output path</source>
+        <target state="new">Enter the output path</target>
         <note />
       </trans-unit>
       <trans-unit id="EnterTheProjectName">
@@ -32,14 +32,24 @@
         <target state="translated">無效的專案名稱。</target>
         <note />
       </trans-unit>
+      <trans-unit id="LanguageOptionDescription">
+        <source>The programming language for the AppHost</source>
+        <target state="new">The programming language for the AppHost</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NameArgumentDescription">
-        <source>The name of the project to create.</source>
-        <target state="translated">要建立專案之名稱。</target>
+        <source>The name of the project to create</source>
+        <target state="needs-review-translation">要建立專案之名稱。</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputArgumentDescription">
-        <source>The output path for the project.</source>
-        <target state="translated">專案的輸出路徑。</target>
+        <source>The output path for the project</source>
+        <target state="needs-review-translation">專案的輸出路徑。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResolvingTemplateVersion">
+        <source>Resolving template version...</source>
+        <target state="translated">正在解析範本版本...</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAProjectTemplate">
@@ -53,8 +63,8 @@
         <note />
       </trans-unit>
       <trans-unit id="SourceArgumentDescription">
-        <source>The NuGet source to use for the project templates.</source>
-        <target state="translated">要用於專案範本的 NuGet 來源。</target>
+        <source>The NuGet source to use for the project templates</source>
+        <target state="needs-review-translation">要用於專案範本的 NuGet 來源。</target>
         <note />
       </trans-unit>
       <trans-unit id="UsePrereleaseTemplates">
@@ -63,8 +73,8 @@
         <note />
       </trans-unit>
       <trans-unit id="VersionArgumentDescription">
-        <source>The version of the project templates to use.</source>
-        <target state="translated">要使用的專案範本版本。</target>
+        <source>The version of the project templates to use</source>
+        <target state="needs-review-translation">要使用的專案範本版本。</target>
         <note />
       </trans-unit>
     </body>

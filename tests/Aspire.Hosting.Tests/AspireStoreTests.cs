@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "5")]
 public class AspireStoreTests
 {
     [Fact]

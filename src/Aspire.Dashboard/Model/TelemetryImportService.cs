@@ -7,6 +7,7 @@ using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Model.Serialization;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Otlp.Serialization;
 using Microsoft.Extensions.Options;
 
 namespace Aspire.Dashboard.Model;

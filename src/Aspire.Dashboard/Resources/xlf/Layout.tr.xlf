@@ -44,17 +44,12 @@
       </trans-unit>
       <trans-unit id="MessageUnsecuredEndpointApiBody">
         <source>Untrusted apps can access telemetry data via the API.</source>
-        <target state="new">Untrusted apps can access telemetry data via the API.</target>
+        <target state="translated">Güvenilmeyen uygulamalar API aracılığıyla telemetri verilerine erişebilir.</target>
         <note />
       </trans-unit>
       <trans-unit id="MessageUnsecuredEndpointLink">
         <source>More information</source>
         <target state="translated">Daha fazla bilgi</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="MessageUnsecuredEndpointMcpBody">
-        <source>Untrusted apps can access sensitive information about the running services.</source>
-        <target state="translated">Güvenilmeyen uygulamalar, çalışan hizmetler hakkındaki hassas bilgilere erişebilir.</target>
         <note />
       </trans-unit>
       <trans-unit id="MessageUnsecuredEndpointTelemetryBody">

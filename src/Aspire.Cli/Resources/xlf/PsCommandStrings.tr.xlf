@@ -3,23 +3,23 @@
   <file datatype="xml" source-language="en" target-language="tr" original="../PsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>List running Aspire apphosts.</source>
-        <target state="translated">Çalışan bir Aspire uygulama ana işlemlerini listeleyin.</target>
+        <source>List running AppHosts</source>
+        <target state="needs-review-translation">Çalışan bir Aspire uygulama ana işlemlerini listeleyin.</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderCliPid">
-        <source>CLI_PID</source>
-        <target state="translated">CLI_PID</target>
+        <source>CLI PID</source>
+        <target state="translated">CLI PID</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderDashboard">
-        <source>DASHBOARD</source>
-        <target state="translated">PANO</target>
+        <source>Dashboard</source>
+        <target state="translated">Pano</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderPath">
-        <source>PATH</source>
-        <target state="translated">YOL</target>
+        <source>Path</source>
+        <target state="translated">Yol</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderPid">
@@ -28,18 +28,13 @@
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output in JSON format.</source>
-        <target state="translated">Çıkışı JSON biçiminde oluşturun.</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">Çıkışı JSON biçiminde oluşturun.</target>
         <note />
       </trans-unit>
-      <trans-unit id="NoRunningAppHostsFound">
-        <source>No running AppHosts found.</source>
-        <target state="translated">Çalışan AppHost bulunamadı.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ScanningForRunningAppHosts">
-        <source>Scanning for running AppHosts...</source>
-        <target state="translated">Çalışan AppHost'lar taranıyor...</target>
+      <trans-unit id="ResourcesOptionDescription">
+        <source>Include resource details for each running AppHost. Only applies to JSON output.</source>
+        <target state="new">Include resource details for each running AppHost. Only applies to JSON output.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnknownPath">

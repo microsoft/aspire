@@ -11,17 +11,8 @@
 
     <!-- Only run on Linux; no docker support on Windows yet -->
     <RunOnGithubActionsWindows>false</RunOnGithubActionsWindows>
-    <RunOnGithubActionsMacOS>false</RunOnGithubActionsMacOS>
     <RunOnAzdoCIWindows>false</RunOnAzdoCIWindows>
     <RunOnAzdoHelixWindows>false</RunOnAzdoHelixWindows>
-
-    <!--
-      Command to be executed directly before 'build.sh -test' is executed.
-      This is used by TestRunsheetBuilder.
-
-      FIXME: temporary workaround for https://github.com/Azure/azure-functions-dotnet-worker/issues/2969
-     -->
-    <TestRunnerPreCommand>./dotnet.sh build &quot;%24(pwd)/playground/AzureFunctionsEndToEnd/AzureFunctionsEndToEnd.Functions/AzureFunctionsEndToEnd.Functions.csproj&quot; -c $(Configuration) /p:SkipUnstableEmulators=true /p:CI=false &amp;&amp; </TestRunnerPreCommand>
 
     <DeployOutsideOfRepoSupportFilesRelativeDir>staging-archive\</DeployOutsideOfRepoSupportFilesRelativeDir>
 
@@ -36,7 +27,7 @@
     <XunitRunnerJson Condition="'$(RepoRoot)' == ''">xunit.runner.json</XunitRunnerJson>
 
     <!--
-      FIXME: https://github.com/dotnet/aspire/issues/8488
+      FIXME: https://github.com/microsoft/aspire/issues/8488
       xUnit1051: Calls to methods which accept CancellationToken should use TestContext.Current.CancellationToken  to allow test cancellation to be more responsive
 
       This is being disabled here in addition to any central location, because this project
@@ -60,6 +51,7 @@
     <Compile Condition="'$(RepoRoot)' != ''" Include="$(SharedDir)X509Certificate2Extensions.cs" />
     <Compile Condition="'$(RepoRoot)' != ''" Include="$(RepoRoot)tests\Aspire.Hosting.Tests\Utils\LoggerNotificationExtensions.cs" />
     <Compile Condition="'$(RepoRoot)' != ''" Include="$(RepoRoot)src\Shared\PathLookupHelper.cs" />
+    <Compile Condition="'$(RepoRoot)' == ''" Include="$(MSBuildThisFileDirectory)..\..\src\Shared\PathLookupHelper.cs" />
     <Compile Condition="'$(RepoRoot)' != ''" Include="$(RepoRoot)tests\Aspire.TestUtilities\FileUtil.cs" />
     <Compile Condition="'$(RepoRoot)' != ''" Include="$(RepoRoot)tests\Aspire.TestUtilities\PlatformDetection.cs" />
     <Compile Condition="'$(RepoRoot)' != ''" Include="$(RepoRoot)tests\Aspire.TestUtilities\QuarantinedTestAttribute.cs" />
@@ -114,6 +106,7 @@
     <None Include="$(RepoRoot)tests\Aspire.TestUtilities\PlatformDetection.cs" Link="$(DeployOutsideOfRepoSupportFilesRelativeDir)tests\$(MSBuildProjectName)\%(FileName)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="$(RepoRoot)tests\Aspire.TestUtilities\QuarantinedTestAttribute.cs" Link="$(DeployOutsideOfRepoSupportFilesRelativeDir)tests\$(MSBuildProjectName)\%(FileName)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="$(RepoRoot)tests\Aspire.TestUtilities\Requires*.cs" Link="$(DeployOutsideOfRepoSupportFilesRelativeDir)tests\$(MSBuildProjectName)\%(FileName)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="$(RepoRoot)tests\Aspire.TestUtilities\TestFeature.cs" Link="$(DeployOutsideOfRepoSupportFilesRelativeDir)tests\$(MSBuildProjectName)\%(FileName)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
 
     <None Include="..\helix\xunit.runner.json" Link="$(DeployOutsideOfRepoSupportFilesRelativeDir)tests\$(MSBuildProjectName)\xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

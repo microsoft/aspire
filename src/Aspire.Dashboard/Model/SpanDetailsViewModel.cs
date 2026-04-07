@@ -32,7 +32,7 @@ public sealed class SpanDetailsViewModel
             {
                 Name = "Destination",
                 Key = KnownTraceFields.DestinationField,
-                Value = OtlpResource.GetResourceName(destination, resources)
+                Value = OtlpHelpers.GetResourceName(destination, resources)
             });
         }
         entryProperties.AddRange(span.GetAttributeProperties().Select(CreateTelemetryProperty));

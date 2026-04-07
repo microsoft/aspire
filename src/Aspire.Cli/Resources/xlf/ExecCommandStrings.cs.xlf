@@ -4,18 +4,18 @@
     <body>
       <trans-unit id="CommandArgumentDescription">
         <source>The command to execute in the target resource's context. Commands can be specified directly after options or after a -- separator.</source>
-        <target state="translated">Příkaz, který se má provést v kontextu cílového prostředku. Příkazy lze zadat přímo po parametrech nebo za oddělovačem --.</target>
+        <target state="needs-review-translation">Příkaz, který se má provést v kontextu cílového prostředku. Příkazy lze zadat přímo po parametrech nebo za oddělovačem --.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Execute commands in the context of an Aspire application resource. Starts the AppHost, waits for resources to initialize, then runs the specified command in the target resource's environment. (Preview)
+        <source>Execute commands in the context of an Aspire application resource. Starts the AppHost, waits for resources to initialize, then runs the specified command in the target resource's environment (Preview)
 
 Examples:
   aspire exec --resource api dotnet build
   aspire exec --resource api -- dotnet test --logger console
   aspire exec --start-resource worker pwsh -c "Get-Process"
     </source>
-        <target state="translated">Umožňuje spouštět příkazy v kontextu prostředku aplikace Aspire. Spustí AppHost, počká na inicializaci prostředků a pak spustí zadaný příkaz v prostředí cílového prostředku. (Preview)
+        <target state="needs-review-translation">Umožňuje spouštět příkazy v kontextu prostředku aplikace Aspire. Spustí AppHost, počká na inicializaci prostředků a pak spustí zadaný příkaz v prostředí cílového prostředku. (Preview)
 
 Příklady:
   aspire exec --resource api dotnet build
@@ -36,7 +36,7 @@ Příklady:
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
         <source>The path to the Aspire AppHost project file. If not specified, searches for a project file in the current directory.</source>
-        <target state="translated">Cesta k souboru projektu Aspire AppHost. Pokud není zadána, vyhledá se soubor projektu v aktuálním adresáři.</target>
+        <target state="needs-review-translation">Cesta k souboru projektu Aspire AppHost. Pokud není zadána, vyhledá se soubor projektu v aktuálním adresáři.</target>
         <note />
       </trans-unit>
       <trans-unit id="Running">
@@ -46,17 +46,17 @@ Příklady:
       </trans-unit>
       <trans-unit id="StartTargetResourceArgumentDescription">
         <source>The name of the target resource to execute the command against. The command will only be executed after the target resource has successfully started and is running.</source>
-        <target state="translated">Název cílového prostředku, proti kterému má být příkaz proveden. Příkaz se spustí až po úspěšném spuštění cílového prostředku.</target>
+        <target state="needs-review-translation">Název cílového prostředku, proti kterému má být příkaz proveden. Příkaz se spustí až po úspěšném spuštění cílového prostředku.</target>
         <note />
       </trans-unit>
       <trans-unit id="StoppingAppHost">
-        <source>Stopping app host...</source>
-        <target state="translated">Zastavuje se hostitel aplikací...</target>
+        <source>Stopping AppHost...</source>
+        <target state="needs-review-translation">Zastavuje se hostitel aplikací...</target>
         <note />
       </trans-unit>
       <trans-unit id="TargetResourceArgumentDescription">
         <source>The name of the target resource to execute the command against. The command will be executed as soon as the AppHost starts, without waiting for the resource to be ready.</source>
-        <target state="translated">Název cílového prostředku, proti kterému má být příkaz proveden. Příkaz se spustí ihned po spuštění AppHost, aniž by se čekalo, až bude prostředek připravený.</target>
+        <target state="needs-review-translation">Název cílového prostředku, proti kterému má být příkaz proveden. Příkaz se spustí ihned po spuštění AppHost, aniž by se čekalo, až bude prostředek připravený.</target>
         <note />
       </trans-unit>
       <trans-unit id="TargetResourceNotSpecified">
@@ -65,8 +65,8 @@ Příklady:
         <note />
       </trans-unit>
       <trans-unit id="WorkdirArgumentDescription">
-        <source>The working directory to execute the command in.</source>
-        <target state="translated">Pracovní adresář, ve kterém se má příkaz spustit</target>
+        <source>The working directory to execute the command in</source>
+        <target state="needs-review-translation">Pracovní adresář, ve kterém se má příkaz spustit</target>
         <note />
       </trans-unit>
     </body>

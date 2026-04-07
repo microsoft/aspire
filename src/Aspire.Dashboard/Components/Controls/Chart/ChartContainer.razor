@@ -38,7 +38,7 @@ else
                        Icon="@(new Icons.Regular.Size24.DataArea())">
                 <div class="metrics-chart-container metric-tab">
                     <PlotlyChart InstrumentViewModel="_instrumentViewModel" Duration="Duration" Resources="Resources"/>
-                    <ChartFilters InstrumentViewModel="_instrumentViewModel" Instrument="_instrument" DimensionFilters="@DimensionFilters" />
+                    <ChartFilters InstrumentViewModel="_instrumentViewModel" Instrument="_instrument" DimensionFilters="@DimensionFilters" OnDimensionValuesChanged="DimensionValuesChangedAsync" />
                 </div>
             </FluentTab>
             <FluentTab LabelClass="tab-label"
@@ -47,7 +47,7 @@ else
                        Icon="@(new Icons.Regular.Size24.Table())">
                 <div class="metrics-chart-container metric-tab">
                     <MetricTable InstrumentViewModel="_instrumentViewModel" Duration="Duration" Resources="Resources" />
-                    <ChartFilters InstrumentViewModel="_instrumentViewModel" Instrument="_instrument" DimensionFilters="@DimensionFilters"/>
+                    <ChartFilters InstrumentViewModel="_instrumentViewModel" Instrument="_instrument" DimensionFilters="@DimensionFilters" OnDimensionValuesChanged="DimensionValuesChangedAsync" />
                 </div>
             </FluentTab>
         </FluentTabs>

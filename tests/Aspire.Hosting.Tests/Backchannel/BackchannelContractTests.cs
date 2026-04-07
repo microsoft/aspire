@@ -9,6 +9,7 @@ namespace Aspire.Hosting.Backchannel;
 /// <summary>
 /// Validates that backchannel request/response types follow the contract rules.
 /// </summary>
+[Trait("Partition", "4")]
 public class BackchannelContractTests
 {
     // V2 request/response types that must follow the contract
@@ -30,10 +31,12 @@ public class BackchannelContractTests
         typeof(StopAppHostRequest),
         typeof(StopAppHostResponse),
         typeof(ResourceSnapshot),
-        typeof(ResourceSnapshotEndpoint),
+        typeof(ResourceSnapshotUrl),
+        typeof(ResourceSnapshotUrlDisplayProperties),
         typeof(ResourceSnapshotRelationship),
         typeof(ResourceSnapshotHealthReport),
         typeof(ResourceSnapshotVolume),
+        typeof(ResourceSnapshotEnvironmentVariable),
         typeof(ResourceSnapshotMcpServer),
         typeof(ResourceLogLine),
     ];

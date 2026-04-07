@@ -33,6 +33,7 @@ public sealed class TraceMenuBuilder
     private readonly IAIContextProvider _aiContextProvider;
     private readonly DashboardDialogService _dialogService;
     private readonly TelemetryRepository _telemetryRepository;
+    private readonly IOutgoingPeerResolver[] _outgoingPeerResolvers;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="TraceMenuBuilder"/> class.
@@ -44,7 +45,8 @@ public sealed class TraceMenuBuilder
         NavigationManager navigationManager,
         IAIContextProvider aiContextProvider,
         DashboardDialogService dialogService,
-        TelemetryRepository telemetryRepository)
+        TelemetryRepository telemetryRepository,
+        IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers)
     {
         _controlsLoc = controlsLoc;
         _aiAssistantLoc = aiAssistantLoc;
@@ -53,6 +55,7 @@ public sealed class TraceMenuBuilder
         _aiContextProvider = aiContextProvider;
         _dialogService = dialogService;
         _telemetryRepository = telemetryRepository;
+        _outgoingPeerResolvers = outgoingPeerResolvers.ToArray();
     }
 
     /// <summary>
@@ -97,7 +100,7 @@ public sealed class TraceMenuBuilder
             Icon = s_bracesIcon,
             OnClick = async () =>
             {
-                var result = ExportHelpers.GetTraceAsJson(trace, _telemetryRepository);
+                var result = ExportHelpers.GetTraceAsJson(trace, _telemetryRepository, _outgoingPeerResolvers);
                 await TextVisualizerDialog.OpenDialogAsync(new OpenTextVisualizerDialogOptions
                 {
                     DialogService = _dialogService,

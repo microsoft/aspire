@@ -12,3 +12,5 @@ output connectionString string = 'Endpoint=https://${existingResourceName}.searc
 output endpoint string = 'https://${existingResourceName}.search.windows.net'
 
 output name string = search.name
+
+output id string = search.id

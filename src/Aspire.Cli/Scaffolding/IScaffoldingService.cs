@@ -26,5 +26,6 @@ internal interface IScaffoldingService
     /// </summary>
     /// <param name="context">The scaffolding context.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    Task ScaffoldAsync(ScaffoldContext context, CancellationToken cancellationToken);
+    /// <returns><see langword="true"/> when scaffolding succeeds; otherwise, <see langword="false"/>.</returns>
+    Task<bool> ScaffoldAsync(ScaffoldContext context, CancellationToken cancellationToken);
 }

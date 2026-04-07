@@ -318,7 +318,7 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
         var provisioningContext = await azureEnvironment.ProvisioningContextTask.Task.ConfigureAwait(false);
 
         var resourceTask = await context.ReportingStep
-            .CreateTaskAsync($"Deploying **{resource.Name}**", context.CancellationToken)
+            .CreateTaskAsync(new MarkdownString($"Deploying **{resource.Name}**"), context.CancellationToken)
             .ConfigureAwait(false);
 
         await using (resourceTask.ConfigureAwait(false))
@@ -330,7 +330,7 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
                 {
                     resource.ProvisioningTaskCompletionSource?.TrySetResult();
                     await resourceTask.CompleteAsync(
-                        $"Using existing deployment for **{resource.Name}**",
+                        new MarkdownString($"Using existing deployment for **{resource.Name}**"),
                         CompletionState.Completed,
                         context.CancellationToken).ConfigureAwait(false);
                 }
@@ -341,7 +341,7 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
                         .ConfigureAwait(false);
                     resource.ProvisioningTaskCompletionSource?.TrySetResult();
                     await resourceTask.CompleteAsync(
-                        $"Successfully provisioned **{resource.Name}**",
+                        new MarkdownString($"Successfully provisioned **{resource.Name}**"),
                         CompletionState.Completed,
                         context.CancellationToken).ConfigureAwait(false);
                 }
@@ -356,10 +356,10 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
                 };
                 resource.ProvisioningTaskCompletionSource?.TrySetException(ex);
                 await resourceTask.CompleteAsync(
-                    $"Failed to provision **{resource.Name}**: {errorMessage}",
+                    new MarkdownString($"Failed to provision **{resource.Name}**: {errorMessage}"),
                     CompletionState.CompletedWithError,
                     context.CancellationToken).ConfigureAwait(false);
-                throw;
+                throw new ProvisioningFailedException(errorMessage, ex);
             }
         }
     }
@@ -373,7 +373,7 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
     /// </summary>
     /// <param name="requestEx">The Azure RequestFailedException containing the error response</param>
     /// <returns>The most specific error message found, or the original exception message if parsing fails</returns>
-    private static string ExtractDetailedErrorMessage(RequestFailedException requestEx)
+    internal static string ExtractDetailedErrorMessage(RequestFailedException requestEx)
     {
         try
         {
@@ -401,7 +401,7 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
                                     }
                                 }
 
-                                return $"{code}: {message}";
+                                return $"Error code = {code}, Message = {message}";
                             }
                         }
 
@@ -412,7 +412,7 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
 
                             if (!string.IsNullOrEmpty(code) && !string.IsNullOrEmpty(message))
                             {
-                                return $"{code}: {message}";
+                                return $"Error code = {code}, Message = {message}";
                             }
                         }
                     }
@@ -444,7 +444,7 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
 
                 if (!string.IsNullOrEmpty(detailCode) && !string.IsNullOrEmpty(detailMessage))
                 {
-                    return $"{detailCode}: {detailMessage}";
+                    return $"Error code = {detailCode}, Message = {detailMessage}";
                 }
             }
         }
@@ -573,7 +573,7 @@ public readonly struct BicepTemplateFile(string path, bool deleteFileOnDispose) 
 /// <param name="name">The name of the KeyVault secret.</param>
 /// <param name="resource">The <see cref="AzureBicepResource"/>.</param>
 [Obsolete("BicepSecretOutputReference is no longer supported. Use IAzureKeyVaultResource instead.")]
-public sealed class BicepSecretOutputReference(string name, AzureBicepResource resource) : IManifestExpressionProvider, IValueProvider, IValueWithReferences
+public sealed class BicepSecretOutputReference(string name, AzureBicepResource resource) : IExpressionValue, IManifestExpressionProvider, IValueProvider, IValueWithReferences
 {
     /// <summary>
     /// Name of the KeyVault secret.
@@ -627,7 +627,8 @@ public sealed class BicepSecretOutputReference(string name, AzureBicepResource r
 /// </summary>
 /// <param name="name">The name of the output</param>
 /// <param name="resource">The <see cref="AzureBicepResource"/>.</param>
-public sealed class BicepOutputReference(string name, AzureBicepResource resource) : IManifestExpressionProvider, IValueProvider, IValueWithReferences, IEquatable<BicepOutputReference>
+[AspireExport(ExposeProperties = true)]
+public sealed class BicepOutputReference(string name, AzureBicepResource resource) : IExpressionValue, IManifestExpressionProvider, IValueProvider, IValueWithReferences, IEquatable<BicepOutputReference>
 {
     /// <summary>
     /// Name of the output.

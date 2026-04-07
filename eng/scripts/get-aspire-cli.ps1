@@ -341,7 +341,7 @@ function Get-CLIArchitectureFromArchitecture {
             return "arm64"
         }
         default {
-            throw "Architecture '$Architecture' not supported. If you think this is a bug, report it at https://github.com/dotnet/aspire/issues"
+            throw "Architecture '$Architecture' not supported. If you think this is a bug, report it at https://github.com/microsoft/aspire/issues"
         }
     }
 }
@@ -438,6 +438,7 @@ function Invoke-SecureWebRequest {
         MaximumRedirection = 10
         TimeoutSec = $TimeoutSec
         UserAgent = $Script:UserAgent
+        UseBasicParsing = $true
     }
 
     if ($Method -eq "Get" -and $OutFile) {
@@ -467,6 +468,49 @@ function Invoke-SecureWebRequest {
     }
     catch {
         throw $_.Exception
+    }
+}
+
+# Builds a compact display string for download messages without exposing the full URL.
+function Get-DownloadDescriptor {
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Uri
+    )
+
+    try {
+        $downloadUri = [System.Uri]$Uri
+        $fileName = [System.IO.Path]::GetFileName($downloadUri.AbsolutePath)
+        $trimmedPath = $downloadUri.AbsolutePath.Trim("/")
+        $source = $downloadUri.Host
+
+        if ($trimmedPath -match "^dotnet/[^/]+/aspire/(?<source>.+)/(?<file>[^/]+)$") {
+            $source = $Matches["source"]
+            $fileName = $Matches["file"]
+        }
+        elseif ($trimmedPath -match "^public(?:-checksums)?/aspire/+(?<version>[^/]+)/(?<file>[^/]+)$") {
+            $source = "version/$($Matches["version"])"
+            $fileName = $Matches["file"]
+        }
+        elseif ($trimmedPath -match "^(?<source>.+)/(?<file>[^/]+)$") {
+            $source = $Matches["source"]
+            $fileName = $Matches["file"]
+        }
+
+        if ([string]::IsNullOrWhiteSpace($fileName)) {
+            return $Uri
+        }
+
+        if ([string]::IsNullOrWhiteSpace($source)) {
+            return $fileName
+        }
+
+        return "$fileName from '$source'"
+    }
+    catch {
+        return $Uri
     }
 }
 
@@ -555,7 +599,110 @@ function Test-FileChecksum {
     }
 }
 
+# Function to get the CLI executable path for a given OS
+function Get-CliExecutablePath {
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$DestinationPath,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$OS
+    )
+
+    $exeName = if ($OS -eq "win") { "aspire.exe" } else { "aspire" }
+    return Join-Path $DestinationPath $exeName
+}
+
+# Function to back up an existing CLI executable before overwriting it.
+# This matches self-update semantics by deleting stale *.old.* backups first.
+# On Windows, a running process can still block the rename.
+function Backup-ExistingCliExecutable {
+    [CmdletBinding(SupportsShouldProcess)]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$TargetExePath
+    )
+    
+    if (Test-Path $TargetExePath) {
+        $unixTimestamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+        $backupPath = "$TargetExePath.old.$unixTimestamp"
+        
+        if ($PSCmdlet.ShouldProcess($TargetExePath, "Backup to $backupPath")) {
+            Write-Message "Backing up existing CLI: $TargetExePath -> $backupPath" -Level Verbose
+
+            Remove-OldCliBackupFiles -TargetExePath $TargetExePath
+
+            # Rename existing executable to .old.[timestamp]
+            try {
+                Move-Item -Path $TargetExePath -Destination $backupPath -Force -ErrorAction Stop
+            }
+            catch {
+                throw "Failed to back up existing CLI at '$TargetExePath'. The file may be in use by another process. Please close any running Aspire CLI instances and try again. Error: $($_.Exception.Message)"
+            }
+            return $backupPath
+        }
+    }
+    
+    return $null
+}
+
+# Function to restore CLI executable from backup if installation fails
+function Restore-CliExecutableFromBackup {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$BackupPath,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$TargetExePath
+    )
+    
+    if ($PSCmdlet.ShouldProcess($BackupPath, "Restore to $TargetExePath")) {
+        Write-Message "Restoring CLI from backup: $BackupPath -> $TargetExePath" -Level Warning
+        
+        if (Test-Path $TargetExePath) {
+            Remove-Item -Path $TargetExePath -Force -ErrorAction SilentlyContinue
+        }
+        
+        Move-Item -Path $BackupPath -Destination $TargetExePath -Force -ErrorAction Stop
+    }
+}
+
+# Function to clean up old backup files (aspire.exe.old.* or aspire.old.*)
+function Remove-OldCliBackupFiles {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$TargetExePath
+    )
+    
+    $directory = Split-Path -Parent $TargetExePath
+    if ([string]::IsNullOrEmpty($directory)) {
+        return
+    }
+    
+    $exeName = Split-Path -Leaf $TargetExePath
+    $searchPattern = "$exeName.old.*"
+    
+    $oldBackupFiles = Get-ChildItem -Path $directory -Filter $searchPattern -ErrorAction SilentlyContinue
+    foreach ($backupFile in $oldBackupFiles) {
+        if ($PSCmdlet.ShouldProcess($backupFile.FullName, "Delete old backup")) {
+            try {
+                Remove-Item -Path $backupFile.FullName -Force -ErrorAction Stop
+                Write-Message "Deleted old backup file: $($backupFile.FullName)" -Level Verbose
+            }
+            catch {
+                Write-Message "Failed to delete old backup file: $($backupFile.FullName) - $($_.Exception.Message)" -Level Verbose
+            }
+        }
+    }
+}
+
 function Expand-AspireCliArchive {
+    [CmdletBinding(SupportsShouldProcess)]
     param(
         [string]$ArchiveFile,
         [string]$DestinationPath,
@@ -564,11 +711,20 @@ function Expand-AspireCliArchive {
 
     Write-Message "Unpacking archive to: $DestinationPath" -Level Verbose
 
+    # Get the target executable path using shared function
+    $targetExePath = Get-CliExecutablePath -DestinationPath $DestinationPath -OS $OS
+    $backupPath = $null
+
     try {
         # Create destination directory if it doesn't exist
         if (-not (Test-Path $DestinationPath)) {
             Write-Message "Creating destination directory: $DestinationPath" -Level Verbose
-            New-Item -ItemType Directory -Path $DestinationPath -Force | Out-Null
+            New-Item -ItemType Directory -Path $DestinationPath -Force -ErrorAction Stop | Out-Null
+        }
+        else {
+            # Back up the existing executable before extraction.
+            # On Windows, this can still fail if the file is locked by a running process.
+            $backupPath = Backup-ExistingCliExecutable -TargetExePath $targetExePath
         }
 
         if ($OS -eq "win") {
@@ -577,7 +733,7 @@ function Expand-AspireCliArchive {
                 throw "Expand-Archive cmdlet not found. Please use PowerShell 5.0 or later to extract ZIP files."
             }
 
-            Expand-Archive -Path $ArchiveFile -DestinationPath $DestinationPath -Force
+            Expand-Archive -Path $ArchiveFile -DestinationPath $DestinationPath -Force -ErrorAction Stop
         }
         else {
             # Use tar for tar.gz files on Unix systems
@@ -588,17 +744,42 @@ function Expand-AspireCliArchive {
             $currentLocation = Get-Location
             try {
                 Set-Location $DestinationPath
-                & tar -xzf $ArchiveFile
+                $tarOutput = & tar -xzf $ArchiveFile 2>&1
+                if ($LASTEXITCODE -ne 0) {
+                    $tarMessage = ($tarOutput | ForEach-Object { $_.ToString() } | Out-String).Trim()
+                    if ([string]::IsNullOrWhiteSpace($tarMessage)) {
+                        throw "tar command failed with exit code $LASTEXITCODE"
+                    }
+
+                    throw "tar command failed with exit code $LASTEXITCODE`: $tarMessage"
+                }
             }
             finally {
                 Set-Location $currentLocation
             }
         }
 
+        # Clean up old backup files on successful extraction
+        if (Test-Path $targetExePath) {
+            Remove-OldCliBackupFiles -TargetExePath $targetExePath
+        }
+
         Write-Message "Successfully unpacked archive" -Level Verbose
     }
     catch {
-        throw "Failed to unpack archive: $($_.Exception.Message)"
+        $unpackErrorMessage = $_.Exception.Message
+
+        # If anything goes wrong and we have a backup, restore it
+        if ($backupPath -and (Test-Path $backupPath)) {
+            try {
+                Restore-CliExecutableFromBackup -BackupPath $backupPath -TargetExePath $targetExePath
+            }
+            catch {
+                throw "Failed to unpack archive: $unpackErrorMessage. Restore from backup also failed: $($_.Exception.Message)"
+            }
+        }
+
+        throw "Failed to unpack archive: $unpackErrorMessage"
     }
 }
 
@@ -805,11 +986,12 @@ function Get-AspireExtension {
     Write-Message "Downloading Aspire VS Code extension" -Level Info
 
     $extensionUrl = Get-AspireExtensionUrl -Version $Version -Quality $Quality
+    $extensionDescriptor = Get-DownloadDescriptor -Uri $extensionUrl
     $extensionArchive = Join-Path $TempDir $Script:ExtensionArtifactName
 
     try {
-        if ($PSCmdlet.ShouldProcess($extensionArchive, "Download extension from $extensionUrl")) {
-            Write-Message "Downloading from: $extensionUrl" -Level Info
+        if ($PSCmdlet.ShouldProcess($extensionArchive, "Download extension ($extensionDescriptor)")) {
+            Write-Message "Downloading $extensionDescriptor" -Level Info
             Invoke-FileDownload -Uri $extensionUrl -OutputPath $extensionArchive -TimeoutSec $Script:ArchiveDownloadTimeoutSec
             Write-Message "Successfully downloaded extension archive" -Level Verbose
         }
@@ -845,7 +1027,7 @@ function Install-AspireExtension {
         if ($PSCmdlet.ShouldProcess($extractDir, "Extract extension archive")) {
             # Expand the zip archive
             if ($Script:IsModernPowerShell) {
-                Expand-Archive -Path $ExtensionArchive -DestinationPath $extractDir -Force
+                Expand-Archive -Path $ExtensionArchive -DestinationPath $extractDir -Force -ErrorAction Stop
             } else {
                 Add-Type -AssemblyName System.IO.Compression.FileSystem
                 [System.IO.Compression.ZipFile]::ExtractToDirectory($ExtensionArchive, $extractDir)
@@ -1008,7 +1190,7 @@ function Install-AspireCli {
     if ($PSCmdlet.ShouldProcess($InstallPath, "Create temporary directory")) {
         Write-Message "Creating temporary directory: $tempDir" -Level Verbose
         try {
-            New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+            New-Item -ItemType Directory -Path $tempDir -Force -ErrorAction Stop | Out-Null
         }
         catch {
             throw "Failed to create temporary directory: $tempDir - $($_.Exception.Message)"
@@ -1030,17 +1212,19 @@ function Install-AspireCli {
         $runtimeIdentifier = "$targetOS-$targetArch"
         $extension = if ($targetOS -eq "win") { "zip" } else { "tar.gz" }
         $urls = Get-AspireCliUrl -Version $Version -Quality $Quality -RuntimeIdentifier $runtimeIdentifier -Extension $extension
+        $archiveDescriptor = Get-DownloadDescriptor -Uri $urls.ArchiveUrl
+        $checksumDescriptor = Get-DownloadDescriptor -Uri $urls.ChecksumUrl
 
         $archivePath = Join-Path $tempDir $urls.ArchiveFilename
         $checksumPath = Join-Path $tempDir $urls.ChecksumFilename
 
-        if ($PSCmdlet.ShouldProcess($urls.ArchiveUrl, "Download CLI archive")) {
+        if ($PSCmdlet.ShouldProcess($archivePath, "Download CLI archive ($archiveDescriptor)")) {
             # Download the Aspire CLI archive
-            Write-Message "Downloading from: $($urls.ArchiveUrl)" -Level Info
+            Write-Message "Downloading $archiveDescriptor" -Level Info
             Invoke-FileDownload -Uri $urls.ArchiveUrl -TimeoutSec $Script:ArchiveDownloadTimeoutSec -OutputPath $archivePath
         }
 
-        if ($PSCmdlet.ShouldProcess($urls.ChecksumUrl, "Download CLI archive checksum")) {
+        if ($PSCmdlet.ShouldProcess($checksumPath, "Download CLI archive checksum ($checksumDescriptor)")) {
             # Download and test the checksum
             Invoke-FileDownload -Uri $urls.ChecksumUrl -TimeoutSec $Script:ChecksumDownloadTimeoutSec -OutputPath $checksumPath
             Test-FileChecksum -ArchiveFile $archivePath -ChecksumFile $checksumPath
@@ -1154,7 +1338,7 @@ function Start-AspireCliInstallation {
             Write-Message "Creating installation directory: $resolvedInstallPath" -Level Info
             if ($PSCmdlet.ShouldProcess($resolvedInstallPath, "Create installation directory")) {
                 try {
-                    New-Item -ItemType Directory -Path $resolvedInstallPath -Force | Out-Null
+                    New-Item -ItemType Directory -Path $resolvedInstallPath -Force -ErrorAction Stop | Out-Null
                 }
                 catch {
                     throw "Failed to create installation directory: $resolvedInstallPath - $($_.Exception.Message)"

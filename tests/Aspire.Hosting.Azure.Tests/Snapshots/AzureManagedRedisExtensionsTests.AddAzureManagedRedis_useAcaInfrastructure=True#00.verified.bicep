@@ -26,4 +26,6 @@ output connectionString string = '${redis_cache.properties.hostName}:10000,ssl=t
 
 output name string = redis_cache.name
 
+output id string = redis_cache.id
+
 output hostName string = redis_cache.properties.hostName

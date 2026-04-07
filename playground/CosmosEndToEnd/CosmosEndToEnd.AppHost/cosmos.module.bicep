@@ -95,3 +95,5 @@ resource user_todo 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/container
 output connectionString string = cosmos.properties.documentEndpoint
 
 output name string = cosmos.name
+
+output id string = cosmos.id

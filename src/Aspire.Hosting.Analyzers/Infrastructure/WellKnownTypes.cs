@@ -69,6 +69,26 @@ internal class WellKnownTypes
         return GetAndCache(index);
     }
 
+    public bool TryGet(WellKnownTypeData.WellKnownType type, [NotNullWhen(true)] out INamedTypeSymbol? symbol)
+    {
+        var index = (int)type;
+        symbol = _lazyWellKnownTypes[index];
+        if (symbol is not null)
+        {
+            return true;
+        }
+
+        symbol = GetTypeByMetadataNameInTargetAssembly(WellKnownTypeData.WellKnownTypeNames[index]);
+        if (symbol is null)
+        {
+            return false;
+        }
+
+        Interlocked.CompareExchange(ref _lazyWellKnownTypes[index], symbol, null);
+        symbol = _lazyWellKnownTypes[index];
+        return true;
+    }
+
     private INamedTypeSymbol GetAndCache(int index)
     {
         var result = GetTypeByMetadataNameInTargetAssembly(WellKnownTypeData.WellKnownTypeNames[index])

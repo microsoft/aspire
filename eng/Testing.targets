@@ -2,7 +2,6 @@
 
   <!--
       Environment variables:
-        - IsGitHubActionsRunner:       indicates whether tests are currently run on GitHub Actions; computed, overridable. Locally this can be set by "/p:GITHUB_ACTIONS=true".
         - IsAzdoCIRunner:              indicates whether tests are currently run on Azure DevOps; computed, overridable. Locally this can be set by "/p:SYSTEM_TEAMPROJECT=foo".
         - IsAzdoHelixRunner:           indicates whether tests are currently run on Helix; computed, overridable. Locally this can be set by "/p:PrepareForHelix=true".
 
@@ -13,7 +12,7 @@
       Project requirements:
         - RunOnGithubActions:          indicates whether tests should run on GitHub Actions (either Windows or Linux or macOS); computed.
         - RunOnGithubActionsWindows:   indicates whether tests should run on Windows in GitHub Actions; default is true; overridable.
-        - RunOnGithubActionsMacOS:     indicates whether tests should run on MacOS in GitHub Actions; default is true; overridable.
+        - RunOnGithubActionsMacOS:     indicates whether tests should run on MacOS in GitHub Actions; default is false; overridable.
         - RunOnGithubActionsLinux:     indicates whether tests should run on Linux in GitHub Actions; default is true; overridable.
         - RunOnAzdoCI:                 indicates whether tests should run on Azure DevOps (either Windows or Linux); always false, if RunOnAzdoHelix=true; computed.
         - RunOnAzdoCIWindows:          indicates whether tests should run on Windows in Azure DevOps; default is true; overridable.
@@ -21,12 +20,14 @@
         - RunOnAzdoHelix:              indicates whether tests should run on Helix (either Windows or Linux); computed.
         - RunOnAzdoHelixWindows:       indicates whether tests should run on Windows in Helix; default is true; overridable.
         - RunOnAzdoHelixLinux:         indicates whether tests should run on Linux in Helix; default is true; overridable.
+
+      Custom GitHub Actions runners (optional):
+        - GithubActionsRunnerWindows:  custom GitHub Actions runner for Windows tests; default is unset (uses 'windows-latest'); overridable.
+        - GithubActionsRunnerLinux:    custom GitHub Actions runner for Linux tests; default is unset (uses 'ubuntu-latest'); overridable.
+        - GithubActionsRunnerMacOS:    custom GitHub Actions runner for macOS tests; default is unset (uses 'macos-latest'); overridable.
     -->
 
   <PropertyGroup>
-    <!-- See https://docs.github.com/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#default-environment-variables -->
-    <IsGitHubActionsRunner Condition=" '$(GITHUB_ACTIONS)' == 'true' ">true</IsGitHubActionsRunner>
-
     <!-- See https://learn.microsoft.com/azure/devops/pipelines/build/variables#system-variables -->
     <IsAzdoCIRunner Condition=" '$(SYSTEM_TEAMPROJECT)' != '' ">true</IsAzdoCIRunner>
 
@@ -43,9 +44,15 @@
       If we haven't detected the tests are run on build agents, then we presume we're running tests locally.
       -->
     <IsLocalDevLoop Condition=" '$(IsGitHubActionsRunner)' != 'true' and '$(IsAzdoCIRunner)' != 'true' and '$(IsHelix)' != 'true' and '$(IsAzdoHelixRunner)' != 'true' ">true</IsLocalDevLoop>
+
+    <SplitTestsOnCI Condition=" '$(SplitTestsOnCI)' == '' ">false</SplitTestsOnCI>
   </PropertyGroup>
 
   <PropertyGroup>
+    <!-- See https://github.com/microsoft/aspire/issues/15615 -->
+    <!-- <RunOnGithubActionsMacOS Condition=" '$(RunOnGithubActionsMacOS)' == '' and '$(IsGithubPullRequest)' == 'true' ">false</RunOnGithubActionsMacOS> -->
+    <RunOnGithubActionsMacOS Condition=" '$(RunOnGithubActionsMacOS)' == '' ">false</RunOnGithubActionsMacOS>
+
     <RunOnGithubActions>false</RunOnGithubActions>
     <RunOnGithubActions Condition=" '$(RunOnGithubActionsWindows)' == 'true' or '$(RunOnGithubActionsLinux)' == 'true' or '$(RunOnGithubActionsMacOS)' == 'true' ">true</RunOnGithubActions>
 
@@ -108,5 +115,4 @@
 
     <Message Text="Project: $(MSBuildProjectName)$(_NewLine)Runner Context:$(_NewLine)$(_RunnerList)$(_NewLine)Runner support:$(_NewLine)$(_RequirementList)" />
   </Target>
-
 </Project>

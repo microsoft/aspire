@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Agents.Playwright;
+
 namespace Aspire.Cli.Agents;
 
 /// <summary>
@@ -14,58 +16,30 @@ internal static class CommonAgentApplicators
     internal const string AspireSkillName = "aspire";
 
     /// <summary>
-    /// Tries to add an applicator for creating/updating the Aspire skill file at the specified path.
+    /// The embedded resource root for the Aspire skill asset bundle.
     /// </summary>
-    /// <param name="context">The scan context.</param>
-    /// <param name="workspaceRoot">The workspace root directory.</param>
-    /// <param name="skillRelativePath">The relative path to the skill file from workspace root (e.g., ".github/skills/aspire/SKILL.md").</param>
-    /// <param name="description">The description to show in the applicator prompt.</param>
-    /// <returns>True if the applicator was added, false if it was already added or the file exists.</returns>
-    public static bool TryAddSkillFileApplicator(
-        AgentEnvironmentScanContext context,
-        DirectoryInfo workspaceRoot,
-        string skillRelativePath,
-        string description)
-    {
-        // Check if we've already added an applicator for this specific skill path
-        if (context.HasSkillFileApplicator(skillRelativePath))
-        {
-            return false;
-        }
-
-        var skillFilePath = Path.Combine(workspaceRoot.FullName, skillRelativePath);
-
-        // Mark this skill path as having an applicator (whether file exists or not)
-        context.MarkSkillFileApplicatorAdded(skillRelativePath);
-
-        // Don't add applicator if the skill file already exists
-        if (File.Exists(skillFilePath))
-        {
-            return false;
-        }
-
-        // Skill file doesn't exist, add applicator to create it
-        context.AddApplicator(new AgentEnvironmentApplicator(
-            description,
-            ct => CreateSkillFileAsync(skillFilePath, ct),
-            promptGroup: McpInitPromptGroup.AdditionalOptions,
-            priority: 0));
-
-        return true;
-    }
+    internal const string AspireSkillResourceRoot = "skills.aspire";
 
     /// <summary>
-    /// Tracks a detected environment and adds a single Playwright applicator if not already added.
-    /// This should be called by each scanner that detects an environment supporting Playwright.
+    /// The name of the dotnet-inspect skill.
+    /// </summary>
+    internal const string DotnetInspectSkillName = "dotnet-inspect";
+
+    /// <summary>
+    /// Adds a single Playwright CLI installation applicator if not already added.
+    /// Called by scanners that detect an environment supporting Playwright.
+    /// The applicator uses <see cref="PlaywrightCliInstaller"/> to securely install the CLI and generate skill files.
     /// </summary>
     /// <param name="context">The scan context.</param>
-    /// <param name="configurationCallback">The callback to configure Playwright for this specific environment.</param>
-    public static void AddPlaywrightConfigurationCallback(
+    /// <param name="installer">The Playwright CLI installer that handles secure installation.</param>
+    /// <param name="skillBaseDirectory">The relative path to the skill base directory for this agent environment (e.g., ".claude/skills", ".github/skills").</param>
+    public static void AddPlaywrightCliApplicator(
         AgentEnvironmentScanContext context,
-        Func<CancellationToken, Task> configurationCallback)
+        PlaywrightCliInstaller installer,
+        string skillBaseDirectory)
     {
-        // Add this environment's Playwright configuration callback
-        context.AddPlaywrightConfigurationCallback(configurationCallback);
+        // Register the skill base directory so skill files can be mirrored to all environments
+        context.AddSkillBaseDirectory(skillBaseDirectory);
 
         // Only add the Playwright applicator prompt once across all environments
         if (context.PlaywrightApplicatorAdded)
@@ -75,140 +49,137 @@ internal static class CommonAgentApplicators
 
         context.PlaywrightApplicatorAdded = true;
         context.AddApplicator(new AgentEnvironmentApplicator(
-            "Configure Playwright MCP server",
-            async ct =>
-            {
-                // Execute all registered Playwright configuration callbacks
-                foreach (var callback in context.PlaywrightConfigurationCallbacks)
-                {
-                    await callback(ct);
-                }
-            },
-            promptGroup: McpInitPromptGroup.AdditionalOptions,
+            "Install Playwright CLI (Recommended for browser automation)",
+            ct => installer.InstallAsync(context.RepositoryRoot.FullName, context.SkillBaseDirectories.ToHashSet(StringComparer.OrdinalIgnoreCase), ct),
+            promptGroup: McpInitPromptGroup.Tools,
             priority: 1));
     }
 
     /// <summary>
-    /// Creates a skill file at the specified path.
+    /// Gets the content for the dotnet-inspect skill file.
+    /// See: <a href="https://github.com/richlander/dotnet-inspect/blob/main/skills/dotnet-inspect/SKILL.md">dotnet-inspect skill file</a>.
     /// </summary>
-    private static async Task CreateSkillFileAsync(string skillFilePath, CancellationToken cancellationToken)
-    {
-        // Ensure the directory exists
-        var directory = Path.GetDirectoryName(skillFilePath);
-        if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
-        // Only create the file if it doesn't already exist
-        if (!File.Exists(skillFilePath))
-        {
-            await File.WriteAllTextAsync(skillFilePath, SkillFileContent, cancellationToken);
-        }
-    }
-
-    /// <summary>
-    /// Gets the content for the Aspire skill file.
-    /// </summary>
-    internal const string SkillFileContent =
+    internal const string DotnetInspectSkillFileContent =
         """
-        # Aspire Skill
+        ---
+        name: dotnet-inspect
+        description: "Query .NET APIs across NuGet packages, platform libraries, and local files. Search for types, list API surfaces, compare and diff versions, find extension methods and implementors. Use whenever you need to answer questions about .NET library contents."
+        ---
 
-        This repository is set up to use Aspire. Aspire is an orchestrator for the entire application and will take care of configuring dependencies, building, and running the application. The resources that make up the application are defined in `apphost.cs` including application code and external dependencies.
+        # dotnet-inspect
 
-        ## General recommendations for working with Aspire
+        Query .NET library APIs — the same commands work across NuGet packages, platform libraries (System.*, Microsoft.AspNetCore.*), and local .dll/.nupkg files.
 
-        1. Before making any changes always run the apphost using `aspire run` and inspect the state of resources to make sure you are building from a known state.
-        2. Changes to the _apphost.cs_ file will require a restart of the application to take effect.
-        3. Make changes incrementally and run the aspire application using the `aspire run` command to validate changes.
-        4. Use the Aspire MCP tools to check the status of resources and debug issues.
+        ## Quick Decision Tree
 
-        ## Running Aspire in agent environments
+        - **Code broken?** → `diff --package Foo@old..new` first, then `member --oneline`
+        - **Need API surface?** → `member Type --package Foo --oneline` (token-efficient)
+        - **Need signatures?** → `member Type --package Foo -m Method` (default shows full signatures + docs)
+        - **Need source/IL?** → `member Type --package Foo -m Method -v:d` (adds Source, Lowered C#, IL)
+        - **Need constructors?** → `member 'Type<T>' --package Foo -m .ctor` (use `<T>` not `<>`)
+        - **Need all overloads?** → `member Type --package Foo --select` (shows `Name:N` indices)
 
-        Agent environments may terminate foreground processes when a command finishes. Use detached mode:
+        ## When to Use This Skill
 
-        ```bash
-        aspire run --detach --isolated
-        ```
+        - **"What types are in this package?"** — `type` discovers types (terse), `find` searches by pattern
+        - **"What's the API surface?"** — `type` for discovery, `member` for detailed inspection (docs on)
+        - **"What changed between versions?"** — `diff` classifies breaking/additive changes
+        - **"This code uses an old API — fix it"** — `diff` the old..new version, then `member --oneline` to see the new API
+        - **"What extends this type?"** — `extensions` finds extension methods/properties
+        - **"What implements this interface?"** — `implements` finds concrete types
+        - **"What does this type depend on?"** — `depends` walks the type hierarchy upward
+        - **"What version/metadata does this have?"** — `package` and `library` inspect metadata
+        - **"Show me something cool"** — `demo` runs curated showcase queries
 
-        This starts the AppHost in the background and returns immediately. The CLI will:
-        - Automatically stop any existing running instance before starting a new one
-        - Display a summary with the Dashboard URL and resource endpoints
+        ## Key Patterns
 
-        ### Stopping the application
-
-        To stop a running AppHost:
-
-        ```bash
-        aspire stop
-        ```
-
-        This will scan for running AppHosts and stop them gracefully.
-
-        ### Relaunch rules
-
-        - If AppHost code changes, run `aspire run --detach` again to restart with the new code.
-        - Relaunching is safe: starting a new instance will automatically stop the previous instance.
-        - Do not attempt to keep multiple instances running.
-
-        ## Running the application
-
-        To run the application run the following command:
+        Use `--oneline` as the default for scanning — it works on `type`, `member`, `find`, `diff`, and `implements`:
 
         ```bash
-        aspire run
+        dnx dotnet-inspect -y -- member JsonSerializer --package System.Text.Json --oneline  # scan members
+        dnx dotnet-inspect -y -- type --package System.Text.Json --oneline                   # scan types
+        dnx dotnet-inspect -y -- diff --package System.CommandLine@2.0.0-beta4.22272.1..2.0.3 --oneline  # triage changes
         ```
 
-        If there is already an instance of the application running it will prompt to stop the existing instance. You only need to restart the application if code in `apphost.cs` is changed, but if you experience problems it can be useful to reset everything to the starting state.
-
-        ## Checking resources
-
-        To check the status of resources defined in the app model use the _list resources_ tool. This will show you the current state of each resource and if there are any issues. If a resource is not running as expected you can use the _execute resource command_ tool to restart it or perform other actions.
-
-        ## Listing integrations
-
-        IMPORTANT! When a user asks you to add a resource to the app model you should first use the _list integrations_ tool to get a list of the current versions of all the available integrations. You should try to use the version of the integration which aligns with the version of the Aspire.AppHost.Sdk. Some integration versions may have a preview suffix. Once you have identified the correct integration you should always use the _get integration docs_ tool to fetch the latest documentation for the integration and follow the links to get additional guidance.
-
-        ## Debugging issues
-
-        IMPORTANT! Aspire is designed to capture rich logs and telemetry for all resources defined in the app model. Use the following diagnostic tools when debugging issues with the application before making changes to make sure you are focusing on the right things.
-
-        1. _list structured logs_; use this tool to get details about structured logs.
-        2. _list console logs_; use this tool to get details about console logs.
-        3. _list traces_; use this tool to get details about traces.
-        4. _list trace structured logs_; use this tool to get logs related to a trace
-
-        ## Other Aspire MCP tools
-
-        1. _select apphost_; use this tool if working with multiple app hosts within a workspace.
-        2. _list apphosts_; use this tool to get details about active app hosts.
-
-        ## Playwright MCP server
-
-        The playwright MCP server has also been configured in this repository and you should use it to perform functional investigations of the resources defined in the app model as you work on the codebase. To get endpoints that can be used for navigation using the playwright MCP server use the list resources tool.
-
-        ## Updating the app host
-
-        The user may request that you update the Aspire apphost. You can do this using the `aspire update` command. This will update the apphost to the latest version and some of the Aspire specific packages in referenced projects, however you may need to manually update other packages in the solution to ensure compatibility. You can consider using the `dotnet-outdated` with the users consent. To install the `dotnet-outdated` tool use the following command:
+        Use `--shape` to understand a type's hierarchy and surface at a glance:
 
         ```bash
-        dotnet tool install --global dotnet-outdated-tool
+        dnx dotnet-inspect -y -- type 'HashSet<T>' --platform System.Collections --shape
         ```
 
-        ## Persistent containers
+        Use `diff` first when fixing broken code — `--oneline` for triage, then full detail on specific types:
 
-        IMPORTANT! Consider avoiding persistent containers early during development to avoid creating state management issues when restarting the app.
+        ```bash
+        dnx dotnet-inspect -y -- diff --package System.CommandLine@2.0.0-beta4.22272.1..2.0.3 --oneline  # what changed?
+        dnx dotnet-inspect -y -- diff -t Command --package System.CommandLine@2.0.0-beta4.22272.1..2.0.3  # detail on Command
+        dnx dotnet-inspect -y -- member Command --package System.CommandLine@2.0.3 --oneline              # new API surface
+        ```
 
-        ## Aspire workload
+        ## Search Scope
 
-        IMPORTANT! The aspire workload is obsolete. You should never attempt to install or use the Aspire workload.
+        Search commands (`find`, `extensions`, `implements`, `depends`) use scope flags:
 
-        ## Official documentation
+        - **(no flags)** — platform frameworks + Microsoft.Extensions.AI
+        - **`--platform`** — all platform frameworks
+        - **`--extensions`** — curated Microsoft.Extensions.* packages
+        - **`--aspnetcore`** — curated Microsoft.AspNetCore.* packages
+        - **`--package Foo`** — specific NuGet package (combinable with scope flags)
 
-        IMPORTANT! Always prefer official documentation when available. The following sites contain the official documentation for Aspire and related components
+        `type`, `member`, `library`, `diff` accept `--platform <name>` as a string for a specific platform library.
 
-        1. https://aspire.dev
-        2. https://learn.microsoft.com/dotnet/aspire
-        3. https://nuget.org (for specific integration package details)
+        ## Command Reference
+
+        | Command | Purpose |
+        | ------- | ------- |
+        | `type` | **Discover types** — terse output, no docs, use `--shape` for hierarchy |
+        | `member` | **Inspect members** — docs on by default, supports dotted syntax (`-m Type.Member`) |
+        | `find` | Search for types by glob pattern across any scope |
+        | `diff` | Compare API surfaces between versions — breaking/additive classification |
+        | `extensions` | Find extension methods/properties for a type |
+        | `implements` | Find types implementing an interface or extending a base class |
+        | `depends` | Walk the type dependency hierarchy upward (interfaces, base classes) |
+        | `package` | Package metadata, files, versions, dependencies, `search` for NuGet discovery |
+        | `library` | Library metadata, symbols, references, dependencies |
+        | `demo` | Run curated showcase queries — list, invoke, or feeling-lucky |
+
+        ## Output Limiting
+
+        **Do not pipe output through `head`, `tail`, or `Select-Object`.** The tool has built-in line limiting that preserves headers and formatting:
+
+        ```bash
+        dnx dotnet-inspect -y -- member JsonSerializer --package System.Text.Json --oneline -10  # first 10 lines
+        dnx dotnet-inspect -y -- find "*Logger*" -n 5                                            # first 5 lines
+        dnx dotnet-inspect -y -- member JsonSerializer --package System.Text.Json -v:q -s Methods  # select specific section
+        ```
+
+        - **`-n N` or `-N`** — line limit, like `head`. Keeps headers, truncates cleanly.
+        - **`-s Section`** — show only a specific section (glob-capable). Use `-s` alone to list available sections.
+        - **`-v:q`** — quiet verbosity for compact summary output.
+
+        ## Key Syntax
+
+        - **Generic types** need quotes: `'Option<T>'`, `'IEnumerable<T>'`
+        - **Use `<T>` not `<>`** for generic types — `"Option<>"` resolves to the abstract base, `'Option<T>'` resolves to the concrete generic with constructors
+        - **`type` uses `-t`** for type filtering, **`member` uses `-m`** for member filtering (not `--filter`)
+        - **Dotted syntax** for `member`: `-m JsonSerializer.Deserialize`
+        - **Diff ranges** use `..`: `--package System.Text.Json@9.0.0..10.0.0`
+        - **Signatures** include `params` and default values from metadata
+        - **Derived types** only show their own members — query the base type too (e.g., `RootCommand` inherits `Add()` and `SetAction()` from `Command`)
+
+        ## Installation
+
+        Use `dnx` (like `npx`). Always use `-y` and `--` to prevent interactive prompts:
+
+        ```bash
+        dnx dotnet-inspect -y -- <command>
+        ```
+
+        ## Full Documentation
+
+        For comprehensive syntax, edge cases, and the flag compatibility matrix:
+
+        ```bash
+        dnx dotnet-inspect -y -- llmstxt
+        ```
         """;
 }

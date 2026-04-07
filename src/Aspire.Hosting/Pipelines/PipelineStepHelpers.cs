@@ -66,7 +66,7 @@ internal static class PipelineStepHelpers
         var targetTag = await cir.GetValueAsync(new ValueProviderContext { ExecutionContext = context.ExecutionContext }, context.CancellationToken).ConfigureAwait(false);
 
         var tagTask = await context.ReportingStep.CreateTaskAsync(
-            $"Tagging **{resource.Name}** for local use",
+            new MarkdownString($"Tagging **{resource.Name}** for local use"),
             context.CancellationToken).ConfigureAwait(false);
 
         await using (tagTask.ConfigureAwait(false))
@@ -88,14 +88,14 @@ internal static class PipelineStepHelpers
                 await containerRuntime.TagImageAsync(localImageName, targetTag, context.CancellationToken).ConfigureAwait(false);
 
                 await tagTask.CompleteAsync(
-                    $"Successfully tagged **{resource.Name}** as `{targetTag}`",
+                    new MarkdownString($"Successfully tagged **{resource.Name}** as `{targetTag}`"),
                     CompletionState.Completed,
                     context.CancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
                 await tagTask.CompleteAsync(
-                    $"Failed to tag **{resource.Name}**: {ex.Message}",
+                    new MarkdownString($"Failed to tag **{resource.Name}**: {ex.Message}"),
                     CompletionState.CompletedWithError,
                     context.CancellationToken).ConfigureAwait(false);
                 throw;
@@ -112,7 +112,7 @@ internal static class PipelineStepHelpers
         var targetTag = await cir.GetValueAsync(new ValueProviderContext { ExecutionContext = context.ExecutionContext }, context.CancellationToken).ConfigureAwait(false);
 
         var pushTask = await context.ReportingStep.CreateTaskAsync(
-            $"Pushing **{resource.Name}** to **{registryName}**",
+            new MarkdownString($"Pushing **{resource.Name}** to **{registryName}**"),
             context.CancellationToken).ConfigureAwait(false);
 
         await using (pushTask.ConfigureAwait(false))
@@ -128,14 +128,14 @@ internal static class PipelineStepHelpers
                 await containerImageManager.PushImageAsync(resource, context.CancellationToken).ConfigureAwait(false);
 
                 await pushTask.CompleteAsync(
-                    $"Successfully pushed **{resource.Name}** to `{targetTag}`",
+                    new MarkdownString($"Successfully pushed **{resource.Name}** to `{targetTag}`"),
                     CompletionState.Completed,
                     context.CancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
                 await pushTask.CompleteAsync(
-                    $"Failed to push **{resource.Name}**: {ex.Message}",
+                    new MarkdownString($"Failed to push **{resource.Name}**: {ex.Message}"),
                     CompletionState.CompletedWithError,
                     context.CancellationToken).ConfigureAwait(false);
                 throw;

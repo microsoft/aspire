@@ -3,7 +3,8 @@
 
 using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Ats;
+using Aspire.Hosting.RemoteHost;
+using Aspire.TypeSystem;
 using Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes;
 
 namespace Aspire.Hosting.CodeGeneration.Go.Tests;

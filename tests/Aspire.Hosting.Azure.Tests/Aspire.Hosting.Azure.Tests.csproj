@@ -9,7 +9,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.AIFoundry\Aspire.Hosting.Azure.AIFoundry.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.JavaScript\Aspire.Hosting.JavaScript.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Foundry\Aspire.Hosting.Foundry.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.AppConfiguration\Aspire.Hosting.Azure.AppConfiguration.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.AppService\Aspire.Hosting.Azure.AppService.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting\Aspire.Hosting.csproj" />
@@ -22,6 +23,7 @@
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.Functions\Aspire.Hosting.Azure.Functions.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.KeyVault\Aspire.Hosting.Azure.KeyVault.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.Kusto\Aspire.Hosting.Azure.Kusto.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.Network\Aspire.Hosting.Azure.Network.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.OperationalInsights\Aspire.Hosting.Azure.OperationalInsights.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.PostgreSQL\Aspire.Hosting.Azure.PostgreSQL.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.Redis\Aspire.Hosting.Azure.Redis.csproj" />

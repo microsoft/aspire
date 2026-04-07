@@ -1,0 +1,107 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="pl" original="../DocsCommandStrings.resx">
+    <body>
+      <trans-unit id="Description">
+        <source>Browse and search Aspire documentation from aspire.dev</source>
+        <target state="needs-review-translation">Przeglądaj i przeszukuj dokumentację Aspire z Aspire.dev.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DocumentNotFound">
+        <source>Documentation page '{0}' not found. Use 'aspire docs list' to see available pages.</source>
+        <target state="translated">Nie znaleziono strony dokumentacji „{0}”. Użyj opcji „lista dokumentacji”, aby wyświetlić dostępne strony.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FormatOptionDescription">
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">Format danych wyjściowych (Tabela lub JSON).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FoundDocumentationPages">
+        <source>Found {0} documentation pages.</source>
+        <target state="translated">Znalezione strony dokumentacji: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FoundSearchResults">
+        <source>Found {0} results for '{1}'.</source>
+        <target state="translated">Znaleziono wyniki ({0}) dla „{1}”.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="GetDescription">
+        <source>Get the full content of a documentation page by its slug</source>
+        <target state="needs-review-translation">Pobierz pełną zawartość strony dokumentacji przy użyciu jej fragmentu.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderScore">
+        <source>Score</source>
+        <target state="translated">Wynik</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderSection">
+        <source>Section</source>
+        <target state="translated">Sekcja</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderSlug">
+        <source>Slug</source>
+        <target state="translated">Slug</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderSummary">
+        <source>Summary</source>
+        <target state="translated">Podsumowanie</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderTitle">
+        <source>Title</source>
+        <target state="translated">Tytuł</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LimitOptionDescription">
+        <source>Maximum number of search results to return (default: 5, max: 10)</source>
+        <target state="needs-review-translation">Maksymalna liczba wyników wyszukiwania do zwrócenia (wartość domyślna: 5, maksimum: 10).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ListDescription">
+        <source>List all available Aspire documentation pages</source>
+        <target state="needs-review-translation">Wyświetl listę wszystkich dostępnych stron dokumentacji.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LoadingDocumentation">
+        <source>Loading documentation...</source>
+        <target state="translated">Trwa ładowanie dokumentacji...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoDocumentationAvailable">
+        <source>No documentation available. The aspire.dev docs may not have loaded correctly.</source>
+        <target state="translated">Brak dostępnej dokumentacji. Dokumenty aspire.dev mogły nie zostać załadowane poprawnie.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoResultsFound">
+        <source>No results found for '{0}'. Try different search terms.</source>
+        <target state="translated">Nie znaleziono żadnych wyników dla „{0}”. Wypróbuj inne terminy wyszukiwania.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="QueryArgumentDescription">
+        <source>The search query</source>
+        <target state="needs-review-translation">Zapytanie wyszukiwania.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SearchDescription">
+        <source>Search Aspire documentation by keywords</source>
+        <target state="needs-review-translation">Wyszukaj dokumentację aplikacji Wyszukaj według słów kluczowych.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SectionOptionDescription">
+        <source>Return only the specified section of the page</source>
+        <target state="needs-review-translation">Zwróć tylko określoną sekcję strony.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SlugArgumentDescription">
+        <source>The slug of the documentation page (e.g., 'redis-integration')</source>
+        <target state="needs-review-translation">Fragment strony dokumentacji (np. „redis-integration”).</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

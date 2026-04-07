@@ -1,5 +1,4 @@
 {
-  "$schema": "https://json.schemastore.org/aspire-8.0.json",
   "resources": {
     "pass": {
       "type": "parameter.v0",
@@ -12,8 +11,8 @@
     },
     "cache": {
       "type": "container.v0",
-      "connectionString": "{cache.bindings.tcp.host}:{cache.bindings.tcp.port},password={pass.value}",
-      "image": "docker.io/library/redis:8.2",
+      "connectionString": "{cache.bindings.tcp.host}:{cache.bindings.tcp.port},password={pass.value}{cond-cache-bindings-tcp-tlsenabled-3eddb73a.connectionString}",
+      "image": "docker.io/library/redis:8.6",
       "entrypoint": "/bin/sh",
       "args": [
         "-c",
@@ -24,7 +23,7 @@
       },
       "bindings": {
         "tcp": {
-          "scheme": "tcp",
+          "scheme": "redis",
           "protocol": "tcp",
           "transport": "tcp",
           "targetPort": 6379
@@ -68,7 +67,7 @@
         "CACHE_HOST": "{cache.bindings.tcp.host}",
         "CACHE_PORT": "{cache.bindings.tcp.port}",
         "CACHE_PASSWORD": "{pass.value}",
-        "CACHE_URI": "redis://:{pass-uri-encoded.value}@{cache.bindings.tcp.host}:{cache.bindings.tcp.port}",
+        "CACHE_URI": "{cache.bindings.tcp.scheme}://:{pass-uri-encoded.value}@{cache.bindings.tcp.host}:{cache.bindings.tcp.port}",
         "PORT": "{frontend.bindings.http.targetPort}"
       },
       "bindings": {
@@ -85,6 +84,10 @@
       "type": "annotated.string",
       "value": "{pass.value}",
       "filter": "uri"
+    },
+    "cond-cache-bindings-tcp-tlsenabled-3eddb73a": {
+      "type": "value.v0",
+      "connectionString": ""
     }
   }
 }

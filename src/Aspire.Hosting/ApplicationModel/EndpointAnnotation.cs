@@ -22,6 +22,7 @@ public sealed class EndpointAnnotation : IResourceAnnotation
     private bool _portSetToNull;
     private int? _targetPort;
     private bool _targetPortSetToNull;
+    private bool? _tlsEnabled;
     private readonly NetworkIdentifier _networkID;
 
     /// <summary>
@@ -101,7 +102,9 @@ public sealed class EndpointAnnotation : IResourceAnnotation
         IsExternal = isExternal ?? false;
         IsProxied = isProxied;
         _networkID = networkID ?? KnownNetworkIdentifiers.LocalhostNetwork;
+#pragma warning disable CS0618 // Type or member is obsolete
         AllAllocatedEndpoints.TryAdd(_networkID, AllocatedEndpointSnapshot);
+#pragma warning restore CS0618 // Type or member is obsolete
     }
 
     /// <summary>
@@ -166,7 +169,7 @@ public sealed class EndpointAnnotation : IResourceAnnotation
     /// </summary>
     public string Transport
     {
-        get => _transport ?? (UriScheme == "http" || UriScheme == "https" ? "http" : Protocol.ToString().ToLowerInvariant());
+        get => _transport ?? (string.Equals(UriScheme, "http", StringComparisons.EndpointAnnotationUriScheme) || string.Equals(UriScheme, "https", StringComparisons.EndpointAnnotationUriScheme) ? "http" : Protocol.ToString().ToLowerInvariant());
         set => _transport = value;
     }
 
@@ -181,6 +184,36 @@ public sealed class EndpointAnnotation : IResourceAnnotation
     /// </summary>
     /// <remarks>Defaults to <c>true</c>.</remarks>
     public bool IsProxied { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether this endpoint is excluded from the default set when referencing the resource's endpoints
+    /// via <c>WithReference(resource)</c>. When <c>true</c>, the endpoint is excluded from the default set and must be
+    /// referenced explicitly using <c>WithReference(resource.GetEndpoint("name"))</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>Defaults to <c>false</c>.</para>
+    /// <para>
+    /// This is useful for resources that expose auxiliary endpoints (e.g., management dashboards, health check ports)
+    /// that should not be included in service discovery by default.
+    /// </para>
+    /// </remarks>
+    public bool ExcludeReferenceEndpoint { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether TLS is enabled for this endpoint.
+    /// </summary>
+    /// <remarks>
+    /// This property is used to track TLS state on the endpoint so that connection string expressions
+    /// can dynamically include TLS-related parameters (e.g., <c>ssl=true</c> for Redis) at resolution time
+    /// rather than at expression build time. For HTTP-based endpoints, the <see cref="UriScheme"/> property
+    /// being set to <c>https</c> already implies TLS. This property is primarily useful for non-HTTP protocols
+    /// (e.g., Redis, databases) that need explicit TLS configuration in their connection strings.
+    /// </remarks>
+    public bool TlsEnabled
+    {
+        get => _tlsEnabled ?? string.Equals(UriScheme, "https", StringComparisons.EndpointAnnotationUriScheme);
+        set => _tlsEnabled = value;
+    }
 
     /// <summary>
     /// Gets or sets a value indicating whether the endpoint is from a launch profile.
@@ -202,8 +235,10 @@ public sealed class EndpointAnnotation : IResourceAnnotation
     /// </summary>
     public AllocatedEndpoint? AllocatedEndpoint
     {
+#pragma warning disable CS0618 // Type or member is obsolete (AllocatedEndpointSnapshot)
         get
         {
+
             if (!AllocatedEndpointSnapshot.IsValueSet)
             {
                 return null;
@@ -223,14 +258,20 @@ public sealed class EndpointAnnotation : IResourceAnnotation
             }
             else
             {
+                if (_networkID != value.NetworkID)
+                {
+                    throw new InvalidOperationException($"The default AllocatedEndpoint's network ID must match the EndpointAnnotation network ID ('{_networkID}'). The attempted AllocatedEndpoint belongs to '{value.NetworkID}'.");
+                }
                 AllocatedEndpointSnapshot.SetValue(value);
             }
         }
+#pragma warning restore CS0618 // Type or member is obsolete
     }
 
     /// <summary>
     /// Gets the <see cref="AllocatedEndpointSnapshot"/> for the default <see cref="AllocatedEndpoint"/>.
     /// </summary>
+    [Obsolete("This property will be marked as internal in future Aspire release. Use AllocatedEndpoint and AllAllocatedEndpoints properties to access and change allocated endpoints associated with an EndpointAnnotation.")]
     public ValueSnapshot<AllocatedEndpoint> AllocatedEndpointSnapshot { get; } = new();
 
     /// <summary>
@@ -244,6 +285,7 @@ public sealed class EndpointAnnotation : IResourceAnnotation
 /// </summary>
 /// <param name="Snapshot">AllocatedEndpoint snapshot</param>
 /// <param name="NetworkID">The ID of the network that is associated with the AllocatedEndpoint snapshot.</param>
+[DebuggerDisplay("NetworkID = {NetworkID}, Endpoint = {Snapshot}")]
 public record class NetworkEndpointSnapshot(ValueSnapshot<AllocatedEndpoint> Snapshot, NetworkIdentifier NetworkID);
 
 /// <summary>
@@ -251,6 +293,7 @@ public record class NetworkEndpointSnapshot(ValueSnapshot<AllocatedEndpoint> Sna
 /// </summary>
 public class NetworkEndpointSnapshotList : IEnumerable<NetworkEndpointSnapshot>
 {
+    [DebuggerBrowsable(DebuggerBrowsableState.RootHidden)]
     private readonly ConcurrentBag<NetworkEndpointSnapshot> _snapshots = new();
 
     /// <summary>
@@ -269,6 +312,7 @@ public class NetworkEndpointSnapshotList : IEnumerable<NetworkEndpointSnapshot>
     /// <summary>
     /// Adds an AllocatedEndpoint snapshot for a specific network if one does not already exist.
     /// </summary>
+    [Obsolete("This method is for internal use only and will be marked internal in a future Aspire release. Use AddOrUpdateAllocatedEndpoint instead.")]
     public bool TryAdd(NetworkIdentifier networkID, ValueSnapshot<AllocatedEndpoint> snapshot)
     {
         lock (_snapshots)
@@ -281,4 +325,41 @@ public class NetworkEndpointSnapshotList : IEnumerable<NetworkEndpointSnapshot>
             return true;
         }
     }
+
+    /// <summary>
+    /// Adds or updates an AllocatedEndpoint value associated with a specific network in the snapshot list.
+    /// </summary>
+    public void AddOrUpdateAllocatedEndpoint(NetworkIdentifier networkID, AllocatedEndpoint endpoint)
+    {
+        if (endpoint.NetworkID != networkID)
+        {
+            throw new ArgumentException($"AllocatedEndpoint must use the same network as the {nameof(networkID)} parameter", nameof(endpoint));
+        }
+        var nes = GetSnapshotFor(networkID);
+        nes.Snapshot.SetValue(endpoint);
+    }
+
+    /// <summary>
+    /// Gets an AllocatedEndpoint for a given network ID, waiting for it to appear if it is not already present.
+    /// </summary>
+    public Task<AllocatedEndpoint> GetAllocatedEndpointAsync(NetworkIdentifier networkID, CancellationToken cancellationToken = default)
+    {
+        var nes = GetSnapshotFor(networkID);
+        return nes.Snapshot.GetValueAsync(cancellationToken);
+    }
+
+    private NetworkEndpointSnapshot GetSnapshotFor(NetworkIdentifier networkID)
+    {
+        lock (_snapshots)
+        {
+            var nes = _snapshots.FirstOrDefault(s => s.NetworkID.Equals(networkID));
+            if (nes is null)
+            {
+                nes = new NetworkEndpointSnapshot(new ValueSnapshot<AllocatedEndpoint>(), networkID);
+                _snapshots.Add(nes);
+            }
+            return nes;
+        }
+    }
+
 }

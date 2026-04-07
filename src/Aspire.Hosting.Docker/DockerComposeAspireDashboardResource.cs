@@ -10,15 +10,16 @@ namespace Aspire.Hosting.Docker;
 /// This resource is used to visualize telemetry data in the Aspire Hosting environment.
 /// </summary>
 /// <param name="name">The name of the Aspire Dashboard resource.</param>
+[global::Aspire.Hosting.AspireExport(ExposeProperties = true)]
 public class DockerComposeAspireDashboardResource(string name) : ContainerResource(name)
 {
     /// <summary>
-    /// Gets or sets the URL of the Aspire Dashboard.
+    /// Gets the primary endpoint of the Aspire Dashboard.
     /// </summary>
     public EndpointReference PrimaryEndpoint => new(this, "http");
 
     /// <summary>
-    /// Gets or sets the URL of the OTLP gRPC endpoint for telemetry data.
+    /// Gets the OTLP gRPC endpoint for telemetry data.
     /// </summary>
     public EndpointReference OtlpGrpcEndpoint => new(this, "otlp-grpc");
 }

@@ -15,6 +15,8 @@ namespace Aspire.Cli.Commands;
 
 internal sealed class DoctorCommand : BaseCommand
 {
+    internal override HelpGroup HelpGroup => HelpGroup.ToolsAndConfiguration;
+
     private readonly IEnvironmentChecker _environmentChecker;
     private readonly IAnsiConsole _ansiConsole;
     private static readonly Option<OutputFormat> s_formatOption = new("--format")
@@ -32,9 +34,6 @@ internal sealed class DoctorCommand : BaseCommand
         AspireCliTelemetry telemetry)
         : base("doctor", DoctorCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
-        ArgumentNullException.ThrowIfNull(environmentChecker);
-        ArgumentNullException.ThrowIfNull(ansiConsole);
-
         _environmentChecker = environmentChecker;
         _ansiConsole = ansiConsole;
 
@@ -45,12 +44,9 @@ internal sealed class DoctorCommand : BaseCommand
     {
         var format = parseResult.GetValue(s_formatOption);
 
-        // When outputting JSON, suppress status messages to keep output machine-readable
-        var statusMessage = format == OutputFormat.Json ? string.Empty : DoctorCommandStrings.CheckingPrerequisites;
-
         // Run all prerequisite checks
         var results = await InteractionService.ShowStatusAsync(
-            statusMessage,
+            DoctorCommandStrings.CheckingPrerequisites,
             async () => await _environmentChecker.CheckAllAsync(cancellationToken));
 
         if (format == OutputFormat.Json)
@@ -86,7 +82,8 @@ internal sealed class DoctorCommand : BaseCommand
 
         var json = System.Text.Json.JsonSerializer.Serialize(response, JsonSourceGenerationContext.RelaxedEscaping.DoctorCheckResponse);
         // Use DisplayRawText to write directly to console without any formatting
-        InteractionService.DisplayRawText(json);
+        // Structured output always goes to stdout.
+        InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
     }
 
     private void OutputHumanReadable(IReadOnlyList<EnvironmentCheckResult> results)
@@ -124,47 +121,66 @@ internal sealed class DoctorCommand : BaseCommand
         // Show link to detailed prerequisites if there are warnings or failures
         if (warnings > 0 || failed > 0)
         {
-            _ansiConsole.MarkupLine($"[dim]{DoctorCommandStrings.DetailedPrerequisitesLink}[/]");
+            const string prerequisitesUrl = "https://aka.ms/aspire-prerequisites";
+            _ansiConsole.MarkupLine(string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DetailedPrerequisitesLink, $"[link]{prerequisitesUrl}[/]"));
         }
     }
 
     private void OutputCheckResult(EnvironmentCheckResult result)
     {
         var (icon, color) = GetStatusIconAndColor(result.Status);
-        // Use 2 spaces after icon for consistent alignment (warning triangle is wider than checkmark)
-        _ansiConsole.MarkupLine($"  [{color}]{icon}[/]  {result.Message.EscapeMarkup()}");
+        var iconPrefix = ConsoleHelpers.FormatEmojiPrefix(icon, _ansiConsole);
 
-        // Show details if available
-        if (!string.IsNullOrEmpty(result.Details))
-        {
-            _ansiConsole.MarkupLine($"        [dim]{result.Details.EscapeMarkup()}[/]");
-        }
+        // Primary grid: icon + message (wrapped lines stay aligned with message text)
+        var messageGrid = new Grid();
+        messageGrid.AddColumn();
+        messageGrid.AddRow(
+            new Markup($"[{color}]{iconPrefix}{result.Message.EscapeMarkup()}[/]"));
 
-        // Show fix suggestion if available
-        if (!string.IsNullOrEmpty(result.Fix))
+        _ansiConsole.Write(new Padder(messageGrid, new Padding(2, 0)));
+
+        // Secondary grid: details, fix suggestions, and links (indented further than message)
+        var hasDetails = !string.IsNullOrEmpty(result.Details);
+        var hasFix = !string.IsNullOrEmpty(result.Fix);
+        var hasLink = !string.IsNullOrEmpty(result.Link);
+
+        if (hasDetails || hasFix || hasLink)
         {
-            var fixLines = result.Fix.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-            foreach (var line in fixLines)
+            var detailGrid = new Grid();
+            detailGrid.AddColumn();
+
+            if (hasFix)
             {
-                _ansiConsole.MarkupLine($"        [dim]{line.Trim().EscapeMarkup()}[/]");
+                var fixLines = result.Fix!.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                foreach (var line in fixLines)
+                {
+                    detailGrid.AddRow(new Markup($"{line.Trim().EscapeMarkup()}"));
+                }
             }
-        }
 
-        // Show documentation link if available
-        if (!string.IsNullOrEmpty(result.Link))
-        {
-            _ansiConsole.MarkupLine($"        [dim]See: {result.Link.EscapeMarkup()}[/]");
+            if (hasLink)
+            {
+                detailGrid.AddRow(new Markup($"See: [link={result.Link!.EscapeMarkup()}]{result.Link!.EscapeMarkup()}[/]"));
+            }
+
+            if (hasDetails)
+            {
+                detailGrid.AddRow(new Markup($"[dim]Details:[/]"));
+                detailGrid.AddRow(new Markup($"[dim]{result.Details!.EscapeMarkup()}[/]"));
+            }
+
+            _ansiConsole.Write(new Padder(detailGrid, new Padding(7, 0)));
         }
     }
 
-    private static (string Icon, string Color) GetStatusIconAndColor(EnvironmentCheckStatus status)
+    private static (KnownEmoji Icon, string Color) GetStatusIconAndColor(EnvironmentCheckStatus status)
     {
         return status switch
         {
-            EnvironmentCheckStatus.Pass => ("✓", "green"),
-            EnvironmentCheckStatus.Warning => ("⚠", "yellow"),
-            EnvironmentCheckStatus.Fail => ("✗", "red"),
-            _ => ("?", "grey")
+            EnvironmentCheckStatus.Pass => (KnownEmojis.CheckMark, "green"),
+            EnvironmentCheckStatus.Warning => (KnownEmojis.Warning, "yellow"),
+            EnvironmentCheckStatus.Fail => (KnownEmojis.CrossMark, "red"),
+            _ => (KnownEmojis.Information, "grey")
         };
     }
 

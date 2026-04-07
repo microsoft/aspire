@@ -18,10 +18,6 @@ spec:
       protocol: "TCP"
       port: {{ .Values.parameters.project1.port_http | int }}
       targetPort: {{ .Values.parameters.project1.port_http | int }}
-    - name: "https"
-      protocol: "TCP"
-      port: {{ .Values.parameters.project1.port_https | int }}
-      targetPort: {{ .Values.parameters.project1.port_https | int }}
     - name: "custom1"
       protocol: "TCP"
       port: 8000

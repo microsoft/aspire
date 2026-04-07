@@ -116,9 +116,9 @@ internal sealed class DockerComposeInfrastructure(
             // Configure OTLP environment variables
             resourceWithEnv.Annotations.Add(new EnvironmentCallbackAnnotation(context =>
             {
-                context.EnvironmentVariables["OTEL_EXPORTER_OTLP_ENDPOINT"] = otlpEndpoint;
-                context.EnvironmentVariables["OTEL_EXPORTER_OTLP_PROTOCOL"] = "grpc";
-                context.EnvironmentVariables["OTEL_SERVICE_NAME"] = resource.Name;
+                context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpEndpoint] = otlpEndpoint;
+                context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpProtocol] = "grpc";
+                context.EnvironmentVariables[KnownOtelConfigNames.ServiceName] = resource.Name;
                 return Task.CompletedTask;
             }));
         }

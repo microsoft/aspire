@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -35,6 +37,7 @@ public static class AzureServiceBusExtensions
     ///
     /// These can be replaced by calling <see cref="WithRoleAssignments{T}(IResourceBuilder{T}, IResourceBuilder{AzureServiceBusResource}, ServiceBusBuiltInRole[])"/>.
     /// </remarks>
+    [AspireExport(Description = "Adds an Azure Service Bus namespace resource")]
     public static IResourceBuilder<AzureServiceBusResource> AddAzureServiceBus(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -44,6 +47,11 @@ public static class AzureServiceBusExtensions
 
         var configureInfrastructure = static (AzureResourceInfrastructure infrastructure) =>
         {
+            var azureResource = (AzureServiceBusResource)infrastructure.AspireResource;
+
+            // Check if this Service Bus has a private endpoint (via annotation)
+            var hasPrivateEndpoint = azureResource.HasAnnotationOfType<PrivateEndpointTargetAnnotation>();
+
             AzureProvisioning.ServiceBusNamespace serviceBusNamespace = AzureProvisioningResource.CreateExistingOrNewProvisionableResource(infrastructure,
                 (identifier, name) =>
                 {
@@ -55,7 +63,7 @@ public static class AzureServiceBusExtensions
                 {
                     var skuParameter = new ProvisioningParameter("sku", typeof(string))
                     {
-                        Value = "Standard"
+                        Value = hasPrivateEndpoint ? "Premium" : "Standard"
                     };
                     infrastructure.Add(skuParameter);
                     var resource = new AzureProvisioning.ServiceBusNamespace(infrastructure.AspireResource.GetBicepIdentifier())
@@ -65,6 +73,10 @@ public static class AzureServiceBusExtensions
                             Name = skuParameter
                         },
                         DisableLocalAuth = true,
+                        // When using private endpoints, disable public network access.
+                        PublicNetworkAccess = hasPrivateEndpoint
+                            ? AzureProvisioning.ServiceBusPublicNetworkAccess.Disabled
+                            : AzureProvisioning.ServiceBusPublicNetworkAccess.Enabled,
                         Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
                     };
                     return resource;
@@ -90,7 +102,8 @@ public static class AzureServiceBusExtensions
             // We need to output name to externalize role assignments.
             infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = serviceBusNamespace.Name.ToBicepExpression() });
 
-            var azureResource = (AzureServiceBusResource)infrastructure.AspireResource;
+            // Output the resource id for private endpoint support.
+            infrastructure.Add(new ProvisioningOutput("id", typeof(string)) { Value = serviceBusNamespace.Id.ToBicepExpression() });
 
             foreach (var queue in azureResource.Queues)
             {
@@ -133,6 +146,8 @@ public static class AzureServiceBusExtensions
     /// <param name="builder">The Azure Service Bus resource builder.</param>
     /// <param name="name">The name of the queue resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>This method is not available in polyglot app hosts. Use <see cref="AddServiceBusQueue"/> instead.</remarks>
+    [AspireExportIgnore(Reason = "Obsolete API with incorrect return type. Use AddServiceBusQueue instead.")]
     [Obsolete($"This method is obsolete because it has the wrong return type and will be removed in a future version. Use {nameof(AddServiceBusQueue)} instead to add an Azure Service Bus Queue.")]
     public static IResourceBuilder<AzureServiceBusResource> AddQueue(this IResourceBuilder<AzureServiceBusResource> builder, [ResourceName] string name)
     {
@@ -151,6 +166,7 @@ public static class AzureServiceBusExtensions
     /// <param name="name">The name of the queue resource.</param>
     /// <param name="queueName">The name of the Service Bus Queue. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport(Description = "Adds an Azure Service Bus queue resource")]
     public static IResourceBuilder<AzureServiceBusQueueResource> AddServiceBusQueue(this IResourceBuilder<AzureServiceBusResource> builder, [ResourceName] string name, string? queueName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -171,6 +187,7 @@ public static class AzureServiceBusExtensions
     /// <param name="builder">The Azure Service Bus Queue resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the <see cref="AzureServiceBusQueueResource"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("withQueueProperties", MethodName = "withProperties", Description = "Configures properties of an Azure Service Bus queue", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureServiceBusQueueResource> WithProperties(this IResourceBuilder<AzureServiceBusQueueResource> builder, Action<AzureServiceBusQueueResource> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -186,6 +203,8 @@ public static class AzureServiceBusExtensions
     /// </summary>
     /// <param name="builder">The Azure Service Bus resource builder.</param>
     /// <param name="name">The name of the topic resource.</param>
+    /// <remarks>This method is not available in polyglot app hosts. Use <see cref="AddServiceBusTopic"/> instead.</remarks>
+    [AspireExportIgnore(Reason = "Obsolete API with incorrect return type. Use AddServiceBusTopic instead.")]
     [Obsolete($"This method is obsolete because it has the wrong return type and will be removed in a future version. Use {nameof(AddServiceBusTopic)} instead to add an Azure Service Bus Topic.")]
     public static IResourceBuilder<AzureServiceBusResource> AddTopic(this IResourceBuilder<AzureServiceBusResource> builder, [ResourceName] string name)
     {
@@ -203,6 +222,8 @@ public static class AzureServiceBusExtensions
     /// <param name="builder">The Azure Service Bus resource builder.</param>
     /// <param name="name">The name of the topic resource.</param>
     /// <param name="subscriptions">The name of the subscriptions.</param>
+    /// <remarks>This method is not available in polyglot app hosts. Use <see cref="AddServiceBusTopic"/> and <see cref="AddServiceBusSubscription"/> instead.</remarks>
+    [AspireExportIgnore(Reason = "Obsolete API. Use AddServiceBusTopic and AddServiceBusSubscription instead.")]
     [Obsolete($"This method is obsolete because it has the wrong return type and will be removed in a future version. Use {nameof(AddServiceBusTopic)} and {nameof(AddServiceBusSubscription)} instead to add an Azure Service Bus Topic and Subscriptions.")]
     public static IResourceBuilder<AzureServiceBusResource> AddTopic(this IResourceBuilder<AzureServiceBusResource> builder, [ResourceName] string name, string[] subscriptions)
     {
@@ -228,6 +249,7 @@ public static class AzureServiceBusExtensions
     /// <param name="name">The name of the topic resource.</param>
     /// <param name="topicName">The name of the Service Bus Topic. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport(Description = "Adds an Azure Service Bus topic resource")]
     public static IResourceBuilder<AzureServiceBusTopicResource> AddServiceBusTopic(this IResourceBuilder<AzureServiceBusResource> builder, [ResourceName] string name, string? topicName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -248,6 +270,7 @@ public static class AzureServiceBusExtensions
     /// <param name="builder">The Azure Service Bus Topic resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the <see cref="AzureServiceBusTopicResource"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("withTopicProperties", MethodName = "withProperties", Description = "Configures properties of an Azure Service Bus topic", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureServiceBusTopicResource> WithProperties(this IResourceBuilder<AzureServiceBusTopicResource> builder, Action<AzureServiceBusTopicResource> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -265,6 +288,8 @@ public static class AzureServiceBusExtensions
     /// <param name="topicName">The name of the topic resource.</param>
     /// <param name="subscriptionName">The name of the subscription.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>This method is not available in polyglot app hosts. Use <see cref="AddServiceBusSubscription"/> instead.</remarks>
+    [AspireExportIgnore(Reason = "Obsolete API. Use AddServiceBusSubscription instead.")]
     [Obsolete($"This method is obsolete and will be removed in a future version. Use {nameof(AddServiceBusSubscription)} instead to add an Azure Service Bus Subscription to a Topic.")]
     public static IResourceBuilder<AzureServiceBusResource> AddSubscription(this IResourceBuilder<AzureServiceBusResource> builder, string topicName, string subscriptionName)
     {
@@ -294,6 +319,7 @@ public static class AzureServiceBusExtensions
     /// <param name="name">The name of the subscription resource.</param>
     /// <param name="subscriptionName">The name of the Service Bus Subscription. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport(Description = "Adds an Azure Service Bus subscription resource")]
     public static IResourceBuilder<AzureServiceBusSubscriptionResource> AddServiceBusSubscription(this IResourceBuilder<AzureServiceBusTopicResource> builder, [ResourceName] string name, string? subscriptionName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -314,6 +340,7 @@ public static class AzureServiceBusExtensions
     /// <param name="builder">The Azure Service Bus Subscription resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the <see cref="AzureServiceBusSubscriptionResource"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("withSubscriptionProperties", MethodName = "withProperties", Description = "Configures properties of an Azure Service Bus subscription", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureServiceBusSubscriptionResource> WithProperties(this IResourceBuilder<AzureServiceBusSubscriptionResource> builder, Action<AzureServiceBusSubscriptionResource> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -349,6 +376,7 @@ public static class AzureServiceBusExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExport(Description = "Configures the Azure Service Bus resource to run with the local emulator", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureServiceBusResource> RunAsEmulator(this IResourceBuilder<AzureServiceBusResource> builder, Action<IResourceBuilder<AzureServiceBusEmulatorResource>>? configureContainer = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -374,6 +402,7 @@ public static class AzureServiceBusExtensions
         builder
             .WithEndpoint(name: "emulator", targetPort: 5672)
             .WithHttpEndpoint(name: EmulatorHealthEndpointName, targetPort: 5300)
+            .WithEndpoint(EmulatorHealthEndpointName, e => e.ExcludeReferenceEndpoint = true)
             .WithAnnotation(new ContainerImageAnnotation
             {
                 Registry = ServiceBusEmulatorContainerImageTags.Registry,
@@ -485,6 +514,7 @@ public static class AzureServiceBusExtensions
     /// <param name="builder">The builder for the <see cref="AzureServiceBusEmulatorResource"/>.</param>
     /// <param name="path">Path to the file on the AppHost where the emulator configuration is located.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport(Description = "Sets the emulator configuration file path")]
     public static IResourceBuilder<AzureServiceBusEmulatorResource> WithConfigurationFile(this IResourceBuilder<AzureServiceBusEmulatorResource> builder, string path)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -500,6 +530,7 @@ public static class AzureServiceBusExtensions
     /// <param name="configJson">A callback to update the JSON object representation of the configuration.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
+    /// This method is not available in polyglot app hosts. Use <see cref="WithConfigurationFile"/> instead to provide a configuration file.
     /// <example>
     /// Here is an example of how to configure the emulator to use a different logging mechanism:
     /// <code language="csharp">
@@ -515,6 +546,7 @@ public static class AzureServiceBusExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExportIgnore(Reason = "Action<JsonNode> callbacks are not ATS-compatible.")]
     public static IResourceBuilder<AzureServiceBusEmulatorResource> WithConfiguration(this IResourceBuilder<AzureServiceBusEmulatorResource> builder, Action<JsonNode> configJson)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -531,6 +563,7 @@ public static class AzureServiceBusExtensions
     /// <param name="builder">Builder for the Azure Service Bus emulator container</param>
     /// <param name="port">The port to bind on the host. If <see langword="null"/> is used, a random port will be assigned.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport(Description = "Sets the host port for the Service Bus emulator endpoint")]
     public static IResourceBuilder<AzureServiceBusEmulatorResource> WithHostPort(this IResourceBuilder<AzureServiceBusEmulatorResource> builder, int? port)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -616,8 +649,10 @@ public static class AzureServiceBusExtensions
     /// <param name="roles">The built-in Service Bus roles to be assigned.</param>
     /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
     /// <remarks>
+    /// This overload is not available in polyglot app hosts. Use
+    /// <see cref="WithRoleAssignments{T}(IResourceBuilder{T}, IResourceBuilder{AzureServiceBusResource}, AzureServiceBusRole[])"/>
+    /// instead.
     /// <example>
-    /// Assigns the AzureServiceBusDataSender role to the 'Projects.Api' project.
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
@@ -629,6 +664,7 @@ public static class AzureServiceBusExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExportIgnore(Reason = "ServiceBusBuiltInRole is an Azure.Provisioning type not compatible with ATS. Use the AzureServiceBusRole-based overload instead.")]
     public static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureServiceBusResource> target,
@@ -636,5 +672,41 @@ public static class AzureServiceBusExtensions
         where T : IResource
     {
         return builder.WithRoleAssignments(target, ServiceBusBuiltInRole.GetBuiltInRoleName, roles);
+    }
+
+    /// <summary>
+    /// Assigns the specified roles to the given resource, granting it the necessary permissions
+    /// on the target Azure Service Bus namespace. This replaces the default role assignments for the resource.
+    /// </summary>
+    /// <param name="builder">The resource to which the specified roles will be assigned.</param>
+    /// <param name="target">The target Azure Service Bus namespace.</param>
+    /// <param name="roles">The Service Bus roles to be assigned.</param>
+    /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
+    /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="AzureServiceBusRole"/> value.</exception>
+    [AspireExport("withServiceBusRoleAssignments", Description = "Assigns Service Bus roles to a resource")]
+    internal static IResourceBuilder<T> WithRoleAssignments<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<AzureServiceBusResource> target,
+        params AzureServiceBusRole[] roles)
+        where T : IResource
+    {
+        if (roles is null || roles.Length == 0)
+        {
+            return builder.WithRoleAssignments(target, Array.Empty<ServiceBusBuiltInRole>());
+        }
+
+        var builtInRoles = new ServiceBusBuiltInRole[roles.Length];
+        for (var i = 0; i < roles.Length; i++)
+        {
+            builtInRoles[i] = roles[i] switch
+            {
+                AzureServiceBusRole.AzureServiceBusDataOwner => ServiceBusBuiltInRole.AzureServiceBusDataOwner,
+                AzureServiceBusRole.AzureServiceBusDataReceiver => ServiceBusBuiltInRole.AzureServiceBusDataReceiver,
+                AzureServiceBusRole.AzureServiceBusDataSender => ServiceBusBuiltInRole.AzureServiceBusDataSender,
+                _ => throw new ArgumentException($"'{roles[i]}' is not a valid {nameof(AzureServiceBusRole)} value.", nameof(roles))
+            };
+        }
+
+        return builder.WithRoleAssignments(target, builtInRoles);
     }
 }

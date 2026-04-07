@@ -1,0 +1,258 @@
+parameters:
+  - name: version
+    type: string
+    default: ''
+  - name: artifactVersion
+    type: string
+    default: ''
+  - name: archiveRoot
+    type: string
+    default: ''
+  - name: validateUrls
+    type: boolean
+    default: true
+  - name: runInstallTest
+    type: boolean
+    default: true
+
+steps:
+  - bash: |
+      set -euo pipefail
+      version='${{ parameters.version }}'
+      artifactVersion='${{ parameters.artifactVersion }}'
+
+      if [ -z "$version" ]; then
+        echo "##[error]Version parameter is required"
+        exit 1
+      fi
+
+      echo "Version: $version"
+      echo "Artifact version: ${artifactVersion:-$version}"
+
+      echo "##vso[task.setvariable variable=CliVersion]$version"
+      echo "##vso[task.setvariable variable=CliArtifactVersion]${artifactVersion:-$version}"
+    displayName: 🟣Set version ${{ parameters.version }}
+
+  - bash: |
+      set -euo pipefail
+      version="$(CliVersion)"
+      artifactVersion="$(CliArtifactVersion)"
+      outputDir="$(Build.StagingDirectory)/homebrew-cask"
+      mkdir -p "$outputDir"
+      outputFile="$outputDir/aspire.rb"
+
+      echo "Generating Homebrew cask for Aspire version $version"
+
+      args=(
+        --version "$version"
+        --artifact-version "$artifactVersion"
+        --output "$outputFile"
+      )
+
+      if [ -n "${ARCHIVE_ROOT:-}" ]; then
+        args+=(--archive-root "$ARCHIVE_ROOT")
+      fi
+
+      validateUrlsNormalized="$(printf '%s' "${VALIDATE_URLS:-false}" | tr '[:upper:]' '[:lower:]')"
+      if [ "$validateUrlsNormalized" = "true" ]; then
+        args+=(--validate-urls)
+      fi
+
+      "$(Build.SourcesDirectory)/eng/homebrew/generate-cask.sh" "${args[@]}"
+
+      echo ""
+      echo "Generated cask:"
+      cat "$outputFile"
+    displayName: 🟣Generate Homebrew cask
+    env:
+      ARCHIVE_ROOT: '${{ parameters.archiveRoot }}'
+      VALIDATE_URLS: '${{ parameters.validateUrls }}'
+
+  - bash: |
+      set -euo pipefail
+      caskFile="aspire.rb"
+      caskName="aspire"
+      caskPath="$(Build.StagingDirectory)/homebrew-cask/$caskFile"
+      firstLetter="${caskName:0:1}"
+      targetPath="Casks/$firstLetter/$caskFile"
+      tapName="local/aspire"
+      tapRoot="$(brew --repository)/Library/Taps/local/homebrew-aspire"
+
+      cleanup() {
+        brew untap "$tapName" >/dev/null 2>&1 || true
+      }
+
+      trap cleanup EXIT
+
+      echo "Validating Ruby syntax..."
+      ruby -c "$caskPath"
+      echo "Ruby syntax OK"
+
+      brew tap-new --no-git "$tapName"
+      mkdir -p "$tapRoot/Casks"
+      cp "$caskPath" "$tapRoot/Casks/$caskFile"
+      tappedCaskPath="$tapRoot/Casks/$caskFile"
+
+      echo ""
+      echo "Applying Homebrew style fixes in local tap..."
+      brew style --fix "$tappedCaskPath"
+      cp "$tappedCaskPath" "$caskPath"
+      echo "Homebrew style OK"
+
+      echo ""
+      echo "Auditing cask via local tap..."
+
+      upstreamStatusCode="$(curl -sS -o /dev/null -w "%{http_code}" "https://api.github.com/repos/Homebrew/homebrew-cask/contents/$targetPath")"
+      auditArgs=(--cask --online "$tapName/$caskName")
+      auditCommand="brew audit --cask --online $tapName/$caskName"
+      isNewCask=false
+      if [ "$upstreamStatusCode" = "404" ]; then
+        echo "Detected new upstream cask; running new-cask audit."
+        auditArgs=(--cask --new --online "$tapName/$caskName")
+        auditCommand="brew audit --cask --new --online $tapName/$caskName"
+        isNewCask=true
+      elif [ "$upstreamStatusCode" = "200" ]; then
+        echo "Detected existing upstream cask; running standard online audit."
+      else
+        echo "##[error]Could not determine whether $targetPath exists upstream (HTTP $upstreamStatusCode)"
+        exit 1
+      fi
+
+      auditCode=0
+      brew audit "${auditArgs[@]}" || auditCode=$?
+
+      if [ $auditCode -ne 0 ]; then
+        echo "##[error]brew audit failed"
+        exit $auditCode
+      fi
+      echo "##vso[task.setvariable variable=HomebrewAuditCommand]$auditCommand"
+      echo "##vso[task.setvariable variable=HomebrewIsNewCask]$isNewCask"
+      echo "brew audit passed"
+      trap - EXIT
+      cleanup
+    displayName: 🟣Validate cask syntax and audit
+
+  - bash: |
+      set -euo pipefail
+      caskFile="aspire.rb"
+      caskName="aspire"
+      caskPath="$(Build.StagingDirectory)/homebrew-cask/$caskFile"
+      tapName="local/aspire-test"
+      tapRoot="$(brew --repository)/Library/Taps/local/homebrew-aspire-test"
+
+      echo "Testing cask install/uninstall: $caskPath"
+      echo ""
+
+      cleanup() {
+        brew untap "$tapName" >/dev/null 2>&1 || true
+      }
+
+      trap cleanup EXIT
+
+      # Verify aspire is NOT already installed
+      echo "Verifying aspire is not already installed..."
+      if command -v aspire &>/dev/null; then
+        echo "##[error]aspire command is already available before install — test environment is not clean"
+        exit 1
+      fi
+      echo "  Confirmed: aspire is not in PATH"
+
+      # Set up a local tap so brew accepts the cask
+      echo ""
+      echo "Setting up local tap..."
+      brew tap-new --no-git "$tapName"
+      mkdir -p "$tapRoot/Casks"
+      cp "$caskPath" "$tapRoot/Casks/$caskFile"
+
+      # Install from local tap
+      echo ""
+      echo "Installing aspire from local tap..."
+      HOMEBREW_NO_INSTALL_FROM_API=1 brew install --cask "$tapName/$caskName"
+      echo "✅ Install succeeded"
+
+      # Verify aspire is now available and runs
+      echo ""
+      echo "Verifying aspire CLI is in PATH..."
+      if ! command -v aspire &>/dev/null; then
+        echo "##[error]aspire command not found in PATH after install"
+        # Show brew info for diagnostics
+        brew info --cask "$tapName/$caskName" || true
+        exit 1
+      fi
+
+      echo "  Path: $(command -v aspire)"
+      aspireVersion="$(aspire --version 2>&1)"
+      echo "  Version: $aspireVersion"
+      echo "✅ aspire CLI verified"
+
+      # Uninstall
+      echo ""
+      echo "Uninstalling aspire..."
+      brew uninstall --cask "$tapName/$caskName"
+      echo "✅ Uninstall succeeded"
+
+      # Clean up tap
+      trap - EXIT
+      cleanup
+
+      # Verify aspire is removed
+      if command -v aspire &>/dev/null; then
+        echo "##[error]aspire command still found in PATH after uninstall"
+        exit 1
+      else
+        echo "  Confirmed: aspire is no longer in PATH"
+      fi
+    displayName: 🟣Test cask install/uninstall
+    condition: and(succeeded(), eq('${{ parameters.runInstallTest }}', 'true'))
+
+  - bash: |
+      set -euo pipefail
+      outputPath="$(Build.StagingDirectory)/homebrew-cask/validation-summary.json"
+      cat > "$outputPath" <<EOF
+      {
+        "schemaVersion": 1,
+        "validatedByPreparePipeline": true,
+        "isStableRelease": true,
+        "isNewCask": $(HomebrewIsNewCask),
+        "checks": {
+          "rubySyntax": {
+            "status": "passed",
+            "details": "ruby -c aspire.rb"
+          },
+          "brewStyle": {
+            "status": "passed",
+            "details": "brew style --fix on a temporary local tap copy of aspire.rb"
+          },
+          "brewAudit": {
+            "status": "passed",
+            "details": "$(HomebrewAuditCommand)"
+          },
+          "brewInstall": {
+            "status": "passed",
+            "details": "HOMEBREW_NO_INSTALL_FROM_API=1 brew install --cask local/aspire-test/aspire"
+          },
+          "brewUninstall": {
+            "status": "passed",
+            "details": "brew uninstall --cask local/aspire-test/aspire"
+          }
+        }
+      }
+      EOF
+
+      echo "Wrote Homebrew validation summary to $outputPath"
+      cat "$outputPath"
+    displayName: 🟣Write Homebrew validation summary
+    condition: and(succeeded(), eq('${{ parameters.runInstallTest }}', 'true'))
+
+  - bash: |
+      set -euo pipefail
+      cp "$(Build.SourcesDirectory)/eng/homebrew/dogfood.sh" "$(Build.StagingDirectory)/homebrew-cask/dogfood.sh"
+      chmod +x "$(Build.StagingDirectory)/homebrew-cask/dogfood.sh"
+    displayName: 🟣Include dogfood script in artifact
+
+  - task: 1ES.PublishBuildArtifacts@1
+    displayName: 🟣Publish Homebrew cask
+    condition: always()
+    inputs:
+      PathtoPublish: '$(Build.StagingDirectory)/homebrew-cask'
+      ArtifactName: homebrew-cask-stable

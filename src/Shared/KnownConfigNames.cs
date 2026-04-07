@@ -8,7 +8,6 @@ internal static class KnownConfigNames
     public const string AspNetCoreUrls = "ASPNETCORE_URLS";
     public const string AllowUnsecuredTransport = "ASPIRE_ALLOW_UNSECURED_TRANSPORT";
     public const string VersionCheckDisabled = "ASPIRE_VERSION_CHECK_DISABLED";
-    public const string DashboardMcpEndpointUrl = "ASPIRE_DASHBOARD_MCP_ENDPOINT_URL";
     public const string DashboardOtlpGrpcEndpointUrl = "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL";
     public const string DashboardOtlpHttpEndpointUrl = "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL";
     public const string DashboardFrontendBrowserToken = "ASPIRE_DASHBOARD_FRONTEND_BROWSERTOKEN";
@@ -18,6 +17,7 @@ internal static class KnownConfigNames
     public const string DashboardConfigFilePath = "ASPIRE_DASHBOARD_CONFIG_FILE_PATH";
     public const string DashboardFileConfigDirectory = "ASPIRE_DASHBOARD_FILE_CONFIG_DIRECTORY";
     public const string DashboardAIDisabled = "ASPIRE_DASHBOARD_AI_DISABLED";
+    public const string DashboardApiEnabled = "ASPIRE_DASHBOARD_API_ENABLED";
     public const string DashboardForwardedHeadersEnabled = "ASPIRE_DASHBOARD_FORWARDEDHEADERS_ENABLED";
 
     public const string ShowDashboardResources = "ASPIRE_SHOW_DASHBOARD_RESOURCES";
@@ -29,12 +29,14 @@ internal static class KnownConfigNames
     public const string WaitForDebugger = "ASPIRE_WAIT_FOR_DEBUGGER";
     public const string WaitForDebuggerTimeout = "ASPIRE_DEBUGGER_TIMEOUT";
     public const string UnixSocketPath = "ASPIRE_BACKCHANNEL_PATH";
+    public const string RemoteAppHostToken = "ASPIRE_REMOTE_APPHOST_TOKEN";
     public const string CliProcessId = "ASPIRE_CLI_PID";
     public const string CliProcessStarted = "ASPIRE_CLI_STARTED";
     public const string ForceRichConsole = "ASPIRE_FORCE_RICH_CONSOLE";
     public const string TestingDisableHttpClient = "ASPIRE_TESTING_DISABLE_HTTP_CLIENT";
     public const string InteractivityEnabled = "ASPIRE_INTERACTIVITY_ENABLED";
     public const string EnableContainerTunnel = "ASPIRE_ENABLE_CONTAINER_TUNNEL";
+    public const string AspireUserSecretsId = "ASPIRE_USER_SECRETS_ID";
 
     public const string LocaleOverride = "ASPIRE_LOCALE_OVERRIDE";
     public const string DotnetCliUiLanguage = "DOTNET_CLI_UI_LANGUAGE";
@@ -48,6 +50,7 @@ internal static class KnownConfigNames
 
     public const string DeveloperCertificateDefaultTrust = "ASPIRE_DEVELOPER_CERTIFICATE_DEFAULT_TRUST";
     public const string DeveloperCertificateDefaultHttpsTermination = "ASPIRE_DEVELOPER_CERTIFICATE_DEFAULT_HTTPS_TERMINATION";
+    public const string DcpDeveloperCertificate = "ASPIRE_DCP_USE_DEVELOPER_CERTIFICATE";
 
     public const string DebugSessionInfo = "DEBUG_SESSION_INFO";
     public const string DebugSessionRunMode = "DEBUG_SESSION_RUN_MODE";

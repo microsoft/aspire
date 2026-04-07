@@ -1,8 +1,12 @@
 # Cleanup workflow for deployment test resources
 #
 # Uses a mark-and-sweep approach:
-# 1. Mark: Tag untagged rg-aspire-* RGs with 'deployment-test-first-seen' timestamp
+# 1. Mark: Tag untagged deployment test RGs with 'deployment-test-first-seen' timestamp
 # 2. Sweep: Delete RGs where 'deployment-test-first-seen' is older than threshold
+#
+# Targets resource groups with prefixes:
+# - rg-aspire-* (legacy naming)
+# - e2e-* (current naming)
 #
 # This ensures RGs are only deleted after they've been seen for the full retention period.
 #
@@ -35,7 +39,7 @@ jobs:
   cleanup:
     name: Cleanup Azure Resources
     runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'dotnet' }}
+    if: ${{ github.repository_owner == 'microsoft' }}
     environment: deployment-testing
 
     steps:
@@ -82,11 +86,13 @@ jobs:
           NOW_ISO=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           MAX_AGE_SECONDS=$((MAX_AGE_HOURS * 3600))
 
-          # List all resource groups matching rg-aspire-* prefix
-          RG_LIST=$(az group list --query "[?starts_with(name, 'rg-aspire-')].name" -o tsv || echo "")
+          # List all resource groups matching deployment test prefixes
+          # Current naming: e2e-* (e.g., e2e-starter-12345678-1)
+          # Legacy naming: rg-aspire-* (may still exist from older tests)
+          RG_LIST=$(az group list --query "[?starts_with(name, 'e2e-') || starts_with(name, 'rg-aspire-')].name" -o tsv || echo "")
 
           if [ -z "$RG_LIST" ]; then
-            echo "No resource groups found matching 'rg-aspire-*' prefix."
+            echo "No resource groups found matching deployment test prefixes (e2e-* or rg-aspire-*)."
             echo "✅ No resource groups found." >> $GITHUB_STEP_SUMMARY
             echo "marked_count=0" >> $GITHUB_OUTPUT
             echo "deleted_count=0" >> $GITHUB_OUTPUT

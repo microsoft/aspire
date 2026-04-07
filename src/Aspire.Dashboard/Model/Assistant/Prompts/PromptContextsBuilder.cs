@@ -11,6 +11,8 @@ internal static class PromptContextsBuilder
     public static Task ErrorTraces(InitializePromptContext promptContext, string displayText, Func<PagedResult<OtlpTrace>> getErrorTraces)
     {
         var outgoingPeerResolvers = promptContext.ServiceProvider.GetRequiredService<IEnumerable<IOutgoingPeerResolver>>();
+        var repository = promptContext.ServiceProvider.GetRequiredService<TelemetryRepository>();
+        var resources = repository.GetResources();
         var errorTraces = getErrorTraces();
         foreach (var trace in errorTraces.Items)
         {
@@ -19,13 +21,15 @@ internal static class PromptContextsBuilder
 
         promptContext.ChatBuilder.AddUserMessage(
             displayText,
-            KnownChatMessages.Traces.CreateErrorTracesMessage(errorTraces.Items, outgoingPeerResolvers, promptContext.DashboardOptions).Text);
+            KnownChatMessages.Traces.CreateErrorTracesMessage(errorTraces.Items, outgoingPeerResolvers, promptContext.DashboardOptions, r => OtlpHelpers.GetResourceName(r, resources)).Text);
 
         return Task.CompletedTask;
     }
 
     public static Task ErrorStructuredLogs(InitializePromptContext promptContext, string displayText, Func<PagedResult<OtlpLogEntry>> getErrorLogs)
     {
+        var repository = promptContext.ServiceProvider.GetRequiredService<TelemetryRepository>();
+        var resources = repository.GetResources();
         var errorLogs = getErrorLogs();
         foreach (var log in errorLogs.Items)
         {
@@ -34,7 +38,7 @@ internal static class PromptContextsBuilder
 
         promptContext.ChatBuilder.AddUserMessage(
             displayText,
-            KnownChatMessages.StructuredLogs.CreateErrorStructuredLogsMessage(errorLogs.Items, promptContext.DashboardOptions).Text);
+            KnownChatMessages.StructuredLogs.CreateErrorStructuredLogsMessage(errorLogs.Items, promptContext.DashboardOptions, r => OtlpHelpers.GetResourceName(r, resources)).Text);
 
         return Task.CompletedTask;
     }
@@ -50,10 +54,12 @@ internal static class PromptContextsBuilder
 
     public static Task AnalyzeLogEntry(InitializePromptContext promptContext, string displayText, OtlpLogEntry logEntry)
     {
+        var repository = promptContext.ServiceProvider.GetRequiredService<TelemetryRepository>();
+        var resources = repository.GetResources();
         promptContext.DataContext.AddReferencedLogEntry(logEntry);
         promptContext.ChatBuilder.AddUserMessage(
             displayText,
-            KnownChatMessages.StructuredLogs.CreateAnalyzeLogEntryMessage(logEntry, promptContext.DashboardOptions).Text);
+            KnownChatMessages.StructuredLogs.CreateAnalyzeLogEntryMessage(logEntry, promptContext.DashboardOptions, r => OtlpHelpers.GetResourceName(r, resources)).Text);
 
         return Task.CompletedTask;
     }
@@ -64,6 +70,7 @@ internal static class PromptContextsBuilder
 
         var outgoingPeerResolvers = context.ServiceProvider.GetRequiredService<IEnumerable<IOutgoingPeerResolver>>();
         var repository = context.ServiceProvider.GetRequiredService<TelemetryRepository>();
+        var resources = repository.GetResources();
         var traceLogs = repository.GetLogsForTrace(trace.TraceId);
         foreach (var log in traceLogs)
         {
@@ -72,7 +79,7 @@ internal static class PromptContextsBuilder
 
         context.ChatBuilder.AddUserMessage(
             displayText,
-            KnownChatMessages.Traces.CreateAnalyzeTraceMessage(trace, traceLogs, outgoingPeerResolvers, context.DashboardOptions).Text);
+            KnownChatMessages.Traces.CreateAnalyzeTraceMessage(trace, traceLogs, outgoingPeerResolvers, context.DashboardOptions, r => OtlpHelpers.GetResourceName(r, resources)).Text);
 
         return Task.CompletedTask;
     }
@@ -83,6 +90,7 @@ internal static class PromptContextsBuilder
 
         var outgoingPeerResolvers = context.ServiceProvider.GetRequiredService<IEnumerable<IOutgoingPeerResolver>>();
         var repository = context.ServiceProvider.GetRequiredService<TelemetryRepository>();
+        var resources = repository.GetResources();
         var traceLogs = repository.GetLogsForTrace(span.Trace.TraceId);
         foreach (var log in traceLogs)
         {
@@ -91,7 +99,7 @@ internal static class PromptContextsBuilder
 
         context.ChatBuilder.AddUserMessage(
             displayText,
-            KnownChatMessages.Traces.CreateAnalyzeSpanMessage(span, traceLogs, outgoingPeerResolvers, context.DashboardOptions).Text);
+            KnownChatMessages.Traces.CreateAnalyzeSpanMessage(span, traceLogs, outgoingPeerResolvers, context.DashboardOptions, r => OtlpHelpers.GetResourceName(r, resources)).Text);
 
         return Task.CompletedTask;
     }

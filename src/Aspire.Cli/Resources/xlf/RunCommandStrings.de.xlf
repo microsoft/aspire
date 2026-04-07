@@ -34,12 +34,17 @@
       </trans-unit>
       <trans-unit id="AppHostExitedWithCode">
         <source>AppHost process exited with code {0}.</source>
-        <target state="translated">Der AppHost-Prozess wurde mit Code {0} beendet.</target>
+        <target state="needs-review-translation">Der AppHost-Prozess wurde mit Code {0} beendet.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostFailedToBuild">
+        <source>AppHost failed to build.</source>
+        <target state="new">AppHost failed to build.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostStartedSuccessfully">
         <source>AppHost started successfully.</source>
-        <target state="translated">Der AppHost wurde erfolgreich gestartet.</target>
+        <target state="needs-review-translation">Der AppHost wurde erfolgreich gestartet.</target>
         <note />
       </trans-unit>
       <trans-unit id="CheckLogsForDetails">
@@ -47,19 +52,14 @@
         <target state="translated">Details finden Sie in den Protokollen: {0}</target>
         <note />
       </trans-unit>
-      <trans-unit id="CheckingForRunningInstances">
-        <source>Checking for running instances...</source>
-        <target state="translated">Es wird nach ausgeführten Instanzen gesucht…</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ConnectingToAppHost">
-        <source>Connecting to apphost...</source>
-        <target state="translated">Verbindung zum AppHost wird hergestellt...</target>
+        <source>Connecting to AppHost...</source>
+        <target state="needs-review-translation">Verbindung zum AppHost wird hergestellt...</target>
         <note />
       </trans-unit>
       <trans-unit id="CopyingUserSecrets">
         <source>Copying user secrets for isolated mode...</source>
-        <target state="new">Copying user secrets for isolated mode...</target>
+        <target state="translated">Benutzergeheimnisse für den isolierten Modus werden kopiert…</target>
         <note />
       </trans-unit>
       <trans-unit id="Dashboard">
@@ -73,13 +73,13 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Run an Aspire apphost in development mode.</source>
-        <target state="translated">Führen Sie einen Aspire-App-Host im Entwicklungsmodus aus.</target>
+        <source>Run an Aspire AppHost interactively for development</source>
+        <target state="needs-review-translation">Führen Sie einen Aspire-App-Host im Entwicklungsmodus aus.</target>
         <note />
       </trans-unit>
       <trans-unit id="DetachArgumentDescription">
-        <source>Run the AppHost in the background and exit after it starts.</source>
-        <target state="translated">Führen Sie den AppHost im Hintergrund aus und beenden Sie ihn, sobald er gestartet ist.</target>
+        <source>Run the AppHost in the background and exit after it starts</source>
+        <target state="needs-review-translation">Führen Sie den AppHost im Hintergrund aus und beenden Sie ihn, sobald er gestartet ist.</target>
         <note />
       </trans-unit>
       <trans-unit id="Endpoints">
@@ -89,17 +89,17 @@
       </trans-unit>
       <trans-unit id="FailedToStartAppHost">
         <source>Failed to start the AppHost.</source>
-        <target state="translated">Fehler beim Starten des AppHost.</target>
+        <target state="needs-review-translation">Fehler beim Starten des AppHost.</target>
         <note />
       </trans-unit>
       <trans-unit id="ForceArgumentDescription">
-        <source>Stop any running instance of the AppHost without prompting.</source>
-        <target state="translated">Beenden Sie alle ausgeführten Instanzen von AppHost ohne Aufforderung.</target>
+        <source>Stop any running instance of the AppHost without prompting</source>
+        <target state="needs-review-translation">Beenden Sie alle ausgeführten Instanzen von AppHost ohne Aufforderung.</target>
         <note />
       </trans-unit>
       <trans-unit id="FormatRequiresDetach">
         <source>The --format option can only be used together with --detach.</source>
-        <target state="new">The --format option can only be used together with --detach.</target>
+        <target state="translated">Die Option „--format“ kann nur zusammen mit „--detach“ verwendet werden.</target>
         <note />
       </trans-unit>
       <trans-unit id="Health">
@@ -113,18 +113,18 @@
         <note />
       </trans-unit>
       <trans-unit id="JsonArgumentDescription">
-        <source>Output result as JSON (only valid with --detach).</source>
-        <target state="new">Output result as JSON (only valid with --detach).</target>
+        <source>Output format for detached AppHost results</source>
+        <target state="needs-review-translation">Ausgabeergebnis als JSON (nur gültig mit --detach).</target>
         <note />
       </trans-unit>
       <trans-unit id="IsolatedArgumentDescription">
-        <source>Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously.</source>
-        <target state="new">Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously.</target>
+        <source>Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously</source>
+        <target state="needs-review-translation">Im isolierten Modus mit zufälligen Ports und getrennten Benutzergeheimnissen ausführen, sodass mehrere Instanzen gleichzeitig laufen können.</target>
         <note />
       </trans-unit>
       <trans-unit id="IsolatedModeRunningInstanceWarning">
         <source>A running instance of this AppHost was found and will be stopped. To run multiple isolated instances simultaneously, run from different directories such as git worktree directories.</source>
-        <target state="new">A running instance of this AppHost was found and will be stopped. To run multiple isolated instances simultaneously, run from different directories such as git worktree directories.</target>
+        <target state="needs-review-translation">Eine laufende Instanz dieses AppHosts wurde gefunden und wird beendet. Um mehrere isolierte Instanzen gleichzeitig auszuführen, starten Sie sie aus verschiedenen Verzeichnissen, zum Beispiel aus Git-Worktree-Verzeichnissen.</target>
         <note />
       </trans-unit>
       <trans-unit id="Logs">
@@ -132,9 +132,19 @@
         <target state="translated">Protokolle</target>
         <note />
       </trans-unit>
+      <trans-unit id="NoBuildArgumentDescription">
+        <source>Do not build or restore the project before running</source>
+        <target state="new">Do not build or restore the project before running</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoBuildNotSupportedWithWatchMode">
+        <source>The --no-build option cannot be used when watch mode is enabled.</source>
+        <target state="translated">Die Option „--no-build“ kann nicht verwendet werden, wenn der Überwachungsmodus aktiviert ist.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PressCtrlCToStopAppHost">
-        <source>Press [bold]CTRL+C[/] to stop the apphost and exit.</source>
-        <target state="translated">Drücken Sie [bold]STRG+C[/], um den App-Host zu beenden und zu verlassen.</target>
+        <source>Press [bold]CTRL+C[/] to stop the AppHost and exit.</source>
+        <target state="needs-review-translation">Drücken Sie [bold]STRG+C[/], um den App-Host zu beenden und zu verlassen.</target>
         <note>[bold] should not be localized</note>
       </trans-unit>
       <trans-unit id="ProcessId">
@@ -143,13 +153,13 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="translated">Der Pfad zur Aspire AppHost-Projektdatei.</target>
+        <source>The path to the Aspire AppHost project file</source>
+        <target state="needs-review-translation">Der Pfad zur Aspire AppHost-Projektdatei.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeRun">
-        <source>The project could not be run. For more information run with --debug switch.</source>
-        <target state="translated">Das Projekt konnte nicht ausgeführt werden. Weitere Informationen erhalten Sie, wenn Sie mit dem Schalter „--debug“ ausführen.</target>
+        <source>The project could not be run. See logs at {0}</source>
+        <target state="translated">Das Projekt konnte nicht ausgeführt werden. Protokolle unter {0} anzeigen.</target>
         <note />
       </trans-unit>
       <trans-unit id="Resource">
@@ -163,18 +173,18 @@
         <note />
       </trans-unit>
       <trans-unit id="StartDebugSessionArgumentDescription">
-        <source>Whether to start a debug session, if running in an Aspire Terminal.</source>
-        <target state="translated">Gibt an, ob eine Debugsitzung gestartet werden soll, wenn sie in einem Aspire-Terminal ausgeführt wird.</target>
+        <source>Whether to start a debug session, if running in an Aspire Terminal</source>
+        <target state="needs-review-translation">Gibt an, ob eine Debugsitzung gestartet werden soll, wenn sie in einem Aspire-Terminal ausgeführt wird.</target>
         <note />
       </trans-unit>
       <trans-unit id="StartingAppHost">
-        <source>Starting Aspire apphost...</source>
-        <target state="translated">Aspire-AppHost wird gestartet...</target>
+        <source>Starting Aspire AppHost...</source>
+        <target state="needs-review-translation">Aspire-AppHost wird gestartet...</target>
         <note />
       </trans-unit>
       <trans-unit id="StartingAppHostInBackground">
-        <source>Starting Aspire apphost in the background...</source>
-        <target state="translated">Aspire-Apphost wird im Hintergrund gestartet…</target>
+        <source>Starting Aspire AppHost in the background...</source>
+        <target state="needs-review-translation">Aspire-AppHost wird im Hintergrund gestartet…</target>
         <note />
       </trans-unit>
       <trans-unit id="StartingDashboard">
@@ -194,7 +204,7 @@
       </trans-unit>
       <trans-unit id="TimeoutWaitingForAppHost">
         <source>Timeout waiting for AppHost to start.</source>
-        <target state="translated">Timeout beim Warten auf den Start des AppHost.</target>
+        <target state="needs-review-translation">Timeout beim Warten auf den Start des AppHost.</target>
         <note />
       </trans-unit>
       <trans-unit id="Type">
@@ -203,13 +213,13 @@
         <note>The type of the resource, eg Project</note>
       </trans-unit>
       <trans-unit id="WaitingForAppHostToStart">
-        <source>Waiting for apphost to start...</source>
-        <target state="translated">Warten auf den Start des Apphosts…</target>
+        <source>Waiting for AppHost to start...</source>
+        <target state="needs-review-translation">Warten auf den Start des AppHosts…</target>
         <note />
       </trans-unit>
       <trans-unit id="WatchArgumentDescription">
-        <source>Start project resources in watch mode.</source>
-        <target state="translated">Starten Sie Projektressourcen im Überwachungsmodus.</target>
+        <source>Start project resources in watch mode</source>
+        <target state="needs-review-translation">Starten Sie Projektressourcen im Überwachungsmodus.</target>
         <note />
       </trans-unit>
     </body>

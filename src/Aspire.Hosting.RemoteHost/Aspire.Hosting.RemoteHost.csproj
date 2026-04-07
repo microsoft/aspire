@@ -1,14 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
-    <IsPackable>true</IsPackable>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Description>Remote host server for polyglot Aspire AppHosts.</Description>
-    <PackageTags>aspire hosting polyglot</PackageTags>
-    <!-- New package, no baseline to compare against yet -->
-    <EnablePackageValidation>false</EnablePackageValidation>
+    <IsPackable>false</IsPackable>
+    <SkipAspireIntegrationAnalyzersReference>true</SkipAspireIntegrationAnalyzersReference>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,11 +14,20 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Aspire.Hosting\Aspire.Hosting.csproj" />
+    <ProjectReference Include="..\Aspire.TypeSystem\Aspire.TypeSystem.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="Aspire.Hosting.RemoteHost.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Copy appsettings.json to output -->
+    <None Include="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

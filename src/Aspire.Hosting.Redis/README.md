@@ -48,6 +48,6 @@ Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPE
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire
 
 _*Redis is a registered trademark of Redis Ltd. Any rights therein are reserved to Redis Ltd._

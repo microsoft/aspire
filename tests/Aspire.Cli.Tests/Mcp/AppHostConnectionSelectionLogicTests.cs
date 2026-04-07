@@ -71,8 +71,8 @@ public class AppHostConnectionSelectionLogicTests
             hash,
             socketPath: "/tmp/socket",
             rpc,
-            mcpInfo: null,
             appHostInfo: new AppHostInformation { AppHostPath = appHostPath, ProcessId = processId, CliProcessId = null },
             isInScope);
     }
 }
+

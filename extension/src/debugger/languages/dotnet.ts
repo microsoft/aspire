@@ -15,7 +15,9 @@ import {
     mergeEnvironmentVariables,
     determineArguments,
     determineWorkingDirectory,
-    determineServerReadyAction
+    determineServerReadyAction,
+    LaunchProfileCommandName,
+    expandEnvironmentVariables
 } from '../launchProfiles';
 import { AspireDebugSession } from '../AspireDebugSession';
 
@@ -56,60 +58,6 @@ class DotNetService implements IDotNetService {
     }
 
     async buildDotNetProject(projectFile: string): Promise<void> {
-        const isDevKitEnabled = await this.getAndActivateDevKit();
-        if (isDevKitEnabled) {
-            this.writeToDebugConsole(lookingForDevkitBuildTask, 'stdout', true);
-
-            const tasks = await vscode.tasks.fetchTasks();
-            const buildTask = tasks.find(t => t.source === "dotnet" && t.name?.includes('build'));
-
-            // The build task may not be registered if there are is no solution in the workspace or if there are no C# projects
-            // with .csproj files.
-            if (buildTask) {
-                // Modify the task to target the specific project
-                const projectName = path.basename(projectFile, '.csproj');
-
-                // Create a modified task definition with just the project file
-                const modifiedDefinition = {
-                    ...buildTask.definition,
-                    file: projectFile  // This will make it build the specific project directly
-                };
-
-                // Create a new task with the modified definition
-                const modifiedTask = new vscode.Task(
-                    modifiedDefinition,
-                    buildTask.scope || vscode.TaskScope.Workspace,
-                    `build ${projectName}`,
-                    buildTask.source,
-                    buildTask.execution,
-                    buildTask.problemMatchers
-                );
-
-                extensionLogOutputChannel.info(`Executing build task: ${modifiedTask.name} for project: ${projectFile}`);
-                await vscode.tasks.executeTask(modifiedTask);
-
-                let disposable: vscode.Disposable = { dispose: () => {} };
-                return new Promise<void>((resolve, reject) => {
-                    disposable = vscode.tasks.onDidEndTaskProcess(async e => {
-                        if (e.execution.task === modifiedTask) {
-                            if (e.exitCode !== 0) {
-                                reject(new Error(buildFailedWithExitCode(e.exitCode ?? 'unknown')));
-                            }
-                            else {
-                                return resolve();
-                            }
-                        }
-                    });
-                }).finally(() => disposable.dispose());
-            }
-            else {
-                this.writeToDebugConsole(noCsharpBuildTask, 'stdout', true);
-            }
-        }
-        else {
-            this.writeToDebugConsole(csharpDevKitNotInstalled, 'stdout', true);
-        }
-
         return new Promise<void>((resolve, reject) => {
             extensionLogOutputChannel.info(`Building .NET project: ${projectFile} using dotnet CLI`);
 
@@ -307,7 +255,29 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                 env.push({ name: "ASPIRE_DASHBOARD_AI_DISABLED", value: "true" });
             }
 
-            if (!isFileBasedApp(projectPath)) {
+            if (baseProfile?.commandName?.toLowerCase() === LaunchProfileCommandName.executable && baseProfile.executablePath) {
+                // For Executable command profiles (e.g., class library integrations), the launch profile
+                // specifies an external executable to run instead of the project output.
+                // Build the project to ensure dependencies are compiled, then launch
+                // using the profile's executable path and command line arguments.
+                // Expand environment variable references (e.g. $(HOME)) that VS handles natively
+                // but aren't expanded by the coreclr debugger.
+                await dotNetService.buildDotNetProject(projectPath);
+
+                debugConfiguration.program = expandEnvironmentVariables(baseProfile.executablePath);
+                if (debugConfiguration.args) {
+                    debugConfiguration.args = expandEnvironmentVariables(debugConfiguration.args);
+                } else if (baseProfile.commandLineArgs) {
+                    // Fall back to launch profile args if run session args were empty
+                    debugConfiguration.args = expandEnvironmentVariables(baseProfile.commandLineArgs);
+                }
+                debugConfiguration.env = Object.fromEntries(mergeEnvironmentVariables(
+                    baseProfile?.environmentVariables,
+                    debugConfiguration.env,
+                    env
+                ));
+            }
+            else if (!isFileBasedApp(projectPath)) {
                 const outputPath = await dotNetService.getDotNetTargetPath(projectPath);
                 if ((!(await doesFileExist(outputPath)) || launchOptions.forceBuild)) {
                     await dotNetService.buildDotNetProject(projectPath);
@@ -325,10 +295,9 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                 const runApiOutput = await dotNetService.getDotNetRunApiOutput(projectPath);
                 const runApiConfig = getRunApiConfigFromOutput(runApiOutput);
 
-                // Build if the executable doesn't exist or forceBuild is requested
-                if ((!(await doesFileExist(runApiConfig.executablePath)) || launchOptions.forceBuild)) {
-                    await dotNetService.buildDotNetProject(projectPath);
-                }
+                // There may be an older cached version of the file-based app, so we
+                // should force a build.
+                await dotNetService.buildDotNetProject(projectPath);
 
                 debugConfiguration.program = runApiConfig.executablePath;
 

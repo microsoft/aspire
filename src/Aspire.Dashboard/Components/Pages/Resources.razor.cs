@@ -643,7 +643,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             ResourceMenuBuilder.AddMenuItems(
                 _contextMenuItems,
                 resource,
-                GetResourceName,
+                _resourceByName,
                 EventCallback.Factory.Create(this, () => ShowResourceDetailsAsync(resource, buttonId: null)),
                 EventCallback.Factory.Create<CommandViewModel>(this, (command) => ExecuteResourceCommandAsync(resource, command)),
                 (resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name),
@@ -734,7 +734,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         _elementIdBeforeDetailsViewOpened = null;
     }
 
-    private string GetResourceName(ResourceViewModel resource) => ResourceViewModel.GetResourceName(resource, _resourceByName, _showHiddenResources);
+    private string GetResourceName(ResourceViewModel resource) => ResourceViewModel.GetResourceName(resource, _resourceByName);
 
     private bool HasMultipleReplicas(ResourceViewModel resource)
     {

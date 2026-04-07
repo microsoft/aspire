@@ -28,8 +28,16 @@ Once you are ready, hit "Start Collection" button and run your scenario.
 
 When done with the scenario, hit "Stop Collection". Wait for PerfView to finish merging and analyzing data (the "working" status bar stops flashing).
 
-### Verify that the trace contains Aspire data
+### Verify that PerfView trace contains Aspire data
 
 This is an optional step, but if you are wondering if your trace has been captured properly, you can check the following:
 
 1. Open the trace (usually named PerfViewData.etl, if you haven't changed the name) and double click Events view. Verify you have a bunch of events from the Microsoft-Aspire-Hosting provider.
+
+## Profiling scripts
+
+The `tools/perf` folder in the repository contains scripts that help quickly assess the impact of code changes on key performance scenarios. Currently available scripts are:
+
+| Script | Description |
+| --- | --------- |
+| `Measure-StartupPerformance.ps1` | Measures startup time for a specific Aspire project. More specifically, the script measures the time to get all application services and supporting dependencies CREATED; the application is not necessarily responsive after measured time. |

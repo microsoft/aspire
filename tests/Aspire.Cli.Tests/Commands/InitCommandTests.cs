@@ -1,18 +1,120 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Projects;
+using Aspire.Cli.Resources;
+using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Commands;
 
 public class InitCommandTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData("Test.csproj")]
+    [InlineData("Test.fsproj")]
+    [InlineData("Test.vbproj")]
+    public async Task InitCommand_WhenSolutionAndProjectInSameDirectory_ReturnsError(string projectFileName)
+    {
+        // Arrange
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Create a solution file and a project file in the same directory
+        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
+        File.WriteAllText(solutionFile.FullName, "Fake solution file");
+
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, projectFileName));
+        File.WriteAllText(projectFile.FullName, "<Project />");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                // GetSolutionProjectsAsync should not be called because the check
+                // happens before reading solution projects
+                runner.GetSolutionProjectsAsyncCallback = (_, _, _) =>
+                {
+                    throw new InvalidOperationException("GetSolutionProjectsAsync should not be called when solution and project are in the same directory.");
+                };
+                return runner;
+            };
+        });
+
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        // Act
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        // Assert
+        Assert.Equal(ExitCodeConstants.FailedToCreateNewProject, exitCode);
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenSolutionDirectoryHasNoProjectFiles_Proceeds()
+    {
+        // Arrange
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Create a solution file only (no project files in the same directory)
+        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
+        File.WriteAllText(solutionFile.FullName, "Fake solution file");
+
+        var getSolutionProjectsCalled = false;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.GetSolutionProjectsAsyncCallback = (_, _, _) =>
+                {
+                    getSolutionProjectsCalled = true;
+                    // Return success with no projects - the test verifies the check passed
+                    return (0, Array.Empty<FileInfo>());
+                };
+                runner.NewProjectAsyncCallback = (_, _, outputPath, _, _) =>
+                {
+                    // Create the expected directories so the code can find them
+                    var appHostDir = Path.Combine(outputPath, "Test.AppHost");
+                    var serviceDefaultsDir = Path.Combine(outputPath, "Test.ServiceDefaults");
+                    Directory.CreateDirectory(appHostDir);
+                    Directory.CreateDirectory(serviceDefaultsDir);
+                    File.WriteAllText(Path.Combine(appHostDir, "Test.AppHost.csproj"), "<Project />");
+                    File.WriteAllText(Path.Combine(serviceDefaultsDir, "Test.ServiceDefaults.csproj"), "<Project />");
+                    return 0;
+                };
+                return runner;
+            };
+            options.PackagingServiceFactory = (sp) =>
+            {
+                return new TestPackagingService();
+            };
+        });
+
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        // Act
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        // Assert - the command should have proceeded past the directory check and created projects
+        Assert.True(getSolutionProjectsCalled, "GetSolutionProjectsAsync should have been called when no project files are in the solution directory.");
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.AppHost", "Test.AppHost.csproj")));
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.ServiceDefaults", "Test.ServiceDefaults.csproj")));
+    }
+
     [Fact]
     public void InitContext_RequiredAppHostFramework_ReturnsHighestTfm()
     {
@@ -103,7 +205,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
         // Act - Invoke init command
         var parseResult = initCommand.Parse("init");
-        var exitCode = await parseResult.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
         // Assert
         Assert.Equal(1, exitCode); // Should return the error exit code
@@ -169,7 +271,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
             options.InteractionServiceFactory = (sp) =>
             {
-                var interactionService = new TestConsoleInteractionService();
+                var interactionService = new TestInteractionService();
                 return interactionService;
             };
 
@@ -185,7 +287,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
         // Act - Invoke init command
         var parseResult = initCommand.Parse("init");
-        var exitCode = await parseResult.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
         // Assert
         Assert.Equal(1, exitCode); // Should return the error exit code
@@ -281,7 +383,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
         // Act - Invoke init command
         var parseResult = initCommand.Parse("init");
-        var exitCode = await parseResult.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
         // Assert
         Assert.Equal(0, exitCode);
@@ -414,7 +516,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<InitCommand>();
         var result = command.Parse("init --channel stable");
 
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
         
         // Assert
         Assert.Equal(0, exitCode);
@@ -439,10 +541,113 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<InitCommand>();
         var result = command.Parse("init --channel invalid-channel");
 
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
         
         // Assert - should fail with non-zero exit code for invalid channel
         Assert.NotEqual(0, exitCode);
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenCSharpInitializationFails_DisplaysCreationErrorMessage()
+    {
+        TestInteractionService? testInteractionService = null;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Create a solution file only (no project files in the same directory)
+        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
+        File.WriteAllText(solutionFile.FullName, "Fake solution file");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = (sp) =>
+            {
+                testInteractionService = new TestInteractionService();
+                return testInteractionService;
+            };
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.GetSolutionProjectsAsyncCallback = (_, _, _) =>
+                {
+                    return (0, Array.Empty<FileInfo>());
+                };
+                runner.NewProjectAsyncCallback = (templateName, projectName, outputPath, invocationOptions, ct) =>
+                {
+                    return 1; // Simulate failure for C# template
+                };
+                return runner;
+            };
+            options.PackagingServiceFactory = (sp) =>
+            {
+                return new TestPackagingService();
+            };
+        });
+
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
+        var expectedMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ProjectCouldNotBeCreated, executionContext.LogFilePath);
+
+        Assert.NotEqual(0, exitCode);
+        Assert.NotNull(testInteractionService);
+        Assert.Contains(expectedMessage, testInteractionService.DisplayedErrors);
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenTypeScriptInitializationFails_DisplaysCreationErrorMessage()
+    {
+        TestInteractionService? testInteractionService = null;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = (sp) =>
+            {
+                testInteractionService = new TestInteractionService();
+                return testInteractionService;
+            };
+
+            options.LanguageServiceFactory = (sp) =>
+            {
+                var projectFactory = sp.GetRequiredService<IAppHostProjectFactory>();
+                var tsProject = projectFactory.GetProject(new LanguageInfo(
+                    LanguageId: new LanguageId(KnownLanguageId.TypeScript),
+                    DisplayName: "TypeScript (Node.js)",
+                    PackageName: "@aspire/app-host",
+                    DetectionPatterns: ["apphost.ts"],
+                    CodeGenerator: "typescript",
+                    AppHostFileName: "apphost.ts"));
+                return new TestLanguageService { DefaultProject = tsProject };
+            };
+        });
+
+        services.AddSingleton<IScaffoldingService>(new TestScaffoldingService
+        {
+            ScaffoldAsyncCallback = (context, cancellationToken) =>
+            {
+                return Task.FromResult(false); // Simulate failure for TypeScript scaffolding
+            }
+        });
+
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
+        var expectedMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ProjectCouldNotBeCreated, executionContext.LogFilePath);
+
+        Assert.NotEqual(0, exitCode);
+        Assert.NotNull(testInteractionService);
+        Assert.Contains(expectedMessage, testInteractionService.DisplayedErrors);
     }
 
     private sealed class TestPackagingServiceWithChannelTracking(Action<string> onChannelUsed) : IPackagingService

@@ -17,4 +17,13 @@ internal static class PathNormalizer
 
         return Path.GetFullPath(path);
     }
+
+    /// <summary>
+    /// Normalizes a path for storage in configuration files by replacing
+    /// backslash separators with forward slashes.
+    /// </summary>
+    public static string NormalizePathForStorage(string path)
+    {
+        return path.Replace('\\', '/');
+    }
 }

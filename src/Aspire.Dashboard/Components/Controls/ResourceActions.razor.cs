@@ -45,9 +45,6 @@ public partial class ResourceActions : ComponentBase
     public required ResourceViewModel Resource { get; set; }
 
     [Parameter]
-    public required Func<ResourceViewModel, string> GetResourceName { get; set; }
-
-    [Parameter]
     public required int MaxHighlightedCount { get; set; }
 
     [Parameter]
@@ -67,7 +64,7 @@ public partial class ResourceActions : ComponentBase
         ResourceMenuBuilder.AddMenuItems(
             _menuItems,
             Resource,
-            GetResourceName,
+            ResourceByName,
             EventCallback.Factory.Create(this, () => OnViewDetails.InvokeAsync(_menuButton?.MenuButtonId)),
             CommandSelected,
             IsCommandExecuting,

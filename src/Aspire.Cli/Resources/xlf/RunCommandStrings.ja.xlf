@@ -34,12 +34,17 @@
       </trans-unit>
       <trans-unit id="AppHostExitedWithCode">
         <source>AppHost process exited with code {0}.</source>
-        <target state="translated">AppHost プロセスが終了し、コード {0} を返しました。</target>
+        <target state="needs-review-translation">AppHost プロセスが終了し、コード {0} を返しました。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostFailedToBuild">
+        <source>AppHost failed to build.</source>
+        <target state="new">AppHost failed to build.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostStartedSuccessfully">
         <source>AppHost started successfully.</source>
-        <target state="translated">AppHost が正常に起動しました。</target>
+        <target state="needs-review-translation">AppHost が正常に起動しました。</target>
         <note />
       </trans-unit>
       <trans-unit id="CheckLogsForDetails">
@@ -47,19 +52,14 @@
         <target state="translated">詳細については、ログを確認してください: {0}</target>
         <note />
       </trans-unit>
-      <trans-unit id="CheckingForRunningInstances">
-        <source>Checking for running instances...</source>
-        <target state="translated">実行中のインスタンスを確認しています...</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ConnectingToAppHost">
-        <source>Connecting to apphost...</source>
-        <target state="translated">AppHost に接続しています...</target>
+        <source>Connecting to AppHost...</source>
+        <target state="needs-review-translation">AppHost に接続しています...</target>
         <note />
       </trans-unit>
       <trans-unit id="CopyingUserSecrets">
         <source>Copying user secrets for isolated mode...</source>
-        <target state="new">Copying user secrets for isolated mode...</target>
+        <target state="translated">ユーザー シークレットを分離モード用にコピーしています...</target>
         <note />
       </trans-unit>
       <trans-unit id="Dashboard">
@@ -73,13 +73,13 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Run an Aspire apphost in development mode.</source>
-        <target state="translated">開発モードで Aspire AppHost を実行します。</target>
+        <source>Run an Aspire AppHost interactively for development</source>
+        <target state="needs-review-translation">開発モードで Aspire AppHost を実行します。</target>
         <note />
       </trans-unit>
       <trans-unit id="DetachArgumentDescription">
-        <source>Run the AppHost in the background and exit after it starts.</source>
-        <target state="translated">AppHost をバックグラウンドで実行し、起動後に終了させます。</target>
+        <source>Run the AppHost in the background and exit after it starts</source>
+        <target state="needs-review-translation">AppHost をバックグラウンドで実行し、起動後に終了させます。</target>
         <note />
       </trans-unit>
       <trans-unit id="Endpoints">
@@ -89,17 +89,17 @@
       </trans-unit>
       <trans-unit id="FailedToStartAppHost">
         <source>Failed to start the AppHost.</source>
-        <target state="translated">AppHost を起動できませんでした。</target>
+        <target state="needs-review-translation">AppHost を起動できませんでした。</target>
         <note />
       </trans-unit>
       <trans-unit id="ForceArgumentDescription">
-        <source>Stop any running instance of the AppHost without prompting.</source>
-        <target state="translated">プロンプトを表示せずに AppHost の実行中のインスタンスを停止します。</target>
+        <source>Stop any running instance of the AppHost without prompting</source>
+        <target state="needs-review-translation">プロンプトを表示せずに AppHost の実行中のインスタンスを停止します。</target>
         <note />
       </trans-unit>
       <trans-unit id="FormatRequiresDetach">
         <source>The --format option can only be used together with --detach.</source>
-        <target state="new">The --format option can only be used together with --detach.</target>
+        <target state="translated">--format オプションは、--detach との組み合わせでのみ使用できます。</target>
         <note />
       </trans-unit>
       <trans-unit id="Health">
@@ -113,18 +113,18 @@
         <note />
       </trans-unit>
       <trans-unit id="JsonArgumentDescription">
-        <source>Output result as JSON (only valid with --detach).</source>
-        <target state="new">Output result as JSON (only valid with --detach).</target>
+        <source>Output format for detached AppHost results</source>
+        <target state="needs-review-translation">結果を JSON 形式で出力します (--detach オプション指定時のみ有効)。</target>
         <note />
       </trans-unit>
       <trans-unit id="IsolatedArgumentDescription">
-        <source>Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously.</source>
-        <target state="new">Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously.</target>
+        <source>Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously</source>
+        <target state="needs-review-translation">ランダムなポートと分離されたユーザー シークレットを使って分離モードで実行し、複数のインスタンスを同時に実行できるようにします。</target>
         <note />
       </trans-unit>
       <trans-unit id="IsolatedModeRunningInstanceWarning">
         <source>A running instance of this AppHost was found and will be stopped. To run multiple isolated instances simultaneously, run from different directories such as git worktree directories.</source>
-        <target state="new">A running instance of this AppHost was found and will be stopped. To run multiple isolated instances simultaneously, run from different directories such as git worktree directories.</target>
+        <target state="needs-review-translation">この AppHost の実行中のインスタンスが見つかったため、停止します。複数の分離したインスタンスを同時に実行するには、異なるディレクトリ (git worktree ディレクトリなど) から実行してください。</target>
         <note />
       </trans-unit>
       <trans-unit id="Logs">
@@ -132,9 +132,19 @@
         <target state="translated">ログ</target>
         <note />
       </trans-unit>
+      <trans-unit id="NoBuildArgumentDescription">
+        <source>Do not build or restore the project before running</source>
+        <target state="new">Do not build or restore the project before running</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoBuildNotSupportedWithWatchMode">
+        <source>The --no-build option cannot be used when watch mode is enabled.</source>
+        <target state="translated">ウォッチ モードが有効な場合、--no-build オプションは使用できません。</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PressCtrlCToStopAppHost">
-        <source>Press [bold]CTRL+C[/] to stop the apphost and exit.</source>
-        <target state="translated">[bold]Ctrl+C[/] キーを押して AppHost を停止して終了します。</target>
+        <source>Press [bold]CTRL+C[/] to stop the AppHost and exit.</source>
+        <target state="needs-review-translation">[bold]Ctrl+C[/] キーを押して AppHost を停止して終了します。</target>
         <note>[bold] should not be localized</note>
       </trans-unit>
       <trans-unit id="ProcessId">
@@ -143,13 +153,13 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="translated">Aspire AppHost プロジェクト ファイルへのパス。</target>
+        <source>The path to the Aspire AppHost project file</source>
+        <target state="needs-review-translation">Aspire AppHost プロジェクト ファイルへのパス。</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeRun">
-        <source>The project could not be run. For more information run with --debug switch.</source>
-        <target state="translated">プロジェクトを実行できませんでした。詳細情報については、--debug スイッチを使用し実行してください。</target>
+        <source>The project could not be run. See logs at {0}</source>
+        <target state="translated">プロジェクトを実行できませんでした。{0} でログを表示する</target>
         <note />
       </trans-unit>
       <trans-unit id="Resource">
@@ -163,18 +173,18 @@
         <note />
       </trans-unit>
       <trans-unit id="StartDebugSessionArgumentDescription">
-        <source>Whether to start a debug session, if running in an Aspire Terminal.</source>
-        <target state="translated">Aspire ターミナルで実行されている場合に、デバッグ セッションを開始するかどうか。</target>
+        <source>Whether to start a debug session, if running in an Aspire Terminal</source>
+        <target state="needs-review-translation">Aspire ターミナルで実行されている場合に、デバッグ セッションを開始するかどうか。</target>
         <note />
       </trans-unit>
       <trans-unit id="StartingAppHost">
-        <source>Starting Aspire apphost...</source>
-        <target state="translated">Aspire AppHost を開始しています...</target>
+        <source>Starting Aspire AppHost...</source>
+        <target state="needs-review-translation">Aspire AppHost を開始しています...</target>
         <note />
       </trans-unit>
       <trans-unit id="StartingAppHostInBackground">
-        <source>Starting Aspire apphost in the background...</source>
-        <target state="translated">バックグラウンドで Aspire apphost を起動しています...</target>
+        <source>Starting Aspire AppHost in the background...</source>
+        <target state="needs-review-translation">バックグラウンドで Aspire apphost を起動しています...</target>
         <note />
       </trans-unit>
       <trans-unit id="StartingDashboard">
@@ -194,7 +204,7 @@
       </trans-unit>
       <trans-unit id="TimeoutWaitingForAppHost">
         <source>Timeout waiting for AppHost to start.</source>
-        <target state="translated">AppHost の起動待機中にタイムアウトしました。</target>
+        <target state="needs-review-translation">AppHost の起動待機中にタイムアウトしました。</target>
         <note />
       </trans-unit>
       <trans-unit id="Type">
@@ -203,13 +213,13 @@
         <note>The type of the resource, eg Project</note>
       </trans-unit>
       <trans-unit id="WaitingForAppHostToStart">
-        <source>Waiting for apphost to start...</source>
-        <target state="translated">apphost の起動を待っています...</target>
+        <source>Waiting for AppHost to start...</source>
+        <target state="needs-review-translation">apphost の起動を待っています...</target>
         <note />
       </trans-unit>
       <trans-unit id="WatchArgumentDescription">
-        <source>Start project resources in watch mode.</source>
-        <target state="translated">watch モードでプロジェクト リソースを開始します。</target>
+        <source>Start project resources in watch mode</source>
+        <target state="needs-review-translation">watch モードでプロジェクト リソースを開始します。</target>
         <note />
       </trans-unit>
     </body>

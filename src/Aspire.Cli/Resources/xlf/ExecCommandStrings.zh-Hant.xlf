@@ -4,18 +4,18 @@
     <body>
       <trans-unit id="CommandArgumentDescription">
         <source>The command to execute in the target resource's context. Commands can be specified directly after options or after a -- separator.</source>
-        <target state="translated">要在目標資源的內容中執行的命令。命令可以直接在選項之後或在 -- 分隔符號之後指定。</target>
+        <target state="needs-review-translation">要在目標資源的內容中執行的命令。命令可以直接在選項之後或在 -- 分隔符號之後指定。</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Execute commands in the context of an Aspire application resource. Starts the AppHost, waits for resources to initialize, then runs the specified command in the target resource's environment. (Preview)
+        <source>Execute commands in the context of an Aspire application resource. Starts the AppHost, waits for resources to initialize, then runs the specified command in the target resource's environment (Preview)
 
 Examples:
   aspire exec --resource api dotnet build
   aspire exec --resource api -- dotnet test --logger console
   aspire exec --start-resource worker pwsh -c "Get-Process"
     </source>
-        <target state="translated">在 Aspire 應用程式資源的內容中執行命令。啟動 AppHost，等待資源初始化，然後在目標資源的環境中執行指定的命令。(預覽)
+        <target state="needs-review-translation">在 Aspire 應用程式資源的內容中執行命令。啟動 AppHost，等待資源初始化，然後在目標資源的環境中執行指定的命令。(預覽)
 
 範例:
   aspire exec --resource api dotnet build
@@ -36,7 +36,7 @@ Examples:
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
         <source>The path to the Aspire AppHost project file. If not specified, searches for a project file in the current directory.</source>
-        <target state="translated">Aspire AppHost 專案檔案的路徑。如果未指定，將在目前目錄中搜尋專案檔案。</target>
+        <target state="needs-review-translation">Aspire AppHost 專案檔案的路徑。如果未指定，將在目前目錄中搜尋專案檔案。</target>
         <note />
       </trans-unit>
       <trans-unit id="Running">
@@ -46,17 +46,17 @@ Examples:
       </trans-unit>
       <trans-unit id="StartTargetResourceArgumentDescription">
         <source>The name of the target resource to execute the command against. The command will only be executed after the target resource has successfully started and is running.</source>
-        <target state="translated">要執行命令的目標資源名稱。命令僅在目標資源成功啟動並運行後執行。</target>
+        <target state="needs-review-translation">要執行命令的目標資源名稱。命令僅在目標資源成功啟動並運行後執行。</target>
         <note />
       </trans-unit>
       <trans-unit id="StoppingAppHost">
-        <source>Stopping app host...</source>
-        <target state="translated">正在停止主控處理程序...</target>
+        <source>Stopping AppHost...</source>
+        <target state="needs-review-translation">正在停止主控處理程序...</target>
         <note />
       </trans-unit>
       <trans-unit id="TargetResourceArgumentDescription">
         <source>The name of the target resource to execute the command against. The command will be executed as soon as the AppHost starts, without waiting for the resource to be ready.</source>
-        <target state="translated">要執行命令的目標資源名稱。命令將在 AppHost 啟動後立即執行，而不會等待資源就緒。</target>
+        <target state="needs-review-translation">要執行命令的目標資源名稱。命令將在 AppHost 啟動後立即執行，而不會等待資源就緒。</target>
         <note />
       </trans-unit>
       <trans-unit id="TargetResourceNotSpecified">
@@ -65,8 +65,8 @@ Examples:
         <note />
       </trans-unit>
       <trans-unit id="WorkdirArgumentDescription">
-        <source>The working directory to execute the command in.</source>
-        <target state="translated">執行命令的工作目錄。</target>
+        <source>The working directory to execute the command in</source>
+        <target state="needs-review-translation">執行命令的工作目錄。</target>
         <note />
       </trans-unit>
     </body>

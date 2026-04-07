@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Nodes;
-using Aspire.Hosting.Ats;
 using Aspire.Hosting.RemoteHost.Ats;
 using Microsoft.Extensions.Logging;
 using StreamJsonRpc;
@@ -11,19 +10,23 @@ namespace Aspire.Hosting.RemoteHost;
 
 internal sealed class RemoteAppHostService
 {
+    private readonly JsonRpcAuthenticationState _authenticationState;
     private readonly JsonRpcCallbackInvoker _callbackInvoker;
     private readonly CancellationTokenRegistry _cancellationTokenRegistry;
     private readonly ILogger<RemoteAppHostService> _logger;
+    private JsonRpc? _clientRpc;
 
     // ATS (Aspire Type System) components
     private readonly CapabilityDispatcher _capabilityDispatcher;
 
     public RemoteAppHostService(
+        JsonRpcAuthenticationState authenticationState,
         JsonRpcCallbackInvoker callbackInvoker,
         CancellationTokenRegistry cancellationTokenRegistry,
         CapabilityDispatcher capabilityDispatcher,
         ILogger<RemoteAppHostService> logger)
     {
+        _authenticationState = authenticationState;
         _callbackInvoker = callbackInvoker;
         _cancellationTokenRegistry = cancellationTokenRegistry;
         _capabilityDispatcher = capabilityDispatcher;
@@ -35,7 +38,27 @@ internal sealed class RemoteAppHostService
     /// </summary>
     public void SetClientConnection(JsonRpc clientRpc)
     {
+        _clientRpc = clientRpc;
         _callbackInvoker.SetConnection(clientRpc);
+    }
+
+    /// <summary>
+    /// Verifies the authentication token supplied by the client.
+    /// Returns <c>true</c> on success; closes the connection and returns <c>false</c> on failure
+    /// so that an unauthenticated client cannot keep retrying without limit.
+    /// </summary>
+    [JsonRpcMethod("authenticate")]
+    public bool Authenticate(string token)
+    {
+        var authenticated = _authenticationState.Authenticate(token);
+        if (!authenticated)
+        {
+            _logger.LogWarning("Rejected unauthenticated AppHost RPC client.");
+            // Close the connection to prevent unlimited retry attempts.
+            _ = Task.Run(() => _clientRpc?.Dispose());
+        }
+
+        return authenticated;
     }
 
     [JsonRpcMethod("ping")]
@@ -55,6 +78,7 @@ internal sealed class RemoteAppHostService
     [JsonRpcMethod("cancelToken")]
     public bool CancelToken(string tokenId)
     {
+        _authenticationState.ThrowIfNotAuthenticated();
         _logger.LogDebug("cancelToken({TokenId})", tokenId);
         return _cancellationTokenRegistry.Cancel(tokenId);
     }
@@ -70,6 +94,7 @@ internal sealed class RemoteAppHostService
     [JsonRpcMethod("invokeCapability")]
     public async Task<JsonNode?> InvokeCapabilityAsync(string capabilityId, JsonObject? args)
     {
+        _authenticationState.ThrowIfNotAuthenticated();
         _logger.LogDebug(">> invokeCapability({CapabilityId}) args: {Args}", capabilityId, args?.ToJsonString() ?? "null");
         var sw = System.Diagnostics.Stopwatch.StartNew();
         try

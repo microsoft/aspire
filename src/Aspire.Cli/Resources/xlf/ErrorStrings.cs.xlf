@@ -4,22 +4,22 @@
     <body>
       <trans-unit id="AlreadyConnectedToBackchannel">
         <source>Already connected to AppHost backchannel.</source>
-        <target state="translated">Již připojeno k vedlejšímu kanálu AppHost.</target>
+        <target state="needs-review-translation">Již připojeno k vedlejšímu kanálu AppHost.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostIncompatibleWithCli">
         <source>AppHost is incompatible with the CLI. The AppHost must be updated to a version that supports the {0} capability.</source>
-        <target state="translated">AppHost není kompatibilní s rozhraním příkazového řádku. AppHost musí být aktualizován na verzi, která podporuje funkci {0}.</target>
+        <target state="needs-review-translation">AppHost není kompatibilní s rozhraním příkazového řádku. AppHost musí být aktualizován na verzi, která podporuje funkci {0}.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostWasSpecifiedButDoesntExist">
         <source>AppHost file was specified in '{0}' but it does not exist at '{1}'.</source>
-        <target state="translated">Soubor AppHost byl zadán v {0}, ale v {1} neexistuje.</target>
+        <target state="needs-review-translation">Soubor AppHost byl zadán v {0}, ale v {1} neexistuje.</target>
         <note>{0} is a path</note>
       </trans-unit>
       <trans-unit id="AppHostsMayNotBeBuildable">
-        <source>No buildable app hosts were found, but there may have been unbuildable app hosts.</source>
-        <target state="translated">Nenašli se žádní hostitelé aplikací, které lze sestavit, ale je možné, že existují hostitelé aplikací, které nelze sestavit.</target>
+        <source>No buildable AppHosts were found, but there may have been unbuildable AppHosts.</source>
+        <target state="needs-review-translation">Nenašli se žádní hostitelé aplikací, které lze sestavit, ale je možné, že existují hostitelé aplikací, které nelze sestavit.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireHostingVersionNull">
@@ -44,7 +44,7 @@
       </trans-unit>
       <trans-unit id="CommandNotSupportedWithSingleFileAppHost">
         <source>This command is not yet supported with single file AppHosts.</source>
-        <target state="translated">Tento příkaz zatím není pro funkci AppHost pro jednosouborové scénáře podporován.</target>
+        <target state="needs-review-translation">Tento příkaz zatím není pro funkci AppHost pro jednosouborové scénáře podporován.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigurationKeyNotFound">
@@ -107,6 +107,11 @@
         <target state="translated">Nepovedlo se vyhledat balíčky. Ukončovací kód: {0}</target>
         <note>{0} is a number</note>
       </trans-unit>
+      <trans-unit id="InvalidJsonInConfigFile">
+        <source>The configuration file '{0}' contains invalid JSON: {1}</source>
+        <target state="new">The configuration file '{0}' contains invalid JSON: {1}</target>
+        <note>{0} is the file path, {1} is the exception message</note>
+      </trans-unit>
       <trans-unit id="InvalidLocaleProvided">
         <source>Invalid locale {0} provided will not be used.</source>
         <target state="translated">Zadané neplatné národní prostředí {0} se nepoužije.</target>
@@ -118,8 +123,8 @@
         <note />
       </trans-unit>
       <trans-unit id="MinimumSdkVersionNotMet">
-        <source>The Aspire CLI requires .NET SDK version {0} or later. Detected: {1}.</source>
-        <target state="translated">Rozhraní příkazového řádku Aspire vyžaduje sadu .NET SDK verze {0} nebo novější. Zjištěno: {1}.</target>
+        <source>C# AppHost requires .NET SDK version {0} or later. Detected: {1}.</source>
+        <target state="needs-review-translation">Rozhraní příkazového řádku Aspire vyžaduje sadu .NET SDK verze {0} nebo novější. Zjištěno: {1}.</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleProjectFilesFound">
@@ -138,8 +143,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeAnalyzed">
-        <source>The project could not be analyzed due to a build error. For more information run with --debug switch.</source>
-        <target state="translated">Projekt se nepodařilo analyzovat kvůli chybě sestavení. Další informace získáte spuštěním s přepínačem --debug.</target>
+        <source>The project could not be analyzed due to a build error. See logs at {0}</source>
+        <target state="translated">Projekt se nepodařilo analyzovat kvůli chybě sestavení. Protokoly najdete na {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectFileDoesntExist">
@@ -154,17 +159,27 @@
       </trans-unit>
       <trans-unit id="ProjectFileNotAppHostProject">
         <source>Project file is not an Aspire AppHost project.</source>
-        <target state="translated">Soubor projektu není projekt Aspire AppHost.</target>
+        <target state="needs-review-translation">Soubor projektu není projekt Aspire AppHost.</target>
         <note />
       </trans-unit>
+      <trans-unit id="ProjectFileUnsupportedInCurrentEnvironment">
+        <source>Project is not supported in the current environment: {0}</source>
+        <target state="new">Project is not supported in the current environment: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ProjectFilesCreatedButNodeToolsNotFound">
+        <source>Project files were created, but Aspire could not run 'npm install' automatically because the required Node.js tools were not found on PATH. You may see missing package errors or red squiggles in your IDE until you install Node.js and run 'npm install' in the project directory.</source>
+        <target state="new">Project files were created, but Aspire could not run 'npm install' automatically because the required Node.js tools were not found on PATH. You may see missing package errors or red squiggles in your IDE until you install Node.js and run 'npm install' in the project directory.</target>
+        <note>Do not translate 'npm install', 'Node.js', or 'PATH'.</note>
+      </trans-unit>
       <trans-unit id="ProjectIsNotAppHost">
-        <source>The project does not contain an Aspire apphost.</source>
-        <target state="translated">Projekt neobsahuje hostitele aplikací Aspire.</target>
+        <source>The project does not contain an Aspire AppHost.</source>
+        <target state="needs-review-translation">Projekt neobsahuje hostitele aplikací Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="SingleFileAppHostFeatureNotEnabled">
         <source>Single file AppHost feature is not enabled. To use .cs AppHost files, enable the feature using configuration.</source>
-        <target state="translated">Funkce AppHost pro jednosouborové scénáře není povolená. Chcete-li používat .cs soubory AppHost, povolte tuto funkci v konfiguraci</target>
+        <target state="needs-review-translation">Funkce AppHost pro jednosouborové scénáře není povolená. Chcete-li používat .cs soubory AppHost, povolte tuto funkci v konfiguraci</target>
         <note />
       </trans-unit>
       <trans-unit id="UnableToRetrieveAssemblyVersion">

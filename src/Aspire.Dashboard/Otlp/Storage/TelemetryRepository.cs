@@ -1449,7 +1449,7 @@ public sealed partial class TelemetryRepository : IDisposable
             EndTime = OtlpHelpers.UnixNanoSecondsToDateTime(span.EndTimeUnixNano),
             Status = ConvertStatus(span.Status),
             StatusMessage = span.Status?.Message,
-            Attributes = span.Attributes.ToKeyValuePairs(context),
+            Attributes = span.Attributes.ToKeyValuePairs(context, filter: attribute => attribute.Key != OtlpHelpers.AspireDestinationNameAttribute),
             State = !string.IsNullOrEmpty(span.TraceState) ? span.TraceState : null,
             Events = events,
             Links = links,

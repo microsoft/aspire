@@ -5,6 +5,7 @@ using System.Collections.Immutable;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
 using StreamJsonRpc;
@@ -15,90 +16,64 @@ namespace Aspire.Cli.Backchannel;
 /// Represents a connection to an AppHost instance via the auxiliary backchannel.
 /// Encapsulates connection management and RPC method calls.
 /// </summary>
-internal sealed class AppHostAuxiliaryBackchannel : IDisposable
+internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 {
     private readonly ILogger? _logger;
     private JsonRpc? _rpc;
     private bool _disposed;
-    private ImmutableHashSet<string> _capabilities = ImmutableHashSet<string>.Empty;
+    private readonly ImmutableHashSet<string> _capabilities;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="AppHostAuxiliaryBackchannel"/> class
-    /// for an existing connection.
+    /// Private constructor - use factory methods to create instances.
     /// </summary>
-    /// <param name="hash">The hash identifier for this AppHost instance.</param>
-    /// <param name="socketPath">The socket path for this connection.</param>
-    /// <param name="rpc">The JSON-RPC proxy for communicating with the AppHost.</param>
-    /// <param name="mcpInfo">The MCP connection information for the Dashboard.</param>
-    /// <param name="appHostInfo">The AppHost information.</param>
-    /// <param name="isInScope">Whether this AppHost is within the scope of the MCP server's working directory.</param>
-    /// <param name="logger">Optional logger for diagnostic messages.</param>
-    public AppHostAuxiliaryBackchannel(
+    private AppHostAuxiliaryBackchannel(
         string hash,
         string socketPath,
         JsonRpc rpc,
-        DashboardMcpConnectionInfo? mcpInfo,
         AppHostInformation? appHostInfo,
         bool isInScope,
-        ILogger? logger = null)
+        ImmutableHashSet<string> capabilities,
+        ILogger? logger)
     {
         Hash = hash;
         SocketPath = socketPath;
         _rpc = rpc;
-        McpInfo = mcpInfo;
         AppHostInfo = appHostInfo;
         IsInScope = isInScope;
+        _capabilities = capabilities;
         ConnectedAt = DateTimeOffset.UtcNow;
         _logger = logger;
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="AppHostAuxiliaryBackchannel"/> class
-    /// for a new connection that needs to be established.
+    /// Internal constructor for testing purposes.
     /// </summary>
-    /// <param name="socketPath">The socket path to connect to.</param>
-    /// <param name="logger">Optional logger for diagnostic messages.</param>
-    private AppHostAuxiliaryBackchannel(string socketPath, ILogger? logger = null)
+    internal AppHostAuxiliaryBackchannel(
+        string hash,
+        string socketPath,
+        JsonRpc rpc,
+        AppHostInformation? appHostInfo,
+        bool isInScope)
+        : this(hash, socketPath, rpc, appHostInfo, isInScope, ImmutableHashSet<string>.Empty, null)
     {
-        SocketPath = socketPath;
-        Hash = string.Empty;
-        ConnectedAt = DateTimeOffset.UtcNow;
-        _logger = logger;
     }
 
-    /// <summary>
-    /// Gets the hash identifier for this AppHost instance.
-    /// </summary>
+    /// <inheritdoc />
     public string Hash { get; private set; }
 
-    /// <summary>
-    /// Gets the socket path for this connection.
-    /// </summary>
+    /// <inheritdoc />
     public string SocketPath { get; }
 
-    /// <summary>
-    /// Gets the MCP connection information for the Dashboard.
-    /// </summary>
-    public DashboardMcpConnectionInfo? McpInfo { get; private set; }
-
-    /// <summary>
-    /// Gets the AppHost information.
-    /// </summary>
+    /// <inheritdoc />
     public AppHostInformation? AppHostInfo { get; private set; }
 
-    /// <summary>
-    /// Gets a value indicating whether this AppHost is within the scope of the MCP server's working directory.
-    /// </summary>
-    public bool IsInScope { get; private set; }
+    /// <inheritdoc />
+    public bool IsInScope { get; internal set; }
 
-    /// <summary>
-    /// Gets the timestamp when this connection was established.
-    /// </summary>
+    /// <inheritdoc />
     public DateTimeOffset ConnectedAt { get; }
 
-    /// <summary>
-    /// Gets a value indicating whether the AppHost supports v2 API.
-    /// </summary>
+    /// <inheritdoc />
     public bool SupportsV2 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.V2);
 
     /// <summary>
@@ -128,62 +103,87 @@ internal sealed class AppHostAuxiliaryBackchannel : IDisposable
     /// <param name="logger">Optional logger for diagnostic messages.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A connected AppHostAuxiliaryBackchannel instance.</returns>
-    public static async Task<AppHostAuxiliaryBackchannel> ConnectAsync(
+    public static Task<AppHostAuxiliaryBackchannel> ConnectAsync(
         string socketPath,
         ILogger? logger = null,
         CancellationToken cancellationToken = default)
     {
-        var backchannel = new AppHostAuxiliaryBackchannel(socketPath, logger);
-        await backchannel.ConnectInternalAsync(cancellationToken).ConfigureAwait(false);
-        return backchannel;
-    }
-
-    private async Task ConnectInternalAsync(CancellationToken cancellationToken)
-    {
-        _logger?.LogDebug("Connecting to auxiliary backchannel at {SocketPath}", SocketPath);
-
-        // Connect to the Unix socket
-        var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-        var endpoint = new UnixDomainSocketEndPoint(SocketPath);
-
-        await socket.ConnectAsync(endpoint, cancellationToken).ConfigureAwait(false);
-
-        // Create JSON-RPC connection with proper formatter
-        var stream = new NetworkStream(socket, ownsSocket: true);
-        _rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream, BackchannelJsonSerializerContext.CreateRpcMessageFormatter()));
-        _rpc.StartListening();
-
-        _logger?.LogDebug("Connected to auxiliary backchannel at {SocketPath}", SocketPath);
-
-        // Fetch capabilities to determine API version support
-        await FetchCapabilitiesAsync(cancellationToken).ConfigureAwait(false);
-
-        // Get the AppHost information
-        AppHostInfo = await GetAppHostInformationAsync(cancellationToken).ConfigureAwait(false);
+        var hash = AppHostHelper.ExtractHashFromSocketPath(socketPath) ?? string.Empty;
+        return CreateFromSocketAsync(hash, socketPath, isInScope: true, socket: null, logger, cancellationToken);
     }
 
     /// <summary>
-    /// Fetches the capabilities from the AppHost to determine supported API versions.
+    /// Creates an AppHostAuxiliaryBackchannel by connecting to the specified socket path,
+    /// or using an already-connected socket if provided.
+    /// This is the single path for all connection creation, ensuring capabilities are always fetched.
     /// </summary>
-    private async Task FetchCapabilitiesAsync(CancellationToken cancellationToken)
+    /// <param name="hash">The AppHost hash identifier.</param>
+    /// <param name="socketPath">The socket path.</param>
+    /// <param name="isInScope">Whether this AppHost is within the scope of the working directory.</param>
+    /// <param name="socket">Optional already-connected socket. If null, a new connection will be established.</param>
+    /// <param name="logger">Optional logger.</param>
+    /// <param name="cancellationToken">Cancellation token (only used when socket is null).</param>
+    /// <returns>A connected AppHostAuxiliaryBackchannel instance.</returns>
+    internal static async Task<AppHostAuxiliaryBackchannel> CreateFromSocketAsync(
+        string hash,
+        string socketPath,
+        bool isInScope,
+        Socket? socket = null,
+        ILogger? logger = null,
+        CancellationToken cancellationToken = default)
     {
-        var rpc = EnsureConnected();
+        // Connect if no socket provided
+        if (socket is null)
+        {
+            logger?.LogDebug("Connecting to auxiliary backchannel at {SocketPath}", socketPath);
 
+            socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            var endpoint = new UnixDomainSocketEndPoint(socketPath);
+            await socket.ConnectAsync(endpoint, cancellationToken).ConfigureAwait(false);
+        }
+
+        // Create JSON-RPC connection with proper formatter
+        var stream = new NetworkStream(socket, ownsSocket: true);
+        var rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream, BackchannelJsonSerializerContext.CreateRpcMessageFormatter()));
+        rpc.StartListening();
+
+        logger?.LogDebug("Connected to auxiliary backchannel at {SocketPath}", socketPath);
+
+        // Fetch all connection info
+        var appHostInfo = await rpc.InvokeAsync<AppHostInformation?>("GetAppHostInformationAsync").ConfigureAwait(false);
+        var capabilities = await FetchCapabilitiesAsync(rpc, logger).ConfigureAwait(false);
+
+        var capabilitiesSet = capabilities?.ToImmutableHashSet() ?? ImmutableHashSet.Create(AuxiliaryBackchannelCapabilities.V1);
+
+        return new AppHostAuxiliaryBackchannel(hash, socketPath, rpc, appHostInfo, isInScope, capabilitiesSet, logger);
+    }
+
+    /// <summary>
+    /// Fetches capabilities from an AppHost via RPC.
+    /// </summary>
+    /// <param name="rpc">The JSON-RPC connection.</param>
+    /// <param name="logger">Optional logger.</param>
+    /// <returns>The capabilities array, or null if not supported.</returns>
+    private static async Task<string[]?> FetchCapabilitiesAsync(JsonRpc rpc, ILogger? logger = null)
+    {
         try
         {
-            var response = await rpc.InvokeWithCancellationAsync<GetCapabilitiesResponse>(
-                "GetCapabilitiesAsync",
-                [null], // Pass null request
-                cancellationToken).ConfigureAwait(false);
-
-            _capabilities = response?.Capabilities?.ToImmutableHashSet() ?? ImmutableHashSet.Create(AuxiliaryBackchannelCapabilities.V1);
-            _logger?.LogDebug("AppHost capabilities: {Capabilities}", string.Join(", ", _capabilities));
+            var response = await rpc.InvokeAsync<GetCapabilitiesResponse?>("GetCapabilitiesAsync", [null]).ConfigureAwait(false);
+            var capabilities = response?.Capabilities;
+            logger?.LogDebug("AppHost capabilities: {Capabilities}", capabilities is not null ? string.Join(", ", capabilities) : "null");
+            return capabilities;
         }
         catch (RemoteMethodNotFoundException)
         {
             // Older AppHost without GetCapabilitiesAsync - assume v1 only
-            _capabilities = ImmutableHashSet.Create(AuxiliaryBackchannelCapabilities.V1);
-            _logger?.LogDebug("AppHost does not support GetCapabilitiesAsync, assuming v1 only");
+            logger?.LogDebug("AppHost does not support GetCapabilitiesAsync, assuming v1 only");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            // Log any other exception
+            logger?.LogWarning(ex, "Failed to fetch capabilities from AppHost");
+            return null;
         }
     }
 
@@ -206,11 +206,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IDisposable
         return appHostInfo;
     }
 
-    /// <summary>
-    /// Requests the AppHost to stop gracefully.
-    /// </summary>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>True if the RPC call succeeded, false if the method wasn't available (older AppHost).</returns>
+    /// <inheritdoc />
     public async Task<bool> StopAppHostAsync(CancellationToken cancellationToken = default)
     {
         var rpc = EnsureConnected();
@@ -235,30 +231,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IDisposable
         }
     }
 
-    /// <summary>
-    /// Gets the Dashboard MCP connection information.
-    /// </summary>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The MCP connection information, or null if unavailable.</returns>
-    public async Task<DashboardMcpConnectionInfo?> GetDashboardMcpConnectionInfoAsync(CancellationToken cancellationToken = default)
-    {
-        var rpc = EnsureConnected();
-
-        _logger?.LogDebug("Requesting Dashboard MCP connection info");
-
-        var mcpInfo = await rpc.InvokeWithCancellationAsync<DashboardMcpConnectionInfo?>(
-            "GetDashboardMcpConnectionInfoAsync",
-            [],
-            cancellationToken).ConfigureAwait(false);
-
-        return mcpInfo;
-    }
-
-    /// <summary>
-    /// Gets the Dashboard URLs including the login token.
-    /// </summary>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The Dashboard URLs state including health and login URLs.</returns>
+    /// <inheritdoc />
     public async Task<DashboardUrlsState?> GetDashboardUrlsAsync(CancellationToken cancellationToken = default)
     {
         var rpc = EnsureConnected();
@@ -282,11 +255,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IDisposable
         }
     }
 
-    /// <summary>
-    /// Gets the current resource snapshots from the AppHost.
-    /// </summary>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A list of resource snapshots representing current state.</returns>
+    /// <inheritdoc />
     public async Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(CancellationToken cancellationToken = default)
     {
         var rpc = EnsureConnected();
@@ -298,9 +267,12 @@ internal sealed class AppHostAuxiliaryBackchannel : IDisposable
             var snapshots = await rpc.InvokeWithCancellationAsync<List<ResourceSnapshot>>(
                 "GetResourceSnapshotsAsync",
                 [],
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken).ConfigureAwait(false) ?? [];
 
-            return snapshots ?? [];
+            // Sort resources by name for consistent ordering.
+            snapshots.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+
+            return snapshots;
         }
         catch (RemoteMethodNotFoundException ex)
         {
@@ -309,11 +281,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IDisposable
         }
     }
 
-    /// <summary>
-    /// Watches for resource snapshot changes and streams them from the AppHost.
-    /// </summary>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>An async enumerable of resource snapshots as they change.</returns>
+    /// <inheritdoc />
     public async IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var rpc = EnsureConnected();
@@ -345,13 +313,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IDisposable
         }
     }
 
-    /// <summary>
-    /// Gets resource log lines from the AppHost.
-    /// </summary>
-    /// <param name="resourceName">Optional resource name. If null, streams logs from all resources (only valid when follow is true).</param>
-    /// <param name="follow">If true, continuously streams new logs. If false, returns existing logs and completes.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>An async enumerable of log lines.</returns>
+    /// <inheritdoc />
     public async IAsyncEnumerable<ResourceLogLine> GetResourceLogsAsync(
         string? resourceName = null,
         bool follow = false,
@@ -391,14 +353,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IDisposable
         }
     }
 
-    /// <summary>
-    /// Invokes an MCP tool on a resource via the AppHost.
-    /// </summary>
-    /// <param name="resourceName">The resource name.</param>
-    /// <param name="toolName">The tool name.</param>
-    /// <param name="arguments">Tool arguments.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A JSON representation of the MCP CallToolResult.</returns>
+    /// <inheritdoc />
     public async Task<CallToolResult> CallResourceMcpToolAsync(
         string resourceName,
         string toolName,
@@ -464,8 +419,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IDisposable
     {
         if (!SupportsV2)
         {
-            // Fall back to v1 and combine results
-            var mcpInfo = await GetDashboardMcpConnectionInfoAsync(cancellationToken).ConfigureAwait(false);
+            // Fall back to v1 - ApiBaseUrl and ApiToken are only available in v2
             var urlsState = await GetDashboardUrlsAsync(cancellationToken).ConfigureAwait(false);
 
             var urls = new List<string>();
@@ -480,8 +434,8 @@ internal sealed class AppHostAuxiliaryBackchannel : IDisposable
 
             return new GetDashboardInfoResponse
             {
-                McpBaseUrl = mcpInfo?.EndpointUrl,
-                McpApiToken = mcpInfo?.ApiToken,
+                ApiBaseUrl = null, // Not available in v1
+                ApiToken = null,   // Not available in v1
                 DashboardUrls = urls.ToArray(),
                 IsHealthy = urlsState?.DashboardHealthy ?? false
             };
@@ -723,6 +677,71 @@ internal sealed class AppHostAuxiliaryBackchannel : IDisposable
             // Fall back to v1
             return await StopAppHostAsync(cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// Executes a command on a resource.
+    /// </summary>
+    public async Task<ExecuteResourceCommandResponse> ExecuteResourceCommandAsync(
+        string resourceName,
+        string commandName,
+        CancellationToken cancellationToken = default)
+    {
+        var rpc = EnsureConnected();
+
+        _logger?.LogDebug("Executing command '{CommandName}' on resource '{ResourceName}'", commandName, resourceName);
+
+        var request = new ExecuteResourceCommandRequest
+        {
+            ResourceName = resourceName,
+            CommandName = commandName
+        };
+
+        var response = await rpc.InvokeWithCancellationAsync<ExecuteResourceCommandResponse>(
+            "ExecuteResourceCommandAsync",
+            [request],
+            cancellationToken).ConfigureAwait(false);
+
+        _logger?.LogDebug("Command '{CommandName}' on resource '{ResourceName}' completed with success={Success}", commandName, resourceName, response.Success);
+
+        return response;
+    }
+
+    /// <inheritdoc />
+    public async Task<WaitForResourceResponse> WaitForResourceAsync(
+        string resourceName,
+        string status,
+        int timeoutSeconds,
+        CancellationToken cancellationToken = default)
+    {
+        if (!SupportsV2)
+        {
+            return new WaitForResourceResponse
+            {
+                Success = false,
+                ErrorMessage = "Wait command is not supported by the AppHost version. Update the AppHost to use this command."
+            };
+        }
+
+        var rpc = EnsureConnected();
+
+        _logger?.LogDebug("Waiting for resource '{ResourceName}' to reach status '{Status}' with timeout {Timeout}s", resourceName, status, timeoutSeconds);
+
+        var request = new WaitForResourceRequest
+        {
+            ResourceName = resourceName,
+            Status = status,
+            TimeoutSeconds = timeoutSeconds
+        };
+
+        var response = await rpc.InvokeWithCancellationAsync<WaitForResourceResponse>(
+            "WaitForResourceAsync",
+            [request],
+            cancellationToken).ConfigureAwait(false);
+
+        _logger?.LogDebug("Wait for resource '{ResourceName}' completed: success={Success}, state={State}", resourceName, response.Success, response.State);
+
+        return response;
     }
 
     #endregion

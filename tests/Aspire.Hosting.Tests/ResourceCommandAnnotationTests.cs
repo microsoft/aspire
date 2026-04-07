@@ -6,42 +6,46 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "2")]
 public class ResourceCommandAnnotationTests
 {
     [Theory]
-    [InlineData("resource-start", "Starting", ResourceCommandState.Disabled)]
-    [InlineData("resource-start", "Stopping", ResourceCommandState.Hidden)]
-    [InlineData("resource-start", "Running", ResourceCommandState.Hidden)]
-    [InlineData("resource-start", "Exited", ResourceCommandState.Enabled)]
-    [InlineData("resource-start", "Finished", ResourceCommandState.Enabled)]
-    [InlineData("resource-start", "FailedToStart", ResourceCommandState.Enabled)]
-    [InlineData("resource-start", "Unknown", ResourceCommandState.Enabled)]
-    [InlineData("resource-start", "Waiting", ResourceCommandState.Enabled)]
-    [InlineData("resource-start", "RuntimeUnhealthy", ResourceCommandState.Disabled)]
-    [InlineData("resource-start", "", ResourceCommandState.Disabled)]
-    [InlineData("resource-start", null, ResourceCommandState.Disabled)]
-    [InlineData("resource-stop", "Starting", ResourceCommandState.Hidden)]
-    [InlineData("resource-stop", "Stopping", ResourceCommandState.Disabled)]
-    [InlineData("resource-stop", "Running", ResourceCommandState.Enabled)]
-    [InlineData("resource-stop", "Exited", ResourceCommandState.Hidden)]
-    [InlineData("resource-stop", "Finished", ResourceCommandState.Hidden)]
-    [InlineData("resource-stop", "FailedToStart", ResourceCommandState.Hidden)]
-    [InlineData("resource-stop", "Unknown", ResourceCommandState.Hidden)]
-    [InlineData("resource-stop", "Waiting", ResourceCommandState.Hidden)]
-    [InlineData("resource-stop", "RuntimeUnhealthy", ResourceCommandState.Hidden)]
-    [InlineData("resource-stop", "", ResourceCommandState.Hidden)]
-    [InlineData("resource-stop", null, ResourceCommandState.Hidden)]
-    [InlineData("resource-restart", "Starting", ResourceCommandState.Disabled)]
-    [InlineData("resource-restart", "Stopping", ResourceCommandState.Disabled)]
-    [InlineData("resource-restart", "Running", ResourceCommandState.Enabled)]
-    [InlineData("resource-restart", "Exited", ResourceCommandState.Disabled)]
-    [InlineData("resource-restart", "Finished", ResourceCommandState.Disabled)]
-    [InlineData("resource-restart", "FailedToStart", ResourceCommandState.Disabled)]
-    [InlineData("resource-restart", "Unknown", ResourceCommandState.Disabled)]
-    [InlineData("resource-restart", "Waiting", ResourceCommandState.Disabled)]
-    [InlineData("resource-restart", "RuntimeUnhealthy", ResourceCommandState.Disabled)]
-    [InlineData("resource-restart", "", ResourceCommandState.Disabled)]
-    [InlineData("resource-restart", null, ResourceCommandState.Disabled)]
+    [InlineData("start", "Starting", ResourceCommandState.Disabled)]
+    [InlineData("start", "Stopping", ResourceCommandState.Hidden)]
+    [InlineData("start", "Running", ResourceCommandState.Hidden)]
+    [InlineData("start", "Exited", ResourceCommandState.Enabled)]
+    [InlineData("start", "Finished", ResourceCommandState.Enabled)]
+    [InlineData("start", "FailedToStart", ResourceCommandState.Enabled)]
+    [InlineData("start", "Unknown", ResourceCommandState.Enabled)]
+    [InlineData("start", "Waiting", ResourceCommandState.Enabled)]
+    [InlineData("start", "Building", ResourceCommandState.Disabled)]
+    [InlineData("start", "RuntimeUnhealthy", ResourceCommandState.Disabled)]
+    [InlineData("start", "", ResourceCommandState.Disabled)]
+    [InlineData("start", null, ResourceCommandState.Disabled)]
+    [InlineData("stop", "Starting", ResourceCommandState.Hidden)]
+    [InlineData("stop", "Stopping", ResourceCommandState.Disabled)]
+    [InlineData("stop", "Running", ResourceCommandState.Enabled)]
+    [InlineData("stop", "Exited", ResourceCommandState.Hidden)]
+    [InlineData("stop", "Finished", ResourceCommandState.Hidden)]
+    [InlineData("stop", "FailedToStart", ResourceCommandState.Hidden)]
+    [InlineData("stop", "Unknown", ResourceCommandState.Hidden)]
+    [InlineData("stop", "Waiting", ResourceCommandState.Hidden)]
+    [InlineData("stop", "Building", ResourceCommandState.Hidden)]
+    [InlineData("stop", "RuntimeUnhealthy", ResourceCommandState.Hidden)]
+    [InlineData("stop", "", ResourceCommandState.Hidden)]
+    [InlineData("stop", null, ResourceCommandState.Hidden)]
+    [InlineData("restart", "Starting", ResourceCommandState.Disabled)]
+    [InlineData("restart", "Stopping", ResourceCommandState.Disabled)]
+    [InlineData("restart", "Running", ResourceCommandState.Enabled)]
+    [InlineData("restart", "Exited", ResourceCommandState.Disabled)]
+    [InlineData("restart", "Finished", ResourceCommandState.Disabled)]
+    [InlineData("restart", "FailedToStart", ResourceCommandState.Disabled)]
+    [InlineData("restart", "Unknown", ResourceCommandState.Disabled)]
+    [InlineData("restart", "Waiting", ResourceCommandState.Disabled)]
+    [InlineData("restart", "Building", ResourceCommandState.Disabled)]
+    [InlineData("restart", "RuntimeUnhealthy", ResourceCommandState.Disabled)]
+    [InlineData("restart", "", ResourceCommandState.Disabled)]
+    [InlineData("restart", null, ResourceCommandState.Disabled)]
     public void LifeCycleCommands_CommandState(string commandName, string? resourceState, ResourceCommandState commandState)
     {
         // Arrange
@@ -110,5 +114,66 @@ public class ResourceCommandAnnotationTests
 
         // Assert - Single file C# app resources should have the detailed description mentioning source code is not recompiled
         Assert.Equal(CommandStrings.RestartProjectDescription, restartCommand.DisplayDescription);
+    }
+
+    [Theory]
+    [InlineData("rebuild", "Starting", ResourceCommandState.Disabled)]
+    [InlineData("rebuild", "Stopping", ResourceCommandState.Disabled)]
+    [InlineData("rebuild", "Running", ResourceCommandState.Enabled)]
+    [InlineData("rebuild", "Exited", ResourceCommandState.Enabled)]
+    [InlineData("rebuild", "Finished", ResourceCommandState.Enabled)]
+    [InlineData("rebuild", "FailedToStart", ResourceCommandState.Enabled)]
+    [InlineData("rebuild", "Unknown", ResourceCommandState.Disabled)]
+    [InlineData("rebuild", "Waiting", ResourceCommandState.Enabled)]
+    [InlineData("rebuild", "RuntimeUnhealthy", ResourceCommandState.Disabled)]
+    [InlineData("rebuild", "Building", ResourceCommandState.Disabled)]
+    [InlineData("rebuild", "", ResourceCommandState.Disabled)]
+    [InlineData("rebuild", null, ResourceCommandState.Disabled)]
+    public void RebuildCommand_CommandState(string commandName, string? resourceState, ResourceCommandState commandState)
+    {
+        var projectResource = new ProjectResource("testproject");
+        projectResource.AddLifeCycleCommands();
+
+        var rebuildCommand = projectResource.Annotations.OfType<ResourceCommandAnnotation>().Single(a => a.Name == commandName);
+
+        var state = rebuildCommand.UpdateState(new UpdateCommandStateContext
+        {
+            ResourceSnapshot = new CustomResourceSnapshot
+            {
+                Properties = [],
+                ResourceType = "test",
+                State = resourceState
+            },
+            ServiceProvider = new ServiceCollection().BuildServiceProvider()
+        });
+
+        Assert.Equal(commandState, state);
+    }
+
+    [Fact]
+    public void RebuildCommand_OnlyAddedToProjectResources()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var containerResource = builder.AddContainer("container", "image");
+        containerResource.Resource.AddLifeCycleCommands();
+
+        var projectResource = new ProjectResource("testproject");
+        projectResource.AddLifeCycleCommands();
+
+        Assert.DoesNotContain(containerResource.Resource.Annotations.OfType<ResourceCommandAnnotation>(), a => a.Name == KnownResourceCommands.RebuildCommand);
+        Assert.Contains(projectResource.Annotations.OfType<ResourceCommandAnnotation>(), a => a.Name == KnownResourceCommands.RebuildCommand);
+    }
+
+    [Fact]
+    public void RebuildCommand_ProjectResource_HasDescription()
+    {
+        var projectResource = new ProjectResource("testproject");
+        projectResource.AddLifeCycleCommands();
+
+        var rebuildCommand = projectResource.Annotations.OfType<ResourceCommandAnnotation>().Single(a => a.Name == KnownResourceCommands.RebuildCommand);
+
+        Assert.Equal(CommandStrings.RebuildName, rebuildCommand.DisplayName);
+        Assert.Equal(CommandStrings.RebuildDescription, rebuildCommand.DisplayDescription);
     }
 }

@@ -1,0 +1,67 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="tr" original="../DescribeCommandStrings.resx">
+    <body>
+      <trans-unit id="Description">
+        <source>Describe resources in a running AppHost</source>
+        <target state="needs-review-translation">Çalışan bir Aspire apphost'tan kaynak anlık görüntülerini göster.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FollowOptionDescription">
+        <source>Continuously stream resource state changes</source>
+        <target state="new">Continuously stream resource state changes</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderEndpoints">
+        <source>Endpoints</source>
+        <target state="translated">Uç noktalar</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderHealth">
+        <source>Health</source>
+        <target state="translated">Sistem Durumu</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderName">
+        <source>Name</source>
+        <target state="translated">Ad</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderState">
+        <source>State</source>
+        <target state="translated">Durum</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderType">
+        <source>Type</source>
+        <target state="translated">Tür</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="JsonOptionDescription">
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">Makine tarafından kullanılmak üzere JSON biçiminde çıktı ver.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoAppHostFound">
+        <source>No AppHost project found.</source>
+        <target state="needs-review-translation">AppHost projesi bulunamadı.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceArgumentDescription">
+        <source>The name of the resource to display. If not specified, all resources are shown.</source>
+        <target state="needs-review-translation">Görüntülenecek kaynağın adı. Belirtilmezse tüm kaynaklar gösterilir.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceNotFound">
+        <source>Resource '{0}' not found.</source>
+        <target state="translated">'{0}' kaynağı bulunamadı.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SelectAppHostAction">
+        <source>describe</source>
+        <target state="translated">açıklayın</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

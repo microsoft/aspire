@@ -1,0 +1,510 @@
+# Reusable template for submitting a Homebrew cask PR to Homebrew/homebrew-cask.
+# Used by the release flow (release-publish-nuget.yml).
+# Analogous to publish-winget.yml for WinGet manifests.
+#
+# NOTE: Cask syntax validation and brew audit are performed during build
+# in prepare-homebrew-cask.yml. This template only handles submission.
+
+parameters:
+  - name: caskArtifactPath
+    type: string
+    displayName: 'Path to the directory containing the generated .rb cask file'
+  - name: version
+    type: string
+    default: ''
+    displayName: 'Package version (used in PR title). If empty, extracted from cask file.'
+  - name: dryRun
+    type: boolean
+    default: false
+    displayName: 'Skip actual submit (for testing)'
+
+steps:
+  - powershell: |
+      $ErrorActionPreference = 'Stop'
+      $caskDir = '${{ parameters.caskArtifactPath }}'
+      $caskFile = 'aspire.rb'
+
+      $caskPath = Join-Path $caskDir $caskFile
+
+      Write-Host "=== Homebrew Cask ==="
+      Write-Host "Cask file: $caskPath"
+      Write-Host "====================="
+
+      if (!(Test-Path $caskPath)) {
+        Write-Host "##[error]Cask file not found: $caskPath"
+        Get-ChildItem -Path $caskDir -ErrorAction SilentlyContinue | Format-Table Name
+        exit 1
+      }
+
+      Write-Host ""
+      Write-Host "=== Cask Contents ==="
+      Get-Content $caskPath
+      Write-Host "====================="
+
+      # Extract version from cask file content
+      $version = '${{ parameters.version }}'
+      if ([string]::IsNullOrWhiteSpace($version)) {
+        $match = Select-String -Path $caskPath -Pattern '^\s*version\s+"([^"]+)"' | Select-Object -First 1
+        if ($match) {
+          $version = $match.Matches[0].Groups[1].Value
+          Write-Host "Extracted version from cask: $version"
+        } else {
+          Write-Error "Could not extract version from cask file"
+          exit 1
+        }
+      } else {
+        Write-Host "Using provided version: $version"
+      }
+
+      Write-Host "##vso[task.setvariable variable=HomebrewCaskFile]$caskFile"
+      Write-Host "##vso[task.setvariable variable=HomebrewCaskPath]$caskPath"
+      Write-Host "##vso[task.setvariable variable=HomebrewVersion]$version"
+    displayName: '🟣Locate Homebrew cask file'
+
+  - powershell: |
+      $ErrorActionPreference = 'Stop'
+      $summaryPath = Join-Path '${{ parameters.caskArtifactPath }}' 'validation-summary.json'
+
+      if (!(Test-Path $summaryPath)) {
+        Write-Error "Homebrew validation summary not found: $summaryPath. Refusing to submit a PR without verified prepare-stage validation."
+        exit 1
+      }
+
+      try {
+        $summary = Get-Content -Raw $summaryPath | ConvertFrom-Json
+      }
+      catch {
+        Write-Error "Homebrew validation summary is invalid JSON: $summaryPath"
+        throw
+      }
+
+      if (-not $summary.validatedByPreparePipeline) {
+        Write-Error "Homebrew validation summary does not indicate successful prepare-stage validation."
+        exit 1
+      }
+
+      $requiredChecks = @('rubySyntax', 'brewStyle', 'brewAudit', 'brewInstall', 'brewUninstall')
+      foreach ($checkName in $requiredChecks) {
+        $check = $summary.checks.$checkName
+        if ($null -eq $check) {
+          Write-Error "Homebrew validation summary is missing required check '$checkName'."
+          exit 1
+        }
+
+        if ("$($check.status)" -ne 'passed') {
+          Write-Error "Homebrew validation check '$checkName' did not pass."
+          exit 1
+        }
+      }
+
+      Write-Host "Validated Homebrew summary: $summaryPath"
+      Write-Host "##vso[task.setvariable variable=HomebrewValidationSummaryPath]$summaryPath"
+    displayName: '🟣Validate Homebrew validation summary'
+    condition: and(succeeded(), eq('${{ parameters.dryRun }}', 'false'))
+
+  - powershell: |
+      $ErrorActionPreference = 'Stop'
+      $caskPath = '$(HomebrewCaskPath)'
+      $version = '$(HomebrewVersion)'
+
+      Write-Host "Validating download URLs from cask file..."
+
+      # Extract url lines from the cask file
+      $urls = @()
+      Get-Content $caskPath | ForEach-Object {
+        if ($_ -match 'url\s+"([^"]+)"') {
+          $urls += $Matches[1]
+        }
+      }
+
+      if ($urls.Count -eq 0) {
+        Write-Host "##[error]No URLs found in cask file: $caskPath"
+        exit 1
+      }
+
+      # Expand #{version} and #{arch} placeholders for both architectures
+      $failed = $false
+      foreach ($rawUrl in $urls) {
+        foreach ($arch in @('arm64', 'x64')) {
+          $expanded = $rawUrl -replace '#\{version\}', $version
+          $expanded = $expanded -replace '#\{arch\}', $arch
+
+          try {
+            $response = Invoke-WebRequest -Uri $expanded -Method Head -MaximumRedirection 5 -TimeoutSec 15 -UseBasicParsing
+            Write-Host "  OK ($($response.StatusCode)): $expanded"
+          } catch {
+            $code = 'ERR'
+            if ($_.Exception.Response) { $code = $_.Exception.Response.StatusCode.value__ }
+            Write-Host "##[error]FAILED ($code): $expanded — $($_.Exception.Message)"
+            $failed = $true
+          }
+        }
+      }
+
+      if ($failed) {
+        Write-Error "One or more download URLs are not accessible. Aborting before PR submission."
+        exit 1
+      }
+      Write-Host "All download URLs are accessible."
+    displayName: '🟣Validate download URLs from cask'
+
+  - powershell: |
+      $ErrorActionPreference = 'Stop'
+      $version = '$(HomebrewVersion)'
+      $caskFile = '$(HomebrewCaskFile)'
+      $caskPath = '$(HomebrewCaskPath)'
+      $validationSummaryPath = '$(HomebrewValidationSummaryPath)'
+      $caskName = $caskFile -replace '\.rb$', ''
+      $token = $env:HOMEBREW_CASK_GITHUB_TOKEN
+      $validationSummary = Get-Content -Raw $validationSummaryPath | ConvertFrom-Json
+
+      if ([string]::IsNullOrWhiteSpace($token)) {
+        Write-Error "GitHub token for Homebrew cask PR is not set. Ensure the variable group is configured."
+        exit 1
+      }
+
+      Write-Host "Submitting cask PR to Homebrew/homebrew-cask"
+
+      $headers = @{
+        Authorization = "Bearer $token"
+        Accept = "application/vnd.github+json"
+        "User-Agent" = "dotnet-aspire-release-pipeline"
+        "X-GitHub-Api-Version" = "2022-11-28"
+      }
+
+      function Get-StatusCode {
+        param([System.Management.Automation.ErrorRecord]$ErrorRecord)
+
+        if ($null -ne $ErrorRecord.Exception.Response) {
+          return [int]$ErrorRecord.Exception.Response.StatusCode
+        }
+
+        return $null
+      }
+
+      function Invoke-GitHubApi {
+        param(
+          [string]$Method,
+          [string]$Uri,
+          [object]$Body
+        )
+
+        $params = @{
+          Method = $Method
+          Uri = $Uri
+          Headers = $headers
+          ErrorAction = 'Stop'
+        }
+
+        if ($null -ne $Body) {
+          $params.Body = ($Body | ConvertTo-Json -Depth 10)
+          $params.ContentType = 'application/json'
+        }
+
+        return Invoke-RestMethod @params
+      }
+
+      function Invoke-GitHubGraphQL {
+        param(
+          [string]$Query,
+          [object]$Variables
+        )
+
+        $response = Invoke-GitHubApi -Method Post -Uri 'https://api.github.com/graphql' -Body @{
+          query = $Query
+          variables = $Variables
+        }
+
+        if ($response.errors) {
+          $messages = ($response.errors | ForEach-Object { $_.message }) -join '; '
+          throw "GitHub GraphQL request failed: $messages"
+        }
+
+        return $response.data
+      }
+
+      function Test-GitHubRepositoryExists {
+        param([string]$RepositoryApiUrl)
+
+        try {
+          Invoke-GitHubApi -Method Get -Uri $RepositoryApiUrl -Body $null | Out-Null
+          return $true
+        }
+        catch {
+          $statusCode = Get-StatusCode -ErrorRecord $_
+          if ($statusCode -eq 404) {
+            return $false
+          }
+
+          throw
+        }
+      }
+
+      function Get-Checkmark {
+        param([bool]$Condition)
+
+        if ($Condition) {
+          return 'x'
+        }
+
+        return ' '
+      }
+
+      function Get-HomebrewPullRequestBody {
+        param(
+          [string]$Version,
+          [string]$CaskName,
+          [string]$CaskFile,
+          [bool]$IsStable,
+          [psobject]$ValidationSummary,
+          [int[]]$SupersededPullRequestNumbers = @()
+        )
+
+        $stableCheck = Get-Checkmark -Condition $IsStable
+        $auditDetails = "$($ValidationSummary.checks.brewAudit.details)"
+        $lines = @(
+          "Update $CaskName to version $Version.",
+          "",
+          "**Validation performed by Aspire CI before submission**",
+          "- [$stableCheck] The submission is for a stable version or a documented exception.",
+          "- [x] ``$($ValidationSummary.checks.rubySyntax.details)`` succeeded.",
+          "- [x] ``brew style --fix`` reported no offenses after copying ``$CaskFile`` into a temporary local tap.",
+          "- [x] ``$auditDetails`` worked successfully.",
+          "- [x] ``$($ValidationSummary.checks.brewInstall.details)`` worked successfully.",
+          "- [x] ``$($ValidationSummary.checks.brewUninstall.details)`` worked successfully.",
+          "- [x] Release-pipeline download URL validation succeeded for the cask URLs."
+        )
+
+        if ([bool]$ValidationSummary.isNewCask) {
+          $lines += @(
+            "",
+            "This submission was validated as a new upstream cask during Aspire CI."
+          )
+        }
+
+        if ($SupersededPullRequestNumbers.Count -gt 0) {
+          $supersededList = $SupersededPullRequestNumbers | ForEach-Object { "#$_" }
+          $lines += @(
+            "",
+            "Supersedes prior closed PRs: $($supersededList -join ', ')."
+          )
+        }
+
+        $lines += @(
+          "",
+          "-----",
+          "",
+          "Generated by the Aspire release pipeline from ``$CaskFile``."
+        )
+
+        return ($lines -join "`n")
+      }
+
+      $botUser = (Invoke-GitHubApi -Method Get -Uri 'https://api.github.com/user' -Body $null).login
+      $upstreamRepo = Invoke-GitHubApi -Method Get -Uri 'https://api.github.com/repos/Homebrew/homebrew-cask' -Body $null
+      $defaultBranch = $upstreamRepo.default_branch
+      $defaultBranchForUri = [Uri]::EscapeDataString($defaultBranch)
+      Write-Host "Authenticated as: $botUser"
+      Write-Host "Upstream default branch: $defaultBranch"
+
+      $forkApiUrl = "https://api.github.com/repos/$botUser/homebrew-cask"
+      if (-not (Test-GitHubRepositoryExists -RepositoryApiUrl $forkApiUrl)) {
+        Write-Host "Forking Homebrew/homebrew-cask into $botUser/homebrew-cask..."
+        Invoke-GitHubApi -Method Post -Uri 'https://api.github.com/repos/Homebrew/homebrew-cask/forks' -Body @{ default_branch_only = $true } | Out-Null
+
+        $forkReady = $false
+        for ($attempt = 1; $attempt -le 12; $attempt++) {
+          Start-Sleep -Seconds 5
+
+          if (Test-GitHubRepositoryExists -RepositoryApiUrl $forkApiUrl) {
+            $forkReady = $true
+            break
+          }
+
+          Write-Host "Waiting for fork creation ($attempt/12)..."
+        }
+
+        if (-not $forkReady) {
+          Write-Error "Timed out waiting for fork $botUser/homebrew-cask to become available."
+          exit 1
+        }
+      } else {
+        Write-Host "Fork already exists: $botUser/homebrew-cask"
+      }
+
+      $branchName = "$($caskName -replace '@', '-')-$version"
+      $firstLetter = $caskName.Substring(0, 1)
+      $targetPath = "Casks/$firstLetter/$caskFile"
+      $targetPathForUri = "Casks/$firstLetter/$([Uri]::EscapeDataString($caskFile))"
+      $upstreamBranch = Invoke-GitHubApi -Method Get -Uri "https://api.github.com/repos/Homebrew/homebrew-cask/branches/$defaultBranchForUri" -Body $null
+      $upstreamSha = $upstreamBranch.commit.sha
+      $caskContent = (Get-Content -Path $caskPath -Raw) -replace "`r`n", "`n"
+      if (-not $caskContent.EndsWith("`n")) {
+        $caskContent += "`n"
+      }
+
+      $upstreamContent = $null
+      try {
+        $upstreamFile = Invoke-GitHubApi -Method Get -Uri "https://api.github.com/repos/Homebrew/homebrew-cask/contents/${targetPathForUri}?ref=$defaultBranchForUri" -Body $null
+        if ($upstreamFile.content) {
+          $upstreamContent = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(($upstreamFile.content -replace '\s', ''))) -replace "`r`n", "`n"
+        }
+      }
+      catch {
+        $statusCode = Get-StatusCode -ErrorRecord $_
+        if ($statusCode -ne 404) {
+          throw
+        }
+      }
+
+      if ($upstreamContent -eq $caskContent) {
+        Write-Host "No Homebrew changes to submit; upstream already matches $caskName $version."
+        exit 0
+      }
+
+      $branchRefUri = "https://api.github.com/repos/$botUser/homebrew-cask/git/refs/heads/$branchName"
+      try {
+        Invoke-GitHubApi -Method Get -Uri $branchRefUri -Body $null | Out-Null
+        Invoke-GitHubApi -Method Patch -Uri $branchRefUri -Body @{
+          sha = $upstreamSha
+          force = $true
+        } | Out-Null
+        Write-Host "Reset branch $branchName to upstream/$defaultBranch"
+      }
+      catch {
+        $statusCode = Get-StatusCode -ErrorRecord $_
+        if ($statusCode -eq 404) {
+          Invoke-GitHubApi -Method Post -Uri "https://api.github.com/repos/$botUser/homebrew-cask/git/refs" -Body @{
+            ref = "refs/heads/$branchName"
+            sha = $upstreamSha
+          } | Out-Null
+          Write-Host "Created branch $branchName from upstream/$defaultBranch"
+        }
+        else {
+          throw
+        }
+      }
+
+      $branchFileUri = "https://api.github.com/repos/$botUser/homebrew-cask/contents/${targetPathForUri}?ref=$([Uri]::EscapeDataString($branchName))"
+      $existingBranchFileSha = $null
+      try {
+        $branchFile = Invoke-GitHubApi -Method Get -Uri $branchFileUri -Body $null
+        $existingBranchFileSha = $branchFile.sha
+      }
+      catch {
+        $statusCode = Get-StatusCode -ErrorRecord $_
+        if ($statusCode -ne 404) {
+          throw
+        }
+      }
+
+      $putBody = @{
+        message = "$caskName $version"
+        content = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($caskContent))
+        branch = $branchName
+      }
+
+      if ($existingBranchFileSha) {
+        $putBody.sha = $existingBranchFileSha
+      }
+
+      $contentResult = Invoke-GitHubApi -Method Put -Uri "https://api.github.com/repos/$botUser/homebrew-cask/contents/$targetPathForUri" -Body $putBody
+      Write-Host "Updated $targetPath on branch $branchName with commit $($contentResult.commit.sha)"
+
+      $compareUri = "https://api.github.com/repos/Homebrew/homebrew-cask/compare/$defaultBranchForUri...$([Uri]::EscapeDataString("${botUser}:$branchName"))"
+      $compareResult = $null
+      for ($attempt = 1; $attempt -le 10; $attempt++) {
+        try {
+          $compareResult = Invoke-GitHubApi -Method Get -Uri $compareUri -Body $null
+          if ($compareResult.ahead_by -gt 0) {
+            break
+          }
+
+          Write-Host "Waiting for branch comparison to reflect new commit ($attempt/10)..."
+        }
+        catch {
+          $statusCode = Get-StatusCode -ErrorRecord $_
+          Write-Host "Branch comparison is not ready yet ($statusCode) ($attempt/10)"
+        }
+
+        Start-Sleep -Seconds 3
+      }
+
+      if ($null -eq $compareResult -or $compareResult.ahead_by -le 0) {
+        Write-Error "Branch $branchName does not contain commits ahead of Homebrew/homebrew-cask:$defaultBranch, so a PR cannot be created."
+        exit 1
+      }
+
+      Write-Host "Branch comparison status: $($compareResult.status); ahead_by=$($compareResult.ahead_by)"
+
+      # Create PR (or update existing)
+      $encodedHead = [Uri]::EscapeDataString("${botUser}:$branchName")
+      $existingPRsResponse = Invoke-GitHubApi -Method Get -Uri "https://api.github.com/repos/Homebrew/homebrew-cask/pulls?head=$encodedHead&state=all" -Body $null
+      $existingPRs = @(
+        foreach ($existingPr in $existingPRsResponse) {
+          if ($null -ne $existingPr) {
+            $existingPr
+          }
+        }
+      )
+      $existingOpenPr = $existingPRs | Where-Object { $_.state -eq 'open' } | Select-Object -First 1
+      $existingClosedPrs = @($existingPRs | Where-Object { $_.state -ne 'open' } | Sort-Object updated_at -Descending)
+      $supersededPullRequestNumbers = @(
+        foreach ($closedPr in $existingClosedPrs) {
+          [Convert]::ToInt32("$($closedPr.number)", [System.Globalization.CultureInfo]::InvariantCulture)
+        }
+      )
+      $isStableCask = [bool]$validationSummary.isStableRelease
+      $pullRequestBody = Get-HomebrewPullRequestBody -Version $version -CaskName $caskName -CaskFile $caskFile -IsStable $isStableCask -ValidationSummary $validationSummary -SupersededPullRequestNumbers $supersededPullRequestNumbers
+
+      if ($existingOpenPr) {
+        $updatedPr = Invoke-GitHubApi -Method Patch -Uri "https://api.github.com/repos/Homebrew/homebrew-cask/pulls/$($existingOpenPr.number)" -Body @{
+          title = "$caskName $version"
+          body = $pullRequestBody
+        }
+
+        Write-Host "PR #$($existingOpenPr.number) already exists — updated title/body at $($updatedPr.html_url)"
+
+        if (-not [bool]$existingOpenPr.draft) {
+          Write-Host "Converting existing PR #$($existingOpenPr.number) to draft..."
+
+          $graphQlData = Invoke-GitHubGraphQL -Query @'
+          mutation ConvertPullRequestToDraft($pullRequestId: ID!) {
+            convertPullRequestToDraft(input: { pullRequestId: $pullRequestId }) {
+              pullRequest {
+                number
+                isDraft
+                url
+              }
+            }
+          }
+          '@ -Variables @{
+            pullRequestId = $existingOpenPr.node_id
+          }
+
+          if (-not $graphQlData.convertPullRequestToDraft.pullRequest.isDraft) {
+            throw "Failed to convert PR #$($existingOpenPr.number) to draft."
+          }
+
+          Write-Host "PR #$($existingOpenPr.number) is now draft."
+        }
+      } else {
+        if ($existingClosedPrs.Count -gt 0) {
+          $closedPrSummary = ($existingClosedPrs | ForEach-Object { "#$($_.number)" }) -join ', '
+          Write-Host "Found prior closed PRs for ${botUser}:${branchName}: $closedPrSummary"
+        }
+
+        $createdPr = Invoke-GitHubApi -Method Post -Uri 'https://api.github.com/repos/Homebrew/homebrew-cask/pulls' -Body @{
+          title = "$caskName $version"
+          body = $pullRequestBody
+          head = "${botUser}:$branchName"
+          base = $defaultBranch
+          draft = $true
+        }
+
+        Write-Host "Draft PR created successfully: #$($createdPr.number) $($createdPr.html_url)"
+      }
+    displayName: '🟣Submit PR to Homebrew/homebrew-cask'
+    condition: and(succeeded(), eq('${{ parameters.dryRun }}', 'false'))
+    env:
+      HOMEBREW_CASK_GITHUB_TOKEN: $(aspire-homebrew-bot-pat)

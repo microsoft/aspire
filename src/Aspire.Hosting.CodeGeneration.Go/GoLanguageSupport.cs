@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Hosting.Ats;
+using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.Go;
 
@@ -9,7 +9,7 @@ namespace Aspire.Hosting.CodeGeneration.Go;
 /// Provides language support for Go AppHosts.
 /// Implements scaffolding, detection, and runtime configuration.
 /// </summary>
-public sealed class GoLanguageSupport : ILanguageSupport
+internal sealed class GoLanguageSupport : ILanguageSupport
 {
     /// <summary>
     /// The language/runtime identifier for Go.
@@ -92,8 +92,6 @@ public sealed class GoLanguageSupport : ILanguageSupport
                 "https": {
                   "applicationUrl": "https://localhost:{{httpsPort}};http://localhost:{{httpPort}}",
                   "environmentVariables": {
-                    "ASPNETCORE_ENVIRONMENT": "Development",
-                    "DOTNET_ENVIRONMENT": "Development",
                     "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:{{otlpPort}}",
                     "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:{{resourceServicePort}}"
                   }

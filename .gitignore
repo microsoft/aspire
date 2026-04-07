@@ -1,5 +1,8 @@
 syntax: glob
 
+### GitHub Agentic Workflows ###
+.github/aw/logs/
+
 ### VisualStudio ###
 
 # Tools directory
@@ -124,9 +127,18 @@ config.ps1
 # Node.js modules
 node_modules/
 
+# Generated Aspire polyglot modules
+.modules/
+
 # Maven build outputs
 target/
 dependency-reduced-pom.xml
+
+# Java AppHost build artifacts
+playground/**/.java-build/
+playground/**/*.class
+tests/PolyglotAppHosts/**/.java-build/
+tests/PolyglotAppHosts/**/Java/**/*.class
 
 # Ignore cache created with the Angular CLI.
 .angular/
@@ -158,9 +170,9 @@ dependency-reduced-pom.xml
 # Publisher Outputs
 playground/**/publish/
 
-# TypeScript AppHost generated modules
-playground/**/.modules/
+# TypeScript AppHost
 playground/**/dist/
+tests/PolyglotAppHosts/**/TypeScript/dist/
 
 # Verify
 *.received.*
@@ -178,6 +190,7 @@ extension/.localization/
 extension/out/
 extension/node_modules/
 extension/.vscode-test/
+extension/.version
 
 # Generated extension localization files (regenerated from XLF during build)
 extension/l10n/bundle.l10n.json
@@ -186,3 +199,6 @@ extension/package.nls.*.json
 
 # Playwright CLI artifacts
 .playwright-cli/
+
+# Azure Functions local settings (may contain encrypted secrets)
+local.settings.json

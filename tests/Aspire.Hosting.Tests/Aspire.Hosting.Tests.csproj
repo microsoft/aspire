@@ -10,6 +10,12 @@
     <!-- Do not run tests in Helix at all -->
     <RunOnAzdoHelixWindows>false</RunOnAzdoHelixWindows>
     <RunOnAzdoHelixLinux>false</RunOnAzdoHelixLinux>
+
+    <!-- Split tests into partitions for CI parallelization -->
+    <SplitTestsOnCI>true</SplitTestsOnCI>
+    <TestClassNamePrefixForCI>Aspire.Hosting.Tests</TestClassNamePrefixForCI>
+
+    <GithubActionsRunnerLinux>8-core-ubuntu-latest</GithubActionsRunnerLinux>
   </PropertyGroup>
 
   <ItemGroup>
@@ -18,6 +24,7 @@
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.ContainerRegistry\Aspire.Hosting.Azure.ContainerRegistry.csproj" IsAspireProjectResource="false" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.JavaScript\Aspire.Hosting.JavaScript.csproj" IsAspireProjectResource="false" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Python\Aspire.Hosting.Python.csproj" IsAspireProjectResource="false" />
+    <ProjectReference Include="..\..\src\Aspire.TypeSystem\Aspire.TypeSystem.csproj" IsAspireProjectResource="false" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Yarp\Aspire.Hosting.Yarp.csproj" IsAspireProjectResource="false" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Testing\Aspire.Hosting.Testing.csproj" IsAspireProjectResource="false" />
     <ProjectReference Include="..\Aspire.Components.Common.TestUtilities\Aspire.Components.Common.TestUtilities.csproj" IsAspireProjectResource="false" />
@@ -30,7 +37,9 @@
     <PackageReference Include="Microsoft.DotNet.RemoteExecutor" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" />
+    <PackageReference Include="Polly.Core" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" />
     <PackageReference Include="Verify.XunitV3" />
   </ItemGroup>
 

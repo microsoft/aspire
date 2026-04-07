@@ -1,0 +1,107 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="zh-Hant" original="../DocsCommandStrings.resx">
+    <body>
+      <trans-unit id="Description">
+        <source>Browse and search Aspire documentation from aspire.dev</source>
+        <target state="needs-review-translation">瀏覽並搜尋 aspire.dev 上的 Aspire 文件。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DocumentNotFound">
+        <source>Documentation page '{0}' not found. Use 'aspire docs list' to see available pages.</source>
+        <target state="translated">找不到文件頁面 '{0}'。請使用 'aspire docs list' 查看可用頁面。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FormatOptionDescription">
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">輸出格式 (資料表或 Json)。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FoundDocumentationPages">
+        <source>Found {0} documentation pages.</source>
+        <target state="translated">找到 {0} 文件頁面。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FoundSearchResults">
+        <source>Found {0} results for '{1}'.</source>
+        <target state="translated">找到 {0} 個 '{1}' 個結果。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="GetDescription">
+        <source>Get the full content of a documentation page by its slug</source>
+        <target state="needs-review-translation">依據識別字串取得文件頁面的完整內容。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderScore">
+        <source>Score</source>
+        <target state="translated">分數</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderSection">
+        <source>Section</source>
+        <target state="translated">區段</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderSlug">
+        <source>Slug</source>
+        <target state="translated">Slug</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderSummary">
+        <source>Summary</source>
+        <target state="translated">摘要</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderTitle">
+        <source>Title</source>
+        <target state="translated">標題</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LimitOptionDescription">
+        <source>Maximum number of search results to return (default: 5, max: 10)</source>
+        <target state="needs-review-translation">最多回傳的搜尋結果數量 (預設: 5，最大值: 10)。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ListDescription">
+        <source>List all available Aspire documentation pages</source>
+        <target state="needs-review-translation">列出所有可用的 Aspire 文件頁面。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LoadingDocumentation">
+        <source>Loading documentation...</source>
+        <target state="translated">正在載入檔案...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoDocumentationAvailable">
+        <source>No documentation available. The aspire.dev docs may not have loaded correctly.</source>
+        <target state="translated">沒有可用的文件。aspire.dev 文件可能未正確載入。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoResultsFound">
+        <source>No results found for '{0}'. Try different search terms.</source>
+        <target state="translated">找不到 '{0}' 的結果。請嘗試不同的搜尋字詞。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="QueryArgumentDescription">
+        <source>The search query</source>
+        <target state="needs-review-translation">搜尋查詢。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SearchDescription">
+        <source>Search Aspire documentation by keywords</source>
+        <target state="needs-review-translation">依關鍵字搜尋 Aspire 文件。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SectionOptionDescription">
+        <source>Return only the specified section of the page</source>
+        <target state="needs-review-translation">僅回傳頁面指定的區段。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SlugArgumentDescription">
+        <source>The slug of the documentation page (e.g., 'redis-integration')</source>
+        <target state="needs-review-translation">文件頁面的識別字串 (例如 'redis-integration')。</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

@@ -28,11 +28,10 @@ internal abstract class CliMcpTool
     public abstract JsonElement GetInputSchema();
 
     /// <summary>
-    /// Executes the tool with the provided arguments.
+    /// Executes the tool with the provided context.
     /// </summary>
-    /// <param name="mcpClient">The MCP client instance to use for communicating with the dashboard.</param>
-    /// <param name="arguments">The arguments passed to the tool.</param>
+    /// <param name="context">The call context containing the MCP server, client, and arguments.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The result of the tool execution.</returns>
-    public abstract ValueTask<CallToolResult> CallToolAsync(ModelContextProtocol.Client.McpClient mcpClient, IReadOnlyDictionary<string, JsonElement>? arguments, CancellationToken cancellationToken);
+    public abstract ValueTask<CallToolResult> CallToolAsync(CallToolContext context, CancellationToken cancellationToken);
 }

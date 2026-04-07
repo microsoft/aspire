@@ -14,6 +14,7 @@ using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
+using Microsoft.JSInterop;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Dialogs;
@@ -56,6 +57,9 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
 
     [Inject]
     public required ILogger<GenAIVisualizerDialog> Logger { get; init; }
+
+    [Inject]
+    public required IJSRuntime JS { get; init; }
 
     [Inject]
     public required ITelemetryErrorRecorder ErrorRecorder { get; init; }
@@ -118,16 +122,44 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
         });
     }
 
-    private void OnViewItem(GenAIItemViewModel viewModel)
+    private void ResetToolStates()
+    {
+        foreach (var td in Content.ToolDefinitions)
+        {
+            td.Expanded = false;
+            td.Highlighted = false;
+        }
+    }
+
+    private void OnViewItem(GenAIItemViewModel? viewModel)
     {
         SelectedItem = viewModel;
     }
 
-    private void ViewToolDefinition(ToolDefinitionViewModel toolDefinition)
+    private async Task GoBackAsync()
+    {
+        var previousIndex = SelectedItem?.Index;
+        SelectedItem = null;
+        OverviewActiveView = OverviewViewKind.InputOutput;
+
+        if (previousIndex is { } index)
+        {
+            // Allow the UI to render the overview before scrolling.
+            await Task.Delay(50);
+            await JS.InvokeVoidAsync("scrollToElement", $"genai-message-{index}");
+        }
+    }
+
+    private async Task ViewToolDefinitionAsync(ToolDefinitionViewModel toolDefinition)
     {
         SelectedItem = null;
         OverviewActiveView = OverviewViewKind.Tools;
         toolDefinition.Expanded = true;
+        toolDefinition.Highlighted = true;
+
+        // Allow the UI to render the tools tab before scrolling.
+        await Task.Delay(50);
+        await JS.InvokeVoidAsync("scrollToElement", toolDefinition.ElementId);
     }
 
     private bool TryGetToolCall(string id, [NotNullWhen(true)] out GenAIItemViewModel? itemVM, [NotNullWhen(true)] out ToolCallRequestPart? toolCallRequestPart)
@@ -154,6 +186,10 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
     {
         var selectedIndex = Content.SelectedTreeItem?.Data as int?;
         SelectedItem = Content.Items.FirstOrDefault(m => m.Index == selectedIndex);
+        if (SelectedItem != null)
+        {
+            ResetToolStates();
+        }
         StateHasChanged();
         return Task.CompletedTask;
     }
@@ -167,6 +203,11 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
             || o is not OverviewViewKind viewKind)
         {
             return;
+        }
+
+        if (viewKind != OverviewViewKind.Tools)
+        {
+            ResetToolStates();
         }
 
         OverviewActiveView = viewKind;
@@ -223,20 +264,16 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
         Content = dialogViewModel;
         _currentSpanContextIndex = _contextSpans.IndexOf(newSpan);
 
-        return true;
-    }
-
-    private string GetItemTitle(GenAIItemViewModel e)
-    {
-        return e.Type switch
+        if (OverviewActiveView is OverviewViewKind.Tools && Content.ToolDefinitions.Count == 0)
         {
-            GenAIItemType.SystemMessage => Loc[nameof(Resources.Dialogs.GenAIMessageTitleSystem)],
-            GenAIItemType.UserMessage => Loc[nameof(Resources.Dialogs.GenAIMessageTitleUser)],
-            GenAIItemType.AssistantMessage or GenAIItemType.OutputMessage => Loc[nameof(Resources.Dialogs.GenAIMessageTitleAssistant)],
-            GenAIItemType.ToolMessage => Loc[nameof(Resources.Dialogs.GenAIMessageTitleTool)],
-            GenAIItemType.Error => "Error",
-            _ => string.Empty
-        };
+            OverviewActiveView = OverviewViewKind.InputOutput;
+        }
+        else if (OverviewActiveView is OverviewViewKind.Evaluations && Content.Evaluations.Count == 0)
+        {
+            OverviewActiveView = OverviewViewKind.InputOutput;
+        }
+
+        return true;
     }
 
     private static string GetToolHeadingTooltip(ToolDefinitionViewModel vm)
@@ -253,36 +290,36 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
 
     private static bool TryGetDataPart(GenAIItemPartViewModel itemPart, HashSet<string>? matchingMimeTypes, [NotNullWhen(true)] out DataInfo? dataInfo)
     {
-        switch (itemPart.MessagePart?.Type)
+        switch (itemPart.MessagePart)
         {
-            case "blob":
+            case BlobPart blobPart:
                 {
-                    if (MatchMimeType(itemPart, matchingMimeTypes, out var mimeType))
+                    if (MatchMimeType(blobPart.MimeType, matchingMimeTypes))
                     {
-                        if (itemPart.TryGetPropertyValue("content", out var content))
+                        if (!string.IsNullOrEmpty(blobPart.Content))
                         {
                             dataInfo = new DataInfo(
-                                Url: $"data:{mimeType};base64,{content}",
-                                MimeType: mimeType,
-                                FileName: CalculateFileName(currentFileName: null, mimeType));
+                                Url: $"data:{blobPart.MimeType};base64,{blobPart.Content}",
+                                MimeType: blobPart.MimeType!,
+                                FileName: CalculateFileName(currentFileName: null, blobPart.MimeType!));
                             return true;
                         }
                     }
                     break;
                 }
-            case "uri":
+            case UriPart uriPart:
                 {
-                    if (MatchMimeType(itemPart, matchingMimeTypes, out var mimeType))
+                    if (MatchMimeType(uriPart.MimeType, matchingMimeTypes))
                     {
-                        if (itemPart.TryGetPropertyValue("uri", out var uri))
+                        if (!string.IsNullOrEmpty(uriPart.Uri))
                         {
                             // Only attempt to display image if it is an http/https address.
-                            if (Uri.TryCreate(uri, UriKind.Absolute, out var result) && result.Scheme.ToLowerInvariant() is "http" or "https")
+                            if (Uri.TryCreate(uriPart.Uri, UriKind.Absolute, out var result) && result.Scheme.ToLowerInvariant() is "http" or "https")
                             {
                                 dataInfo = new DataInfo(
-                                    Url: uri,
-                                    MimeType: mimeType,
-                                    FileName: CalculateFileName(Path.GetFileName(result.LocalPath), mimeType));
+                                    Url: uriPart.Uri,
+                                    MimeType: uriPart.MimeType!,
+                                    FileName: CalculateFileName(Path.GetFileName(result.LocalPath), uriPart.MimeType!));
                                 return true;
                             }
                         }
@@ -294,11 +331,11 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
         dataInfo = null;
         return false;
 
-        static bool MatchMimeType(GenAIItemPartViewModel viewModel, HashSet<string>? matchingMimeTypes, [NotNullWhen(true)] out string? mimeType)
+        static bool MatchMimeType(string? mimeType, HashSet<string>? matchingMimeTypes)
         {
-            if (viewModel.TryGetPropertyValue("mime_type", out mimeType))
+            if (!string.IsNullOrEmpty(mimeType))
             {
-                return matchingMimeTypes == null || matchingMimeTypes.Contains(mimeType);
+                return matchingMimeTypes is null || matchingMimeTypes.Contains(mimeType);
             }
 
             return false;

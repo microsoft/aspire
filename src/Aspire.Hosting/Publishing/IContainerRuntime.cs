@@ -34,7 +34,7 @@ public interface IContainerRuntime
     /// <param name="buildSecrets">Build secrets to pass to the build process.</param>
     /// <param name="stage">The target build stage.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
-    Task BuildImageAsync(string contextPath, string dockerfilePath, ContainerImageBuildOptions? options, Dictionary<string, string?> buildArguments, Dictionary<string, string?> buildSecrets, string? stage, CancellationToken cancellationToken);
+    Task BuildImageAsync(string contextPath, string dockerfilePath, ContainerImageBuildOptions? options, Dictionary<string, string?> buildArguments, Dictionary<string, BuildImageSecretValue> buildSecrets, string? stage, CancellationToken cancellationToken);
 
     /// <summary>
     /// Tags a container image with a new name.

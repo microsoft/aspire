@@ -3,6 +3,7 @@
 
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model.Assistant;
+using Aspire.Shared.ConsoleLogs;
 using Xunit;
 
 namespace Aspire.Dashboard.Tests.Model.AIAssistant;
@@ -82,15 +83,15 @@ public class AIHelpersTests
     [Fact]
     public void LimitLength_UnderLimit_ReturnFullValue()
     {
-        var value = AIHelpers.LimitLength("How now brown cow?");
+        var value = SharedAIHelpers.LimitLength("How now brown cow?");
         Assert.Equal("How now brown cow?", value);
     }
 
     [Fact]
     public void LimitLength_OverLimit_ReturnTrimmedValue()
     {
-        var value = AIHelpers.LimitLength(new string('!', 10_000));
-        Assert.Equal($"{new string('!', AIHelpers.MaximumStringLength)}...[TRUNCATED]", value);
+        var value = SharedAIHelpers.LimitLength(new string('!', 10_000));
+        Assert.Equal($"{new string('!', SharedAIHelpers.MaximumStringLength)}...[TRUNCATED]", value);
     }
 
     [Fact]
@@ -104,7 +105,7 @@ public class AIHelpersTests
         }
 
         // Act
-        var (items, message) = AIHelpers.GetLimitFromEndWithSummary(values, totalValues: values.Count, limit: 20, "test item", s => s, s => ((string)s).Length);
+        var (items, message) = SharedAIHelpers.GetLimitFromEndWithSummary(values, totalValues: values.Count, limit: 20, "test item", "test items", s => s, s => ((string)s).Length);
 
         // Assert
         Assert.Equal(10, items.Count);
@@ -122,7 +123,7 @@ public class AIHelpersTests
         }
 
         // Act
-        var (items, message) = AIHelpers.GetLimitFromEndWithSummary(values, totalValues: 100, limit: 20, "test item", s => s, s => ((string)s).Length);
+        var (items, message) = SharedAIHelpers.GetLimitFromEndWithSummary(values, totalValues: 100, limit: 20, "test item", "test items", s => s, s => ((string)s).Length);
 
         // Assert
         Assert.Equal(10, items.Count);
@@ -140,7 +141,7 @@ public class AIHelpersTests
         }
 
         // Act
-        var (items, message) = AIHelpers.GetLimitFromEndWithSummary(values, totalValues: 100, limit: 5, "test item", s => s, s => ((string)s).Length);
+        var (items, message) = SharedAIHelpers.GetLimitFromEndWithSummary(values, totalValues: 100, limit: 5, "test item", "test items", s => s, s => ((string)s).Length);
 
         // Assert
         Assert.Collection(items,
@@ -165,7 +166,7 @@ public class AIHelpersTests
         }
 
         // Act
-        var (items, message) = AIHelpers.GetLimitFromEndWithSummary(values, limit: 10, "test item", s => s, s => ((string)s).Length);
+        var (items, message) = SharedAIHelpers.GetLimitFromEndWithSummary(values, limit: 10, "test item", "test items", s => s, s => ((string)s).Length);
 
         // Assert
         Assert.Collection(items,
@@ -186,10 +187,10 @@ public class AIHelpersTests
         Assert.True(options.Frontend.TryParseOptions(out _));
 
         // Act
-        var url = AIHelpers.GetDashboardUrl(options, "/path");
+        var url = AIHelpers.GetDashboardUrl(options);
 
         // Assert
-        Assert.Equal("https://localhost:1234/path", url);
+        Assert.Equal("https://localhost:1234", url);
     }
 
     [Fact]
@@ -201,10 +202,10 @@ public class AIHelpersTests
         Assert.True(options.Frontend.TryParseOptions(out _));
 
         // Act
-        var url = AIHelpers.GetDashboardUrl(options, "/path");
+        var url = AIHelpers.GetDashboardUrl(options);
 
         // Assert
-        Assert.Equal("https://localhost:1234/path", url);
+        Assert.Equal("https://localhost:1234", url);
     }
 
     [Fact]
@@ -216,9 +217,9 @@ public class AIHelpersTests
         Assert.True(options.Frontend.TryParseOptions(out _));
 
         // Act
-        var url = AIHelpers.GetDashboardUrl(options, "/path");
+        var url = AIHelpers.GetDashboardUrl(options);
 
         // Assert
-        Assert.Equal("http://localhost:5000/path", url);
+        Assert.Equal("http://localhost:5000", url);
     }
 }

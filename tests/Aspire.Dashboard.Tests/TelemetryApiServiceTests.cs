@@ -1,8 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text;
 using Aspire.Dashboard.Api;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Storage;
 using Google.Protobuf.Collections;
 using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Trace.V1;
@@ -44,7 +47,7 @@ public class TelemetryApiServiceTests
             });
         }
 
-        var service = new TelemetryApiService(repository);
+        var service = CreateService(repository);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
 
         // Act - stream spans
@@ -91,7 +94,7 @@ public class TelemetryApiServiceTests
             });
         }
 
-        var service = new TelemetryApiService(repository);
+        var service = CreateService(repository);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
 
         // Act - stream logs
@@ -136,10 +139,10 @@ public class TelemetryApiServiceTests
             }
         });
 
-        var service = new TelemetryApiService(repository);
+        var service = CreateService(repository);
 
         // Act - get spans with hasError=false
-        var result = service.GetSpans(resource: null, traceId: null, hasError: false, limit: null);
+        var result = service.GetSpans(resourceNames: null, traceId: null, hasError: false, limit: null);
 
         // Assert - should only return the non-error span
         Assert.NotNull(result);
@@ -178,10 +181,10 @@ public class TelemetryApiServiceTests
             }
         });
 
-        var service = new TelemetryApiService(repository);
+        var service = CreateService(repository);
 
         // Act - get spans with hasError=true
-        var result = service.GetSpans(resource: null, traceId: null, hasError: true, limit: null);
+        var result = service.GetSpans(resourceNames: null, traceId: null, hasError: true, limit: null);
 
         // Assert - should only return the error span
         Assert.NotNull(result);
@@ -237,17 +240,17 @@ public class TelemetryApiServiceTests
             }
         });
 
-        var service = new TelemetryApiService(repository);
+        var service = CreateService(repository);
 
         // Act - get traces with hasError=false (no error, should exclude the error trace)
-        var result = service.GetTraces(resource: null, hasError: false, limit: null);
+        var result = service.GetTraces(resourceNames: null, hasError: false, limit: null);
 
         // Assert - should only return 1 trace (the one without errors)
         Assert.NotNull(result);
         Assert.Equal(1, result.ReturnedCount);
         
         // Verify with null filter returns both
-        var allResult = service.GetTraces(resource: null, hasError: null, limit: null);
+        var allResult = service.GetTraces(resourceNames: null, hasError: null, limit: null);
         Assert.NotNull(allResult);
         Assert.Equal(2, allResult.ReturnedCount);
     }
@@ -297,18 +300,168 @@ public class TelemetryApiServiceTests
             }
         });
 
-        var service = new TelemetryApiService(repository);
+        var service = CreateService(repository);
 
         // Act - get traces with hasError=true (error only)
-        var result = service.GetTraces(resource: null, hasError: true, limit: null);
+        var result = service.GetTraces(resourceNames: null, hasError: true, limit: null);
 
         // Assert - should only return 1 trace (the one with errors)
         Assert.NotNull(result);
         Assert.Equal(1, result.ReturnedCount);
         
         // Verify with null filter returns both
-        var allResult = service.GetTraces(resource: null, hasError: null, limit: null);
+        var allResult = service.GetTraces(resourceNames: null, hasError: null, limit: null);
         Assert.NotNull(allResult);
         Assert.Equal(2, allResult.ReturnedCount);
+    }
+
+    [Fact]
+    public async Task FollowSpansAsync_WithInvalidResourceName_ReturnsNoSpans()
+    {
+        // Arrange
+        var repository = CreateRepository();
+
+        // Add spans for service1
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "trace1", spanId: "span1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1))
+                        }
+                    }
+                }
+            }
+        });
+
+        var service = CreateService(repository);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+
+        // Act - stream spans for a non-existent resource
+        var receivedItems = new List<string>();
+        try
+        {
+            await foreach (var item in service.FollowSpansAsync(["nonexistent-service"], null, null, cts.Token))
+            {
+                receivedItems.Add(item);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected - timeout
+        }
+
+        // Assert - should receive NO items because the resource doesn't exist
+        Assert.Empty(receivedItems);
+    }
+
+    [Fact]
+    public async Task FollowLogsAsync_WithInvalidResourceName_ReturnsNoLogs()
+    {
+        // Arrange
+        var repository = CreateRepository();
+
+        // Add logs for service1
+        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope("TestLogger"),
+                        LogRecords =
+                        {
+                            CreateLogRecord(time: s_testTime, message: "log1", severity: SeverityNumber.Info)
+                        }
+                    }
+                }
+            }
+        });
+
+        var service = CreateService(repository);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+
+        // Act - stream logs for a non-existent resource
+        var receivedItems = new List<string>();
+        try
+        {
+            await foreach (var item in service.FollowLogsAsync(["nonexistent-service"], null, null, cts.Token))
+            {
+                receivedItems.Add(item);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected - timeout
+        }
+
+        // Assert - should receive NO items because the resource doesn't exist
+        Assert.Empty(receivedItems);
+    }
+
+    [Theory]
+    [InlineData("747261636531", true)] // full hex trace ID
+    [InlineData("7472616", true)] // shortened (7 char) prefix
+    [InlineData("747261", false)] // too short
+    [InlineData("nonexistent", false)]
+    public void GetTrace_VariousTraceIds_ReturnsExpectedResult(string lookupId, bool expectFound)
+    {
+        var repository = CreateRepository();
+        var traceId = Encoding.UTF8.GetString(Convert.FromHexString("747261636531"));
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: traceId, spanId: "span1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1))
+                        }
+                    }
+                }
+            }
+        });
+
+        var service = CreateService(repository);
+
+        var result = service.GetTrace(lookupId);
+
+        if (expectFound)
+        {
+            Assert.NotNull(result);
+            Assert.Equal(1, result.ReturnedCount);
+        }
+        else
+        {
+            Assert.Null(result);
+        }
+    }
+
+    /// <summary>
+    /// Creates a TelemetryApiService instance for testing with optional custom dependencies.
+    /// </summary>
+    private static TelemetryApiService CreateService(
+        TelemetryRepository? repository = null,
+        IOutgoingPeerResolver[]? peerResolvers = null)
+    {
+        return new TelemetryApiService(
+            repository ?? CreateRepository(),
+            peerResolvers ?? []);
     }
 }

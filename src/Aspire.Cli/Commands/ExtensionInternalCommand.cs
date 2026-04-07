@@ -17,9 +17,6 @@ internal sealed class ExtensionInternalCommand : BaseCommand
 {
     public ExtensionInternalCommand(IFeatures features, ICliUpdateNotifier updateNotifier, IProjectLocator projectLocator, CliExecutionContext executionContext, IInteractionService interactionService, AspireCliTelemetry telemetry) : base("extension", "Hidden command for extension integration", features, updateNotifier, executionContext, interactionService, telemetry)
     {
-        ArgumentNullException.ThrowIfNull(features);
-        ArgumentNullException.ThrowIfNull(updateNotifier);
-
         this.Hidden = true;
         this.Subcommands.Add(new GetAppHostCandidatesCommand(features, updateNotifier, projectLocator, executionContext, interactionService, telemetry));
     }
@@ -51,7 +48,8 @@ internal sealed class ExtensionInternalCommand : BaseCommand
                     SelectedProjectFile = result.SelectedProjectFile?.FullName,
                     AllProjectFileCandidates = result.AllProjectFileCandidates.Select(f => f.FullName).ToList()
                 }, BackchannelJsonSerializerContext.Default.AppHostProjectSearchResultPoco);
-                InteractionService.DisplayRawText(json);
+                // Structured output always goes to stdout.
+                InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
                 return ExitCodeConstants.Success;
             }
             catch

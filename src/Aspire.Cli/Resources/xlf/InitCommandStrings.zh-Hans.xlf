@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="AddingAppHostProjectToSolution">
         <source>Adding AppHost project to solution...</source>
-        <target state="translated">正在将 AppHost 项目添加到解决方案中...</target>
+        <target state="needs-review-translation">正在将 AppHost 项目添加到解决方案中...</target>
         <note />
       </trans-unit>
       <trans-unit id="AddingProjectsToSolution">
@@ -24,7 +24,7 @@
       </trans-unit>
       <trans-unit id="CreatingAppHostProject">
         <source>Creating AppHost project...</source>
-        <target state="translated">正在创建 AppHost 项目...</target>
+        <target state="needs-review-translation">正在创建 AppHost 项目...</target>
         <note />
       </trans-unit>
       <trans-unit id="CreatingServiceDefaultsProject">
@@ -33,8 +33,13 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Initialize Aspire support in an existing solution or create a single-file AppHost.</source>
-        <target state="translated">在现有解决方案中初始化 Aspire 支持，或创建单文件 AppHost。</target>
+        <source>Initialize Aspire in an existing codebase</source>
+        <target state="needs-review-translation">在现有解决方案中初始化 Aspire 支持，或创建单文件 AppHost。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LanguageOptionDescription">
+        <source>The programming language for the AppHost (csharp, typescript)</source>
+        <target state="new">The programming language for the AppHost (csharp, typescript)</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleSolutionsFound">
@@ -44,7 +49,12 @@
       </trans-unit>
       <trans-unit id="NoSolutionFoundCreatingSingleFileAppHost">
         <source>No solution file found. Creating single-file AppHost...</source>
-        <target state="translated">找不到解决方案文件。正在创建单文件 AppHost...</target>
+        <target state="needs-review-translation">找不到解决方案文件。正在创建单文件 AppHost...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResolvingTemplateVersion">
+        <source>Resolving template version...</source>
+        <target state="translated">正在解析模板版本...</target>
         <note />
       </trans-unit>
       <trans-unit id="SolutionDetected">
@@ -55,6 +65,11 @@
       <trans-unit id="SolutionAlreadyInitialized">
         <source>Solution has already been initialized with Aspire.</source>
         <target state="translated">解决方案已使用 Aspire 初始化。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SolutionAndProjectInSameDirectory">
+        <source>The solution file '{0}' and project file '{1}' are in the same directory. The AppHost and ServiceDefaults projects cannot be created inside an existing project directory. Move the solution file to a parent directory or the project file to a subdirectory.</source>
+        <target state="new">The solution file '{0}' and project file '{1}' are in the same directory. The AppHost and ServiceDefaults projects cannot be created inside an existing project directory. Move the solution file to a parent directory or the project file to a subdirectory.</target>
         <note />
       </trans-unit>
     </body>

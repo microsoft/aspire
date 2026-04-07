@@ -11,6 +11,7 @@ resource ehstorage 'Microsoft.Storage/storageAccounts@2024-01-01' = {
   properties: {
     accessTier: 'Hot'
     allowSharedKeyAccess: false
+    isHnsEnabled: false
     minimumTlsVersion: 'TLS1_2'
     networkAcls: {
       defaultAction: 'Allow'
@@ -23,8 +24,12 @@ resource ehstorage 'Microsoft.Storage/storageAccounts@2024-01-01' = {
 
 output blobEndpoint string = ehstorage.properties.primaryEndpoints.blob
 
+output dataLakeEndpoint string = ehstorage.properties.primaryEndpoints.dfs
+
 output queueEndpoint string = ehstorage.properties.primaryEndpoints.queue
 
 output tableEndpoint string = ehstorage.properties.primaryEndpoints.table
 
 output name string = ehstorage.name
+
+output id string = ehstorage.id

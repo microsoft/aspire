@@ -13,7 +13,6 @@ using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Tests.Publishing;
 using Aspire.Hosting.Utils;
-using Aspire.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -21,6 +20,7 @@ using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Hosting.Tests.Pipelines;
 
+[Trait("Partition", "4")]
 public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
@@ -696,7 +696,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     }
 
     // Test for multiple failing steps at the same level removed due to inherent race conditions.
-    // See https://github.com/dotnet/aspire/issues/12200
+    // See https://github.com/microsoft/aspire/issues/12200
 
     [Fact]
     public async Task ExecuteAsync_WithFailingStep_PreservesOriginalStackTrace()
@@ -2027,7 +2027,6 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/dotnet/aspire/issues/13083")]
     public async Task ProcessParametersStep_ValidatesBehavior()
     {
         // Arrange
@@ -2098,6 +2097,29 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         Assert.NotNull(paramResource);
         Assert.NotNull(paramResource.WaitForValueTcs);
         Assert.True(paramResource.WaitForValueTcs.Task.IsCompletedSuccessfully);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_PassesStepHierarchyMetadataToActivityReporter()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
+        builder.Services.AddSingleton(testOutputHelper);
+
+        var activityReporter = new TestPipelineActivityReporter(testOutputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter>(activityReporter);
+
+        var pipeline = new DistributedApplicationPipeline();
+        pipeline.AddStep("root", _ => Task.CompletedTask);
+        pipeline.AddStep("child", _ => Task.CompletedTask, dependsOn: "root");
+        pipeline.AddStep("grandchild", _ => Task.CompletedTask, dependsOn: "child");
+
+        var context = CreateDeployingContext(builder.Build());
+
+        await pipeline.ExecuteAsync(context).DefaultTimeout();
+
+        Assert.Contains(activityReporter.CreatedStepHierarchy, step => step.StepTitle == "root" && step.ParentStepId is null && step.HierarchyLevel == 0);
+        Assert.Contains(activityReporter.CreatedStepHierarchy, step => step.StepTitle == "child" && step.ParentStepId == "root" && step.HierarchyLevel == 1);
+        Assert.Contains(activityReporter.CreatedStepHierarchy, step => step.StepTitle == "grandchild" && step.ParentStepId == "child" && step.HierarchyLevel == 2);
     }
 
     [Fact]

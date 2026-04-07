@@ -57,12 +57,6 @@ namespace Aspire.Cli.Resources {
             }
         }
 
-        public static string ProjectOptionDescription {
-            get {
-                return ResourceManager.GetString("ProjectOptionDescription", resourceCulture);
-            }
-        }
-
         public static string FollowOptionDescription {
             get {
                 return ResourceManager.GetString("FollowOptionDescription", resourceCulture);
@@ -72,30 +66,6 @@ namespace Aspire.Cli.Resources {
         public static string JsonOptionDescription {
             get {
                 return ResourceManager.GetString("JsonOptionDescription", resourceCulture);
-            }
-        }
-
-        public static string AppHostNotRunning {
-            get {
-                return ResourceManager.GetString("AppHostNotRunning", resourceCulture);
-            }
-        }
-
-        public static string ScanningForRunningAppHosts {
-            get {
-                return ResourceManager.GetString("ScanningForRunningAppHosts", resourceCulture);
-            }
-        }
-
-        public static string SelectAppHost {
-            get {
-                return ResourceManager.GetString("SelectAppHost", resourceCulture);
-            }
-        }
-
-        public static string NoInScopeAppHostsShowingAll {
-            get {
-                return ResourceManager.GetString("NoInScopeAppHostsShowingAll", resourceCulture);
             }
         }
 
@@ -120,6 +90,30 @@ namespace Aspire.Cli.Resources {
         public static string TailMustBePositive {
             get {
                 return ResourceManager.GetString("TailMustBePositive", resourceCulture);
+            }
+        }
+
+        public static string ResourceNotFound {
+            get {
+                return ResourceManager.GetString("ResourceNotFound", resourceCulture);
+            }
+        }
+
+        public static string TimestampsOptionDescription {
+            get {
+                return ResourceManager.GetString("TimestampsOptionDescription", resourceCulture);
+            }
+        }
+
+        public static string SelectAppHostAction {
+            get {
+                return ResourceManager.GetString("SelectAppHostAction", resourceCulture);
+            }
+        }
+
+        public static string GettingLogs {
+            get {
+                return ResourceManager.GetString("GettingLogs", resourceCulture);
             }
         }
     }

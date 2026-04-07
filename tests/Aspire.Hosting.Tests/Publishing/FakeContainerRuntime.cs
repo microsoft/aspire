@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using Aspire.Hosting.Publishing;
 
 #pragma warning disable ASPIREPIPELINES003
@@ -20,15 +21,15 @@ public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning
     public bool WasPushImageCalled { get; private set; }
     public bool WasBuildImageCalled { get; private set; }
     public bool WasLoginToRegistryCalled { get; private set; }
-    public List<(string localImageName, string targetImageName)> TagImageCalls { get; } = [];
-    public List<string> RemoveImageCalls { get; } = [];
-    public List<IResource> PushImageCalls { get; } = [];
-    public List<(string contextPath, string dockerfilePath, ContainerImageBuildOptions? options)> BuildImageCalls { get; } = [];
-    public List<(string registryServer, string username, string password)> LoginToRegistryCalls { get; } = [];
+    public ConcurrentBag<(string localImageName, string targetImageName)> TagImageCalls { get; } = [];
+    public ConcurrentBag<string> RemoveImageCalls { get; } = [];
+    public ConcurrentBag<IResource> PushImageCalls { get; } = [];
+    public ConcurrentBag<(string contextPath, string dockerfilePath, ContainerImageBuildOptions? options)> BuildImageCalls { get; } = [];
+    public ConcurrentBag<(string registryServer, string username, string password)> LoginToRegistryCalls { get; } = [];
     public Dictionary<string, string?>? CapturedBuildArguments { get; private set; }
-    public Dictionary<string, string?>? CapturedBuildSecrets { get; private set; }
+    public Dictionary<string, BuildImageSecretValue>? CapturedBuildSecrets { get; private set; }
     public string? CapturedStage { get; private set; }
-    public Func<string, string, ContainerImageBuildOptions?, Dictionary<string, string?>, Dictionary<string, string?>, string?, CancellationToken, Task>? BuildImageAsyncCallback { get; set; }
+    public Func<string, string, ContainerImageBuildOptions?, Dictionary<string, string?>, Dictionary<string, BuildImageSecretValue>, string?, CancellationToken, Task>? BuildImageAsyncCallback { get; set; }
 
     public Task<bool> CheckIfRunningAsync(CancellationToken cancellationToken)
     {
@@ -70,7 +71,7 @@ public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning
         return Task.CompletedTask;
     }
 
-    public async Task BuildImageAsync(string contextPath, string dockerfilePath, ContainerImageBuildOptions? options, Dictionary<string, string?> buildArguments, Dictionary<string, string?> buildSecrets, string? stage, CancellationToken cancellationToken)
+    public async Task BuildImageAsync(string contextPath, string dockerfilePath, ContainerImageBuildOptions? options, Dictionary<string, string?> buildArguments, Dictionary<string, BuildImageSecretValue> buildSecrets, string? stage, CancellationToken cancellationToken)
     {
         // Capture the arguments for verification in tests
         CapturedBuildArguments = buildArguments;

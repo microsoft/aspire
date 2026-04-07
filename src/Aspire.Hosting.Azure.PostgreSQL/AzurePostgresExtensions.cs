@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using Aspire.Hosting.ApplicationModel;
@@ -135,6 +137,7 @@ public static class AzurePostgresExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExport(Description = "Adds an Azure PostgreSQL Flexible Server resource")]
     public static IResourceBuilder<AzurePostgresFlexibleServerResource> AddAzurePostgresFlexibleServer(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -155,6 +158,7 @@ public static class AzurePostgresExtensions
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <param name="databaseName">The name of the database. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport(Description = "Adds an Azure PostgreSQL database")]
     public static IResourceBuilder<AzurePostgresFlexibleServerDatabaseResource> AddDatabase(this IResourceBuilder<AzurePostgresFlexibleServerResource> builder, [ResourceName] string name, string? databaseName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -207,6 +211,7 @@ public static class AzurePostgresExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExport(Description = "Configures the Azure PostgreSQL Flexible Server resource to run locally in a container", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzurePostgresFlexibleServerResource> RunAsContainer(this IResourceBuilder<AzurePostgresFlexibleServerResource> builder, Action<IResourceBuilder<PostgresServerResource>>? configureContainer = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -286,6 +291,7 @@ public static class AzurePostgresExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExport(Description = "Configures password authentication for Azure PostgreSQL Flexible Server")]
     public static IResourceBuilder<AzurePostgresFlexibleServerResource> WithPasswordAuthentication(
         this IResourceBuilder<AzurePostgresFlexibleServerResource> builder,
         IResourceBuilder<ParameterResource>? userName = null,
@@ -300,7 +306,7 @@ public static class AzurePostgresExtensions
         // need to do this later in case builder becomes an emulator after this method is called.
         if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
         {
-            builder.ApplicationBuilder.Eventing.Subscribe<BeforeStartEvent>((data, token) =>
+            builder.ApplicationBuilder.OnBeforeStart((data, token) =>
             {
                 if (builder.Resource.IsContainer())
                 {
@@ -322,6 +328,7 @@ public static class AzurePostgresExtensions
     /// <param name="userName">The parameter used to provide the user name for the PostgreSQL resource. If <see langword="null"/> a default value will be used.</param>
     /// <param name="password">The parameter used to provide the administrator password for the PostgreSQL resource. If <see langword="null"/> a random password will be generated.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> builder.</returns>
+    [AspireExport("withPasswordAuthenticationWithKeyVault", Description = "Configures password authentication using a specified Azure Key Vault resource")]
     public static IResourceBuilder<AzurePostgresFlexibleServerResource> WithPasswordAuthentication(
         this IResourceBuilder<AzurePostgresFlexibleServerResource> builder,
         IResourceBuilder<IAzureKeyVaultResource> keyVaultBuilder,
@@ -378,6 +385,7 @@ public static class AzurePostgresExtensions
     /// </para>
     /// </remarks>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport(Description = "Adds a Postgres MCP server container", RunSyncOnBackgroundThread = true)]
     [Experimental("ASPIREPOSTGRES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzurePostgresFlexibleServerDatabaseResource> WithPostgresMcp(
         this IResourceBuilder<AzurePostgresFlexibleServerDatabaseResource> builder,
@@ -401,6 +409,9 @@ public static class AzurePostgresExtensions
 
     private static PostgreSqlFlexibleServer CreatePostgreSqlFlexibleServer(AzureResourceInfrastructure infrastructure, IDistributedApplicationBuilder distributedApplicationBuilder, IReadOnlyDictionary<string, string> databases)
     {
+        // Check if this PostgreSQL server has a private endpoint (via annotation)
+        var hasPrivateEndpoint = infrastructure.AspireResource.HasAnnotationOfType<PrivateEndpointTargetAnnotation>();
+
         var postgres = AzureProvisioningResource.CreateExistingOrNewProvisionableResource(infrastructure,
             (identifier, name) =>
             {
@@ -408,47 +419,65 @@ public static class AzurePostgresExtensions
                 resource.Name = name;
                 return resource;
             },
-            (infrastructure) => new PostgreSqlFlexibleServer(infrastructure.AspireResource.GetBicepIdentifier())
+            (infrastructure) =>
             {
-                StorageSizeInGB = 32,
-                Sku = new PostgreSqlFlexibleServerSku()
+                var server = new PostgreSqlFlexibleServer(infrastructure.AspireResource.GetBicepIdentifier())
                 {
-                    Name = "Standard_B1ms",
-                    Tier = PostgreSqlFlexibleServerSkuTier.Burstable
-                },
-                Version = new StringLiteralExpression("16"),
-                HighAvailability = new PostgreSqlFlexibleServerHighAvailability()
+                    StorageSizeInGB = 32,
+                    Sku = new PostgreSqlFlexibleServerSku()
+                    {
+                        Name = "Standard_B1ms",
+                        Tier = PostgreSqlFlexibleServerSkuTier.Burstable
+                    },
+                    Version = new StringLiteralExpression("16"),
+                    HighAvailability = new PostgreSqlFlexibleServerHighAvailability()
+                    {
+                        Mode = PostgreSqlFlexibleServerHighAvailabilityMode.Disabled
+                    },
+                    Backup = new PostgreSqlFlexibleServerBackupProperties()
+                    {
+                        BackupRetentionDays = 7,
+                        GeoRedundantBackup = PostgreSqlFlexibleServerGeoRedundantBackupEnum.Disabled
+                    },
+                    AvailabilityZone = "1",
+                    Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
+                };
+
+                // When using private endpoints, disable public network access.
+                if (hasPrivateEndpoint)
                 {
-                    Mode = PostgreSqlFlexibleServerHighAvailabilityMode.Disabled
-                },
-                Backup = new PostgreSqlFlexibleServerBackupProperties()
-                {
-                    BackupRetentionDays = 7,
-                    GeoRedundantBackup = PostgreSqlFlexibleServerGeoRedundantBackupEnum.Disabled
-                },
-                AvailabilityZone = "1",
-                Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
+                    server.Network = new PostgreSqlFlexibleServerNetwork()
+                    {
+                        PublicNetworkAccess = PostgreSqlFlexibleServerPublicNetworkAccessState.Disabled
+                    };
+                }
+
+                return server;
             });
 
-        // Opens access to all Azure services.
-        infrastructure.Add(new PostgreSqlFlexibleServerFirewallRule("postgreSqlFirewallRule_AllowAllAzureIps")
+        // Only add firewall rules when not using private endpoints
+        if (!hasPrivateEndpoint)
         {
-            Parent = postgres,
-            Name = "AllowAllAzureIps",
-            StartIPAddress = new IPAddress([0, 0, 0, 0]),
-            EndIPAddress = new IPAddress([0, 0, 0, 0])
-        });
-
-        if (distributedApplicationBuilder.ExecutionContext.IsRunMode)
-        {
-            // Opens access to the Internet.
-            infrastructure.Add(new PostgreSqlFlexibleServerFirewallRule("postgreSqlFirewallRule_AllowAllIps")
+            // Opens access to all Azure services.
+            infrastructure.Add(new PostgreSqlFlexibleServerFirewallRule("postgreSqlFirewallRule_AllowAllAzureIps")
             {
                 Parent = postgres,
-                Name = "AllowAllIps",
+                Name = "AllowAllAzureIps",
                 StartIPAddress = new IPAddress([0, 0, 0, 0]),
-                EndIPAddress = new IPAddress([255, 255, 255, 255])
+                EndIPAddress = new IPAddress([0, 0, 0, 0])
             });
+
+            if (distributedApplicationBuilder.ExecutionContext.IsRunMode)
+            {
+                // Opens access to the Internet.
+                infrastructure.Add(new PostgreSqlFlexibleServerFirewallRule("postgreSqlFirewallRule_AllowAllIps")
+                {
+                    Parent = postgres,
+                    Name = "AllowAllIps",
+                    StartIPAddress = new IPAddress([0, 0, 0, 0]),
+                    EndIPAddress = new IPAddress([255, 255, 255, 255])
+                });
+            }
         }
 
         foreach (var databaseNames in databases)
@@ -545,6 +574,9 @@ public static class AzurePostgresExtensions
 
         // We need to output name to externalize role assignments.
         infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = postgres.Name.ToBicepExpression() });
+
+        // Output the resource id for private endpoint support.
+        infrastructure.Add(new ProvisioningOutput("id", typeof(string)) { Value = postgres.Id.ToBicepExpression() });
 
         // Always output the hostName for the PostgreSQL server.
         infrastructure.Add(new ProvisioningOutput("hostName", typeof(string)) { Value = postgres.FullyQualifiedDomainName.ToBicepExpression() });

@@ -2,9 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -20,7 +23,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("logs --help");
 
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Help should return success
         Assert.Equal(ExitCodeConstants.Success, exitCode);
@@ -122,7 +125,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"logs --tail {tailValue}");
 
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Should fail validation
         Assert.NotEqual(ExitCodeConstants.Success, exitCode);
@@ -143,7 +146,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         // Use --help to avoid needing a running AppHost
         var result = command.Parse($"logs --tail {tailValue} --help");
 
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Help should succeed (validation passed)
         Assert.Equal(ExitCodeConstants.Success, exitCode);
@@ -160,7 +163,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         // Without --follow and no running AppHost, should succeed (like Unix ps with no processes)
         var result = command.Parse("logs myresource");
 
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Should succeed - no running AppHost is not an error
         Assert.Equal(ExitCodeConstants.Success, exitCode);
@@ -180,7 +183,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         // Use --help to verify the option is parsed correctly
         var result = command.Parse($"logs --format {format} --help");
 
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
     }
@@ -198,7 +201,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"logs --format {format} --help");
 
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
     }
@@ -213,7 +216,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("logs --format invalid");
 
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Invalid format should cause parsing error
         Assert.NotEqual(ExitCodeConstants.Success, exitCode);
@@ -229,7 +232,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("logs --follow --tail 50 --help");
 
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
     }
@@ -244,7 +247,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("logs myresource --follow --tail 100 --format json --help");
 
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
     }
@@ -260,7 +263,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         // -f is short for --follow, -n is short for --tail
         var result = command.Parse("logs -f -n 10 --help");
 
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
     }
@@ -362,5 +365,290 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         var deserialized = JsonSerializer.Deserialize(json, LogsCommandJsonContext.Ndjson.LogLineJson);
         Assert.NotNull(deserialized);
         Assert.Equal(logLine.Content, deserialized.Content);
+    }
+
+    [Fact]
+    public async Task LogsCommand_JsonOutput_ResolvesResourceNames()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var provider = CreateLogsTestServices(workspace, outputWriter);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
+        Assert.NotNull(jsonOutput);
+
+        var logsOutput = JsonSerializer.Deserialize(jsonOutput, LogsCommandJsonContext.Snapshot.LogsOutput);
+        Assert.NotNull(logsOutput);
+        Assert.Equal(3, logsOutput.Logs.Length);
+
+        // Logs are sorted by timestamp.
+        // Unique display name should be used for the redis resource
+        Assert.Equal("redis", logsOutput.Logs[0].ResourceName);
+
+        // Replicas share the same DisplayName, so the unique Name should be used instead
+        Assert.Equal("apiservice-abc123", logsOutput.Logs[1].ResourceName);
+        Assert.Equal("apiservice-def456", logsOutput.Logs[2].ResourceName);
+    }
+
+    [Fact]
+    public async Task LogsCommand_TextOutput_ResolvesResourceNames()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        // Plain text output uses "[resourceName] content" format
+        // Replicas share the same DisplayName, so the unique Name should be used instead
+        Assert.Contains(outputWriter.Logs, l => l.Contains("[apiservice-abc123]"));
+        Assert.Contains(outputWriter.Logs, l => l.Contains("[apiservice-def456]"));
+
+        // Unique display name should be used for the redis resource
+        Assert.Contains(outputWriter.Logs, l => l.Contains("[redis]"));
+    }
+
+    [Theory]
+    [InlineData("nonexistent", true)]
+    [InlineData("redis", false)]
+    [InlineData("apiservice-abc123", false)]
+    [InlineData("apiservice", false)]
+    public async Task LogsCommand_WithResourceName_ValidatesAgainstNameAndDisplayName(string resourceName, bool expectError)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var provider = CreateLogsTestServices(workspace, outputWriter);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"logs {resourceName} --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        if (expectError)
+        {
+            Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        }
+        else
+        {
+            Assert.Equal(ExitCodeConstants.Success, exitCode);
+        }
+    }
+
+    [Fact]
+    public async Task LogsCommand_JsonOutput_WithTimestamps_IncludesTimestampField()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var provider = CreateLogsTestServices(workspace, outputWriter);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs --format json --timestamps");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
+        Assert.NotNull(jsonOutput);
+
+        var logsOutput = JsonSerializer.Deserialize(jsonOutput, LogsCommandJsonContext.Snapshot.LogsOutput);
+        Assert.NotNull(logsOutput);
+        Assert.Equal(3, logsOutput.Logs.Length);
+
+        // Logs are sorted by timestamp
+        Assert.Equal("redis", logsOutput.Logs[0].ResourceName);
+        Assert.Equal("2025-01-15T10:30:00.000Z", logsOutput.Logs[0].Timestamp);
+        Assert.Equal("Ready to accept connections", logsOutput.Logs[0].Content);
+        Assert.False(logsOutput.Logs[0].IsError);
+
+        Assert.Equal("apiservice-abc123", logsOutput.Logs[1].ResourceName);
+        Assert.Equal("2025-01-15T10:30:01.000Z", logsOutput.Logs[1].Timestamp);
+        Assert.Equal("Hello from replica 1", logsOutput.Logs[1].Content);
+        Assert.False(logsOutput.Logs[1].IsError);
+
+        Assert.Equal("apiservice-def456", logsOutput.Logs[2].ResourceName);
+        Assert.Equal("2025-01-15T10:30:02.000Z", logsOutput.Logs[2].Timestamp);
+        Assert.Equal("Hello from replica 2", logsOutput.Logs[2].Content);
+        Assert.False(logsOutput.Logs[2].IsError);
+    }
+
+    [Fact]
+    public async Task LogsCommand_JsonOutput_WithoutTimestamps_OmitsTimestampField()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var provider = CreateLogsTestServices(workspace, outputWriter);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
+        Assert.NotNull(jsonOutput);
+
+        var logsOutput = JsonSerializer.Deserialize(jsonOutput, LogsCommandJsonContext.Snapshot.LogsOutput);
+        Assert.NotNull(logsOutput);
+        Assert.Equal(3, logsOutput.Logs.Length);
+
+        // Timestamp should be null when --timestamps is not specified
+        // Logs are sorted by timestamp
+        Assert.Equal("redis", logsOutput.Logs[0].ResourceName);
+        Assert.Null(logsOutput.Logs[0].Timestamp);
+        Assert.Equal("Ready to accept connections", logsOutput.Logs[0].Content);
+        Assert.False(logsOutput.Logs[0].IsError);
+
+        Assert.Equal("apiservice-abc123", logsOutput.Logs[1].ResourceName);
+        Assert.Null(logsOutput.Logs[1].Timestamp);
+        Assert.Equal("Hello from replica 1", logsOutput.Logs[1].Content);
+        Assert.False(logsOutput.Logs[1].IsError);
+
+        Assert.Equal("apiservice-def456", logsOutput.Logs[2].ResourceName);
+        Assert.Null(logsOutput.Logs[2].Timestamp);
+        Assert.Equal("Hello from replica 2", logsOutput.Logs[2].Content);
+        Assert.False(logsOutput.Logs[2].IsError);
+    }
+
+    [Fact]
+    public async Task LogsCommand_TextOutput_WithTimestamps_IncludesTimestampPrefix()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs --timestamps");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        // Logs are sorted by timestamp, timestamp prefix is ISO 8601 round-trip format
+        var logLines = outputWriter.Logs.Where(l => l.StartsWith("2025-", StringComparison.Ordinal)).ToList();
+        Assert.Equal(3, logLines.Count);
+        Assert.Equal("2025-01-15T10:30:00.000Z [redis] Ready to accept connections", logLines[0]);
+        Assert.Equal("2025-01-15T10:30:01.000Z [apiservice-abc123] Hello from replica 1", logLines[1]);
+        Assert.Equal("2025-01-15T10:30:02.000Z [apiservice-def456] Hello from replica 2", logLines[2]);
+    }
+
+    [Fact]
+    public async Task LogsCommand_TextOutput_WithoutTimestamps_NoTimestampPrefix()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        // Without --timestamps, log lines start with "[resourceName]" with no timestamp prefix
+        // Logs are sorted by timestamp
+        var logLines = outputWriter.Logs.Where(l => l.StartsWith("[", StringComparison.Ordinal)).ToList();
+        Assert.Equal(3, logLines.Count);
+        Assert.Equal("[redis] Ready to accept connections", logLines[0]);
+        Assert.Equal("[apiservice-abc123] Hello from replica 1", logLines[1]);
+        Assert.Equal("[apiservice-def456] Hello from replica 2", logLines[2]);
+    }
+
+    private ServiceProvider CreateLogsTestServices(
+        TemporaryWorkspace workspace,
+        TestOutputTextWriter outputWriter,
+        Action<Dictionary<string, string?>>? configureOptions = null,
+        bool disableAnsi = false)
+    {
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            IsInScope = true,
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "TestAppHost", "TestAppHost.csproj"),
+                ProcessId = 1234
+            },
+            ResourceSnapshots =
+            [
+                // Unique resource - DisplayName is unique across all resources
+                new ResourceSnapshot
+                {
+                    Name = "redis",
+                    DisplayName = "redis",
+                    ResourceType = "Container",
+                    State = "Running"
+                },
+                // Replicas - two resources share the same DisplayName
+                new ResourceSnapshot
+                {
+                    Name = "apiservice-abc123",
+                    DisplayName = "apiservice",
+                    ResourceType = "Project",
+                    State = "Running"
+                },
+                new ResourceSnapshot
+                {
+                    Name = "apiservice-def456",
+                    DisplayName = "apiservice",
+                    ResourceType = "Project",
+                    State = "Running"
+                }
+            ],
+            LogLines =
+            [
+                // Log lines are intentionally out of timestamp order to verify sorting
+                new ResourceLogLine
+                {
+                    ResourceName = "apiservice-def456",
+                    LineNumber = 1,
+                    Content = "2025-01-15T10:30:02Z Hello from replica 2",
+                    IsError = false
+                },
+                new ResourceLogLine
+                {
+                    ResourceName = "redis",
+                    LineNumber = 1,
+                    Content = "2025-01-15T10:30:00Z Ready to accept connections",
+                    IsError = false
+                },
+                new ResourceLogLine
+                {
+                    ResourceName = "apiservice-abc123",
+                    LineNumber = 1,
+                    Content = "2025-01-15T10:30:01Z Hello from replica 1",
+                    IsError = false
+                }
+            ]
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = disableAnsi;
+
+            if (configureOptions is not null)
+            {
+                options.ConfigurationCallback += configureOptions;
+            }
+        });
+
+        return services.BuildServiceProvider();
     }
 }

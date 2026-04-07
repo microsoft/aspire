@@ -1,7 +1,8 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Nodes;
+using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.ServiceBus;
 using Aspire.Hosting.Utils;
@@ -66,7 +67,7 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
             
     }
 
-    [Fact(Skip = "Azure ServiceBus emulator is not reliable in CI - https://github.com/dotnet/aspire/issues/7066")]
+    [Fact(Skip = "Azure ServiceBus emulator is not reliable in CI - https://github.com/microsoft/aspire/issues/7066")]
     [RequiresFeature(TestFeature.Docker)]
     public async Task VerifyWaitForOnServiceBusEmulatorBlocksDependentResources()
     {
@@ -107,7 +108,7 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
         await app.StopAsync();
     }
 
-    [Theory(Skip = "Azure ServiceBus emulator is not reliable in CI - https://github.com/dotnet/aspire/issues/7066")]
+    [Theory(Skip = "Azure ServiceBus emulator is not reliable in CI - https://github.com/microsoft/aspire/issues/7066")]
     [InlineData(null)]
     [InlineData("other")]
     [RequiresFeature(TestFeature.Docker)]
@@ -767,7 +768,7 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
         Assert.Equal(expectedBicep, sbRolesManifest.BicepText);
     }
 
-    [Fact(Skip = "Azure ServiceBus emulator is not reliable in CI - https://github.com/dotnet/aspire/issues/7066")]
+    [Fact(Skip = "Azure ServiceBus emulator is not reliable in CI - https://github.com/microsoft/aspire/issues/7066")]
     [RequiresFeature(TestFeature.Docker)]
     public async Task AzureServiceBusEmulator_WithCustomConfig()
     {
@@ -825,6 +826,56 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
         var message = await receiver.ReceiveMessageAsync(cancellationToken: cts.Token);
 
         Assert.Equal("Hello, World!", message.Body.ToString());
+    }
+
+    [Fact]
+    public void WithRoleAssignments_EnumOverload_DoesNotThrow()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var serviceBus = builder.AddAzureServiceBus("servicebus");
+        var container = builder.AddContainer("myContainer", "nginx");
+        var method = typeof(AzureServiceBusExtensions)
+            .GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
+            .Single(m =>
+                m.Name == nameof(AzureServiceBusExtensions.WithRoleAssignments) &&
+                m.IsGenericMethodDefinition &&
+                m.GetParameters().Length == 3 &&
+                m.GetParameters()[2].ParameterType.IsArray &&
+                m.GetParameters()[2].ParameterType.GetElementType()?.Name == "AzureServiceBusRole")
+            .MakeGenericMethod(typeof(ContainerResource));
+
+        var roleType = method.GetParameters()[2].ParameterType.GetElementType()!;
+        var roles = Array.CreateInstance(roleType, 1);
+        roles.SetValue(Enum.Parse(roleType, "AzureServiceBusDataSender"), 0);
+
+        var exception = Record.Exception(() =>
+            method.Invoke(null, [container, serviceBus, roles]));
+
+        Assert.Null(exception);
+    }
+
+    [Fact]
+    public void WithRoleAssignments_EnumOverload_NullRoles_DoesNotThrow()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var serviceBus = builder.AddAzureServiceBus("servicebus");
+        var container = builder.AddContainer("myContainer", "nginx");
+        var method = typeof(AzureServiceBusExtensions)
+            .GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
+            .Single(m =>
+                m.Name == nameof(AzureServiceBusExtensions.WithRoleAssignments) &&
+                m.IsGenericMethodDefinition &&
+                m.GetParameters().Length == 3 &&
+                m.GetParameters()[2].ParameterType.IsArray &&
+                m.GetParameters()[2].ParameterType.GetElementType()?.Name == "AzureServiceBusRole")
+            .MakeGenericMethod(typeof(ContainerResource));
+
+        var exception = Record.Exception(() =>
+            method.Invoke(null, [container, serviceBus, null!]));
+
+        Assert.Null(exception);
     }
 
     [Fact]

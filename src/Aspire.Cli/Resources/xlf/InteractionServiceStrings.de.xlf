@@ -3,13 +3,13 @@
   <file datatype="xml" source-language="en" target-language="de" original="../InteractionServiceStrings.resx">
     <body>
       <trans-unit id="AppHostConnectionLost">
-        <source>The connection to the app host was lost: {0}.</source>
-        <target state="translated">Die Verbindung mit dem App-Host wurde getrennt: {0}.</target>
+        <source>The connection to the AppHost was lost: {0}.</source>
+        <target state="needs-review-translation">Die Verbindung mit dem App-Host wurde getrennt: {0}.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostNotCompatibleConsiderUpgrading">
-        <source>The AppHost version is not compatible. Please upgrade the apphost or Aspire CLI.</source>
-        <target state="translated">Die AppHost-Version ist nicht kompatibel. Aktualisieren Sie den AppHost oder die Aspire-CLI.</target>
+        <source>The AppHost version is not compatible. Please upgrade the AppHost or Aspire CLI.</source>
+        <target state="needs-review-translation">Die AppHost-Version ist nicht kompatibel. Aktualisieren Sie den AppHost oder die Aspire-CLI.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireCLIVersion">
@@ -23,8 +23,8 @@
         <note />
       </trans-unit>
       <trans-unit id="BuildingAppHost">
-        <source>Building apphost...</source>
-        <target state="translated">AppHost wird erstellt...</target>
+        <source>Building AppHost...</source>
+        <target state="needs-review-translation">AppHost wird erstellt...</target>
         <note />
       </trans-unit>
       <trans-unit id="CheckingCertificates">
@@ -63,13 +63,13 @@
         <note>Represents a type of link</note>
       </trans-unit>
       <trans-unit id="ErrorConnectingToAppHost">
-        <source>An error occurred while connecting to the app host. The app host possibly crashed before it was available: {0}.</source>
-        <target state="translated">Fehler beim Herstellen einer Verbindung mit dem App-Host. Der App-Host ist möglicherweise abgestürzt, bevor er verfügbar war: {0}.</target>
+        <source>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}.</source>
+        <target state="needs-review-translation">Fehler beim Herstellen einer Verbindung mit dem App-Host. Der App-Host ist möglicherweise abgestürzt, bevor er verfügbar war: {0}.</target>
         <note />
       </trans-unit>
       <trans-unit id="FindingAppHosts">
-        <source>Finding apphosts...</source>
-        <target state="translated">AppHosts werden gesucht...</target>
+        <source>Finding AppHosts...</source>
+        <target state="needs-review-translation">AppHosts werden gesucht...</target>
         <note />
       </trans-unit>
       <trans-unit id="InteractiveInputNotSupported">
@@ -83,8 +83,8 @@
         <note>Do not translate [dim] and [link]. Also leave [/] as-is. {0} is a URL</note>
       </trans-unit>
       <trans-unit id="NewCliVersionAvailable">
-        <source>[yellow]A new version of the Aspire CLI is available: {0}[/]</source>
-        <target state="translated">[yellow]Eine neue Version der Aspire-CLI ist verfügbar: {0}[/]</target>
+        <source>[yellow]A new version of Aspire is available: {0}[/]</source>
+        <target state="new">[yellow]A new version of Aspire is available: {0}[/]</target>
         <note>Do not translate [yellow] and also leave [/] as-is. {0} is the version number</note>
       </trans-unit>
       <trans-unit id="NoItemsAvailableForSelection">
@@ -98,23 +98,28 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeBuilt">
-        <source>The project could not be built. For more information run with --debug switch.</source>
-        <target state="translated">Das Projekt konnte nicht erstellt werden. Weitere Informationen erhalten Sie, wenn Sie mit dem Schalter „--debug“ ausführen.</target>
+        <source>The project could not be built. See logs at {0}</source>
+        <target state="translated">Das Projekt konnte nicht erstellt werden. Protokolle unter {0} anzeigen.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ProjectCouldNotBeCreated">
+        <source>The app could not be created. See logs at {0}</source>
+        <target state="new">The app could not be created. See logs at {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionDoesntExist">
-        <source>The --project option specified a project that does not exist.</source>
-        <target state="translated">Die Option „--project“ hat ein Projekt angegeben, das nicht vorhanden ist.</target>
+        <source>The --apphost option specified a project that does not exist.</source>
+        <target state="translated">Die Option „--apphost“ hat ein Projekt angegeben, das nicht vorhanden ist.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionNotSpecifiedMultipleAppHostsFound">
-        <source>The --project option was not specified and multiple app host project files were detected.</source>
-        <target state="translated">Die Option „--project“ wurde nicht angegeben, und es wurden mehrere App-Hostprojektdateien erkannt.</target>
+        <source>The --apphost option was not specified and multiple AppHost project files were detected.</source>
+        <target state="needs-review-translation">Die Option „--apphost“ wurde nicht angegeben, und es wurden mehrere App-Hostprojektdateien erkannt.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionNotSpecifiedNoCsprojFound">
-        <source>The project argument was not specified and no app host project files were detected.</source>
-        <target state="translated">Das Projektargument wurde nicht angegeben, und es wurden keine App-Hostprojektdateien erkannt.</target>
+        <source>The project argument was not specified and no AppHost project files were detected.</source>
+        <target state="needs-review-translation">Das Projektargument wurde nicht angegeben, und es wurden keine App-Hostprojektdateien erkannt.</target>
         <note />
       </trans-unit>
       <trans-unit id="RequiredCapability">
@@ -127,14 +132,19 @@
         <target state="translated">Suche wird ausgeführt...</target>
         <note />
       </trans-unit>
+      <trans-unit id="SeeLogsAt">
+        <source>See logs at {0}</source>
+        <target state="translated">Protokolle unter {0} anzeigen.</target>
+        <note>{0} is the log file path</note>
+      </trans-unit>
       <trans-unit id="SelectAppHostToUse">
-        <source>Select an apphost to use:</source>
-        <target state="translated">AppHost zur Verwendung auswählen:</target>
+        <source>Select an AppHost to use:</source>
+        <target state="needs-review-translation">AppHost zur Verwendung auswählen:</target>
         <note />
       </trans-unit>
       <trans-unit id="SpecifiedProjectFileNotAppHostProject">
         <source>The specified project file is not an Aspire AppHost project.</source>
-        <target state="translated">Die angegebene Projektdatei ist kein Aspire-AppHost-Projekt.</target>
+        <target state="needs-review-translation">Die angegebene Projektdatei ist kein Aspire-AppHost-Projekt.</target>
         <note />
       </trans-unit>
       <trans-unit id="StoppingAspire">
@@ -153,8 +163,8 @@
         <note />
       </trans-unit>
       <trans-unit id="UnbuildableAppHostsDetected">
-        <source>No app hosts were found (there may be app hosts project files with syntax errors/invalid SDK versions).</source>
-        <target state="translated">Es wurden keine App-Hosts gefunden (möglicherweise gibt es App-Host-Projektdateien mit Syntaxfehlern/ungültigen SDK-Versionen).</target>
+        <source>No AppHosts were found (there may be AppHost project files with syntax errors/invalid SDK versions).</source>
+        <target state="needs-review-translation">Es wurden keine App-Hosts gefunden (möglicherweise gibt es App-Host-Projektdateien mit Syntaxfehlern/ungültigen SDK-Versionen).</target>
         <note />
       </trans-unit>
       <trans-unit id="UnexpectedErrorOccurred">
@@ -162,9 +172,14 @@
         <target state="translated">Ein unerwarteter Fehler ist aufgetreten: {0}</target>
         <note>{0} is the exception message</note>
       </trans-unit>
+      <trans-unit id="UpdatedSettingsFile">
+        <source>Updated settings file at {0}.</source>
+        <target state="new">Updated settings file at {0}.</target>
+        <note>{0} is a path</note>
+      </trans-unit>
       <trans-unit id="WaitingForDebuggerToAttachToAppHost">
-        <source>Waiting for debugger to attach to app host process</source>
-        <target state="translated">Es wird darauf gewartet, dass der Debugger an den App-Hostprozess angefügt wird.</target>
+        <source>Waiting for debugger to attach to AppHost process</source>
+        <target state="needs-review-translation">Es wird darauf gewartet, dass der Debugger an den App-Hostprozess angefügt wird.</target>
         <note />
       </trans-unit>
     </body>

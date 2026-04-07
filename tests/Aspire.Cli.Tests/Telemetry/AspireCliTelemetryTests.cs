@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Microsoft.AspNetCore.InternalTesting;
 using System.Diagnostics;
 using Aspire.Cli.Telemetry;
 using Microsoft.Extensions.Logging;
@@ -198,6 +199,20 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
+    public void InitializeAsync_AddsOsInformationTags()
+    {
+        using var fixture = new TelemetryFixture();
+
+        var tags = fixture.Telemetry.GetDefaultTags();
+
+        var expectedOsName = AspireCliTelemetry.GetOsName();
+        var expectedOsType = AspireCliTelemetry.GetOsType();
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.OsName && (string?)t.Value == expectedOsName);
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.OsVersion && t.Value is string s && s == Environment.OSVersion.Version.ToString());
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.OsType && (string?)t.Value == expectedOsType);
+    }
+
+    [Fact]
     public void StartReportedActivity_IncludesAllDefaultTags()
     {
         var machineInfoProvider = new TelemetryFixture.TestMachineInformationProvider
@@ -239,7 +254,7 @@ public class AspireCliTelemetryTests
         var ciDetector = new TelemetryFixture.TestCIEnvironmentDetector();
         var telemetry = new AspireCliTelemetry(NullLogger<AspireCliTelemetry>.Instance, provider, ciDetector);
 
-        await telemetry.InitializeAsync();
+        await telemetry.InitializeAsync().DefaultTimeout();
         var tagsAfterFirstInit = telemetry.GetDefaultTags().Count;
         await telemetry.InitializeAsync(); // Should not throw
 

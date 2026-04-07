@@ -212,16 +212,16 @@ builder.Add{Technology}{Client}("{connectionName}");
 ## Additional documentation
 
 * {Link to official technology documentation}
-* https://github.com/dotnet/aspire/tree/main/src/Components/README.md
+* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire
 ```
 
 **Guidelines:**
 - Always include a link to the official technology/SDK documentation
-- Always include the link to Aspire Components README: `https://github.com/dotnet/aspire/tree/main/src/Components/README.md`
+- Always include the link to Aspire Components README: `https://github.com/microsoft/aspire/tree/main/src/Components/README.md`
 - Use bulleted list format with `*` prefix
 - "Feedback & contributing" section should be separate with just the GitHub link
 
@@ -354,11 +354,11 @@ builder.AddNpgsqlDataSource("postgresdb");
 ## Additional documentation
 
 * https://www.npgsql.org/doc/basic-usage.html
-* https://github.com/dotnet/aspire/tree/main/src/Components/README.md
+* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire
 
 _*Postgres*, *PostgreSQL* and the *Slonik Logo* are trademarks or registered trademarks of the *PostgreSQL Community Association of Canada*, and used with their permission._
 ```
@@ -405,7 +405,7 @@ Settings classes follow consistent naming:
 - ❌ Don't omit prerequisites
 - ❌ Don't forget to show the dependency injection example
 - ❌ Don't use inconsistent configuration key naming
-- ❌ Don't forget the link to `https://github.com/dotnet/aspire/tree/main/src/Components/README.md`
+- ❌ Don't forget the link to `https://github.com/microsoft/aspire/tree/main/src/Components/README.md`
 - ❌ Don't explain health checks, telemetry, or observability in detail (they're automatically enabled)
 - ❌ Don't forget trademark notices when applicable
 

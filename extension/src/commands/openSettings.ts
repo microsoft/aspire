@@ -5,11 +5,12 @@ import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { getConfigInfo } from '../utils/configInfoProvider';
 
 /**
- * Opens the local or global Aspire settings file.
+ * Opens the local or global Aspire configuration file.
  */
 
 /**
- * Opens the local Aspire settings file (.aspire/settings.json) in the current workspace.
+ * Opens the local Aspire configuration file (aspire.config.json or legacy .aspire/settings.json)
+ * in the current workspace. The path is resolved by the CLI via `aspire config info`.
  * Creates the file with an empty JSON object if it doesn't exist.
  */
 export async function openLocalSettingsCommand(terminalProvider: AspireTerminalProvider): Promise<void> {
@@ -26,7 +27,8 @@ export async function openLocalSettingsCommand(terminalProvider: AspireTerminalP
 }
 
 /**
- * Opens the global Aspire settings file (~/.aspire/globalsettings.json).
+ * Opens the global Aspire configuration file (aspire.config.json or legacy ~/.aspire/globalsettings.json).
+ * The path is resolved by the CLI via `aspire config info`.
  * Creates the file with an empty JSON object if it doesn't exist.
  */
 export async function openGlobalSettingsCommand(terminalProvider: AspireTerminalProvider): Promise<void> {

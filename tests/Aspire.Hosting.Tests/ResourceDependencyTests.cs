@@ -5,6 +5,7 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "2")]
 public class ResourceDependencyTests
 {
     [Fact]
@@ -546,6 +547,31 @@ public class ResourceDependencyTests
     }
 
     [Fact]
+    public async Task DirectOnlyDoesNotIncludeWaitForDependenciesFromReferencedResources()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        // Chain: A -> (ref) B -> (waitfor) C
+        // A has WithReference(B) and WaitFor(B)
+        // B has WaitFor(C) but A does NOT reference C directly
+        var c = builder.AddRedis("c");
+        var b = builder.AddContainer("b", "alpine")
+            .WithHttpEndpoint(5000, 5000, "http")
+            .WaitFor(c);
+        var a = builder.AddContainer("a", "alpine")
+            .WithReference(b.GetEndpoint("http"))
+            .WaitFor(b);
+
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+        var dependencies = await a.Resource.GetResourceDependenciesAsync(executionContext, ResourceDependencyDiscoveryMode.DirectOnly);
+
+        // A depends on B (via WithReference and WaitFor)
+        Assert.Contains(b.Resource, dependencies);
+        // A should NOT depend on C because C is only a WaitFor dependency of B, not of A
+        Assert.DoesNotContain(c.Resource, dependencies);
+    }
+
+    [Fact]
     public async Task DefaultOverloadUsesTransitiveClosure()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -565,5 +591,407 @@ public class ResourceDependencyTests
 
         Assert.Contains(b.Resource, dependencies);
         Assert.Contains(c.Resource, dependencies);
+    }
+
+    #region Multi-Resource GetDependenciesAsync Tests
+
+    [Fact]
+    public async Task MultiResourceIndependentResourcesDependenciesAreMerged()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        // A -> X, B -> Y (independent dependencies)
+        var x = builder.AddContainer("x", "alpine")
+            .WithHttpEndpoint(8001, 8001, "http");
+        var y = builder.AddContainer("y", "alpine")
+            .WithHttpEndpoint(8002, 8002, "http");
+        var a = builder.AddContainer("a", "alpine").WithEnvironment("X_URL", x.GetEndpoint("http"));
+        var b = builder.AddContainer("b", "alpine").WithEnvironment("Y_URL", y.GetEndpoint("http"));
+
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+        var dependencies = await ResourceExtensions.GetDependenciesAsync(
+            [a.Resource, b.Resource], executionContext);
+
+        Assert.Contains(x.Resource, dependencies);
+        Assert.Contains(y.Resource, dependencies);
+        Assert.Equal(2, dependencies.Count);
+    }
+
+    [Fact]
+    public async Task MultiResourceOverlappingDependenciesAreDeduplicatedAndCombined()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        // A -> X, B -> X (shared dependency)
+        var x = builder.AddContainer("x", "alpine")
+            .WithHttpEndpoint(8001, 8001, "http");
+        var a = builder.AddContainer("a", "alpine").WithEnvironment("X_URL", x.GetEndpoint("http"));
+        var b = builder.AddContainer("b", "alpine").WithEnvironment("X_URL", x.GetEndpoint("http"));
+
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+        var dependencies = await ResourceExtensions.GetDependenciesAsync(
+            [a.Resource, b.Resource], executionContext);
+
+        Assert.Contains(x.Resource, dependencies);
+        Assert.Single(dependencies); // X should only appear once
+    }
+
+    [Fact]
+    public async Task MultiResourceInputResourceExcludedEvenIfOtherInputDependsOnIt()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        // A -> B, but both A and B are inputs
+        var b = builder.AddContainer("b", "alpine")
+            .WithHttpEndpoint(8080, 8080, "http");
+        var a = builder.AddContainer("a", "alpine")
+            .WithReference(b.GetEndpoint("http"));
+
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+        var dependencies = await ResourceExtensions.GetDependenciesAsync(
+            [a.Resource, b.Resource], executionContext);
+
+        // B should be excluded because it's an input resource
+        Assert.DoesNotContain(a.Resource, dependencies);
+        Assert.DoesNotContain(b.Resource, dependencies);
+        Assert.Empty(dependencies);
+    }
+
+    [Fact]
+    public async Task MultiResourceTransitiveDependencyThroughInputIsStillIncluded()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        // A -> B -> C, inputs are [A, B]
+        var c = builder.AddRedis("c");
+        var b = builder.AddContainer("b", "alpine")
+            .WithHttpEndpoint(8080, 8080, "http")
+            .WithReference(c);
+        var a = builder.AddContainer("a", "alpine")
+            .WithReference(b.GetEndpoint("http"));
+
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+        var dependencies = await ResourceExtensions.GetDependenciesAsync(
+            [a.Resource, b.Resource], executionContext);
+
+        // C should be included (as dependency of B)
+        Assert.Contains(c.Resource, dependencies);
+        // A and B are inputs, so excluded
+        Assert.DoesNotContain(a.Resource, dependencies);
+        Assert.DoesNotContain(b.Resource, dependencies);
+    }
+
+    [Fact]
+    public async Task MultiResourceEmptyInputReturnsEmptySet()
+    {
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+        var dependencies = await ResourceExtensions.GetDependenciesAsync(
+            Array.Empty<IResource>(), executionContext);
+
+        Assert.Empty(dependencies);
+    }
+
+    [Fact]
+    public async Task MultiResourceAllInputsHaveNoDependenciesReturnsEmptySet()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var a = builder.AddContainer("a", "alpine");
+        var b = builder.AddContainer("b", "alpine");
+        var c = builder.AddContainer("c", "alpine");
+
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+        var dependencies = await ResourceExtensions.GetDependenciesAsync(
+            [a.Resource, b.Resource, c.Resource], executionContext);
+
+        Assert.Empty(dependencies);
+    }
+
+    [Fact]
+    public async Task MultiResourceDiamondWithMultipleInputsHandledCorrectly()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        // Diamond: A -> B -> D, A -> C -> D
+        // Input: [A, C] - should get B, D (C is excluded as input)
+        var d = builder.AddContainer("d", "alpine")
+            .WithHttpEndpoint(8080, 8080, "http");
+        var b = builder.AddContainer("b", "alpine")
+            .WithHttpEndpoint(8081, 8081, "http")
+            .WaitFor(d);
+        var c = builder.AddContainer("c", "alpine")
+            .WithHttpEndpoint(8082, 8082, "http")
+            .WaitFor(d);
+        var a = builder.AddContainer("a", "alpine")
+            .WaitFor(b)
+            .WaitFor(c);
+
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+        var dependencies = await ResourceExtensions.GetDependenciesAsync(
+            [a.Resource, c.Resource], executionContext);
+
+        Assert.Contains(b.Resource, dependencies);
+        Assert.Contains(d.Resource, dependencies);
+        Assert.DoesNotContain(a.Resource, dependencies);
+        Assert.DoesNotContain(c.Resource, dependencies);
+        Assert.Equal(2, dependencies.Count);
+    }
+
+    [Fact]
+    public async Task MultiResourceDirectOnlyModeWithMultipleResources()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        // A -> B -> C, D -> E -> F
+        var c = builder.AddRedis("c");
+        var b = builder.AddContainer("b", "alpine")
+            .WithHttpEndpoint(8080, 8080, "http")
+            .WithReference(c);
+        var a = builder.AddContainer("a", "alpine")
+            .WithReference(b.GetEndpoint("http"));
+
+        var f = builder.AddRedis("f");
+        var e = builder.AddContainer("e", "alpine")
+            .WithHttpEndpoint(8081, 8081, "http")
+            .WithReference(f);
+        var d = builder.AddContainer("d", "alpine")
+            .WithReference(e.GetEndpoint("http"));
+
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+        var dependencies = await ResourceExtensions.GetDependenciesAsync(
+            [a.Resource, d.Resource], executionContext, new ResourceDependencyDiscoveryOptions
+            {
+                DiscoveryMode = ResourceDependencyDiscoveryMode.DirectOnly
+            });
+
+        // DirectOnly should only include B and E (direct deps), not C and F
+        Assert.Contains(b.Resource, dependencies);
+        Assert.Contains(e.Resource, dependencies);
+        Assert.DoesNotContain(c.Resource, dependencies);
+        Assert.DoesNotContain(f.Resource, dependencies);
+        Assert.Equal(2, dependencies.Count);
+    }
+
+    [Fact]
+    public async Task MultiResourceCircularReferenceAmongInputsHandledCorrectly()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        // A -> B -> C -> A (circular), plus D as external dependency
+        var d = builder.AddContainer("d", "alpine")
+            .WithHttpEndpoint(8083, 8083, "http"); ;
+        var a = builder.AddContainer("a", "alpine")
+            .WithHttpEndpoint(8080, 8080, "http");
+        var b = builder.AddContainer("b", "alpine")
+            .WithHttpEndpoint(8081, 8081, "http")
+            .WithEnvironment("A_URL", a.GetEndpoint("http"));
+        var c = builder.AddContainer("c", "alpine")
+            .WithHttpEndpoint(8082, 8082, "http")
+            .WithEnvironment("B_URL", b.GetEndpoint("http"))
+            .WithEnvironment("D_URL", d.GetEndpoint("http"));
+        a.WithEnvironment("C_URL", c.GetEndpoint("http"));
+
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+        // All three circular resources as input
+        var dependencies = await ResourceExtensions.GetDependenciesAsync(
+            [a.Resource, b.Resource, c.Resource], executionContext);
+
+        // Only D should remain as a dependency (A, B, C are all inputs)
+        Assert.Contains(d.Resource, dependencies);
+        Assert.DoesNotContain(a.Resource, dependencies);
+        Assert.DoesNotContain(b.Resource, dependencies);
+        Assert.DoesNotContain(c.Resource, dependencies);
+        Assert.Single(dependencies);
+    }
+
+    [Fact]
+    public async Task MultiResourceParentChildBothAsInputsExcludesBoth()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        // Simulate parent-child-like relationship using WaitFor
+        var parent = builder.AddContainer("parent", "alpine");
+        var child = builder.AddContainer("child", "alpine")
+            .WaitFor(parent);
+
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+        // Both parent and child as inputs
+        var dependencies = await ResourceExtensions.GetDependenciesAsync(
+            [parent.Resource, child.Resource], executionContext);
+
+        // Both are inputs, so neither should appear
+        Assert.DoesNotContain(parent.Resource, dependencies);
+        Assert.DoesNotContain(child.Resource, dependencies);
+        Assert.Empty(dependencies);
+    }
+
+    [Fact]
+    public async Task MultiResourceCombinesDependenciesFromDifferentSourceTypes()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        // A uses WaitFor(X), B uses WithReference(Y), C uses WithEnvironment(Z endpoint)
+        var x = builder.AddContainer("x", "alpine");
+        var y = builder.AddContainer("y", "alpine")
+            .WithHttpEndpoint(8001, 8001, "http");
+        var z = builder.AddContainer("z", "alpine")
+            .WithHttpEndpoint(8080, 8080, "http");
+
+        var a = builder.AddContainer("a", "alpine").WaitFor(x);
+        var b = builder.AddContainer("b", "alpine")
+            .WithEnvironment("Y_URL", y.GetEndpoint("http"));
+        var c = builder.AddContainer("c", "alpine")
+            .WithEnvironment("Z_URL", z.GetEndpoint("http"));
+
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+        var dependencies = await ResourceExtensions.GetDependenciesAsync(
+            [a.Resource, b.Resource, c.Resource], executionContext);
+
+        Assert.Contains(x.Resource, dependencies);
+        Assert.Contains(y.Resource, dependencies);
+        Assert.Contains(z.Resource, dependencies);
+        Assert.Equal(3, dependencies.Count);
+    }
+
+    [Fact]
+    public async Task MultiResourceSingleResourceBehavesLikeSingleResourceMethod()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        // Chain: A -> B -> C
+        var c = builder.AddRedis("c");
+        var b = builder.AddContainer("b", "alpine")
+            .WithHttpEndpoint(5000, 5000, "http")
+            .WithReference(c);
+        var a = builder.AddContainer("a", "alpine")
+            .WithReference(b.GetEndpoint("http"));
+
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+
+        // Compare single-resource method with multi-resource method using single input
+        var singleDeps = await a.Resource.GetResourceDependenciesAsync(executionContext);
+        var multiDeps = await ResourceExtensions.GetDependenciesAsync([a.Resource], executionContext);
+
+        Assert.Equal(singleDeps.Count, multiDeps.Count);
+        foreach (var dep in singleDeps)
+        {
+            Assert.Contains(dep, multiDeps);
+        }
+    }
+
+    #endregion
+
+    [Fact]
+    public async Task ConditionalReferenceExpressionIncludesBothBranchDependencies()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var enableTls = builder.AddParameter("enable-tls");
+        var tlsSuffix = builder.AddParameter("tls-suffix");
+
+        var conditional = ReferenceExpression.CreateConditional(
+            enableTls.Resource,
+            bool.TrueString,
+            ReferenceExpression.Create($"{tlsSuffix}"),
+            ReferenceExpression.Create($",ssl=false"));
+
+        var container = builder.AddContainer("container", "alpine")
+            .WithEnvironment("TLS_SUFFIX", conditional);
+
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+        var dependencies = await container.Resource.GetResourceDependenciesAsync(executionContext);
+
+        Assert.Contains(enableTls.Resource, dependencies);
+        Assert.Contains(tlsSuffix.Resource, dependencies);
+    }
+
+    [Fact]
+    public async Task ConditionalReferenceExpressionWithEndpointReferencesIncludesAll()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var flag = builder.AddParameter("use-primary");
+        var primary = builder.AddContainer("primary", "alpine")
+            .WithHttpEndpoint(5000, 5000, "http");
+        var secondary = builder.AddContainer("secondary", "alpine")
+            .WithHttpEndpoint(5001, 5001, "http");
+
+        var conditional = ReferenceExpression.CreateConditional(
+            flag.Resource,
+            bool.TrueString,
+            ReferenceExpression.Create($"{primary.GetEndpoint("http")}"),
+            ReferenceExpression.Create($"{secondary.GetEndpoint("http")}"));
+
+        var container = builder.AddContainer("frontend", "alpine")
+            .WithEnvironment("BACKEND_URL", conditional);
+
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+        var dependencies = await container.Resource.GetResourceDependenciesAsync(executionContext);
+
+        Assert.Contains(flag.Resource, dependencies);
+        Assert.Contains(primary.Resource, dependencies);
+        Assert.Contains(secondary.Resource, dependencies);
+    }
+
+    [Fact]
+    public async Task NestedConditionalReferenceExpressionIncludesAllTransitiveDependencies()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var outerFlag = builder.AddParameter("outer-flag");
+        var innerFlag = builder.AddParameter("inner-flag");
+        var paramA = builder.AddParameter("param-a");
+        var paramB = builder.AddParameter("param-b");
+        var paramC = builder.AddParameter("param-c");
+
+        var innerConditional = ReferenceExpression.CreateConditional(
+            innerFlag.Resource,
+            bool.TrueString,
+            ReferenceExpression.Create($"{paramA}"),
+            ReferenceExpression.Create($"{paramB}"));
+
+        var outerConditional = ReferenceExpression.CreateConditional(
+            outerFlag.Resource,
+            bool.TrueString,
+            innerConditional,
+            ReferenceExpression.Create($"{paramC}"));
+
+        var container = builder.AddContainer("container", "alpine")
+            .WithEnvironment("VALUE", outerConditional);
+
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+        var dependencies = await container.Resource.GetResourceDependenciesAsync(executionContext);
+
+        Assert.Contains(outerFlag.Resource, dependencies);
+        Assert.Contains(innerFlag.Resource, dependencies);
+        Assert.Contains(paramA.Resource, dependencies);
+        Assert.Contains(paramB.Resource, dependencies);
+        Assert.Contains(paramC.Resource, dependencies);
+    }
+
+    [Fact]
+    public async Task DuplicateConditionalExpressionDependenciesAreDeduplicatedAndIncluded()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var flag = builder.AddParameter("flag");
+        var param = builder.AddParameter("value");
+
+        var conditional = ReferenceExpression.CreateConditional(
+            flag.Resource,
+            bool.TrueString,
+            ReferenceExpression.Create($"{param}"),
+            ReferenceExpression.Create($"default"));
+
+        var container = builder.AddContainer("container", "alpine")
+            .WithEnvironment("VAR1", conditional)
+            .WithEnvironment("VAR2", conditional);
+
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+        var dependencies = await container.Resource.GetResourceDependenciesAsync(executionContext);
+
+        // Both env vars reference the same resources — dependencies should be deduplicated
+        Assert.Contains(flag.Resource, dependencies);
+        Assert.Contains(param.Resource, dependencies);
     }
 }

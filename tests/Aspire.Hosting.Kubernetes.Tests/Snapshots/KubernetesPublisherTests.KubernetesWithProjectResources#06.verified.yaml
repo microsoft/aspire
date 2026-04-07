@@ -1,4 +1,4 @@
----
+﻿---
 apiVersion: "v1"
 kind: "ConfigMap"
 metadata:
@@ -10,13 +10,13 @@ metadata:
 data:
   PROJECT1_HTTP: "http://project1-service:{{ .Values.parameters.project1.port_http }}"
   services__project1__http__0: "http://project1-service:{{ .Values.parameters.project1.port_http }}"
-  PROJECT1_HTTPS: "https://project1-service:{{ .Values.parameters.project1.port_https }}"
-  services__project1__https__0: "https://project1-service:{{ .Values.parameters.project1.port_https }}"
+  PROJECT1_HTTPS: "https://project1-service:{{ .Values.parameters.project1.port_http }}"
+  services__project1__https__0: "https://project1-service:{{ .Values.parameters.project1.port_http }}"
   PROJECT1_CUSTOM1: "{{ .Values.config.api.PROJECT1_CUSTOM1 }}"
-  services__project1__custom1__0: "{{ .Values.config.api.services__project1__custom1__0 }}"
+  services__project1__http__1: "{{ .Values.config.api.services__project1__http__1 }}"
   PROJECT1_CUSTOM2: "{{ .Values.config.api.PROJECT1_CUSTOM2 }}"
-  services__project1__custom2__0: "{{ .Values.config.api.services__project1__custom2__0 }}"
+  services__project1__http__2: "{{ .Values.config.api.services__project1__http__2 }}"
   PROJECT1_CUSTOM3: "{{ .Values.config.api.PROJECT1_CUSTOM3 }}"
-  services__project1__custom3__0: "{{ .Values.config.api.services__project1__custom3__0 }}"
+  services__project1__http__3: "{{ .Values.config.api.services__project1__http__3 }}"
   PROJECT1_CUSTOM4: "{{ .Values.config.api.PROJECT1_CUSTOM4 }}"
-  services__project1__custom4__0: "{{ .Values.config.api.services__project1__custom4__0 }}"
+  services__project1__http__4: "{{ .Values.config.api.services__project1__http__4 }}"

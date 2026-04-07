@@ -1,13 +1,24 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Net.Http.Json;
 using System.Text.Json;
+using Aspire.Cli.Commands;
+using Aspire.Dashboard.Otlp.Model;
+using Aspire.Otlp.Serialization;
+using Aspire.Dashboard.Utils;
+using Aspire.Shared.ConsoleLogs;
+using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 
 namespace Aspire.Cli.Mcp.Tools;
 
-internal sealed class ListTracesTool : CliMcpTool
+/// <summary>
+/// MCP tool for listing distributed traces.
+/// Gets trace data directly from the Dashboard telemetry API.
+/// </summary>
+internal sealed class ListTracesTool(IDashboardInfoProvider dashboardInfoProvider, IHttpClientFactory httpClientFactory, ILogger<ListTracesTool> logger) : CliMcpTool
 {
     public override string Name => KnownMcpTools.ListTraces;
 
@@ -28,24 +39,71 @@ internal sealed class ListTracesTool : CliMcpTool
             """).RootElement;
     }
 
-    public override async ValueTask<CallToolResult> CallToolAsync(ModelContextProtocol.Client.McpClient mcpClient, IReadOnlyDictionary<string, JsonElement>? arguments, CancellationToken cancellationToken)
+    public override async ValueTask<CallToolResult> CallToolAsync(CallToolContext context, CancellationToken cancellationToken)
     {
-        // Convert JsonElement arguments to Dictionary<string, object?>
-        Dictionary<string, object?>? convertedArgs = null;
-        if (arguments != null)
+        var arguments = context.Arguments;
+        var (apiToken, apiBaseUrl, dashboardBaseUrl) = await dashboardInfoProvider.GetDashboardInfoAsync(cancellationToken).ConfigureAwait(false);
+
+        // Extract resourceName from arguments
+        string? resourceName = null;
+        if (arguments?.TryGetValue("resourceName", out var resourceNameElement) == true &&
+            resourceNameElement.ValueKind == JsonValueKind.String)
         {
-            convertedArgs = new Dictionary<string, object?>();
-            foreach (var kvp in arguments)
-            {
-                convertedArgs[kvp.Key] = kvp.Value.ValueKind == JsonValueKind.Null ? null : kvp.Value;
-            }
+            resourceName = resourceNameElement.GetString();
         }
 
-        // Forward the call to the dashboard's MCP server
-        return await mcpClient.CallToolAsync(
-            Name,
-            convertedArgs,
-            serializerOptions: McpJsonUtilities.DefaultOptions,
-            cancellationToken: cancellationToken);
+        try
+        {
+            using var client = TelemetryCommandHelpers.CreateApiClient(httpClientFactory, apiToken);
+
+            // Resolve resource name to specific instances (handles replicas)
+            var resources = await TelemetryCommandHelpers.GetAllResourcesAsync(client, apiBaseUrl, cancellationToken).ConfigureAwait(false);
+
+            // If a resource was specified but not found, return error
+            if (!TelemetryCommandHelpers.TryResolveResourceNames(resourceName, resources, out var resolvedResources))
+            {
+                return new CallToolResult
+                {
+                    Content = [new TextContentBlock { Text = $"Resource '{resourceName}' not found." }],
+                    IsError = true
+                };
+            }
+
+            var url = DashboardUrls.TelemetryTracesApiUrl(apiBaseUrl, resolvedResources);
+
+            logger.LogDebug("Fetching traces from {Url}", url);
+
+            var response = await client.GetAsync(url, cancellationToken).ConfigureAwait(false);
+            TelemetryCommandHelpers.EnsureTelemetryApiResponse(response);
+
+            var apiResponse = await response.Content.ReadFromJsonAsync(OtlpJsonSerializerContext.Default.TelemetryApiResponse, cancellationToken).ConfigureAwait(false);
+            var resourceSpans = apiResponse?.Data?.ResourceSpans;
+
+            var (tracesData, limitMessage) = SharedAIHelpers.GetTracesJson(
+                resourceSpans,
+                getResourceName: s => OtlpHelpers.GetResourceName(s, resources.Select(r => new SimpleOtlpResource(r.Name, r.InstanceId)).ToList()),
+                dashboardBaseUrl: dashboardBaseUrl);
+
+            var text = $"""
+                {limitMessage}
+
+                # TRACES DATA
+
+                {tracesData}
+                """;
+
+            return new CallToolResult
+            {
+                Content = [new TextContentBlock { Text = text }]
+            };
+        }
+        catch (HttpRequestException ex)
+        {
+            logger.LogError(ex, "Failed to fetch traces from Dashboard API");
+            var errorMessage = dashboardInfoProvider.IsDirectConnection
+                ? await TelemetryCommandHelpers.GetDashboardApiErrorMessageAsync(ex, apiBaseUrl, httpClientFactory, logger, cancellationToken)
+                : $"Failed to fetch traces: {ex.Message}";
+            throw new McpProtocolException(errorMessage, McpErrorCode.InternalError);
+        }
     }
 }

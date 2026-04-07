@@ -4,18 +4,18 @@
     <body>
       <trans-unit id="CommandArgumentDescription">
         <source>The command to execute in the target resource's context. Commands can be specified directly after options or after a -- separator.</source>
-        <target state="translated">ターゲット リソースのコンテキストで実行するコマンド。コマンドは、オプションの直後または -- 区切り記号の後に指定できます。</target>
+        <target state="needs-review-translation">ターゲット リソースのコンテキストで実行するコマンド。コマンドは、オプションの直後または -- 区切り記号の後に指定できます。</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Execute commands in the context of an Aspire application resource. Starts the AppHost, waits for resources to initialize, then runs the specified command in the target resource's environment. (Preview)
+        <source>Execute commands in the context of an Aspire application resource. Starts the AppHost, waits for resources to initialize, then runs the specified command in the target resource's environment (Preview)
 
 Examples:
   aspire exec --resource api dotnet build
   aspire exec --resource api -- dotnet test --logger console
   aspire exec --start-resource worker pwsh -c "Get-Process"
     </source>
-        <target state="translated">Aspire アプリケーション リソースのコンテキストでコマンドを実行します。AppHost を開始し、リソースが初期化されるのを待ってから、ターゲット リソースの環境で指定されたコマンドを実行します。(プレビュー)
+        <target state="needs-review-translation">Aspire アプリケーション リソースのコンテキストでコマンドを実行します。AppHost を開始し、リソースが初期化されるのを待ってから、ターゲット リソースの環境で指定されたコマンドを実行します。(プレビュー)
 
 例:
   aspire exec --resource api dotnet build
@@ -36,7 +36,7 @@ Examples:
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
         <source>The path to the Aspire AppHost project file. If not specified, searches for a project file in the current directory.</source>
-        <target state="translated">Aspire AppHost プロセス プロジェクト ファイルへのパス。指定しない場合は、現在のディレクトリ内のプロジェクトファイルを検索します。</target>
+        <target state="needs-review-translation">Aspire AppHost プロセス プロジェクト ファイルへのパス。指定しない場合は、現在のディレクトリ内のプロジェクトファイルを検索します。</target>
         <note />
       </trans-unit>
       <trans-unit id="Running">
@@ -46,17 +46,17 @@ Examples:
       </trans-unit>
       <trans-unit id="StartTargetResourceArgumentDescription">
         <source>The name of the target resource to execute the command against. The command will only be executed after the target resource has successfully started and is running.</source>
-        <target state="translated">コマンドを実行するターゲット リソースの名前。このコマンドは、ターゲットリソースが正常に起動し、実行中である後にのみ実行されます。</target>
+        <target state="needs-review-translation">コマンドを実行するターゲット リソースの名前。このコマンドは、ターゲットリソースが正常に起動し、実行中である後にのみ実行されます。</target>
         <note />
       </trans-unit>
       <trans-unit id="StoppingAppHost">
-        <source>Stopping app host...</source>
-        <target state="translated">アプリ ホストを停止しています...</target>
+        <source>Stopping AppHost...</source>
+        <target state="needs-review-translation">アプリ ホストを停止しています...</target>
         <note />
       </trans-unit>
       <trans-unit id="TargetResourceArgumentDescription">
         <source>The name of the target resource to execute the command against. The command will be executed as soon as the AppHost starts, without waiting for the resource to be ready.</source>
-        <target state="translated">コマンドを実行するターゲット リソースの名前。このコマンドは、リソースの準備が整うのを待たずに、AppHost が起動するとすぐに実行されます。</target>
+        <target state="needs-review-translation">コマンドを実行するターゲット リソースの名前。このコマンドは、リソースの準備が整うのを待たずに、AppHost が起動するとすぐに実行されます。</target>
         <note />
       </trans-unit>
       <trans-unit id="TargetResourceNotSpecified">
@@ -65,8 +65,8 @@ Examples:
         <note />
       </trans-unit>
       <trans-unit id="WorkdirArgumentDescription">
-        <source>The working directory to execute the command in.</source>
-        <target state="translated">コマンドを実行する作業ディレクトリ。</target>
+        <source>The working directory to execute the command in</source>
+        <target state="needs-review-translation">コマンドを実行する作業ディレクトリ。</target>
         <note />
       </trans-unit>
     </body>

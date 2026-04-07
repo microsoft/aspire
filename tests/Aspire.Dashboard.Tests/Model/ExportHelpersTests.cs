@@ -22,11 +22,13 @@ public sealed class ExportHelpersTests
             environment: [new EnvironmentVariableViewModel("MY_VAR", "my-value", fromSpec: false)],
             relationships: [new RelationshipViewModel("dependency", "Reference")]);
 
+        var resourceByName = new Dictionary<string, ResourceViewModel>(StringComparer.OrdinalIgnoreCase) { [resource.Name] = resource };
+
         // Act
-        var result = ExportHelpers.GetResourceAsJson(resource, r => r.Name);
+        var result = ExportHelpers.GetResourceAsJson(resource, resourceByName);
 
         // Assert
-        Assert.Equal("test-resource.json", result.FileName);
+        Assert.Equal("Test Resource.json", result.FileName);
         Assert.NotNull(result.Content);
     }
 
@@ -40,14 +42,23 @@ public sealed class ExportHelpersTests
             resourceType: "Container",
             state: KnownResourceState.Running,
             environment: [
-                new EnvironmentVariableViewModel("MY_VAR", "my-value", fromSpec: false)
+                new EnvironmentVariableViewModel("MY_VAR", "my-value", fromSpec: true),
+                new EnvironmentVariableViewModel("RUNTIME_VAR", "runtime-value", fromSpec: false)
             ]);
 
+        var resourceByName = new Dictionary<string, ResourceViewModel>(StringComparer.OrdinalIgnoreCase) { [resource.Name] = resource };
+
         // Act
-        var result = ExportHelpers.GetEnvironmentVariablesAsEnvFile(resource, r => r.Name);
+        var result = ExportHelpers.GetEnvironmentVariablesAsEnvFile(resource, resourceByName);
 
         // Assert
-        Assert.Equal("test-resource.env", result.FileName);
-        Assert.Contains("MY_VAR=my-value", result.Content);
+        Assert.Equal("Test Resource.env", result.FileName);
+        Assert.Equal(
+            """
+            MY_VAR=my-value
+
+            """,
+            result.Content,
+            ignoreLineEndingDifferences: true);
     }
 }

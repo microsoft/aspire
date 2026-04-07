@@ -10,6 +10,16 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 public class ResourceCommandService
 {
+    /// <summary>
+    /// Maps legacy command names to their current equivalents for backwards compatibility.
+    /// </summary>
+    private static readonly Dictionary<string, string> s_legacyCommandNameMap = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [KnownResourceCommands.LegacyStartCommand] = KnownResourceCommands.StartCommand,
+        [KnownResourceCommands.LegacyStopCommand] = KnownResourceCommands.StopCommand,
+        [KnownResourceCommands.LegacyRestartCommand] = KnownResourceCommands.RestartCommand,
+    };
+
     private readonly ResourceNotificationService _resourceNotificationService;
     private readonly ResourceLoggerService _resourceLoggerService;
     private readonly IServiceProvider _serviceProvider;
@@ -96,7 +106,13 @@ public class ResourceCommandService
 
         if (failures.Count == 0 && cancellations.Count == 0)
         {
-            return new ExecuteCommandResult { Success = true };
+            var successWithResult = results.FirstOrDefault(r => r.Result is not null);
+            return new ExecuteCommandResult
+            {
+                Success = true,
+                Result = successWithResult?.Result,
+                ResultFormat = successWithResult?.ResultFormat
+            };
         }
         else if (failures.Count == 0 && cancellations.Count > 0)
         {
@@ -124,6 +140,19 @@ public class ResourceCommandService
         logger.LogInformation("Executing command '{CommandName}'.", commandName);
 
         var annotation = resource.Annotations.OfType<ResourceCommandAnnotation>().SingleOrDefault(a => a.Name == commandName);
+
+        // Backwards compatibility: if the command wasn't found and the caller used a legacy name
+        // (e.g. "resource-start"), fall back to the current name (e.g. "start").
+        if (annotation is null && s_legacyCommandNameMap.TryGetValue(commandName, out var mappedName))
+        {
+            logger.LogDebug("Command '{CommandName}' not found, falling back to '{MappedName}'.", commandName, mappedName);
+            annotation = resource.Annotations.OfType<ResourceCommandAnnotation>().SingleOrDefault(a => a.Name == mappedName);
+            if (annotation is not null)
+            {
+                commandName = mappedName;
+            }
+        }
+
         if (annotation != null)
         {
             try
@@ -132,7 +161,8 @@ public class ResourceCommandService
                 {
                     ResourceName = resourceId,
                     ServiceProvider = _serviceProvider,
-                    CancellationToken = cancellationToken
+                    CancellationToken = cancellationToken,
+                    Logger = logger
                 };
 
                 var result = await annotation.ExecuteCommand(context).ConfigureAwait(false);

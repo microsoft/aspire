@@ -38,7 +38,7 @@ public class KubernetesEnvironmentResourceTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/11818", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/11818", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public async Task PublishAsKubernetesService_ThrowsIfNoEnvironment()
     {
         static async Task RunTest(Action<IDistributedApplicationBuilder> action)
@@ -70,7 +70,7 @@ public class KubernetesEnvironmentResourceTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/11818", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/11818", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public async Task MultipleKubernetesEnvironmentsSupported()
     {
         using var tempDir = new TestTempDirectory();
@@ -105,7 +105,7 @@ public class KubernetesEnvironmentResourceTests(ITestOutputHelper output)
             .AddProject<Projects.ServiceA>("project1", launchProfileName: null)
             .WithHttpEndpoint();
 
-        var endpointReferenceEx = ((IComputeEnvironmentResource)env.Resource).GetHostAddressExpression(project.GetEndpoint("http"));
+        var endpointReferenceEx = env.Resource.GetHostAddressExpression(project.GetEndpoint("http"));
         Assert.NotNull(endpointReferenceEx);
 
         Assert.Equal("project1-service", endpointReferenceEx.Format);

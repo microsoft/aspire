@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Tests.Dcp;
 
+[Trait("Partition", "4")]
 public sealed class DcpLogParserTests
 {
     [Fact]

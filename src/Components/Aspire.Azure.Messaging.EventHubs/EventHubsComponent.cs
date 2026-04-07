@@ -1,10 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire;
 using Aspire.Azure.Common;
 using Aspire.Azure.Messaging.EventHubs;
 using Azure.Core;
-using Azure.Identity;
 using Azure.Messaging.EventHubs;
 using Azure.Messaging.EventHubs.Producer;
 using HealthChecks.Azure.Messaging.EventHubs;
@@ -45,7 +45,7 @@ internal abstract class EventHubsComponent<TSettings, TClient, TClientOptions> :
             // If no connection is provided use TokenCredential
             if (string.IsNullOrEmpty(settings.ConnectionString))
             {
-                _healthCheckClient = new EventHubProducerClient(settings.FullyQualifiedNamespace, settings.EventHubName, settings.Credential ?? new DefaultAzureCredential(), producerClientOptions);
+                _healthCheckClient = new EventHubProducerClient(settings.FullyQualifiedNamespace, settings.EventHubName, settings.Credential ?? AzureCredentialHelper.CreateDefaultAzureCredential(), producerClientOptions);
             }
             // If no specific EventHubName is provided, it has to be in the connection string
             else if (string.IsNullOrEmpty(settings.EventHubName))

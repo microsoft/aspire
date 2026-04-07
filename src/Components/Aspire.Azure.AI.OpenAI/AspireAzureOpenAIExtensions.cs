@@ -2,12 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.ClientModel;
+using Aspire;
 using Aspire.Azure.AI.OpenAI;
 using Aspire.Azure.Common;
 using Azure.AI.OpenAI;
 using Azure.Core;
 using Azure.Core.Extensions;
-using Azure.Identity;
 using Microsoft.Extensions.Azure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -111,7 +111,7 @@ public static class AspireAzureOpenAIExtensions
                     }
                     else
                     {
-                        return new AzureOpenAIClient(settings.Endpoint, settings.Credential ?? new DefaultAzureCredential(), options);
+                        return new AzureOpenAIClient(settings.Endpoint, settings.Credential ?? AzureCredentialHelper.CreateDefaultAzureCredential(), options);
                     }
                 }
             });

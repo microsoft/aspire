@@ -268,7 +268,7 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
         ResourceMenuBuilder.AddMenuItems(
             _resourceActionsMenuItems,
             Resource,
-            FormatName,
+            ResourceByName,
             EventCallback.Empty, // View details not shown since we're already in the details view
             CommandSelected,
             IsCommandExecuting,

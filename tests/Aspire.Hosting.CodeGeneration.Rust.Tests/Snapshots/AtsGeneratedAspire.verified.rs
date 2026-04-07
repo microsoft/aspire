@@ -178,6 +178,16 @@ impl IDistributedApplicationBuilder {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(TestRedisResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a test vault resource
+    pub fn add_test_vault(&self, name: &str) -> Result<TestVaultResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/addTestVault", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(TestVaultResource::new(handle, self.client.clone()))
+    }
 }
 
 /// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
@@ -245,6 +255,32 @@ impl HasHandle for IResourceWithEnvironment {
 }
 
 impl IResourceWithEnvironment {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+}
+
+/// Wrapper for Aspire.Hosting.CodeGeneration.Rust.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestVaultResource
+pub struct ITestVaultResource {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for ITestVaultResource {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl ITestVaultResource {
     pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
         Self { handle, client }
     }
@@ -378,6 +414,317 @@ impl TestCollectionContext {
     }
 }
 
+/// Wrapper for Aspire.Hosting.CodeGeneration.Rust.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestDatabaseResource
+pub struct TestDatabaseResource {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for TestDatabaseResource {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl TestDatabaseResource {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Adds an optional string parameter
+    pub fn with_optional_string(&self, value: Option<&str>, enabled: Option<bool>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        if let Some(ref v) = value {
+            args.insert("value".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = enabled {
+            args.insert("enabled".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withOptionalString", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource with a DTO
+    pub fn with_config(&self, config: TestConfigDto) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("config".to_string(), serde_json::to_value(&config).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withConfig", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures environment with callback (test version)
+    pub fn test_with_environment_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/testWithEnvironmentCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
+    /// Sets the created timestamp
+    pub fn with_created_at(&self, created_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("createdAt".to_string(), serde_json::to_value(&created_at).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withCreatedAt", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Sets the modified timestamp
+    pub fn with_modified_at(&self, modified_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("modifiedAt".to_string(), serde_json::to_value(&modified_at).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withModifiedAt", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Sets the correlation ID
+    pub fn with_correlation_id(&self, correlation_id: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("correlationId".to_string(), serde_json::to_value(&correlation_id).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withCorrelationId", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures with optional callback
+    pub fn with_optional_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withOptionalCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Sets the resource status
+    pub fn with_status(&self, status: TestResourceStatus) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("status".to_string(), serde_json::to_value(&status).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withStatus", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures with nested DTO
+    pub fn with_nested_config(&self, config: TestNestedDto) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("config".to_string(), serde_json::to_value(&config).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withNestedConfig", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds validation callback
+    pub fn with_validator(&self, validator: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(validator);
+        args.insert("validator".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withValidator", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Waits for another resource (test version)
+    pub fn test_wait_for(&self, dependency: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("dependency".to_string(), dependency.handle().to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/testWaitFor", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds a dependency on another resource
+    pub fn with_dependency(&self, dependency: &IResourceWithConnectionString) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("dependency".to_string(), dependency.handle().to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withDependency", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds a dependency from a string or another resource
+    pub fn with_union_dependency(&self, dependency: Value) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("dependency".to_string(), serde_json::to_value(&dependency).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withUnionDependency", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Sets the endpoints
+    pub fn with_endpoints(&self, endpoints: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("endpoints".to_string(), serde_json::to_value(&endpoints).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withEndpoints", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Sets environment variables
+    pub fn with_environment_variables(&self, variables: HashMap<String, String>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("variables".to_string(), serde_json::to_value(&variables).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withEnvironmentVariables", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
+    /// Performs a cancellable operation
+    pub fn with_cancellable_operation(&self, operation: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(operation);
+        args.insert("operation".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withCancellableOperation", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds a data volume
+    pub fn with_data_volume(&self, name: Option<&str>) -> Result<TestDatabaseResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        if let Some(ref v) = name {
+            args.insert("name".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withDataVolume", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(TestDatabaseResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds a label to the resource
+    pub fn with_merge_label(&self, label: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("label".to_string(), serde_json::to_value(&label).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withMergeLabel", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds a categorized label to the resource
+    pub fn with_merge_label_categorized(&self, label: &str, category: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("label".to_string(), serde_json::to_value(&label).unwrap_or(Value::Null));
+        args.insert("category".to_string(), serde_json::to_value(&category).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withMergeLabelCategorized", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures a named endpoint
+    pub fn with_merge_endpoint(&self, endpoint_name: &str, port: f64) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("endpointName".to_string(), serde_json::to_value(&endpoint_name).unwrap_or(Value::Null));
+        args.insert("port".to_string(), serde_json::to_value(&port).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withMergeEndpoint", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures a named endpoint with scheme
+    pub fn with_merge_endpoint_scheme(&self, endpoint_name: &str, port: f64, scheme: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("endpointName".to_string(), serde_json::to_value(&endpoint_name).unwrap_or(Value::Null));
+        args.insert("port".to_string(), serde_json::to_value(&port).unwrap_or(Value::Null));
+        args.insert("scheme".to_string(), serde_json::to_value(&scheme).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withMergeEndpointScheme", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures resource logging
+    pub fn with_merge_logging(&self, log_level: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("logLevel".to_string(), serde_json::to_value(&log_level).unwrap_or(Value::Null));
+        if let Some(ref v) = enable_console {
+            args.insert("enableConsole".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = max_files {
+            args.insert("maxFiles".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withMergeLogging", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures resource logging with file path
+    pub fn with_merge_logging_path(&self, log_level: &str, log_path: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("logLevel".to_string(), serde_json::to_value(&log_level).unwrap_or(Value::Null));
+        args.insert("logPath".to_string(), serde_json::to_value(&log_path).unwrap_or(Value::Null));
+        if let Some(ref v) = enable_console {
+            args.insert("enableConsole".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = max_files {
+            args.insert("maxFiles".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withMergeLoggingPath", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures a route
+    pub fn with_merge_route(&self, path: &str, method: &str, handler: &str, priority: f64) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("path".to_string(), serde_json::to_value(&path).unwrap_or(Value::Null));
+        args.insert("method".to_string(), serde_json::to_value(&method).unwrap_or(Value::Null));
+        args.insert("handler".to_string(), serde_json::to_value(&handler).unwrap_or(Value::Null));
+        args.insert("priority".to_string(), serde_json::to_value(&priority).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withMergeRoute", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures a route with middleware
+    pub fn with_merge_route_middleware(&self, path: &str, method: &str, handler: &str, priority: f64, middleware: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("path".to_string(), serde_json::to_value(&path).unwrap_or(Value::Null));
+        args.insert("method".to_string(), serde_json::to_value(&method).unwrap_or(Value::Null));
+        args.insert("handler".to_string(), serde_json::to_value(&handler).unwrap_or(Value::Null));
+        args.insert("priority".to_string(), serde_json::to_value(&priority).unwrap_or(Value::Null));
+        args.insert("middleware".to_string(), serde_json::to_value(&middleware).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withMergeRouteMiddleware", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+}
+
 /// Wrapper for Aspire.Hosting.CodeGeneration.Rust.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext
 pub struct TestEnvironmentContext {
     handle: Handle,
@@ -481,6 +828,19 @@ impl TestRedisResource {
 
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
+    }
+
+    /// Adds a child database to a test Redis resource
+    pub fn add_test_child_database(&self, name: &str, database_name: Option<&str>) -> Result<TestDatabaseResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        if let Some(ref v) = database_name {
+            args.insert("databaseName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/addTestChildDatabase", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(TestDatabaseResource::new(handle, self.client.clone()))
     }
 
     /// Configures the Redis resource with persistence
@@ -671,6 +1031,16 @@ impl TestRedisResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Adds a dependency from a string or another resource
+    pub fn with_union_dependency(&self, dependency: Value) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("dependency".to_string(), serde_json::to_value(&dependency).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withUnionDependency", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Sets the endpoints
     pub fn with_endpoints(&self, endpoints: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -725,6 +1095,136 @@ impl TestRedisResource {
         }
         let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/waitForReadyAsync", args)?;
         Ok(serde_json::from_value(result)?)
+    }
+
+    /// Tests multi-param callback destructuring
+    pub fn with_multi_param_handle_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<TestRedisResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withMultiParamHandleCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(TestRedisResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds a data volume with persistence
+    pub fn with_data_volume(&self, name: Option<&str>, is_read_only: Option<bool>) -> Result<TestRedisResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        if let Some(ref v) = name {
+            args.insert("name".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = is_read_only {
+            args.insert("isReadOnly".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withDataVolume", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(TestRedisResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds a label to the resource
+    pub fn with_merge_label(&self, label: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("label".to_string(), serde_json::to_value(&label).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withMergeLabel", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds a categorized label to the resource
+    pub fn with_merge_label_categorized(&self, label: &str, category: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("label".to_string(), serde_json::to_value(&label).unwrap_or(Value::Null));
+        args.insert("category".to_string(), serde_json::to_value(&category).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withMergeLabelCategorized", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures a named endpoint
+    pub fn with_merge_endpoint(&self, endpoint_name: &str, port: f64) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("endpointName".to_string(), serde_json::to_value(&endpoint_name).unwrap_or(Value::Null));
+        args.insert("port".to_string(), serde_json::to_value(&port).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withMergeEndpoint", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures a named endpoint with scheme
+    pub fn with_merge_endpoint_scheme(&self, endpoint_name: &str, port: f64, scheme: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("endpointName".to_string(), serde_json::to_value(&endpoint_name).unwrap_or(Value::Null));
+        args.insert("port".to_string(), serde_json::to_value(&port).unwrap_or(Value::Null));
+        args.insert("scheme".to_string(), serde_json::to_value(&scheme).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withMergeEndpointScheme", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures resource logging
+    pub fn with_merge_logging(&self, log_level: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("logLevel".to_string(), serde_json::to_value(&log_level).unwrap_or(Value::Null));
+        if let Some(ref v) = enable_console {
+            args.insert("enableConsole".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = max_files {
+            args.insert("maxFiles".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withMergeLogging", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures resource logging with file path
+    pub fn with_merge_logging_path(&self, log_level: &str, log_path: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("logLevel".to_string(), serde_json::to_value(&log_level).unwrap_or(Value::Null));
+        args.insert("logPath".to_string(), serde_json::to_value(&log_path).unwrap_or(Value::Null));
+        if let Some(ref v) = enable_console {
+            args.insert("enableConsole".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = max_files {
+            args.insert("maxFiles".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withMergeLoggingPath", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures a route
+    pub fn with_merge_route(&self, path: &str, method: &str, handler: &str, priority: f64) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("path".to_string(), serde_json::to_value(&path).unwrap_or(Value::Null));
+        args.insert("method".to_string(), serde_json::to_value(&method).unwrap_or(Value::Null));
+        args.insert("handler".to_string(), serde_json::to_value(&handler).unwrap_or(Value::Null));
+        args.insert("priority".to_string(), serde_json::to_value(&priority).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withMergeRoute", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures a route with middleware
+    pub fn with_merge_route_middleware(&self, path: &str, method: &str, handler: &str, priority: f64, middleware: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("path".to_string(), serde_json::to_value(&path).unwrap_or(Value::Null));
+        args.insert("method".to_string(), serde_json::to_value(&method).unwrap_or(Value::Null));
+        args.insert("handler".to_string(), serde_json::to_value(&handler).unwrap_or(Value::Null));
+        args.insert("priority".to_string(), serde_json::to_value(&priority).unwrap_or(Value::Null));
+        args.insert("middleware".to_string(), serde_json::to_value(&middleware).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withMergeRouteMiddleware", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 }
 
@@ -815,6 +1315,315 @@ impl TestResourceContext {
     }
 }
 
+/// Wrapper for Aspire.Hosting.CodeGeneration.Rust.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestVaultResource
+pub struct TestVaultResource {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for TestVaultResource {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl TestVaultResource {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Adds an optional string parameter
+    pub fn with_optional_string(&self, value: Option<&str>, enabled: Option<bool>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        if let Some(ref v) = value {
+            args.insert("value".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = enabled {
+            args.insert("enabled".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withOptionalString", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource with a DTO
+    pub fn with_config(&self, config: TestConfigDto) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("config".to_string(), serde_json::to_value(&config).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withConfig", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures environment with callback (test version)
+    pub fn test_with_environment_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/testWithEnvironmentCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
+    /// Sets the created timestamp
+    pub fn with_created_at(&self, created_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("createdAt".to_string(), serde_json::to_value(&created_at).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withCreatedAt", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Sets the modified timestamp
+    pub fn with_modified_at(&self, modified_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("modifiedAt".to_string(), serde_json::to_value(&modified_at).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withModifiedAt", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Sets the correlation ID
+    pub fn with_correlation_id(&self, correlation_id: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("correlationId".to_string(), serde_json::to_value(&correlation_id).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withCorrelationId", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures with optional callback
+    pub fn with_optional_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withOptionalCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Sets the resource status
+    pub fn with_status(&self, status: TestResourceStatus) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("status".to_string(), serde_json::to_value(&status).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withStatus", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures with nested DTO
+    pub fn with_nested_config(&self, config: TestNestedDto) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("config".to_string(), serde_json::to_value(&config).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withNestedConfig", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds validation callback
+    pub fn with_validator(&self, validator: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(validator);
+        args.insert("validator".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withValidator", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Waits for another resource (test version)
+    pub fn test_wait_for(&self, dependency: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("dependency".to_string(), dependency.handle().to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/testWaitFor", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds a dependency on another resource
+    pub fn with_dependency(&self, dependency: &IResourceWithConnectionString) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("dependency".to_string(), dependency.handle().to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withDependency", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds a dependency from a string or another resource
+    pub fn with_union_dependency(&self, dependency: Value) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("dependency".to_string(), serde_json::to_value(&dependency).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withUnionDependency", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Sets the endpoints
+    pub fn with_endpoints(&self, endpoints: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("endpoints".to_string(), serde_json::to_value(&endpoints).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withEndpoints", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Sets environment variables
+    pub fn with_environment_variables(&self, variables: HashMap<String, String>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("variables".to_string(), serde_json::to_value(&variables).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withEnvironmentVariables", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
+    /// Performs a cancellable operation
+    pub fn with_cancellable_operation(&self, operation: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(operation);
+        args.insert("operation".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withCancellableOperation", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures vault using direct interface target
+    pub fn with_vault_direct(&self, option: &str) -> Result<ITestVaultResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("option".to_string(), serde_json::to_value(&option).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withVaultDirect", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ITestVaultResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds a label to the resource
+    pub fn with_merge_label(&self, label: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("label".to_string(), serde_json::to_value(&label).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withMergeLabel", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds a categorized label to the resource
+    pub fn with_merge_label_categorized(&self, label: &str, category: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("label".to_string(), serde_json::to_value(&label).unwrap_or(Value::Null));
+        args.insert("category".to_string(), serde_json::to_value(&category).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withMergeLabelCategorized", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures a named endpoint
+    pub fn with_merge_endpoint(&self, endpoint_name: &str, port: f64) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("endpointName".to_string(), serde_json::to_value(&endpoint_name).unwrap_or(Value::Null));
+        args.insert("port".to_string(), serde_json::to_value(&port).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withMergeEndpoint", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures a named endpoint with scheme
+    pub fn with_merge_endpoint_scheme(&self, endpoint_name: &str, port: f64, scheme: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("endpointName".to_string(), serde_json::to_value(&endpoint_name).unwrap_or(Value::Null));
+        args.insert("port".to_string(), serde_json::to_value(&port).unwrap_or(Value::Null));
+        args.insert("scheme".to_string(), serde_json::to_value(&scheme).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withMergeEndpointScheme", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures resource logging
+    pub fn with_merge_logging(&self, log_level: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("logLevel".to_string(), serde_json::to_value(&log_level).unwrap_or(Value::Null));
+        if let Some(ref v) = enable_console {
+            args.insert("enableConsole".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = max_files {
+            args.insert("maxFiles".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withMergeLogging", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures resource logging with file path
+    pub fn with_merge_logging_path(&self, log_level: &str, log_path: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("logLevel".to_string(), serde_json::to_value(&log_level).unwrap_or(Value::Null));
+        args.insert("logPath".to_string(), serde_json::to_value(&log_path).unwrap_or(Value::Null));
+        if let Some(ref v) = enable_console {
+            args.insert("enableConsole".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = max_files {
+            args.insert("maxFiles".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withMergeLoggingPath", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures a route
+    pub fn with_merge_route(&self, path: &str, method: &str, handler: &str, priority: f64) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("path".to_string(), serde_json::to_value(&path).unwrap_or(Value::Null));
+        args.insert("method".to_string(), serde_json::to_value(&method).unwrap_or(Value::Null));
+        args.insert("handler".to_string(), serde_json::to_value(&handler).unwrap_or(Value::Null));
+        args.insert("priority".to_string(), serde_json::to_value(&priority).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withMergeRoute", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures a route with middleware
+    pub fn with_merge_route_middleware(&self, path: &str, method: &str, handler: &str, priority: f64, middleware: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("path".to_string(), serde_json::to_value(&path).unwrap_or(Value::Null));
+        args.insert("method".to_string(), serde_json::to_value(&method).unwrap_or(Value::Null));
+        args.insert("handler".to_string(), serde_json::to_value(&handler).unwrap_or(Value::Null));
+        args.insert("priority".to_string(), serde_json::to_value(&priority).unwrap_or(Value::Null));
+        args.insert("middleware".to_string(), serde_json::to_value(&middleware).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withMergeRouteMiddleware", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+}
+
 // ============================================================================
 // Handle wrapper registrations
 // ============================================================================
@@ -834,6 +1643,9 @@ pub fn connect() -> Result<Arc<AspireClient>, Box<dyn std::error::Error>> {
         .map_err(|_| "REMOTE_APP_HOST_SOCKET_PATH environment variable not set. Run this application using `aspire run`")?;
     let client = Arc::new(AspireClient::new(&socket_path));
     client.connect()?;
+    let auth_token = std::env::var("ASPIRE_REMOTE_APPHOST_TOKEN")
+        .map_err(|_| "ASPIRE_REMOTE_APPHOST_TOKEN environment variable not set. Run this application using `aspire run`")?;
+    client.authenticate(&auth_token)?;
     Ok(client)
 }
 

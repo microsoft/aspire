@@ -197,4 +197,4 @@ adb devices
 
 ## Feedback & Issues
 
-Please file issues at https://github.com/dotnet/aspire/issues
+Please file issues at https://github.com/microsoft/aspire/issues

@@ -20,7 +20,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- see https://github.com/dotnet/aspire/pull/1225 -->
+    <!-- see https://github.com/microsoft/aspire/pull/1225 -->
     <None Include="templates\**\*" />
   </ItemGroup>
 
@@ -45,16 +45,10 @@
       <DestinationFile>$(IntermediateOutputPath)content\templates\aspire-apphost-singlefile\%(RecursiveDir)%(Filename)%(Extension)</DestinationFile>
     </TemplateProjectFiles>
 
-    <!-- Template project files: apphost.cs (aspire-py-starter) -->
-    <TemplateProjectFiles Include="$(MSBuildThisFileDirectory)templates\aspire-py-starter\**\apphost.cs">
-      <PackagePath>content/templates/aspire-py-starter/%(RecursiveDir)</PackagePath>
-      <DestinationFile>$(IntermediateOutputPath)content\templates\aspire-py-starter\%(RecursiveDir)%(Filename)%(Extension)</DestinationFile>
-    </TemplateProjectFiles>
-
     <TemplateProjectFilesObj Include="@(TemplateProjectFiles->'%(DestinationFile)')" />
 
     <TemplateFiles Include="$(MSBuildThisFileDirectory)templates\**\*"
-                   Exclude="$(MSBuildThisFileDirectory)templates\**\bin\**;$(MSBuildThisFileDirectory)templates\**\obj\**;$(MSBuildThisFileDirectory)templates\**\*.csproj;$(MSBuildThisFileDirectory)templates\aspire-apphost-singlefile\**\apphost.cs;$(MSBuildThisFileDirectory)templates\aspire-py-starter\**\apphost.cs">
+                   Exclude="$(MSBuildThisFileDirectory)templates\**\bin\**;$(MSBuildThisFileDirectory)templates\**\obj\**;$(MSBuildThisFileDirectory)templates\**\*.csproj;$(MSBuildThisFileDirectory)templates\aspire-apphost-singlefile\**\apphost.cs">
       <PackagePath>content/templates/%(RecursiveDir)</PackagePath>
     </TemplateFiles>
 

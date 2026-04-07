@@ -26,4 +26,4 @@ aspire publish -o k8s-artifacts
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

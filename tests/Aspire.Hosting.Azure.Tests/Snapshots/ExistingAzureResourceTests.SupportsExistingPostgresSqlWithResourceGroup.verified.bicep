@@ -20,4 +20,6 @@ output connectionString string = 'Host=${postgresSql.properties.fullyQualifiedDo
 
 output name string = postgresSql.name
 
+output id string = postgresSql.id
+
 output hostName string = postgresSql.properties.fullyQualifiedDomainName

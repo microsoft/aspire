@@ -15,6 +15,7 @@ namespace Aspire.Hosting.Azure;
 /// <param name="databaseName">The database name.</param>
 /// <param name="parent">The Azure SQL Database (server) parent resource associated with this database.</param>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Database = {DatabaseName}")]
+[AspireExport(ExposeProperties = true)]
 public class AzureSqlDatabaseResource(string name, string databaseName, AzureSqlServerResource parent)
     : Resource(name), IResourceWithParent<AzureSqlServerResource>, IResourceWithConnectionString
 {
@@ -81,6 +82,8 @@ public class AzureSqlDatabaseResource(string name, string databaseName, AzureSql
             Parent.BuildJdbcConnectionString(DatabaseName);
 
     /// <inheritdoc />
+    /// <remarks>This property is not available in polyglot app hosts.</remarks>
+    [AspireExportIgnore]
     public override ResourceAnnotationCollection Annotations => InnerResource?.Annotations ?? base.Annotations;
 
     private static string ThrowIfNullOrEmpty([NotNull] string? argument, [CallerArgumentExpression(nameof(argument))] string? paramName = null)

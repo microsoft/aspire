@@ -3,12 +3,14 @@
 
 using Aspire.TestUtilities;
 using Aspire.Hosting.Eventing;
+using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests.Eventing;
 
+[Trait("Partition", "6")]
 public class DistributedApplicationBuilderEventingTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
@@ -333,6 +335,125 @@ public class DistributedApplicationBuilderEventingTests(ITestOutputHelper testOu
 
         // Verify that ResourceStoppedEvent was fired
         await resourceStoppedTcs.Task.DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task OnBeforeStartSubscribesToBeforeStartEvent()
+    {
+        var eventFired = new ManualResetEventSlim();
+
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.OnBeforeStart((e, ct) =>
+        {
+            Assert.NotNull(e.Services);
+            Assert.NotNull(e.Model);
+            eventFired.Set();
+            return Task.CompletedTask;
+        });
+
+        using var app = builder.Build();
+        await app.StartAsync();
+
+        var fired = eventFired.Wait(TimeSpan.FromSeconds(10));
+        Assert.True(fired);
+
+        await app.StopAsync();
+    }
+
+    [Fact]
+    public async Task OnAfterResourcesCreatedSubscribesToAfterResourcesCreatedEvent()
+    {
+        var eventFired = new ManualResetEventSlim();
+
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.Eventing.Subscribe<AfterResourcesCreatedEvent>((e, ct) =>
+        {
+            Assert.NotNull(e.Services);
+            Assert.NotNull(e.Model);
+            eventFired.Set();
+            return Task.CompletedTask;
+        });
+
+        using var app = builder.Build();
+        await app.StartAsync();
+
+        var fired = eventFired.Wait(TimeSpan.FromSeconds(10));
+        Assert.True(fired);
+
+        await app.StopAsync();
+    }
+
+    [Fact]
+    public async Task OnBeforePublishSubscribesToBeforePublishEvent()
+    {
+        var eventFired = false;
+
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.OnBeforePublish((e, ct) =>
+        {
+            Assert.NotNull(e.Model);
+            eventFired = true;
+            return Task.CompletedTask;
+        });
+
+        using var app = builder.Build();
+        var eventing = app.Services.GetRequiredService<IDistributedApplicationEventing>();
+
+        // Manually publish the event to verify subscription
+        var testEvent = new BeforePublishEvent(app.Services, new([]));
+        await eventing.PublishAsync(testEvent, CancellationToken.None);
+
+        Assert.True(eventFired);
+    }
+
+    [Fact]
+    public async Task OnAfterPublishSubscribesToAfterPublishEvent()
+    {
+        var eventFired = false;
+
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.OnAfterPublish((e, ct) =>
+        {
+            Assert.NotNull(e.Model);
+            eventFired = true;
+            return Task.CompletedTask;
+        });
+
+        using var app = builder.Build();
+        var eventing = app.Services.GetRequiredService<IDistributedApplicationEventing>();
+
+        // Manually publish the event to verify subscription
+        var testEvent = new AfterPublishEvent(app.Services, new([]));
+        await eventing.PublishAsync(testEvent, CancellationToken.None);
+
+        Assert.True(eventFired);
+    }
+
+    [Fact]
+    public void OnBeforeStartReturnsBuilderForChaining()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var result = builder.OnBeforeStart((e, ct) => Task.CompletedTask);
+
+        Assert.Same(builder, result);
+    }
+
+    [Fact]
+    public void OnBeforePublishReturnsBuilderForChaining()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var result = builder.OnBeforePublish((e, ct) => Task.CompletedTask);
+
+        Assert.Same(builder, result);
+    }
+
+    [Fact]
+    public void OnAfterPublishReturnsBuilderForChaining()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var result = builder.OnAfterPublish((e, ct) => Task.CompletedTask);
+
+        Assert.Same(builder, result);
     }
 
     public class DummyEvent : IDistributedApplicationEvent

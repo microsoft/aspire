@@ -19,8 +19,7 @@ internal sealed class TemporaryNuGetConfig : IDisposable
 
     public static async Task<TemporaryNuGetConfig> CreateAsync(PackageMapping[] mappings)
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        Directory.CreateDirectory(tempDirectory);
+        var tempDirectory = Directory.CreateTempSubdirectory("aspire-nuget-config").FullName;
         var tempFilePath = Path.Combine(tempDirectory, "nuget.config");
         var configFile = new FileInfo(tempFilePath);
         await GenerateNuGetConfigAsync(mappings, configFile);

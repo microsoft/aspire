@@ -1,0 +1,21 @@
+﻿services:
+  docker-compose-dashboard:
+    image: "mcr.microsoft.com/dotnet/nightly/aspire-dashboard:latest"
+    ports:
+      - "18888"
+    expose:
+      - "18889"
+      - "18890"
+    networks:
+      - "aspire"
+    restart: "always"
+  myapp:
+    image: "mcr.microsoft.com/dotnet/aspnet:8.0"
+    environment:
+      TLS_SUFFIX: ",ssl=true"
+      TLS_SUFFIX_FALSE: ",ssl=false"
+    networks:
+      - "aspire"
+networks:
+  aspire:
+    driver: "bridge"

@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "2")]
 public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
@@ -323,6 +324,138 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         Assert.False(result.Success);
         Assert.True(result.Canceled);
         Assert.Null(result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_LegacyCommandName_FallsBackToCurrentName()
+    {
+        // Arrange
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: KnownResourceCommands.StartCommand,
+                displayName: "Start",
+                executeCommand: _ => Task.FromResult(new ExecuteCommandResult { Success = true }));
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        // Act - use the legacy "resource-start" name
+        var result = await app.ResourceCommands.ExecuteCommandAsync(custom.Resource, "resource-start");
+
+        // Assert - should succeed via fallback
+        Assert.True(result.Success);
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_LegacyCommandName_ById_FallsBackToCurrentName()
+    {
+        // Arrange
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: KnownResourceCommands.StopCommand,
+                displayName: "Stop",
+                executeCommand: _ => Task.FromResult(new ExecuteCommandResult { Success = true }));
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        // Act - use the legacy "resource-stop" name via resource ID
+        var result = await app.ResourceCommands.ExecuteCommandAsync("myResource", "resource-stop");
+
+        // Assert - should succeed via fallback
+        Assert.True(result.Success);
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_SuccessWithResult_ReturnsResultData()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "generate-token",
+                displayName: "Generate Token",
+                executeCommand: _ => Task.FromResult(CommandResults.Success("{\"token\": \"abc123\"}", CommandResultFormat.Json)));
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(custom.Resource, "generate-token");
+
+        Assert.True(result.Success);
+        Assert.Equal("{\"token\": \"abc123\"}", result.Result);
+        Assert.Equal(CommandResultFormat.Json, result.ResultFormat);
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_SuccessWithoutResult_ReturnsNoResultData()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: _ => Task.FromResult(CommandResults.Success()));
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(custom.Resource, "mycommand");
+
+        Assert.True(result.Success);
+        Assert.Null(result.Result);
+        Assert.Null(result.ResultFormat);
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_HasReplicas_SuccessWithResult_ReturnsFirstResultData()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var callCount = 0;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithAnnotation(new DcpInstancesAnnotation([
+            new DcpInstance("myResource-abcdwxyz", "abcdwxyz", 0),
+            new DcpInstance("myResource-efghwxyz", "efghwxyz", 1)
+            ]));
+        custom.WithCommand(name: "generate-token",
+                displayName: "Generate Token",
+                executeCommand: e =>
+                {
+                    var count = Interlocked.Increment(ref callCount);
+                    return Task.FromResult(CommandResults.Success($"token-{count}", CommandResultFormat.Text));
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(custom.Resource, "generate-token");
+
+        Assert.True(result.Success);
+        Assert.NotNull(result.Result);
+        Assert.StartsWith("token-", result.Result);
+        Assert.Equal(CommandResultFormat.Text, result.ResultFormat);
+    }
+
+    [Fact]
+    public void CommandResults_SuccessWithResult_ProducesCorrectResult()
+    {
+        var result = CommandResults.Success("{\"key\": \"value\"}", CommandResultFormat.Json);
+
+        Assert.True(result.Success);
+        Assert.Equal("{\"key\": \"value\"}", result.Result);
+        Assert.Equal(CommandResultFormat.Json, result.ResultFormat);
+    }
+
+    [Fact]
+    public void CommandResults_SuccessWithTextResult_DefaultsToText()
+    {
+        var result = CommandResults.Success("hello world");
+
+        Assert.True(result.Success);
+        Assert.Equal("hello world", result.Result);
+        Assert.Equal(CommandResultFormat.Text, result.ResultFormat);
     }
 
     private sealed class CustomResource(string name) : Resource(name), IResourceWithEndpoints, IResourceWithWaitSupport

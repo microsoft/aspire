@@ -1,7 +1,7 @@
 blank_issues_enabled: true
 contact_links:
   - name: Aspire Discussions
-    url: https://github.com/dotnet/aspire/discussions
+    url: https://github.com/microsoft/aspire/discussions
     about: For other types of questions, consider using Discussions.
   - name: Issue Management Policies
     url: https://aka.ms/aspnet/issue-policies

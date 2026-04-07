@@ -2,19 +2,39 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="it" original="../RootCommandStrings.resx">
     <body>
+      <trans-unit id="BannerArgumentDescription">
+        <source>Display the animated Aspire CLI welcome banner</source>
+        <target state="needs-review-translation">Visualizzare il banner di benvenuto animato dell'interfaccia della riga di comando di Aspire.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="BannerVersionFormat">
+        <source>CLI — version {0}</source>
+        <target state="translated">Interfaccia della riga di comando - Versione {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="BannerWelcomeText">
+        <source>Welcome to the</source>
+        <target state="translated">Benvenuti in</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CliWaitForDebuggerArgumentDescription">
-        <source>Wait for a debugger to attach before executing the command.</source>
-        <target state="translated">Attendi che un debugger si connetta prima di eseguire il comando.</target>
+        <source>Wait for a debugger to attach before executing the command</source>
+        <target state="needs-review-translation">Attendi che un debugger si connetta prima di eseguire il comando.</target>
         <note />
       </trans-unit>
       <trans-unit id="DebugArgumentDescription">
-        <source>Enable debug logging to the console.</source>
-        <target state="translated">Abilita la registrazione di debug nella console.</target>
+        <source>Enable debug logging to the console</source>
+        <target state="needs-review-translation">Abilita la registrazione di debug nella console.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DebugLevelArgumentDescription">
+        <source>Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)</source>
+        <target state="new">Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>The Aspire CLI can be used to create, run, and publish Aspire-based applications.</source>
-        <target state="translated">L'interfaccia della riga di comando Aspire può essere usata per creare, eseguire e pubblicare applicazioni basate su Aspire.</target>
+        <source>The Aspire CLI can be used to create, run, and publish Aspire-based applications</source>
+        <target state="needs-review-translation">L'interfaccia della riga di comando Aspire può essere usata per creare, eseguire e pubblicare applicazioni basate su Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="FirstTimeUseTelemetryNotice">
@@ -23,28 +43,28 @@
 
 The Aspire CLI collects usage data. It is collected by Microsoft and is used to help us improve your experience. You can opt out of telemetry by setting the ASPIRE_CLI_TELEMETRY_OPTOUT environment variable to '1' or 'true' using your preferred shell.
 
-Read more about Aspire CLI telemetry: https://aka.ms/aspire/cli-telemetry</source>
+Read more about Aspire CLI telemetry: {0}</source>
         <target state="new">Telemetry
 ---------
 
 The Aspire CLI collects usage data. It is collected by Microsoft and is used to help us improve your experience. You can opt out of telemetry by setting the ASPIRE_CLI_TELEMETRY_OPTOUT environment variable to '1' or 'true' using your preferred shell.
 
-Read more about Aspire CLI telemetry: https://aka.ms/aspire/cli-telemetry</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FirstTimeUseWelcome">
-        <source>Welcome to Aspire! Learn more about Aspire at https://aspire.dev</source>
-        <target state="new">Welcome to Aspire! Learn more about Aspire at https://aspire.dev</target>
-        <note />
+Read more about Aspire CLI telemetry: {0}</target>
+        <note>{0} is a clickable URL</note>
       </trans-unit>
       <trans-unit id="NoLogoArgumentDescription">
-        <source>Suppress the startup banner and telemetry notice.</source>
-        <target state="new">Suppress the startup banner and telemetry notice.</target>
+        <source>Suppress the startup banner and telemetry notice</source>
+        <target state="needs-review-translation">Consente di disabilitare il banner di avvio e l'avviso di telemetria.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NonInteractiveArgumentDescription">
+        <source>Run the command in non-interactive mode, disabling all interactive prompts and spinners</source>
+        <target state="new">Run the command in non-interactive mode, disabling all interactive prompts and spinners</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitForDebuggerArgumentDescription">
-        <source>Wait for a debugger to attach before executing the command.</source>
-        <target state="translated">Attendi che un debugger si connetta prima di eseguire il comando.</target>
+        <source>Wait for a debugger to attach before executing the command</source>
+        <target state="needs-review-translation">Attendi che un debugger si connetta prima di eseguire il comando.</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitingForDebugger">

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Microsoft.AspNetCore.InternalTesting;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Aspire.Cli.Telemetry;
@@ -21,14 +22,14 @@ public class LinuxInformationProviderTests
         var provider = new LinuxMachineInformationProvider(NullLogger<LinuxMachineInformationProvider>.Instance);
 
         // Act
-        var deviceId = await provider.GetOrCreateDeviceId();
+        var deviceId = await provider.GetOrCreateDeviceId().DefaultTimeout();
 
         // Assert
         Assert.NotNull(deviceId);
         Assert.NotEmpty(deviceId);
 
         // Verify it's persisted by calling again
-        var deviceId2 = await provider.GetOrCreateDeviceId();
+        var deviceId2 = await provider.GetOrCreateDeviceId().DefaultTimeout();
         Assert.Equal(deviceId, deviceId2);
     }
 }

@@ -8,6 +8,7 @@ using System.Globalization;
 
 namespace Aspire.TestUtilities.Tests;
 
+[Trait("Partition", "4")]
 public class UseCultureAttributeTests
 {
     [Fact]

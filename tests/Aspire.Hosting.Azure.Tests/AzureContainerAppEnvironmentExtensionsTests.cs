@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.AppContainers;
@@ -132,5 +133,23 @@ public class AzureContainerAppEnvironmentExtensionsTests
         var exception = Assert.Throws<InvalidOperationException>(() => containerAppEnvironment.Resource.ContainerRegistry);
         Assert.Contains("not an Azure Container Registry", exception.Message);
         Assert.Contains("env", exception.Message);
+    }
+
+    [Fact]
+    public async Task WithDelegatedSubnet_ConfiguresVnetConfiguration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("container-apps-subnet", "10.0.0.0/23");
+
+        var containerAppEnvironment = builder.AddAzureContainerAppEnvironment("env")
+            .WithDelegatedSubnet(subnet);
+
+        var (_, envBicep) = await AzureManifestUtils.GetManifestWithBicep(containerAppEnvironment.Resource);
+        var (_, vnetBicep) = await AzureManifestUtils.GetManifestWithBicep(vnet.Resource);
+
+        await Verify(envBicep, extension: "bicep")
+            .AppendContentAsFile(vnetBicep, "bicep", "vnet");
     }
 }

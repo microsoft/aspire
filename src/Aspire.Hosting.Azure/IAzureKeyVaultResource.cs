@@ -8,6 +8,7 @@ namespace Aspire.Hosting.Azure;
 /// <summary>
 /// Represents a resource that represents an Azure Key Vault.
 /// </summary>
+[AspireExport]
 public interface IAzureKeyVaultResource : IResource, IAzureResource
 {
     /// <summary>

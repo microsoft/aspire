@@ -34,3 +34,5 @@ resource aiwithoutlaw 'Microsoft.Insights/components@2020-02-02' = {
 output appInsightsConnectionString string = aiwithoutlaw.properties.ConnectionString
 
 output name string = aiwithoutlaw.name
+
+output id string = aiwithoutlaw.id

@@ -9,6 +9,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <param name="name">The name of the resource.</param>
 /// <param name="admin">A parameter that contains the Keycloak admin, or <see langword="null"/> to use a default value.</param>
 /// <param name="adminPassword">A parameter that contains the Keycloak admin password.</param>
+[AspireExport(ExposeProperties = true)]
 public sealed class KeycloakResource(string name, ParameterResource? admin, ParameterResource adminPassword)
     : ContainerResource(name), IResourceWithServiceDiscovery
 {

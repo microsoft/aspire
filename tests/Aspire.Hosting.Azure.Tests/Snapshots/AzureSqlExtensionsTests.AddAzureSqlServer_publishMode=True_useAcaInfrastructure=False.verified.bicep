@@ -71,4 +71,6 @@ output sqlServerFqdn string = sql.properties.fullyQualifiedDomainName
 
 output name string = sql.name
 
+output id string = sql.id
+
 output sqlServerAdminName string = sql.properties.administrators.login

@@ -12,10 +12,10 @@
     <!-- Disable strong name signing because Hex1b package is not signed -->
     <SignAssembly>false</SignAssembly>
 
-    <!-- Do not run in the standard CI workflow - use deployment-tests.yml workflow instead -->
+    <!-- Deployment tests run on Linux only via deployment-tests.yml (excluded from tests.yml via OnlyDeploymentTests) -->
     <RunOnGithubActionsWindows>false</RunOnGithubActionsWindows>
+    <RunOnGithubActionsLinux>true</RunOnGithubActionsLinux>
     <RunOnGithubActionsMacOS>false</RunOnGithubActionsMacOS>
-    <RunOnGithubActionsLinux>false</RunOnGithubActionsLinux>
 
     <!-- Do not run tests in Helix - use GitHub Actions matrix strategy instead -->
     <RunOnAzdoHelixWindows>false</RunOnAzdoHelixWindows>
@@ -25,9 +25,12 @@
     <RunOnAzdoCIWindows>false</RunOnAzdoCIWindows>
     <RunOnAzdoCILinux>false</RunOnAzdoCILinux>
 
-    <!-- Each test class runs as a separate CI job via DeploymentEndToEndTestRunsheetBuilder -->
-    <ExtractTestClassNamesForHelix Condition="'$(ContinuousIntegrationBuild)' == 'true' or '$(PrepareForHelix)' == 'true'">true</ExtractTestClassNamesForHelix>
-    <ExtractTestClassNamesPrefix>Aspire.Deployment.EndToEnd.Tests</ExtractTestClassNamesPrefix>
+    <!-- Each test class runs as a separate CI job via GenerateTestPartitionsForCI -->
+    <SplitTestsOnCI>true</SplitTestsOnCI>
+    <TestClassNamePrefixForCI>Aspire.Deployment.EndToEnd.Tests</TestClassNamePrefixForCI>
+
+    <!-- Short name for CI job display (avoids verbose "Deployment.EndToEnd-ClassName") -->
+    <TestShortName>EndToEnd</TestShortName>
 
     <!-- These tests require built NuGet packages -->
     <TestUsingWorkloads>true</TestUsingWorkloads>
@@ -50,6 +53,8 @@
 
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)TemporaryRepo.cs" Link="shared\TemporaryRepo.cs" />
+    <Compile Include="$(TestsSharedDir)Hex1bTestHelpers.cs" Link="shared\Hex1bTestHelpers.cs" />
+    <Compile Include="$(TestsSharedDir)Hex1bAutomatorTestHelpers.cs" Link="shared\Hex1bAutomatorTestHelpers.cs" />
   </ItemGroup>
 
 </Project>

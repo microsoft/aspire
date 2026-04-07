@@ -15,6 +15,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <param name="databaseName">The database name.</param>
 /// <param name="parent">The MySQL parent resource associated with this database.</param>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Database = {DatabaseName}")]
+[AspireExport(ExposeProperties = true)]
 public class MySqlDatabaseResource(string name, string databaseName, MySqlServerResource parent)
     : Resource(name), IResourceWithParent<MySqlServerResource>, IResourceWithConnectionString
 {

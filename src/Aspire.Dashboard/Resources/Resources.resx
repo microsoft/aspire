@@ -306,6 +306,14 @@
     <value>Showing &lt;strong&gt;{0} resources&lt;/strong&gt;</value>
     <comment>{0} is a number. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</comment>
   </data>
+  <data name="TotalItemsFooterParametersSingularText" xml:space="preserve">
+    <value>Showing &lt;strong&gt;{0} parameter&lt;/strong&gt;</value>
+    <comment>{0} is a number. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</comment>
+  </data>
+  <data name="TotalItemsFooterParametersPluralText" xml:space="preserve">
+    <value>Showing &lt;strong&gt;{0} parameters&lt;/strong&gt;</value>
+    <comment>{0} is a number. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</comment>
+  </data>
   <data name="ResourceActionCommandsText" xml:space="preserve">
     <value>Commands</value>
   </data>

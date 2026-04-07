@@ -52,11 +52,6 @@
         <target state="translated">La versión instalada de la CLI de devtunnel {0} no es compatible. Se requiere la versión {1} o superior.</target>
         <note />
       </trans-unit>
-      <trans-unit id="InstallationInstructions">
-        <source>Installation instructions</source>
-        <target state="translated">Instrucciones de instalación</target>
-        <note />
-      </trans-unit>
       <trans-unit id="LoginWithGitHub">
         <source>Login with GitHub</source>
         <target state="translated">Iniciar sesión con GitHub</target>
@@ -65,21 +60,6 @@
       <trans-unit id="LoginWithMicrosoft">
         <source>Login with Microsoft</source>
         <target state="translated">Iniciar sesión con Microsoft</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RequiredCommandNotification">
-        <source>Required command '{0}' was not found on PATH or at a specified location.</source>
-        <target state="translated">No se encontró el comando requerido '{0}' en la ruta de acceso ni en la ubicación especificada.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RequiredCommandNotificationWithLink">
-        <source>Required command '{0}' was not found. See installation instructions for more details.</source>
-        <target state="translated">No se encontró el comando necesario '{0}'. Consulte las instrucciones de instalación para obtener más detalles.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RequiredCommandNotificationWithValidation">
-        <source>{0} See installation instructions for more details.</source>
-        <target state="translated">{0} Consulte las instrucciones de instalación para obtener más detalles.</target>
         <note />
       </trans-unit>
     </body>

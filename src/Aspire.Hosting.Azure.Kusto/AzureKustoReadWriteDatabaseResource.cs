@@ -13,6 +13,7 @@ namespace Aspire.Hosting.Azure;
 /// <summary>
 /// Represents an Azure Kusto read-write database resource, which is a child resource of a <see cref="AzureKustoClusterResource"/>.
 /// </summary>
+[AspireExport(ExposeProperties = true)]
 public class AzureKustoReadWriteDatabaseResource : Resource, IResourceWithParent<AzureKustoClusterResource>, IResourceWithConnectionString
 {
     /// <summary>

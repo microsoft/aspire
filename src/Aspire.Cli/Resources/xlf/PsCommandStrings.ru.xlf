@@ -3,23 +3,23 @@
   <file datatype="xml" source-language="en" target-language="ru" original="../PsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>List running Aspire apphosts.</source>
-        <target state="translated">Перечислить запущенные apphosts Aspire.</target>
+        <source>List running AppHosts</source>
+        <target state="needs-review-translation">Перечислить запущенные apphosts Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderCliPid">
-        <source>CLI_PID</source>
-        <target state="translated">CLI_PID</target>
+        <source>CLI PID</source>
+        <target state="translated">PID CLI</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderDashboard">
-        <source>DASHBOARD</source>
-        <target state="translated">ПАНЕЛЬ МОНИТОРИНГА</target>
+        <source>Dashboard</source>
+        <target state="translated">Панель мониторинга</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderPath">
-        <source>PATH</source>
-        <target state="translated">PATH</target>
+        <source>Path</source>
+        <target state="translated">Путь</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderPid">
@@ -28,18 +28,13 @@
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output in JSON format.</source>
-        <target state="translated">Вывод в формате JSON.</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">Вывод в формате JSON.</target>
         <note />
       </trans-unit>
-      <trans-unit id="NoRunningAppHostsFound">
-        <source>No running AppHosts found.</source>
-        <target state="translated">Запущенные appHosts не найдены.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ScanningForRunningAppHosts">
-        <source>Scanning for running AppHosts...</source>
-        <target state="translated">Выполняется сканирование на наличие запущенных AppHosts...</target>
+      <trans-unit id="ResourcesOptionDescription">
+        <source>Include resource details for each running AppHost. Only applies to JSON output.</source>
+        <target state="new">Include resource details for each running AppHost. Only applies to JSON output.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnknownPath">

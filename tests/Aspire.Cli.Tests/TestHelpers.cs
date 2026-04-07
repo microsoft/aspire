@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Utils;
-using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Cli.Tests;
 
@@ -10,13 +9,18 @@ internal static class TestHelpers
 {
     public static ICliHostEnvironment CreateInteractiveHostEnvironment()
     {
-        var configuration = new ConfigurationBuilder().Build();
-        return new CliHostEnvironment(configuration, nonInteractive: false);
+        return new TestCliHostEnvironment(supportsInteractiveInput: true, supportsInteractiveOutput: true, supportsAnsi: true);
     }
 
     public static ICliHostEnvironment CreateNonInteractiveHostEnvironment()
     {
-        var configuration = new ConfigurationBuilder().Build();
-        return new CliHostEnvironment(configuration, nonInteractive: true);
+        return new TestCliHostEnvironment(supportsInteractiveInput: false, supportsInteractiveOutput: false, supportsAnsi: false);
+    }
+
+    private sealed class TestCliHostEnvironment(bool supportsInteractiveInput, bool supportsInteractiveOutput, bool supportsAnsi) : ICliHostEnvironment
+    {
+        public bool SupportsInteractiveInput => supportsInteractiveInput;
+        public bool SupportsInteractiveOutput => supportsInteractiveOutput;
+        public bool SupportsAnsi => supportsAnsi;
     }
 }

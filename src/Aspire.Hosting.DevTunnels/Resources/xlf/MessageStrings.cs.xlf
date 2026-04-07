@@ -52,11 +52,6 @@
         <target state="translated">Nainstalovaná verze příkazového řádku devtunnel {0} není podporovaná. Vyžaduje se verze {1} nebo vyšší.</target>
         <note />
       </trans-unit>
-      <trans-unit id="InstallationInstructions">
-        <source>Installation instructions</source>
-        <target state="translated">Pokyny k instalaci</target>
-        <note />
-      </trans-unit>
       <trans-unit id="LoginWithGitHub">
         <source>Login with GitHub</source>
         <target state="translated">Přihlásit se pomocí GitHubu</target>
@@ -65,21 +60,6 @@
       <trans-unit id="LoginWithMicrosoft">
         <source>Login with Microsoft</source>
         <target state="translated">Přihlásit se pomocí účtu Microsoft</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RequiredCommandNotification">
-        <source>Required command '{0}' was not found on PATH or at a specified location.</source>
-        <target state="translated">Požadovaný příkaz {0} nebyl nalezen v cestě PATH nebo v zadaném umístění.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RequiredCommandNotificationWithLink">
-        <source>Required command '{0}' was not found. See installation instructions for more details.</source>
-        <target state="translated">Požadovaný příkaz {0} nebyl nalezen. Další podrobnosti najdete v pokynech k instalaci.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RequiredCommandNotificationWithValidation">
-        <source>{0} See installation instructions for more details.</source>
-        <target state="translated">{0} Další podrobnosti najdete v pokynech k instalaci.</target>
         <note />
       </trans-unit>
     </body>

@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -35,6 +37,7 @@ public static class AzureEventHubsExtensions
     ///
     /// These can be replaced by calling <see cref="WithRoleAssignments{T}(IResourceBuilder{T}, IResourceBuilder{AzureEventHubsResource}, EventHubsBuiltInRole[])"/>.
     /// </remarks>
+    [AspireExport(Description = "Adds an Azure Event Hubs namespace resource")]
     public static IResourceBuilder<AzureEventHubsResource> AddAzureEventHubs(
         this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
@@ -45,6 +48,11 @@ public static class AzureEventHubsExtensions
 
         var configureInfrastructure = static (AzureResourceInfrastructure infrastructure) =>
         {
+            var azureResource = (AzureEventHubsResource)infrastructure.AspireResource;
+
+            // Check if this Event Hubs has a private endpoint (via annotation)
+            var hasPrivateEndpoint = azureResource.HasAnnotationOfType<PrivateEndpointTargetAnnotation>();
+
             var eventHubsNamespace = AzureProvisioningResource.CreateExistingOrNewProvisionableResource(infrastructure,
                 (identifier, name) =>
                 {
@@ -67,6 +75,10 @@ public static class AzureEventHubsExtensions
                         {
                             Name = skuParameter
                         },
+                        // When using private endpoints, disable public network access.
+                        PublicNetworkAccess = hasPrivateEndpoint
+                            ? AzureProvisioning.EventHubsPublicNetworkAccess.Disabled
+                            : AzureProvisioning.EventHubsPublicNetworkAccess.Enabled,
                         Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
                     };
                     return resource;
@@ -92,7 +104,8 @@ public static class AzureEventHubsExtensions
             // We need to output name to externalize role assignments.
             infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = eventHubsNamespace.Name.ToBicepExpression() });
 
-            var azureResource = (AzureEventHubsResource)infrastructure.AspireResource;
+            // Output the resource id for private endpoint support.
+            infrastructure.Add(new ProvisioningOutput("id", typeof(string)) { Value = eventHubsNamespace.Id.ToBicepExpression() });
 
             foreach (var hub in azureResource.Hubs)
             {
@@ -139,6 +152,7 @@ public static class AzureEventHubsExtensions
     /// <param name="name">The name of the Event Hub resource.</param>
     /// <param name="hubName">The name of the Event Hub. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport(Description = "Adds an Azure Event Hub resource")]
     public static IResourceBuilder<AzureEventHubResource> AddHub(this IResourceBuilder<AzureEventHubsResource> builder, [ResourceName] string name, string? hubName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -159,6 +173,7 @@ public static class AzureEventHubsExtensions
     /// <param name="builder">The Azure Event Hub resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the <see cref="AzureEventHubResource"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport(Description = "Configures properties of an Azure Event Hub", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureEventHubResource> WithProperties(this IResourceBuilder<AzureEventHubResource> builder, Action<AzureEventHubResource> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -176,6 +191,7 @@ public static class AzureEventHubsExtensions
     /// <param name="name">The name of the Event Hub Consumer Group resource.</param>
     /// <param name="groupName">The name of the Consumer Group. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport(Description = "Adds an Azure Event Hub consumer group resource")]
     public static IResourceBuilder<AzureEventHubConsumerGroupResource> AddConsumerGroup(
         this IResourceBuilder<AzureEventHubResource> builder,
         [ResourceName] string name,
@@ -221,6 +237,7 @@ public static class AzureEventHubsExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
+    [AspireExport(Description = "Configures the Azure Event Hubs resource to run with the local emulator", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureEventHubsResource> RunAsEmulator(this IResourceBuilder<AzureEventHubsResource> builder, Action<IResourceBuilder<AzureEventHubsEmulatorResource>>? configureContainer = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -241,6 +258,7 @@ public static class AzureEventHubsExtensions
         builder
             .WithEndpoint(name: "emulator", targetPort: 5672)
             .WithHttpEndpoint(name: EmulatorHealthEndpointName, targetPort: 5300)
+            .WithEndpoint(EmulatorHealthEndpointName, e => e.ExcludeReferenceEndpoint = true)
             .WithHttpHealthCheck(endpointName: EmulatorHealthEndpointName, path: "/health")
             .WithAnnotation(new ContainerImageAnnotation
             {
@@ -387,6 +405,7 @@ public static class AzureEventHubsExtensions
     /// <param name="builder">Builder for the Azure Event Hubs emulator container</param>
     /// <param name="port">The port to bind on the host. If <see langword="null"/> is used, a random port will be assigned.</param>
     /// <returns>Azure Event Hubs emulator resource builder.</returns>
+    [AspireExport(Description = "Sets the host port for the Event Hubs emulator endpoint")]
     public static IResourceBuilder<AzureEventHubsEmulatorResource> WithHostPort(this IResourceBuilder<AzureEventHubsEmulatorResource> builder, int? port)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -403,6 +422,7 @@ public static class AzureEventHubsExtensions
     /// <param name="builder">The builder for the <see cref="AzureEventHubsEmulatorResource"/>.</param>
     /// <param name="path">Path to the file on the AppHost where the emulator configuration is located.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport(Description = "Sets the emulator configuration file path")]
     public static IResourceBuilder<AzureEventHubsEmulatorResource> WithConfigurationFile(this IResourceBuilder<AzureEventHubsEmulatorResource> builder, string path)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -417,6 +437,8 @@ public static class AzureEventHubsExtensions
     /// <param name="builder">The builder for the <see cref="AzureEventHubsEmulatorResource"/>.</param>
     /// <param name="configJson">A callback to update the JSON object representation of the configuration.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>This method is not available in polyglot app hosts. Use <see cref="WithConfigurationFile"/> instead.</remarks>
+    [AspireExportIgnore(Reason = "Action<JsonNode> callbacks are not ATS-compatible.")]
     public static IResourceBuilder<AzureEventHubsEmulatorResource> WithConfiguration(this IResourceBuilder<AzureEventHubsEmulatorResource> builder, Action<JsonNode> configJson)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -484,6 +506,12 @@ public static class AzureEventHubsExtensions
     ///   .WithReference(eventHubs);
     /// </code>
     /// </example>
+    /// <remarks>
+    /// This overload is not available in polyglot app hosts. Use
+    /// <see cref="WithRoleAssignments{T}(IResourceBuilder{T}, IResourceBuilder{AzureEventHubsResource}, AzureEventHubsRole[])"/>
+    /// instead.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "EventHubsBuiltInRole is an Azure.Provisioning type not compatible with ATS. Use the AzureEventHubsRole-based overload instead.")]
     public static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureEventHubsResource> target,
@@ -491,5 +519,41 @@ public static class AzureEventHubsExtensions
         where T : IResource
     {
         return builder.WithRoleAssignments(target, EventHubsBuiltInRole.GetBuiltInRoleName, roles);
+    }
+
+    /// <summary>
+    /// Assigns the specified roles to the given resource, granting it the necessary permissions
+    /// on the target Azure Event Hubs Namespace resource. This replaces the default role assignments for the resource.
+    /// </summary>
+    /// <param name="builder">The resource to which the specified roles will be assigned.</param>
+    /// <param name="target">The target Azure Event Hubs Namespace resource.</param>
+    /// <param name="roles">The Event Hubs roles to be assigned.</param>
+    /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
+    /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="AzureEventHubsRole"/> value.</exception>
+    [AspireExport("withEventHubsRoleAssignments", Description = "Assigns Event Hubs roles to a resource")]
+    internal static IResourceBuilder<T> WithRoleAssignments<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<AzureEventHubsResource> target,
+        params AzureEventHubsRole[] roles)
+        where T : IResource
+    {
+        if (roles is null || roles.Length == 0)
+        {
+            return builder.WithRoleAssignments(target, Array.Empty<EventHubsBuiltInRole>());
+        }
+
+        var builtInRoles = new EventHubsBuiltInRole[roles.Length];
+        for (var i = 0; i < roles.Length; i++)
+        {
+            builtInRoles[i] = roles[i] switch
+            {
+                AzureEventHubsRole.AzureEventHubsDataOwner => EventHubsBuiltInRole.AzureEventHubsDataOwner,
+                AzureEventHubsRole.AzureEventHubsDataReceiver => EventHubsBuiltInRole.AzureEventHubsDataReceiver,
+                AzureEventHubsRole.AzureEventHubsDataSender => EventHubsBuiltInRole.AzureEventHubsDataSender,
+                _ => throw new ArgumentException($"Invalid Event Hubs role: {roles[i]}.", nameof(roles))
+            };
+        }
+
+        return builder.WithRoleAssignments(target, builtInRoles);
     }
 }

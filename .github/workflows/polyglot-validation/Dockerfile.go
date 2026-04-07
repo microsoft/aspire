@@ -8,7 +8,7 @@
 #     -v /var/run/docker.sock:/var/run/docker.sock \
 #     polyglot-go
 #
-# Note: Expects CLI and NuGet artifacts to be pre-downloaded to /workspace/artifacts/
+# Note: Expects self-extracting binary and NuGet artifacts to be pre-downloaded to /workspace/artifacts/
 #
 FROM mcr.microsoft.com/devcontainers/go:1-trixie
 
@@ -22,14 +22,9 @@ RUN apt-get update && apt-get install -y \
     jq \
     && rm -rf /var/lib/apt/lists/*
 
-# Install .NET SDK 10.0 with retry logic
-COPY install-dotnet.sh /scripts/install-dotnet.sh
-RUN chmod +x /scripts/install-dotnet.sh && /scripts/install-dotnet.sh
-ENV PATH="/root/.dotnet:${PATH}"
-ENV DOTNET_ROOT="/root/.dotnet"
-
 # Pre-configure Aspire CLI path
 ENV PATH="/root/.aspire/bin:${PATH}"
+ENV ASPIRE_CLI_TELEMETRY_OPTOUT=1
 
 WORKDIR /workspace
 
@@ -37,12 +32,13 @@ COPY setup-local-cli.sh /scripts/setup-local-cli.sh
 COPY test-go.sh /scripts/test-go.sh
 RUN chmod +x /scripts/setup-local-cli.sh /scripts/test-go.sh
 
-# Entrypoint: Set up Aspire CLI from local artifacts, enable polyglot, run validation
+# Entrypoint: Set up Aspire CLI and run validation
+# Bundle extraction happens lazily on first command that needs the layout
 ENTRYPOINT ["/bin/bash", "-c", "\
     set -e && \
     /scripts/setup-local-cli.sh && \
-    echo '=== Enabling polyglot support ===' && \
-    aspire config set features:polyglotSupportEnabled true --global && \
+    aspire --nologo config set features:experimentalPolyglot:go true --global && \
+    echo '' && \
     echo '=== Running validation ===' && \
     /scripts/test-go.sh \
 "]

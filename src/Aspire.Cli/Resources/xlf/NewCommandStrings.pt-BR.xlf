@@ -13,13 +13,13 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Create a new Aspire project.</source>
-        <target state="translated">Criar um projeto Aspire.</target>
+        <source>Create a new app from an Aspire starter template</source>
+        <target state="needs-review-translation">Criar um projeto Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="EnterTheOutputPath">
-        <source>Enter the output path:</source>
-        <target state="translated">Insira o caminho de saída:</target>
+        <source>Enter the output path</source>
+        <target state="new">Enter the output path</target>
         <note />
       </trans-unit>
       <trans-unit id="EnterTheProjectName">
@@ -32,14 +32,24 @@
         <target state="translated">Nome de projeto inválido.</target>
         <note />
       </trans-unit>
+      <trans-unit id="LanguageOptionDescription">
+        <source>The programming language for the AppHost</source>
+        <target state="new">The programming language for the AppHost</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NameArgumentDescription">
-        <source>The name of the project to create.</source>
-        <target state="translated">O nome do projeto a ser criado.</target>
+        <source>The name of the project to create</source>
+        <target state="needs-review-translation">O nome do projeto a ser criado.</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputArgumentDescription">
-        <source>The output path for the project.</source>
-        <target state="translated">O caminho de saída para o projeto.</target>
+        <source>The output path for the project</source>
+        <target state="needs-review-translation">O caminho de saída para o projeto.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResolvingTemplateVersion">
+        <source>Resolving template version...</source>
+        <target state="translated">Resolvendo a versão do modelo...</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAProjectTemplate">
@@ -53,8 +63,8 @@
         <note />
       </trans-unit>
       <trans-unit id="SourceArgumentDescription">
-        <source>The NuGet source to use for the project templates.</source>
-        <target state="translated">A origem do NuGet a ser usada para os modelos de projeto.</target>
+        <source>The NuGet source to use for the project templates</source>
+        <target state="needs-review-translation">A origem do NuGet a ser usada para os modelos de projeto.</target>
         <note />
       </trans-unit>
       <trans-unit id="UsePrereleaseTemplates">
@@ -63,8 +73,8 @@
         <note />
       </trans-unit>
       <trans-unit id="VersionArgumentDescription">
-        <source>The version of the project templates to use.</source>
-        <target state="translated">A versão dos modelos de projeto a serem usados.</target>
+        <source>The version of the project templates to use</source>
+        <target state="needs-review-translation">A versão dos modelos de projeto a serem usados.</target>
         <note />
       </trans-unit>
     </body>

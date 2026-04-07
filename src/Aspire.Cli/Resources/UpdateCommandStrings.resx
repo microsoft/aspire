@@ -13,10 +13,10 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>Update integrations in the Aspire project. (Preview)</value>
+    <value>Update integrations in the Aspire project (Preview)</value>
   </data>
   <data name="ProjectArgumentDescription" xml:space="preserve">
-    <value>The path to the Aspire AppHost project file.</value>
+    <value>The path to the Aspire AppHost project file</value>
   </data>
   <data name="SelectChannelPrompt" xml:space="preserve">
     <value>Select a channel:</value>
@@ -40,10 +40,10 @@
     <value>Update successful!</value>
   </data>
   <data name="AnalyzeAppHost" xml:space="preserve">
-    <value>Analyze App Host</value>
+    <value>Analyze AppHost</value>
   </data>
   <data name="AnalyzeAppHostSdk" xml:space="preserve">
-    <value>Analyze App Host SDK</value>
+    <value>Analyze AppHost SDK</value>
   </data>
   <data name="AnalyzeProjectFormat" xml:space="preserve">
     <value>Analyze project: {0}</value>
@@ -143,5 +143,26 @@
   </data>
   <data name="NoWritePermissionToInstallDirectory" xml:space="preserve">
     <value>Cannot write to installation directory '{0}'. Please run the update with elevated permissions (e.g., using sudo on Linux/macOS).</value>
+  </data>
+  <data name="CheckingForUpdates" xml:space="preserve">
+    <value>Checking for updates...</value>
+  </data>
+  <data name="ApplyingUpdates" xml:space="preserve">
+    <value>Applying updates...</value>
+  </data>
+  <data name="ExtractingNewCli" xml:space="preserve">
+    <value>Extracting new CLI...</value>
+  </data>
+  <data name="ExtractedNewCli" xml:space="preserve">
+    <value>Extracted new CLI</value>
+  </data>
+  <data name="RegeneratingSdkCode" xml:space="preserve">
+    <value>Regenerating SDK code with updated packages...</value>
+  </data>
+  <data name="RegeneratedSdkCode" xml:space="preserve">
+    <value>Regenerated SDK code with updated packages.</value>
+  </data>
+  <data name="SelfOptionDescription" xml:space="preserve">
+    <value>Update the Aspire CLI itself to the latest version</value>
   </data>
 </root>

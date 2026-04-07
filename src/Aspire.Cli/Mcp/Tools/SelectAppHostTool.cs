@@ -32,11 +32,9 @@ internal sealed class SelectAppHostTool(IAuxiliaryBackchannelMonitor auxiliaryBa
             """).RootElement;
     }
 
-    public override ValueTask<CallToolResult> CallToolAsync(ModelContextProtocol.Client.McpClient mcpClient, IReadOnlyDictionary<string, JsonElement>? arguments, CancellationToken cancellationToken)
+    public override ValueTask<CallToolResult> CallToolAsync(CallToolContext context, CancellationToken cancellationToken)
     {
-        // This tool does not use the MCP client as it operates locally
-        _ = mcpClient;
-        _ = cancellationToken;
+        var arguments = context.Arguments;
 
         if (arguments == null || !arguments.TryGetValue("appHostPath", out var appHostPathElement))
         {

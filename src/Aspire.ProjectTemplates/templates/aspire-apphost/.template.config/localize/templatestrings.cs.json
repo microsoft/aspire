@@ -1,4 +1,4 @@
-﻿{
+{
   "author": "Microsoft",
   "name": "Aspire AppHost",
   "description": "Šablona projektu pro vytvoření projektu Aspire AppHost (orchestrátor).",
@@ -8,17 +8,16 @@
   "symbols/Framework/choices/net10.0/description": "Cíl net10.0",
   "symbols/appHostHttpPort/description": "Číslo portu, který se má použít pro koncový bod HTTP v launchSettings.json projektu AppHost.",
   "symbols/appHostOtlpHttpPort/description": "Číslo portu, který se má použít pro koncový bod HTTP OTLP v launchSettings.json projektu AppHost.",
-  "symbols/appHostMcpHttpPort/description": "Číslo portu, který se má použít pro koncový bod MCP HTTP v launchSettings.json projektu AppHost.",
   "symbols/appHostResourceHttpPort/description": "Číslo portu, který se má použít pro koncový bod HTTP služby prostředků v launchSettings.json projektu AppHost.",
   "symbols/appHostHttpsPort/description": "Číslo portu, který se má použít pro koncový bod HTTPS v launchSettings.json projektu AppHost. Tato možnost se dá použít jenom v případě, že se nepoužívá parametr no-https.",
   "symbols/appHostOtlpHttpsPort/description": "Číslo portu, který se má použít pro koncový bod HTTPS OTLP v launchSettings.json projektu AppHost.",
-  "symbols/appHostMcpHttpsPort/description": "Číslo portu, který se má použít pro koncový bod MCP HTTPS v launchSettings.json projektu AppHost.",
   "symbols/appHostResourceHttpsPort/description": "Číslo portu, který se má použít pro koncový bod HTTPS služby prostředků v launchSettings.json projektu AppHost.",
   "symbols/skipRestore/description": "Pokud se tato možnost zadá, přeskočí automatické obnovení projektu při vytvoření.",
   "symbols/NoHttps/description": "Určuje, jestli se má vypnout protokol HTTPS.",
   "symbols/LocalhostTld/displayName": "Použití TLD .dev.localhost v adrese URL aplikace",
   "symbols/LocalhostTld/description": "Určuje, jestli se má název projektu zkombinovat s TLD .dev.localhost v adrese URL aplikace pro místní vývoj, například https://myapp.dev.localhost:12345. Podporováno v .NET 10 a novějších verzích.",
   "postActions/set-startup-project/description": "Nastaví projekt po spuštění v řešení",
+  "postActions/set-startup-project/manualInstructions/default/text": "",
   "postActions/restore/description": "Obnoví balíčky NuGet vyžadované tímto projektem.",
   "postActions/restore/manualInstructions/default/text": "Spustit dotnet restore"
 }

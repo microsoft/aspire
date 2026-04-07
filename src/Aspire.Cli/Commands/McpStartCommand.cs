@@ -2,16 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
-using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.Mcp.Docs;
-using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
-using Aspire.Cli.Utils.EnvironmentChecker;
-using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Commands;
 
@@ -28,30 +23,12 @@ internal sealed class McpStartCommand : BaseCommand
         IFeatures features,
         ICliUpdateNotifier updateNotifier,
         CliExecutionContext executionContext,
-        IAuxiliaryBackchannelMonitor auxiliaryBackchannelMonitor,
-        ILoggerFactory loggerFactory,
-        ILogger<AgentMcpCommand> agentMcpLogger,
-        IPackagingService packagingService,
-        IEnvironmentChecker environmentChecker,
-        IDocsSearchService docsSearchService,
-        IDocsIndexService docsIndexService,
+        AgentMcpCommand agentMcpCommand,
         AspireCliTelemetry telemetry)
         : base("start", McpCommandStrings.StartCommand_Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
-        // Create the AgentMcpCommand to delegate execution to
-        _agentMcpCommand = new AgentMcpCommand(
-            interactionService,
-            features,
-            updateNotifier,
-            executionContext,
-            auxiliaryBackchannelMonitor,
-            loggerFactory,
-            agentMcpLogger,
-            packagingService,
-            environmentChecker,
-            docsSearchService,
-            docsIndexService,
-            telemetry);
+        // Use the injected AgentMcpCommand to delegate execution to
+        _agentMcpCommand = agentMcpCommand;
     }
 
     protected override bool UpdateNotificationsEnabled => false;
@@ -60,7 +37,7 @@ internal sealed class McpStartCommand : BaseCommand
     {
         // Display deprecation warning to stderr (all MCP logging goes to stderr)
         InteractionService.DisplayMarkupLine($"[yellow]⚠ {McpCommandStrings.DeprecatedCommandWarning}[/]");
-        
+
         // Delegate to the new AgentMcpCommand
         return _agentMcpCommand.ExecuteCommandAsync(parseResult, cancellationToken);
     }

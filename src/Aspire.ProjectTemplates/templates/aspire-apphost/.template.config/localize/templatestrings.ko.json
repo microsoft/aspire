@@ -1,4 +1,4 @@
-﻿{
+{
   "author": "Microsoft",
   "name": "Aspire AppHost",
   "description": "Aspire 앱 호스트(오케스트레이터) 프로젝트를 만들기 위한 프로젝트 템플릿입니다.",
@@ -8,17 +8,16 @@
   "symbols/Framework/choices/net10.0/description": "대상 net10.0",
   "symbols/appHostHttpPort/description": "AppHost 프로젝트의 launchSettings.json HTTP 엔드포인트에 사용할 포트 번호입니다.",
   "symbols/appHostOtlpHttpPort/description": "AppHost 프로젝트의 launchSettings.json OTLP HTTP 엔드포인트에 사용할 포트 번호입니다.",
-  "symbols/appHostMcpHttpPort/description": "AppHost 프로젝트의 launchSettings.json에서 MCP HTTP 엔드포인트에 사용할 포트 번호입니다.",
   "symbols/appHostResourceHttpPort/description": "AppHost 프로젝트의 launchSettings.json 리소스 서비스 HTTP 엔드포인트에 사용할 포트 번호입니다.",
   "symbols/appHostHttpsPort/description": "AppHost 프로젝트의 launchSettings.json HTTPS 엔드포인트에 사용할 포트 번호입니다. 이 옵션은 no-https 매개 변수가 사용되지 않는 경우에만 적용됩니다.",
   "symbols/appHostOtlpHttpsPort/description": "AppHost 프로젝트의 launchSettings.json OTLP HTTPS 엔드포인트에 사용할 포트 번호입니다.",
-  "symbols/appHostMcpHttpsPort/description": "AppHost 프로젝트의 launchSettings.json에서 MCP HTTPS 엔드포인트에 사용할 포트 번호입니다.",
   "symbols/appHostResourceHttpsPort/description": "AppHost 프로젝트의 launchSettings.json 리소스 서비스 HTTPS 엔드포인트에 사용할 포트 번호입니다.",
   "symbols/skipRestore/description": "지정된 경우, 프로젝트 생성 시 자동 복원을 건너뜁니다.",
   "symbols/NoHttps/description": "HTTPS를 끌지 여부입니다.",
   "symbols/LocalhostTld/displayName": "애플리케이션 URL에서 .dev.localhost TLD를 사용하세요.",
   "symbols/LocalhostTld/description": "로컬 개발을 위한 애플리케이션 URL에서 프로젝트 이름과 .dev.localhost TLD를 결합할지 여부(예: https://myapp.dev.localhost:12345)입니다. .NET 10 이상에서 지원됩니다.",
   "postActions/set-startup-project/description": "솔루션에서 시작 프로젝트를 설정합니다.",
+  "postActions/set-startup-project/manualInstructions/default/text": "",
   "postActions/restore/description": "이 프로젝트에 필요한 NuGet 패키지를 복원합니다.",
   "postActions/restore/manualInstructions/default/text": "'dotnet restore' 실행"
 }

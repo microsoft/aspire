@@ -5,12 +5,11 @@ using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Dashboard.Configuration;
-using Aspire.Dashboard.ConsoleLogs;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
-using Aspire.Hosting.ConsoleLogs;
+using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 
@@ -97,13 +96,17 @@ public sealed class AssistantChatDataContext
 
         _referencedTraces.TryAdd(trace.TraceId, trace);
 
-        return AIHelpers.GetTraceJson(trace, _outgoingPeerResolvers, new PromptContext(), _dashboardOptions.CurrentValue);
+        var spans = TelemetryExportService.ConvertTracesToOtlpJson([trace], _outgoingPeerResolvers.ToArray()).ResourceSpans;
+        var resources = TelemetryRepository.GetResources();
+
+        return SharedAIHelpers.GetTraceJson(spans, r => OtlpHelpers.GetResourceName(r, resources), AIHelpers.GetDashboardUrl(_dashboardOptions.CurrentValue));
     }
 
+    // resourceName is provided as a non-nullable string to prevent the JSON schema from including an array. An array breaks VS integration.
     [Description("Get structured logs for resources.")]
     public async Task<string> GetStructuredLogsAsync(
         [Description("The resource name. This limits logs returned to the specified resource. If no resource name is specified then structured logs for all resources are returned.")]
-        string? resourceName = null,
+        string resourceName,
         CancellationToken cancellationToken = default)
     {
         // TODO: The resourceName might be a name that resolves to multiple replicas, e.g. catalogservice has two replicas.
@@ -129,7 +132,9 @@ public sealed class AssistantChatDataContext
             Filters = []
         });
 
-        var (logsData, limitMessage) = AIHelpers.GetStructuredLogsJson(logs.Items, _dashboardOptions.CurrentValue);
+        var otlpData = TelemetryExportService.ConvertLogsToOtlpJson(logs.Items);
+        var resources = TelemetryRepository.GetResources();
+        var (logsData, limitMessage) = AIHelpers.GetStructuredLogsJson(otlpData, _dashboardOptions.CurrentValue, r => OtlpHelpers.GetResourceName(r, resources));
 
         var response = $"""
             Always format log_id in the response as code like this: `log_id: 123`.
@@ -143,10 +148,11 @@ public sealed class AssistantChatDataContext
         return response;
     }
 
+    // resourceName is provided as a non-nullable string to prevent the JSON schema from including an array. An array breaks VS integration.
     [Description("Get distributed traces for resources. A distributed trace is used to track operations. A distributed trace can span multiple resources across a distributed system. Includes a list of distributed traces with their IDs, resources in the trace, duration and whether an error occurred in the trace.")]
     public async Task<string> GetTracesAsync(
         [Description("The resource name. This limits traces returned to the specified resource. If no resource name is specified then distributed traces for all resources are returned.")]
-        string? resourceName = null,
+        string resourceName,
         CancellationToken cancellationToken = default)
     {
         // TODO: The resourceName might be a name that resolves to multiple replicas, e.g. catalogservice has two replicas.
@@ -171,7 +177,9 @@ public sealed class AssistantChatDataContext
             FilterText = string.Empty
         });
 
-        var (tracesData, limitMessage) = AIHelpers.GetTracesJson(traces.PagedResult.Items, _outgoingPeerResolvers, _dashboardOptions.CurrentValue);
+        var spans = TelemetryExportService.ConvertTracesToOtlpJson(traces.PagedResult.Items, _outgoingPeerResolvers.ToArray()).ResourceSpans;
+        var resources = TelemetryRepository.GetResources();
+        var (tracesData, limitMessage) = SharedAIHelpers.GetTracesJson(spans, r => OtlpHelpers.GetResourceName(r, resources), AIHelpers.GetDashboardUrl(_dashboardOptions.CurrentValue));
 
         var response = $"""
             {limitMessage}
@@ -208,7 +216,9 @@ public sealed class AssistantChatDataContext
 
         await InvokeToolCallbackAsync(nameof(GetTraceStructuredLogsAsync), _loc.GetString(nameof(AIAssistant.ToolNotificationTraceStructuredLogs), OtlpHelpers.ToShortenedId(traceId)), cancellationToken).ConfigureAwait(false);
 
-        var (logsData, limitMessage) = AIHelpers.GetStructuredLogsJson(logs.Items, _dashboardOptions.CurrentValue);
+        var otlpData = TelemetryExportService.ConvertLogsToOtlpJson(logs.Items);
+        var resources = TelemetryRepository.GetResources();
+        var (logsData, limitMessage) = AIHelpers.GetStructuredLogsJson(otlpData, _dashboardOptions.CurrentValue, r => OtlpHelpers.GetResourceName(r, resources));
 
         var response = $"""
             {limitMessage}
@@ -221,7 +231,7 @@ public sealed class AssistantChatDataContext
         return response;
     }
 
-    [Description("Get console logs for a resource. The console logs includes standard output from resources and resource commands. Known resource commands are 'resource-start', 'resource-stop' and 'resource-restart' which are used to start and stop resources. Don't print the full console logs in the response to the user. Console logs should be examined when determining why a resource isn't running.")]
+    [Description("Get console logs for a resource. The console logs includes standard output from resources and resource commands. Known resource commands are 'start', 'stop' and 'restart' which are used to start and stop resources. Don't print the full console logs in the response to the user. Console logs should be examined when determining why a resource isn't running.")]
     public async Task<string> GetConsoleLogsAsync(
         [Description("The resource name.")]
         string resourceName,
@@ -265,14 +275,15 @@ public sealed class AssistantChatDataContext
 
         var entries = logEntries.GetEntries().ToList();
         var totalLogsCount = entries.Count == 0 ? 0 : entries.Last().LineNumber;
-        var (trimmedItems, limitMessage) = AIHelpers.GetLimitFromEndWithSummary<LogEntry>(
+        var (trimmedItems, limitMessage) = SharedAIHelpers.GetLimitFromEndWithSummary(
             entries,
             totalLogsCount,
             AIHelpers.ConsoleLogsLimit,
             "console log",
-            AIHelpers.SerializeLogEntry,
-            logEntry => AIHelpers.EstimateTokenCount((string) logEntry));
-        var consoleLogsText = AIHelpers.SerializeConsoleLogs(trimmedItems.Cast<string>().ToList());
+            "console logs",
+            SharedAIHelpers.SerializeLogEntry,
+            SharedAIHelpers.EstimateTokenCount);
+        var consoleLogsText = SharedAIHelpers.SerializeConsoleLogs(trimmedItems);
 
         var consoleLogsData = $"""
             {limitMessage}

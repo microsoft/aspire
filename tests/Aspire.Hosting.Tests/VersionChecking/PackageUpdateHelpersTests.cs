@@ -7,6 +7,7 @@ using Semver;
 
 namespace Aspire.Hosting.Tests.VersionChecking;
 
+[Trait("Partition", "4")]
 public class PackageUpdateHelpersTests
 {
     [Fact]

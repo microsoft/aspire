@@ -1,0 +1,324 @@
+# Analyzes failed CI PR runs for retry-safe transient failures and requests reruns for
+# the matched jobs through GitHub's job-rerun API, which also reruns dependent jobs.
+# For the supported behaviors and safety rails, see
+# docs/ci/auto-rerun-transient-ci-failures.md.
+name: Auto rerun transient CI failures
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'CI workflow run ID to inspect'
+        required: true
+        type: number
+      dry_run:
+        description: 'Inspect and summarize without requesting reruns'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && inputs.run_id || github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+jobs:
+  analyze-transient-failures:
+    name: Analyze transient CI failures
+    if: >-
+      ${{
+          github.repository_owner == 'microsoft' &&
+          (github.event_name == 'workflow_dispatch' ||
+           (github.event.workflow_run.event == 'pull_request' &&
+            github.event.workflow_run.conclusion == 'failure' &&
+            github.event.workflow_run.run_attempt <= 3))
+      }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+    outputs:
+      source_run_id: ${{ steps.analyze.outputs.source_run_id }}
+      source_run_attempt: ${{ steps.analyze.outputs.source_run_attempt }}
+      source_run_url: ${{ steps.analyze.outputs.source_run_url }}
+      retryable_jobs: ${{ steps.analyze.outputs.retryable_jobs }}
+      pull_request_numbers: ${{ steps.analyze.outputs.pull_request_numbers }}
+      retryable_count: ${{ steps.analyze.outputs.retryable_count }}
+      skipped_count: ${{ steps.analyze.outputs.skipped_count }}
+      rerun_eligible: ${{ steps.analyze.outputs.rerun_eligible }}
+      rerun_execution_eligible: ${{ steps.analyze.outputs.rerun_execution_eligible }}
+      dry_run: ${{ steps.analyze.outputs.dry_run }}
+      max_retryable_jobs: ${{ steps.analyze.outputs.max_retryable_jobs }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Analyze failed jobs
+        id: analyze
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          MANUAL_RUN_ID: ${{ inputs.run_id }}
+          MANUAL_DRY_RUN: ${{ inputs.dry_run }}
+        with:
+          script: |
+            const rerunWorkflow = require('./.github/workflows/auto-rerun-transient-ci-failures.js');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const isWorkflowDispatch = context.eventName === 'workflow_dispatch';
+            const maxRetryableJobs = rerunWorkflow.defaultMaxRetryableJobs;
+            const maxJobLogInspectionBytes = 256 * 1024;
+
+            async function paginate(route, parameters, selectItems) {
+              const items = [];
+
+              for (let page = 1; ; page++) {
+                const response = await github.request(route, {
+                  ...parameters,
+                  per_page: 100,
+                  page,
+                });
+
+                items.push(...selectItems(response.data));
+
+                if (!response.headers.link || !response.headers.link.includes('rel="next"')) {
+                  return items;
+                }
+              }
+            }
+
+            async function getWorkflowRun() {
+              if (!isWorkflowDispatch) {
+                return context.payload.workflow_run;
+              }
+
+              const runId = Number(process.env.MANUAL_RUN_ID);
+
+              if (!Number.isInteger(runId) || runId <= 0) {
+                throw new Error('workflow_dispatch requires a valid run_id input.');
+              }
+
+              const response = await github.rest.actions.getWorkflowRun({
+                owner,
+                repo,
+                run_id: runId,
+              });
+
+              return response.data;
+            }
+
+            function parseManualDryRun() {
+              if (!isWorkflowDispatch) {
+                return false;
+              }
+
+              return String(process.env.MANUAL_DRY_RUN).toLowerCase() === 'true';
+            }
+
+            async function listJobsForAttempt(runId, attemptNumber) {
+              return paginate(
+                'GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs',
+                {
+                  owner,
+                  repo,
+                  run_id: runId,
+                  attempt_number: attemptNumber,
+                },
+                data => data.jobs || []);
+            }
+
+            async function listAnnotations(job) {
+              try {
+                const checkRunId = await rerunWorkflow.getCheckRunIdForJob({
+                  job,
+                  getJobForWorkflowRun: async jobId => {
+                    const response = await github.rest.actions.getJobForWorkflowRun({
+                      owner,
+                      repo,
+                      job_id: jobId,
+                    });
+
+                    return response.data;
+                  },
+                });
+
+                if (!checkRunId) {
+                  core.warning(`Unable to resolve a check run id for job ${job.id}.`);
+                  return [];
+                }
+
+                return await paginate(
+                  'GET /repos/{owner}/{repo}/check-runs/{check_run_id}/annotations',
+                  {
+                    owner,
+                    repo,
+                    check_run_id: checkRunId,
+                  },
+                  data => Array.isArray(data) ? data : []);
+              }
+              catch (error) {
+                core.warning(`Failed to list annotations for job ${job.id}: ${error.message}`);
+                return [];
+              }
+            }
+
+            async function getJobLogText(jobId) {
+              try {
+                const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/jobs/${jobId}/logs`, {
+                  headers: {
+                    authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+                    accept: 'application/vnd.github+json',
+                    'x-github-api-version': '2022-11-28',
+                  },
+                });
+
+                if (!response.ok) {
+                  throw new Error(`HTTP ${response.status}`);
+                }
+
+                return (await response.text()).slice(-maxJobLogInspectionBytes);
+              }
+              catch (error) {
+                core.warning(`Failed to fetch logs for job ${jobId}: ${error.message}`);
+                return '';
+              }
+            }
+
+            const workflowRun = await getWorkflowRun();
+            const dryRun = parseManualDryRun();
+            const sourceRunUrl = workflowRun.html_url || `https://github.com/${owner}/${repo}/actions/runs/${workflowRun.id}`;
+
+            core.setOutput('source_run_id', String(workflowRun.id));
+            core.setOutput('source_run_attempt', String(workflowRun.run_attempt || ''));
+            core.setOutput('source_run_url', sourceRunUrl);
+            core.setOutput('dry_run', String(dryRun));
+            core.setOutput('max_retryable_jobs', String(maxRetryableJobs));
+            core.setOutput('retryable_jobs', '[]');
+            core.setOutput('pull_request_numbers', '[]');
+            core.setOutput('retryable_count', '0');
+            core.setOutput('skipped_count', '0');
+            core.setOutput('rerun_eligible', 'false');
+            core.setOutput('rerun_execution_eligible', 'false');
+
+            if (workflowRun.name && workflowRun.name !== 'CI') {
+              console.log(`Workflow run ${workflowRun.id} is '${workflowRun.name}', not 'CI'. Skipping.`);
+              return;
+            }
+
+            const pullRequestNumbers = await rerunWorkflow.getAssociatedPullRequestNumbers({
+              github,
+              owner,
+              repo,
+              workflowRun,
+              warn: message => core.warning(message),
+            });
+            core.setOutput('pull_request_numbers', JSON.stringify(pullRequestNumbers));
+
+            if (pullRequestNumbers.length === 0) {
+              console.log('No associated pull request could be resolved for this workflow run. Skipping.');
+              return;
+            }
+
+            const runId = workflowRun.id;
+            const runAttempt = workflowRun.run_attempt;
+            const jobs = await listJobsForAttempt(runId, runAttempt);
+            const { failedJobs, retryableJobs, skippedJobs } = await rerunWorkflow.analyzeFailedJobs({
+              jobs,
+              getAnnotationsForJob: async job => listAnnotations(job),
+              getJobLogTextForJob: async job => getJobLogText(job.id),
+              maxRetryableJobs,
+            });
+
+            core.setOutput('retryable_jobs', JSON.stringify(retryableJobs.map(job => ({
+              id: job.id,
+              name: job.name,
+              htmlUrl: job.htmlUrl,
+              reason: job.reason,
+            }))));
+            core.setOutput('retryable_count', String(retryableJobs.length));
+            core.setOutput('skipped_count', String(skippedJobs.length));
+
+            const rerunEligible = rerunWorkflow.computeRerunEligibility({
+              retryableCount: retryableJobs.length,
+              maxRetryableJobs,
+              runAttempt,
+            });
+            const rerunExecutionEligible = rerunWorkflow.computeRerunExecutionEligibility({
+              dryRun,
+              retryableCount: retryableJobs.length,
+              maxRetryableJobs,
+              runAttempt,
+            });
+            core.setOutput('rerun_eligible', String(rerunEligible));
+            core.setOutput('rerun_execution_eligible', String(rerunExecutionEligible));
+
+            await rerunWorkflow.writeAnalysisSummary({
+              summary: core.summary,
+              failedJobs,
+              retryableJobs,
+              skippedJobs,
+              maxRetryableJobs,
+              dryRun,
+              rerunEligible,
+              sourceRunUrl,
+              sourceRunAttempt: runAttempt,
+            });
+
+            if (retryableJobs.length === 0) {
+              console.log('No retryable failed jobs were detected.');
+              return;
+            }
+
+  rerun-transient-failures:
+    name: Rerun transient CI failures
+    needs: [analyze-transient-failures]
+    if: ${{ needs.analyze-transient-failures.outputs.rerun_execution_eligible == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Rerun matched jobs
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        env:
+          RETRYABLE_JOBS: ${{ needs.analyze-transient-failures.outputs.retryable_jobs }}
+          PULL_REQUEST_NUMBERS: ${{ needs.analyze-transient-failures.outputs.pull_request_numbers }}
+          SOURCE_RUN_ID: ${{ needs.analyze-transient-failures.outputs.source_run_id }}
+          SOURCE_RUN_ATTEMPT: ${{ needs.analyze-transient-failures.outputs.source_run_attempt }}
+          SOURCE_RUN_URL: ${{ needs.analyze-transient-failures.outputs.source_run_url }}
+        with:
+          script: |
+            const rerunWorkflow = require('./.github/workflows/auto-rerun-transient-ci-failures.js');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const retryableJobs = JSON.parse(process.env.RETRYABLE_JOBS || '[]');
+            const pullRequestNumbers = JSON.parse(process.env.PULL_REQUEST_NUMBERS || '[]');
+            const sourceRunId = Number(process.env.SOURCE_RUN_ID);
+            const sourceRunAttempt = Number(process.env.SOURCE_RUN_ATTEMPT);
+            const sourceRunUrl = process.env.SOURCE_RUN_URL;
+
+            if (retryableJobs.length === 0) {
+              console.log('No retryable jobs were provided to the rerun job.');
+              return;
+            }
+
+            await rerunWorkflow.rerunMatchedJobs({
+              github,
+              owner,
+              repo,
+              retryableJobs,
+              pullRequestNumbers,
+              summary: core.summary,
+              sourceRunId,
+              sourceRunAttempt,
+              sourceRunUrl,
+            });

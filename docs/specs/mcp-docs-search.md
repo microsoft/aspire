@@ -254,6 +254,16 @@ Search uses weighted field scoring for relevance ranking:
 - Code blocks: 5.0x
 - Body text: 1.0x
 
+**Slug Matching Bonuses (helps dedicated docs rank higher):**
+- Exact slug match: +50.0 (e.g., query "service-discovery" matches slug "service-discovery")
+- Full phrase in slug: +30.0 (e.g., query "service discovery" matches slug "service-discovery")
+- Partial slug match: +10.0 (proportional to matching segments)
+
+**Changelog/What's New Penalty:**
+- Pages with "whats-new" or "changelog" in slug: 0.3x multiplier for generic queries
+- Multiplier is skipped when the query indicates changelog intent (e.g., includes "changelog", "what's new", or similar terms)
+- Prevents release notes from outranking dedicated documentation for non-changelog-focused queries
+
 **Scoring Bonuses:**
 - Word boundary match: +0.5
 - Multiple occurrences: +0.25 per occurrence (max 3)
@@ -261,6 +271,8 @@ Search uses weighted field scoring for relevance ranking:
 
 **Implementation optimizations:**
 - Pre-computed lowercase text in `IndexedDocument` and `IndexedSection` classes
+- Pre-computed lowercase slug for fast slug matching
+- Pre-computed slug segments (`SlugSegments`) to avoid per-score allocations during slug relevance scoring
 - Span-based `CountOccurrences` method for zero-allocation matching
 - Static lambdas to avoid closure allocations
 - Pre-extracted code spans and identifiers

@@ -3,7 +3,8 @@
 
 using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Ats;
+using Aspire.Hosting.RemoteHost;
+using Aspire.TypeSystem;
 using Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes;
 
 namespace Aspire.Hosting.CodeGeneration.TypeScript.Tests;
@@ -48,6 +49,27 @@ public class AtsTypeScriptCodeGeneratorTests
 
         await Verify(files["aspire.ts"], extension: "ts")
             .UseFileName("AtsGeneratedAspire");
+
+        await Verify(files["base.ts"], extension: "ts")
+            .UseFileName("base");
+
+        await Verify(files["transport.ts"], extension: "ts")
+            .UseFileName("transport");
+    }
+
+    [Fact]
+    public void GenerateDistributedApplication_WithHostingTypes_KeepsReferenceExpressionInBaseTs()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+
+        Assert.DoesNotContain("export class ReferenceExpression {", files["aspire.ts"]);
+        Assert.Contains("export class ReferenceExpression {", files["base.ts"]);
+        Assert.Contains("registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression'", files["base.ts"]);
+        Assert.Contains("condition: extractHandleForExpr(state.condition),", files["base.ts"]);
+        Assert.Contains("('$handle' in json || '$expr' in json)", files["base.ts"]);
+        Assert.Contains("registerCancellation(state.client, cancellationToken)", files["base.ts"]);
     }
 
     [Fact]
@@ -297,6 +319,31 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public void FactoryMethod_ReturnsChildResourceType_NotParentType()
+    {
+        // Regression test: Factory methods on a builder (e.g., AddDatabase on SqlServerServerResource)
+        // must return the child resource type, not the parent/receiver type.
+        // Previously, the codegen always used the builder's own type for the return type,
+        // causing addDatabase() to return SqlServerServerResourcePromise instead of
+        // SqlServerDatabaseResourcePromise.
+        var atsContext = CreateContextFromTestAssembly();
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireTs = files["aspire.ts"];
+
+        // addTestChildDatabase is a factory method on TestRedisResource that returns TestDatabaseResource.
+        // The generated internal method must return TestDatabaseResource, not TestRedisResource.
+        Assert.Contains("_addTestChildDatabaseInternal", aspireTs);
+        Assert.Contains("Promise<TestDatabaseResource>", aspireTs);
+
+        // The public fluent method must return TestDatabaseResourcePromise, not TestRedisResourcePromise.
+        Assert.Matches(@"addTestChildDatabase\([^)]*\):\s*TestDatabaseResourcePromise", aspireTs);
+
+        // Verify the thenable class also uses the child type's promise class.
+        // In TestRedisResourcePromise, addTestChildDatabase should return TestDatabaseResourcePromise.
+        Assert.Contains("new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.addTestChildDatabase(", aspireTs);
+    }
+
+    [Fact]
     public async Task Scanner_WithPersistence_HasCorrectExpandedTargets()
     {
         // Verify the entire capability object for withPersistence
@@ -536,23 +583,45 @@ public class AtsTypeScriptCodeGeneratorTests
     [Fact]
     public void Pattern4_InterfaceParameterType_GeneratesUnionType()
     {
-        // Pattern 4/5: Verify that parameters with interface handle types generate union types
-        // in the generated TypeScript.
+        // Interface-constrained resource parameters should expand to the concrete
+        // wrapper interfaces/classes that satisfy the interface contract.
         var atsContext = CreateContextFromTestAssembly();
 
         // Generate the TypeScript output
         var files = _generator.GenerateDistributedApplication(atsContext);
         var aspireTs = files["aspire.ts"];
 
-        // The withDependency method should have its dependency parameter as a union type:
-        // dependency: IResourceWithConnectionStringHandle | ResourceBuilderBase
-        // Note: The exact generated name depends on the type mapping, but it should contain
-        // both the handle type and ResourceBuilderBase.
-        Assert.Contains("ResourceBuilderBase", aspireTs);
+        Assert.Contains("withDependency(dependency: ResourceWithConnectionString | TestRedisResource)", aspireTs);
+        Assert.DoesNotContain("withDependency(dependency: HandleReference)", aspireTs);
+    }
 
-        // Also verify the union type pattern appears somewhere
-        // (the exact format depends on the type name mapping)
-        Assert.Contains("|", aspireTs); // Union types use pipe
+    [Fact]
+    public void AspireUnion_InterfaceHandleInput_GeneratesExpandedUnion()
+    {
+        var atsContext = CreateContextFromTestAssembly();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireTs = files["aspire.ts"];
+
+        Assert.Contains("withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource)", aspireTs);
+    }
+
+    [Fact]
+    public void MapInputUnionTypeToTypeScript_ThrowsOnEmptyUnion()
+    {
+        var method = typeof(AtsTypeScriptCodeGenerator).GetMethod("MapInputUnionTypeToTypeScript", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+
+        var typeRef = new AtsTypeRef
+        {
+            TypeId = "test/EmptyUnion",
+            Category = AtsTypeCategory.Union,
+            UnionTypes = [],
+        };
+
+        var ex = Assert.Throws<TargetInvocationException>(() => method.Invoke(_generator, [typeRef]));
+        Assert.IsType<InvalidOperationException>(ex.InnerException);
+        Assert.Equal("Union input types must define at least one member type.", ex.InnerException.Message);
     }
 
     [Fact]
@@ -671,6 +740,18 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public void Scanner_HostingAssembly_UsesUnifiedWithReferenceCapability()
+    {
+        var capabilities = ScanCapabilitiesFromHostingAssembly();
+
+        var withReference = Assert.Single(capabilities, c => c.CapabilityId == "Aspire.Hosting/withReference");
+        Assert.Contains(withReference.Parameters, p => p.Name == "name" && p.IsOptional);
+
+        Assert.DoesNotContain(capabilities, c => c.CapabilityId == "Aspire.Hosting/withServiceReference");
+        Assert.DoesNotContain(capabilities, c => c.CapabilityId == "Aspire.Hosting/withServiceReferenceNamed");
+    }
+
+    [Fact]
     public void BugFix_TargetParameterName_WithVolumeUsesResource()
     {
         // Verify that withVolume has TargetParameterName = "resource" (from CoreExports.cs)
@@ -767,6 +848,34 @@ public class AtsTypeScriptCodeGeneratorTests
             .UseFileName("TwoPassScanningGeneratedAspire");
     }
 
+    [Fact]
+    public void TwoPassScanning_GeneratesDeprecatedJSDocForObsoleteExports()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireTs = files["aspire.ts"];
+
+        Assert.Contains("@deprecated ATS compatibility shim. Use withEnvironment instead.", aspireTs);
+        Assert.Contains("withEnvironmentExpression(name: string, value: ReferenceExpression)", aspireTs);
+    }
+
+    [Fact]
+    public void TwoPassScanning_DeduplicatesExpandedUnionTypes()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireTs = files["aspire.ts"];
+        var lines = aspireTs.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        Assert.DoesNotContain("ResourceBuilderBase | ResourceBuilderBase", aspireTs);
+        Assert.DoesNotContain("EndpointReference | EndpointReference", aspireTs);
+        Assert.Contains(lines, line => line.StartsWith("withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ", StringComparison.Ordinal));
+        Assert.Contains("ResourceWithConnectionString", aspireTs);
+        Assert.DoesNotContain("value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression", aspireTs);
+    }
+
     private static List<AtsCapabilityInfo> ScanCapabilitiesFromTestAssembly()
     {
         var testAssembly = LoadTestAssembly();
@@ -796,6 +905,13 @@ public class AtsTypeScriptCodeGeneratorTests
         var hostingAssembly = typeof(DistributedApplication).Assembly;
         var result = AtsCapabilityScanner.ScanAssembly(hostingAssembly);
         return result.Capabilities;
+    }
+
+    private static AtsContext CreateContextFromHostingAssembly()
+    {
+        var hostingAssembly = typeof(DistributedApplication).Assembly;
+        var result = AtsCapabilityScanner.ScanAssembly(hostingAssembly);
+        return result.ToAtsContext();
     }
 
     private static List<AtsCapabilityInfo> ScanCapabilitiesFromBothAssemblies()
@@ -875,6 +991,34 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public void Generate_HostingAssembly_IncludesCoreFrameworkPolyglotHelpers()
+    {
+        var atsContext = CreateContextFromHostingAssembly();
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireTs = files["aspire.ts"];
+
+        Assert.Contains("getSection", aspireTs);
+        Assert.Contains("getChildren", aspireTs);
+        Assert.Contains("exists", aspireTs);
+        Assert.Contains("getLoggerFactory", aspireTs);
+        Assert.Contains("createLogger", aspireTs);
+        Assert.Contains("getResourceLoggerService", aspireTs);
+        Assert.Contains("getResourceNotificationService", aspireTs);
+        Assert.Contains("getDistributedApplicationModel", aspireTs);
+        Assert.Contains("subscribeBeforeStart", aspireTs);
+        Assert.Contains("subscribeAfterResourcesCreated", aspireTs);
+        Assert.Contains("onBeforeResourceStarted", aspireTs);
+        Assert.Contains("onResourceStopped", aspireTs);
+        Assert.Contains("onConnectionStringAvailable", aspireTs);
+        Assert.Contains("onInitializeResource", aspireTs);
+        Assert.Contains("onResourceEndpointsAllocated", aspireTs);
+        Assert.Contains("onResourceReady", aspireTs);
+        Assert.Contains("getUserSecretsManager", aspireTs);
+        Assert.Contains("getEventing", aspireTs);
+        Assert.Contains("saveStateJson", aspireTs);
+    }
+
+    [Fact]
     public void Scanner_ObjectParameter_MapsToAny()
     {
         // This test verifies that 'object' parameters are correctly mapped to 'any' type.
@@ -941,6 +1085,19 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public void Scanner_ReferenceExpressionGetValueAsync_IsExported()
+    {
+        var capabilities = ScanCapabilitiesFromHostingAssembly();
+
+        var getValueAsync = capabilities.FirstOrDefault(c =>
+            c.CapabilityId == "Aspire.Hosting.ApplicationModel/getValue" &&
+            c.TargetTypeId == AtsConstants.ReferenceExpressionTypeId);
+
+        Assert.NotNull(getValueAsync);
+        Assert.Equal(AtsCapabilityKind.InstanceMethod, getValueAsync.CapabilityKind);
+    }
+
+    [Fact]
     public void Scanner_ExtensionMethod_HasCorrectCapabilityKind()
     {
         // Extension methods should be CapabilityKind.Method
@@ -960,8 +1117,8 @@ public class AtsTypeScriptCodeGeneratorTests
         var code = GenerateTwoPassCode();
 
         // TestResourceContext has ExposeMethods=true - gets Promise wrapper
-        Assert.Contains("export class TestResourceContextPromise", code);
-        Assert.Contains("implements PromiseLike<TestResourceContext>", code);
+        Assert.Contains("class TestResourceContextPromiseImpl implements TestResourceContextPromise", code);
+        Assert.Contains("implements TestResourceContextPromise", code);
     }
 
     [Fact]
@@ -989,6 +1146,16 @@ public class AtsTypeScriptCodeGeneratorTests
 
         // getValueAsync returns string - plain Promise, not a wrapper
         Assert.Contains("getValueAsync(): Promise<string>", code);
+    }
+
+    [Fact]
+    public void GenerateTwoPassCode_UsesUnifiedWithReferenceSurface()
+    {
+        var code = GenerateTwoPassCode();
+
+        Assert.DoesNotContain("withServiceReference(", code);
+        Assert.DoesNotContain("withServiceReferenceNamed(", code);
+        Assert.Contains("name?: string;", code);
     }
 
     private string GenerateTwoPassCode()
@@ -1020,13 +1187,15 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
-    public void Generate_MethodWithCancellationToken_GeneratesAbortSignalParameter()
+    public void Generate_MethodWithCancellationToken_GeneratesCancellationTokenParameter()
     {
-        // Verify generated TypeScript has AbortSignal parameter
+        // Generated input parameters should accept AbortSignal for user-authored cancellation,
+        // while callbacks and returned values use the structural SDK cancellation token interface.
         var code = GenerateTwoPassCode();
 
-        // getStatusAsync should have an AbortSignal parameter in the generated code
-        Assert.Contains("AbortSignal", code);
+        Assert.Contains("cancellationToken?: AbortSignal | CancellationToken;", code);
+        Assert.Contains("set: async (value: AbortSignal | CancellationToken): Promise<void> => {", code);
+        Assert.Contains("withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>)", code);
     }
 
     [Fact]
@@ -1224,5 +1393,118 @@ public class AtsTypeScriptCodeGeneratorTests
         // Should NOT contain the old pattern for items
         Assert.DoesNotContain("items = {", code);
         Assert.DoesNotContain("items = {\n        get: async", code);
+    }
+
+    [Fact]
+    public void Generate_ConcreteAndInterfaceWithSameClassName_NoDuplicateClasses()
+    {
+        // TestVaultResource (concrete) and ITestVaultResource (interface) both derive
+        // to the same TypeScript class name "TestVaultResource". The codegen must emit
+        // exactly one class definition, preferring the concrete type.
+        var atsContext = CreateContextFromTestAssembly();
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var code = files["aspire.ts"];
+
+        // Count occurrences of the public interface definition.
+        var classCount = CountOccurrences(code, "export interface TestVaultResource ");
+        Assert.Equal(1, classCount);
+
+        // Also verify the Promise wrapper interface is not duplicated.
+        var promiseCount = CountOccurrences(code, "export interface TestVaultResourcePromise ");
+        Assert.Equal(1, promiseCount);
+    }
+
+    // ===== Options Interface Merging Tests =====
+
+    [Fact]
+    public async Task Generate_SameMethodNameOnDifferentTypes_MergesOptionsInterface()
+    {
+        // Regression test: When the same method name (e.g., withDataVolume) appears on
+        // multiple resource types with different optional parameters, the generated options
+        // interface must be the union of all parameters across all overloads.
+        // Previously, RegisterOptionsInterface used first-write-wins, so the interface
+        // only included parameters from whichever overload was registered first.
+        var code = GenerateTwoPassCode();
+
+        // Extract just the WithDataVolumeOptions interface for snapshot verification.
+        var interfaceStart = code.IndexOf("export interface WithDataVolumeOptions", StringComparison.Ordinal);
+        Assert.True(interfaceStart >= 0, "WithDataVolumeOptions interface not found in generated code");
+
+        var interfaceEnd = code.IndexOf("}", interfaceStart, StringComparison.Ordinal);
+        var interfaceBody = code[interfaceStart..(interfaceEnd + 1)];
+
+        await Verify(interfaceBody, extension: "ts")
+            .UseFileName("WithDataVolumeOptionsMerged");
+    }
+
+    private static int CountOccurrences(string text, string pattern)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = text.IndexOf(pattern, index, StringComparison.Ordinal)) != -1)
+        {
+            count++;
+            index += pattern.Length;
+        }
+        return count;
+    }
+
+    // ===== JavaScript Assembly Expansion Tests =====
+
+    [Fact]
+    public void Scanner_WithNpm_ExpandsToAllJavaScriptResourceTypes()
+    {
+        // Verify that withNpm (constrained to JavaScriptAppResource) expands to all three
+        // concrete JS resource types: JavaScriptAppResource, NodeAppResource, ViteAppResource.
+        // This is a regression test for capability ID expansion where concrete types
+        // were not registered under their own type ID in the compatibility map.
+        var hostingAssembly = typeof(DistributedApplication).Assembly;
+        var jsAssembly = typeof(Aspire.Hosting.JavaScript.JavaScriptAppResource).Assembly;
+
+        var result = AtsCapabilityScanner.ScanAssemblies([hostingAssembly, jsAssembly]);
+
+        var withNpm = result.Capabilities
+            .FirstOrDefault(c => c.CapabilityId == "Aspire.Hosting.JavaScript/withNpm");
+        Assert.NotNull(withNpm);
+
+        var expandedTypeIds = withNpm.ExpandedTargetTypes.Select(t => t.TypeId).ToList();
+
+        // All three JS resource types should be present
+        var javaScriptAppTypeId = AtsTypeMapping.DeriveTypeId(typeof(Aspire.Hosting.JavaScript.JavaScriptAppResource));
+        var nodeAppTypeId = AtsTypeMapping.DeriveTypeId(typeof(Aspire.Hosting.JavaScript.NodeAppResource));
+        var viteAppTypeId = AtsTypeMapping.DeriveTypeId(typeof(Aspire.Hosting.JavaScript.ViteAppResource));
+
+        Assert.Contains(javaScriptAppTypeId, expandedTypeIds);
+        Assert.Contains(nodeAppTypeId, expandedTypeIds);
+        Assert.Contains(viteAppTypeId, expandedTypeIds);
+    }
+
+    [Theory]
+    [InlineData("withNpm")]
+    [InlineData("withBun")]
+    [InlineData("withYarn")]
+    [InlineData("withPnpm")]
+    public void Scanner_PackageManagerMethods_ExpandToAllJavaScriptResourceTypes(string methodName)
+    {
+        // Verify all package manager methods expand to the known JS resource types.
+        // Assert the minimum expected set rather than an exact count so the test
+        // remains valid when new JavaScriptAppResource-derived types are added.
+        var hostingAssembly = typeof(DistributedApplication).Assembly;
+        var jsAssembly = typeof(Aspire.Hosting.JavaScript.JavaScriptAppResource).Assembly;
+
+        var result = AtsCapabilityScanner.ScanAssemblies([hostingAssembly, jsAssembly]);
+
+        var capability = result.Capabilities
+            .FirstOrDefault(c => c.CapabilityId == $"Aspire.Hosting.JavaScript/{methodName}");
+        Assert.NotNull(capability);
+
+        var expandedTypeIds = capability.ExpandedTargetTypes.Select(t => t.TypeId).ToList();
+        Assert.True(expandedTypeIds.Count >= 3, $"Expected at least 3 expanded types but found {expandedTypeIds.Count}");
+        Assert.Contains(expandedTypeIds,
+            id => id.Contains(nameof(JavaScript.JavaScriptAppResource), StringComparison.Ordinal)
+               && !id.Contains("NodeApp", StringComparison.Ordinal)
+               && !id.Contains("ViteApp", StringComparison.Ordinal));
+        Assert.Contains(expandedTypeIds, id => id.Contains(nameof(JavaScript.NodeAppResource), StringComparison.Ordinal));
+        Assert.Contains(expandedTypeIds, id => id.Contains(nameof(JavaScript.ViteAppResource), StringComparison.Ordinal));
     }
 }

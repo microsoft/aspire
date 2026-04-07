@@ -50,6 +50,7 @@ public class OtlpLogEntry
                     return false;
                 case "SpanId":
                 case "TraceId":
+                case OtlpHelpers.AspireLogIdAttribute:
                     // Explicitly ignore these
                     return false;
                 case "logrecord.event.name":

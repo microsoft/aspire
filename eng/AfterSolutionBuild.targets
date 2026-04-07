@@ -50,7 +50,7 @@
       ```
 
     -->
-  <Target Name="_GenerateTestMatrix" BeforeTargets="Test" Condition=" '$(TestRunnerName)' == 'TestRunsheetBuilder' or  '$(TestRunnerName)' == 'QuarantinedTestRunsheetBuilder' or '$(TestRunnerName)' == 'OuterloopTestRunsheetBuilder' ">
+  <Target Name="_GenerateTestMatrix" BeforeTargets="Test" Condition=" '$(TestRunnerName)' == 'QuarantinedTestRunsheetBuilder' or '$(TestRunnerName)' == 'OuterloopTestRunsheetBuilder' ">
     <PropertyGroup>
       <_CombinedRunsheetFile>$(ArtifactsTmpDir)/combined_runsheet.json</_CombinedRunsheetFile>
       <_Command>
@@ -104,5 +104,27 @@
       <Output TaskParameter="ConsoleOutput" PropertyName="ScriptOutput" />
     </Exec>
     <Message Importance="high" Text="Combined runsheet created%0D%0A%0D%0A$(ScriptOutput)" />
+  </Target>
+
+  <!--
+    Generates the canonical test matrix JSON from test metadata files.
+    The output is platform-agnostic and can be consumed by GitHub Actions, Azure DevOps, etc.
+    Each platform has its own expansion script to transform the canonical format.
+  -->
+  <Target Name="_GenerateCanonicalMatrixJson" BeforeTargets="Test" Condition=" '$(TestRunnerName)' == 'TestEnumerationRunsheetBuilder' and '$(MSBuildProjectName)' != '' and !$(MSBuildProjectName.EndsWith('.Tests')) ">
+    <Error Condition="'$(TestMatrixOutputPath)' == ''"
+           Text="TestMatrixOutputPath must be specified when using TestEnumerationRunsheetBuilder" />
+
+    <PropertyGroup>
+      <_TestMatrixOutputPath>$([MSBuild]::NormalizePath('$(RepoRoot)', '$(TestMatrixOutputPath)'))</_TestMatrixOutputPath>
+      <_BuildMatrixScript>$([MSBuild]::NormalizePath($(RepoRoot), 'eng', 'scripts', 'build-test-matrix.ps1'))</_BuildMatrixScript>
+    </PropertyGroup>
+
+    <!-- Build the canonical test matrix (platform-agnostic) -->
+    <Exec Command="pwsh -File &quot;$(_BuildMatrixScript)&quot; -ArtifactsDir &quot;$(ArtifactsDir)&quot; -OutputMatrixFile &quot;$(_TestMatrixOutputPath)&quot;"
+          ConsoleToMSBuild="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="TestEnumerationOutput" />
+    </Exec>
+    <Message Importance="high" Text="Canonical test matrix built%0D%0A%0D%0A$(TestEnumerationOutput)" />
   </Target>
 </Project>

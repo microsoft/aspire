@@ -25,9 +25,6 @@ spec:
             - name: "http"
               protocol: "TCP"
               containerPort: {{ .Values.parameters.ServiceA.port_http | int }}
-            - name: "https"
-              protocol: "TCP"
-              containerPort: {{ .Values.parameters.ServiceA.port_https | int }}
           imagePullPolicy: "IfNotPresent"
   selector:
     matchLabels:

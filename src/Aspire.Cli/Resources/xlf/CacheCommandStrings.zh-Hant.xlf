@@ -18,13 +18,13 @@
         <note />
       </trans-unit>
       <trans-unit id="ClearCommand_Description">
-        <source>Clear all cache entries.</source>
-        <target state="translated">清除所有快取項目。</target>
+        <source>Clear all cache entries</source>
+        <target state="needs-review-translation">清除所有快取項目。</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Manage disk cache for CLI operations.</source>
-        <target state="translated">管理 CLI 操作的磁碟快取。</target>
+        <source>Manage disk cache for CLI operations</source>
+        <target state="needs-review-translation">管理 CLI 操作的磁碟快取。</target>
         <note />
       </trans-unit>
     </body>

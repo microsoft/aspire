@@ -138,8 +138,8 @@ public class ResourceTests
         // Act
         var resources = repository.GetResources();
 
-        var instance1Name = OtlpResource.GetResourceName(resources[0], resources);
-        var instance2Name = OtlpResource.GetResourceName(resources[1], resources);
+        var instance1Name = OtlpHelpers.GetResourceName(resources[0], resources);
+        var instance2Name = OtlpHelpers.GetResourceName(resources[1], resources);
 
         // Assert
         Assert.Equal("app1-19572b19", instance1Name);

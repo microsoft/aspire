@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "2")]
 public class ResourceExtensionsTests
 {
     [Fact]
@@ -508,5 +509,75 @@ public class ResourceExtensionsTests
 
     private sealed class TestContainerFilesResource(string name) : ContainerResource(name), IResourceWithContainerFiles
     {
+    }
+
+    [Theory]
+    [InlineData(false)] // No annotation
+    [InlineData(true)]  // Empty annotation
+    public void TryGetInstances_ReturnsFalse_WhenNoInstances(bool addEmptyAnnotation)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddResource(new ParentResource("test"));
+
+        if (addEmptyAnnotation)
+        {
+            resource.WithAnnotation(new DcpInstancesAnnotation([]));
+        }
+
+        var result = resource.Resource.TryGetInstances(out var instances);
+
+        Assert.False(result);
+        Assert.Empty(instances);
+    }
+
+    [Fact]
+    public void TryGetInstances_ReturnsTrue_WhenAnnotationHasInstances()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddResource(new ParentResource("test"))
+            .WithAnnotation(new DcpInstancesAnnotation([
+                new DcpInstance("test-abc123", "abc123", 0),
+                new DcpInstance("test-def456", "def456", 1)
+            ]));
+
+        var result = resource.Resource.TryGetInstances(out var instances);
+
+        Assert.True(result);
+        Assert.Equal(2, instances.Length);
+        Assert.Equal("test-abc123", instances[0].Name);
+        Assert.Equal("test-def456", instances[1].Name);
+    }
+
+    [Theory]
+    [InlineData(false)] // No annotation
+    [InlineData(true)]  // Empty annotation
+    public void GetResolvedResourceNames_ReturnsResourceName_WhenNoInstances(bool addEmptyAnnotation)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddResource(new ParentResource("test"));
+
+        if (addEmptyAnnotation)
+        {
+            resource.WithAnnotation(new DcpInstancesAnnotation([]));
+        }
+
+        var result = resource.Resource.GetResolvedResourceNames();
+
+        Assert.Equal(["test"], result);
+    }
+
+    [Fact]
+    public void GetResolvedResourceNames_ReturnsInstanceNames_WhenAnnotationHasInstances()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddResource(new ParentResource("test"))
+            .WithAnnotation(new DcpInstancesAnnotation([
+                new DcpInstance("test-abc123", "abc123", 0),
+                new DcpInstance("test-def456", "def456", 1)
+            ]));
+
+        var result = resource.Resource.GetResolvedResourceNames();
+
+        Assert.Equal(["test-abc123", "test-def456"], result);
     }
 }

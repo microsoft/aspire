@@ -5,6 +5,7 @@ using static Aspire.Hosting.Utils.PasswordGenerator;
 
 namespace Aspire.Hosting.Tests.Utils;
 
+[Trait("Partition", "4")]
 public class PasswordGeneratorTests
 {
     [Fact]

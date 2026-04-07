@@ -9,12 +9,12 @@ namespace Aspire.Cli.Tests.TestServices;
 internal sealed class TestAuxiliaryBackchannelMonitor : IAuxiliaryBackchannelMonitor
 {
     // Outer key: hash, Inner key: socketPath
-    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, AppHostAuxiliaryBackchannel>> _connectionsByHash = new();
+    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, IAppHostAuxiliaryBackchannel>> _connectionsByHash = new();
 
-    public IEnumerable<AppHostAuxiliaryBackchannel> Connections =>
+    public IEnumerable<IAppHostAuxiliaryBackchannel> Connections =>
         _connectionsByHash.Values.SelectMany(d => d.Values);
 
-    public IEnumerable<AppHostAuxiliaryBackchannel> GetConnectionsByHash(string hash) =>
+    public IEnumerable<IAppHostAuxiliaryBackchannel> GetConnectionsByHash(string hash) =>
         _connectionsByHash.TryGetValue(hash, out var connections) ? connections.Values : [];
 
     public string? SelectedAppHostPath { get; set; }
@@ -33,7 +33,7 @@ internal sealed class TestAuxiliaryBackchannelMonitor : IAuxiliaryBackchannelMon
         return Task.CompletedTask;
     }
 
-    public AppHostAuxiliaryBackchannel? SelectedConnection
+    public IAppHostAuxiliaryBackchannel? SelectedConnection
     {
         get
         {
@@ -73,7 +73,7 @@ internal sealed class TestAuxiliaryBackchannelMonitor : IAuxiliaryBackchannelMon
         }
     }
 
-    public IReadOnlyList<AppHostAuxiliaryBackchannel> GetConnectionsForWorkingDirectory(DirectoryInfo workingDirectory)
+    public IReadOnlyList<IAppHostAuxiliaryBackchannel> GetConnectionsForWorkingDirectory(DirectoryInfo workingDirectory)
     {
         return Connections
             .Where(c => IsAppHostInScopeOfDirectory(c.AppHostInfo?.AppHostPath, workingDirectory.FullName))
@@ -96,9 +96,9 @@ internal sealed class TestAuxiliaryBackchannelMonitor : IAuxiliaryBackchannelMon
         return !relativePath.StartsWith("..", StringComparison.Ordinal) && !Path.IsPathRooted(relativePath);
     }
 
-    public void AddConnection(string hash, string socketPath, AppHostAuxiliaryBackchannel connection)
+    public void AddConnection(string hash, string socketPath, IAppHostAuxiliaryBackchannel connection)
     {
-        var connectionsDict = _connectionsByHash.GetOrAdd(hash, _ => new ConcurrentDictionary<string, AppHostAuxiliaryBackchannel>());
+        var connectionsDict = _connectionsByHash.GetOrAdd(hash, _ => new ConcurrentDictionary<string, IAppHostAuxiliaryBackchannel>());
         connectionsDict[socketPath] = connection;
     }
 

@@ -1,5 +1,4 @@
 {
-  "$schema": "https://json.schemastore.org/aspire-8.0.json",
   "resources": {
     "docker-compose": {
       "error": "This resource does not support generation in the manifest."
@@ -58,7 +57,7 @@
     },
     "builder-sync": {
       "type": "container.v1",
-      "connectionString": "{builder-sync.bindings.tcp.host}:{builder-sync.bindings.tcp.port},password={builder-sync-password.value}",
+      "connectionString": "{builder-sync.bindings.tcp.host}:{builder-sync.bindings.tcp.port},password={builder-sync-password.value}{cond-builder-sync-bindings-tcp-tlsenabled-6201da71.connectionString}",
       "build": {
         "context": ".",
         "dockerfile": "builder-sync.Dockerfile"
@@ -73,7 +72,7 @@
       },
       "bindings": {
         "tcp": {
-          "scheme": "tcp",
+          "scheme": "redis",
           "protocol": "tcp",
           "transport": "tcp",
           "targetPort": 6379
@@ -82,7 +81,7 @@
     },
     "builder-async": {
       "type": "container.v1",
-      "connectionString": "{builder-async.bindings.tcp.host}:{builder-async.bindings.tcp.port},password={builder-async-password.value}",
+      "connectionString": "{builder-async.bindings.tcp.host}:{builder-async.bindings.tcp.port},password={builder-async-password.value}{cond-builder-async-bindings-tcp-tlsenabled-b1634741.connectionString}",
       "build": {
         "context": ".",
         "dockerfile": "builder-async.Dockerfile"
@@ -97,7 +96,7 @@
       },
       "bindings": {
         "tcp": {
-          "scheme": "tcp",
+          "scheme": "redis",
           "protocol": "tcp",
           "transport": "tcp",
           "targetPort": 6379
@@ -135,6 +134,14 @@
           }
         }
       }
+    },
+    "cond-builder-sync-bindings-tcp-tlsenabled-6201da71": {
+      "type": "value.v0",
+      "connectionString": ""
+    },
+    "cond-builder-async-bindings-tcp-tlsenabled-b1634741": {
+      "type": "value.v0",
+      "connectionString": ""
     }
   }
 }

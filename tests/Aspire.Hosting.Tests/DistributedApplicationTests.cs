@@ -32,6 +32,7 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "1")]
 public class DistributedApplicationTests
 {
     private readonly ITestOutputHelper _testOutputHelper;
@@ -121,6 +122,7 @@ public class DistributedApplicationTests
     }
 
     [Fact]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/15777")]
     public async Task StartResourceForcesStart()
     {
         using var testProgram = CreateTestProgram("force-resource-start");
@@ -369,6 +371,86 @@ public class DistributedApplicationTests
     }
 
     [Fact]
+    public async Task StartAsync_ThrowsWhenCancelled()
+    {
+        const string testName = "startasync-cancelled-during-startup";
+        using var testProgram = CreateTestProgram(testName, randomizePorts: false, includeIntegrationServices: false);
+
+        using var cts = new CancellationTokenSource();
+        testProgram.AppBuilder.Eventing.Subscribe<BeforeStartEvent>((_, cancellationToken) =>
+        {
+            cts.Cancel();
+            return Task.CompletedTask;
+        });
+
+        using var app = testProgram.Build();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await app.StartAsync(cts.Token);
+        }).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+    }
+
+    [Fact]
+    public async Task StartAsync_ThrowsWhenStopped()
+    {
+        const string testName = "startasync-stopped-during-startup";
+        using var testProgram = CreateTestProgram(testName, randomizePorts: false, includeIntegrationServices: false);
+
+        testProgram.AppBuilder.Eventing.Subscribe<BeforeStartEvent>((evt, cancellationToken) =>
+        {
+            evt.Services.GetRequiredService<IHostApplicationLifetime>().StopApplication();
+            return Task.CompletedTask;
+        });
+
+        using var app = testProgram.Build();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await app.StartAsync();
+        }).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+    }
+
+    [Fact]
+    public async Task RunAsync_ThrowsWhenCancelled()
+    {
+        const string testName = "runasync-cancelled-by-caller-during-startup";
+        using var testProgram = CreateTestProgram(testName, randomizePorts: false, includeIntegrationServices: false);
+        using var cts = new CancellationTokenSource();
+
+        testProgram.AppBuilder.Eventing.Subscribe<BeforeStartEvent>((_, cancellationToken) =>
+        {
+            cts.Cancel();
+            return Task.CompletedTask;
+        });
+
+        using var app = testProgram.Build();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await app.RunAsync(cts.Token);
+        }).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+    }
+
+    [Fact]
+    public async Task RunAsync_DoesNotThrowWhenStopped()
+    {
+        const string testName = "runasync-stopped-during-startup";
+        using var testProgram = CreateTestProgram(testName, randomizePorts: false, includeIntegrationServices: false);
+
+        testProgram.AppBuilder.Eventing.Subscribe<BeforeStartEvent>((evt, cancellationToken) =>
+        {
+            // Simulate ctrl+c by a user
+            evt.Services.GetRequiredService<IHostApplicationLifetime>().StopApplication();
+            return Task.CompletedTask;
+        });
+
+        using var app = testProgram.Build();
+
+        await app.RunAsync().DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+    }
+
+    [Fact]
     [RequiresFeature(TestFeature.Docker)]
     public async Task ExplicitStart_StartContainer()
     {
@@ -396,8 +478,16 @@ public class DistributedApplicationTests
         var startTask = app.StartAsync(token);
 
         // On start, one resource won't be started and the other is waiting on it.
-        var notStartedResourceEvent = await rns.WaitForResourceAsync(notStartedResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.NotStarted, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
-        var dependentResourceEvent = await rns.WaitForResourceAsync(dependentResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Waiting, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        var notStartedResourceEvent = await rns.WaitForResourceAsync(
+            notStartedResourceName,
+            e => e.Snapshot.State?.Text == KnownResourceStates.NotStarted,
+            token
+        ).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        var dependentResourceEvent = await rns.WaitForResourceAsync(
+            dependentResourceName,
+            e => e.Snapshot.State?.Text == KnownResourceStates.Waiting,
+            token
+        ).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
         Assert.Collection(notStartedResourceEvent.Snapshot.Urls, u =>
         {
@@ -616,7 +706,7 @@ public class DistributedApplicationTests
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/dotnet/aspire/issues/9340")]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/9340")]
     public async Task TestServicesWithMultipleReplicas()
     {
         var replicaCount = 3;
@@ -1472,8 +1562,7 @@ public class DistributedApplicationTests
         await using var app = testProgram.Build();
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () => await app.StartAsync().DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout));
-        var suffix = app.Services.GetRequiredService<IOptions<DcpOptions>>().Value.ResourceNameSuffix;
-        Assert.Equal($"Resource '{testName}-servicea-{suffix}' uses multiple replicas and a proxy-less endpoint 'http'. These features do not work together.", ex.Message);
+        Assert.Equal($"Resource '{testName}-servicea' uses multiple replicas and a proxy-less endpoint 'http'. These features do not work together.", ex.Message);
     }
 
     [Fact]
@@ -1495,17 +1584,18 @@ public class DistributedApplicationTests
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/dotnet/aspire/issues/8728")]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/8728")]
     public async Task ProxylessEndpointWorks()
     {
         const string testName = "proxyless-endpoint-works";
         using var testProgram = CreateTestProgram(testName);
 
+        var port = await Network.GetAvailablePortAsync();
         testProgram.ServiceABuilder
             .WithEndpoint("http", e =>
             {
-                e.Port = 1234;
-                e.TargetPort = 1234;
+                e.Port = port;
+                e.TargetPort = port;
                 e.IsProxied = false;
             });
 
@@ -1537,11 +1627,12 @@ public class DistributedApplicationTests
         const string testName = "proxyless-and-proxied-endpoints";
         using var testProgram = CreateTestProgram(testName);
 
+        var port = await Network.GetAvailablePortAsync();
         testProgram.ServiceABuilder
             .WithEndpoint("http", e =>
             {
-                e.Port = 1234;
-                e.TargetPort = 1234;
+                e.Port = port;
+                e.TargetPort = port;
                 e.IsProxied = false;
             }, createIfNotExists: false)
             .WithEndpoint("https", e =>
@@ -1607,7 +1698,8 @@ public class DistributedApplicationTests
         const string testName = "proxyless-container";
         using var builder = TestDistributedApplicationBuilder.Create(_testOutputHelper);
 
-        var redis = builder.AddRedis($"{testName}-redis", 1234).WithEndpoint("tcp", endpoint =>
+        var port = await Network.GetAvailablePortAsync();
+        var redis = builder.AddRedis($"{testName}-redis", port).WithEndpoint("tcp", endpoint =>
         {
             endpoint.IsProxied = false;
         });
@@ -1638,7 +1730,7 @@ public class DistributedApplicationTests
         var env = Assert.Single(service.Spec.Env!, e => e.Name == $"ConnectionStrings__{testName}-redis");
         var sslVal = redis.Resource.TlsEnabled ? ",ssl=true" : string.Empty;
 #pragma warning disable CS0618 // Type or member is obsolete
-        Assert.Equal($"localhost:1234,password={redis.Resource.PasswordParameter?.Value}{sslVal}", env.Value);
+        Assert.Equal($"localhost:{port},password={redis.Resource.PasswordParameter?.Value}{sslVal}", env.Value);
 #pragma warning restore CS0618 // Type or member is obsolete
 
         var list = await s.ListAsync<Container>().DefaultTimeout();
@@ -1646,11 +1738,11 @@ public class DistributedApplicationTests
         if (redis.Resource.TlsEnabled)
         {
             Assert.Equal(2, redisContainer.Spec.Ports!.Count);
-            Assert.Contains(redisContainer.Spec.Ports!, p => p.HostPort == 1234);
+            Assert.Contains(redisContainer.Spec.Ports!, p => p.HostPort == port);
         }
         else
         {
-            Assert.Equal(1234, Assert.Single(redisContainer.Spec.Ports!).HostPort);
+            Assert.Equal(port, Assert.Single(redisContainer.Spec.Ports!).HostPort);
         }
 
         var otherRedisEnv = Assert.Single(service.Spec.Env!, e => e.Name == $"ConnectionStrings__{testName}-redisNoPort");
@@ -1680,7 +1772,8 @@ public class DistributedApplicationTests
         const string testName = "endpoint-proxy-support";
         using var builder = TestDistributedApplicationBuilder.Create(_testOutputHelper);
 
-        var redis = builder.AddRedis($"{testName}-redis", 1234).WithEndpointProxySupport(false);
+        var port = await Network.GetAvailablePortAsync();
+        var redis = builder.AddRedis($"{testName}-redis", port).WithEndpointProxySupport(false);
 
         // Since port is not specified, this instance will use the container target port (6379) as the host port.
         var redisNoPort = builder.AddRedis($"{testName}-redisNoPort").WithEndpointProxySupport(false);
@@ -1710,7 +1803,7 @@ public class DistributedApplicationTests
         var env = Assert.Single(service.Spec.Env!, e => e.Name == $"ConnectionStrings__{testName}-redis");
         var sslVal = redis.Resource.TlsEnabled ? ",ssl=true" : string.Empty;
 #pragma warning disable CS0618 // Type or member is obsolete
-        Assert.Equal($"localhost:1234,password={redis.Resource.PasswordParameter!.Value}{sslVal}", env.Value);
+        Assert.Equal($"localhost:{port},password={redis.Resource.PasswordParameter!.Value}{sslVal}", env.Value);
 #pragma warning restore CS0618 // Type or member is obsolete
 
         var list = await s.ListAsync<Container>().DefaultTimeout();
@@ -1718,11 +1811,11 @@ public class DistributedApplicationTests
         if (redis.Resource.TlsEnabled)
         {
             Assert.Equal(2, redisContainer.Spec.Ports!.Count);
-            Assert.Contains(redisContainer.Spec.Ports!, p => p.HostPort == 1234);
+            Assert.Contains(redisContainer.Spec.Ports!, p => p.HostPort == port);
         }
         else
         {
-            Assert.Equal(1234, Assert.Single(redisContainer.Spec.Ports!).HostPort);
+            Assert.Equal(port, Assert.Single(redisContainer.Spec.Ports!).HostPort);
         }
 
         var otherRedisEnv = Assert.Single(service.Spec.Env!, e => e.Name == $"ConnectionStrings__{testName}-redisNoPort");

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Microsoft.AspNetCore.InternalTesting;
 using Aspire.Cli.Mcp.Docs;
 
 namespace Aspire.Cli.Tests.Mcp.Docs;
@@ -10,7 +11,7 @@ public class LlmsTxtParserTests
     [Fact]
     public async Task ParseAsync_WithEmptyString_ReturnsEmptyList()
     {
-        var result = await LlmsTxtParser.ParseAsync("");
+        var result = await LlmsTxtParser.ParseAsync("").DefaultTimeout();
 
         Assert.Empty(result);
     }
@@ -18,7 +19,7 @@ public class LlmsTxtParserTests
     [Fact]
     public async Task ParseAsync_WithWhitespaceOnly_ReturnsEmptyList()
     {
-        var result = await LlmsTxtParser.ParseAsync("   \n\t\n   ");
+        var result = await LlmsTxtParser.ParseAsync("   \n\t\n   ").DefaultTimeout();
 
         Assert.Empty(result);
     }
@@ -32,7 +33,7 @@ public class LlmsTxtParserTests
             ## This is H2 but no H1
             """;
 
-        var result = await LlmsTxtParser.ParseAsync(content);
+        var result = await LlmsTxtParser.ParseAsync(content).DefaultTimeout();
 
         Assert.Empty(result);
     }
@@ -47,7 +48,7 @@ public class LlmsTxtParserTests
             Some body content here.
             """;
 
-        var result = await LlmsTxtParser.ParseAsync(content);
+        var result = await LlmsTxtParser.ParseAsync(content).DefaultTimeout();
 
         Assert.Single(result);
         var doc = result[0];
@@ -75,7 +76,7 @@ public class LlmsTxtParserTests
             Third content without summary.
             """;
 
-        var result = await LlmsTxtParser.ParseAsync(content);
+        var result = await LlmsTxtParser.ParseAsync(content).DefaultTimeout();
 
         Assert.Equal(3, result.Count);
         Assert.Equal("First Document", result[0].Title);
@@ -100,7 +101,7 @@ public class LlmsTxtParserTests
             Subsection content.
             """;
 
-        var result = await LlmsTxtParser.ParseAsync(content);
+        var result = await LlmsTxtParser.ParseAsync(content).DefaultTimeout();
 
         Assert.Single(result);
         var doc = result[0];
@@ -132,7 +133,7 @@ public class LlmsTxtParserTests
             Another content.
             """;
 
-        var result = await LlmsTxtParser.ParseAsync(content);
+        var result = await LlmsTxtParser.ParseAsync(content).DefaultTimeout();
 
         var doc = result[0];
         var parentSection = doc.Sections.First(s => s.Heading == "Parent Section");
@@ -153,7 +154,7 @@ public class LlmsTxtParserTests
             Just regular content, no blockquote.
             """;
 
-        var result = await LlmsTxtParser.ParseAsync(content);
+        var result = await LlmsTxtParser.ParseAsync(content).DefaultTimeout();
 
         Assert.Single(result);
         Assert.Null(result[0].Summary);
@@ -167,7 +168,7 @@ public class LlmsTxtParserTests
             Content.
             """;
 
-        var result = await LlmsTxtParser.ParseAsync(content);
+        var result = await LlmsTxtParser.ParseAsync(content).DefaultTimeout();
 
         Assert.Single(result);
         Assert.Equal("hello-world-hows-it-going", result[0].Slug);
@@ -181,7 +182,7 @@ public class LlmsTxtParserTests
             Content.
             """;
 
-        var result = await LlmsTxtParser.ParseAsync(content);
+        var result = await LlmsTxtParser.ParseAsync(content).DefaultTimeout();
 
         Assert.Single(result);
         // Multiple spaces should become single hyphens
@@ -196,7 +197,7 @@ public class LlmsTxtParserTests
             Content.
             """;
 
-        var result = await LlmsTxtParser.ParseAsync(content);
+        var result = await LlmsTxtParser.ParseAsync(content).DefaultTimeout();
 
         Assert.Single(result);
         // Leading and trailing hyphens should be trimmed
@@ -220,7 +221,7 @@ public class LlmsTxtParserTests
             More text.
             """;
 
-        var result = await LlmsTxtParser.ParseAsync(content);
+        var result = await LlmsTxtParser.ParseAsync(content).DefaultTimeout();
 
         Assert.Single(result);
         Assert.Contains("```csharp", result[0].Content);
@@ -236,7 +237,7 @@ public class LlmsTxtParserTests
             Content.
             """;
 
-        var result = await LlmsTxtParser.ParseAsync(content);
+        var result = await LlmsTxtParser.ParseAsync(content).DefaultTimeout();
 
         Assert.Empty(result);
     }
@@ -249,7 +250,7 @@ public class LlmsTxtParserTests
             Content.
             """;
 
-        var result = await LlmsTxtParser.ParseAsync(content);
+        var result = await LlmsTxtParser.ParseAsync(content).DefaultTimeout();
 
         Assert.Empty(result);
     }
@@ -262,7 +263,7 @@ public class LlmsTxtParserTests
             Content.
             """;
 
-        var result = await LlmsTxtParser.ParseAsync(content);
+        var result = await LlmsTxtParser.ParseAsync(content).DefaultTimeout();
 
         Assert.Single(result);
         Assert.Equal("Document With Leading Spaces", result[0].Title);
@@ -281,7 +282,7 @@ public class LlmsTxtParserTests
             Line 3.
             """;
 
-        var result = await LlmsTxtParser.ParseAsync(content);
+        var result = await LlmsTxtParser.ParseAsync(content).DefaultTimeout();
 
         Assert.Single(result);
         Assert.Contains("\n", result[0].Content);
@@ -298,7 +299,7 @@ public class LlmsTxtParserTests
             Second content.
             """;
 
-        var result = await LlmsTxtParser.ParseAsync(content);
+        var result = await LlmsTxtParser.ParseAsync(content).DefaultTimeout();
 
         Assert.Equal(2, result.Count);
         Assert.Contains("## inside text", result[0].Content);
@@ -344,7 +345,7 @@ public class LlmsTxtParserTests
             ```
             """;
 
-        var result = await LlmsTxtParser.ParseAsync(content);
+        var result = await LlmsTxtParser.ParseAsync(content).DefaultTimeout();
 
         Assert.Equal(2, result.Count);
 
@@ -396,7 +397,7 @@ public class LlmsTxtParserTests
             Valid content.
             """;
 
-        var result = await LlmsTxtParser.ParseAsync(content);
+        var result = await LlmsTxtParser.ParseAsync(content).DefaultTimeout();
 
         Assert.Single(result);
         Assert.Equal("Valid Title", result[0].Title);
@@ -413,7 +414,7 @@ public class LlmsTxtParserTests
             Content.
             """;
 
-        var result = await LlmsTxtParser.ParseAsync(content);
+        var result = await LlmsTxtParser.ParseAsync(content).DefaultTimeout();
 
         Assert.Single(result);
         Assert.Equal("First summary.", result[0].Summary);
@@ -429,7 +430,7 @@ public class LlmsTxtParserTests
             > This blockquote is in a section, not a summary.
             """;
 
-        var result = await LlmsTxtParser.ParseAsync(content);
+        var result = await LlmsTxtParser.ParseAsync(content).DefaultTimeout();
 
         Assert.Single(result);
         Assert.Null(result[0].Summary);
@@ -447,7 +448,7 @@ public class LlmsTxtParserTests
     {
         var content = $"# {title}\nContent.";
 
-        var result = await LlmsTxtParser.ParseAsync(content);
+        var result = await LlmsTxtParser.ParseAsync(content).DefaultTimeout();
 
         Assert.Single(result);
         Assert.Equal(expectedSlug, result[0].Slug);
@@ -459,7 +460,7 @@ public class LlmsTxtParserTests
         // Minified content with inline sections using [Section titled...] markers (like aspire.dev format)
         var content = "# Document Title\n> Summary text. ## First Section [Section titled \"First Section\"] Content for first section. ## Second Section [Section titled \"Second Section\"] Content for second section. ### Subsection [Section titled \"Subsection\"] Subsection content.";
 
-        var result = await LlmsTxtParser.ParseAsync(content);
+        var result = await LlmsTxtParser.ParseAsync(content).DefaultTimeout();
 
         Assert.Single(result);
         var doc = result[0];
@@ -493,7 +494,7 @@ public class LlmsTxtParserTests
             Real section content.
             """;
 
-        var result = await LlmsTxtParser.ParseAsync(content);
+        var result = await LlmsTxtParser.ParseAsync(content).DefaultTimeout();
 
         Assert.Single(result);
         var doc = result[0];
@@ -510,7 +511,7 @@ public class LlmsTxtParserTests
         // Content with [Section titled...] markers like aspire.dev uses
         var content = "# Main Doc\n> Summary. ## Getting Started [Section titled \"Getting Started\"] This section explains...";
 
-        var result = await LlmsTxtParser.ParseAsync(content);
+        var result = await LlmsTxtParser.ParseAsync(content).DefaultTimeout();
 
         Assert.Single(result);
         var doc = result[0];
@@ -521,7 +522,7 @@ public class LlmsTxtParserTests
     [Fact]
     public async Task ParseAsync_AspireDotDevContent_ParsesFourDocuments()
     {
-        var result = await LlmsTxtParser.ParseAsync(AspireDotDevFourArticleExample);
+        var result = await LlmsTxtParser.ParseAsync(AspireDotDevFourArticleExample).DefaultTimeout();
 
         Assert.Equal(4, result.Count);
     }
@@ -529,7 +530,7 @@ public class LlmsTxtParserTests
     [Fact]
     public async Task ParseAsync_AspireDotDevContent_ParsesDocumentTitlesCorrectly()
     {
-        var result = await LlmsTxtParser.ParseAsync(AspireDotDevFourArticleExample);
+        var result = await LlmsTxtParser.ParseAsync(AspireDotDevFourArticleExample).DefaultTimeout();
 
         // Note: First article starts after a blank line following the <SYSTEM> tag
         Assert.Equal("Certificate configuration", result[0].Title);
@@ -541,7 +542,7 @@ public class LlmsTxtParserTests
     [Fact]
     public async Task ParseAsync_AspireDotDevContent_GeneratesCorrectSlugs()
     {
-        var result = await LlmsTxtParser.ParseAsync(AspireDotDevFourArticleExample);
+        var result = await LlmsTxtParser.ParseAsync(AspireDotDevFourArticleExample).DefaultTimeout();
 
         Assert.Equal("certificate-configuration", result[0].Slug);
         Assert.Equal("apphost-configuration", result[1].Slug);
@@ -552,7 +553,7 @@ public class LlmsTxtParserTests
     [Fact]
     public async Task ParseAsync_AspireDotDevContent_ParsesSummariesCorrectly()
     {
-        var result = await LlmsTxtParser.ParseAsync(AspireDotDevFourArticleExample);
+        var result = await LlmsTxtParser.ParseAsync(AspireDotDevFourArticleExample).DefaultTimeout();
 
         Assert.Equal("Learn how to configure HTTPS endpoints and certificate trust for resources in Aspire to enable secure communication.", result[0].Summary);
         Assert.Equal("Learn about the Aspire AppHost configuration options.", result[1].Summary);
@@ -563,7 +564,7 @@ public class LlmsTxtParserTests
     [Fact]
     public async Task ParseAsync_AspireDotDevContent_ParsesSectionsForCertificatesDoc()
     {
-        var result = await LlmsTxtParser.ParseAsync(AspireDotDevFourArticleExample);
+        var result = await LlmsTxtParser.ParseAsync(AspireDotDevFourArticleExample).DefaultTimeout();
 
         var certificatesDoc = result[0];
         Assert.True(certificatesDoc.Sections.Count > 0, "Certificate doc should have sections");
@@ -583,7 +584,7 @@ public class LlmsTxtParserTests
     [Fact]
     public async Task ParseAsync_AspireDotDevContent_ParsesSectionsForAppHostConfigDoc()
     {
-        var result = await LlmsTxtParser.ParseAsync(AspireDotDevFourArticleExample);
+        var result = await LlmsTxtParser.ParseAsync(AspireDotDevFourArticleExample).DefaultTimeout();
 
         var appHostConfigDoc = result[1];
         Assert.True(appHostConfigDoc.Sections.Count > 0, "AppHost config doc should have sections");
@@ -599,7 +600,7 @@ public class LlmsTxtParserTests
     [Fact]
     public async Task ParseAsync_AspireDotDevContent_ParsesSectionsForDockerComposeDoc()
     {
-        var result = await LlmsTxtParser.ParseAsync(AspireDotDevFourArticleExample);
+        var result = await LlmsTxtParser.ParseAsync(AspireDotDevFourArticleExample).DefaultTimeout();
 
         var dockerComposeDoc = result[2];
         Assert.True(dockerComposeDoc.Sections.Count > 0, "Docker Compose doc should have sections");
@@ -615,7 +616,7 @@ public class LlmsTxtParserTests
     [Fact]
     public async Task ParseAsync_AspireDotDevContent_ParsesSectionsForEventingDoc()
     {
-        var result = await LlmsTxtParser.ParseAsync(AspireDotDevFourArticleExample);
+        var result = await LlmsTxtParser.ParseAsync(AspireDotDevFourArticleExample).DefaultTimeout();
 
         var eventingDoc = result[3];
         Assert.True(eventingDoc.Sections.Count > 0, "Eventing doc should have sections");
@@ -635,7 +636,7 @@ public class LlmsTxtParserTests
     [Fact]
     public async Task ParseAsync_AspireDotDevContent_ContentContainsCodeBlocks()
     {
-        var result = await LlmsTxtParser.ParseAsync(AspireDotDevFourArticleExample);
+        var result = await LlmsTxtParser.ParseAsync(AspireDotDevFourArticleExample).DefaultTimeout();
 
         // HTTPS certificates doc should have C# code examples
         Assert.Contains("```csharp", result[0].Content);
@@ -656,7 +657,7 @@ public class LlmsTxtParserTests
     [Fact]
     public async Task ParseAsync_AspireDotDevContent_DocumentBoundariesAreCorrect()
     {
-        var result = await LlmsTxtParser.ParseAsync(AspireDotDevFourArticleExample);
+        var result = await LlmsTxtParser.ParseAsync(AspireDotDevFourArticleExample).DefaultTimeout();
 
         // Each document's content should not contain other documents' titles
         Assert.DoesNotContain("# AppHost configuration", result[0].Content);

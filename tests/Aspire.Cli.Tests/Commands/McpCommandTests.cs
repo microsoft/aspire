@@ -4,11 +4,27 @@
 using Aspire.Cli.Commands;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Commands;
 
 public class McpCommandTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task McpCommand_WithoutSubcommand_ReturnsInvalidCommand()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("mcp");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+    }
+
     [Fact]
     public async Task McpCommandWithHelpArgumentReturnsZero()
     {
@@ -19,7 +35,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("mcp --help");
 
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(0, exitCode);
     }
 
@@ -33,7 +49,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("mcp start --help");
 
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(0, exitCode);
     }
 
@@ -68,7 +84,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task McpCommandIsHidden()
+    public async Task McpCommandIsVisible()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
@@ -78,7 +94,22 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
         var mcpCommand = rootCommand.Subcommands.FirstOrDefault(c => c.Name == "mcp");
 
         Assert.NotNull(mcpCommand);
-        Assert.True(mcpCommand.Hidden, "The mcp command should be hidden for backward compatibility");
+        Assert.False(mcpCommand.Hidden, "The mcp command should be visible (contains tools and call subcommands)");
+    }
+
+    [Fact]
+    public async Task AgentCommand_WithoutSubcommand_ReturnsInvalidCommand()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("agent");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
     }
 
     [Fact]
@@ -91,7 +122,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("agent --help");
 
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(0, exitCode);
     }
 
@@ -105,7 +136,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("agent mcp --help");
 
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(0, exitCode);
     }
 
@@ -119,7 +150,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("agent init --help");
 
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(0, exitCode);
     }
 

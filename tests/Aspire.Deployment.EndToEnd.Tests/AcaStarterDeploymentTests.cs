@@ -3,7 +3,6 @@
 
 using Aspire.Cli.Tests.Utils;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
-using Hex1b;
 using Hex1b.Automation;
 using Xunit;
 
@@ -14,9 +13,9 @@ namespace Aspire.Deployment.EndToEnd.Tests;
 /// </summary>
 public sealed class AcaStarterDeploymentTests(ITestOutputHelper output)
 {
-    // Timeout set to 15 minutes to allow for Azure provisioning.
-    // Full deployments can take 10-20+ minutes. Increase if needed.
-    private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(15);
+    // Timeout set to 40 minutes to allow for Azure provisioning.
+    // Full deployments can take up to 30 minutes if Azure infrastructure is backed up.
+    private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(40);
 
     [Fact]
     public async Task DeployStarterTemplateToAzureContainerApps()
@@ -51,63 +50,30 @@ public sealed class AcaStarterDeploymentTests(ITestOutputHelper output)
         }
 
         var workspace = TemporaryWorkspace.Create(output);
-        var recordingPath = DeploymentE2ETestHelpers.GetTestResultsRecordingPath(nameof(DeployStarterTemplateToAzureContainerApps));
         var startTime = DateTime.UtcNow;
         var deploymentUrls = new Dictionary<string, string>();
-        // Note: aspire deploy creates its own resource group with pattern rg-aspire-{appname}
-        // We add a unique suffix per run to avoid collisions with concurrent runs or cleanup in progress
-        var runSuffix = DateTime.UtcNow.ToString("HHmmss");
-        var projectName = $"AcaTest{runSuffix}";
+        // Generate a unique resource group name with pattern: e2e-[testcasename]-[runid]-[attempt]
+        var resourceGroupName = DeploymentE2ETestHelpers.GenerateResourceGroupName("starter");
+        // Project name can be simpler since resource group is explicitly set
+        var projectName = "AcaStarter";
 
         output.WriteLine($"Test: {nameof(DeployStarterTemplateToAzureContainerApps)}");
         output.WriteLine($"Project Name: {projectName}");
-        output.WriteLine($"Expected Resource Group: rg-aspire-{projectName.ToLowerInvariant()}apphost");
+        output.WriteLine($"Resource Group: {resourceGroupName}");
         output.WriteLine($"Subscription: {subscriptionId[..8]}...");
         output.WriteLine($"Workspace: {workspace.WorkspaceRoot.FullName}");
 
         try
         {
-            var builder = Hex1bTerminal.CreateBuilder()
-                .WithHeadless()
-                .WithAsciinemaRecording(recordingPath)
-                .WithPtyProcess("/bin/bash", ["--norc"]);
-
-            using var terminal = builder.Build();
+            using var terminal = DeploymentE2ETestHelpers.CreateTestTerminal();
             var pendingRun = terminal.RunAsync(cancellationToken);
 
-            // Pattern searchers for aspire new interactive prompts
-            var waitingForTemplateSelectionPrompt = new CellPatternSearcher()
-                .FindPattern("> Starter App");
-
-            var waitingForProjectNamePrompt = new CellPatternSearcher()
-                .Find($"Enter the project name ({workspace.WorkspaceRoot.Name}): ");
-
-            var waitingForOutputPathPrompt = new CellPatternSearcher()
-                .Find("Enter the output path:");
-
-            var waitingForUrlsPrompt = new CellPatternSearcher()
-                .Find("Use *.dev.localhost URLs");
-
-            var waitingForRedisPrompt = new CellPatternSearcher()
-                .Find("Use Redis Cache");
-
-            var waitingForTestPrompt = new CellPatternSearcher()
-                .Find("Do you want to create a test project?");
-
-            // Pattern searchers for aspire add prompts
-            var waitingForAddVersionSelectionPrompt = new CellPatternSearcher()
-                .Find("(based on NuGet.config)");
-
-            // Pattern searcher for deployment success
-            var waitingForPipelineSucceeded = new CellPatternSearcher()
-                .Find("PIPELINE SUCCEEDED");
-
             var counter = new SequenceCounter();
-            var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+            var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
             // Step 1: Prepare environment
             output.WriteLine("Step 1: Preparing environment...");
-            sequenceBuilder.PrepareEnvironment(workspace, counter);
+            await auto.PrepareEnvironmentAsync(workspace, counter);
 
             // Step 2: Set up CLI environment (in CI)
             // The workflow builds and installs the CLI to ~/.aspire/bin before running tests
@@ -116,127 +82,108 @@ public sealed class AcaStarterDeploymentTests(ITestOutputHelper output)
             {
                 output.WriteLine("Step 2: Using pre-installed Aspire CLI from local build...");
                 // Source the CLI environment (sets PATH and other env vars)
-                sequenceBuilder.SourceAspireCliEnvironment(counter);
+                await auto.SourceAspireCliEnvironmentAsync(counter);
             }
 
             // Step 3: Create starter project using aspire new with interactive prompts
             output.WriteLine("Step 3: Creating starter project...");
-            sequenceBuilder.Type("aspire new")
-                .Enter()
-                .WaitUntil(s => waitingForTemplateSelectionPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(60))
-                .Enter() // Select first template (Starter App ASP.NET Core/Blazor)
-                .WaitUntil(s => waitingForProjectNamePrompt.Search(s).Count > 0, TimeSpan.FromSeconds(30))
-                .Type(projectName)
-                .Enter()
-                .WaitUntil(s => waitingForOutputPathPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-                .Enter() // Accept default output path
-                .WaitUntil(s => waitingForUrlsPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-                .Enter() // Select "No" for localhost URLs (default)
-                .WaitUntil(s => waitingForRedisPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-                // For Redis prompt, default is "Yes" so we need to select "No" by pressing Down
-                .Key(Hex1b.Input.Hex1bKey.DownArrow)
-                .Enter() // Select "No" for Redis Cache
-                .WaitUntil(s => waitingForTestPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-                .Enter() // Select "No" for test project (default)
-                .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(5));
+            await auto.AspireNewAsync(projectName, counter, useRedisCache: false);
 
             // Step 4: Navigate to project directory
             output.WriteLine("Step 4: Navigating to project directory...");
-            sequenceBuilder
-                .Type($"cd {projectName}")
-                .Enter()
-                .WaitForSuccessPrompt(counter);
+            await auto.TypeAsync($"cd {projectName}");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
 
             // Step 5: Add Aspire.Hosting.Azure.AppContainers package
             output.WriteLine("Step 5: Adding Azure Container Apps hosting package...");
-            sequenceBuilder.Type("aspire add Aspire.Hosting.Azure.AppContainers")
-                .Enter();
+            await auto.TypeAsync("aspire add Aspire.Hosting.Azure.AppContainers");
+            await auto.EnterAsync();
 
             // In CI, aspire add shows a version selection prompt
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
-                sequenceBuilder
-                    .WaitUntil(s => waitingForAddVersionSelectionPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(60))
-                    .Enter(); // select first version (PR build)
+                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
+                await auto.EnterAsync(); // select first version (PR build)
             }
 
-            sequenceBuilder.WaitForSuccessPrompt(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
 
             // Step 6: Modify AppHost.cs to add Azure Container App Environment
-            sequenceBuilder.ExecuteCallback(() =>
-            {
-                var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
-                var appHostDir = Path.Combine(projectDir, $"{projectName}.AppHost");
-                var appHostFilePath = Path.Combine(appHostDir, "AppHost.cs");
+            var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
+            var appHostDir = Path.Combine(projectDir, $"{projectName}.AppHost");
+            var appHostFilePath = Path.Combine(appHostDir, "AppHost.cs");
 
-                output.WriteLine($"Looking for AppHost.cs at: {appHostFilePath}");
+            output.WriteLine($"Looking for AppHost.cs at: {appHostFilePath}");
 
-                var content = File.ReadAllText(appHostFilePath);
+            var content = File.ReadAllText(appHostFilePath);
 
-                // Insert the Azure Container App Environment before builder.Build().Run();
-                var buildRunPattern = "builder.Build().Run();";
-                var replacement = """
+            // Insert the Azure Container App Environment before builder.Build().Run();
+            var buildRunPattern = "builder.Build().Run();";
+            var replacement = """
 // Add Azure Container App Environment for deployment
 builder.AddAzureContainerAppEnvironment("infra");
 
 builder.Build().Run();
 """;
 
-                content = content.Replace(buildRunPattern, replacement);
-                File.WriteAllText(appHostFilePath, content);
+            content = content.Replace(buildRunPattern, replacement);
+            File.WriteAllText(appHostFilePath, content);
 
-                output.WriteLine($"Modified AppHost.cs at: {appHostFilePath}");
-            });
+            output.WriteLine($"Modified AppHost.cs at: {appHostFilePath}");
 
             // Step 7: Navigate to AppHost project directory
             output.WriteLine("Step 6: Navigating to AppHost directory...");
-            sequenceBuilder
-                .Type($"cd {projectName}.AppHost")
-                .Enter()
-                .WaitForSuccessPrompt(counter);
+            await auto.TypeAsync($"cd {projectName}.AppHost");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
 
-            // Step 8: Unset ASPIRE_PLAYGROUND before deploy and set Azure location
-            sequenceBuilder.Type("unset ASPIRE_PLAYGROUND && export Azure__Location=westus3")
-                .Enter()
-                .WaitForSuccessPrompt(counter);
+            // Step 8: Set environment variables for deployment
+            // - Unset ASPIRE_PLAYGROUND to avoid conflicts
+            // - Set Azure location
+            // - Set AZURE__RESOURCEGROUP to use our unique resource group name
+            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
 
             // Step 9: Deploy to Azure Container Apps using aspire deploy
             // Use --clear-cache to ensure fresh deployment without cached location from previous runs
             output.WriteLine("Step 7: Starting Azure Container Apps deployment...");
-            sequenceBuilder
-                .Type("aspire deploy --clear-cache")
-                .Enter()
-                // Wait for pipeline to complete successfully
-                .WaitUntil(s => waitingForPipelineSucceeded.Search(s).Count > 0, TimeSpan.FromMinutes(10))
-                .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(2));
+            await auto.TypeAsync("aspire deploy --clear-cache");
+            await auto.EnterAsync();
+            // Wait for pipeline to complete successfully
+            await auto.WaitUntilTextAsync("PIPELINE SUCCEEDED", timeout: TimeSpan.FromMinutes(30));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
-            // Step 10: Extract deployment URLs and verify endpoints
+            // Step 10: Extract deployment URLs and verify endpoints with retry
+            // Retry each endpoint for up to 3 minutes (18 attempts * 10 seconds)
             output.WriteLine("Step 8: Verifying deployed endpoints...");
-            var expectedResourceGroup = $"rg-aspire-{projectName.ToLowerInvariant()}apphost";
-            sequenceBuilder
-                .Type($"RG_NAME=\"{expectedResourceGroup}\" && " +
-                      "echo \"Resource group: $RG_NAME\" && " +
-                      "if ! az group show -n \"$RG_NAME\" &>/dev/null; then echo \"❌ Resource group not found\"; exit 1; fi && " +
-                      // Get external endpoints only (exclude .internal. which are not publicly accessible)
-                      "urls=$(az containerapp list -g \"$RG_NAME\" --query \"[].properties.configuration.ingress.fqdn\" -o tsv 2>/dev/null | grep -v '\\.internal\\.') && " +
-                      "if [ -z \"$urls\" ]; then echo \"❌ No external container app endpoints found\"; exit 1; fi && " +
-                      "failed=0 && " +
-                      "for url in $urls; do " +
-                      "echo -n \"Checking https://$url... \"; " +
-                      "STATUS=$(curl -s -o /dev/null -w \"%{http_code}\" \"https://$url\" --max-time 10 2>/dev/null); " +
-                      "if [ \"$STATUS\" = \"200\" ] || [ \"$STATUS\" = \"302\" ]; then echo \"✅ $STATUS\"; else echo \"❌ $STATUS\"; failed=1; fi; " +
-                      "done && " +
-                      "if [ \"$failed\" -ne 0 ]; then echo \"❌ One or more endpoint checks failed\"; exit 1; fi")
-                .Enter()
-                .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(2));
+            await auto.TypeAsync(
+                $"RG_NAME=\"{resourceGroupName}\" && " +
+                "echo \"Resource group: $RG_NAME\" && " +
+                "if ! az group show -n \"$RG_NAME\" &>/dev/null; then echo \"❌ Resource group not found\"; exit 1; fi && " +
+                // Get external endpoints only (exclude .internal. which are not publicly accessible)
+                "urls=$(az containerapp list -g \"$RG_NAME\" --query \"[].properties.configuration.ingress.fqdn\" -o tsv 2>/dev/null | grep -v '\\.internal\\.') && " +
+                "if [ -z \"$urls\" ]; then echo \"❌ No external container app endpoints found\"; exit 1; fi && " +
+                "failed=0 && " +
+                "for url in $urls; do " +
+                "echo \"Checking https://$url...\"; " +
+                "success=0; " +
+                "for i in $(seq 1 18); do " +
+                "STATUS=$(curl -s -o /dev/null -w \"%{http_code}\" \"https://$url\" --max-time 10 2>/dev/null); " +
+                "if [ \"$STATUS\" = \"200\" ] || [ \"$STATUS\" = \"302\" ]; then echo \"  ✅ $STATUS (attempt $i)\"; success=1; break; fi; " +
+                "echo \"  Attempt $i: $STATUS, retrying in 10s...\"; sleep 10; " +
+                "done; " +
+                "if [ \"$success\" -eq 0 ]; then echo \"  ❌ Failed after 18 attempts\"; failed=1; fi; " +
+                "done && " +
+                "if [ \"$failed\" -ne 0 ]; then echo \"❌ One or more endpoint checks failed\"; exit 1; fi");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
 
             // Step 11: Exit terminal
-            sequenceBuilder
-                .Type("exit")
-                .Enter();
+            await auto.TypeAsync("exit");
+            await auto.EnterAsync();
 
-            var sequence = sequenceBuilder.Build();
-            await sequence.ApplyAsync(terminal, cancellationToken);
             await pendingRun;
 
             var duration = DateTime.UtcNow - startTime;
@@ -245,7 +192,7 @@ builder.Build().Run();
             // Report success
             DeploymentReporter.ReportDeploymentSuccess(
                 nameof(DeployStarterTemplateToAzureContainerApps),
-                $"rg-aspire-{projectName.ToLowerInvariant()}apphost",
+                resourceGroupName,
                 deploymentUrls,
                 duration);
 
@@ -258,7 +205,7 @@ builder.Build().Run();
 
             DeploymentReporter.ReportDeploymentFailure(
                 nameof(DeployStarterTemplateToAzureContainerApps),
-                $"rg-aspire-{projectName.ToLowerInvariant()}apphost",
+                resourceGroupName,
                 ex.Message,
                 ex.StackTrace);
 
@@ -266,13 +213,10 @@ builder.Build().Run();
         }
         finally
         {
-            // Note: aspire deploy creates its own resource group (rg-aspire-{appname})
-            // The cleanup workflow runs hourly and removes resource groups older than 3 hours.
-            // We trigger cleanup here as a best-effort, but rely on the cleanup workflow for reliability.
-            var resourceGroupToCleanup = $"rg-aspire-{projectName.ToLowerInvariant()}apphost";
-            output.WriteLine($"Triggering cleanup of resource group: {resourceGroupToCleanup}");
-            TriggerCleanupResourceGroup(resourceGroupToCleanup, output);
-            DeploymentReporter.ReportCleanupStatus(resourceGroupToCleanup, success: true, "Cleanup triggered (fire-and-forget)");
+            // Clean up the resource group we created
+            output.WriteLine($"Triggering cleanup of resource group: {resourceGroupName}");
+            TriggerCleanupResourceGroup(resourceGroupName, output);
+            DeploymentReporter.ReportCleanupStatus(resourceGroupName, success: true, "Cleanup triggered (fire-and-forget)");
         }
     }
 

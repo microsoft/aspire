@@ -9,6 +9,8 @@ Param(
   [switch]$testnobuild,
   [ValidateSet("x86","x64","arm","arm64")][string[]][Alias('a')]$arch = @([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString().ToLowerInvariant()),
   [switch]$mauirestore,
+  [switch]$bundle,
+  [string]$runtimeVersion,
 
   [Parameter(ValueFromRemainingArguments=$true)][String[]]$properties
 )
@@ -46,6 +48,8 @@ function Get-Help() {
   Write-Host "Libraries settings:"
   Write-Host "  -testnobuild            Skip building tests when invoking -test."
   Write-Host "  -buildExtension         Build the VS Code extension."
+  Write-Host "  -bundle                 Build the self-contained bundle (CLI + Runtime + Dashboard + DCP)."
+  Write-Host "  -runtimeVersion <ver>   .NET runtime version for bundle (default: from eng/Versions.props RuntimeVersion)."
   Write-Host ""
 
   Write-Host "Command-line arguments not listed above are passed through to MSBuild."
@@ -102,6 +106,8 @@ foreach ($argument in $PSBoundParameters.Keys)
     "testnobuild"            { $arguments += " /p:VSTestNoBuild=true" }
     "buildExtension"         { $arguments += " /p:BuildExtension=true" }
     "mauirestore"            { $arguments += " -restoreMaui" }
+    "bundle"                 { } # Handled after main build
+    "runtimeVersion"         { } # Handled after main build
     default                  { $arguments += " /p:$argument=$($PSBoundParameters[$argument])" }
   }
 }
@@ -112,4 +118,60 @@ if ($env:TreatWarningsAsErrors -eq 'false') {
 
 Write-Host "& `"$PSScriptRoot/common/build.ps1`" $arguments"
 Invoke-Expression "& `"$PSScriptRoot/common/build.ps1`" $arguments"
-exit $LASTEXITCODE
+$buildExitCode = $LASTEXITCODE
+
+if ($buildExitCode -ne 0) {
+  exit $buildExitCode
+}
+
+# Build bundle if requested
+if ($bundle) {
+  Write-Host ""
+  Write-Host "Building bundle via MSBuild..."
+  Write-Host ""
+  
+  $repoRoot = Split-Path $PSScriptRoot -Parent
+  $config = if ($configuration) { $configuration } else { "Debug" }
+  
+  # Determine RID
+  $targetOs = if ($os) { $os } else { 
+    if ($IsWindows -or $env:OS -eq "Windows_NT") { "win" }
+    elseif ($IsMacOS) { "osx" }
+    else { "linux" }
+  }
+  $targetArch = if ($arch) { 
+    # If arch is an array with multiple values, use only the first one for bundle build
+    if ($arch -is [array]) { $arch[0] } else { $arch }
+  } else { 
+    [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString().ToLowerInvariant()
+  }
+  if ($targetArch -eq "x64" -or $targetArch -eq "amd64") { $targetArch = "x64" }
+  $rid = "$targetOs-$targetArch"
+  
+  # Build MSBuild arguments (use MSBuild syntax, not dotnet build syntax)
+  $bundleArgs = @(
+    "$PSScriptRoot/Bundle.proj",
+    "/p:Configuration=$config",
+    "/p:TargetRid=$rid"
+  )
+  
+  # Pass through SkipNativeBuild if set
+  if ($properties -contains "/p:SkipNativeBuild=true") {
+    $bundleArgs += "/p:SkipNativeBuild=true"
+  }
+  
+  # CI flag is passed to Bundle.proj which handles version computation via Versions.props
+  if ($ci) {
+    $bundleArgs += "/p:ContinuousIntegrationBuild=true"
+  }
+  
+  Write-Host "  RID: $rid"
+  Write-Host "  Configuration: $config"
+  Write-Host ""
+  
+  & dotnet msbuild @bundleArgs
+  
+  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+
+exit 0

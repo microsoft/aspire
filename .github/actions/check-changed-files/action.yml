@@ -1,12 +1,19 @@
 name: 'Check Changed Files'
 description: |
-  Check if all changed files in a PR match provided regex patterns.
+  Check if all changed files in a PR match provided glob patterns.
 
-  This action compares changed files in a pull request against one or more regex patterns
+  This action compares changed files in a pull request against one or more glob patterns
   and determines if all changed files match at least one of the provided patterns.
+  It only supports pull_request events.
 
   Inputs:
-  - patterns: List of regex patterns (multiline string) to match against changed file paths
+  - patterns_file: Path to a file containing glob patterns (relative to repository root).
+                   Lines starting with '#' and blank lines are ignored.
+
+  Pattern syntax:
+  - **  matches any path including directory separators (recursive)
+  - *   matches any characters except a directory separator
+  - .   is treated as a literal dot (no escaping needed)
 
   Outputs:
   - only_changed: Boolean indicating if all changed files matched the patterns
@@ -15,8 +22,8 @@ description: |
   - matched_files: JSON array of files that matched at least one pattern
   - unmatched_files: JSON array of files that didn't match any pattern
 inputs:
-  patterns:
-    description: 'List of regex patterns to match against changed files'
+  patterns_file:
+    description: 'Path to a file containing glob patterns (relative to repository root)'
     required: true
 
 outputs:
@@ -57,12 +64,60 @@ runs:
           exit 1
         fi
 
-        # Read patterns from input (multiline string)
-        PATTERNS_INPUT="${{ inputs.patterns }}"
+        # Convert a glob pattern to an anchored ERE regex pattern.
+        # Glob syntax supported:
+        #   **   matches any path including directory separators
+        #   *    matches any characters except a directory separator
+        #   .    is treated as a literal dot
+        #   All other characters are treated as literals.
+        glob_to_regex() {
+          local glob="$1"
+          local result="$glob"
+          # Replace ** and * with placeholders before escaping
+          result="${result//\*\*/__DOUBLESTAR__}"
+          result="${result//\*/__STAR__}"
+          # Escape regex metacharacters that could appear in file paths.
+          # Note: { } ^ $ are not escaped because they are either not special
+          # in ERE mid-pattern or cannot appear in file paths.
+          result="${result//\\/\\\\}"
+          result="${result//./\\.}"
+          result="${result//+/\\+}"
+          result="${result//\?/\\?}"
+          result="${result//\[/\\[}"
+          result="${result//\]/\\]}"
+          result="${result//\(/\\(}"
+          result="${result//\)/\\)}"
+          result="${result//|/\\|}"
+          # Restore glob placeholders as regex
+          result="${result//__STAR__/[^/]*}"
+          result="${result//__DOUBLESTAR__/.*}"
+          # Anchor to full path
+          echo "^${result}$"
+        }
 
-        # Validate patterns input
-        if [ -z "$PATTERNS_INPUT" ]; then
-          echo "Error: patterns input is required"
+        PATTERNS=()
+
+        PATTERNS_FILE="${{ inputs.patterns_file }}"
+
+        # Read glob patterns from file, skip comments and blank lines
+        FULL_PATH="${GITHUB_WORKSPACE}/${PATTERNS_FILE}"
+        if [ ! -f "$FULL_PATH" ]; then
+          echo "Error: patterns_file '$FULL_PATH' not found"
+          exit 1
+        fi
+        while IFS= read -r line; do
+          # Remove leading/trailing whitespace
+          line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          # Skip blank lines and comments
+          if [ -z "$line" ] || [[ "$line" == \#* ]]; then
+            continue
+          fi
+          PATTERNS+=("$(glob_to_regex "$line")")
+        done < "$FULL_PATH"
+
+        # Check if we have any valid patterns
+        if [ ${#PATTERNS[@]} -eq 0 ]; then
+          echo "Error: No valid patterns provided"
           exit 1
         fi
 
@@ -76,23 +131,6 @@ runs:
 
         echo "Changed files:"
         echo "$CHANGED_FILES"
-
-        # Convert patterns to array and filter out empty lines
-        PATTERNS=()
-        while IFS= read -r pattern; do
-          # Remove leading/trailing whitespace
-          pattern=$(echo "$pattern" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-          # Skip empty patterns
-          if [ -n "$pattern" ]; then
-            PATTERNS+=("$pattern")
-          fi
-        done <<< "$PATTERNS_INPUT"
-
-        # Check if we have any valid patterns
-        if [ ${#PATTERNS[@]} -eq 0 ]; then
-          echo "Error: No valid patterns provided"
-          exit 1
-        fi
 
         # Initialize arrays
         MATCHED_FILES=()

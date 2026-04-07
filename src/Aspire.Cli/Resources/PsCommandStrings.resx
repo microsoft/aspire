@@ -118,30 +118,27 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>List running Aspire apphosts.</value>
+    <value>List running AppHosts</value>
   </data>
   <data name="JsonOptionDescription" xml:space="preserve">
-    <value>Output in JSON format.</value>
-  </data>
-  <data name="ScanningForRunningAppHosts" xml:space="preserve">
-    <value>Scanning for running AppHosts...</value>
-  </data>
-  <data name="NoRunningAppHostsFound" xml:space="preserve">
-    <value>No running AppHosts found.</value>
+    <value>Output format (Table or Json)</value>
   </data>
   <data name="HeaderPath" xml:space="preserve">
-    <value>PATH</value>
+    <value>Path</value>
   </data>
   <data name="HeaderPid" xml:space="preserve">
     <value>PID</value>
   </data>
   <data name="HeaderCliPid" xml:space="preserve">
-    <value>CLI_PID</value>
+    <value>CLI PID</value>
   </data>
   <data name="HeaderDashboard" xml:space="preserve">
-    <value>DASHBOARD</value>
+    <value>Dashboard</value>
   </data>
   <data name="UnknownPath" xml:space="preserve">
     <value>Unknown</value>
+  </data>
+  <data name="ResourcesOptionDescription" xml:space="preserve">
+    <value>Include resource details for each running AppHost. Only applies to JSON output.</value>
   </data>
 </root>

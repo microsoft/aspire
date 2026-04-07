@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="zh-Hant" original="../DoCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Execute a specific pipeline step and its dependencies. (Preview)</source>
-        <target state="translated">執行特定管線步驟及其相依性。(預覽)</target>
+        <source>Execute a specific pipeline step and its dependencies (Preview)</source>
+        <target state="needs-review-translation">執行特定管線步驟及其相依性。(預覽)</target>
         <note />
       </trans-unit>
       <trans-unit id="GeneratingArtifacts">
@@ -28,13 +28,13 @@
         <note />
       </trans-unit>
       <trans-unit id="OutputPathArgumentDescription">
-        <source>The optional output path for artifacts.</source>
-        <target state="translated">成品的選用輸出路徑。</target>
+        <source>The optional output path for artifacts</source>
+        <target state="needs-review-translation">成品的選用輸出路徑。</target>
         <note />
       </trans-unit>
       <trans-unit id="StepArgumentDescription">
-        <source>The name of the step to execute.</source>
-        <target state="translated">要執行的步驟名稱。</target>
+        <source>The name of the step to execute</source>
+        <target state="needs-review-translation">要執行的步驟名稱。</target>
         <note />
       </trans-unit>
     </body>

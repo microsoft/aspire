@@ -10,8 +10,8 @@
 
 namespace Aspire.Cli.Resources {
     using System;
-    
-    
+
+
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -23,15 +23,15 @@ namespace Aspire.Cli.Resources {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class RootCommandStrings {
-        
+
         private static global::System.Resources.ResourceManager resourceMan;
-        
+
         private static global::System.Globalization.CultureInfo resourceCulture;
-        
+
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal RootCommandStrings() {
         }
-        
+
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Aspire.Cli.Resources {
                 return resourceMan;
             }
         }
-        
+
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,7 +59,34 @@ namespace Aspire.Cli.Resources {
                 resourceCulture = value;
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to Display the animated Aspire CLI welcome banner..
+        /// </summary>
+        public static string BannerArgumentDescription {
+            get {
+                return ResourceManager.GetString("BannerArgumentDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to CLI — version {0}.
+        /// </summary>
+        public static string BannerVersionFormat {
+            get {
+                return ResourceManager.GetString("BannerVersionFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Welcome to the.
+        /// </summary>
+        public static string BannerWelcomeText {
+            get {
+                return ResourceManager.GetString("BannerWelcomeText", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Wait for a debugger to attach before executing the command..
         /// </summary>
@@ -68,7 +95,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CliWaitForDebuggerArgumentDescription", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Enable debug logging to the console..
         /// </summary>
@@ -77,7 +104,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DebugArgumentDescription", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to The Aspire CLI can be used to create, run, and publish Aspire-based applications..
         /// </summary>
@@ -86,30 +113,30 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("Description", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)..
+        /// </summary>
+        public static string DebugLevelArgumentDescription {
+            get {
+                return ResourceManager.GetString("DebugLevelArgumentDescription", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Telemetry
         ///---------
         ///
         ///The Aspire CLI collects usage data. It is collected by Microsoft and is used to help us improve your experience. You can opt out of telemetry by setting the ASPIRE_CLI_TELEMETRY_OPTOUT environment variable to &apos;1&apos; or &apos;true&apos; using your preferred shell.
         ///
-        ///Read more about Aspire CLI telemetry: https://aka.ms/aspire/cli-telemetry.
+        ///Read more about Aspire CLI telemetry: {0}.
         /// </summary>
         public static string FirstTimeUseTelemetryNotice {
             get {
                 return ResourceManager.GetString("FirstTimeUseTelemetryNotice", resourceCulture);
             }
         }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Welcome to Aspire! Learn more about Aspire at https://aspire.dev.
-        /// </summary>
-        public static string FirstTimeUseWelcome {
-            get {
-                return ResourceManager.GetString("FirstTimeUseWelcome", resourceCulture);
-            }
-        }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Suppress the startup banner and telemetry notice..
         /// </summary>
@@ -118,7 +145,16 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NoLogoArgumentDescription", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to Run the command in non-interactive mode, disabling all interactive prompts and spinners..
+        /// </summary>
+        public static string NonInteractiveArgumentDescription {
+            get {
+                return ResourceManager.GetString("NonInteractiveArgumentDescription", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Wait for a debugger to attach before executing the command..
         /// </summary>
@@ -127,7 +163,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("WaitForDebuggerArgumentDescription", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Waiting for debugger to attach to CLI process ID: {0}.
         /// </summary>

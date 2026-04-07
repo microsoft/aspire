@@ -16,6 +16,7 @@ namespace Aspire.Hosting.Tests.VersionChecking;
 
 #pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
+[Trait("Partition", "4")]
 public class VersionCheckServiceTests
 {
     [Fact]

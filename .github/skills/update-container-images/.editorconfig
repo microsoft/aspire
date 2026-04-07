@@ -1,0 +1,12 @@
+# Override repo-level analyzers for standalone tool scripts
+root = true
+
+[*.cs]
+# Disable file header requirement
+dotnet_diagnostic.IDE0073.severity = none
+# Disable unused using warning (script may need conditional usings)
+dotnet_diagnostic.IDE0005.severity = suggestion
+# Disable ConfigureAwait requirement (not needed in console apps)
+dotnet_diagnostic.CA2007.severity = none
+# Disable locale-sensitive parsing warning
+dotnet_diagnostic.CA1305.severity = none

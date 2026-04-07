@@ -6,13 +6,15 @@
     <PackageTags>aspire integration hosting azure cloud appservice</PackageTags>
     <Description>Azure app service resource types for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)Azure_256x.png</PackageIconFullPath>
-    <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
+    <!-- Disable package validation as this package hasn't shipped stable yet. -->
+    <EnablePackageValidation>false</EnablePackageValidation>
   </PropertyGroup>
 
   <ItemGroup>
     <Compile Include="$(SharedDir)BicepFormattingHelpers.cs" LinkBase="Shared\BicepFormattingHelpers.cs" />
     <Compile Include="$(SharedDir)DashboardConfigNames.cs" LinkBase="Shared\DashboardConfigNames.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" LinkBase="Shared\KnownConfigNames.cs" />
+    <Compile Include="$(SharedDir)KnownOtelConfigNames.cs" LinkBase="Shared\KnownOtelConfigNames.cs" />
     <Compile Include="$(SharedDir)ResourceNameComparer.cs" LinkBase="Shared\ResourceNameComparer.cs" />
   </ItemGroup>
 

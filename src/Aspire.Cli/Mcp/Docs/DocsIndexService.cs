@@ -13,6 +13,11 @@ namespace Aspire.Cli.Mcp.Docs;
 internal interface IDocsIndexService
 {
     /// <summary>
+    /// Gets a value indicating whether the documentation has been indexed.
+    /// </summary>
+    bool IsIndexed { get; }
+
+    /// <summary>
     /// Ensures documentation is loaded and indexed.
     /// </summary>
     /// <param name="cancellationToken">The cancellation token.</param>
@@ -87,7 +92,7 @@ internal sealed class DocsContent
 /// - Section-oriented ("configuration", "examples")
 /// - Name-exact ("Redis resource", "AddServiceDefaults")
 /// </remarks>
-internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, ILogger<DocsIndexService> logger) : IDocsIndexService
+internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCache docsCache, ILogger<DocsIndexService> logger) : IDocsIndexService
 {
     // Field weights for relevance scoring
     private const float TitleWeight = 10.0f;      // H1 (page title)
@@ -104,11 +109,25 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, ILogger
     private const float CodeIdentifierBonus = 0.5f;
     private const int MinTokenLength = 2;
 
+    // Slug matching bonuses - helps dedicated docs rank higher than incidental mentions
+    private const float ExactSlugMatchBonus = 50.0f;        // Query exactly matches slug (e.g., "service-discovery" matches service-discovery)
+    private const float FullPhraseInSlugBonus = 30.0f;      // All query words in slug (e.g., "service discovery" -> service-discovery)
+    private const float PartialSlugMatchBonus = 10.0f;      // Some query words in slug
+
+    // Changelog/What's New penalty - these pages mention many terms and shouldn't outrank dedicated docs
+    private const float WhatsNewPenaltyMultiplier = 0.3f;   // Apply 0.3x to whats-new pages
+
     private readonly IDocsFetcher _docsFetcher = docsFetcher;
+    private readonly IDocsCache _docsCache = docsCache;
     private readonly ILogger<DocsIndexService> _logger = logger;
 
-    private List<IndexedDocument>? _indexedDocuments;
+    // Volatile ensures the double-checked locking pattern works correctly by preventing
+    // instruction reordering that could expose a partially-constructed list to other threads.
+    private volatile List<IndexedDocument>? _indexedDocuments;
     private readonly SemaphoreSlim _indexLock = new(1, 1);
+
+    /// <inheritdoc />
+    public bool IsIndexed => _indexedDocuments is not null;
 
     public async ValueTask EnsureIndexedAsync(CancellationToken cancellationToken = default)
     {
@@ -130,6 +149,18 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, ILogger
 
             _logger.LogDebug("Loading aspire.dev documentation");
 
+            // Try to load from disk cache first
+            var cachedDocuments = await _docsCache.GetIndexAsync(cancellationToken).ConfigureAwait(false);
+            if (cachedDocuments is not null)
+            {
+                _indexedDocuments = [.. cachedDocuments.Select(static d => new IndexedDocument(d))];
+
+                var cacheElapsedTime = Stopwatch.GetElapsedTime(startTimestamp);
+                _logger.LogInformation("Loaded {Count} documents from cache in {ElapsedTime:ss\\.fff} seconds.", _indexedDocuments.Count, cacheElapsedTime);
+                return;
+            }
+
+            // Fetch and parse from network
             var content = await _docsFetcher.FetchDocsAsync(cancellationToken).ConfigureAwait(false);
             if (content is null)
             {
@@ -142,6 +173,9 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, ILogger
 
             // Pre-compute lowercase versions for faster searching
             _indexedDocuments = [.. documents.Select(static d => new IndexedDocument(d))];
+
+            // Cache the parsed documents for next time
+            await _docsCache.SetIndexAsync([.. documents], cancellationToken).ConfigureAwait(false);
 
             var elapsedTime = Stopwatch.GetElapsedTime(startTimestamp);
 
@@ -188,11 +222,14 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, ILogger
             return [];
         }
 
+        // Pre-compute queryAsSlug once to avoid repeated allocation in hot path
+        var queryAsSlug = string.Join("-", queryTokens);
+
         var results = new List<DocsSearchResult>();
 
         foreach (var doc in _indexedDocuments)
         {
-            var (score, matchedSection) = ScoreDocument(doc, queryTokens);
+            var (score, matchedSection) = ScoreDocument(doc, queryTokens, queryAsSlug);
 
             if (score > 0)
             {
@@ -257,11 +294,15 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, ILogger
         };
     }
 
-    private static (float Score, string? MatchedSection) ScoreDocument(IndexedDocument doc, string[] queryTokens)
+    private static (float Score, string? MatchedSection) ScoreDocument(IndexedDocument doc, string[] queryTokens, string queryAsSlug)
     {
         var score = 0.0f;
         string? matchedSection = null;
         var bestSectionScore = 0.0f;
+
+        // Score slug matching - this is key for finding dedicated docs
+        // e.g., query "service discovery" should match slug "service-discovery" with high score
+        score += ScoreSlugMatch(doc.SlugLower, doc.SlugSegments, queryTokens, queryAsSlug);
 
         // Score H1 title
         score += ScoreField(doc.TitleLower, queryTokens) * TitleWeight;
@@ -291,7 +332,124 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, ILogger
 
         score += bestSectionScore;
 
+        // Apply penalty for "What's New" / changelog pages
+        // These pages mention many features and shouldn't outrank dedicated documentation
+        // BUT: Skip penalty when user is explicitly searching for changelog content
+        // Note: "what's" tokenizes to "what" due to apostrophe splitting, so we check for both "what" and "new" together
+        var hasChangelogToken = queryTokens.Any(static t => t is "changelog" or "whats-new");
+        var hasWhatsNewTokens = queryTokens.Contains("what") && queryTokens.Contains("new");
+        var queryIsAboutChangelog = hasChangelogToken || hasWhatsNewTokens;
+        if (!queryIsAboutChangelog && (doc.SlugLower.Contains("whats-new") || doc.SlugLower.Contains("changelog")))
+        {
+            score *= WhatsNewPenaltyMultiplier;
+        }
+
         return (score, matchedSection);
+    }
+
+    /// <summary>
+    /// Scores how well the query matches the document slug.
+    /// Helps dedicated docs rank higher than docs with incidental mentions.
+    /// </summary>
+    private static float ScoreSlugMatch(string slugLower, string[] slugSegments, string[] queryTokens, string queryAsSlug)
+    {
+        if (slugLower.Length is 0 || queryTokens.Length is 0)
+        {
+            return 0;
+        }
+
+        // queryAsSlug is pre-computed before the scoring loop to avoid repeated allocation
+        // e.g., ["service", "discovery"] -> "service-discovery"
+
+        // Exact match: query "service-discovery" matches slug "service-discovery"
+        if (slugLower == queryAsSlug)
+        {
+            return ExactSlugMatchBonus;
+        }
+
+        // Check if slug contains the full query phrase
+        // This handles both multi-word queries and hyphenated single-token queries
+        // e.g., slug "azure-service-discovery" contains "service-discovery"
+        // e.g., single token "service-bus" matches slug "azure-service-bus"
+        var isMultiWordQuery = queryTokens.Length > 1;
+        var hasHyphenatedToken = queryTokens.Any(static t => t.Contains('-'));
+
+        if ((isMultiWordQuery || hasHyphenatedToken) && slugLower.Contains(queryAsSlug))
+        {
+            return FullPhraseInSlugBonus;
+        }
+
+        // Count how many query tokens appear as distinct slug segments
+        // This prevents "service discovery" from boosting "azure-service-bus"
+        // because "discovery" must be a segment, not just "service"
+        // Note: slugSegments is pre-computed to avoid allocation in hot path
+        var matchingSegments = 0;
+
+        foreach (var token in queryTokens)
+        {
+            // For hyphenated tokens, check if all parts match consecutive segments in order
+            if (token.Contains('-'))
+            {
+                var tokenParts = token.Split('-');
+
+                // Look for a contiguous sequence of slug segments that matches all token parts
+                var foundContiguousMatch = false;
+                var maxStartIndex = slugSegments.Length - tokenParts.Length;
+
+                for (var startIndex = 0; startIndex <= maxStartIndex; startIndex++)
+                {
+                    var allPartsMatch = true;
+
+                    for (var partIndex = 0; partIndex < tokenParts.Length; partIndex++)
+                    {
+                        if (slugSegments[startIndex + partIndex] != tokenParts[partIndex])
+                        {
+                            allPartsMatch = false;
+                            break;
+                        }
+                    }
+
+                    if (allPartsMatch)
+                    {
+                        foundContiguousMatch = true;
+                        break;
+                    }
+                }
+
+                if (foundContiguousMatch)
+                {
+                    matchingSegments++;
+                }
+            }
+            else
+            {
+                foreach (var segment in slugSegments)
+                {
+                    if (segment == token)
+                    {
+                        matchingSegments++;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // All tokens match as individual segments (but not necessarily as a contiguous phrase)
+        // e.g., query "azure cosmos" matches slug "azure-cosmos-db" segment-by-segment
+        // This gets PartialSlugMatchBonus because the full phrase isn't in the slug
+        if (matchingSegments == queryTokens.Length)
+        {
+            return PartialSlugMatchBonus;
+        }
+
+        // Some tokens match slug segments - give proportional bonus
+        if (matchingSegments > 0)
+        {
+            // Give proportional bonus based on how many tokens matched
+            return PartialSlugMatchBonus * matchingSegments / (float)queryTokens.Length;
+        }
+
+        return 0;
     }
 
     /// <summary>
@@ -430,18 +588,34 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, ILogger
     /// <summary>
     /// Pre-indexed document with lowercase text for faster searching.
     /// </summary>
-    private sealed class IndexedDocument(LlmsDocument source)
+    private sealed class IndexedDocument
     {
-        public LlmsDocument Source { get; } = source;
+        private readonly string _slugLower;
 
-        public string TitleLower { get; } = source.Title.ToLowerInvariant();
+        public IndexedDocument(LlmsDocument source)
+        {
+            Source = source;
+            TitleLower = source.Title.ToLowerInvariant();
+            _slugLower = source.Slug.ToLowerInvariant();
+            SlugSegments = _slugLower.Split('-');
+            SummaryLower = source.Summary?.ToLowerInvariant();
+            Sections = [.. source.Sections.Select(static s => new IndexedSection(s))];
+        }
 
-        public string? SummaryLower { get; } = source.Summary?.ToLowerInvariant();
+        public LlmsDocument Source { get; }
 
-        public IReadOnlyList<IndexedSection> Sections { get; } =
-        [
-            .. source.Sections.Select(static s => new IndexedSection(s))
-        ];
+        public string TitleLower { get; }
+
+        public string SlugLower => _slugLower;
+
+        /// <summary>
+        /// Pre-computed slug segments to avoid allocation in hot path during scoring.
+        /// </summary>
+        public string[] SlugSegments { get; }
+
+        public string? SummaryLower { get; }
+
+        public IReadOnlyList<IndexedSection> Sections { get; }
     }
 
     /// <summary>

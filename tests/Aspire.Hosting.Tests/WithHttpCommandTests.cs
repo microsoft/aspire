@@ -1,16 +1,16 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net;
 using Aspire.Hosting.Testing;
 using Aspire.Hosting.Utils;
-using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "6")]
 public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
@@ -205,7 +205,7 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
     [InlineData("get", true)]
     [InlineData("post", false)]
     [Theory]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/9725")]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/9725")]
     public async Task WithHttpCommand_ResultsInExpectedResultForHttpMethod(string? httpMethod, bool expectSuccess)
     {
         // Arrange
@@ -401,7 +401,6 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/dotnet/aspire/issues/8101")]
     public async Task WithHttpCommand_EnablesCommandOnceResourceIsRunning()
     {
         // Arrange

@@ -118,10 +118,10 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>Deploy the contents of an Aspire apphost to its defined deployment targets. (Preview)</value>
+    <value>Deploy an AppHost to its deployment targets (Preview)</value>
   </data>
   <data name="OutputPathArgumentDescription" xml:space="preserve">
-    <value>The optional output path for deployment artifacts.</value>
+    <value>The optional output path for deployment artifacts</value>
   </data>
   <data name="DeploymentCanceled" xml:space="preserve">
     <value>The deployment was canceled.</value>
@@ -131,5 +131,8 @@
   </data>
   <data name="OperationFailedPrefix" xml:space="preserve">
     <value>DEPLOYMENT FAILED</value>
+  </data>
+  <data name="ClearCacheOptionDescription" xml:space="preserve">
+    <value>Clear the deployment cache associated with the current environment and do not save deployment state</value>
   </data>
 </root>

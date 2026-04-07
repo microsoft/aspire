@@ -1,7 +1,8 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Testing;
 using Aspire.Hosting.Utils;
 using Aspire.Hosting.Yarp.Transforms;
 using Aspire.TestUtilities;
@@ -11,7 +12,6 @@ public class YarpFunctionalTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     [RequiresFeature(TestFeature.Docker)]
-    [QuarantinedTest("https://github.com/dotnet/aspire/issues/9344")]
     public async Task VerifyYarpResourceExtensionsConfig()
     {
         await VerifyYarpResource((yarp, endpoint) =>
@@ -48,8 +48,7 @@ public class YarpFunctionalTests(ITestOutputHelper testOutputHelper)
         await app.ResourceNotifications.WaitForResourceHealthyAsync(backend.Resource.Name, cts.Token);
         await app.ResourceNotifications.WaitForResourceHealthyAsync(yarp.Resource.Name, cts.Token);
 
-        var endpoint = yarp.Resource.GetEndpoint("http");
-        var httpClient = new HttpClient() { BaseAddress = new Uri(endpoint.Url) };
+        using var httpClient = app.CreateHttpClient(yarp.Resource.Name);
 
         using var response200 = await httpClient.GetAsync("/aspnetapp");
         Assert.Equal(System.Net.HttpStatusCode.OK, response200.StatusCode);

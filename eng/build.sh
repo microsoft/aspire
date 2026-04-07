@@ -47,6 +47,8 @@ usage()
   echo "Libraries settings:"
   echo "  --testnobuild              Skip building tests when invoking -test."
   echo "  --build-extension          Build the VS Code extension."
+  echo "  --bundle                   Build the self-contained bundle (CLI + Runtime + Dashboard + DCP)."
+  echo "  --runtime-version <ver>    .NET runtime version for bundle (default: 10.0.2)."
   echo ""
 
   echo "Command line arguments starting with '/p:' are passed through to MSBuild."
@@ -56,6 +58,9 @@ usage()
 
 arguments=''
 extraargs=''
+build_bundle=false
+runtime_version=""
+config="Debug"
 
 # Check if an action is passed in
 declare -a actions=("b" "build" "r" "restore" "rebuild" "testnobuild" "sign" "publish" "clean" "t" "test" "build-extension")
@@ -99,6 +104,7 @@ while [[ $# > 0 ]]; do
       case "$passedConfig" in
         debug|release)
           val="$(tr '[:lower:]' '[:upper:]' <<< ${passedConfig:0:1})${passedConfig:1}"
+          config="$val"
           ;;
         *)
           echo "Unsupported target configuration '$2'."
@@ -144,8 +150,22 @@ while [[ $# > 0 ]]; do
       ;;
 
      -mauirestore)
-      extraargs="$extraargs -restoreMaui"
+      export restore_maui=true
       shift 1
+      ;;
+
+     -bundle)
+      build_bundle=true
+      shift 1
+      ;;
+
+     -runtime-version)
+      if [ -z ${2+x} ]; then
+        echo "No runtime version supplied." 1>&2
+        exit 1
+      fi
+      runtime_version="$2"
+      shift 2
       ;;
 
      *)
@@ -165,5 +185,81 @@ fi
 
 arguments="$arguments $extraargs"
 "$scriptroot/common/build.sh" $arguments
+build_exit_code=$?
 
-exit $?
+if [ $build_exit_code -ne 0 ]; then
+    exit $build_exit_code
+fi
+
+# Build bundle if requested
+if [ "$build_bundle" = true ]; then
+    echo ""
+    echo "Building bundle via MSBuild..."
+    echo ""
+    
+    repo_root="$(dirname "$scriptroot")"
+    
+    # Use the local .NET SDK installed by restore
+    export DOTNET_ROOT="$repo_root/.dotnet"
+    export PATH="$DOTNET_ROOT:$PATH"
+    
+    # Free up disk space by cleaning intermediate build artifacts (CI only)
+    if [ "${CI:-}" = "true" ]; then
+        echo "  Cleaning intermediate build artifacts to free disk space..."
+        find "$repo_root" -type d -name "obj" -exec rm -rf {} + 2>/dev/null || true
+        dotnet nuget locals http-cache --clear 2>/dev/null || true
+        df -h / 2>/dev/null || true
+    fi
+    
+    # Determine RID
+    if [ -z "${os:-}" ]; then
+        case "$(uname -s)" in
+            Linux*)  target_os="linux" ;;
+            Darwin*) target_os="osx" ;;
+            *)       target_os="linux" ;;
+        esac
+    else
+        target_os="$os"
+    fi
+    
+    if [ -z "${arch:-}" ]; then
+        case "$(uname -m)" in
+            x86_64)  target_arch="x64" ;;
+            aarch64) target_arch="arm64" ;;
+            arm64)   target_arch="arm64" ;;
+            *)       target_arch="x64" ;;
+        esac
+    else
+        target_arch="$arch"
+    fi
+    
+    rid="${target_os}-${target_arch}"
+    
+    echo "  RID: $rid"
+    echo "  Configuration: $config"
+    echo ""
+    
+    # Build MSBuild arguments
+    bundle_args=(
+        "$scriptroot/Bundle.proj"
+        "/p:Configuration=$config"
+        "/p:TargetRid=$rid"
+    )
+    
+    # Pass through SkipNativeBuild if set
+    for arg in "$@"; do
+        if [[ "$arg" == *"SkipNativeBuild=true"* ]]; then
+            bundle_args+=("/p:SkipNativeBuild=true")
+            break
+        fi
+    done
+    
+    # CI flag is passed to Bundle.proj which handles version computation via Versions.props
+    if [ "${CI:-}" = "true" ]; then
+        bundle_args+=("/p:ContinuousIntegrationBuild=true")
+    fi
+    
+    dotnet msbuild "${bundle_args[@]}" || exit $?
+fi
+
+exit 0

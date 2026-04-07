@@ -27,6 +27,46 @@
         <target state="translated">Une version plus récente du package Aspire.Hosting.AppHost est nécessaire pour exécuter l’application. Vérifiez que vous référencez au moins la version « {0} ».</target>
         <note />
       </trans-unit>
+      <trans-unit id="InstallationInstructions">
+        <source>Installation instructions</source>
+        <target state="translated">Instructions d’installation</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MissingCommandNotificationTitle">
+        <source>Missing command</source>
+        <target state="translated">Commande manquante</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PersistentContainerWithoutUserSecrets">
+        <source>Resource '{0}' has a persistent lifetime but the AppHost project does not have user secrets configured. Generated parameter values (such as passwords) may change on each restart, causing persistent containers to be recreated. Run 'aspire secret set' to initialize user secrets.</source>
+        <target state="translated">La ressource « {0} » a une durée de vie persistante, mais le projet AppHost n’a pas de secrets utilisateur configurés. Les valeurs des paramètres générés (comme les mots de passe) peuvent changer à chaque redémarrage, ce qui entraîne la recréation des conteneurs persistants. Exécutez la commande « aspire secret set » pour initialiser les secrets utilisateur.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RequiredCommandNotFound">
+        <source>Required command '{0}' was not found on PATH or at the specified location.</source>
+        <target state="translated">La commande requise « {0} » est introuvable dans le CHEMIN ou à l’emplacement spécifié.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RequiredCommandNotFoundWithLink">
+        <source>Required command '{0}' was not found on PATH or at the specified location. For installation instructions, see: {1}</source>
+        <target state="translated">La commande requise « {0} » est introuvable dans le CHEMIN ou à l’emplacement spécifié. Pour les instructions d’installation manuelle, voir : {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RequiredCommandValidationFailed">
+        <source>Command '{0}' validation failed: {1}</source>
+        <target state="translated">Désolé, échec de la validation de la commande « {0} » : {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RequiredCommandValidationFailedWithLink">
+        <source>Command '{0}' validation failed: {1}. For installation instructions, see: {2}</source>
+        <target state="translated">Échec de la validation de la commande « {0} » : {1}. Pour les instructions d’installation manuelle, voir : {2}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceMayFailToStart">
+        <source>Resource '{0}' may fail to start: {1}</source>
+        <target state="translated">Le démarrage de la ressource « {0} » peut échouer : {1}</target>
+        <note />
+      </trans-unit>
     </body>
   </file>
 </xliff>

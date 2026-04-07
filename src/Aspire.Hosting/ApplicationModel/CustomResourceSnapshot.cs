@@ -413,6 +413,11 @@ public static class KnownResourceStates
     public static readonly string NotStarted = nameof(NotStarted);
 
     /// <summary>
+    /// The building state. Useful for showing the resource is being rebuilt.
+    /// </summary>
+    public static readonly string Building = nameof(Building);
+
+    /// <summary>
     /// The not active state. Useful for resources without a lifetime.
     /// </summary>
     public static readonly string Active = nameof(Active);
@@ -421,6 +426,11 @@ public static class KnownResourceStates
     /// List of terminal states.
     /// </summary>
     public static readonly IReadOnlyList<string> TerminalStates = [Finished, FailedToStart, Exited];
+
+    /// <summary>
+    /// List of states in which a resource can be rebuilt.
+    /// </summary>
+    public static readonly IReadOnlyList<string> BuildableStates = [Running, Waiting, Finished, FailedToStart, Exited];
 }
 
 internal static class ResourceSnapshotBuilder

@@ -3,7 +3,6 @@
 
 using System.Collections.Immutable;
 using System.Xml.Linq;
-using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Resources;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;

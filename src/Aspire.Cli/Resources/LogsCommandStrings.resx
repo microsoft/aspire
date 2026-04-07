@@ -118,31 +118,16 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>Display logs from resources in a running Aspire apphost.</value>
+    <value>Display logs from resources in a running AppHost</value>
   </data>
   <data name="ResourceArgumentDescription" xml:space="preserve">
     <value>The name of the resource to get logs for. If not specified, logs from all resources are shown.</value>
   </data>
-  <data name="ProjectOptionDescription" xml:space="preserve">
-    <value>The path to the Aspire AppHost project file.</value>
-  </data>
   <data name="FollowOptionDescription" xml:space="preserve">
-    <value>Stream logs in real-time as they are written.</value>
+    <value>Stream logs in real-time as they are written</value>
   </data>
   <data name="JsonOptionDescription" xml:space="preserve">
-    <value>Output logs in JSON format (NDJSON).</value>
-  </data>
-  <data name="AppHostNotRunning" xml:space="preserve">
-    <value>No running AppHost found. Use 'aspire run' to start one first.</value>
-  </data>
-  <data name="ScanningForRunningAppHosts" xml:space="preserve">
-    <value>Scanning for running AppHosts...</value>
-  </data>
-  <data name="SelectAppHost" xml:space="preserve">
-    <value>Select an AppHost:</value>
-  </data>
-  <data name="NoInScopeAppHostsShowingAll" xml:space="preserve">
-    <value>No AppHosts found in current directory. Showing all running AppHosts.</value>
+    <value>Output format (Table or Json)</value>
   </data>
   <data name="ResourceRequiredWithoutFollow" xml:space="preserve">
     <value>A resource name is required when not using --follow. Use --follow to stream logs from all resources.</value>
@@ -151,12 +136,24 @@
     <value>No resources found.</value>
   </data>
   <data name="TailOptionDescription" xml:space="preserve">
-    <value>Number of lines to show from the end of logs (default: all).</value>
+    <value>Number of lines to show from the end of logs (default: all)</value>
   </data>
   <data name="TailRequiresResource" xml:space="preserve">
     <value>The --tail option requires a resource name to be specified.</value>
   </data>
   <data name="TailMustBePositive" xml:space="preserve">
     <value>The --tail value must be a positive number.</value>
+  </data>
+  <data name="ResourceNotFound" xml:space="preserve">
+    <value>Resource '{0}' was not found.</value>
+  </data>
+  <data name="TimestampsOptionDescription" xml:space="preserve">
+    <value>Show timestamps for each log line</value>
+  </data>
+  <data name="SelectAppHostAction" xml:space="preserve">
+    <value>stream logs from</value>
+  </data>
+  <data name="GettingLogs" xml:space="preserve">
+    <value>Getting logs...</value>
   </data>
 </root>

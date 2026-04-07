@@ -3,6 +3,7 @@
 
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -18,7 +19,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
         var result = command.Parse("doctor --help");
 
-        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
         
         // Help should return success
         Assert.Equal(ExitCodeConstants.Success, exitCode);

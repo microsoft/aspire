@@ -9,24 +9,19 @@ internal static class DashboardConfigNames
 
     public static readonly ConfigName DashboardOtlpGrpcUrlName = new(KnownConfigNames.DashboardOtlpGrpcEndpointUrl);
     public static readonly ConfigName DashboardOtlpHttpUrlName = new(KnownConfigNames.DashboardOtlpHttpEndpointUrl);
-    public static readonly ConfigName DashboardMcpUrlName = new(KnownConfigNames.DashboardMcpEndpointUrl);
     public static readonly ConfigName DashboardUnsecuredAllowAnonymousName = new(KnownConfigNames.DashboardUnsecuredAllowAnonymous);
     public static readonly ConfigName DashboardConfigFilePathName = new(KnownConfigNames.DashboardConfigFilePath);
     public static readonly ConfigName DashboardFileConfigDirectoryName = new(KnownConfigNames.DashboardFileConfigDirectory);
     public static readonly ConfigName DashboardAIDisabledName = new(KnownConfigNames.DashboardAIDisabled);
+    public static readonly ConfigName DashboardAspireApiEnabledName = new(KnownConfigNames.DashboardApiEnabled);
     public static readonly ConfigName ResourceServiceUrlName = new(KnownConfigNames.ResourceServiceEndpointUrl);
     public static readonly ConfigName ForwardedHeaders = new(KnownConfigNames.DashboardForwardedHeadersEnabled);
 
     public static readonly ConfigName DashboardOtlpAuthModeName = new("Dashboard:Otlp:AuthMode", "DASHBOARD__OTLP__AUTHMODE");
     public static readonly ConfigName DashboardOtlpPrimaryApiKeyName = new("Dashboard:Otlp:PrimaryApiKey", "DASHBOARD__OTLP__PRIMARYAPIKEY");
     public static readonly ConfigName DashboardOtlpSecondaryApiKeyName = new("Dashboard:Otlp:SecondaryApiKey", "DASHBOARD__OTLP__SECONDARYAPIKEY");
-    public static readonly ConfigName DashboardMcpPublicUrlName = new("Dashboard:Mcp:PublicUrl", "DASHBOARD__MCP__PUBLICURL");
-    public static readonly ConfigName DashboardMcpAuthModeName = new("Dashboard:Mcp:AuthMode", "DASHBOARD__MCP__AUTHMODE");
-    public static readonly ConfigName DashboardMcpPrimaryApiKeyName = new("Dashboard:Mcp:PrimaryApiKey", "DASHBOARD__MCP__PRIMARYAPIKEY");
-    public static readonly ConfigName DashboardMcpDisableName = new("Dashboard:Mcp:Disabled", "DASHBOARD__MCP__DISABLED");
-    public static readonly ConfigName DashboardMcpUseCliMcpName = new("Dashboard:Mcp:UseCliMcp", "DASHBOARD__MCP__USECLIMCP");
 
-    // Dashboard API Authentication - used for MCP and Telemetry API
+    // Dashboard API Authentication - used for Telemetry API
     public static readonly ConfigName DashboardApiEnabledName = new("Dashboard:Api:Enabled", "DASHBOARD__API__ENABLED");
     public static readonly ConfigName DashboardApiAuthModeName = new("Dashboard:Api:AuthMode", "DASHBOARD__API__AUTHMODE");
     public static readonly ConfigName DashboardApiPrimaryApiKeyName = new("Dashboard:Api:PrimaryApiKey", "DASHBOARD__API__PRIMARYAPIKEY");

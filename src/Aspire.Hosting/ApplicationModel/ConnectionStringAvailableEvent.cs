@@ -10,6 +10,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 /// <param name="resource">The <see cref="IResource"/> for the event.</param>
 /// <param name="services">The <see cref="IServiceProvider"/> for the app host.</param>
+[AspireExport(ExposeProperties = true)]
 public class ConnectionStringAvailableEvent(IResource resource, IServiceProvider services) : IDistributedApplicationResourceEvent
 {
     /// <inheritdoc />

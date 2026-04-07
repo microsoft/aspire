@@ -4,6 +4,8 @@ This directory contains scripts to download and install the Aspire CLI for diffe
 
 ## Scripts
 
+### CLI installers
+
 - **`get-aspire-cli.sh`** - Bash script for Unix-like systems (Linux, macOS)
 - **`get-aspire-cli.ps1`** - PowerShell script for cross-platform use (Windows, Linux, macOS)
 
@@ -169,19 +171,19 @@ Additional scripts exist to fetch CLI and NuGet artifacts from a pull request bu
 
 Quick fetch (Bash):
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dotnet/aspire/main/eng/scripts/get-aspire-cli-pr.sh | bash -s -- <PR_NUMBER>
+curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.sh | bash -s -- <PR_NUMBER>
 ```
 
 Quick fetch (PowerShell):
 ```powershell
-iex "& { $(irm https://raw.githubusercontent.com/dotnet/aspire/main/eng/scripts/get-aspire-cli-pr.ps1) } <PR_NUMBER>"
+iex "& { $(irm https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.ps1) } <PR_NUMBER>"
 ```
 
 NuGet hive path pattern: `~/.aspire/hives/pr-<PR_NUMBER>/packages`
 
 ### Repository Override
 
-You can point the PR artifact retrieval scripts at a fork by setting the `ASPIRE_REPO` environment variable to `owner/name` before invoking the script (defaults to `dotnet/aspire`).
+You can point the PR artifact retrieval scripts at a fork by setting the `ASPIRE_REPO` environment variable to `owner/name` before invoking the script (defaults to `microsoft/aspire`).
 
 Examples:
 
@@ -194,3 +196,30 @@ export ASPIRE_REPO=myfork/aspire
 $env:ASPIRE_REPO = 'myfork/aspire'
 ./get-aspire-cli-pr.ps1 1234
 ```
+
+## Self-Extracting Binary
+
+The Aspire CLI can also be distributed as a self-extracting binary that embeds the full bundle
+payload inside the native AOT executable. This is the simplest installation method:
+
+```bash
+# Linux/macOS - download and extract
+mkdir -p ~/.aspire/bin
+curl -fsSL <url>/aspire -o ~/.aspire/bin/aspire
+chmod +x ~/.aspire/bin/aspire
+~/.aspire/bin/aspire setup
+
+# Add to PATH
+export PATH="$HOME/.aspire/bin:$PATH"
+```
+
+```powershell
+# Windows - download and extract
+New-Item -ItemType Directory -Force -Path "$env:LOCALAPPDATA\Aspire\bin"
+Invoke-WebRequest -Uri <url>/aspire.exe -OutFile "$env:LOCALAPPDATA\Aspire\bin\aspire.exe"
+& "$env:LOCALAPPDATA\Aspire\bin\aspire.exe" setup
+```
+
+The `aspire setup` command extracts the embedded payload to the parent directory of the CLI binary.
+Alternatively, extraction happens lazily on the first command that needs the bundle layout
+(e.g., `aspire run` with a polyglot project).

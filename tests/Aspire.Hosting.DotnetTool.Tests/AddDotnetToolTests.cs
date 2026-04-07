@@ -377,4 +377,17 @@ public class AddDotnetToolTests
 
         Assert.Equal(expectedManifest, manifest.ToString());
     }
+
+    [Fact]
+    public void AddDotnetTool_IncludesRequiredCommandAnnotation()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var tool = builder.AddDotnetTool("mytool", "dotnet-ef");
+
+#pragma warning disable ASPIRECOMMAND001
+        var annotation = Assert.Single(tool.Resource.Annotations.OfType<RequiredCommandAnnotation>());
+#pragma warning restore ASPIRECOMMAND001
+        Assert.Equal("dotnet", annotation.Command);
+        Assert.NotNull(annotation.ValidationCallback);
+    }
 }

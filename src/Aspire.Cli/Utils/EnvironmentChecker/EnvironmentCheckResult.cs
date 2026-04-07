@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
 namespace Aspire.Cli.Utils.EnvironmentChecker;
@@ -56,6 +57,17 @@ internal sealed class EnvironmentCheckResult
     [JsonPropertyName("details")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Details { get; init; }
+
+    /// <summary>
+    /// Gets optional structured metadata for programmatic consumption.
+    /// </summary>
+    /// <remarks>
+    /// This property allows individual checks to attach arbitrary structured data
+    /// to the JSON output. It is omitted from non-JSON output and when null.
+    /// </remarks>
+    [JsonPropertyName("metadata")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public JsonObject? Metadata { get; init; }
 }
 
 /// <summary>

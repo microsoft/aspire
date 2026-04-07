@@ -6,7 +6,8 @@ import { createSelfSignedCertAsync, generateToken } from '../utils/security';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { AspireResourceDebugSession, DcpServerConnectionInfo, ErrorDetails, ErrorResponse, ProcessRestartedNotification, RunSessionNotification, RunSessionPayload, ServiceLogsNotification, SessionMessageNotification, SessionTerminatedNotification } from './types';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
-import { createDebugSessionConfiguration, ResourceDebuggerExtension } from '../debugger/debuggerExtensions';
+import { createDebugSessionConfiguration, getResourceDebuggerExtensions } from '../debugger/debuggerExtensions';
+import { cleanupRun } from '../debugger/runCleanupRegistry';
 import { timingSafeEqual } from 'crypto';
 import { getRunSessionInfo, getSupportedCapabilities } from '../capabilities';
 import { authorizationAndDcpHeadersRequired, authorizationHeaderMustStartWithBearer, encounteredErrorStartingResource, invalidOrMissingToken, invalidTokenLength } from '../loc/strings';
@@ -35,7 +36,7 @@ export default class AspireDcpServer {
         this.pendingNotificationQueueByDcpId = pendingNotificationQueueByDcpId;
     }
 
-    static async create(debuggerExtensions: ResourceDebuggerExtension[], getDebugSession: (debugSessionId: string) => AspireDebugSession | null): Promise<AspireDcpServer> {
+    static async create(getDebugSession: (debugSessionId: string) => AspireDebugSession | null): Promise<AspireDcpServer> {
         const runsBySession = new Map<string, AspireResourceDebugSession[]>();
         const wsBySession = new Map<string, WebSocket>();
         const pendingNotificationQueueByDcpId = new Map<string, RunSessionNotification[]>();
@@ -106,7 +107,7 @@ export default class AspireDcpServer {
                 }
 
                 const launchConfig = payload.launch_configurations[0];
-                const foundDebuggerExtension = debuggerExtensions.find(ext => ext.resourceType === launchConfig.type) ?? null;
+                const foundDebuggerExtension = getResourceDebuggerExtensions().find(ext => ext.resourceType === launchConfig.type) ?? null;
 
                 if (!foundDebuggerExtension) {
                     const error: ErrorDetails = {
@@ -135,41 +136,77 @@ export default class AspireDcpServer {
                     return;
                 }
 
-                const config = await createDebugSessionConfiguration(
-                    aspireDebugSession.configuration,
-                    launchConfig,
-                    payload.args ?? [],
-                    payload.env ?? [],
-                    { debug: launchConfig.mode === "Debug", runId, debugSessionId: dcpId, isApphost: false, debugSession: aspireDebugSession },
-                    foundDebuggerExtension
-                );
+                try {
+                    const config = await createDebugSessionConfiguration(
+                        aspireDebugSession.configuration,
+                        launchConfig,
+                        payload.args,
+                        payload.env ?? [],
+                        { debug: launchConfig.mode === "Debug", runId, debugSessionId: dcpId, isApphost: false, debugSession: aspireDebugSession },
+                        foundDebuggerExtension
+                    );
 
-                const resourceDebugSession = await aspireDebugSession.startAndGetDebugSession(config);
+                    const resourceDebugSession = await aspireDebugSession.startAndGetDebugSession(config);
 
-                if (!resourceDebugSession) {
+                    if (!resourceDebugSession) {
+                        // Clean up any processes associated with this run (registered by resource-type extensions)
+                        cleanupRun(runId);
+
+                        const error: ErrorDetails = {
+                            code: 'DebugSessionFailed',
+                            message: `Failed to start debug session for run ID ${runId}`,
+                            details: []
+                        };
+
+                        extensionLogOutputChannel.error(`Error creating debug session ${runId}: ${error.message}`);
+                        const response: ErrorResponse = { error };
+                        respondWithError(res, 500, response);
+                        return;
+                    }
+
+                    processes.push(resourceDebugSession);
+                    extensionLogOutputChannel.info(`Debugging session created with ID: ${runId}`);
+
+                    runsBySession.set(runId, processes);
+                    res.status(201).set('Location', `https://${req.get('host')}/run_session/${runId}`).end();
+                    extensionLogOutputChannel.info(`New run session created with ID: ${runId}`);
+                } catch (err) {
+                    extensionLogOutputChannel.error(`Error creating debug session ${runId}: ${err}`);
+
+                    // Clean up any processes associated with this run (registered by resource-type extensions)
+                    cleanupRun(runId);
+
+                    // Notify DCP via WebSocket that the session terminated so it can update
+                    // resource state, AND respond with HTTP 500 so the original POST /run_session
+                    // request gets a proper error. Both are needed: the 500 tells DCP the launch
+                    // failed synchronously, while sessionTerminated handles async cleanup.
+                    const notification: SessionTerminatedNotification = {
+                        notification_type: 'sessionTerminated',
+                        session_id: runId,
+                        dcp_id: dcpId,
+                        exit_code: -1
+                    };
+
+                    const ws = wsBySession.get(dcpId);
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        AspireDcpServer.sendNotificationCore(notification, ws);
+                    } else {
+                        pendingNotificationQueueByDcpId.set(dcpId, [...(pendingNotificationQueueByDcpId.get(dcpId) || []), notification]);
+                    }
+
                     const error: ErrorDetails = {
                         code: 'DebugSessionFailed',
-                        message: `Failed to start debug session for run ID ${runId}`,
+                        message: `Failed to start debug session for run ID ${runId}: ${err instanceof Error ? err.message : String(err)}`,
                         details: []
                     };
 
-                    extensionLogOutputChannel.error(`Error creating debug session ${runId}: ${error.message}`);
                     const response: ErrorResponse = { error };
                     respondWithError(res, 500, response);
-                    return;
                 }
-
-                processes.push(resourceDebugSession);
-                extensionLogOutputChannel.info(`Debugging session created with ID: ${runId}`);
-
-
-                runsBySession.set(runId, processes);
-                res.status(201).set('Location', `https://${req.get('host')}/run_session/${runId}`).end();
-                extensionLogOutputChannel.info(`New run session created with ID: ${runId}`);
             });
 
             app.delete('/run_session/:id', requireHeaders, async (req: Request, res: Response) => {
-                const runId = req.params.id;
+                const runId = req.params.id as string;
                 if (runsBySession.has(runId)) {
                     const baseDebugSessions = runsBySession.get(runId);
                     for (const debugSession of baseDebugSessions || []) {

@@ -9,6 +9,7 @@ namespace Aspire.Cli.Backchannel;
 namespace Aspire.Hosting.Backchannel;
 #endif
 
+using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
@@ -110,14 +111,15 @@ internal sealed class GetDashboardInfoRequest { }
 internal sealed class GetDashboardInfoResponse
 {
     /// <summary>
-    /// Gets the base URL of the Dashboard MCP endpoint.
+    /// Gets the base URL of the Dashboard API (without login token).
+    /// Use this for API calls like /api/telemetry/*.
     /// </summary>
-    public string? McpBaseUrl { get; init; }
+    public string? ApiBaseUrl { get; init; }
 
     /// <summary>
-    /// Gets the Dashboard MCP API token.
+    /// Gets the Dashboard API token for authenticated API calls.
     /// </summary>
-    public string? McpApiToken { get; init; }
+    public string? ApiToken { get; init; }
 
     /// <summary>
     /// Gets the Dashboard URLs with login tokens.
@@ -248,6 +250,114 @@ internal sealed class StopAppHostRequest
 /// </summary>
 internal sealed class StopAppHostResponse { }
 
+/// <summary>
+/// Request for executing a resource command.
+/// </summary>
+internal sealed class ExecuteResourceCommandRequest
+{
+    /// <summary>
+    /// Gets the resource name (or resource ID for replicas).
+    /// </summary>
+    public required string ResourceName { get; init; }
+
+    /// <summary>
+    /// Gets the command name (e.g., "start", "stop", "restart").
+    /// </summary>
+    public required string CommandName { get; init; }
+}
+
+/// <summary>
+/// Response from executing a resource command.
+/// </summary>
+internal sealed class ExecuteResourceCommandResponse
+{
+    /// <summary>
+    /// Gets whether the command executed successfully.
+    /// </summary>
+    public required bool Success { get; init; }
+
+    /// <summary>
+    /// Gets whether the command was canceled.
+    /// </summary>
+    public bool Canceled { get; init; }
+
+    /// <summary>
+    /// Gets the error message if the command failed.
+    /// </summary>
+    public string? ErrorMessage { get; init; }
+
+    /// <summary>
+    /// Gets the result data produced by the command.
+    /// </summary>
+    public string? Result { get; init; }
+
+    /// <summary>
+    /// Gets the format of the result data (e.g. "none", "text", "json").
+    /// </summary>
+    public string? ResultFormat { get; init; }
+}
+
+#endregion
+
+#region Wait For Resource
+
+/// <summary>
+/// Request to wait for a resource to reach a target status.
+/// </summary>
+internal sealed class WaitForResourceRequest
+{
+    /// <summary>
+    /// Gets the name of the resource to wait for.
+    /// </summary>
+    public required string ResourceName { get; init; }
+
+    /// <summary>
+    /// Gets the target status to wait for (e.g., "up", "healthy", "down").
+    /// </summary>
+    public required string Status { get; init; }
+
+    /// <summary>
+    /// Gets the timeout in seconds.
+    /// </summary>
+    public int TimeoutSeconds { get; init; } = 120;
+}
+
+/// <summary>
+/// Response from waiting for a resource.
+/// </summary>
+internal sealed class WaitForResourceResponse
+{
+    /// <summary>
+    /// Gets whether the resource reached the target status.
+    /// </summary>
+    public required bool Success { get; init; }
+
+    /// <summary>
+    /// Gets the current state of the resource.
+    /// </summary>
+    public string? State { get; init; }
+
+    /// <summary>
+    /// Gets the current health status of the resource.
+    /// </summary>
+    public string? HealthStatus { get; init; }
+
+    /// <summary>
+    /// Gets whether the resource was not found.
+    /// </summary>
+    public bool ResourceNotFound { get; init; }
+
+    /// <summary>
+    /// Gets whether the wait timed out.
+    /// </summary>
+    public bool TimedOut { get; init; }
+
+    /// <summary>
+    /// Gets the error message if the wait failed.
+    /// </summary>
+    public string? ErrorMessage { get; init; }
+}
+
 #endregion
 
 /// <summary>
@@ -282,19 +392,21 @@ internal sealed class RpcResourceState
 }
 
 /// <summary>
-/// Represents dashboard URLs with authentication tokens.
+/// Represents dashboard URLs for the running AppHost.
 /// </summary>
 internal sealed class DashboardUrlsState
 {
     public bool DashboardHealthy { get; init; } = true;
 
     /// <summary>
-    /// Gets the base dashboard URL with a login token.
+    /// Gets the dashboard URL.
+    /// When browser token authentication is enabled, this value includes the login token.
     /// </summary>
     public string? BaseUrlWithLoginToken { get; init; }
 
     /// <summary>
-    /// Gets the Codespaces dashboard URL with a login token, if available.
+    /// Gets the Codespaces dashboard URL, if available.
+    /// When browser token authentication is enabled, this value includes the login token.
     /// </summary>
     public string? CodespacesUrlWithLoginToken { get; init; }
 }
@@ -356,9 +468,27 @@ internal sealed class PublishingActivityData
     public string? StepId { get; init; }
 
     /// <summary>
+    /// Gets the identifier of the parent step used for hierarchical step summaries.
+    /// </summary>
+    public string? ParentStepId { get; init; }
+
+    /// <summary>
+    /// Gets the hierarchical level of the step used for display purposes.
+    /// Nullable for backwards compatibility with older app hosts that do not send hierarchy metadata.
+    /// </summary>
+    public int? HierarchyLevel { get; init; }
+
+    /// <summary>
     /// Gets the optional completion message for tasks (appears as dimmed child text).
     /// </summary>
     public string? CompletionMessage { get; init; }
+
+    /// <summary>
+    /// Gets the pipeline summary information to display after pipeline completion.
+    /// Each item carries its own key, value, and Markdown formatting flag.
+    /// The list preserves the order items were added.
+    /// </summary>
+    public IReadOnlyList<BackchannelPipelineSummaryItem>? PipelineSummary { get; init; }
 
     /// <summary>
     /// Gets the input information for prompt activities, if available.
@@ -379,6 +509,27 @@ internal sealed class PublishingActivityData
     /// Gets a value indicating whether markdown formatting is enabled for the publishing activity.
     /// </summary>
     public bool EnableMarkdown { get; init; } = true;
+}
+
+/// <summary>
+/// Represents a single item in a pipeline summary for backchannel transport.
+/// </summary>
+internal sealed class BackchannelPipelineSummaryItem
+{
+    /// <summary>
+    /// Gets the key or label for the summary item.
+    /// </summary>
+    public required string Key { get; init; }
+
+    /// <summary>
+    /// Gets the string value for the summary item.
+    /// </summary>
+    public required string Value { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the value contains Markdown formatting.
+    /// </summary>
+    public bool EnableMarkdown { get; init; }
 }
 
 /// <summary>
@@ -509,6 +660,7 @@ internal sealed class DashboardMcpConnectionInfo
 /// Represents a snapshot of a resource in the application model, suitable for RPC communication.
 /// Designed to be extensible - new fields can be added without breaking existing consumers.
 /// </summary>
+[DebuggerDisplay("Name = {Name}, ResourceType = {ResourceType}, State = {State}, Properties = {Properties.Count}")]
 internal sealed class ResourceSnapshot
 {
     /// <summary>
@@ -517,9 +669,25 @@ internal sealed class ResourceSnapshot
     public required string Name { get; init; }
 
     /// <summary>
+    /// Gets the display name of the resource.
+    /// </summary>
+    public string? DisplayName { get; init; }
+
+    // ResourceType can't be required because older versions of the backchannel may not set it.
+    /// <summary>
     /// Gets the type of the resource (e.g., "Project", "Container", "Executable").
     /// </summary>
-    public required string Type { get; init; }
+    public string? ResourceType { get; init; }
+
+    /// <summary>
+    /// Gets the type of the resource (e.g., "Project", "Container", "Executable").
+    /// </summary>
+    [Obsolete("Use ResourceType property instead.")]
+    public string? Type
+    {
+        get => ResourceType;
+        init => ResourceType = value;
+    }
 
     /// <summary>
     /// Gets the current state of the resource (e.g., "Running", "Stopped", "Starting").
@@ -557,9 +725,9 @@ internal sealed class ResourceSnapshot
     public DateTimeOffset? StoppedAt { get; init; }
 
     /// <summary>
-    /// Gets the endpoints exposed by this resource.
+    /// Gets the URLs exposed by this resource.
     /// </summary>
-    public ResourceSnapshotEndpoint[] Endpoints { get; init; } = [];
+    public ResourceSnapshotUrl[] Urls { get; init; } = [];
 
     /// <summary>
     /// Gets the relationships to other resources.
@@ -577,6 +745,11 @@ internal sealed class ResourceSnapshot
     public ResourceSnapshotVolume[] Volumes { get; init; } = [];
 
     /// <summary>
+    /// Gets the environment variables for this resource.
+    /// </summary>
+    public ResourceSnapshotEnvironmentVariable[] EnvironmentVariables { get; init; } = [];
+
+    /// <summary>
     /// Gets additional properties as key-value pairs.
     /// This allows for extensibility without changing the schema.
     /// </summary>
@@ -586,15 +759,48 @@ internal sealed class ResourceSnapshot
     /// Gets the MCP server information if the resource exposes an MCP endpoint.
     /// </summary>
     public ResourceSnapshotMcpServer? McpServer { get; init; }
+
+    /// <summary>
+    /// Gets the commands available for this resource.
+    /// </summary>
+    public ResourceSnapshotCommand[] Commands { get; init; } = [];
 }
 
 /// <summary>
-/// Represents an endpoint exposed by a resource.
+/// Represents a command available for a resource.
 /// </summary>
-internal sealed class ResourceSnapshotEndpoint
+[DebuggerDisplay("Name = {Name}, State = {State}")]
+internal sealed class ResourceSnapshotCommand
 {
     /// <summary>
-    /// Gets the endpoint name (e.g., "http", "https", "tcp").
+    /// Gets the command name (e.g., "start", "stop", "restart").
+    /// </summary>
+    public required string Name { get; init; }
+
+    /// <summary>
+    /// Gets the display name of the command.
+    /// </summary>
+    public string? DisplayName { get; init; }
+
+    /// <summary>
+    /// Gets the description of the command.
+    /// </summary>
+    public string? Description { get; init; }
+
+    /// <summary>
+    /// Gets the state of the command (e.g., "Enabled", "Disabled", "Hidden").
+    /// </summary>
+    public required string State { get; init; }
+}
+
+/// <summary>
+/// Represents a URL exposed by a resource.
+/// </summary>
+[DebuggerDisplay("Name = {Name}, Url = {Url}")]
+internal sealed class ResourceSnapshotUrl
+{
+    /// <summary>
+    /// Gets the URL name (e.g., "http", "https", "tcp").
     /// </summary>
     public required string Name { get; init; }
 
@@ -604,14 +810,37 @@ internal sealed class ResourceSnapshotEndpoint
     public required string Url { get; init; }
 
     /// <summary>
-    /// Gets whether this is an internal endpoint.
+    /// Gets whether this is an internal URL.
     /// </summary>
     public bool IsInternal { get; init; }
+
+    /// <summary>
+    /// Gets the display properties for the URL.
+    /// </summary>
+    public ResourceSnapshotUrlDisplayProperties? DisplayProperties { get; init; }
+}
+
+/// <summary>
+/// Represents display properties for a URL.
+/// </summary>
+[DebuggerDisplay("DisplayName = {DisplayName}, SortOrder = {SortOrder}")]
+internal sealed class ResourceSnapshotUrlDisplayProperties
+{
+    /// <summary>
+    /// Gets the display name of the URL.
+    /// </summary>
+    public string? DisplayName { get; init; }
+
+    /// <summary>
+    /// Gets the sort order for display. Higher numbers are displayed first.
+    /// </summary>
+    public int SortOrder { get; init; }
 }
 
 /// <summary>
 /// Represents a relationship to another resource.
 /// </summary>
+[DebuggerDisplay("ResourceName = {ResourceName}, Type = {Type}")]
 internal sealed class ResourceSnapshotRelationship
 {
     /// <summary>
@@ -628,6 +857,7 @@ internal sealed class ResourceSnapshotRelationship
 /// <summary>
 /// Represents a health report for a resource.
 /// </summary>
+[DebuggerDisplay("Name = {Name}, Status = {Status}")]
 internal sealed class ResourceSnapshotHealthReport
 {
     /// <summary>
@@ -654,6 +884,7 @@ internal sealed class ResourceSnapshotHealthReport
 /// <summary>
 /// Represents a volume mounted to a resource.
 /// </summary>
+[DebuggerDisplay("Source = {Source}, Target = {Target}")]
 internal sealed class ResourceSnapshotVolume
 {
     /// <summary>
@@ -678,8 +909,31 @@ internal sealed class ResourceSnapshotVolume
 }
 
 /// <summary>
+/// Represents an environment variable for a resource.
+/// </summary>
+[DebuggerDisplay("Name = {Name}, Value = {Value}")]
+internal sealed class ResourceSnapshotEnvironmentVariable
+{
+    /// <summary>
+    /// Gets the name of the environment variable.
+    /// </summary>
+    public required string Name { get; init; }
+
+    /// <summary>
+    /// Gets the value of the environment variable.
+    /// </summary>
+    public string? Value { get; init; }
+
+    /// <summary>
+    /// Gets whether this environment variable is from the resource specification.
+    /// </summary>
+    public bool IsFromSpec { get; init; }
+}
+
+/// <summary>
 /// Represents MCP server information for a resource.
 /// </summary>
+[DebuggerDisplay("EndpointUrl = {EndpointUrl}")]
 internal sealed class ResourceSnapshotMcpServer
 {
     /// <summary>

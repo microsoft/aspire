@@ -46,6 +46,36 @@
       "commandLineArgs": "deploy",
       "workingDirectory": "../../playground/AzureStorageEndToEnd/AzureStorageEndToEnd.AppHost"
     },
+    "--version": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "commandLineArgs": "--version"
+    },
+    "new": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "commandLineArgs": "new -d"
+    },
+    "otel traces": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "commandLineArgs": "otel traces --dashboard-url http://localhost:15889"
+    },
+    "help": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "commandLineArgs": "--help"
+    },
+    "logs": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "commandLineArgs": "logs"
+    },
+    "render": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "commandLineArgs": "render"
+    },
     "run-testapphost": {
       "commandName": "Project",
       "dotnetRunMessages": true,
@@ -58,6 +88,14 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
       "commandLineArgs": "run --isolated -d --project ../../../../../playground/TestShop/TestShop.AppHost/TestShop.AppHost.csproj",
+      "environmentVariables": {
+        "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true"
+      }
+    },
+    "get-resources": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "commandLineArgs": "resources --project ../../../../../playground/TestShop/TestShop.AppHost/TestShop.AppHost.csproj",
       "environmentVariables": {
         "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true"
       }

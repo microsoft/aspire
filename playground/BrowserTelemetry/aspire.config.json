@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "BrowserTelemetry.AppHost/BrowserTelemetry.AppHost.csproj"
+  }
+}

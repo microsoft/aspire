@@ -61,13 +61,13 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>Manage AI agent integrations.</value>
+    <value>Manage AI agent environment configuration</value>
   </data>
   <data name="McpCommand_Description" xml:space="preserve">
-    <value>Start the MCP (Model Context Protocol) server.</value>
+    <value>Start the MCP (Model Context Protocol) server</value>
   </data>
   <data name="InitCommand_Description" xml:space="preserve">
-    <value>Initialize agent environment configuration for detected agents.</value>
+    <value>Initialize agent environment configuration for detected agents</value>
   </data>
   <data name="DeprecatedConfigUpdate_Description" xml:space="preserve">
     <value>Update {0} config to use new 'agent mcp' command</value>
@@ -80,5 +80,98 @@
   </data>
   <data name="ConfigUpdatesSelectPrompt" xml:space="preserve">
     <value>The following agent configurations use the deprecated 'mcp start' command. Update them?</value>
+  </data>
+  <data name="MalformedConfigFileError" xml:space="preserve">
+    <value>The configuration file '{0}' contains malformed JSON. Please fix the file manually and re-run the command.</value>
+  </data>
+  <data name="SkippedMalformedConfigFile" xml:space="preserve">
+    <value>Skipping update of '{0}'.</value>
+  </data>
+  <data name="ConfigurationCompletedWithErrors" xml:space="preserve">
+    <value>Configuration completed with errors. Please fix the reported issues and re-run the command.</value>
+  </data>
+  <data name="SkipNoneDescription" xml:space="preserve">
+    <value>None — skip</value>
+  </data>
+  <data name="InitCommand_ConfigureMcpServer" xml:space="preserve">
+    <value>Install Aspire MCP server</value>
+  </data>
+  <data name="InitCommand_SelectSkillLocations" xml:space="preserve">
+    <value>Where should skill files be installed?</value>
+  </data>
+  <data name="InitCommand_SelectSkills" xml:space="preserve">
+    <value>Which skills should be installed?</value>
+  </data>
+  <data name="InitCommand_InstalledPlaywrightCli" xml:space="preserve">
+    <value>Installed Playwright CLI.</value>
+  </data>
+  <data name="InitCommand_PlaywrightCliSkipped" xml:space="preserve">
+    <value>Playwright CLI requires npm, which was not found on PATH. Skipping installation.</value>
+  </data>
+  <data name="InitCommand_InstalledSkill" xml:space="preserve">
+    <value>Installed {0} skill ({1}).</value>
+  </data>
+  <data name="InitCommand_FailedToInstallSkill" xml:space="preserve">
+    <value>Failed to install {0} skill at {1}: {2}</value>
+  </data>
+  <data name="InitCommand_ConfiguresDetectedAgentEnvironments" xml:space="preserve">
+    <value>(configures detected agent environments)</value>
+  </data>
+  <data name="SkillDescription_Aspire" xml:space="preserve">
+    <value>Aspire CLI commands and workflows for distributed apps</value>
+  </data>
+  <data name="SkillDescription_PlaywrightCli" xml:space="preserve">
+    <value>Browser automation and functional testing</value>
+  </data>
+  <data name="SkillDescription_DotnetInspect" xml:space="preserve">
+    <value>Query .NET API surfaces across NuGet packages and platform libraries</value>
+  </data>
+  <data name="SkillLocation_StandardName" xml:space="preserve">
+    <value>Standard (.agents/skills/)</value>
+  </data>
+  <data name="SkillLocation_StandardDescription" xml:space="preserve">
+    <value>Supported by VS Code, GitHub Copilot, and OpenCode (also installs at ~/)</value>
+  </data>
+  <data name="SkillLocation_ClaudeCodeName" xml:space="preserve">
+    <value>Claude Code (.claude/skills/)</value>
+  </data>
+  <data name="SkillLocation_ClaudeCodeDescription" xml:space="preserve">
+    <value>Required for Claude Code</value>
+  </data>
+  <data name="SkillLocation_GitHubSkillsName" xml:space="preserve">
+    <value>VS Code / GitHub Copilot (.github/skills/)</value>
+  </data>
+  <data name="SkillLocation_GitHubSkillsDescription" xml:space="preserve">
+    <value>Legacy location for GitHub Copilot skills</value>
+  </data>
+  <data name="SkillLocation_OpenCodeName" xml:space="preserve">
+    <value>OpenCode (.opencode/skill/)</value>
+  </data>
+  <data name="SkillLocation_OpenCodeDescription" xml:space="preserve">
+    <value>Legacy location for OpenCode skills</value>
+  </data>
+  <data name="PlaywrightCliInstaller_InstallingStatus" xml:space="preserve">
+    <value>Installing Playwright CLI...</value>
+  </data>
+  <data name="PlaywrightCliInstaller_FailedToResolvePackage" xml:space="preserve">
+    <value>Failed to resolve {0} from the npm registry.</value>
+  </data>
+  <data name="PlaywrightCliInstaller_ProvenanceVerificationFailed" xml:space="preserve">
+    <value>Provenance verification failed for {0}: {1}</value>
+  </data>
+  <data name="PlaywrightCliInstaller_FailedToDownload" xml:space="preserve">
+    <value>Failed to download {0}.</value>
+  </data>
+  <data name="PlaywrightCliInstaller_IntegrityVerificationFailed" xml:space="preserve">
+    <value>Integrity verification failed for {0}. The downloaded package may have been tampered with.</value>
+  </data>
+  <data name="PlaywrightCliInstaller_FailedToInstallGlobally" xml:space="preserve">
+    <value>Failed to install {0} globally via npm.</value>
+  </data>
+  <data name="PlaywrightCliInstaller_FailedToGenerateSkillFiles" xml:space="preserve">
+    <value>Failed to generate Playwright CLI skill files.</value>
+  </data>
+  <data name="PlaywrightCliInstaller_InstalledWithMirrorWarnings" xml:space="preserve">
+    <value>Installed Playwright CLI (some locations failed to mirror).</value>
   </data>
 </root>

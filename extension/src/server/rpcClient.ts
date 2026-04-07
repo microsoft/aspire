@@ -31,7 +31,7 @@ export class RpcClient implements ICliRpcClient {
         this._messageConnection = messageConnection;
         this._connectionClosed = false;
         this.debugSessionId = debugSessionId;
-        this.interactionService = new InteractionService(getAspireDebugSession, this);
+        this.interactionService = new InteractionService(getAspireDebugSession, this, () => terminalProvider.getAspireTerminal());
 
         this._messageConnection.onClose(() => {
             this._connectionClosed = true;

@@ -1,6 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRECOMMAND001
+
+using System.Reflection;
 using System.Text.Json.Nodes;
 using Aspire.TestUtilities;
 using Aspire.Hosting.ApplicationModel;
@@ -14,6 +17,13 @@ namespace Aspire.Hosting.Azure.Tests;
 
 public class AzureFunctionsTests
 {
+    private static readonly MethodInfo s_polyglotWithReferenceMethod = typeof(ResourceBuilderExtensions)
+        .GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
+        .Single(m => m.Name == nameof(ResourceBuilderExtensions.WithReference)
+            && m.IsGenericMethodDefinition
+            && m.GetParameters() is { Length: 5 } parameters
+            && parameters[1].ParameterType == typeof(IResourceBuilder<IResource>));
+
     [Fact]
     public async Task AddAzureFunctionsProject_Works()
     {
@@ -268,6 +278,30 @@ public class AzureFunctionsTests
             arg => Assert.Equal("--port", arg),
             arg => Assert.Equal("9876", arg)
         );
+    }
+
+    [Fact]
+    public async Task WithReferenceDispatchesAzureFunctionsSpecificConfiguration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var blobs = builder.AddAzureStorage("storage").AddBlobs("blobs");
+        var funcApp = builder.AddAzureFunctionsProject<TestProject>("funcapp");
+
+        InvokeWithReference(funcApp, (IResourceBuilder<IResource>)blobs, connectionName: "input");
+
+        Assert.True(funcApp.Resource.TryGetAnnotationsOfType<EnvironmentCallbackAnnotation>(out var envAnnotations));
+
+        var context = new EnvironmentCallbackContext(builder.ExecutionContext);
+        foreach (var envAnnotation in envAnnotations)
+        {
+            await envAnnotation.Callback(context);
+        }
+
+        Assert.Contains("input__blobServiceUri", context.EnvironmentVariables.Keys);
+        Assert.Contains("input__queueServiceUri", context.EnvironmentVariables.Keys);
+        Assert.Contains("Aspire__Azure__Storage__Blobs__input__ServiceUri", context.EnvironmentVariables.Keys);
+        Assert.DoesNotContain("ConnectionStrings__input", context.EnvironmentVariables.Keys);
     }
 
     [Fact]
@@ -757,15 +791,29 @@ public class AzureFunctionsTests
     }
 
     [Fact]
-    public void AddAzureFunctionsProject_RegistersFuncCoreToolsInstallationManager()
+    public void AddAzureFunctionsProject_AddsRequiredCommandAnnotation()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
-        builder.AddAzureFunctionsProject<TestProject>("funcapp");
+        var funcApp = builder.AddAzureFunctionsProject<TestProject>("funcapp");
 
-        // Verify that FuncCoreToolsInstallationManager is registered as a singleton
-        var descriptor = builder.Services.FirstOrDefault(s => s.ServiceType == typeof(FuncCoreToolsInstallationManager));
-        Assert.NotNull(descriptor);
-        Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
+        // Verify that RequiredCommandAnnotation for 'func' is added
+        var annotation = funcApp.Resource.Annotations.OfType<RequiredCommandAnnotation>().SingleOrDefault();
+        Assert.NotNull(annotation);
+        Assert.Equal("func", annotation.Command);
+        Assert.Equal("https://learn.microsoft.com/azure/azure-functions/functions-run-local#install-the-azure-functions-core-tools", annotation.HelpLink);
+    }
+
+    private static IResourceBuilder<TDestination> InvokeWithReference<TDestination>(
+        IResourceBuilder<TDestination> builder,
+        IResourceBuilder<IResource> source,
+        string? connectionName = null,
+        bool optional = false,
+        string? name = null)
+        where TDestination : IResourceWithEnvironment
+    {
+        return (IResourceBuilder<TDestination>)s_polyglotWithReferenceMethod
+            .MakeGenericMethod(typeof(TDestination))
+            .Invoke(null, [builder, source, connectionName, optional, name])!;
     }
 }

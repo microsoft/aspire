@@ -3,6 +3,7 @@
 
 using System.Collections.Concurrent;
 using System.Net;
+using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json.Nodes;
 using Aspire.Dashboard.Configuration;
@@ -16,6 +17,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration.EnvironmentVariables;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -137,19 +139,28 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
     [InlineData(KnownConfigNames.Legacy.DashboardConfigFilePath)]
     public async Task Configuration_ConfigFilePathDoesntExist_Error(string dashboardConfigFilePathNameKey)
     {
-        // Arrange & Act
-        var configFilePath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        var ex = await Assert.ThrowsAsync<FileNotFoundException>(async () =>
-        {
-            await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
-                additionalConfiguration: data =>
-                {
-                    data[dashboardConfigFilePathNameKey] = configFilePath;
-                });
-        }).DefaultTimeout();
+        var tempDirectory = Directory.CreateTempSubdirectory();
 
-        // Assert
-        Assert.Contains(configFilePath, ex.Message);
+        try
+        {
+            // Arrange & Act
+            var configFilePath = Path.Combine(tempDirectory.FullName, Path.GetRandomFileName());
+            var ex = await Assert.ThrowsAsync<FileNotFoundException>(async () =>
+            {
+                await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
+                    additionalConfiguration: data =>
+                    {
+                        data[dashboardConfigFilePathNameKey] = configFilePath;
+                    });
+            }).DefaultTimeout();
+
+            // Assert
+            Assert.Contains(configFilePath, ex.Message);
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory.FullName, recursive: true);
+        }
     }
 
     [Theory]
@@ -237,7 +248,8 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
     public async Task Configuration_FileConfigDirectoryDoesntExist_Error()
     {
         // Arrange & Act
-        var fileConfigDirectory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        var fileConfigDirectory = Directory.CreateTempSubdirectory().FullName;
+        Directory.Delete(fileConfigDirectory);
         var ex = await Assert.ThrowsAsync<DirectoryNotFoundException>(async () =>
         {
             await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
@@ -348,85 +360,6 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
             var client = new LogsService.LogsServiceClient(channel);
             var serviceResponse = await client.ExportAsync(new ExportLogsServiceRequest()).ResponseAsync.DefaultTimeout();
             Assert.Equal(0, serviceResponse.PartialSuccess.RejectedLogRecords);
-        }
-        finally
-        {
-            if (app is not null)
-            {
-                await app.DisposeAsync().DefaultTimeout();
-            }
-        }
-    }
-
-    [Fact]
-    public async Task Configuration_BrowserAndOtlpGrpcAndMcpEndpointSame_Https_EndPointPortsAssigned()
-    {
-        // Arrange
-        DashboardWebApplication? app = null;
-        try
-        {
-            await ServerRetryHelper.BindPortWithRetry(async port =>
-            {
-                app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
-                    additionalConfiguration: initialData =>
-                    {
-                        initialData[DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = $"https://127.0.0.1:{port}";
-                        initialData[DashboardConfigNames.DashboardOtlpGrpcUrlName.ConfigKey] = $"https://127.0.0.1:{port}";
-                        initialData[DashboardConfigNames.DashboardOtlpHttpUrlName.ConfigKey] = $"https://127.0.0.1:{port}";
-                        initialData[DashboardConfigNames.DashboardMcpUrlName.ConfigKey] = $"https://127.0.0.1:{port}";
-                    });
-
-                // Act
-                await app.StartAsync().DefaultTimeout();
-            }, NullLogger.Instance);
-
-            // Assert
-            Assert.NotNull(app);
-            Assert.Equal(app.FrontendSingleEndPointAccessor().EndPoint.Port, app.OtlpServiceGrpcEndPointAccessor().EndPoint.Port);
-
-            // Check browser access
-            using var browserHttpClient = new HttpClient(new HttpClientHandler
-            {
-                ServerCertificateCustomValidationCallback = (message, cert, chain, errors) =>
-                {
-                    return true;
-                }
-            })
-            {
-                BaseAddress = new Uri($"https://{app.FrontendSingleEndPointAccessor().EndPoint}")
-            };
-            var request = new HttpRequestMessage(HttpMethod.Get, "/");
-            var response = await browserHttpClient.SendAsync(request).DefaultTimeout();
-            response.EnsureSuccessStatusCode();
-
-            // Check OTLP service
-            using var channel = IntegrationTestHelpers.CreateGrpcChannel($"https://{app.FrontendSingleEndPointAccessor().EndPoint}", testOutputHelper);
-            var client = new LogsService.LogsServiceClient(channel);
-            var serviceResponse = await client.ExportAsync(new ExportLogsServiceRequest()).ResponseAsync.DefaultTimeout();
-            Assert.Equal(0, serviceResponse.PartialSuccess.RejectedLogRecords);
-
-            // Check MCP service
-            using var mcpHttpClient = new HttpClient(new HttpClientHandler
-            {
-                ServerCertificateCustomValidationCallback = (message, cert, chain, errors) =>
-                {
-                    return true;
-                }
-            })
-            {
-                BaseAddress = new Uri($"https://{app.McpEndPointAccessor().EndPoint}")
-            };
-            var mcpRequest = McpServiceTests.CreateListToolsRequest();
-
-            var responseMessage = await mcpHttpClient.SendAsync(mcpRequest).DefaultTimeout(TestConstants.LongTimeoutDuration);
-            responseMessage.EnsureSuccessStatusCode();
-
-            var responseData = await McpServiceTests.GetDataFromSseResponseAsync(responseMessage);
-
-            var jsonResponse = JsonNode.Parse(responseData!)!;
-            var tools = jsonResponse["result"]!["tools"]!.AsArray();
-
-            Assert.NotEmpty(tools);
         }
         finally
         {
@@ -630,7 +563,8 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
     public async Task Configuration_Logging_FileConfig_OverrideDefaults(string dashboardConfigFilePathNameKey)
     {
         // Arrange
-        var configFilePath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        var tempDirectory = Directory.CreateTempSubdirectory();
+        var configFilePath = Path.Combine(tempDirectory.FullName, Path.GetRandomFileName());
         var configJson = new JsonObject
         {
             ["Logging"] = new JsonObject
@@ -666,7 +600,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         }
         finally
         {
-            File.Delete(configFilePath);
+            Directory.Delete(tempDirectory.FullName, recursive: true);
         }
     }
 
@@ -710,19 +644,12 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
             },
             w =>
             {
-                Assert.Equal("MCP listening on: {McpEndpointUri}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
-
-                var uri = new Uri((string)LogTestHelpers.GetValue(w, "McpEndpointUri")!);
-                Assert.NotEqual(0, uri.Port);
-            },
-            w =>
-            {
                 Assert.Equal("OTLP server is unsecured. Untrusted apps can send telemetry to the dashboard. For more information, visit https://go.microsoft.com/fwlink/?linkid=2267030", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
                 Assert.Equal(LogLevel.Warning, w.LogLevel);
             },
             w =>
             {
-                Assert.Equal("MCP server is unsecured. Untrusted apps can access sensitive information.", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
+                Assert.Equal("Dashboard API is unsecured. Untrusted apps can access sensitive telemetry data.", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
                 Assert.Equal(LogLevel.Warning, w.LogLevel);
             });
     }
@@ -746,7 +673,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         // Assert
         var l = testSink.Writes.Where(w => w.LoggerName == typeof(DashboardWebApplication).FullName && w.LogLevel >= LogLevel.Information).ToList();
         
-        // Should have version, frontend, MCP, and MCP warning logs, but no OTLP logs
+        // Should have version, frontend, and API warning logs, but no OTLP logs
         Assert.Collection(l,
             w =>
             {
@@ -758,13 +685,56 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
             },
             w =>
             {
-                Assert.Equal("MCP listening on: {McpEndpointUri}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
-            },
-            w =>
-            {
-                Assert.Equal("MCP server is unsecured. Untrusted apps can access sensitive information.", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
+                Assert.Equal("Dashboard API is unsecured. Untrusted apps can access sensitive telemetry data.", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
                 Assert.Equal(LogLevel.Warning, w.LogLevel);
             });
+    }
+
+    [Theory]
+    [InlineData(null, HttpStatusCode.NotFound)]
+    [InlineData(true, HttpStatusCode.OK)]
+    [InlineData(false, HttpStatusCode.NotFound)]
+    public async Task ApiEnabled_ReturnsExpectedStatusAndWarning(bool? enabled, HttpStatusCode expectedStatusCode)
+    {
+        const string ApiUnsecuredWarning = "Dashboard API is unsecured. Untrusted apps can access sensitive telemetry data.";
+
+        // Arrange
+        var testSink = new TestSink();
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
+            additionalConfiguration: config =>
+            {
+                if (enabled is not null)
+                {
+                    config[DashboardConfigNames.DashboardApiEnabledName.ConfigKey] = enabled.Value.ToString();
+                }
+                else
+                {
+                    config.Remove(DashboardConfigNames.DashboardApiEnabledName.ConfigKey);
+                }
+            },
+            testSink: testSink);
+        await app.StartAsync().DefaultTimeout();
+
+        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
+
+        // Act
+        var response = await httpClient.GetAsync("/api/telemetry/spans").DefaultTimeout();
+
+        // Assert
+        Assert.Equal(expectedStatusCode, response.StatusCode);
+
+        var warnings = testSink.Writes
+            .Where(w => w.LoggerName == typeof(DashboardWebApplication).FullName && w.LogLevel >= LogLevel.Warning)
+            .ToList();
+
+        if (enabled == true)
+        {
+            Assert.Contains(warnings, w => LogTestHelpers.GetValue(w, "{OriginalFormat}")?.ToString() == ApiUnsecuredWarning);
+        }
+        else
+        {
+            Assert.DoesNotContain(warnings, w => LogTestHelpers.GetValue(w, "{OriginalFormat}")?.ToString() == ApiUnsecuredWarning);
+        }
     }
 
     [Fact]
@@ -801,7 +771,6 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
                         data[DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = $"https://localhost:{frontendPort1};http://localhost:{frontendPort2}";
                         data[DashboardConfigNames.DashboardOtlpGrpcUrlName.ConfigKey] = $"http://localhost:{otlpGrpcPort}";
                         data[DashboardConfigNames.DashboardOtlpHttpUrlName.ConfigKey] = $"http://localhost:{otlpHttpPort}";
-                        data[DashboardConfigNames.DashboardMcpUrlName.ConfigKey] = "http://127.0.0.1:0"; // Test that a dynamic port has a set value in logs.
                     });
 
                 // Act
@@ -848,19 +817,12 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
             },
             w =>
             {
-                Assert.Equal("MCP listening on: {McpEndpointUri}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
-
-                var uri = new Uri((string)LogTestHelpers.GetValue(w, "McpEndpointUri")!);
-                Assert.NotEqual(0, uri.Port); // Check that allocated port is in log message
-            },
-            w =>
-            {
                 Assert.Equal("OTLP server is unsecured. Untrusted apps can send telemetry to the dashboard. For more information, visit https://go.microsoft.com/fwlink/?linkid=2267030", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
                 Assert.Equal(LogLevel.Warning, w.LogLevel);
             },
             w =>
             {
-                Assert.Equal("MCP server is unsecured. Untrusted apps can access sensitive information.", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
+                Assert.Equal("Dashboard API is unsecured. Untrusted apps can access sensitive telemetry data.", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
                 Assert.Equal(LogLevel.Warning, w.LogLevel);
             });
     }
@@ -1041,6 +1003,59 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         // Assert
         Assert.Equal(value, app.DashboardOptionsMonitor.CurrentValue.AI.Disabled);
         Assert.Equal(!(value ?? false), aiContextProvider.Enabled);
+    }
+
+    [Fact]
+    public async Task Run_AddressAlreadyInUse_ReturnsExitCodeAddressInUse()
+    {
+        // Bind a port so the dashboard can't use it.
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+
+        await using var app = new DashboardWebApplication(preConfigureBuilder: builder =>
+        {
+            RemoveEnvironmentVariableSources(builder);
+            builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = $"http://127.0.0.1:{port}",
+                [DashboardConfigNames.DashboardOtlpGrpcUrlName.ConfigKey] = "http://127.0.0.1:0",
+                [DashboardConfigNames.DashboardOtlpHttpUrlName.ConfigKey] = "http://127.0.0.1:0",
+                [DashboardConfigNames.DashboardOtlpAuthModeName.ConfigKey] = nameof(OtlpAuthMode.Unsecured),
+                [DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = nameof(FrontendAuthMode.Unsecured),
+            });
+        });
+
+        var exitCode = app.Run();
+
+        Assert.Equal(DashboardWebApplication.ExitCodeAddressInUse, exitCode);
+    }
+
+    [Fact]
+    public async Task Run_ValidationFailure_ReturnsExitCodeValidationFailure()
+    {
+        // Omit required configuration so the dashboard fails validation.
+        await using var app = new DashboardWebApplication(preConfigureBuilder: builder =>
+        {
+            RemoveEnvironmentVariableSources(builder);
+            // No frontend URL or auth mode configured — validation will fail.
+        });
+
+        var exitCode = app.Run();
+
+        Assert.Equal(DashboardWebApplication.ExitCodeValidationFailure, exitCode);
+    }
+
+    private static void RemoveEnvironmentVariableSources(WebApplicationBuilder builder)
+    {
+        var sources = ((IConfigurationBuilder)builder.Configuration).Sources;
+        foreach (var item in sources.ToList())
+        {
+            if (item is EnvironmentVariablesConfigurationSource)
+            {
+                sources.Remove(item);
+            }
+        }
     }
 
     private static void AssertIPv4OrIPv6Endpoint(Func<ResolvedEndpointInfo> endPointAccessor)

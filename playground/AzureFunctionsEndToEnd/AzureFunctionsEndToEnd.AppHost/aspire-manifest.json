@@ -1,5 +1,4 @@
 {
-  "$schema": "https://json.schemastore.org/aspire-8.0.json",
   "resources": {
     "env-acr": {
       "type": "azure.bicep.v0",
@@ -84,6 +83,7 @@
           "funcstorage67c6c_outputs_blobendpoint": "{funcstorage67c6c.outputs.blobEndpoint}",
           "funcstorage67c6c_outputs_queueendpoint": "{funcstorage67c6c.outputs.queueEndpoint}",
           "funcstorage67c6c_outputs_tableendpoint": "{funcstorage67c6c.outputs.tableEndpoint}",
+          "funcstorage67c6c_outputs_datalakeendpoint": "{funcstorage67c6c.outputs.dataLakeEndpoint}",
           "eventhubs_outputs_eventhubsendpoint": "{eventhubs.outputs.eventHubsEndpoint}",
           "messaging_outputs_servicebusendpoint": "{messaging.outputs.serviceBusEndpoint}",
           "cosmosdb_outputs_connectionstring": "{cosmosdb.outputs.connectionString}",
@@ -101,9 +101,11 @@
         "AzureWebJobsStorage__blobServiceUri": "{funcstorage67c6c.outputs.blobEndpoint}",
         "AzureWebJobsStorage__queueServiceUri": "{funcstorage67c6c.outputs.queueEndpoint}",
         "AzureWebJobsStorage__tableServiceUri": "{funcstorage67c6c.outputs.tableEndpoint}",
+        "AzureWebJobsStorage__dataLakeServiceUri": "{funcstorage67c6c.outputs.dataLakeEndpoint}",
         "Aspire__Azure__Storage__Blobs__AzureWebJobsStorage__ServiceUri": "{funcstorage67c6c.outputs.blobEndpoint}",
         "Aspire__Azure__Storage__Queues__AzureWebJobsStorage__ServiceUri": "{funcstorage67c6c.outputs.queueEndpoint}",
         "Aspire__Azure__Data__Tables__AzureWebJobsStorage__ServiceUri": "{funcstorage67c6c.outputs.tableEndpoint}",
+        "Aspire__Azure__Storage__Files__DataLake__AzureWebJobsStorage__ServiceUri": "{funcstorage67c6c.outputs.dataLakeEndpoint}",
         "myhub__fullyQualifiedNamespace": "{eventhubs.outputs.eventHubsEndpoint}",
         "Aspire__Azure__Messaging__EventHubs__EventHubProducerClient__myhub__FullyQualifiedNamespace": "{eventhubs.outputs.eventHubsEndpoint}",
         "Aspire__Azure__Messaging__EventHubs__EventHubConsumerClient__myhub__FullyQualifiedNamespace": "{eventhubs.outputs.eventHubsEndpoint}",

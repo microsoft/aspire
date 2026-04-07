@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
 using Confluent.Kafka;
 using HealthChecks.Kafka;
@@ -30,6 +29,7 @@ public static class KafkaBuilderExtensions
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency</param>
     /// <param name="port">The host port of Kafka broker.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KafkaServerResource}"/>.</returns>
+    [AspireExport(Description = "Adds a Kafka container resource")]
     public static IResourceBuilder<KafkaServerResource> AddKafka(this IDistributedApplicationBuilder builder, [ResourceName] string name, int? port = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -89,6 +89,7 @@ public static class KafkaBuilderExtensions
     /// <param name="configureContainer">Configuration callback for KafkaUI container resource.</param>
     /// <param name="containerName">The name of the container (Optional).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KafkaServerResource}"/>.</returns>
+    [AspireExport(Description = "Adds a Kafka UI container to manage the Kafka resource", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<KafkaServerResource> WithKafkaUI(this IResourceBuilder<KafkaServerResource> builder, Action<IResourceBuilder<KafkaUIContainerResource>>? configureContainer = null, string? containerName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -152,6 +153,7 @@ public static class KafkaBuilderExtensions
     /// <param name="builder">The resource builder for KafkaUI.</param>
     /// <param name="port">The port to bind on the host. If <see langword="null"/> is used random port will be assigned.</param>
     /// <returns>The resource builder for KafkaUI.</returns>
+    [AspireExport(Description = "Sets the host port for the Kafka UI container")]
     public static IResourceBuilder<KafkaUIContainerResource> WithHostPort(this IResourceBuilder<KafkaUIContainerResource> builder, int? port)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -169,6 +171,7 @@ public static class KafkaBuilderExtensions
     /// <param name="name">The name of the volume. Defaults to an auto-generated name based on the application and resource names.</param>
     /// <param name="isReadOnly">A flag that indicates if this is a read-only volume.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport(Description = "Adds a data volume to the Kafka container")]
     public static IResourceBuilder<KafkaServerResource> WithDataVolume(this IResourceBuilder<KafkaServerResource> builder, string? name = null, bool isReadOnly = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -185,6 +188,7 @@ public static class KafkaBuilderExtensions
     /// <param name="source">The source directory on the host to mount into the container.</param>
     /// <param name="isReadOnly">A flag that indicates if this is a read-only mount.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport(Description = "Adds a data bind mount to the Kafka container")]
     public static IResourceBuilder<KafkaServerResource> WithDataBindMount(this IResourceBuilder<KafkaServerResource> builder, string source, bool isReadOnly = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -215,7 +219,7 @@ public static class KafkaBuilderExtensions
         var advertisedListeners = context.ExecutionContext.IsRunMode
             // In run mode, PLAINTEXT_INTERNAL assumes kafka is being accessed over a default Aspire container network and hardcodes the resource address
             // This will need to be refactored once updated service discovery APIs are available
-            ? ReferenceExpression.Create($"PLAINTEXT://localhost:29092,PLAINTEXT_HOST://localhost:{primaryEndpoint.Port.ToString(CultureInfo.InvariantCulture)},PLAINTEXT_INTERNAL://{resource.Name}:{internalEndpoint.Property(EndpointProperty.TargetPort)}")
+            ? ReferenceExpression.Create($"PLAINTEXT://localhost:29092,PLAINTEXT_HOST://localhost:{primaryEndpoint.Property(EndpointProperty.Port)},PLAINTEXT_INTERNAL://{resource.Name}:{internalEndpoint.Property(EndpointProperty.TargetPort)}")
             : ReferenceExpression.Create($"PLAINTEXT://{primaryEndpoint.Property(EndpointProperty.Host)}:29092,PLAINTEXT_HOST://{primaryEndpoint.Property(EndpointProperty.HostAndPort)},PLAINTEXT_INTERNAL://{internalEndpoint.Property(EndpointProperty.HostAndPort)}");
 
         context.EnvironmentVariables["KAFKA_ADVERTISED_LISTENERS"] = advertisedListeners;

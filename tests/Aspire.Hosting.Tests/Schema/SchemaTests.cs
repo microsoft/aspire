@@ -13,6 +13,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests.Schema;
 
+[Trait("Partition", "4")]
 public class SchemaTests
 {
     public static TheoryData<string, Action<IDistributedApplicationBuilder>> ApplicationSamples

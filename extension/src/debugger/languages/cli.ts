@@ -20,8 +20,6 @@ export interface SpawnProcessOptions {
 
 export function spawnCliProcess(terminalProvider: AspireTerminalProvider, command: string, args?: string[], options?: SpawnProcessOptions): ChildProcessWithoutNullStreams {
     const workingDirectory = options?.workingDirectory ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
-    extensionLogOutputChannel.info(`Spawning CLI process: ${command} ${args?.join(" ")} (working directory: ${workingDirectory})`);
-
     const env = {};
 
     Object.assign(env, terminalProvider.createEnvironment(options?.debugSessionId, options?.noDebug, options?.noExtensionVariables));
