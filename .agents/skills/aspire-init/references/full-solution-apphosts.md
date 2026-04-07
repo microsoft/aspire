@@ -177,7 +177,7 @@ Before declaring success:
 1. The AppHost project builds under its intended SDK boundary.
 2. The root solution still behaves the way the user expects, or the user has explicitly accepted any tradeoff.
 3. Any ServiceDefaults changes compile in the selected services.
-4. `aspire start` works from the AppHost context.
+4. `aspire start` works from the AppHost context, and long-lived app resources are healthy rather than merely `Finished`.
 5. Legacy `IHostBuilder` services were either modernized intentionally or explicitly left unchanged.
 
 ## When to ask the user instead of deciding

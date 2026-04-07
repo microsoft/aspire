@@ -773,7 +773,19 @@ Once the app is running, use the Aspire CLI to verify everything is wired up cor
 4. **No startup errors**: `aspire logs <resource>` — check logs for each resource to ensure clean startup with no crashes, missing config, or connection failures.
 5. **Dashboard is accessible**: Confirm the dashboard URL (including the login token) is printed and can be opened. The full URL looks like `http://localhost:18888/login?t=<token>` — always include the token.
 
-**This skill is not done until `aspire start` runs without errors and all resources are healthy.** If anything fails, diagnose, fix, and run `aspire start` again. Keep iterating until it works — do not move on to Step 11 with a broken app.
+**This skill is not done until `aspire start` runs without errors and every resource is in an expected terminal/runtime state.** Acceptable end states are:
+
+- **Healthy / Running** for long-lived services
+- **Finished** only for resources that were intentionally modeled as one-shot tasks (for example migrations or seed steps) **and** only if they exited cleanly with no errors
+- **Not started** only when that is intentional and understood (for example, an optional resource the user chose not to run yet)
+
+Treat these as failure states unless you intentionally designed for them:
+
+- **Finished** for long-lived APIs, frontends, workers, or databases
+- **Finished** after an exception, crash, or non-zero exit
+- unhealthy, degraded, failed, or crash-looping resources
+
+If anything lands in an unexpected state, diagnose it, fix it, and run `aspire start` again. Keep iterating until the app behaves as expected — do not move on to Step 11 with crash-shaped "success".
 
 Once everything is healthy, print a summary for the user:
 
@@ -790,7 +802,7 @@ Resources:
 <any notes about optional steps skipped, e.g., "OTel not configured — run the aspire skill to add it later">
 ```
 
-Get the dashboard URL from `aspire start` output (always include the `?t=<token>` parameter). Get resource status from `aspire describe`. This summary is the user's confirmation that init worked — make it complete and accurate.
+Get the dashboard URL from `aspire start` output (always include the `?t=<token>` parameter). Get resource status from `aspire describe`. If any resource shows `Finished`, confirm from logs that it was an intentional one-shot resource that exited successfully before including it as success. This summary is the user's confirmation that init worked — make it complete and accurate.
 
 Common issues:
 
