@@ -467,6 +467,11 @@
         <target state="new">No notifications</target>
         <note />
       </trans-unit>
+      <trans-unit id="NotificationEntryDismiss">
+        <source>Dismiss notification</source>
+        <target state="new">Dismiss notification</target>
+        <note />
+      </trans-unit>
       <trans-unit id="OpenInTextVisualizer">
         <source>Open in text visualizer</source>
         <target state="translated">Ouvrir dans le visualiseur de texte</target>

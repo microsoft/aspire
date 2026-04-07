@@ -271,6 +271,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.TryAddSingleton<IDashboardClient, DashboardClient>();
 
         builder.Services.TryAddSingleton<INotificationService, NotificationService>();
+        builder.Services.TryAddSingleton(TimeProvider.System);
         builder.Services.TryAddScoped<DashboardCommandExecutor>();
 
         builder.Services.AddSingleton<PauseManager>();

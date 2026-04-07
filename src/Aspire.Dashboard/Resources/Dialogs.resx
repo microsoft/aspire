@@ -501,4 +501,7 @@
   <data name="NotificationCenterEmpty" xml:space="preserve">
     <value>No notifications</value>
   </data>
+  <data name="NotificationEntryDismiss" xml:space="preserve">
+    <value>Dismiss notification</value>
+  </data>
 </root>

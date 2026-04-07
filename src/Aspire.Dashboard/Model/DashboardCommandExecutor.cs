@@ -104,7 +104,6 @@ public sealed class DashboardCommandExecutor(
         {
             Title = messageBarStartingTitle,
             Intent = MessageIntent.Info,
-            Timestamp = DateTime.Now
         });
 
         // When a resource command starts a toast is immediately shown.
@@ -132,6 +131,9 @@ public sealed class DashboardCommandExecutor(
         };
 
         ResourceCommandResponseViewModel response;
+        // The CTS intentionally outlives the command execution to ensure we can close the toast in all scenarios
+        // e.g., even if the command execution fails or the toast is still open when the command finishes.
+        // It's ok to let it be cleaned up by GC when the short CancelAfter completes.
         var closeToastCts = new CancellationTokenSource();
         try
         {
@@ -171,7 +173,6 @@ public sealed class DashboardCommandExecutor(
                 Title = successTitle,
                 Body = response.Message,
                 Intent = MessageIntent.Success,
-                Timestamp = DateTime.Now,
                 PrimaryAction = response.Result is not null ? CreateViewResponseNotificationAction(command, response) : null
             });
 
@@ -213,7 +214,6 @@ public sealed class DashboardCommandExecutor(
                 Title = failedTitle,
                 Body = response.Message,
                 Intent = MessageIntent.Error,
-                Timestamp = DateTime.Now,
                 PrimaryAction = response.Result is not null ? CreateViewResponseNotificationAction(command, response) : null
             });
 

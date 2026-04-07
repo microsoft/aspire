@@ -6,8 +6,10 @@ namespace Aspire.Dashboard.Model;
 /// <summary>
 /// Thread-safe singleton implementation of <see cref="INotificationService"/>.
 /// </summary>
-internal sealed class NotificationService : INotificationService
+internal sealed class NotificationService(TimeProvider timeProvider) : INotificationService
 {
+    private const int MaxNotifications = 100;
+
     private readonly object _lock = new();
     private readonly List<(string Id, NotificationEntry Entry)> _notifications = [];
     private int _unreadCount;
@@ -43,11 +45,18 @@ internal sealed class NotificationService : INotificationService
 
     public string AddNotification(NotificationEntry notification)
     {
+        notification.Timestamp = timeProvider.GetUtcNow();
         var id = Guid.NewGuid().ToString("N");
         lock (_lock)
         {
             _notifications.Add((id, notification));
             _unreadCount++;
+
+            // Remove oldest notifications when the limit is exceeded.
+            while (_notifications.Count > MaxNotifications)
+            {
+                _notifications.RemoveAt(0);
+            }
         }
 
         OnChange?.Invoke();
@@ -56,6 +65,7 @@ internal sealed class NotificationService : INotificationService
 
     public void ReplaceNotification(string id, NotificationEntry notification)
     {
+        notification.Timestamp = timeProvider.GetUtcNow();
         lock (_lock)
         {
             for (var i = 0; i < _notifications.Count; i++)

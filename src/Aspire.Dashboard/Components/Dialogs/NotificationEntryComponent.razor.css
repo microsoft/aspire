@@ -6,24 +6,24 @@
     width: 100%;
     min-height: 36px;
     padding: 0 8px;
-    column-gap: 8px;
+    column-gap: 4px;
     border-top: calc(var(--stroke-width) * 1px) solid var(--neutral-stroke-divider-rest);
 }
 
 .notification-entry.intent-info {
-    fill: #797775;
+    fill: var(--info);
 }
 
 .notification-entry.intent-warning {
-    fill: #d83b01;
+    fill: var(--warning);
 }
 
 .notification-entry.intent-error {
-    fill: #a80000;
+    fill: var(--error);
 }
 
 .notification-entry.intent-success {
-    fill: #107c10;
+    fill: var(--success);
 }
 
 .notification-entry-icon {

@@ -1184,5 +1184,14 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("NotificationCenterEmpty", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Dismiss notification.
+        /// </summary>
+        public static string NotificationEntryDismiss {
+            get {
+                return ResourceManager.GetString("NotificationEntryDismiss", resourceCulture);
+            }
+        }
     }
 }

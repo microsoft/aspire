@@ -62,7 +62,7 @@ public sealed class NotificationEntry
     public required string Title { get; init; }
     public string? Body { get; init; }
     public required MessageIntent Intent { get; init; }
-    public DateTime Timestamp { get; init; } = DateTime.Now;
+    public DateTimeOffset Timestamp { get; set; }
     public NotificationAction? PrimaryAction { get; init; }
 }
 
