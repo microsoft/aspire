@@ -44,17 +44,49 @@ If you're unsure whether something is a service, whether two services depend on 
 
 ### Always use latest Aspire APIs — verify before you write
 
-**Do not assume APIs exist.** Aspire evolves fast and community toolkit packages may or may not be available. Before writing any AppHost code:
+**Do not assume APIs exist.** Aspire evolves fast. Before writing any AppHost code, look up the correct API. Follow this **tiered preference** when choosing how to model a resource:
 
-1. Run `aspire docs search "<resource type>"` to find the correct builder method
-2. Run `aspire docs get "<slug>"` to read the full API surface
-3. If an API doesn't exist (e.g., there's no `AddGolangApp`), fall back to `AddDockerfile()` or `AddContainer()` and note it to the user
-4. For TypeScript, check `.modules/aspire.ts` after `aspire restore` to see what's actually available
+#### Tier 1: First-party Aspire hosting packages (always prefer)
 
-Common pitfalls:
-- **Don't invent APIs** — if `aspire docs search` doesn't return it, it probably doesn't exist
-- **CommunityToolkit packages** may not be installed by default — verify with `aspire docs search` before referencing them
-- **API shapes differ between C# and TypeScript** — always check the correct language docs
+Packages named `Aspire.Hosting.*` — these are maintained by the Aspire team and ship with every release. Examples:
+
+| Package | Unlocks |
+|---------|---------|
+| `Aspire.Hosting.Python` | `AddPythonApp()`, `AddUvicornApp()` |
+| `Aspire.Hosting.NodeJs` | `AddNodeApp()`, `AddNpmApp()`, `AddViteApp()` |
+| `Aspire.Hosting.JavaScript` | Additional JavaScript hosting support |
+| `Aspire.Hosting.PostgreSQL` | `AddPostgres()`, `AddDatabase()` |
+| `Aspire.Hosting.Redis` | `AddRedis()` |
+
+#### Tier 2: Community Toolkit packages (use when no first-party exists)
+
+Packages named `CommunityToolkit.Aspire.Hosting.*` — maintained by the community, documented on aspire.dev, and installable via `aspire add`. Examples:
+
+| Package | Unlocks |
+|---------|---------|
+| `CommunityToolkit.Aspire.Hosting.Golang` | `AddGolangApp()` — handles `go run .`, working dir, PORT env |
+| `CommunityToolkit.Aspire.Hosting.Rust` | `AddRustApp()` |
+| `CommunityToolkit.Aspire.Hosting.Java` | Java hosting support |
+
+These provide typed APIs with proper endpoint handling, health checks, and dashboard integration — significantly better than raw executables.
+
+#### Tier 3: Raw fallbacks (last resort)
+
+`AddExecutable()`, `AddDockerfile()`, `AddContainer()` — use only when no Tier 1 or Tier 2 package exists for the technology, or when the user's setup is too custom for a typed integration.
+
+#### How to discover available packages
+
+Before writing any builder call:
+
+1. Run `aspire docs search "<technology>"` (e.g., `aspire docs search "golang"`, `aspire docs search "python"`)
+2. Run `aspire docs get "<slug>"` to read the full API surface and installation instructions
+3. Run `aspire list integrations` to see all available packages (first-party and community toolkit)
+4. Install with `aspire add <integration-name>` (e.g., `aspire add communitytoolkit-golang`)
+5. For TypeScript, run `aspire restore` then check `.modules/aspire.ts` to see what's available
+
+**Don't invent APIs** — if the docs search and integration list don't return it, it doesn't exist. Fall back to Tier 3 and note the limitation to the user.
+
+**API shapes differ between C# and TypeScript** — always check the correct language docs.
 
 ### Optimize for local dev, not deployment
 
@@ -283,22 +315,33 @@ dotnet add <AppHost.csproj> reference <Web.csproj>
 #### Non-.NET services in a C# AppHost
 
 ```csharp
-// Node.js app (requires Aspire.Hosting.NodeJs)
+// Node.js app (Tier 1: Aspire.Hosting.NodeJs)
 var frontend = builder.AddNpmApp("frontend", "../frontend", "start");
 
-// Dockerfile-based service
-var worker = builder.AddDockerfile("worker", "../worker");
-
-// Python app (requires Aspire.Hosting.Python)
+// Python app (Tier 1: Aspire.Hosting.Python)
 var pyApi = builder.AddPythonApp("py-api", "../py-api", "app.py");
+
+// Go app (Tier 2: CommunityToolkit.Aspire.Hosting.Golang)
+var goApi = builder.AddGolangApp("go-api", "../go-api")
+    .WithHttpEndpoint(env: "PORT");
+
+// Dockerfile-based service (Tier 3: fallback for unsupported languages)
+var worker = builder.AddDockerfile("worker", "../worker");
 ```
 
-Add required hosting NuGet packages:
+Add required hosting packages — use `aspire add` or `dotnet add package`:
 
 ```bash
-dotnet add <AppHost.csproj> package Aspire.Hosting.NodeJs
-dotnet add <AppHost.csproj> package Aspire.Hosting.Python
+# Tier 1: first-party
+aspire add nodejs    # or: dotnet add <AppHost.csproj> package Aspire.Hosting.NodeJs
+aspire add python    # or: dotnet add <AppHost.csproj> package Aspire.Hosting.Python
+
+# Tier 2: community toolkit
+aspire add communitytoolkit-golang
+# or: dotnet add <AppHost.csproj> package CommunityToolkit.Aspire.Hosting.Golang
 ```
+
+Always check `aspire list integrations` and `aspire docs search "<language>"` to find the best available integration before falling back to `AddExecutable`/`AddDockerfile`.
 
 **Important rules:**
 
@@ -594,28 +637,40 @@ After successful validation:
 
 ## Looking up APIs and integrations
 
-Before writing AppHost code for an unfamiliar resource type or integration, **always** look it up:
+Before writing AppHost code for an unfamiliar resource type or integration, **always** look it up. Follow the tiered preference from the principles section (first-party → community toolkit → raw fallbacks).
 
 ```bash
 # Search for documentation on a topic
 aspire docs search "redis"
-aspire docs search "node app endpoints"
+aspire docs search "golang"
+aspire docs search "python uvicorn"
 
 # Get a specific doc page by slug (returned from search results)
 aspire docs get "redis-integration"
+aspire docs get "go-integration"
+
+# List ALL available integrations (first-party and community toolkit)
+aspire list integrations
 ```
 
-Use `aspire docs search` to find the right builder methods, configuration options, and patterns. Use `aspire docs get <slug>` to read the full doc page. Do not guess API shapes — Aspire has many resource types with specific overloads.
+Use `aspire docs search` to find the right builder methods, configuration options, and patterns. Use `aspire docs get <slug>` to read the full doc page. Use `aspire list integrations` to discover packages you might not have known about. Do not guess API shapes — Aspire has many resource types with specific overloads.
 
 To add an integration package (which unlocks typed builder methods):
 
 ```bash
-aspire add Aspire.Hosting.Redis
-aspire add Aspire.Hosting.NodeJs
-aspire add Aspire.Hosting.Python
+# First-party
+aspire add redis
+aspire add python
+aspire add nodejs
+
+# Community Toolkit
+aspire add communitytoolkit-golang
+aspire add communitytoolkit-rust
 ```
 
 After adding, run `aspire restore` (TypeScript) or `dotnet restore` (C#) to update available APIs, then check what methods are now available.
+
+**Always prefer a typed integration over raw `AddExecutable`/`AddContainer`.** Typed integrations handle working directories, port injection, health checks, and dashboard integration automatically.
 
 ## AppHost wiring reference
 
