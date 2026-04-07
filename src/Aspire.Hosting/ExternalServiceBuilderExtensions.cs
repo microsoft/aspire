@@ -313,11 +313,14 @@ internal static class HttpHealthCheckHelpers
     /// <summary>
     /// Gets a friendly error message for the given exception.
     /// </summary>
-    public static string GetFriendlyErrorMessage(Uri uri, Exception exception)
+    public static string GetFriendlyErrorMessage(Uri uri, Exception exception, CancellationToken cancellationToken)
     {
         return exception switch
         {
-            TaskCanceledException or OperationCanceledException => $"Request to {uri} timed out.",
+            TaskCanceledException or OperationCanceledException when cancellationToken.IsCancellationRequested
+                => $"Health check for {uri} was canceled.",
+            TaskCanceledException or OperationCanceledException
+                => $"Request to {uri} timed out.",
             HttpRequestException hre when hre.StatusCode.HasValue =>
                 $"Request to {uri} returned {(int)hre.StatusCode.Value} {hre.StatusCode.Value}.",
             HttpRequestException => $"Failed to connect to {uri}.",
@@ -355,7 +358,7 @@ internal sealed class StaticUriHealthCheck : IHealthCheck
             if (result.Status == HealthStatus.Unhealthy)
             {
                 var friendlyMessage = result.Exception is not null
-                    ? HttpHealthCheckHelpers.GetFriendlyErrorMessage(_uri, result.Exception)
+                    ? HttpHealthCheckHelpers.GetFriendlyErrorMessage(_uri, result.Exception, cancellationToken)
                     : $"Health check failed for {_uri}.";
                 return HealthCheckResult.Unhealthy(friendlyMessage, result.Exception);
             }
@@ -364,7 +367,7 @@ internal sealed class StaticUriHealthCheck : IHealthCheck
         }
         catch (Exception ex)
         {
-            var friendlyMessage = HttpHealthCheckHelpers.GetFriendlyErrorMessage(_uri, ex);
+            var friendlyMessage = HttpHealthCheckHelpers.GetFriendlyErrorMessage(_uri, ex, cancellationToken);
             return HealthCheckResult.Unhealthy(friendlyMessage, ex);
         }
     }
@@ -428,7 +431,7 @@ internal sealed class ParameterUriHealthCheck : IHealthCheck
             if (result.Status == HealthStatus.Unhealthy)
             {
                 var friendlyMessage = result.Exception is not null
-                    ? HttpHealthCheckHelpers.GetFriendlyErrorMessage(targetUri, result.Exception)
+                    ? HttpHealthCheckHelpers.GetFriendlyErrorMessage(targetUri, result.Exception, cancellationToken)
                     : $"Health check failed for {targetUri}.";
                 return HealthCheckResult.Unhealthy(friendlyMessage, result.Exception);
             }
@@ -439,7 +442,7 @@ internal sealed class ParameterUriHealthCheck : IHealthCheck
         {
             if (targetUri is not null)
             {
-                var friendlyMessage = HttpHealthCheckHelpers.GetFriendlyErrorMessage(targetUri, ex);
+                var friendlyMessage = HttpHealthCheckHelpers.GetFriendlyErrorMessage(targetUri, ex, cancellationToken);
                 return HealthCheckResult.Unhealthy(friendlyMessage, ex);
             }
 

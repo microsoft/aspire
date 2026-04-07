@@ -45,7 +45,8 @@ public class FriendlyHealthCheckErrorMessagesTests(ITestOutputHelper testOutputH
         Assert.NotNull(entry.Description);
         Assert.True(
             entry.Description.Contains("timed out", StringComparison.OrdinalIgnoreCase) ||
-            entry.Description.Contains("Failed to connect", StringComparison.OrdinalIgnoreCase),
+            entry.Description.Contains("Failed to connect", StringComparison.OrdinalIgnoreCase) ||
+            entry.Description.Contains("was canceled", StringComparison.OrdinalIgnoreCase),
             $"Expected friendly error message, but got: {entry.Description}");
     }
 
@@ -84,7 +85,8 @@ public class FriendlyHealthCheckErrorMessagesTests(ITestOutputHelper testOutputH
         Assert.NotNull(entry.Description);
         Assert.True(
             entry.Description.Contains("timed out", StringComparison.OrdinalIgnoreCase) ||
-            entry.Description.Contains("Failed to connect", StringComparison.OrdinalIgnoreCase),
+            entry.Description.Contains("Failed to connect", StringComparison.OrdinalIgnoreCase) ||
+            entry.Description.Contains("was canceled", StringComparison.OrdinalIgnoreCase),
             $"Expected friendly error message, but got: {entry.Description}");
     }
 
