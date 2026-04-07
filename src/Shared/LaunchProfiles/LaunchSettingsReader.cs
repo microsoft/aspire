@@ -17,7 +17,7 @@ internal static class LaunchSettingsReader
     {
         var launchSettingsFilePath = directoryPath is null
             ? Path.Combine("Properties", "launchSettings.json")
-            : Path.Combine(directoryPath, "Properties", "launchSettings.json");
+            : Path.Combine(Path.GetFullPath(directoryPath), "Properties", "launchSettings.json");
 
         if (!File.Exists(launchSettingsFilePath))
         {
@@ -32,8 +32,8 @@ internal static class LaunchSettingsReader
     /// </summary>
     /// <param name="launchSettingsFilePath">The path to the launch settings file.</param>
     /// <param name="resourceIdentifier">A descriptive identifier used in error messages when JSON parsing fails.</param>
-    /// <returns>The deserialized <see cref="LaunchSettings"/>, or <see langword="null"/> if the file is empty.</returns>
-    /// <exception cref="DistributedApplicationException">Thrown when the file contains malformed JSON.</exception>
+    /// <returns>The deserialized <see cref="LaunchSettings"/>.</returns>
+    /// <exception cref="DistributedApplicationException">Thrown when the file is empty or contains malformed JSON.</exception>
     internal static LaunchSettings? ReadLaunchSettingsFile(string launchSettingsFilePath, string resourceIdentifier)
     {
         using var stream = File.OpenRead(launchSettingsFilePath);
