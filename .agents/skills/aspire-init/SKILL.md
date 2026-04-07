@@ -262,6 +262,35 @@ For C# AppHosts, there are two sub-modes:
 
 Check which mode you're in by looking at what exists at the `appHost.path` location.
 
+### Mixed SDK repos: keep a `.csproj` AppHost on .NET 10 without changing .NET 8 services
+
+This guidance is specifically for **full project mode** C# AppHosts (the AppHost has its own `.csproj`).
+
+Some repos pin the root `global.json` to an older SDK such as .NET 8. A `.csproj`-based Aspire AppHost should still stay on the current Aspire-supported SDK (for example, .NET 10), while the existing service projects can remain on `net8.0`.
+
+**Do not downgrade the AppHost project to match the repo's root SDK pin.** Instead, create an SDK boundary around the AppHost:
+
+- Keep the repo root `global.json` unchanged
+- Put the AppHost in its own directory
+- Add a **nested `global.json` next to the AppHost** that pins the newer SDK
+- Leave existing services targeting `net8.0`
+
+This works because the .NET 10 SDK can build and run `net8.0` projects just fine.
+
+**Important caveat:** if the repo's root solution is normally built from the repo root under SDK 8, do not assume that build can own a `net10.0` AppHost project. In mixed-SDK repos, prefer a **separate AppHost project folder** with a nested `global.json`, kept outside the repo's normal root-build path when necessary.
+
+If you use full project mode because a solution exists, be careful: adding a `net10.0` AppHost project to a root solution that is built under SDK 8 may break the repo's normal build. If that's likely, tell the user and prefer keeping the AppHost isolated rather than silently wiring it into the root solution.
+
+Example nested `global.json` beside the AppHost:
+
+```json
+{
+  "sdk": {
+    "version": "10.0.100"
+  }
+}
+```
+
 ## Workflow
 
 Follow these steps in order. If any step fails, diagnose and fix before continuing. **The goal is a working `aspire start` — keep going until every resource starts cleanly and the dashboard is accessible. Do not stop at partial success.**
