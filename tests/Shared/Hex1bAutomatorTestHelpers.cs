@@ -170,13 +170,39 @@ internal static class Hex1bAutomatorTestHelpers
     {
         var templateTimeout = TimeSpan.FromSeconds(60);
 
-        // Step 1: Type aspire new and wait for the template list
+        // Step 1: Type aspire new and wait for the template list or a version picker.
+        // When a non-default channel (e.g. "ci") is configured the CLI shows a version
+        // selection prompt before the template list.
         await auto.TypeAsync("aspire new");
         await auto.EnterAsync();
+
+        var waitingForTemplateList = new CellPatternSearcher().Find("> Starter App");
+        var waitingForVersionPicker = new CellPatternSearcher().Find("Select a version of");
+        var versionPickerShown = false;
+
         await auto.WaitUntilAsync(
-            s => new CellPatternSearcher().Find("> Starter App").Search(s).Count > 0,
+            s =>
+            {
+                if (waitingForVersionPicker.Search(s).Count > 0)
+                {
+                    versionPickerShown = true;
+                    return true;
+                }
+                return waitingForTemplateList.Search(s).Count > 0;
+            },
             timeout: templateTimeout,
-            description: "template selection list (> Starter App)");
+            description: "template selection list or version picker");
+
+        // If we landed on a version picker, accept the first (latest) version and then
+        // wait for the template list to appear.
+        if (versionPickerShown)
+        {
+            await auto.EnterAsync(); // Accept the first (pre-selected) version
+            await auto.WaitUntilAsync(
+                s => waitingForTemplateList.Search(s).Count > 0,
+                timeout: templateTimeout,
+                description: "template selection list (> Starter App) after version selection");
+        }
 
         // Step 2: Navigate to and select the desired template
         switch (template)
