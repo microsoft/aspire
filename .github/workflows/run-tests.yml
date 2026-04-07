@@ -39,7 +39,8 @@ on:
         required: false
         type: boolean
         default: false
-      # Controls whether to set CLI E2E environment variables (GH_TOKEN, GITHUB_PR_NUMBER, GITHUB_PR_HEAD_SHA)
+      # Controls whether to build and install the CLI from a native archive and set
+      # CLI E2E environment variables (ASPIRE_CLI_PATH_DIR, ASPIRE_CLI_VERSION, BUILT_NUGETS_PATH)
       requiresCliArchive:
         required: false
         type: boolean
@@ -202,6 +203,69 @@ jobs:
             Write-Host "Merged $($nupkgs.Count) arch-specific nugets for RID=$env:RID into $dest"
           }
 
+      - name: Download CLI archive (Linux)
+        if: ${{ inputs.requiresCliArchive && runner.os == 'Linux' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cli-native-archives-linux-x64
+          path: ${{ github.workspace }}/cli-archive
+
+      - name: Install CLI from archive (Linux)
+        if: ${{ inputs.requiresCliArchive && runner.os == 'Linux' }}
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.aspire/bin"
+
+          # Find the tar.gz archive (e.g., aspire-cli-linux-x64-13.3.0-preview.1.25234.2.tar.gz)
+          archive=$(find "${{ github.workspace }}/cli-archive" -name "aspire-cli-*.tar.gz" 2>/dev/null | head -1)
+
+          if [ -z "$archive" ]; then
+            echo "ERROR: No aspire-cli-*.tar.gz found in ${{ github.workspace }}/cli-archive"
+            ls -la "${{ github.workspace }}/cli-archive/" || true
+            exit 1
+          fi
+
+          echo "Installing CLI from: $archive"
+          tar -xzf "$archive" -C "$HOME/.aspire/bin"
+          chmod +x "$HOME/.aspire/bin/aspire"
+
+          # Verify installation (first run triggers self-extraction of embedded bundle).
+          # Capture and print the version to confirm the correct build was installed.
+          installed_version=$("$HOME/.aspire/bin/aspire" --version 2>&1)
+          if [ $? -ne 0 ]; then
+            echo "WARNING: 'aspire --version' exited non-zero. Output: $installed_version"
+          else
+            echo "Installed CLI version: $installed_version"
+          fi
+
+          # Add to PATH for subsequent steps and tests
+          echo "$HOME/.aspire/bin" >> $GITHUB_PATH
+
+          # Expose the install dir and commit SHA so tests can detect the pre-installed CLI
+          # and verify they are running the correct build.
+          echo "ASPIRE_CLI_PATH_DIR=$HOME/.aspire/bin" >> $GITHUB_ENV
+          echo "ASPIRE_CLI_VERSION=$installed_version" >> $GITHUB_ENV
+
+          # Set up NuGet hive from built packages so 'aspire new' / 'aspire add' can resolve
+          # CI-built packages without going to nuget.org.
+          NUGETS_PATH="${{ github.workspace }}/artifacts/packages/Debug/Shipping"
+          if [ -d "$NUGETS_PATH" ]; then
+            HIVE_DIR="$HOME/.aspire/hives/ci/packages"
+            mkdir -p "$HIVE_DIR"
+            if cp "$NUGETS_PATH"/*.nupkg "$HIVE_DIR/" 2>/dev/null; then
+              pkg_count=$(find "$HIVE_DIR" -name "*.nupkg" | wc -l)
+              echo "Copied $pkg_count packages to NuGet hive at $HIVE_DIR"
+            else
+              echo "WARNING: No .nupkg files found in $NUGETS_PATH — NuGet hive will be empty"
+            fi
+
+            # Configure the CLI channel to point to the local hive.
+            # Non-fatal: channel can be configured manually if this fails.
+            if ! "$HOME/.aspire/bin/aspire" config set channel ci --global --non-interactive 2>&1; then
+              echo "WARNING: Failed to set CLI channel to 'ci' — packages may be resolved from nuget.org"
+            fi
+          fi
+
       - name: Install sdk for nuget based testing
         if: ${{ inputs.requiresTestSdk }}
         run: >
@@ -328,10 +392,6 @@ jobs:
           TEST_LOG_PATH: ${{ github.workspace }}/artifacts/log/test-logs
           TestsRunningOutsideOfRepo: true
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
-          # PR metadata and token for CLI E2E tests that download artifacts from a PR
-          GITHUB_PR_NUMBER: ${{ inputs.requiresCliArchive && github.event.pull_request.number || '' }}
-          GITHUB_PR_HEAD_SHA: ${{ inputs.requiresCliArchive && github.event.pull_request.head.sha || '' }}
-          GH_TOKEN: ${{ inputs.requiresCliArchive && github.token || '' }}
         run: |
           # Start heartbeat monitor in background
           ${{ github.workspace }}/${{ env.DOTNET_SCRIPT }} ${{ github.workspace }}/tools/scripts/Heartbeat.cs &
@@ -371,10 +431,6 @@ jobs:
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
           # Prevent VBCSCompiler from starting during tests. See #15832
           UseSharedCompilation: false
-          # PR metadata and token for CLI E2E tests that download artifacts from a PR
-          GITHUB_PR_NUMBER: ${{ inputs.requiresCliArchive && github.event.pull_request.number || '' }}
-          GITHUB_PR_HEAD_SHA: ${{ inputs.requiresCliArchive && github.event.pull_request.head.sha || '' }}
-          GH_TOKEN: ${{ inputs.requiresCliArchive && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (output goes to console directly)
           # Use 60s interval on Windows to reduce overhead on constrained 2-core runners
@@ -420,10 +476,6 @@ jobs:
           NUGET_PACKAGES: ${{ github.workspace }}/.packages
           PLAYWRIGHT_INSTALLED: ${{ !inputs.enablePlaywrightInstall && 'false' || 'true' }}
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
-          # PR metadata and token for CLI E2E tests that download artifacts from a PR
-          GITHUB_PR_NUMBER: ${{ inputs.requiresCliArchive && github.event.pull_request.number || '' }}
-          GITHUB_PR_HEAD_SHA: ${{ inputs.requiresCliArchive && github.event.pull_request.head.sha || '' }}
-          GH_TOKEN: ${{ inputs.requiresCliArchive && github.token || '' }}
         run: |
           # Start heartbeat monitor in background
           ${{ env.DOTNET_SCRIPT }} ${{ github.workspace }}/tools/scripts/Heartbeat.cs &
@@ -470,10 +522,6 @@ jobs:
           # so any rebuild triggered by DCP's "dotnet run" should be minimal.
           # See https://github.com/microsoft/aspire/issues/15832
           UseSharedCompilation: false
-          # PR metadata and token for CLI E2E tests that download artifacts from a PR
-          GITHUB_PR_NUMBER: ${{ inputs.requiresCliArchive && github.event.pull_request.number || '' }}
-          GITHUB_PR_HEAD_SHA: ${{ inputs.requiresCliArchive && github.event.pull_request.head.sha || '' }}
-          GH_TOKEN: ${{ inputs.requiresCliArchive && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (output goes to console directly)
           # Use 60s interval on Windows to reduce overhead on constrained 2-core runners
