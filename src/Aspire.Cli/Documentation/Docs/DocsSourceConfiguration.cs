@@ -10,6 +10,8 @@ namespace Aspire.Cli.Documentation.Docs;
 /// </summary>
 internal static class DocsSourceConfiguration
 {
+    private const string IndexCacheKeyPrefix = "index:";
+
     /// <summary>
     /// Configuration key for overriding the llms.txt source URL.
     /// </summary>
@@ -27,4 +29,12 @@ internal static class DocsSourceConfiguration
     /// <returns>The resolved documentation source URL.</returns>
     public static string GetLlmsTxtUrl(IConfiguration configuration)
         => configuration[LlmsTxtUrlConfigKey] ?? DefaultLlmsTxtUrl;
+
+    /// <summary>
+    /// Gets a source-specific cache key for the parsed llms.txt index.
+    /// </summary>
+    /// <param name="llmsTxtUrl">The configured documentation source URL.</param>
+    /// <returns>The cache key used for the parsed documentation index.</returns>
+    public static string GetIndexCacheKey(string llmsTxtUrl)
+        => $"{IndexCacheKeyPrefix}{llmsTxtUrl.Trim()}";
 }

@@ -3,6 +3,7 @@
 
 using Aspire.Cli.Documentation.ApiDocs;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Cli.Tests.Documentation.ApiDocs;
 
@@ -127,7 +128,40 @@ public class ApiDocsIndexServiceTests
         Assert.Contains("## DoOther() {#doother}", item.Content, StringComparison.Ordinal);
     }
 
-    private static ApiDocsIndexService CreateService()
+    [Fact]
+    public async Task GetAsync_RebasesConfiguredHostForFetchedContentAndReturnedUrl()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [ApiDocsSourceConfiguration.SitemapUrlConfigKey] = "http://localhost:4321/sitemap-0.xml"
+            })
+            .Build();
+
+        var fetcher = new TestApiDocsFetcher(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+              <url><loc>https://aspire.dev/reference/api/csharp/aspire.test.package/testtype/methods/</loc></url>
+            </urlset>
+            """,
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["http://localhost:4321/reference/api/csharp/aspire.test.package/testtype/methods.md"] = "# Methods\n\n## LocalOnly()"
+            });
+
+        var service = new ApiDocsIndexService(fetcher, new TestApiDocsCache(), configuration, NullLogger<ApiDocsIndexService>.Instance);
+
+        var item = await service.GetAsync("csharp/aspire.test.package/testtype/methods");
+
+        Assert.NotNull(item);
+        Assert.Equal("http://localhost:4321/reference/api/csharp/aspire.test.package/testtype/methods", item.Url);
+        Assert.Equal(["http://localhost:4321/reference/api/csharp/aspire.test.package/testtype/methods"], fetcher.RequestedPageUrls);
+        Assert.Equal(["http://localhost:4321/reference/api/csharp/aspire.test.package/testtype/methods.md"], fetcher.RequestedMarkdownUrls);
+        Assert.Contains("## LocalOnly()", item.Content, StringComparison.Ordinal);
+    }
+
+    private static ApiDocsIndexService CreateService(IConfiguration? configuration = null)
     {
         var fetcher = new TestApiDocsFetcher(
             """
@@ -159,16 +193,25 @@ public class ApiDocsIndexServiceTests
                     """,
             });
 
-        return new ApiDocsIndexService(fetcher, new TestApiDocsCache(), NullLogger<ApiDocsIndexService>.Instance);
+        return new ApiDocsIndexService(fetcher, new TestApiDocsCache(), configuration ?? new ConfigurationBuilder().Build(), NullLogger<ApiDocsIndexService>.Instance);
     }
 
     private sealed class TestApiDocsFetcher(string sitemapContent, IReadOnlyDictionary<string, string> pageContent) : IApiDocsFetcher
     {
+        public List<string> RequestedPageUrls { get; } = [];
+
+        public List<string> RequestedMarkdownUrls { get; } = [];
+
         public Task<string?> FetchSitemapAsync(CancellationToken cancellationToken = default)
             => Task.FromResult<string?>(sitemapContent);
 
         public Task<string?> FetchPageAsync(string pageUrl, CancellationToken cancellationToken = default)
-            => Task.FromResult(pageContent.TryGetValue(pageUrl, out var content) ? content : null);
+        {
+            RequestedPageUrls.Add(pageUrl);
+            var markdownUrl = pageUrl.EndsWith(".md", StringComparison.OrdinalIgnoreCase) ? pageUrl : $"{pageUrl}.md";
+            RequestedMarkdownUrls.Add(markdownUrl);
+            return Task.FromResult(pageContent.TryGetValue(pageUrl, out var content) ? content : pageContent.TryGetValue(markdownUrl, out content) ? content : null);
+        }
     }
 
     private sealed class TestApiDocsCache : IApiDocsCache

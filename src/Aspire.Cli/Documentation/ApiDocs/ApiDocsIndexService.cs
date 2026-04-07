@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Documentation.ApiDocs;
@@ -319,7 +320,7 @@ internal interface IApiDocsIndexService
 /// <summary>
 /// Default implementation of <see cref="IApiDocsIndexService"/>.
 /// </summary>
-internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiDocsCache cache, ILogger<ApiDocsIndexService> logger) : IApiDocsIndexService
+internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiDocsCache cache, IConfiguration configuration, ILogger<ApiDocsIndexService> logger) : IApiDocsIndexService
 {
     private const string RootCSharpScope = ApiReferenceLanguages.CSharp;
     private const string RootTypeScriptScope = ApiReferenceLanguages.TypeScript;
@@ -335,6 +336,7 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
 
     private readonly IApiDocsFetcher _fetcher = fetcher;
     private readonly IApiDocsCache _cache = cache;
+    private readonly string _sitemapUrl = ApiDocsSourceConfiguration.GetSitemapUrl(configuration);
     private readonly ILogger<ApiDocsIndexService> _logger = logger;
     private volatile List<IndexedApiReferenceItem>? _indexedItems;
     private volatile Dictionary<string, ApiReferenceItem>? _itemsById;
@@ -384,7 +386,7 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
             }
 
             var sitemapEntries = ApiSitemapParser.Parse(sitemapContent);
-            var items = BuildBaseItems(sitemapEntries);
+            var items = BuildBaseItems(sitemapEntries, _sitemapUrl);
 
             var itemArray = items
                 .OrderBy(static item => item.Id, StringComparer.OrdinalIgnoreCase)
@@ -549,7 +551,7 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
         _itemsById = items.ToDictionary(static item => item.Id, StringComparer.OrdinalIgnoreCase);
     }
 
-    private static List<ApiReferenceItem> BuildBaseItems(IReadOnlyList<ApiSitemapEntry> entries)
+    private static List<ApiReferenceItem> BuildBaseItems(IReadOnlyList<ApiSitemapEntry> entries, string sitemapUrl)
     {
         var items = new List<ApiReferenceItem>(entries.Count);
         var typeScriptContainerIds = entries
@@ -562,13 +564,13 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
             switch (entry.Language)
             {
                 case ApiReferenceLanguages.CSharp:
-                    BuildCSharpItems(items, entry);
+                    BuildCSharpItems(items, entry, sitemapUrl);
                     break;
                 case ApiReferenceLanguages.TypeScript:
-                    BuildTypeScriptItems(items, entry, typeScriptContainerIds);
+                    BuildTypeScriptItems(items, entry, typeScriptContainerIds, sitemapUrl);
                     break;
                 default:
-                    BuildGenericItems(items, entry);
+                    BuildGenericItems(items, entry, sitemapUrl);
                     break;
             }
         }
@@ -576,7 +578,7 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
         return Deduplicate(items);
     }
 
-    private static void BuildCSharpItems(List<ApiReferenceItem> items, ApiSitemapEntry entry)
+    private static void BuildCSharpItems(List<ApiReferenceItem> items, ApiSitemapEntry entry, string sitemapUrl)
     {
         if (entry.Segments.Length == 1)
         {
@@ -587,7 +589,7 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
                 Language = ApiReferenceLanguages.CSharp,
                 Kind = ApiReferenceKinds.Package,
                 ParentId = RootCSharpScope,
-                PageUrl = entry.Url
+                PageUrl = ApiDocsSourceConfiguration.RebasePageUrl(entry.Url, sitemapUrl)
             });
             return;
         }
@@ -601,7 +603,7 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
                 Language = ApiReferenceLanguages.CSharp,
                 Kind = ApiReferenceKinds.Type,
                 ParentId = $"{ApiReferenceLanguages.CSharp}/{entry.Segments[0]}",
-                PageUrl = entry.Url
+                PageUrl = ApiDocsSourceConfiguration.RebasePageUrl(entry.Url, sitemapUrl)
             });
             return;
         }
@@ -615,13 +617,13 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
                 Language = ApiReferenceLanguages.CSharp,
                 Kind = ApiReferenceKinds.MemberGroup,
                 ParentId = $"{ApiReferenceLanguages.CSharp}/{entry.Segments[0]}/{entry.Segments[1]}",
-                PageUrl = entry.Url,
+                PageUrl = ApiDocsSourceConfiguration.RebasePageUrl(entry.Url, sitemapUrl),
                 MemberGroup = entry.Segments[2]
             });
         }
     }
 
-    private static void BuildTypeScriptItems(List<ApiReferenceItem> items, ApiSitemapEntry entry, HashSet<string> typeScriptContainerIds)
+    private static void BuildTypeScriptItems(List<ApiReferenceItem> items, ApiSitemapEntry entry, HashSet<string> typeScriptContainerIds, string sitemapUrl)
     {
         if (entry.Segments.Length == 1)
         {
@@ -632,7 +634,7 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
                 Language = ApiReferenceLanguages.TypeScript,
                 Kind = ApiReferenceKinds.Module,
                 ParentId = RootTypeScriptScope,
-                PageUrl = entry.Url
+                PageUrl = ApiDocsSourceConfiguration.RebasePageUrl(entry.Url, sitemapUrl)
             });
             return;
         }
@@ -647,7 +649,7 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
                 Language = ApiReferenceLanguages.TypeScript,
                 Kind = typeScriptContainerIds.Contains(id) ? ApiReferenceKinds.Symbol : ApiReferenceKinds.Member,
                 ParentId = $"{ApiReferenceLanguages.TypeScript}/{entry.Segments[0]}",
-                PageUrl = entry.Url
+                PageUrl = ApiDocsSourceConfiguration.RebasePageUrl(entry.Url, sitemapUrl)
             });
             return;
         }
@@ -661,12 +663,12 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
                 Language = ApiReferenceLanguages.TypeScript,
                 Kind = ApiReferenceKinds.Member,
                 ParentId = $"{ApiReferenceLanguages.TypeScript}/{entry.Segments[0]}/{entry.Segments[1]}",
-                PageUrl = entry.Url
+                PageUrl = ApiDocsSourceConfiguration.RebasePageUrl(entry.Url, sitemapUrl)
             });
         }
     }
 
-    private static void BuildGenericItems(List<ApiReferenceItem> items, ApiSitemapEntry entry)
+    private static void BuildGenericItems(List<ApiReferenceItem> items, ApiSitemapEntry entry, string sitemapUrl)
     {
         if (entry.Segments.Length is 0)
         {
@@ -687,7 +689,7 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
             ParentId = entry.Segments.Length == 1
                 ? entry.Language
                 : $"{entry.Language}/{string.Join('/', entry.Segments[..^1])}",
-            PageUrl = entry.Url
+            PageUrl = ApiDocsSourceConfiguration.RebasePageUrl(entry.Url, sitemapUrl)
         });
     }
 

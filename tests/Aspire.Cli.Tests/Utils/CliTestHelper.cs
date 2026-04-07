@@ -596,8 +596,9 @@ internal sealed class CliServiceCollectionTestOptions
     {
         var fetcher = serviceProvider.GetRequiredService<IApiDocsFetcher>();
         var cache = serviceProvider.GetRequiredService<IApiDocsCache>();
+        var configuration = serviceProvider.GetRequiredService<IConfiguration>();
         var logger = serviceProvider.GetRequiredService<ILogger<ApiDocsIndexService>>();
-        return new ApiDocsIndexService(fetcher, cache, logger);
+        return new ApiDocsIndexService(fetcher, cache, configuration, logger);
     };
 }
 

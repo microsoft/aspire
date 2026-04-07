@@ -47,5 +47,5 @@ internal sealed class ApiDocsFetcher(HttpClient httpClient, IApiDocsCache cache,
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The markdown content, or <c>null</c> when it cannot be retrieved.</returns>
     public Task<string?> FetchPageAsync(string pageUrl, CancellationToken cancellationToken = default)
-        => CachedHttpDocumentFetcher.FetchAsync(_httpClient, _cache, ApiDocsSourceConfiguration.BuildMarkdownUrl(pageUrl), _logger, cancellationToken);
+        => CachedHttpDocumentFetcher.FetchAsync(_httpClient, _cache, ApiDocsSourceConfiguration.BuildMarkdownUrl(pageUrl, _sitemapUrl), _logger, cancellationToken);
 }

@@ -14,10 +14,10 @@ namespace Aspire.Cli.Documentation.Docs;
 internal sealed class DocsCache : IDocsCache
 {
     private const string DocsCacheSubdirectory = "docs";
-    private const string IndexCacheKey = "index";
 
     private readonly FileBackedDocumentContentCache _contentCache;
     private readonly string _llmsTxtUrl;
+    private readonly string _indexCacheKey;
 
     public DocsCache(
         IMemoryCache memoryCache,
@@ -26,6 +26,7 @@ internal sealed class DocsCache : IDocsCache
         ILogger<DocsCache> logger)
     {
         _llmsTxtUrl = DocsSourceConfiguration.GetLlmsTxtUrl(configuration);
+        _indexCacheKey = DocsSourceConfiguration.GetIndexCacheKey(_llmsTxtUrl);
         _contentCache = new FileBackedDocumentContentCache(memoryCache, executionContext, DocsCacheSubdirectory, logger);
     }
 
@@ -45,8 +46,8 @@ internal sealed class DocsCache : IDocsCache
         => _contentCache.InvalidateAsync(key, cancellationToken);
 
     public Task<LlmsDocument[]?> GetIndexAsync(CancellationToken cancellationToken = default)
-        => _contentCache.GetJsonAsync(IndexCacheKey, JsonSourceGenerationContext.Default.LlmsDocumentArray, _llmsTxtUrl, cancellationToken);
+        => _contentCache.GetJsonAsync(_indexCacheKey, JsonSourceGenerationContext.Default.LlmsDocumentArray, _llmsTxtUrl, cancellationToken);
 
     public Task SetIndexAsync(LlmsDocument[] documents, CancellationToken cancellationToken = default)
-        => _contentCache.SetJsonAsync(IndexCacheKey, documents, JsonSourceGenerationContext.Default.LlmsDocumentArray, cancellationToken);
+        => _contentCache.SetJsonAsync(_indexCacheKey, documents, JsonSourceGenerationContext.Default.LlmsDocumentArray, cancellationToken);
 }
