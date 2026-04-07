@@ -26,23 +26,23 @@ internal sealed class SeqHealthCheck(string seqUri) : IHealthCheck
 
             return response.IsSuccessStatusCode
                 ? HealthCheckResult.Healthy()
-                : HealthCheckResult.Unhealthy($"Request to {_healthUri} returned {(int)response.StatusCode} {response.StatusCode}.");
+                : HealthCheckResult.Unhealthy($"Request to {_healthUri} returned {(int)response.StatusCode} {response.StatusCode}");
         }
         catch (TaskCanceledException tce) when (!cancellationToken.IsCancellationRequested)
         {
-            return HealthCheckResult.Unhealthy($"Request to {_healthUri} timed out.", tce);
+            return HealthCheckResult.Unhealthy($"Request to {_healthUri} timed out", tce);
         }
         catch (TaskCanceledException tce) when (cancellationToken.IsCancellationRequested)
         {
-            return HealthCheckResult.Unhealthy($"Health check for {_healthUri} was canceled.", tce);
+            return HealthCheckResult.Unhealthy($"Health check for {_healthUri} was canceled", tce);
         }
         catch (HttpRequestException hre)
         {
-            return HealthCheckResult.Unhealthy($"Failed to connect to {_healthUri}.", hre);
+            return HealthCheckResult.Unhealthy($"Failed to connect to {_healthUri}", hre);
         }
         catch (Exception ex)
         {
-            return HealthCheckResult.Unhealthy($"Health check failed for {_healthUri}.", ex);
+            return HealthCheckResult.Unhealthy($"Health check failed for {_healthUri}", ex);
         }
     }
 }

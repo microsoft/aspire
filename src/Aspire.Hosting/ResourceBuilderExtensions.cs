@@ -18,6 +18,7 @@ using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SystemProcess = System.Diagnostics.Process;
@@ -2844,7 +2845,7 @@ public static class ResourceBuilderExtensions
             healthCheckKey,
             serviceProvider => new DeferredUriHealthCheck(
                 () => uri,
-                statusCode ?? 200,
+                statusCode.Value,
                 () => serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(healthCheckKey)),
             failureStatus: default,
             tags: default,

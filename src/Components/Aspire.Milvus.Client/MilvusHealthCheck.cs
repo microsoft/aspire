@@ -25,7 +25,7 @@ internal sealed class MilvusHealthCheck : IHealthCheck
 
             return milvusHealthState.IsHealthy
                 ? HealthCheckResult.Healthy()
-                : new HealthCheckResult(HealthStatus.Unhealthy, description: $"Milvus server is unhealthy: {milvusHealthState}");
+                : new HealthCheckResult(HealthStatus.Unhealthy, description: $"Milvus server is unhealthy: {milvusHealthState}.");
         }
         catch (Exception ex)
         {

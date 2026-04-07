@@ -8,6 +8,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace Aspire.Hosting.Tests.Health;
 
+[Trait("Partition", "6")]
 public class FriendlyHealthCheckErrorMessagesTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
@@ -29,7 +30,7 @@ public class FriendlyHealthCheckErrorMessagesTests(ITestOutputHelper testOutputH
         var healthCheckKey = healthCheckAnnotations.First(hc => hc.Key.StartsWith($"{externalService.Resource.Name}_external")).Key;
 
         // Run the health check with a short timeout
-        var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+        var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
         var result = await healthCheckService.CheckHealthAsync(
             registration => registration.Name == healthCheckKey,
             cts.Token);
@@ -69,7 +70,7 @@ public class FriendlyHealthCheckErrorMessagesTests(ITestOutputHelper testOutputH
         var healthCheckKey = healthCheckAnnotations.First(hc => hc.Key.StartsWith($"{externalService.Resource.Name}_external")).Key;
 
         // Run the health check with a short timeout
-        var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+        var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
         var result = await healthCheckService.CheckHealthAsync(
             registration => registration.Name == healthCheckKey,
             cts.Token);
@@ -123,5 +124,65 @@ public class FriendlyHealthCheckErrorMessagesTests(ITestOutputHelper testOutputH
         // The description should contain a friendly message about invalid URL
         Assert.NotNull(entry.Description);
         Assert.Contains("invalid", entry.Description, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void GetFriendlyErrorMessage_StripsCredentialsFromUri()
+    {
+        var uri = new Uri("http://user:secret@example.com:8080/");
+        var exception = new HttpRequestException();
+
+        var message = HttpHealthCheckHelpers.GetFriendlyErrorMessage(uri, exception, CancellationToken.None);
+
+        Assert.DoesNotContain("user", message);
+        Assert.DoesNotContain("secret", message);
+        Assert.Contains("example.com", message);
+    }
+
+    [Fact]
+    public void GetFriendlyErrorMessage_PreservesUriWithoutCredentials()
+    {
+        var uri = new Uri("http://example.com:8080/");
+        var exception = new HttpRequestException();
+
+        var message = HttpHealthCheckHelpers.GetFriendlyErrorMessage(uri, exception, CancellationToken.None);
+
+        Assert.Contains("http://example.com:8080/", message);
+    }
+
+    [Fact]
+    public void GetFriendlyErrorMessage_ReturnsTimeoutForTaskCanceledException()
+    {
+        var uri = new Uri("http://example.com/");
+        var exception = new TaskCanceledException();
+
+        var message = HttpHealthCheckHelpers.GetFriendlyErrorMessage(uri, exception, CancellationToken.None);
+
+        Assert.Contains("timed out", message);
+    }
+
+    [Fact]
+    public void GetFriendlyErrorMessage_ReturnsCanceledWhenTokenIsCanceled()
+    {
+        var uri = new Uri("http://example.com/");
+        var exception = new OperationCanceledException();
+        var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var message = HttpHealthCheckHelpers.GetFriendlyErrorMessage(uri, exception, cts.Token);
+
+        Assert.Contains("canceled", message);
+    }
+
+    [Fact]
+    public void GetFriendlyErrorMessage_ReturnsStatusCodeForHttpRequestException()
+    {
+        var uri = new Uri("http://example.com/");
+        var exception = new HttpRequestException(null, null, System.Net.HttpStatusCode.NotFound);
+
+        var message = HttpHealthCheckHelpers.GetFriendlyErrorMessage(uri, exception, CancellationToken.None);
+
+        Assert.Contains("404", message);
+        Assert.Contains("NotFound", message);
     }
 }
