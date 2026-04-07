@@ -919,7 +919,10 @@ jobs:
     runs-on: ubuntu-slim
     permissions:
       contents: write
+<<<<<<< failing-test-issues
       discussions: write
+=======
+>>>>>>> main
       issues: write
       pull-requests: write
     concurrency:
@@ -950,7 +953,10 @@ jobs:
             aspire
           github-api-url: ${{ github.api_url }}
           permission-contents: write
+<<<<<<< failing-test-issues
           permission-discussions: write
+=======
+>>>>>>> main
           permission-issues: write
           permission-pull-requests: write
       - name: Download agent output artifact
@@ -1243,7 +1249,10 @@ jobs:
     runs-on: ubuntu-slim
     permissions:
       contents: write
+<<<<<<< failing-test-issues
       discussions: write
+=======
+>>>>>>> main
       issues: write
       pull-requests: write
     timeout-minutes: 15
@@ -1306,7 +1315,10 @@ jobs:
             aspire
           github-api-url: ${{ github.api_url }}
           permission-contents: write
+<<<<<<< failing-test-issues
           permission-discussions: write
+=======
+>>>>>>> main
           permission-issues: write
           permission-pull-requests: write
       - name: Checkout repository

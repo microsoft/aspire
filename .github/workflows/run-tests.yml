@@ -16,11 +16,11 @@ on:
       testSessionTimeout:
         required: false
         type: string
-        default: "15m"
+        default: "20m"
       testHangTimeout:
         required: false
         type: string
-        default: "7m"
+        default: "10m"
       extraTestArgs:
         required: false
         type: string
@@ -67,6 +67,11 @@ jobs:
     name: ${{ inputs.testShortName }} (${{ inputs.os }})
     env:
       DOTNET_ROOT: ${{ github.workspace }}/.dotnet
+      # Resolve once so the fallback isn't duplicated across all four test-runner steps.
+      # The '|| default' is needed because GitHub Actions passes empty strings for
+      # unset workflow_call inputs, bypassing the input-level default: values.
+      EFFECTIVE_TEST_SESSION_TIMEOUT: ${{ inputs.testSessionTimeout || '20m' }}
+      EFFECTIVE_TEST_HANG_TIMEOUT: ${{ inputs.testHangTimeout || '10m' }}
     steps:
       - name: Validate arguments
         shell: pwsh
@@ -338,11 +343,10 @@ jobs:
             --report-trx --report-trx-filename "${{ inputs.testShortName }}.trx" \
             --crashdump \
             --hangdump \
-            --hangdump-filename ${{ github.workspace }}/testresults/${{ inputs.testShortName }}.hangdump \
-            --hangdump-timeout ${{ inputs.testHangTimeout }} \
+            --hangdump-timeout ${{ env.EFFECTIVE_TEST_HANG_TIMEOUT }} \
             --results-directory ${{ github.workspace }}/testresults \
             --filter-not-trait "category=failing" \
-            --timeout ${{ inputs.testSessionTimeout }} \
+            --timeout ${{ env.EFFECTIVE_TEST_SESSION_TIMEOUT }} \
             ${{ inputs.extraTestArgs }} \
             ${{ inputs.ignoreTestFailures && '|| true' || '' }}
           TEST_EXIT_CODE=$?
@@ -386,9 +390,11 @@ jobs:
               --ignore-exit-code 8 `
               --report-trx --report-trx-filename "${{ inputs.testShortName }}.trx" `
               --crashdump `
+              --hangdump `
+              --hangdump-timeout ${{ env.EFFECTIVE_TEST_HANG_TIMEOUT }} `
               --results-directory ${{ github.workspace }}/testresults `
               --filter-not-trait "category=failing" `
-              --timeout ${{ inputs.testSessionTimeout }} `
+              --timeout ${{ env.EFFECTIVE_TEST_SESSION_TIMEOUT }} `
               ${{ inputs.extraTestArgs }}
             $testExitCode = $LASTEXITCODE
           }
@@ -435,8 +441,10 @@ jobs:
             --ignore-exit-code 8 \
             --report-trx \
             --crashdump \
+            --hangdump \
+            --hangdump-timeout ${{ env.EFFECTIVE_TEST_HANG_TIMEOUT }} \
             --results-directory ${{ github.workspace }}/testresults \
-            --timeout ${{ inputs.testSessionTimeout }} \
+            --timeout ${{ env.EFFECTIVE_TEST_SESSION_TIMEOUT }} \
             ${{ inputs.extraTestArgs }} \
             ${{ inputs.ignoreTestFailures && '|| true' || '' }}
           TEST_EXIT_CODE=$?
@@ -488,8 +496,10 @@ jobs:
               --ignore-exit-code 8 `
               --report-trx `
               --crashdump `
+              --hangdump `
+              --hangdump-timeout ${{ env.EFFECTIVE_TEST_HANG_TIMEOUT }} `
               --results-directory ${{ github.workspace }}/testresults `
-              --timeout ${{ inputs.testSessionTimeout }} `
+              --timeout ${{ env.EFFECTIVE_TEST_SESSION_TIMEOUT }} `
               ${{ inputs.extraTestArgs }}
             $testExitCode = $LASTEXITCODE
           }

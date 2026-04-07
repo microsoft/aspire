@@ -132,6 +132,8 @@ jobs:
       requiresNugets: ${{ matrix.tests.requiresNugets == true }}
       requiresTestSdk: ${{ matrix.tests.requiresTestSdk == true }}
       os: ${{ matrix.tests.os }}
+      testSessionTimeout: ${{ matrix.tests.testSessionTimeout }}
+      testHangTimeout: ${{ matrix.tests.testHangTimeout }}
       enablePlaywrightInstall: ${{ inputs.enablePlaywrightInstall }}
       extraTestArgs: ${{ inputs.extraTestArgs }}
       ignoreTestFailures: ${{ inputs.ignoreTestFailures }}
@@ -198,6 +200,23 @@ jobs:
           --
           ${{ github.workspace }}/testresults
           --combined
+
+      - name: Fail if test runner crashed or timed out
+        if: steps.check_tests.outputs.tests_run == 'true'
+        shell: pwsh
+        run: |
+          $logDirectory = "${{ github.workspace }}/artifacts/all-logs"
+
+          # Check for dump files (.dmp) in any of the collected test artifacts.
+          # A .dmp file indicates a crash (--crashdump) or timeout (--hangdump).
+          $dumpFiles = Get-ChildItem -Path $logDirectory -Filter *.dmp -Recurse -ErrorAction SilentlyContinue
+          if ($dumpFiles.Count -gt 0) {
+            Write-Host "::error::Dump file(s) detected — the test runner crashed or timed out in one or more jobs:"
+            foreach ($df in $dumpFiles) { Write-Host "  - $($df.FullName)" }
+            exit 1
+          }
+
+          Write-Host "✓ No dump files detected"
 
       - name: Fail if any dependency failed
         # 'skipped' can be when a transitive dependency fails and the dependent job gets 'skipped'.
