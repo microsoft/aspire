@@ -459,3 +459,53 @@ internal sealed class ParameterUriHealthCheck : IHealthCheck
         }
     }
 }
+
+/// <summary>
+/// HTTP health check that resolves its URI lazily and provides friendly error messages.
+/// </summary>
+internal sealed class DeferredUriHealthCheck : IHealthCheck
+{
+    private readonly Func<Uri?> _uriFactory;
+    private readonly int _expectedStatusCode;
+    private readonly Func<HttpClient> _httpClientFactory;
+
+    public DeferredUriHealthCheck(Func<Uri?> uriFactory, int expectedStatusCode, Func<HttpClient> httpClientFactory)
+    {
+        _uriFactory = uriFactory ?? throw new ArgumentNullException(nameof(uriFactory));
+        _expectedStatusCode = expectedStatusCode;
+        _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
+    }
+
+    public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
+    {
+        var uri = _uriFactory();
+        if (uri is null)
+        {
+            return HealthCheckResult.Unhealthy("The URI for the health check is not set. Ensure that the resource has been allocated before the health check is executed.");
+        }
+
+        try
+        {
+            var options = new UriHealthCheckOptions();
+            options.AddUri(uri, setup => setup.ExpectHttpCode(_expectedStatusCode));
+            var uriHealthCheck = new UriHealthCheck(options, _httpClientFactory);
+
+            var result = await uriHealthCheck.CheckHealthAsync(context, cancellationToken).ConfigureAwait(false);
+
+            if (result.Status == HealthStatus.Unhealthy)
+            {
+                var friendlyMessage = result.Exception is not null
+                    ? HttpHealthCheckHelpers.GetFriendlyErrorMessage(uri, result.Exception, cancellationToken)
+                    : result.Description ?? $"Health check failed for {uri}.";
+                return HealthCheckResult.Unhealthy(friendlyMessage, result.Exception);
+            }
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            var friendlyMessage = HttpHealthCheckHelpers.GetFriendlyErrorMessage(uri, ex, cancellationToken);
+            return HealthCheckResult.Unhealthy(friendlyMessage, ex);
+        }
+    }
+}
