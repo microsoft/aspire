@@ -25,6 +25,10 @@ if: >-
   && github.repository_owner == 'microsoft'
 
 checkout:
+  # gh-aw checks out the workflow repository first, then overlays the current
+  # workspace with aspire.dev because that is where documentation changes are
+  # authored. Read aspire PR details via GitHub tools instead of relying on
+  # local files from the initial workflow-repository checkout.
   - repository: microsoft/aspire.dev
     github-app:
       app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
@@ -63,6 +67,10 @@ safe-outputs:
     labels: [docs-from-code]
     draft: true
     target-repo: "microsoft/aspire.dev"
+    # Keep protected-file handling explicit in the source of truth. Copilot
+    # workflows automatically protect AGENTS.md alongside dependency manifests
+    # and repository security config unless this policy is intentionally relaxed.
+    protected-files: blocked
     fallback-as-issue: true
   add-comment:
     target-repo: "microsoft/aspire"
@@ -82,6 +90,17 @@ needed, create a draft PR with the actual documentation changes.
 - **Source repository**: `microsoft/aspire`
 - **PR Number**: `${{ github.event.pull_request.number || github.event.inputs.pr_number }}`
 - **PR Title**: `${{ github.event.pull_request.title }}`
+
+> [!NOTE]
+> The agent runs with `microsoft/aspire.dev` as the current workspace, so use
+> GitHub tools for the source `microsoft/aspire` PR details and diff instead of
+> expecting a local checkout of the merged PR contents to remain available.
+>
+> For security, this workflow only auto-activates for merged PRs whose head
+> repository is `microsoft/aspire`. Unlike the old `pull_request_target` hook,
+> fork-based PRs are intentionally excluded from automatic activation; use
+> `workflow_dispatch` with `pr_number` when a maintainer wants to run the docs
+> check manually for a merged fork PR.
 
 ## Step 1: Gather PR Information
 
