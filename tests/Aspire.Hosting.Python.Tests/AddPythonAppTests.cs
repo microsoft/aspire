@@ -2404,7 +2404,8 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
 
         var installerResource = appModel.Resources.OfType<PythonInstallerResource>().Single();
-        Assert.True(installerResource.HasAnnotationOfType<NameValidationPolicyAnnotation>());
+        Assert.True(installerResource.TryGetLastAnnotation<NameValidationPolicyAnnotation>(out var policy));
+        Assert.Same(NameValidationPolicyAnnotation.None, policy);
     }
 
     [Fact]
@@ -2429,7 +2430,8 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
         var venvCreatorResource = appModel.Resources.OfType<PythonVenvCreatorResource>().SingleOrDefault();
         Assert.NotNull(venvCreatorResource);
-        Assert.True(venvCreatorResource.HasAnnotationOfType<NameValidationPolicyAnnotation>());
+        Assert.True(venvCreatorResource.TryGetLastAnnotation<NameValidationPolicyAnnotation>(out var policy));
+        Assert.Same(NameValidationPolicyAnnotation.None, policy);
     }
 
     /// <summary>

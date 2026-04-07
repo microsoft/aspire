@@ -941,7 +941,8 @@ public class ProjectResourceTests
 
         var rebuilder = appModel.Resources.OfType<ProjectRebuilderResource>().SingleOrDefault();
         Assert.NotNull(rebuilder);
-        Assert.True(rebuilder.HasAnnotationOfType<NameValidationPolicyAnnotation>());
+        Assert.True(rebuilder.TryGetLastAnnotation<NameValidationPolicyAnnotation>(out var policy));
+        Assert.Same(NameValidationPolicyAnnotation.None, policy);
     }
 
     internal static IDistributedApplicationBuilder CreateBuilder(string[]? args = null, DistributedApplicationOperation operation = DistributedApplicationOperation.Publish)

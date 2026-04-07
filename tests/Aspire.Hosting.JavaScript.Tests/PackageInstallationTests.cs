@@ -573,7 +573,8 @@ public class PackageInstallationTests
 
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
         var installerResource = Assert.Single(appModel.Resources.OfType<JavaScriptInstallerResource>());
-        Assert.True(installerResource.TryGetLastAnnotation<NameValidationPolicyAnnotation>(out _));
+        Assert.True(installerResource.TryGetLastAnnotation<NameValidationPolicyAnnotation>(out var policy));
+        Assert.Same(NameValidationPolicyAnnotation.None, policy);
     }
 
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
