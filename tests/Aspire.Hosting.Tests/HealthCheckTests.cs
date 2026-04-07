@@ -11,6 +11,7 @@ using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "3")]
 public class HealthCheckTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]

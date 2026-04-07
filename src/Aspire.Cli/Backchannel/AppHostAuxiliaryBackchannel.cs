@@ -30,7 +30,6 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         string hash,
         string socketPath,
         JsonRpc rpc,
-        DashboardMcpConnectionInfo? mcpInfo,
         AppHostInformation? appHostInfo,
         bool isInScope,
         ImmutableHashSet<string> capabilities,
@@ -39,7 +38,6 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         Hash = hash;
         SocketPath = socketPath;
         _rpc = rpc;
-        McpInfo = mcpInfo;
         AppHostInfo = appHostInfo;
         IsInScope = isInScope;
         _capabilities = capabilities;
@@ -54,10 +52,9 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         string hash,
         string socketPath,
         JsonRpc rpc,
-        DashboardMcpConnectionInfo? mcpInfo,
         AppHostInformation? appHostInfo,
         bool isInScope)
-        : this(hash, socketPath, rpc, mcpInfo, appHostInfo, isInScope, ImmutableHashSet<string>.Empty, null)
+        : this(hash, socketPath, rpc, appHostInfo, isInScope, ImmutableHashSet<string>.Empty, null)
     {
     }
 
@@ -66,9 +63,6 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
     /// <inheritdoc />
     public string SocketPath { get; }
-
-    /// <inheritdoc />
-    public DashboardMcpConnectionInfo? McpInfo { get; private set; }
 
     /// <inheritdoc />
     public AppHostInformation? AppHostInfo { get; private set; }
@@ -157,12 +151,11 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         // Fetch all connection info
         var appHostInfo = await rpc.InvokeAsync<AppHostInformation?>("GetAppHostInformationAsync").ConfigureAwait(false);
-        var mcpInfo = await rpc.InvokeAsync<DashboardMcpConnectionInfo?>("GetDashboardMcpConnectionInfoAsync").ConfigureAwait(false);
         var capabilities = await FetchCapabilitiesAsync(rpc, logger).ConfigureAwait(false);
 
         var capabilitiesSet = capabilities?.ToImmutableHashSet() ?? ImmutableHashSet.Create(AuxiliaryBackchannelCapabilities.V1);
 
-        return new AppHostAuxiliaryBackchannel(hash, socketPath, rpc, mcpInfo, appHostInfo, isInScope, capabilitiesSet, logger);
+        return new AppHostAuxiliaryBackchannel(hash, socketPath, rpc, appHostInfo, isInScope, capabilitiesSet, logger);
     }
 
     /// <summary>
@@ -238,25 +231,6 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         }
     }
 
-    /// <summary>
-    /// Gets the Dashboard MCP connection information.
-    /// </summary>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The MCP connection information, or null if unavailable.</returns>
-    public async Task<DashboardMcpConnectionInfo?> GetDashboardMcpConnectionInfoAsync(CancellationToken cancellationToken = default)
-    {
-        var rpc = EnsureConnected();
-
-        _logger?.LogDebug("Requesting Dashboard MCP connection info");
-
-        var mcpInfo = await rpc.InvokeWithCancellationAsync<DashboardMcpConnectionInfo?>(
-            "GetDashboardMcpConnectionInfoAsync",
-            [],
-            cancellationToken).ConfigureAwait(false);
-
-        return mcpInfo;
-    }
-
     /// <inheritdoc />
     public async Task<DashboardUrlsState?> GetDashboardUrlsAsync(CancellationToken cancellationToken = default)
     {
@@ -293,9 +267,12 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
             var snapshots = await rpc.InvokeWithCancellationAsync<List<ResourceSnapshot>>(
                 "GetResourceSnapshotsAsync",
                 [],
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken).ConfigureAwait(false) ?? [];
 
-            return snapshots ?? [];
+            // Sort resources by name for consistent ordering.
+            snapshots.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+
+            return snapshots;
         }
         catch (RemoteMethodNotFoundException ex)
         {
@@ -443,7 +420,6 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         if (!SupportsV2)
         {
             // Fall back to v1 - ApiBaseUrl and ApiToken are only available in v2
-            var mcpInfo = await GetDashboardMcpConnectionInfoAsync(cancellationToken).ConfigureAwait(false);
             var urlsState = await GetDashboardUrlsAsync(cancellationToken).ConfigureAwait(false);
 
             var urls = new List<string>();
@@ -458,8 +434,6 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
             return new GetDashboardInfoResponse
             {
-                McpBaseUrl = mcpInfo?.EndpointUrl,
-                McpApiToken = mcpInfo?.ApiToken,
                 ApiBaseUrl = null, // Not available in v1
                 ApiToken = null,   // Not available in v1
                 DashboardUrls = urls.ToArray(),
@@ -729,6 +703,43 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
             cancellationToken).ConfigureAwait(false);
 
         _logger?.LogDebug("Command '{CommandName}' on resource '{ResourceName}' completed with success={Success}", commandName, resourceName, response.Success);
+
+        return response;
+    }
+
+    /// <inheritdoc />
+    public async Task<WaitForResourceResponse> WaitForResourceAsync(
+        string resourceName,
+        string status,
+        int timeoutSeconds,
+        CancellationToken cancellationToken = default)
+    {
+        if (!SupportsV2)
+        {
+            return new WaitForResourceResponse
+            {
+                Success = false,
+                ErrorMessage = "Wait command is not supported by the AppHost version. Update the AppHost to use this command."
+            };
+        }
+
+        var rpc = EnsureConnected();
+
+        _logger?.LogDebug("Waiting for resource '{ResourceName}' to reach status '{Status}' with timeout {Timeout}s", resourceName, status, timeoutSeconds);
+
+        var request = new WaitForResourceRequest
+        {
+            ResourceName = resourceName,
+            Status = status,
+            TimeoutSeconds = timeoutSeconds
+        };
+
+        var response = await rpc.InvokeWithCancellationAsync<WaitForResourceResponse>(
+            "WaitForResourceAsync",
+            [request],
+            cancellationToken).ConfigureAwait(false);
+
+        _logger?.LogDebug("Wait for resource '{ResourceName}' completed: success={Success}, state={State}", resourceName, response.Success, response.State);
 
         return response;
     }

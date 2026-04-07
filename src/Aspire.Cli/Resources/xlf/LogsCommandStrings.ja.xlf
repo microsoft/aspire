@@ -2,29 +2,19 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="ja" original="../LogsCommandStrings.resx">
     <body>
-      <trans-unit id="AppHostNotRunning">
-        <source>No running AppHost found. Use 'aspire run' to start one first.</source>
-        <target state="translated">実行中の AppHost は見つかりません。最初に 'aspire run' を使って起動してください。</target>
-        <note />
-      </trans-unit>
       <trans-unit id="Description">
-        <source>Display logs from resources in a running Aspire apphost.</source>
-        <target state="translated">実行中の Aspire apphost のリソースからログを表示します。</target>
+        <source>Display logs from resources in a running AppHost</source>
+        <target state="needs-review-translation">実行中の Aspire apphost のリソースからログを表示します。</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
-        <source>Stream logs in real-time as they are written.</source>
-        <target state="translated">ログが書き込まれると同時にリアルタイムでストリームします。</target>
+        <source>Stream logs in real-time as they are written</source>
+        <target state="needs-review-translation">ログが書き込まれると同時にリアルタイムでストリームします。</target>
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output logs in JSON format (NDJSON).</source>
-        <target state="translated">ログを JSON 形式 (NDJSON) で出力します。</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="NoInScopeAppHostsShowingAll">
-        <source>No AppHosts found in current directory. Showing all running AppHosts.</source>
-        <target state="translated">現在のディレクトリ内に AppHost が見つかりません。実行中のすべての AppHost を表示しています。</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">ログを JSON 形式 (NDJSON) で出力します。</target>
         <note />
       </trans-unit>
       <trans-unit id="NoResourcesFound">
@@ -32,14 +22,14 @@
         <target state="translated">リソースが見つかりませんでした。</target>
         <note />
       </trans-unit>
-      <trans-unit id="ProjectOptionDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="translated">Aspire AppHost プロジェクト ファイルへのパス。</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The name of the resource to get logs for. If not specified, logs from all resources are shown.</source>
-        <target state="translated">ログ取得の対象とするリソースの名前。指定しない場合は、すべてのリソースのログが表示されます。</target>
+        <target state="needs-review-translation">ログ取得の対象とするリソースの名前。指定しない場合は、すべてのリソースのログが表示されます。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceNotFound">
+        <source>Resource '{0}' was not found.</source>
+        <target state="translated">リソース '{0}' が見つかりませんでした。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceRequiredWithoutFollow">
@@ -47,14 +37,9 @@
         <target state="translated">--follow を使わない場合はリソース名の指定が必須です。--follow を使う場合、すべてのリソースのログがストリーミングされます。</target>
         <note />
       </trans-unit>
-      <trans-unit id="ScanningForRunningAppHosts">
-        <source>Scanning for running AppHosts...</source>
-        <target state="translated">実行中の AppHost をスキャンしています...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SelectAppHost">
-        <source>Select an AppHost:</source>
-        <target state="translated">AppHost を選択:</target>
+      <trans-unit id="SelectAppHostAction">
+        <source>stream logs from</source>
+        <target state="translated">次からログをストリーミングする</target>
         <note />
       </trans-unit>
       <trans-unit id="TailMustBePositive">
@@ -63,13 +48,23 @@
         <note />
       </trans-unit>
       <trans-unit id="TailOptionDescription">
-        <source>Number of lines to show from the end of logs (default: all).</source>
-        <target state="translated">表示するログの行数を、ログの末尾から数えた行数で指定します (既定値: すべて)。</target>
+        <source>Number of lines to show from the end of logs (default: all)</source>
+        <target state="needs-review-translation">表示するログの行数を、ログの末尾から数えた行数で指定します (既定値: すべて)。</target>
         <note />
       </trans-unit>
       <trans-unit id="TailRequiresResource">
         <source>The --tail option requires a resource name to be specified.</source>
         <target state="translated">--tail オプションにはリソース名の指定が必須です。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TimestampsOptionDescription">
+        <source>Show timestamps for each log line</source>
+        <target state="new">Show timestamps for each log line</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="GettingLogs">
+        <source>Getting logs...</source>
+        <target state="translated">ログを取得しています...</target>
         <note />
       </trans-unit>
     </body>

@@ -95,3 +95,5 @@ resource container1_connectionString 'Microsoft.KeyVault/vaults/secrets@2024-11-
 }
 
 output name string = cosmos.name
+
+output id string = cosmos.id

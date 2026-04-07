@@ -658,7 +658,7 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
 
     private void RemoveAllSelectionsForResource(string resourceName)
     {
-        _selectedRows.RemoveWhere(r => StringComparers.ResourceName.Equals(r.ResourceName, resourceName));
+        _selectedRows.RemoveWhere(r => string.Equals(r.ResourceName, resourceName, StringComparisons.ResourceName));
     }
 
     public async ValueTask DisposeAsync()

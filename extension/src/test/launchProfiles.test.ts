@@ -9,6 +9,7 @@ import {
     determineWorkingDirectory,
     determineServerReadyAction,
     readLaunchSettings,
+    expandEnvironmentVariables,
     LaunchSettings,
     LaunchProfile
 } from '../debugger/launchProfiles';
@@ -480,6 +481,34 @@ suite('Launch Profile Tests', () => {
 
             assert.strictEqual(result, path.join('C:', 'project'));
         });
+
+        test('expands environment variables in working directory before resolving', () => {
+            process.env['TEST_WD_ROOT'] = '/opt/app';
+            const baseProfile: LaunchProfile = {
+                commandName: 'Executable',
+                workingDirectory: '$(TEST_WD_ROOT)/output'
+            };
+
+            const result = determineWorkingDirectory('/dummy/project.csproj', baseProfile);
+
+            // $(TEST_WD_ROOT) expands to /opt/app, making it an absolute path
+            assert.strictEqual(result, '/opt/app/output');
+            delete process.env['TEST_WD_ROOT'];
+        });
+
+        test('expands environment variables in relative working directory', () => {
+            process.env['TEST_WD_SUBDIR'] = 'build-output';
+            const baseProfile: LaunchProfile = {
+                commandName: 'Executable',
+                workingDirectory: '$(TEST_WD_SUBDIR)/bin'
+            };
+
+            const result = determineWorkingDirectory('/projects/myapp/myapp.csproj', baseProfile);
+
+            // $(TEST_WD_SUBDIR) expands to build-output, still relative, resolved against project dir
+            assert.strictEqual(result, path.resolve('/projects/myapp', 'build-output/bin'));
+            delete process.env['TEST_WD_SUBDIR'];
+        });
     });
 
     suite('determineServerReadyAction', () => {
@@ -624,6 +653,159 @@ suite('Launch Profile Tests', () => {
             assert.strictEqual(result!.profiles['Development'].applicationUrl, 'https://localhost:5001');
             assert.strictEqual(result!.profiles['Development'].launchBrowser, true);
             assert.strictEqual(result!.profiles['Production'].environmentVariables!.ASPNETCORE_ENVIRONMENT, 'Production');
+        });
+
+        test('falls back to aspire.config.json profiles when .run.json does not exist for file-based app', async () => {
+            // Create a file-based app (.cs file) with no .run.json
+            const fileBasedAppPath = path.join(tempDir, 'TestProject', 'apphost.cs');
+            fs.writeFileSync(fileBasedAppPath, '// test file-based app');
+
+            // Create aspire.config.json with profiles
+            const aspireConfigPath = path.join(tempDir, 'TestProject', 'aspire.config.json');
+            const aspireConfig = {
+                appHost: { path: 'apphost.cs' },
+                profiles: {
+                    https: {
+                        applicationUrl: 'https://localhost:5001;http://localhost:5000',
+                        environmentVariables: {
+                            ASPNETCORE_ENVIRONMENT: 'Development'
+                        }
+                    },
+                    http: {
+                        applicationUrl: 'http://localhost:5000'
+                    }
+                }
+            };
+            fs.writeFileSync(aspireConfigPath, JSON.stringify(aspireConfig, null, 2));
+
+            const result = await readLaunchSettings(fileBasedAppPath);
+
+            assert.notStrictEqual(result, null);
+            assert.strictEqual(Object.keys(result!.profiles).length, 2);
+            assert.strictEqual(result!.profiles['https'].applicationUrl, 'https://localhost:5001;http://localhost:5000');
+            assert.strictEqual(result!.profiles['https'].environmentVariables!.ASPNETCORE_ENVIRONMENT, 'Development');
+            assert.strictEqual(result!.profiles['https'].commandName, 'Project');
+            assert.strictEqual(result!.profiles['http'].applicationUrl, 'http://localhost:5000');
+        });
+
+        test('returns null when neither .run.json nor aspire.config.json exists for file-based app', async () => {
+            const fileBasedAppPath = path.join(tempDir, 'TestProject', 'apphost.cs');
+            fs.writeFileSync(fileBasedAppPath, '// test file-based app');
+
+            const result = await readLaunchSettings(fileBasedAppPath);
+
+            assert.strictEqual(result, null);
+        });
+
+        test('prefers .run.json over aspire.config.json profiles for file-based app', async () => {
+            const fileBasedAppPath = path.join(tempDir, 'TestProject', 'apphost.cs');
+            fs.writeFileSync(fileBasedAppPath, '// test file-based app');
+
+            // Create both .run.json and aspire.config.json
+            const runJsonPath = path.join(tempDir, 'TestProject', 'apphost.run.json');
+            const runJson = {
+                profiles: {
+                    default: {
+                        commandName: 'Project',
+                        applicationUrl: 'https://localhost:7000'
+                    }
+                }
+            };
+            fs.writeFileSync(runJsonPath, JSON.stringify(runJson, null, 2));
+
+            const aspireConfigPath = path.join(tempDir, 'TestProject', 'aspire.config.json');
+            const aspireConfig = {
+                profiles: {
+                    default: {
+                        applicationUrl: 'https://localhost:9999'
+                    }
+                }
+            };
+            fs.writeFileSync(aspireConfigPath, JSON.stringify(aspireConfig, null, 2));
+
+            const result = await readLaunchSettings(fileBasedAppPath);
+
+            assert.notStrictEqual(result, null);
+            // Should use the .run.json value, not aspire.config.json
+            assert.strictEqual(result!.profiles['default'].applicationUrl, 'https://localhost:7000');
+        });
+
+        test('reads aspire.config.json profiles with comments', async () => {
+            const fileBasedAppPath = path.join(tempDir, 'TestProject', 'apphost.cs');
+            fs.writeFileSync(fileBasedAppPath, '// test file-based app');
+
+            const aspireConfigPath = path.join(tempDir, 'TestProject', 'aspire.config.json');
+            const aspireConfigWithComments = `{
+  // AppHost configuration
+  "appHost": { "path": "apphost.cs" },
+  "profiles": {
+    "https": {
+      "applicationUrl": "https://localhost:5001", // HTTPS endpoint
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}`;
+            fs.writeFileSync(aspireConfigPath, aspireConfigWithComments);
+
+            const result = await readLaunchSettings(fileBasedAppPath);
+
+            assert.notStrictEqual(result, null);
+            assert.strictEqual(result!.profiles['https'].applicationUrl, 'https://localhost:5001');
+            assert.strictEqual(result!.profiles['https'].environmentVariables!.ASPNETCORE_ENVIRONMENT, 'Development');
+        });
+    });
+
+    suite('expandEnvironmentVariables', () => {
+        test('expands $(VAR) syntax from process.env', () => {
+            process.env['TEST_EXPAND_VAR'] = '/test/path';
+            const result = expandEnvironmentVariables('$(TEST_EXPAND_VAR)/subfolder');
+            assert.strictEqual(result, '/test/path/subfolder');
+            delete process.env['TEST_EXPAND_VAR'];
+        });
+
+        test('expands %VAR% syntax from process.env', () => {
+            process.env['TEST_EXPAND_WIN'] = 'C:\\Users\\test';
+            const result = expandEnvironmentVariables('%TEST_EXPAND_WIN%\\subfolder');
+            assert.strictEqual(result, 'C:\\Users\\test\\subfolder');
+            delete process.env['TEST_EXPAND_WIN'];
+        });
+
+        test('expands multiple variables in one string', () => {
+            process.env['TEST_HOME'] = '/home/user';
+            process.env['TEST_VERSION'] = '1.0.0';
+            const result = expandEnvironmentVariables('$(TEST_HOME)/.store/tool/$(TEST_VERSION)/content');
+            assert.strictEqual(result, '/home/user/.store/tool/1.0.0/content');
+            delete process.env['TEST_HOME'];
+            delete process.env['TEST_VERSION'];
+        });
+
+        test('replaces undefined variables with empty string', () => {
+            delete process.env['NONEXISTENT_VAR_12345'];
+            const result = expandEnvironmentVariables('prefix/$(NONEXISTENT_VAR_12345)/suffix');
+            assert.strictEqual(result, 'prefix//suffix');
+        });
+
+        test('returns string unchanged when no variables present', () => {
+            const result = expandEnvironmentVariables('/plain/path/no/vars');
+            assert.strictEqual(result, '/plain/path/no/vars');
+        });
+
+        test('expands HOME variable like AWS Lambda launch profiles use', () => {
+            const home = process.env['HOME'] ?? '';
+            const input = '$(HOME)/.dotnet/tools/.store/amazon.lambda.testtool/0.13.0/content/RuntimeSupport.dll';
+            const result = expandEnvironmentVariables(input);
+            assert.strictEqual(result, `${home}/.dotnet/tools/.store/amazon.lambda.testtool/0.13.0/content/RuntimeSupport.dll`);
+        });
+
+        test('handles mixed $(VAR) and %VAR% in same string', () => {
+            process.env['TEST_MIX_A'] = 'alpha';
+            process.env['TEST_MIX_B'] = 'beta';
+            const result = expandEnvironmentVariables('$(TEST_MIX_A)/%TEST_MIX_B%/end');
+            assert.strictEqual(result, 'alpha/beta/end');
+            delete process.env['TEST_MIX_A'];
+            delete process.env['TEST_MIX_B'];
         });
     });
 });

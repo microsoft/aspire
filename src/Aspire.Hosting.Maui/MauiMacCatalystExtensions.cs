@@ -23,6 +23,9 @@ public static class MauiMacCatalystExtensions
     /// <para>
     /// The resource name will default to "{projectName}-maccatalyst".
     /// </para>
+    /// <para>
+    /// This overload is not available in polyglot app hosts. Use <see cref="AddMacCatalystDevice(IResourceBuilder{MauiProjectResource}, string)"/> instead.
+    /// </para>
     /// </remarks>
     /// <example>
     /// Add a Mac Catalyst device to a MAUI project:
@@ -35,6 +38,7 @@ public static class MauiMacCatalystExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
+    [AspireExportIgnore(Reason = "Convenience overload. Use the named overload instead.")]
     public static IResourceBuilder<MauiMacCatalystPlatformResource> AddMacCatalystDevice(
         this IResourceBuilder<MauiProjectResource> builder)
     {
@@ -70,6 +74,7 @@ public static class MauiMacCatalystExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
+    [AspireExport(Description = "Adds a Mac Catalyst platform resource for a .NET MAUI project.")]
     public static IResourceBuilder<MauiMacCatalystPlatformResource> AddMacCatalystDevice(
         this IResourceBuilder<MauiProjectResource> builder,
         [ResourceName] string name)

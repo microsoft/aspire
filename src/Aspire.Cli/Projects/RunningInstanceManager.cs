@@ -58,7 +58,7 @@ internal sealed class RunningInstanceManager
 
             // Display message that we're stopping the previous instance
             var cliPidText = appHostInfo.CliProcessId.HasValue ? appHostInfo.CliProcessId.Value.ToString(CultureInfo.InvariantCulture) : "N/A";
-            _interactionService.DisplayMessage("stop_sign", $"Stopping previous instance (AppHost PID: {appHostInfo.ProcessId.ToString(CultureInfo.InvariantCulture)}, CLI PID: {cliPidText})");
+            _interactionService.DisplayMessage(KnownEmojis.StopSign, $"Stopping previous instance (AppHost PID: {appHostInfo.ProcessId.ToString(CultureInfo.InvariantCulture)}, CLI PID: {cliPidText})");
 
             // Call StopAppHostAsync on the auxiliary backchannel
             await backchannel.StopAppHostAsync(cancellationToken).ConfigureAwait(false);

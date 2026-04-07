@@ -250,7 +250,7 @@ public class AzureBicepResourceTests
     [Fact]
     public void GetBicepTemplateFile_WithTemplateFile_ReturnsOriginalPathWhenDirectoryProvided()
     {
-        // This test verifies the fix for https://github.com/dotnet/aspire/issues/13967
+        // This test verifies the fix for https://github.com/microsoft/aspire/issues/13967
         // When a templateFile is specified, GetBicepTemplateFile should return the original path
         // and not combine it with the directory parameter.
 

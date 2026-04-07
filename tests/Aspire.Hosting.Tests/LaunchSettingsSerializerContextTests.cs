@@ -5,6 +5,7 @@ using System.Text.Json;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "3")]
 public class LaunchSettingsSerializerContextTests
 {
     [Fact]

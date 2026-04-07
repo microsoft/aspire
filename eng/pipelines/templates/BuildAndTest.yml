@@ -41,6 +41,20 @@ parameters:
 steps:
   # Internal pipeline: Build with pack+sign
   - ${{ if ne(parameters.runAsPublic, 'true') }}:
+    # Build bundle payload (aspire-managed) for each target RID before the main build
+    - ${{ each targetRid in parameters.targetRids }}:
+      - script: ${{ parameters.dotnetScript }}
+                msbuild
+                $(Build.SourcesDirectory)/eng/Bundle.proj
+                /restore
+                /p:Configuration=${{ parameters.buildConfig }}
+                /p:TargetRid=${{ targetRid }}
+                /p:BundleVersion=ci-bundlepayload
+                /p:SkipNativeBuild=true
+                /p:ContinuousIntegrationBuild=true
+                /bl:${{ parameters.repoLogPath }}/BundlePayload-${{ targetRid }}.binlog
+        displayName: 🟣Build bundle payload (${{ targetRid }})
+
     - script: ${{ parameters.buildScript }}
               -restore -build
               -pack
@@ -223,6 +237,7 @@ steps:
               -configuration ${{ parameters.buildConfig }}
               -pack
               /p:PrepareForHelix=${{ lower(eq(parameters.runHelixTests, 'true')) }}
+              /p:ArchiveTests=${{ lower(eq(parameters.runHelixTests, 'true')) }}
               /bl:${{ parameters.repoLogPath }}/build.binlog
               $(_OfficialBuildIdArgs)
       displayName: Build
@@ -260,7 +275,7 @@ steps:
               "${{ parameters.buildScript }} -testnobuild -test -configuration ${{ parameters.buildConfig }} /bl:${{ parameters.repoLogPath }}/tests.binlog /maxcpucount:1 /p:BuildInParallel=false $(_OfficialBuildIdArgs)"
       env:
         DOCKER_BUILDKIT: 1
-        # https://github.com/dotnet/aspire/issues/5195#issuecomment-2271687822
+        # https://github.com/microsoft/aspire/issues/5195#issuecomment-2271687822
         DOTNET_ASPIRE_DEPENDENCY_CHECK_TIMEOUT: 180
         ASPIRE__TEST__DCPLOGBASEPATH: $(Build.ArtifactStagingDirectory)/artifacts/log/dcp
         DOTNET_ROOT: $(Build.SourcesDirectory)/.dotnet

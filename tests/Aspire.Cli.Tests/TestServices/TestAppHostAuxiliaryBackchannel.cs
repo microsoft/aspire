@@ -15,7 +15,6 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
 {
     public string Hash { get; set; } = "test-hash";
     public string SocketPath { get; set; } = "/tmp/test.sock";
-    public DashboardMcpConnectionInfo? McpInfo { get; set; }
     public AppHostInformation? AppHostInfo { get; set; }
     public bool IsInScope { get; set; } = true;
     public DateTimeOffset ConnectedAt { get; set; } = DateTimeOffset.UtcNow;
@@ -46,6 +45,12 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// </summary>
     public Func<string, string, IReadOnlyDictionary<string, JsonElement>?, CancellationToken, Task<CallToolResult>>? CallResourceMcpToolHandler { get; set; }
 
+    /// <summary>
+    /// Gets or sets the function to call when GetResourceSnapshotsAsync is invoked.
+    /// If null, returns the ResourceSnapshots list.
+    /// </summary>
+    public Func<CancellationToken, Task<List<ResourceSnapshot>>>? GetResourceSnapshotsHandler { get; set; }
+
     public Task<DashboardUrlsState?> GetDashboardUrlsAsync(CancellationToken cancellationToken = default)
     {
         return Task.FromResult(DashboardUrlsState);
@@ -53,6 +58,11 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
 
     public Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(CancellationToken cancellationToken = default)
     {
+        if (GetResourceSnapshotsHandler is not null)
+        {
+            return GetResourceSnapshotsHandler(cancellationToken);
+        }
+
         return Task.FromResult(ResourceSnapshots);
     }
 
@@ -72,7 +82,8 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     {
         var lines = resourceName is null
             ? LogLines
-            : LogLines.Where(l => l.ResourceName == resourceName);
+            : LogLines.Where(l => string.Equals(l.ResourceName, resourceName, StringComparison.OrdinalIgnoreCase)
+                                || l.ResourceName.StartsWith(resourceName + "-", StringComparison.OrdinalIgnoreCase));
 
         foreach (var line in lines)
         {
@@ -97,6 +108,20 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
         CancellationToken cancellationToken = default)
     {
         return Task.FromResult(ExecuteResourceCommandResult);
+    }
+
+    /// <summary>
+    /// Gets or sets the result to return from WaitForResourceAsync.
+    /// </summary>
+    public WaitForResourceResponse WaitForResourceResult { get; set; } = new WaitForResourceResponse { Success = true, State = "Running" };
+
+    public Task<WaitForResourceResponse> WaitForResourceAsync(
+        string resourceName,
+        string status,
+        int timeoutSeconds,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(WaitForResourceResult);
     }
 
     public Task<CallToolResult> CallResourceMcpToolAsync(

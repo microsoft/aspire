@@ -3,63 +3,23 @@
   <file datatype="xml" source-language="en" target-language="it" original="../ResourceCommandStrings.resx">
     <body>
       <trans-unit id="CommandDescription">
-        <source>Execute a command on a resource.</source>
-        <target state="new">Execute a command on a resource.</target>
+        <source>Execute a command on a resource (e.g. start, stop, restart)</source>
+        <target state="needs-review-translation">Eseguire un comando su una risorsa.</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandNameArgumentDescription">
-        <source>The name of the command to execute.</source>
-        <target state="new">The name of the command to execute.</target>
+        <source>The name of the command to execute (e.g. start, stop, restart)</source>
+        <target state="needs-review-translation">Nome del comando da eseguire.</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandResourceArgumentDescription">
-        <source>The name of the resource to execute the command on.</source>
-        <target state="new">The name of the resource to execute the command on.</target>
+        <source>The name of the resource to execute the command on</source>
+        <target state="needs-review-translation">Nome della risorsa di destinazione rispetto al quale eseguire il comando.</target>
         <note />
       </trans-unit>
-      <trans-unit id="NoInScopeAppHostsShowingAll">
-        <source>No in-scope AppHosts found. Showing all running AppHosts.</source>
-        <target state="new">No in-scope AppHosts found. Showing all running AppHosts.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="NoRunningAppHostsFound">
-        <source>No running AppHosts found.</source>
-        <target state="translated">Non sono stati trovati AppHost in esecuzione.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ProjectOptionDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="translated">Percorso del file di un progetto AppHost di Aspire.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RestartDescription">
-        <source>Restart a running resource.</source>
-        <target state="new">Restart a running resource.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RestartResourceArgumentDescription">
-        <source>The name of the resource to restart.</source>
-        <target state="new">The name of the resource to restart.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ScanningForRunningAppHosts">
-        <source>Scanning for running AppHosts...</source>
-        <target state="translated">Analisi per l'esecuzione di AppHosts in corso...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SelectAppHost">
-        <source>Select which AppHost to connect to:</source>
-        <target state="new">Select which AppHost to connect to:</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="StartDescription">
-        <source>Start a stopped resource.</source>
-        <target state="new">Start a stopped resource.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="StartResourceArgumentDescription">
-        <source>The name of the resource to start.</source>
-        <target state="new">The name of the resource to start.</target>
+      <trans-unit id="SelectAppHostAction">
+        <source>connect to</source>
+        <target state="translated">connettersi a</target>
         <note />
       </trans-unit>
     </body>

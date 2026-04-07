@@ -37,7 +37,7 @@ public class GenAIItemViewModel
         }
         if (Type == GenAIItemType.OutputMessage)
         {
-            if (ItemParts.Any(p => p.MessagePart?.Type == MessagePart.ToolCallType))
+            if (ItemParts.Any(p => p.MessagePart?.Type is MessagePart.ToolCallType or MessagePart.ServerToolCallType))
             {
                 return new BadgeDetail(loc[nameof(Dialogs.GenAIMessageCategoryToolCalls)], "output", s_toolCallsIcon);
             }
@@ -46,11 +46,11 @@ public class GenAIItemViewModel
                 return new BadgeDetail(loc[nameof(Dialogs.GenAIMessageCategoryOutput)], "output", s_messageIcon);
             }
         }
-        if (ItemParts.Any(p => p.MessagePart?.Type == MessagePart.ToolCallType))
+        if (ItemParts.Any(p => p.MessagePart?.Type is MessagePart.ToolCallType or MessagePart.ServerToolCallType))
         {
             return new BadgeDetail(loc[nameof(Dialogs.GenAIMessageCategoryToolCalls)], "tool-calls", s_toolCallsIcon);
         }
-        if (ItemParts.Any(p => p.MessagePart?.Type == MessagePart.ToolCallResponseType))
+        if (ItemParts.Any(p => p.MessagePart?.Type is MessagePart.ToolCallResponseType or MessagePart.ServerToolCallResponseType))
         {
             return new BadgeDetail(loc[nameof(Dialogs.GenAIMessageCategoryToolResponse)], "tool-response", s_messageIcon);
         }

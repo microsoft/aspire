@@ -26,4 +26,6 @@ output connectionString string = '${cache.properties.hostName}:10000,ssl=true'
 
 output name string = cache.name
 
+output id string = cache.id
+
 output hostName string = cache.properties.hostName

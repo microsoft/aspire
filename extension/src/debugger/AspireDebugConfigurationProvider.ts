@@ -1,15 +1,8 @@
 import * as vscode from 'vscode';
 import { defaultConfigurationName } from '../loc/strings';
-import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { checkCliAvailableOrRedirect } from '../utils/workspace';
 
 export class AspireDebugConfigurationProvider implements vscode.DebugConfigurationProvider {
-    private _terminalProvider: AspireTerminalProvider;
-
-    constructor(terminalProvider: AspireTerminalProvider) {
-        this._terminalProvider = terminalProvider;
-    }
-
     async provideDebugConfigurations(folder: vscode.WorkspaceFolder | undefined, token?: vscode.CancellationToken): Promise<vscode.DebugConfiguration[]> {
         if (folder === undefined) {
             return [];
@@ -28,9 +21,8 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
 
     async resolveDebugConfiguration(folder: vscode.WorkspaceFolder | undefined, config: vscode.DebugConfiguration, token?: vscode.CancellationToken): Promise<vscode.DebugConfiguration | null | undefined> {
          // Check if CLI is available before starting debug session
-        const cliPath = this._terminalProvider.getAspireCliExecutablePath();
-        const isCliAvailable = await checkCliAvailableOrRedirect(cliPath);
-        if (!isCliAvailable) {
+        const result = await checkCliAvailableOrRedirect();
+        if (!result.available) {
             return undefined; // Cancel the debug session
         }
 

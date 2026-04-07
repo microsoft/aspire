@@ -2,19 +2,54 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="tr" original="../TelemetryCommandStrings.resx">
     <body>
-      <trans-unit id="AppHostNotRunning">
-        <source>No running AppHost found. Use 'aspire run' to start one first.</source>
-        <target state="translated">Çalışan AppHost bulunamadı. Önce birini başlatmak için 'aspire run' komutunu kullanın.</target>
+      <trans-unit id="ApiKeyOptionDescription">
+        <source>API key for authenticating with the dashboard (optional, for dashboards with API key authentication)</source>
+        <target state="new">API key for authenticating with the dashboard (optional, for dashboards with API key authentication)</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardApiNotAvailable">
         <source>Dashboard API is not available. Ensure the AppHost is running with Dashboard enabled.</source>
-        <target state="translated">Pano API'si kullanılamıyor. AppHost'un Pano özelliği etkin olarak çalıştığından emin olun.</target>
+        <target state="needs-review-translation">Pano API'si kullanılamıyor. AppHost'un Pano özelliği etkin olarak çalıştığından emin olun.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardApiNotEnabled">
+        <source>The dashboard at '{0}' does not have the telemetry API enabled. Configure the dashboard with Dashboard:Api:Enabled set to true.</source>
+        <target state="new">The dashboard at '{0}' does not have the telemetry API enabled. Configure the dashboard with Dashboard:Api:Enabled set to true.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardAuthFailed">
+        <source>Authentication denied by the dashboard. Use --api-key to specify a valid API key that matches the dashboard's configured API key (Dashboard:Api:PrimaryApiKey).</source>
+        <target state="new">Authentication denied by the dashboard. Use --api-key to specify a valid API key that matches the dashboard's configured API key (Dashboard:Api:PrimaryApiKey).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardConnectionFailed">
+        <source>Could not connect to the dashboard at '{0}'. Verify the dashboard is running and the URL is correct.</source>
+        <target state="new">Could not connect to the dashboard at '{0}'. Verify the dashboard is running and the URL is correct.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardUrlAndAppHostExclusive">
+        <source>The --dashboard-url and --apphost options cannot be used together. Specify one or the other.</source>
+        <target state="new">The --dashboard-url and --apphost options cannot be used together. Specify one or the other.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardUrlInvalid">
+        <source>The value '{0}' is not a valid URL. Specify an absolute URL like 'http://localhost:18888'.</source>
+        <target state="new">The value '{0}' is not a valid URL. Specify an absolute URL like 'http://localhost:18888'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardUrlNotReachable">
+        <source>The specified --dashboard-url '{0}' does not appear to be a valid Aspire Dashboard. Verify the URL is correct.</source>
+        <target state="new">The specified --dashboard-url '{0}' does not appear to be a valid Aspire Dashboard. Verify the URL is correct.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardUrlOptionDescription">
+        <source>URL of a standalone Aspire Dashboard to connect to directly (bypasses AppHost discovery)</source>
+        <target state="new">URL of a standalone Aspire Dashboard to connect to directly (bypasses AppHost discovery)</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>View telemetry data (logs, spans, traces) from a running Aspire application.</source>
-        <target state="translated">Çalışan bir Aspire uygulamasından telemetri verilerini (günlükler, yayılmalar, izlemeler) görüntüleyin.</target>
+        <source>View OpenTelemetry data (logs, spans, traces) from a running AppHost</source>
+        <target state="needs-review-translation">Çalışan bir Aspire uygulamasından telemetri verilerini (günlükler, yayılmalar, izlemeler) görüntüleyin.</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedToFetchTelemetry">
@@ -23,18 +58,43 @@
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
-        <source>Stream telemetry in real-time as it arrives.</source>
-        <target state="translated">Telemetri geldikçe gerçek zamanlı olarak akışını yapın.</target>
+        <source>Stream telemetry in real-time as it arrives</source>
+        <target state="needs-review-translation">Telemetri geldikçe gerçek zamanlı olarak akışını yapın.</target>
         <note />
       </trans-unit>
       <trans-unit id="FormatOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">Çıktı biçimi (Tablo veya Json).</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">Çıktı biçimi (Tablo veya Json).</target>
         <note />
       </trans-unit>
       <trans-unit id="HasErrorOptionDescription">
-        <source>Filter by error status (true to show only errors, false to exclude errors).</source>
-        <target state="translated">Hata durumuna göre filtreleyin (yalnızca hataları göstermek için true, hataları hariç tutmak için false).</target>
+        <source>Filter by error status (true to show only errors, false to exclude errors)</source>
+        <target state="needs-review-translation">Hata durumuna göre filtreleyin (yalnızca hataları göstermek için true, hataları hariç tutmak için false).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderDuration">
+        <source>Duration</source>
+        <target state="translated">Süre</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderName">
+        <source>Name</source>
+        <target state="translated">Ad</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderSpans">
+        <source>Spans</source>
+        <target state="translated">Yayılmalar</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderStatus">
+        <source>Status</source>
+        <target state="translated">Durum</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderTimestamp">
+        <source>Timestamp</source>
+        <target state="translated">Zaman damgası</target>
         <note />
       </trans-unit>
       <trans-unit id="LimitMustBePositive">
@@ -43,58 +103,43 @@
         <note />
       </trans-unit>
       <trans-unit id="LimitOptionDescription">
-        <source>Maximum number of items to return.</source>
-        <target state="translated">Döndürülecek maksimum öğe sayısı.</target>
+        <source>Maximum number of items to return</source>
+        <target state="needs-review-translation">Döndürülecek maksimum öğe sayısı.</target>
         <note />
       </trans-unit>
       <trans-unit id="LogsDescription">
-        <source>View structured logs from the Dashboard telemetry API.</source>
-        <target state="translated">Pano telemetri API'sinden yapılandırılmış günlükleri görüntüleyin.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="NoInScopeAppHostsShowingAll">
-        <source>No AppHosts found in current directory. Showing all running AppHosts.</source>
-        <target state="translated">Geçerli dizinde AppHost bulunamadı. Tüm çalışan AppHost'lar gösteriliyor.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ProjectOptionDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="translated">Aspire AppHost proje dosyasının yolu.</target>
+        <source>View structured logs from the Dashboard telemetry API</source>
+        <target state="needs-review-translation">Pano telemetri API'sinden yapılandırılmış günlükleri görüntüleyin.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
-        <source>Filter by resource name.</source>
-        <target state="translated">Kaynak adına göre filtreleyin.</target>
+        <source>Filter by resource name</source>
+        <target state="needs-review-translation">Kaynak adına göre filtreleyin.</target>
         <note />
       </trans-unit>
-      <trans-unit id="ScanningForRunningAppHosts">
-        <source>Scanning for running AppHosts...</source>
-        <target state="translated">Çalışan AppHost'lar taranıyor...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SelectAppHost">
-        <source>Select an AppHost:</source>
-        <target state="translated">AppHost seçin:</target>
+      <trans-unit id="SelectAppHostAction">
+        <source>view telemetry for</source>
+        <target state="translated">telemetrisini görüntüle:</target>
         <note />
       </trans-unit>
       <trans-unit id="SeverityOptionDescription">
-        <source>Filter logs by minimum severity (Trace, Debug, Information, Warning, Error, Critical).</source>
-        <target state="translated">Günlükleri en düşük önem derecesine göre filtreleyin (İzleme, Hata Ayıklama, Bilgi, Uyarı, Hata, Kritik).</target>
+        <source>Filter logs by minimum severity (Trace, Debug, Information, Warning, Error, Critical)</source>
+        <target state="needs-review-translation">Günlükleri en düşük önem derecesine göre filtreleyin (İzleme, Hata Ayıklama, Bilgi, Uyarı, Hata, Kritik).</target>
         <note />
       </trans-unit>
       <trans-unit id="SpansDescription">
-        <source>View spans from the Dashboard telemetry API.</source>
-        <target state="translated">Pano telemetri API'sinden yayılmaları görüntüleyin.</target>
+        <source>View spans from the Dashboard telemetry API</source>
+        <target state="needs-review-translation">Pano telemetri API'sinden yayılmaları görüntüleyin.</target>
         <note />
       </trans-unit>
       <trans-unit id="TraceIdArgumentDescription">
         <source>The trace ID to view. If not specified, lists all traces.</source>
-        <target state="translated">Görüntülenecek izleme kimliği. Belirtilmezse, tüm izlemeler listelenir.</target>
+        <target state="needs-review-translation">Görüntülenecek izleme kimliği. Belirtilmezse, tüm izlemeler listelenir.</target>
         <note />
       </trans-unit>
       <trans-unit id="TraceIdOptionDescription">
-        <source>Filter by trace ID.</source>
-        <target state="translated">İzleme kimliğine göre filtreleyin.</target>
+        <source>Filter by trace ID</source>
+        <target state="needs-review-translation">İzleme kimliğine göre filtreleyin.</target>
         <note />
       </trans-unit>
       <trans-unit id="TraceNotFound">
@@ -103,13 +148,13 @@
         <note />
       </trans-unit>
       <trans-unit id="TracesDescription">
-        <source>View traces from the Dashboard telemetry API.</source>
-        <target state="translated">Pano telemetri API'sinden izlemeleri görüntüleyin.</target>
+        <source>View traces from the Dashboard telemetry API</source>
+        <target state="needs-review-translation">Pano telemetri API'sinden izlemeleri görüntüleyin.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnexpectedContentType">
-        <source>Dashboard API returned unexpected content type. Expected JSON response.</source>
-        <target state="translated">Pano API'si beklenmeyen içerik türü döndürdü. JSON yanıtı bekleniyordu.</target>
+        <source>Dashboard API returned unexpected content type '{0}'. Expected JSON response.</source>
+        <target state="new">Dashboard API returned unexpected content type '{0}'. Expected JSON response.</target>
         <note />
       </trans-unit>
     </body>

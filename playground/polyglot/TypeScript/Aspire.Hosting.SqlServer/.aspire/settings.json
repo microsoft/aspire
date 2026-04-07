@@ -1,9 +1,0 @@
-{
-  "appHostPath": "../apphost.ts",
-  "language": "typescript/nodejs",
-  "channel": "pr-13970",
-  "sdkVersion": "13.1.0",
-  "packages": {
-    "Aspire.Hosting.SqlServer": "13.2.0-pr.13970.g0575147c"
-  }
-}

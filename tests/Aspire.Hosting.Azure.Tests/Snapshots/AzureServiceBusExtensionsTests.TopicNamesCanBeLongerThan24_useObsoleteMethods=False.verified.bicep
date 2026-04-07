@@ -8,6 +8,7 @@ resource sb 'Microsoft.ServiceBus/namespaces@2024-01-01' = {
   location: location
   properties: {
     disableLocalAuth: true
+    publicNetworkAccess: 'Enabled'
   }
   sku: {
     name: sku
@@ -27,3 +28,5 @@ output serviceBusEndpoint string = sb.properties.serviceBusEndpoint
 output serviceBusHostName string = split(replace(sb.properties.serviceBusEndpoint, 'https://', ''), ':')[0]
 
 output name string = sb.name
+
+output id string = sb.id

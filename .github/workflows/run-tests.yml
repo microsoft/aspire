@@ -39,6 +39,11 @@ on:
         required: false
         type: boolean
         default: false
+      # Controls whether to set CLI E2E environment variables (GH_TOKEN, GITHUB_PR_NUMBER, GITHUB_PR_HEAD_SHA)
+      requiresCliArchive:
+        required: false
+        type: boolean
+        default: false
       # Controls whether to install Playwright browsers during project build
       enablePlaywrightInstall:
         required: false
@@ -75,8 +80,8 @@ jobs:
       # from the repo always use restored dotnet. For tests run from outside
       # the repo we install system dotnet earlier in the build
 
-      - name: Setup vars (Linux)
-        if: ${{ inputs.os == 'ubuntu-latest' || inputs.os == 'macos-latest' }}
+      - name: Setup vars (Linux/macOS)
+        if: ${{ runner.os != 'Windows' }}
         run: |
           echo "DOTNET_SCRIPT=./dotnet.sh" >> $GITHUB_ENV
           echo "BUILD_SCRIPT=./build.sh" >> $GITHUB_ENV
@@ -84,7 +89,7 @@ jobs:
           echo ${{ github.workspace }}/.dotnet >> $GITHUB_PATH
 
       - name: Setup vars (Windows)
-        if: ${{ inputs.os == 'windows-latest' }}
+        if: ${{ runner.os == 'Windows' }}
         run: |
           echo "DOTNET_SCRIPT=.\dotnet.cmd" >> $env:GITHUB_ENV
           echo "BUILD_SCRIPT=.\build.cmd" >> $env:GITHUB_ENV
@@ -92,10 +97,10 @@ jobs:
           echo ${{ github.workspace }}\.dotnet >> $env:GITHUB_PATH
 
       - name: Checkout code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Set up .NET Core
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         # Used for running tests outside the repo
         if: ${{ inputs.requiresNugets }}
         with:
@@ -107,17 +112,27 @@ jobs:
           DOTNET_INSTALL_DIR: ${{ env.DOTNET_ROOT }}
 
       - name: Trust HTTPS development certificate (Linux)
-        if: inputs.os == 'ubuntu-latest'
-        run: ${{ env.DOTNET_SCRIPT }} dev-certs https --trust
+        if: runner.os == 'Linux'
+        # Allow the task to succeed on partial trust.
+        # Remove this workaround once https://github.com/dotnet/aspnetcore/pull/65392 has shipped
+        run: |
+          EXIT_CODE=0
+          ${{ env.DOTNET_SCRIPT }} dev-certs https --trust || EXIT_CODE=$?
+          if [ $EXIT_CODE -ne 0 ] && [ $EXIT_CODE -ne 4 ]; then
+            echo "dev-certs https --trust failed with exit code $EXIT_CODE"
+            exit $EXIT_CODE
+          fi
+        env:
+          WSL_INTEROP: ""
 
       - name: Verify Docker is running
         # nested docker containers not supported on windows
-        if: inputs.os == 'ubuntu-latest'
+        if: runner.os == 'Linux'
         run: docker info
 
       - name: Download built nugets
         if: ${{ inputs.requiresNugets }}
-        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: built-nugets
           path: ${{ github.workspace }}/artifacts/packages
@@ -125,20 +140,30 @@ jobs:
       - name: Copy nugets to the correct location
         if: ${{ inputs.requiresNugets }}
         shell: pwsh
-        run:
-          Move-Item -Path "${{ github.workspace }}/artifacts/packages/built-nugets/Debug" -Destination "${{ github.workspace }}/artifacts/packages"
+        run: |
+          $packageRoot = "${{ github.workspace }}/artifacts/packages"
+          $nestedDebugPath = Join-Path $packageRoot "built-nugets/Debug"
+          $directDebugPath = Join-Path $packageRoot "Debug"
+
+          if (Test-Path $nestedDebugPath) {
+            Move-Item -Path $nestedDebugPath -Destination $packageRoot
+          }
+          elseif (-not (Test-Path $directDebugPath)) {
+            Get-ChildItem -Path $packageRoot -Recurse | Select-Object -ExpandProperty FullName
+            Write-Error "Unable to find downloaded NuGet packages at '$nestedDebugPath' or '$directDebugPath'."
+          }
 
       - name: Compute RID for arch-specific packages
         if: ${{ inputs.requiresNugets }}
         id: compute_rid
         shell: pwsh
         run: |
-          $os = "${{ inputs.os }}"
-          switch ($os) {
-            'ubuntu-latest' { $rid = 'linux-x64' }
-            'macos-latest'  { $rid = 'osx-arm64' }
-            'windows-latest'{ $rid = 'win-x64' }
-            Default { Write-Error "Unknown OS '$os' for RID mapping"; exit 1 }
+          $runnerOs = "${{ runner.os }}"
+          switch ($runnerOs) {
+            'Linux'   { $rid = 'linux-x64' }
+            'macOS'   { $rid = 'osx-arm64' }
+            'Windows' { $rid = 'win-x64' }
+            Default { Write-Error "Unknown runner.os '$runnerOs' for RID mapping"; exit 1 }
           }
           Write-Host "Using RID=$rid"
           "RID=$rid"    | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
@@ -147,7 +172,7 @@ jobs:
       - name: Download arch-specific nugets
         if: ${{ inputs.requiresNugets }}
         continue-on-error: true
-        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: built-nugets-for-${{ steps.compute_rid.outputs.rid }}
           path: ${{ github.workspace }}/arch-specific
@@ -180,7 +205,7 @@ jobs:
           /bl:${{ github.workspace }}/artifacts/log/Debug/InstallSdkForTesting.binlog
 
       - name: Install Azure Functions Core Tools
-        if: inputs.os == 'ubuntu-latest' && (inputs.testShortName == 'Playground' || inputs.testShortName == 'Azure')
+        if: runner.os == 'Linux' && (inputs.testShortName == 'Playground' || inputs.testShortName == 'Azure')
         run: |
           npm i -g azure-functions-core-tools@4 --unsafe-perm true
 
@@ -224,13 +249,16 @@ jobs:
         run: >
           ${{ env.BUILD_SCRIPT }} -restore -ci -build -projects ${{ env.TEST_PROJECT_PATH }}
           /p:PrepareForHelix=true
-          /bl:${{ github.workspace }}/artifacts/log/Debug/PrepareForHelix.binlog
+          /p:ArchiveTests=true
+          /bl:${{ github.workspace }}/artifacts/log/Debug/BuildAndArchive.binlog
           ${{ !inputs.enablePlaywrightInstall && '/p:InstallBrowsersForPlaywright=false' || '' }}
           ${{ inputs.versionOverrideArg }}
 
       # Workaround for bug in Azure Functions Worker SDK. See https://github.com/Azure/azure-functions-dotnet-worker/issues/2969.
       - name: Rebuild for Azure Functions project
         if: inputs.testShortName == 'Playground'
+        env:
+          UseSharedCompilation: ${{ runner.os == 'Windows' && 'false' || '' }}
         run: |
           ${{ env.DOTNET_SCRIPT }} build ${{ github.workspace }}/playground/AzureFunctionsEndToEnd/AzureFunctionsEndToEnd.Functions/AzureFunctionsEndToEnd.Functions.csproj /p:SkipUnstableEmulators=true
 
@@ -275,8 +303,17 @@ jobs:
         if: runner.os == 'macOS'
         uses: ./.github/actions/unlock-macos-keychain
 
+      # Shut down the Roslyn compiler server before running tests. On resource-constrained
+      # runners (e.g. 2-core windows-latest), VBCSCompiler stays resident and consumes
+      # ~150% CPU / 700MB RAM, starving the runner agent and causing "lost communication"
+      # crashes. This is fast and idempotent (no-op if no server is running).
+      # See https://github.com/microsoft/aspire/issues/15832
+      - name: Shutdown build server
+        if: runner.os == 'Windows'
+        run: ${{ env.DOTNET_SCRIPT }} build-server shutdown
+
       - name: Run nuget dependent tests (Linux/macOS)
-        if: ${{ inputs.requiresNugets && (inputs.os == 'ubuntu-latest' || inputs.os == 'macos-latest') }}
+        if: ${{ inputs.requiresNugets && runner.os != 'Windows' }}
         working-directory: ${{ github.workspace }}/run-tests/
         env:
           ASPIRE__TEST__DCPLOGBASEPATH: ${{ github.workspace }}/testresults/dcp
@@ -286,6 +323,10 @@ jobs:
           TEST_LOG_PATH: ${{ github.workspace }}/artifacts/log/test-logs
           TestsRunningOutsideOfRepo: true
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
+          # PR metadata and token for CLI E2E tests that download artifacts from a PR
+          GITHUB_PR_NUMBER: ${{ inputs.requiresCliArchive && github.event.pull_request.number || '' }}
+          GITHUB_PR_HEAD_SHA: ${{ inputs.requiresCliArchive && github.event.pull_request.head.sha || '' }}
+          GH_TOKEN: ${{ inputs.requiresCliArchive && github.token || '' }}
         run: |
           # Start heartbeat monitor in background
           ${{ github.workspace }}/${{ env.DOTNET_SCRIPT }} ${{ github.workspace }}/tools/scripts/Heartbeat.cs &
@@ -297,7 +338,6 @@ jobs:
             --report-trx --report-trx-filename "${{ inputs.testShortName }}.trx" \
             --crashdump \
             --hangdump \
-            --hangdump-filename ${{ github.workspace }}/testresults/${{ inputs.testShortName }}.hangdump \
             --hangdump-timeout ${{ inputs.testHangTimeout }} \
             --results-directory ${{ github.workspace }}/testresults \
             --filter-not-trait "category=failing" \
@@ -313,7 +353,7 @@ jobs:
           exit $TEST_EXIT_CODE
 
       - name: Run nuget dependent tests (Windows)
-        if: ${{ inputs.requiresNugets && inputs.os == 'windows-latest' }}
+        if: ${{ inputs.requiresNugets && runner.os == 'Windows' }}
         working-directory: ${{ github.workspace }}/run-tests/
         shell: pwsh
         env:
@@ -324,18 +364,29 @@ jobs:
           TEST_LOG_PATH: ${{ github.workspace }}/artifacts/log/test-logs
           TestsRunningOutsideOfRepo: true
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
+          # Prevent VBCSCompiler from starting during tests. See #15832
+          UseSharedCompilation: false
+          # PR metadata and token for CLI E2E tests that download artifacts from a PR
+          GITHUB_PR_NUMBER: ${{ inputs.requiresCliArchive && github.event.pull_request.number || '' }}
+          GITHUB_PR_HEAD_SHA: ${{ inputs.requiresCliArchive && github.event.pull_request.head.sha || '' }}
+          GH_TOKEN: ${{ inputs.requiresCliArchive && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (output goes to console directly)
+          # Use 60s interval on Windows to reduce overhead on constrained 2-core runners
           $heartbeatProcess = Start-Process -FilePath "dotnet" `
-            -ArgumentList "${{ github.workspace }}\tools\scripts\Heartbeat.cs" `
+            -ArgumentList "${{ github.workspace }}\tools\scripts\Heartbeat.cs 60" `
             -NoNewWindow -PassThru
 
           try {
+            # Ensure UTF-8 encoding for all output on Windows
+            [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
             # Run tests
             dotnet ${{ env.TEST_ASSEMBLY_NAME }}.dll `
               --ignore-exit-code 8 `
               --report-trx --report-trx-filename "${{ inputs.testShortName }}.trx" `
               --crashdump `
+              --hangdump `
+              --hangdump-timeout ${{ inputs.testHangTimeout }} `
               --results-directory ${{ github.workspace }}/testresults `
               --filter-not-trait "category=failing" `
               --timeout ${{ inputs.testSessionTimeout }} `
@@ -354,7 +405,7 @@ jobs:
           }
 
       - name: Run tests (Linux/macOS)
-        if: ${{ ! inputs.requiresNugets && (inputs.os == 'ubuntu-latest' || inputs.os == 'macos-latest') }}
+        if: ${{ ! inputs.requiresNugets && runner.os != 'Windows' }}
         id: run-tests-unix
         env:
           ASPIRE__TEST__DCPLOGBASEPATH: ${{ github.workspace }}/testresults/dcp
@@ -364,12 +415,10 @@ jobs:
           NUGET_PACKAGES: ${{ github.workspace }}/.packages
           PLAYWRIGHT_INSTALLED: ${{ !inputs.enablePlaywrightInstall && 'false' || 'true' }}
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
-          # PR number for CLI E2E tests that download artifacts from a PR
-          GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
-          # PR head SHA for version verification (not the merge commit SHA)
-          GITHUB_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          # GitHub token for CLI E2E tests to download artifacts
-          GH_TOKEN: ${{ github.token }}
+          # PR metadata and token for CLI E2E tests that download artifacts from a PR
+          GITHUB_PR_NUMBER: ${{ inputs.requiresCliArchive && github.event.pull_request.number || '' }}
+          GITHUB_PR_HEAD_SHA: ${{ inputs.requiresCliArchive && github.event.pull_request.head.sha || '' }}
+          GH_TOKEN: ${{ inputs.requiresCliArchive && github.token || '' }}
         run: |
           # Start heartbeat monitor in background
           ${{ env.DOTNET_SCRIPT }} ${{ github.workspace }}/tools/scripts/Heartbeat.cs &
@@ -387,6 +436,8 @@ jobs:
             --ignore-exit-code 8 \
             --report-trx \
             --crashdump \
+            --hangdump \
+            --hangdump-timeout ${{ inputs.testHangTimeout }} \
             --results-directory ${{ github.workspace }}/testresults \
             --timeout ${{ inputs.testSessionTimeout }} \
             ${{ inputs.extraTestArgs }} \
@@ -400,7 +451,7 @@ jobs:
           exit $TEST_EXIT_CODE
 
       - name: Run tests (Windows)
-        if: ${{ ! inputs.requiresNugets && inputs.os == 'windows-latest' }}
+        if: ${{ ! inputs.requiresNugets && runner.os == 'Windows' }}
         id: run-tests-windows
         shell: pwsh
         env:
@@ -408,19 +459,26 @@ jobs:
           NUGET_PACKAGES: ${{ github.workspace }}/.packages
           PLAYWRIGHT_INSTALLED: ${{ !inputs.enablePlaywrightInstall && 'false' || 'true' }}
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
-          # PR number for CLI E2E tests that download artifacts from a PR
-          GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
-          # PR head SHA for version verification (not the merge commit SHA)
-          GITHUB_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          # GitHub token for CLI E2E tests to download artifacts
-          GH_TOKEN: ${{ github.token }}
+          # Prevent the Roslyn compiler server (VBCSCompiler) from starting during tests.
+          # On 2-core runners, VBCSCompiler consumes ~150% CPU / 700MB RAM and starves the
+          # runner agent, causing "lost communication" crashes. Projects are already pre-built,
+          # so any rebuild triggered by DCP's "dotnet run" should be minimal.
+          # See https://github.com/microsoft/aspire/issues/15832
+          UseSharedCompilation: false
+          # PR metadata and token for CLI E2E tests that download artifacts from a PR
+          GITHUB_PR_NUMBER: ${{ inputs.requiresCliArchive && github.event.pull_request.number || '' }}
+          GITHUB_PR_HEAD_SHA: ${{ inputs.requiresCliArchive && github.event.pull_request.head.sha || '' }}
+          GH_TOKEN: ${{ inputs.requiresCliArchive && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (output goes to console directly)
+          # Use 60s interval on Windows to reduce overhead on constrained 2-core runners
           $heartbeatProcess = Start-Process -FilePath "${{ env.DOTNET_SCRIPT }}" `
-            -ArgumentList "${{ github.workspace }}\tools\scripts\Heartbeat.cs" `
+            -ArgumentList "${{ github.workspace }}\tools\scripts\Heartbeat.cs 60" `
             -NoNewWindow -PassThru
 
           try {
+            # Ensure UTF-8 encoding for all output on Windows
+            [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
             # Run tests
             & ${{ env.DOTNET_SCRIPT }} test ${{ env.TEST_PROJECT_PATH }} `
               /p:ContinuousIntegrationBuild=true `
@@ -433,6 +491,8 @@ jobs:
               --ignore-exit-code 8 `
               --report-trx `
               --crashdump `
+              --hangdump `
+              --hangdump-timeout ${{ inputs.testHangTimeout }} `
               --results-directory ${{ github.workspace }}/testresults `
               --timeout ${{ inputs.testSessionTimeout }} `
               ${{ inputs.extraTestArgs }}
@@ -497,7 +557,7 @@ jobs:
           Write-Host "✓ Test execution completed successfully (found $validFileCount valid .trx file(s))"
 
       - name: Dump docker info
-        if: ${{ always() && inputs.os == 'ubuntu-latest' }}
+        if: ${{ always() && runner.os == 'Linux' }}
         run: |
           docker container ls --all
           docker container ls --all --format json
@@ -507,7 +567,7 @@ jobs:
       - name: Upload logs, and test results
         id: upload-logs
         if: always()
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: logs-${{ inputs.testShortName }}-${{ inputs.os }}
           path: |
@@ -529,7 +589,7 @@ jobs:
 
       - name: Upload CLI E2E recordings
         if: always()
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: cli-e2e-recordings-${{ inputs.testShortName }}
           path: cli-e2e-recordings/*.cast

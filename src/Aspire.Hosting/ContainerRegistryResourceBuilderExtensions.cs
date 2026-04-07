@@ -35,6 +35,7 @@ public static class ContainerRegistryResourceBuilderExtensions
     /// </code>
     /// </example>
     [Experimental("ASPIRECOMPUTE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport(Description = "Adds a container registry resource")]
     public static IResourceBuilder<ContainerRegistryResource> AddContainerRegistry(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -87,6 +88,7 @@ public static class ContainerRegistryResourceBuilderExtensions
     /// </code>
     /// </example>
     [Experimental("ASPIRECOMPUTE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport("addContainerRegistryFromString", Description = "Adds a container registry with string endpoint")]
     public static IResourceBuilder<ContainerRegistryResource> AddContainerRegistry(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -118,7 +120,7 @@ public static class ContainerRegistryResourceBuilderExtensions
     /// </summary>
     private static void SubscribeToAddRegistryTargetAnnotations(IDistributedApplicationBuilder builder, ContainerRegistryResource registry)
     {
-        builder.Eventing.Subscribe<BeforeStartEvent>((beforeStartEvent, cancellationToken) =>
+        builder.OnBeforeStart((beforeStartEvent, cancellationToken) =>
         {
             foreach (var resource in beforeStartEvent.Model.Resources)
             {
@@ -151,6 +153,7 @@ public static class ContainerRegistryResourceBuilderExtensions
     /// </code>
     /// </example>
     [Experimental("ASPIRECOMPUTE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport(Description = "Configures a resource to use a container registry")]
     public static IResourceBuilder<TDestination> WithContainerRegistry<TDestination, TContainerRegistry>(
         this IResourceBuilder<TDestination> builder,
         IResourceBuilder<TContainerRegistry> registry)

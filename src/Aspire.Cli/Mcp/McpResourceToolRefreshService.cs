@@ -20,7 +20,7 @@ internal sealed class McpResourceToolRefreshService : IMcpResourceToolRefreshSer
     private McpServer? _server;
     private Dictionary<string, ResourceToolEntry> _resourceToolMap = new(StringComparer.Ordinal);
     private bool _invalidated = true;
-    private string? _selectedAppHostPath;
+    private string? _lastRefreshedAppHostPath;
 
     public McpResourceToolRefreshService(
         IAuxiliaryBackchannelMonitor auxiliaryBackchannelMonitor,
@@ -35,7 +35,7 @@ internal sealed class McpResourceToolRefreshService : IMcpResourceToolRefreshSer
     {
         lock (_lock)
         {
-            if (_invalidated || _selectedAppHostPath != _auxiliaryBackchannelMonitor.SelectedAppHostPath)
+            if (_invalidated || _lastRefreshedAppHostPath != _auxiliaryBackchannelMonitor.ResolvedAppHostPath)
             {
                 resourceToolMap = null!;
                 return false;
@@ -71,7 +71,7 @@ internal sealed class McpResourceToolRefreshService : IMcpResourceToolRefreshSer
     }
 
     /// <inheritdoc/>
-    public async Task<IReadOnlyDictionary<string, ResourceToolEntry>> RefreshResourceToolMapAsync(CancellationToken cancellationToken)
+    public async Task<(IReadOnlyDictionary<string, ResourceToolEntry> ToolMap, bool Changed)> RefreshResourceToolMapAsync(CancellationToken cancellationToken)
     {
         _logger.LogDebug("Refreshing resource tool map.");
 
@@ -95,10 +95,15 @@ internal sealed class McpResourceToolRefreshService : IMcpResourceToolRefreshSer
                 {
                     Debug.Assert(resource.McpServer is not null);
 
+                    // Use DisplayName (the app-model name, e.g. "db1-mcp") rather than Name
+                    // (the DCP runtime ID, e.g. "db1-mcp-ypnvhwvw") because the AppHost resolves
+                    // resources by their app-model name in CallResourceMcpToolAsync.
+                    var routedResourceName = resource.DisplayName ?? resource.Name;
+
                     foreach (var tool in resource.McpServer.Tools)
                     {
-                        var exposedName = $"{resource.Name.Replace("-", "_")}_{tool.Name}";
-                        refreshedMap[exposedName] = new ResourceToolEntry(resource.Name, tool);
+                        var exposedName = $"{routedResourceName.Replace("-", "_")}_{tool.Name}";
+                        refreshedMap[exposedName] = new ResourceToolEntry(routedResourceName, tool);
 
                         _logger.LogDebug("{Tool}: {Description}", exposedName, tool.Description);
                     }
@@ -117,10 +122,38 @@ internal sealed class McpResourceToolRefreshService : IMcpResourceToolRefreshSer
 
         lock (_lock)
         {
+            var changed = _resourceToolMap.Count != refreshedMap.Count;
+            if (!changed)
+            {
+                // Check for deleted tools (in old but not in new).
+                foreach (var key in _resourceToolMap.Keys)
+                {
+                    if (!refreshedMap.ContainsKey(key))
+                    {
+                        changed = true;
+                        break;
+                    }
+                }
+
+                // Check for new tools (in new but not in old).
+                if (!changed)
+                {
+                    foreach (var key in refreshedMap.Keys)
+                    {
+                        if (!_resourceToolMap.ContainsKey(key))
+                        {
+                            changed = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
             _resourceToolMap = refreshedMap;
-            _selectedAppHostPath = selectedAppHostPath;
+            _lastRefreshedAppHostPath = selectedAppHostPath;
             _invalidated = false;
-            return _resourceToolMap;
+            return (_resourceToolMap, changed);
         }
     }
+
 }

@@ -3,7 +3,6 @@
 
 using Aspire.Cli.Tests.Utils;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
-using Hex1b;
 using Hex1b.Automation;
 using Xunit;
 
@@ -18,7 +17,7 @@ public sealed class AppServiceReactDeploymentTests(ITestOutputHelper output)
     // Full deployments can take up to 30 minutes if Azure infrastructure is backed up.
     private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(40);
 
-    [Fact(Skip = "App Service provisioning takes longer than 30 minutes, causing timeouts. Skipped until infrastructure issues are resolved.")]
+    [Fact]
     public async Task DeployReactTemplateToAzureAppService()
     {
         using var cts = new CancellationTokenSource(s_testTimeout);
@@ -51,7 +50,6 @@ public sealed class AppServiceReactDeploymentTests(ITestOutputHelper output)
         }
 
         var workspace = TemporaryWorkspace.Create(output);
-        var recordingPath = DeploymentE2ETestHelpers.GetTestResultsRecordingPath(nameof(DeployReactTemplateToAzureAppService));
         var startTime = DateTime.UtcNow;
         var deploymentUrls = new Dictionary<string, string>();
         // Generate a unique resource group name with pattern: e2e-[testcasename]-[runid]-[attempt]
@@ -67,53 +65,15 @@ public sealed class AppServiceReactDeploymentTests(ITestOutputHelper output)
 
         try
         {
-            var builder = Hex1bTerminal.CreateBuilder()
-                .WithHeadless()
-                .WithDimensions(160, 48)
-                .WithAsciinemaRecording(recordingPath)
-                .WithPtyProcess("/bin/bash", ["--norc"]);
-
-            using var terminal = builder.Build();
+            using var terminal = DeploymentE2ETestHelpers.CreateTestTerminal();
             var pendingRun = terminal.RunAsync(cancellationToken);
 
-            // Pattern searchers for aspire new interactive prompts
-            var waitingForTemplateSelectionPrompt = new CellPatternSearcher()
-                .FindPattern("> Starter App");
-
-            // Wait for the ASP.NET Core/React template to be highlighted (after pressing Down once)
-            // Use Find() instead of FindPattern() because parentheses and slashes are regex special characters
-            var waitingForReactTemplateSelected = new CellPatternSearcher()
-                .Find("> Starter App (ASP.NET Core/React)");
-
-            var waitingForProjectNamePrompt = new CellPatternSearcher()
-                .Find($"Enter the project name ({workspace.WorkspaceRoot.Name}): ");
-
-            var waitingForOutputPathPrompt = new CellPatternSearcher()
-                .Find($"Enter the output path: (./{projectName}): ");
-
-            var waitingForUrlsPrompt = new CellPatternSearcher()
-                .Find("Use *.dev.localhost URLs");
-
-            var waitingForRedisPrompt = new CellPatternSearcher()
-                .Find("Use Redis Cache");
-
-            // Note: React template (aspire-ts-cs-starter) does NOT have the "test project" prompt
-            // unlike the Blazor starter template. It only has localhost URLs and Redis prompts.
-
-            // Pattern searchers for aspire add prompts
-            var waitingForAddVersionSelectionPrompt = new CellPatternSearcher()
-                .Find("(based on NuGet.config)");
-
-            // Pattern searcher for deployment success
-            var waitingForPipelineSucceeded = new CellPatternSearcher()
-                .Find("PIPELINE SUCCEEDED");
-
             var counter = new SequenceCounter();
-            var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+            var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
             // Step 1: Prepare environment
             output.WriteLine("Step 1: Preparing environment...");
-            sequenceBuilder.PrepareEnvironment(workspace, counter);
+            await auto.PrepareEnvironmentAsync(workspace, counter);
 
             // Step 2: Set up CLI environment (in CI)
             // The workflow builds and installs the CLI to ~/.aspire/bin before running tests
@@ -122,139 +82,108 @@ public sealed class AppServiceReactDeploymentTests(ITestOutputHelper output)
             {
                 output.WriteLine("Step 2: Using pre-installed Aspire CLI from local build...");
                 // Source the CLI environment (sets PATH and other env vars)
-                sequenceBuilder.SourceAspireCliEnvironment(counter);
+                await auto.SourceAspireCliEnvironmentAsync(counter);
             }
 
             // Step 3: Create React + ASP.NET Core project using aspire new with interactive prompts
-            // Navigate down to select Starter App (ASP.NET Core/React) - it's the 2nd option
             output.WriteLine("Step 3: Creating React + ASP.NET Core project...");
-            sequenceBuilder.Type("aspire new")
-                .Enter()
-                .WaitUntil(s => waitingForTemplateSelectionPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(60))
-                // Navigate to Starter App (ASP.NET Core/React) - it's the 2nd option (after Blazor)
-                .Key(Hex1b.Input.Hex1bKey.DownArrow)
-                .WaitUntil(s => waitingForReactTemplateSelected.Search(s).Count > 0, TimeSpan.FromSeconds(5))
-                .Enter() // Select Starter App (ASP.NET Core/React)
-                .WaitUntil(s => waitingForProjectNamePrompt.Search(s).Count > 0, TimeSpan.FromSeconds(30))
-                .Type(projectName)
-                .Enter()
-                .WaitUntil(s => waitingForOutputPathPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-                .Enter() // Accept default output path
-                .WaitUntil(s => waitingForUrlsPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-                .Enter() // Select "No" for localhost URLs (default)
-                .WaitUntil(s => waitingForRedisPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-                // For Redis prompt, default is "Yes" so we need to select "No" by pressing Down
-                .Key(Hex1b.Input.Hex1bKey.DownArrow)
-                .Enter() // Select "No" for Redis Cache
-                // Note: React template does NOT have a test project prompt (unlike Blazor starter)
-                .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(5));
+            await auto.AspireNewAsync(projectName, counter, template: AspireTemplate.JsReact, useRedisCache: false);
 
             // Step 4: Navigate to project directory
             output.WriteLine("Step 4: Navigating to project directory...");
-            sequenceBuilder
-                .Type($"cd {projectName}")
-                .Enter()
-                .WaitForSuccessPrompt(counter);
+            await auto.TypeAsync($"cd {projectName}");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
 
             // Step 5: Add Aspire.Hosting.Azure.AppService package (instead of AppContainers)
             output.WriteLine("Step 5: Adding Azure App Service hosting package...");
-            sequenceBuilder.Type("aspire add Aspire.Hosting.Azure.AppService")
-                .Enter();
+            await auto.TypeAsync("aspire add Aspire.Hosting.Azure.AppService");
+            await auto.EnterAsync();
 
             // In CI, aspire add shows a version selection prompt
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
-                sequenceBuilder
-                    .WaitUntil(s => waitingForAddVersionSelectionPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(60))
-                    .Enter(); // select first version (PR build)
+                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
+                await auto.EnterAsync(); // select first version (PR build)
             }
 
-            sequenceBuilder.WaitForSuccessPrompt(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
 
             // Step 6: Modify AppHost.cs to add Azure App Service Environment
-            sequenceBuilder.ExecuteCallback(() =>
-            {
-                var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
-                var appHostDir = Path.Combine(projectDir, $"{projectName}.AppHost");
-                var appHostFilePath = Path.Combine(appHostDir, "AppHost.cs");
+            var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
+            var appHostDir = Path.Combine(projectDir, $"{projectName}.AppHost");
+            var appHostFilePath = Path.Combine(appHostDir, "AppHost.cs");
 
-                output.WriteLine($"Looking for AppHost.cs at: {appHostFilePath}");
+            output.WriteLine($"Looking for AppHost.cs at: {appHostFilePath}");
 
-                var content = File.ReadAllText(appHostFilePath);
+            var content = File.ReadAllText(appHostFilePath);
 
-                // Insert the Azure App Service Environment before builder.Build().Run();
-                var buildRunPattern = "builder.Build().Run();";
-                var replacement = """
+            // Insert the Azure App Service Environment before builder.Build().Run();
+            var buildRunPattern = "builder.Build().Run();";
+            var replacement = """
 // Add Azure App Service Environment for deployment
 builder.AddAzureAppServiceEnvironment("infra");
 
 builder.Build().Run();
 """;
 
-                content = content.Replace(buildRunPattern, replacement);
-                File.WriteAllText(appHostFilePath, content);
+            content = content.Replace(buildRunPattern, replacement);
+            File.WriteAllText(appHostFilePath, content);
 
-                output.WriteLine($"Modified AppHost.cs at: {appHostFilePath}");
-            });
+            output.WriteLine($"Modified AppHost.cs at: {appHostFilePath}");
 
             // Step 7: Navigate to AppHost project directory
             output.WriteLine("Step 6: Navigating to AppHost directory...");
-            sequenceBuilder
-                .Type($"cd {projectName}.AppHost")
-                .Enter()
-                .WaitForSuccessPrompt(counter);
+            await auto.TypeAsync($"cd {projectName}.AppHost");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
 
             // Step 8: Set environment variables for deployment
             // - Unset ASPIRE_PLAYGROUND to avoid conflicts
             // - Set Azure location
             // - Set AZURE__RESOURCEGROUP to use our unique resource group name
-            sequenceBuilder.Type($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}")
-                .Enter()
-                .WaitForSuccessPrompt(counter);
+            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
 
             // Step 9: Deploy to Azure App Service using aspire deploy
             // Use --clear-cache to ensure fresh deployment without cached location from previous runs
             output.WriteLine("Step 7: Starting Azure App Service deployment...");
-            sequenceBuilder
-                .Type("aspire deploy --clear-cache")
-                .Enter()
-                // Wait for pipeline to complete successfully (App Service can take longer)
-                .WaitUntil(s => waitingForPipelineSucceeded.Search(s).Count > 0, TimeSpan.FromMinutes(30))
-                .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(2));
+            await auto.TypeAsync("aspire deploy --clear-cache");
+            await auto.EnterAsync();
+            // Wait for pipeline to complete successfully (App Service can take longer)
+            await auto.WaitUntilTextAsync("PIPELINE SUCCEEDED", timeout: TimeSpan.FromMinutes(30));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
             // Step 10: Extract deployment URLs and verify endpoints with retry
             // For App Service, we use az webapp list instead of az containerapp list
             // Retry each endpoint for up to 3 minutes (18 attempts * 10 seconds)
             output.WriteLine("Step 8: Verifying deployed endpoints...");
-            sequenceBuilder
-                .Type($"RG_NAME=\"{resourceGroupName}\" && " +
-                      "echo \"Resource group: $RG_NAME\" && " +
-                      "if ! az group show -n \"$RG_NAME\" &>/dev/null; then echo \"❌ Resource group not found\"; exit 1; fi && " +
-                      // Get App Service hostnames (defaultHostName for each web app)
-                      "urls=$(az webapp list -g \"$RG_NAME\" --query \"[].defaultHostName\" -o tsv 2>/dev/null) && " +
-                      "if [ -z \"$urls\" ]; then echo \"❌ No App Service endpoints found\"; exit 1; fi && " +
-                      "failed=0 && " +
-                      "for url in $urls; do " +
-                      "echo \"Checking https://$url...\"; " +
-                      "success=0; " +
-                      "for i in $(seq 1 18); do " +
-                      "STATUS=$(curl -s -o /dev/null -w \"%{http_code}\" \"https://$url\" --max-time 30 2>/dev/null); " +
-                      "if [ \"$STATUS\" = \"200\" ] || [ \"$STATUS\" = \"302\" ]; then echo \"  ✅ $STATUS (attempt $i)\"; success=1; break; fi; " +
-                      "echo \"  Attempt $i: $STATUS, retrying in 10s...\"; sleep 10; " +
-                      "done; " +
-                      "if [ \"$success\" -eq 0 ]; then echo \"  ❌ Failed after 18 attempts\"; failed=1; fi; " +
-                      "done && " +
-                      "if [ \"$failed\" -ne 0 ]; then echo \"❌ One or more endpoint checks failed\"; exit 1; fi")
-                .Enter()
-                .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(5));
+            await auto.TypeAsync($"RG_NAME=\"{resourceGroupName}\" && " +
+                  "echo \"Resource group: $RG_NAME\" && " +
+                  "if ! az group show -n \"$RG_NAME\" &>/dev/null; then echo \"❌ Resource group not found\"; exit 1; fi && " +
+                  // Get App Service hostnames (defaultHostName for each web app)
+                  "urls=$(az webapp list -g \"$RG_NAME\" --query \"[].defaultHostName\" -o tsv 2>/dev/null) && " +
+                  "if [ -z \"$urls\" ]; then echo \"❌ No App Service endpoints found\"; exit 1; fi && " +
+                  "failed=0 && " +
+                  "for url in $urls; do " +
+                  "echo \"Checking https://$url...\"; " +
+                  "success=0; " +
+                  "for i in $(seq 1 18); do " +
+                  "STATUS=$(curl -s -o /dev/null -w \"%{http_code}\" \"https://$url\" --max-time 30 2>/dev/null); " +
+                  "if [ \"$STATUS\" = \"200\" ] || [ \"$STATUS\" = \"302\" ]; then echo \"  ✅ $STATUS (attempt $i)\"; success=1; break; fi; " +
+                  "echo \"  Attempt $i: $STATUS, retrying in 10s...\"; sleep 10; " +
+                  "done; " +
+                  "if [ \"$success\" -eq 0 ]; then echo \"  ❌ Failed after 18 attempts\"; failed=1; fi; " +
+                  "done && " +
+                  "if [ \"$failed\" -ne 0 ]; then echo \"❌ One or more endpoint checks failed\"; exit 1; fi");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
 
             // Step 11: Exit terminal
-            sequenceBuilder
-                .Type("exit")
-                .Enter();
+            await auto.TypeAsync("exit");
+            await auto.EnterAsync();
 
-            var sequence = sequenceBuilder.Build();
-            await sequence.ApplyAsync(terminal, cancellationToken);
             await pendingRun;
 
             var duration = DateTime.UtcNow - startTime;

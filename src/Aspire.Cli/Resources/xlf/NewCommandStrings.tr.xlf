@@ -13,13 +13,13 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Create a new Aspire project.</source>
-        <target state="translated">Yeni bir Aspire projesi oluşturun.</target>
+        <source>Create a new app from an Aspire starter template</source>
+        <target state="needs-review-translation">Yeni bir Aspire projesi oluşturun.</target>
         <note />
       </trans-unit>
       <trans-unit id="EnterTheOutputPath">
-        <source>Enter the output path:</source>
-        <target state="translated">Çıkış yolunu girin:</target>
+        <source>Enter the output path</source>
+        <target state="new">Enter the output path</target>
         <note />
       </trans-unit>
       <trans-unit id="EnterTheProjectName">
@@ -32,14 +32,24 @@
         <target state="translated">Geçersiz proje adı.</target>
         <note />
       </trans-unit>
+      <trans-unit id="LanguageOptionDescription">
+        <source>The programming language for the AppHost</source>
+        <target state="new">The programming language for the AppHost</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NameArgumentDescription">
-        <source>The name of the project to create.</source>
-        <target state="translated">Oluşturulacak projenin adı.</target>
+        <source>The name of the project to create</source>
+        <target state="needs-review-translation">Oluşturulacak projenin adı.</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputArgumentDescription">
-        <source>The output path for the project.</source>
-        <target state="translated">Projenin çıkış yolu.</target>
+        <source>The output path for the project</source>
+        <target state="needs-review-translation">Projenin çıkış yolu.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResolvingTemplateVersion">
+        <source>Resolving template version...</source>
+        <target state="translated">Şablon sürümü çözümleniyor...</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAProjectTemplate">
@@ -53,8 +63,8 @@
         <note />
       </trans-unit>
       <trans-unit id="SourceArgumentDescription">
-        <source>The NuGet source to use for the project templates.</source>
-        <target state="translated">Proje şablonları için kullanılacak NuGet kaynağı.</target>
+        <source>The NuGet source to use for the project templates</source>
+        <target state="needs-review-translation">Proje şablonları için kullanılacak NuGet kaynağı.</target>
         <note />
       </trans-unit>
       <trans-unit id="UsePrereleaseTemplates">
@@ -63,8 +73,8 @@
         <note />
       </trans-unit>
       <trans-unit id="VersionArgumentDescription">
-        <source>The version of the project templates to use.</source>
-        <target state="translated">Kullanılacak proje şablonlarının sürümü.</target>
+        <source>The version of the project templates to use</source>
+        <target state="needs-review-translation">Kullanılacak proje şablonlarının sürümü.</target>
         <note />
       </trans-unit>
     </body>

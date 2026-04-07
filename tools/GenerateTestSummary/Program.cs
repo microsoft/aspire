@@ -87,8 +87,23 @@ rootCommand.SetAction(result =>
     if (Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true"
         && Environment.GetEnvironmentVariable("GITHUB_STEP_SUMMARY") is string summaryPath)
     {
+        // GitHub Actions limits $GITHUB_STEP_SUMMARY to 1024 KB.
+        // Truncate to stay safely under the limit.
+        const int maxSummaryBytes = 900 * 1024; // 900 KB with headroom
+        var summaryToWrite = report;
+        if (Encoding.UTF8.GetByteCount(report) > maxSummaryBytes)
+        {
+            Console.WriteLine($"Report size ({Encoding.UTF8.GetByteCount(report) / 1024}KB) exceeds GitHub step summary limit. Truncating.");
+            // Find a safe truncation point within the byte limit
+            var truncated = report.AsSpan();
+            while (Encoding.UTF8.GetByteCount(truncated) > maxSummaryBytes)
+            {
+                truncated = truncated[..(truncated.Length - 1024)];
+            }
+            summaryToWrite = string.Concat(truncated, "\n\n⚠️ *Summary truncated — output exceeded GitHub step summary size limit.*\n");
+        }
         Console.WriteLine($"Detected GitHub Actions environment. Writing to {summaryPath}");
-        File.WriteAllText(summaryPath, report);
+        File.WriteAllText(summaryPath, summaryToWrite);
     }
 
     Console.WriteLine(report);

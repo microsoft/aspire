@@ -6,6 +6,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <summary>
 /// A resource that represents a MySQL container.
 /// </summary>
+[AspireExport(ExposeProperties = true)]
 public class MySqlServerResource : ContainerResource, IResourceWithConnectionString
 {
     internal static string PrimaryEndpointName => "tcp";

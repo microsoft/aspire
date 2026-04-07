@@ -7,6 +7,7 @@ using Aspire.Hosting.Pipelines;
 
 namespace Aspire.Hosting.Tests.Pipelines;
 
+[Trait("Partition", "4")]
 public class PipelineSummaryTests
 {
     [Fact]
@@ -22,6 +23,7 @@ public class PipelineSummaryTests
         Assert.Single(summary.Items);
         Assert.Equal("Key1", summary.Items[0].Key);
         Assert.Equal("Value1", summary.Items[0].Value);
+        Assert.False(summary.Items[0].EnableMarkdown);
     }
 
     [Fact]
@@ -95,7 +97,7 @@ public class PipelineSummaryTests
         var items = summary.Items;
 
         // Assert
-        Assert.IsType<System.Collections.ObjectModel.ReadOnlyCollection<KeyValuePair<string, string>>>(items);
+        Assert.IsType<System.Collections.ObjectModel.ReadOnlyCollection<PipelineSummaryItem>>(items);
     }
 
     [Fact]
@@ -118,8 +120,10 @@ public class PipelineSummaryTests
 
         // Act & Assert
         Assert.Equal(2, summary.Items.Count);
-        Assert.Equal(new KeyValuePair<string, string>("Key1", "Value1"), summary.Items[0]);
-        Assert.Equal(new KeyValuePair<string, string>("Key2", "Value2"), summary.Items[1]);
+        Assert.Equal("Key1", summary.Items[0].Key);
+        Assert.Equal("Value1", summary.Items[0].Value);
+        Assert.Equal("Key2", summary.Items[1].Key);
+        Assert.Equal("Value2", summary.Items[1].Value);
     }
 
     [Fact]
@@ -132,8 +136,8 @@ public class PipelineSummaryTests
 
         // Act & Assert
         Assert.Equal(2, summary.Items.Count);
-        Assert.Equal(new KeyValuePair<string, string>("Key", "FirstValue"), summary.Items[0]);
-        Assert.Equal(new KeyValuePair<string, string>("Key", "LastValue"), summary.Items[1]);
+        Assert.Equal("FirstValue", summary.Items[0].Value);
+        Assert.Equal("LastValue", summary.Items[1].Value);
     }
 
     [Fact]
@@ -150,5 +154,53 @@ public class PipelineSummaryTests
         Assert.Equal(2, summary.Items.Count);
         Assert.Equal("☁️ Target", summary.Items[0].Key);
         Assert.Equal("📦 Resource Group", summary.Items[1].Key);
+    }
+
+    [Fact]
+    public void Add_WithMarkdownString_SetsEnableMarkdownTrue()
+    {
+        // Arrange
+        var summary = new PipelineSummary();
+
+        // Act
+        summary.Add("📦 Resource Group", new MarkdownString("[rg-test](https://portal.azure.com)"));
+
+        // Assert
+        Assert.Single(summary.Items);
+        Assert.Equal("📦 Resource Group", summary.Items[0].Key);
+        Assert.Equal("[rg-test](https://portal.azure.com)", summary.Items[0].Value);
+        Assert.True(summary.Items[0].EnableMarkdown);
+    }
+
+    [Fact]
+    public void Add_WithPlainString_SetsEnableMarkdownFalse()
+    {
+        // Arrange
+        var summary = new PipelineSummary();
+
+        // Act
+        summary.Add("☁️ Target", "Azure");
+
+        // Assert
+        Assert.Single(summary.Items);
+        Assert.False(summary.Items[0].EnableMarkdown);
+    }
+
+    [Fact]
+    public void Add_MixedPlainAndMarkdown_PreservesFlags()
+    {
+        // Arrange
+        var summary = new PipelineSummary();
+
+        // Act
+        summary.Add("☁️ Target", "Azure");
+        summary.Add("📦 Resource Group", new MarkdownString("[rg-test](https://portal.azure.com)"));
+        summary.Add("🌐 Location", "eastus");
+
+        // Assert
+        Assert.Equal(3, summary.Items.Count);
+        Assert.False(summary.Items[0].EnableMarkdown);
+        Assert.True(summary.Items[1].EnableMarkdown);
+        Assert.False(summary.Items[2].EnableMarkdown);
     }
 }

@@ -923,6 +923,92 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
             .AppendContentAsFile(File.ReadAllText(envPath), "env");
     }
 
+    [Fact]
+    public async Task PublishAsync_HandlesConditionalReferenceExpression()
+    {
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+
+        builder.AddDockerComposeEnvironment("docker-compose");
+
+        var api = builder.AddContainer("myapp", "mcr.microsoft.com/dotnet/aspnet:8.0")
+            .WithEnvironment(context =>
+            {
+                // Simulate a conditional expression like TLS-enabled connection strings produce.
+                // The condition evaluates statically at publish time.
+                var conditional = ReferenceExpression.CreateConditional(
+                    new TestConditionProvider(bool.TrueString),
+                    bool.TrueString,
+                    ReferenceExpression.Create($",ssl=true"),
+                    ReferenceExpression.Empty);
+
+                context.EnvironmentVariables["TLS_SUFFIX"] = conditional;
+
+                var conditionalFalse = ReferenceExpression.CreateConditional(
+                    new TestConditionProvider(bool.FalseString),
+                    bool.TrueString,
+                    ReferenceExpression.Create($",ssl=true"),
+                    ReferenceExpression.Create($",ssl=false"));
+
+                context.EnvironmentVariables["TLS_SUFFIX_FALSE"] = conditionalFalse;
+            });
+
+        var app = builder.Build();
+        app.Run();
+
+        var composePath = Path.Combine(tempDir.Path, "docker-compose.yaml");
+        Assert.True(File.Exists(composePath));
+
+        await Verify(File.ReadAllText(composePath), "yaml");
+    }
+
+    [Fact]
+    public async Task PublishAsync_HandlesConditionalReferenceExpressionWithParameterCondition()
+    {
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+
+        builder.AddDockerComposeEnvironment("docker-compose");
+
+        // Use a real ParameterResource as the condition with a known default value.
+        var enableTls = builder.AddParameter("enable-tls", "True", publishValueAsDefault: true);
+
+        var api = builder.AddContainer("myapp", "mcr.microsoft.com/dotnet/aspnet:8.0")
+            .WithEnvironment(context =>
+            {
+                var conditional = ReferenceExpression.CreateConditional(
+                    enableTls.Resource,
+                    bool.TrueString,
+                    ReferenceExpression.Create($",ssl=true"),
+                    ReferenceExpression.Create($",ssl=false"));
+
+                context.EnvironmentVariables["TLS_SUFFIX"] = conditional;
+            });
+
+        var app = builder.Build();
+        app.Run();
+
+        var composePath = Path.Combine(tempDir.Path, "docker-compose.yaml");
+        Assert.True(File.Exists(composePath));
+
+        await Verify(File.ReadAllText(composePath), "yaml");
+    }
+
+    private sealed class TestConditionProvider(string value) : IValueProvider, IManifestExpressionProvider
+    {
+        public string ValueExpression => "test-condition";
+
+        public ValueTask<string?> GetValueAsync(CancellationToken cancellationToken = default)
+            => new(value);
+
+        public ValueTask<string?> GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken = default)
+            => new(value);
+    }
+
     private sealed class MockImageBuilder : IResourceContainerImageManager
     {
         public bool BuildImageCalled { get; private set; }

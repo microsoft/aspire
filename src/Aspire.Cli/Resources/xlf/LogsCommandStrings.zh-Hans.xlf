@@ -2,29 +2,19 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="zh-Hans" original="../LogsCommandStrings.resx">
     <body>
-      <trans-unit id="AppHostNotRunning">
-        <source>No running AppHost found. Use 'aspire run' to start one first.</source>
-        <target state="translated">找不到正在运行的 AppHost。请先使用 "aspire run" 启动一个。</target>
-        <note />
-      </trans-unit>
       <trans-unit id="Description">
-        <source>Display logs from resources in a running Aspire apphost.</source>
-        <target state="translated">显示正在运行的 Aspire 应用主机中资源的日志。</target>
+        <source>Display logs from resources in a running AppHost</source>
+        <target state="needs-review-translation">显示正在运行的 Aspire 应用主机中资源的日志。</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
-        <source>Stream logs in real-time as they are written.</source>
-        <target state="translated">在写入日志时实时流式传输这些日志。</target>
+        <source>Stream logs in real-time as they are written</source>
+        <target state="needs-review-translation">在写入日志时实时流式传输这些日志。</target>
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output logs in JSON format (NDJSON).</source>
-        <target state="translated">以 JSON 格式输出日志(NDJSON)。</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="NoInScopeAppHostsShowingAll">
-        <source>No AppHosts found in current directory. Showing all running AppHosts.</source>
-        <target state="translated">当前目录中未找到 AppHost。显示所有正在运行的 AppHost。</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">以 JSON 格式输出日志(NDJSON)。</target>
         <note />
       </trans-unit>
       <trans-unit id="NoResourcesFound">
@@ -32,14 +22,14 @@
         <target state="translated">未找到资源。</target>
         <note />
       </trans-unit>
-      <trans-unit id="ProjectOptionDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="translated">Aspire AppHost 项目文件的路径。</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The name of the resource to get logs for. If not specified, logs from all resources are shown.</source>
-        <target state="translated">要获取其日志的资源的名称。如果未指定，则显示所有资源的日志。</target>
+        <target state="needs-review-translation">要获取其日志的资源的名称。如果未指定，则显示所有资源的日志。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceNotFound">
+        <source>Resource '{0}' was not found.</source>
+        <target state="translated">未找到资源“{0}”。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceRequiredWithoutFollow">
@@ -47,14 +37,9 @@
         <target state="translated">不使用 --follow 时必须指定资源名称。使用 --follow 流式传输所有资源的日志。</target>
         <note />
       </trans-unit>
-      <trans-unit id="ScanningForRunningAppHosts">
-        <source>Scanning for running AppHosts...</source>
-        <target state="translated">正在扫描处于运行状态的 AppHost...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SelectAppHost">
-        <source>Select an AppHost:</source>
-        <target state="translated">选择 AppHost:</target>
+      <trans-unit id="SelectAppHostAction">
+        <source>stream logs from</source>
+        <target state="translated">从以下位置流式传输日志</target>
         <note />
       </trans-unit>
       <trans-unit id="TailMustBePositive">
@@ -63,13 +48,23 @@
         <note />
       </trans-unit>
       <trans-unit id="TailOptionDescription">
-        <source>Number of lines to show from the end of logs (default: all).</source>
-        <target state="translated">要在日志末尾显示的行数(默认: 全部)。</target>
+        <source>Number of lines to show from the end of logs (default: all)</source>
+        <target state="needs-review-translation">要在日志末尾显示的行数(默认: 全部)。</target>
         <note />
       </trans-unit>
       <trans-unit id="TailRequiresResource">
         <source>The --tail option requires a resource name to be specified.</source>
         <target state="translated">--tail 选项需要指定资源名称。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TimestampsOptionDescription">
+        <source>Show timestamps for each log line</source>
+        <target state="new">Show timestamps for each log line</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="GettingLogs">
+        <source>Getting logs...</source>
+        <target state="translated">正在获取日志...</target>
         <note />
       </trans-unit>
     </body>

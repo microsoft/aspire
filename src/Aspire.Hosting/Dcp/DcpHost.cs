@@ -5,17 +5,21 @@ using System.Buffers;
 using System.Collections;
 using System.IO.Pipelines;
 using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Aspire.Dashboard.Utils;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Resources;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Dcp;
 
 #pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 internal sealed class DcpHost
 {
@@ -29,7 +33,10 @@ internal sealed class DcpHost
     private readonly IInteractionService _interactionService;
     private readonly Locations _locations;
     private readonly TimeProvider _timeProvider;
+    private readonly IDeveloperCertificateService _developerCertificateService;
+    private readonly IConfiguration _configuration;
     private readonly CancellationTokenSource _shutdownCts = new();
+    private string? _dcpTlsCertThumbprint;
     private Task? _logProcessorTask;
 
     // These environment variables should never be inherited by DCP from app host.
@@ -48,7 +55,9 @@ internal sealed class DcpHost
         IInteractionService interactionService,
         Locations locations,
         DistributedApplicationModel applicationModel,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IDeveloperCertificateService developerCertificateService,
+        IConfiguration configuration)
     {
         _loggerFactory = loggerFactory;
         _logger = loggerFactory.CreateLogger<DcpHost>();
@@ -58,11 +67,15 @@ internal sealed class DcpHost
         _locations = locations;
         _applicationModel = applicationModel;
         _timeProvider = timeProvider;
+        _developerCertificateService = developerCertificateService;
+        _configuration = configuration;
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         await EnsureDcpContainerRuntimeAsync(cancellationToken).ConfigureAwait(false);
+        await EnsureDevelopmentCertificateTrustAsync(cancellationToken).ConfigureAwait(false);
+        await PrepareDcpTlsCertificateAsync(cancellationToken).ConfigureAwait(false);
         EnsureDcpHostRunning();
     }
 
@@ -122,6 +135,115 @@ internal sealed class DcpHost
         }
     }
 
+    internal async Task EnsureDevelopmentCertificateTrustAsync(CancellationToken cancellationToken)
+    {
+        AspireEventSource.Instance.DevelopmentCertificateTrustCheckStart();
+
+        try
+        {
+            // If no resources use HTTPS/TLS, there's no need to warn about untrusted dev certificates.
+            if (!_applicationModel.Resources.Any(ResourceUsesTls))
+            {
+                return;
+            }
+
+            // Check and warn if no trusted dev certs exist, or if a newer untrusted cert was detected
+            var hasNewerUntrustedCert = _developerCertificateService.LatestCertificateIsUntrusted;
+            var hasNoTrustedCerts = _developerCertificateService.Certificates.Count == 0;
+
+            if (hasNoTrustedCerts || hasNewerUntrustedCert)
+            {
+                string title;
+                string message;
+
+                if (hasNoTrustedCerts)
+                {
+                    title = InteractionStrings.NoDeveloperCertificateTrustedTitle;
+                    message = InteractionStrings.NoDeveloperCertificateTrustedMessage;
+                    _logger.LogWarning("No trusted Aspire development certificate was found. See https://aka.ms/aspire/devcerts for more information.");
+                }
+                else
+                {
+                    title = InteractionStrings.DeveloperCertificateNotFullyTrustedTitle;
+                    message = InteractionStrings.DeveloperCertificateNotFullyTrustedMessage;
+                    _logger.LogWarning("The most recent development certificate isn't fully trusted. See https://aka.ms/aspire/devcerts for more information.");
+                }
+
+                // Check if the interaction service is available (dashboard enabled)
+                if (!_interactionService.IsAvailable)
+                {
+                    return;
+                }
+
+                // Send notification to the dashboard
+                _ = _interactionService.PromptNotificationAsync(
+                    title: title,
+                    message: message,
+                    options: new NotificationInteractionOptions
+                    {
+                        Intent = MessageIntent.Error,
+                    },
+                    cancellationToken: cancellationToken);
+            }
+        }
+        finally
+        {
+            AspireEventSource.Instance.DevelopmentCertificateTrustCheckStop();
+        }
+    }
+
+    internal Task PrepareDcpTlsCertificateAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // Using the ASP.NET dev cert for DCP TLS is opt-in; by default DCP uses its own ephemeral certificate.
+        if (!_configuration.GetBool(KnownConfigNames.DcpDeveloperCertificate, defaultValue: false))
+        {
+            return Task.CompletedTask;
+        }
+
+        if (!OperatingSystem.IsWindows())
+        {
+            _logger.LogWarning("Developer certificate thumbprint configuration is only supported on Windows. DCP will use its default certificate.");
+            return Task.CompletedTask;
+        }
+
+        // Check if we have a trusted developer certificate with a private key available
+        var certificates = _developerCertificateService.Certificates;
+        if (certificates.Count == 0)
+        {
+            return Task.CompletedTask;
+        }
+
+        // Use the first (latest/best) certificate that has a private key
+        X509Certificate2? certificate = null;
+        foreach (var cert in certificates)
+        {
+            if (cert.HasPrivateKey)
+            {
+                certificate = cert;
+                break;
+            }
+        }
+
+        if (certificate is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        var thumbprint = certificate.Thumbprint;
+        if (string.IsNullOrWhiteSpace(thumbprint))
+        {
+            _logger.LogWarning("Failed to read the developer certificate thumbprint. DCP will use its default certificate.");
+            return Task.CompletedTask;
+        }
+
+        _dcpTlsCertThumbprint = thumbprint;
+        _logger.LogDebug("Prepared DCP TLS certificate thumbprint {Thumbprint}.", thumbprint);
+
+        return Task.CompletedTask;
+    }
+
     public async Task StopAsync()
     {
         _shutdownCts.Cancel();
@@ -170,7 +292,7 @@ internal sealed class DcpHost
 
     }
 
-    private ProcessSpec CreateDcpProcessSpec(Locations locations)
+    public ProcessSpec CreateDcpProcessSpec(Locations locations)
     {
         var dcpExePath = _dcpOptions.CliPath;
         if (!File.Exists(dcpExePath))
@@ -182,6 +304,11 @@ internal sealed class DcpHost
         if (!string.IsNullOrEmpty(_dcpOptions.ContainerRuntime))
         {
             arguments += $" --container-runtime \"{_dcpOptions.ContainerRuntime}\"";
+        }
+
+        if (!string.IsNullOrWhiteSpace(_dcpTlsCertThumbprint))
+        {
+            arguments += $" --tls-cert-thumbprint \"{_dcpTlsCertThumbprint}\"";
         }
 
         var dcpProcessSpec = new ProcessSpec(dcpExePath)
@@ -473,6 +600,38 @@ internal sealed class DcpHost
         var installed = dcpInfo.Containers?.Installed ?? false;
         var running = dcpInfo.Containers?.Running ?? false;
         return installed && running;
+    }
+
+    /// <summary>
+    /// Determines whether a resource uses HTTPS/TLS by checking for HTTPS endpoint annotations
+    /// or active HTTPS certificate configuration callbacks that haven't been disabled.
+    /// </summary>
+    private static bool ResourceUsesTls(IResource resource)
+    {
+        // Check if the resource has any HTTPS endpoints
+        if (resource.Annotations.OfType<EndpointAnnotation>().Any(e => e.UriScheme is "https"))
+        {
+            return true;
+        }
+
+        // Check if the resource has an HTTPS certificate configuration callback that hasn't been
+        // disabled via WithoutHttpsCertificate(). HttpsCertificateAnnotation has no effect without
+        // HttpsCertificateConfigurationCallbackAnnotation, so it's only checked as a filter here.
+        if (resource.Annotations.OfType<HttpsCertificateConfigurationCallbackAnnotation>().Any())
+        {
+            // The callback is present. Check if it's been disabled by WithoutHttpsCertificate()
+            // which sets UseDeveloperCertificate = false and Certificate = null.
+            if (resource.TryGetLastAnnotation<HttpsCertificateAnnotation>(out var certAnnotation)
+                && certAnnotation.UseDeveloperCertificate is false or null
+                && certAnnotation.Certificate is null)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        return false;
     }
 }
 

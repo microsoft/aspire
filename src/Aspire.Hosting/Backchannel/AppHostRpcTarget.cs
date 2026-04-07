@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Runtime.CompilerServices;
-using System.Threading.Channels;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Exec;
 using Aspire.Hosting.Pipelines;
@@ -20,14 +19,7 @@ internal class AppHostRpcTarget(
     IHostApplicationLifetime lifetime,
     DistributedApplicationOptions options)
 {
-    private readonly TaskCompletionSource<Channel<BackchannelLogEntry>> _logChannelTcs = new();
     private readonly CancellationTokenSource _shutdownCts = new();
-
-    public void RegisterLogChannel(Channel<BackchannelLogEntry> channel)
-    {
-        ArgumentNullException.ThrowIfNull(channel);
-        _logChannelTcs.TrySetResult(channel);
-    }
 
     public async IAsyncEnumerable<BackchannelLogEntry> GetAppHostLogEntriesAsync([EnumeratorCancellation] CancellationToken cancellationToken)
     {
@@ -35,30 +27,32 @@ internal class AppHostRpcTarget(
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token);
         var linkedToken = linkedCts.Token;
 
-        Channel<BackchannelLogEntry>? channel = null;
-        
-        try
+        var loggerProvider = serviceProvider.GetService<BackchannelLoggerProvider>();
+        if (loggerProvider is null)
         {
-            channel = await _logChannelTcs.Task.WaitAsync(linkedToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (_shutdownCts.Token.IsCancellationRequested)
-        {
-            // Gracefully handle cancellation due to shutdown
-            logger.LogDebug("Log entries stream cancelled due to AppHost shutdown before channel was ready");
             yield break;
         }
 
-        var logEntries = channel.Reader.ReadAllAsync(linkedToken);
+        // Subscribe atomically: snapshot + channel for new entries, no gap
+        var (snapshot, subscriberId, channel) = loggerProvider.Subscribe();
 
-        await foreach (var logEntry in logEntries.WithCancellation(linkedToken).ConfigureAwait(false))
+        try
         {
-            // If the log entry is null, terminate the stream
-            if (logEntry == null)
+            // Replay buffered entries first so late-connecting clients see history
+            foreach (var entry in snapshot)
             {
-                yield break;
+                yield return entry;
             }
 
-            yield return logEntry;
+            // Stream live entries
+            await foreach (var entry in channel.Reader.ReadAllAsync(linkedToken).ConfigureAwait(false))
+            {
+                yield return entry;
+            }
+        }
+        finally
+        {
+            loggerProvider.Unsubscribe(subscriberId);
         }
     }
 

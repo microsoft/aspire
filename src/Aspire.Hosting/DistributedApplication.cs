@@ -150,7 +150,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("createBuilder", Description = "Creates a new distributed application builder")]
+    [AspireExport(Description = "Creates a new distributed application builder")]
     public static IDistributedApplicationBuilder CreateBuilder(string[] args)
     {
         WaitForDebugger();
@@ -249,12 +249,14 @@ public class DistributedApplication : IHost, IAsyncDisposable
         if (Environment.GetEnvironmentVariable(KnownConfigNames.WaitForDebugger) == "true")
         {
             var startedWaiting = DateTimeOffset.UtcNow;
-            TimeSpan timeout = TimeSpan.FromSeconds(30);
+            var timeout = TimeSpan.FromSeconds(30);
 
             if (Environment.GetEnvironmentVariable(KnownConfigNames.WaitForDebuggerTimeout) is string timeoutString && int.TryParse(timeoutString, out var timeoutSeconds))
             {
                 timeout = TimeSpan.FromSeconds(timeoutSeconds);
             }
+
+            Console.WriteLine($"AppHost PID: {Environment.ProcessId}");
 
             while (Debugger.IsAttached == false)
             {
@@ -488,7 +490,15 @@ public class DistributedApplication : IHost, IAsyncDisposable
             await ExecuteBeforeStartHooksAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        await _host.RunAsync(cancellationToken).ConfigureAwait(false);
+        var lifetime = _host.Services.GetRequiredService<IHostApplicationLifetime>();
+        try
+        {
+            await _host.RunAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (lifetime.ApplicationStopping.IsCancellationRequested)
+        {
+            // Do nothing
+        }
     }
 
     /// <summary>

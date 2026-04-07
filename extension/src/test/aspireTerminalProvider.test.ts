@@ -2,94 +2,58 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import * as sinon from 'sinon';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
+import * as cliPathModule from '../utils/cliPath';
 
 suite('AspireTerminalProvider tests', () => {
     let terminalProvider: AspireTerminalProvider;
-    let configStub: sinon.SinonStub;
+    let resolveCliPathStub: sinon.SinonStub;
     let subscriptions: vscode.Disposable[];
 
     setup(() => {
         subscriptions = [];
         terminalProvider = new AspireTerminalProvider(subscriptions);
-        configStub = sinon.stub(vscode.workspace, 'getConfiguration');
+        resolveCliPathStub = sinon.stub(cliPathModule, 'resolveCliPath');
     });
 
     teardown(() => {
-        configStub.restore();
+        resolveCliPathStub.restore();
         subscriptions.forEach(s => s.dispose());
     });
 
     suite('getAspireCliExecutablePath', () => {
-        test('returns "aspire" when no custom path is configured', () => {
-            configStub.returns({
-                get: sinon.stub().returns('')
-            });
+        test('returns "aspire" when CLI is on PATH', async () => {
+            resolveCliPathStub.resolves({ cliPath: 'aspire', available: true, source: 'path' });
 
-            const result = terminalProvider.getAspireCliExecutablePath();
+            const result = await terminalProvider.getAspireCliExecutablePath();
             assert.strictEqual(result, 'aspire');
         });
 
-        test('returns custom path when configured', () => {
-            configStub.returns({
-                get: sinon.stub().returns('/usr/local/bin/aspire')
-            });
+        test('returns resolved path when CLI found at default install location', async () => {
+            resolveCliPathStub.resolves({ cliPath: '/home/user/.aspire/bin/aspire', available: true, source: 'default-install' });
 
-            const result = terminalProvider.getAspireCliExecutablePath();
+            const result = await terminalProvider.getAspireCliExecutablePath();
+            assert.strictEqual(result, '/home/user/.aspire/bin/aspire');
+        });
+
+        test('returns configured custom path', async () => {
+            resolveCliPathStub.resolves({ cliPath: '/usr/local/bin/aspire', available: true, source: 'configured' });
+
+            const result = await terminalProvider.getAspireCliExecutablePath();
             assert.strictEqual(result, '/usr/local/bin/aspire');
         });
 
-        test('returns custom path with spaces', () => {
-            configStub.returns({
-                get: sinon.stub().returns('/my path/with spaces/aspire')
-            });
+        test('returns "aspire" when CLI is not found', async () => {
+            resolveCliPathStub.resolves({ cliPath: 'aspire', available: false, source: 'not-found' });
 
-            const result = terminalProvider.getAspireCliExecutablePath();
-            assert.strictEqual(result, '/my path/with spaces/aspire');
-        });
-
-        test('trims whitespace from configured path', () => {
-            configStub.returns({
-                get: sinon.stub().returns('  /usr/local/bin/aspire  ')
-            });
-
-            const result = terminalProvider.getAspireCliExecutablePath();
-            assert.strictEqual(result, '/usr/local/bin/aspire');
-        });
-
-        test('returns "aspire" when configured path is only whitespace', () => {
-            configStub.returns({
-                get: sinon.stub().returns('   ')
-            });
-
-            const result = terminalProvider.getAspireCliExecutablePath();
+            const result = await terminalProvider.getAspireCliExecutablePath();
             assert.strictEqual(result, 'aspire');
         });
 
-        test('handles Windows-style paths', () => {
-            configStub.returns({
-                get: sinon.stub().returns('C:\\Program Files\\Aspire\\aspire.exe')
-            });
+        test('handles Windows-style paths', async () => {
+            resolveCliPathStub.resolves({ cliPath: 'C:\\Program Files\\Aspire\\aspire.exe', available: true, source: 'configured' });
 
-            const result = terminalProvider.getAspireCliExecutablePath();
+            const result = await terminalProvider.getAspireCliExecutablePath();
             assert.strictEqual(result, 'C:\\Program Files\\Aspire\\aspire.exe');
-        });
-
-        test('handles Windows-style paths without spaces', () => {
-            configStub.returns({
-                get: sinon.stub().returns('C:\\aspire\\aspire.exe')
-            });
-
-            const result = terminalProvider.getAspireCliExecutablePath();
-            assert.strictEqual(result, 'C:\\aspire\\aspire.exe');
-        });
-
-        test('handles paths with special characters', () => {
-            configStub.returns({
-                get: sinon.stub().returns('/path/with$dollar/aspire')
-            });
-
-            const result = terminalProvider.getAspireCliExecutablePath();
-            assert.strictEqual(result, '/path/with$dollar/aspire');
         });
     });
 });

@@ -19,7 +19,7 @@ public class DiskCacheTests(ITestOutputHelper outputHelper)
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
         var hives = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives"));
         var cacheDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cache"));
-        var ctx = new CliExecutionContext(workspace.WorkspaceRoot, hives, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")));
+        var ctx = new CliExecutionContext(workspace.WorkspaceRoot, hives, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
         var loggerFactory = NullLoggerFactory.Instance; // no-op logging is fine here
         var logger = loggerFactory.CreateLogger<DiskCache>();
         return new DiskCache(logger, ctx, configuration);

@@ -1,74 +1,66 @@
 #!/bin/bash
 # setup-local-cli.sh - Set up Aspire CLI and NuGet packages from local artifacts
 # Used by polyglot validation Dockerfiles to use pre-built artifacts from the workflow
+#
+# The artifact is a self-extracting binary that embeds the runtime, dashboard, dcp, etc.
+# Bundle extraction happens lazily on first command that needs the layout.
 
 set -e
 
 ARTIFACTS_DIR="/workspace/artifacts"
-CLI_DIR="$ARTIFACTS_DIR/cli"
+BUNDLE_DIR="$ARTIFACTS_DIR/bundle"
 NUGETS_DIR="$ARTIFACTS_DIR/nugets"
 NUGETS_RID_DIR="$ARTIFACTS_DIR/nugets-rid"
 ASPIRE_HOME="$HOME/.aspire"
 
-echo "=== Setting up Aspire CLI from local artifacts ==="
-
-# Find and extract the CLI archive
-CLI_ARCHIVE=$(find "$CLI_DIR" -name "aspire-cli-linux-x64*.tar.gz" 2>/dev/null | head -1)
-if [ -z "$CLI_ARCHIVE" ]; then
-    echo "Error: Could not find CLI archive in $CLI_DIR"
-    ls -la "$CLI_DIR" 2>/dev/null || echo "Directory does not exist"
+# Install the self-extracting binary
+echo "=== Installing Aspire CLI ==="
+if [ ! -f "$BUNDLE_DIR/aspire" ]; then
+    echo "ERROR: aspire binary not found at $BUNDLE_DIR/aspire"
+    ls -la "$BUNDLE_DIR" 2>/dev/null || echo "Bundle directory does not exist"
     exit 1
 fi
 
-echo "Found CLI archive: $CLI_ARCHIVE"
-
-# Create CLI directory and extract
 mkdir -p "$ASPIRE_HOME/bin"
-tar -xzf "$CLI_ARCHIVE" -C "$ASPIRE_HOME/bin"
+cp "$BUNDLE_DIR/aspire" "$ASPIRE_HOME/bin/"
 chmod +x "$ASPIRE_HOME/bin/aspire"
+echo "  ✓ Installed to $ASPIRE_HOME/bin/aspire"
 
-# Verify CLI works
-echo "CLI version:"
-"$ASPIRE_HOME/bin/aspire" --version
+# Extract the embedded bundle so runtime/dotnet and other components are available
+# Commands like 'aspire init' and 'aspire add' need the bundled dotnet for NuGet operations
+echo "=== Extracting bundle ==="
+"$ASPIRE_HOME/bin/aspire" setup || {
+    echo "ERROR: aspire setup failed"
+    exit 1
+}
 
 # Set up NuGet hive
+echo "=== Setting up NuGet package hive ==="
 HIVE_DIR="$ASPIRE_HOME/hives/local/packages"
 mkdir -p "$HIVE_DIR"
 
-# Find NuGet packages in the shipping directory
 SHIPPING_DIR="$NUGETS_DIR/Release/Shipping"
 if [ ! -d "$SHIPPING_DIR" ]; then
-    # Try without Release subdirectory
     SHIPPING_DIR="$NUGETS_DIR"
 fi
 
 if [ -d "$SHIPPING_DIR" ]; then
-    echo "Copying NuGet packages from $SHIPPING_DIR to hive"
-    # Copy all .nupkg files, handling nested directories
     find "$SHIPPING_DIR" -name "*.nupkg" -exec cp {} "$HIVE_DIR/" \;
-    PKG_COUNT=$(find "$HIVE_DIR" -name "*.nupkg" | wc -l)
-    echo "Copied $PKG_COUNT packages to hive"
-else
-    echo "Warning: Could not find NuGet packages directory"
-    ls -la "$NUGETS_DIR" 2>/dev/null || echo "Directory does not exist"
+    echo "  ✓ Copied $(find "$HIVE_DIR" -name "*.nupkg" | wc -l) packages"
 fi
 
-# Copy RID-specific packages (Aspire.Hosting.Orchestration.linux-x64, Aspire.Dashboard.Sdk.linux-x64)
 if [ -d "$NUGETS_RID_DIR" ]; then
-    echo "Copying RID-specific NuGet packages from $NUGETS_RID_DIR to hive"
     find "$NUGETS_RID_DIR" -name "*.nupkg" -exec cp {} "$HIVE_DIR/" \;
-    RID_PKG_COUNT=$(find "$NUGETS_RID_DIR" -name "*.nupkg" | wc -l)
-    echo "Copied $RID_PKG_COUNT RID-specific packages to hive"
-else
-    echo "Warning: Could not find RID-specific NuGet packages directory at $NUGETS_RID_DIR"
+    echo "  ✓ Copied RID-specific packages"
 fi
 
-# Total package count
-TOTAL_PKG_COUNT=$(find "$HIVE_DIR" -name "*.nupkg" | wc -l)
-echo "Total packages in hive: $TOTAL_PKG_COUNT"
+echo "  Total packages in hive: $(find "$HIVE_DIR" -name "*.nupkg" | wc -l)"
 
 # Set the channel to 'local' so CLI uses our hive
-echo "Setting channel to 'local'"
-"$ASPIRE_HOME/bin/aspire" config set channel local --global || true
+echo "=== Configuring CLI channel ==="
+"$ASPIRE_HOME/bin/aspire" config set channel local --global || {
+    echo "  Warning: Failed to set channel"
+}
 
+echo ""
 echo "=== Aspire CLI setup complete ==="

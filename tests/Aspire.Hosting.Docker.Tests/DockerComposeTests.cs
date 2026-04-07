@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECOMPUTE002
@@ -211,6 +211,43 @@ public class DockerComposeTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task DockerSwarmUpdateConfigSerializedCorrectly()
+    {
+        using var tempDir = new TestTempDirectory();
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+
+        builder.AddDockerComposeEnvironment("swarm-env");
+
+        builder.AddContainer("my-service", "my-image:latest")
+            .PublishAsDockerComposeService((resource, service) =>
+            {
+                service.Deploy = new Aspire.Hosting.Docker.Resources.ServiceNodes.Swarm.Deploy
+                {
+                    UpdateConfig = new Aspire.Hosting.Docker.Resources.ServiceNodes.Swarm.UpdateConfig
+                    {
+                        Parallelism = 2,
+                        Delay = "10s",
+                        FailureAction = "rollback",
+                        Monitor = "5s",
+                        MaxFailureRatio = "0.3",
+                        Order = "start-first"
+                    }
+                };
+            });
+
+        using var app = builder.Build();
+        app.Run();
+
+        var composeFile = Path.Combine(tempDir.Path, "docker-compose.yaml");
+        Assert.True(File.Exists(composeFile), "Docker Compose file was not created.");
+        var composeContent = File.ReadAllText(composeFile);
+
+        await Verify(composeContent, "yaml");
+    }
+
+    [Fact]
     public async Task GetHostAddressExpression()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -349,6 +386,7 @@ public class DockerComposeTests(ITestOutputHelper output)
 
     [Fact]
     [RequiresFeature(TestFeature.Docker)]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/15078", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public async Task DeployWithDashboard_PrintsDashboardAndServiceEndpoints()
     {
         using var tempDir = new TestTempDirectory();
@@ -645,14 +683,12 @@ public class DockerComposeTests(ITestOutputHelper output)
         Assert.False(fakeRuntime.WasPushImageCalled, "PushImageAsync should NOT have been called for local registry");
 
         // Verify the tag was applied correctly
-        Assert.Single(fakeRuntime.TagImageCalls);
-        var (localName, targetName) = fakeRuntime.TagImageCalls[0];
+        var (localName, targetName) = Assert.Single(fakeRuntime.TagImageCalls);
         Assert.StartsWith("servicea:", localName); // Local name includes a hash suffix
         Assert.StartsWith("servicea:", targetName); // Target name includes the deploy tag
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/dotnet/aspire/issues/13878")]
     public async Task PushImageToRegistry_WithRemoteRegistry_PushesImage()
     {
         using var tempDir = new TestTempDirectory();

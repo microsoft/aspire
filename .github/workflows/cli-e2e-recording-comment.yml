@@ -20,7 +20,7 @@ jobs:
     # Only run on the dotnet org and for pull requests
     # Note: This runs for all conclusions (success, failure, cancelled) since recordings may exist
     if: >-
-      ${{ github.repository_owner == 'dotnet' && 
+      ${{ github.repository_owner == 'microsoft' &&
           (github.event.workflow_run.event == 'pull_request' || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
     permissions:
@@ -39,7 +39,7 @@ jobs:
         with:
           script: |
             let runId, prNumber, headSha;
-            
+
             if (context.eventName === 'workflow_dispatch') {
               // Manual trigger - get run info from input
               runId = context.payload.inputs.run_id;
@@ -49,7 +49,7 @@ jobs:
                 run_id: runId
               });
               headSha = run.data.head_sha;
-              
+
               // Find PR by head SHA
               const prs = await github.rest.pulls.list({
                 owner: context.repo.owner,
@@ -62,18 +62,18 @@ jobs:
               // Triggered by workflow_run
               runId = context.payload.workflow_run.id;
               headSha = context.payload.workflow_run.head_sha;
-              
+
               // Get PR number from the workflow run
               const prs = context.payload.workflow_run.pull_requests;
               prNumber = prs && prs.length > 0 ? prs[0].number : null;
             }
-            
+
             if (!prNumber) {
               console.log('No PR found for this workflow run, skipping comment');
               core.setOutput('skip', 'true');
               return;
             }
-            
+
             core.setOutput('skip', 'false');
             core.setOutput('run_id', runId);
             core.setOutput('pr_number', prNumber);
@@ -87,9 +87,9 @@ jobs:
           script: |
             const fs = require('fs');
             const path = require('path');
-            
+
             const runId = ${{ steps.run-info.outputs.run_id }};
-            
+
             // List ALL artifacts for the workflow run using pagination
             // (without pagination we only get the first page and miss CLI E2E artifacts)
             const allArtifacts = await github.paginate(
@@ -101,37 +101,37 @@ jobs:
                 per_page: 100
               }
             );
-            
+
             console.log(`Total artifacts found: ${allArtifacts.length}`);
-            
+
             // Filter for CLI E2E recording artifacts (simple pattern match)
             // These are uploaded by the run-tests workflow with name: cli-e2e-recordings-{TestName}
-            const cliE2eArtifacts = allArtifacts.filter(a => 
+            const cliE2eArtifacts = allArtifacts.filter(a =>
               a.name.startsWith('cli-e2e-recordings-')
             );
-            
+
             console.log(`Found ${cliE2eArtifacts.length} CLI E2E recording artifacts`);
-            
+
             // Create recordings directory
             const recordingsDir = 'recordings';
             fs.mkdirSync(recordingsDir, { recursive: true });
-            
+
             // Download each artifact
             for (const artifact of cliE2eArtifacts) {
               console.log(`Downloading ${artifact.name}...`);
-              
+
               const download = await github.rest.actions.downloadArtifact({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 artifact_id: artifact.id,
                 archive_format: 'zip'
               });
-              
+
               const artifactPath = path.join(recordingsDir, `${artifact.name}.zip`);
               fs.writeFileSync(artifactPath, Buffer.from(download.data));
               console.log(`Saved to ${artifactPath}`);
             }
-            
+
             core.setOutput('artifact_count', cliE2eArtifacts.length);
 
       - name: Extract recordings from artifacts
@@ -139,17 +139,17 @@ jobs:
         shell: bash
         run: |
           mkdir -p cast_files
-          
+
           for zipfile in recordings/*.zip; do
             if [ -f "$zipfile" ]; then
               echo "Extracting $zipfile..."
               unzip -o "$zipfile" -d "recordings/extracted_$(basename "$zipfile" .zip)" || true
             fi
           done
-          
+
           # Find and copy all .cast files
           find recordings -name "*.cast" -exec cp {} cast_files/ \; 2>/dev/null || true
-          
+
           echo "Found recordings:"
           ls -la cast_files/ || echo "No .cast files found"
 
@@ -166,61 +166,88 @@ jobs:
           RUN_ID="${{ steps.run-info.outputs.run_id }}"
           HEAD_SHA="${{ steps.run-info.outputs.head_sha }}"
           SHORT_SHA="${HEAD_SHA:0:7}"
-          
+
           RECORDINGS_DIR="cast_files"
-          
+
           if [ -d "$RECORDINGS_DIR" ] && compgen -G "$RECORDINGS_DIR"/*.cast > /dev/null; then
             # Install asciinema
             pip install asciinema
-            
+
             # Unique marker to identify CLI E2E recording comments
             COMMENT_MARKER="<!-- cli-e2e-recordings -->"
-            
-            # Build comment body
-            COMMENT_BODY="${COMMENT_MARKER}
-          ## 🎬 CLI E2E Test Recordings
-          
-          The following terminal recordings are available for commit \`${SHORT_SHA}\`:
-          
-          | Test | Recording |
-          |------|-----------|"
-            
+
+            # Retry configuration for asciinema uploads
+            MAX_UPLOAD_RETRIES=5
+            RETRY_BASE_DELAY_SECONDS=30
+
             UPLOAD_COUNT=0
             FAIL_COUNT=0
-            
+            TOTAL_COUNT=0
+
+            TABLE_BODY=""
+
             for castfile in "$RECORDINGS_DIR"/*.cast; do
               if [ -f "$castfile" ]; then
                 filename=$(basename "$castfile" .cast)
                 echo "Uploading $castfile..."
-                
-                # Upload to asciinema and capture URL
-                UPLOAD_OUTPUT=$(asciinema upload "$castfile" 2>&1) || true
-                ASCIINEMA_URL=$(echo "$UPLOAD_OUTPUT" | grep -oP 'https://asciinema\.org/a/[a-zA-Z0-9_-]+' | head -1) || true
-                
+                TOTAL_COUNT=$((TOTAL_COUNT + 1))
+
+                # Upload to asciinema with retry logic for transient failures
+                ASCIINEMA_URL=""
+                for attempt in $(seq 1 "$MAX_UPLOAD_RETRIES"); do
+                  UPLOAD_OUTPUT=$(asciinema upload "$castfile" 2>&1) || true
+                  ASCIINEMA_URL=$(echo "$UPLOAD_OUTPUT" | grep -oP 'https://asciinema\.org/a/[a-zA-Z0-9_-]+' | head -1) || true
+                  if [ -n "$ASCIINEMA_URL" ]; then
+                    break
+                  fi
+                  if [ "$attempt" -lt "$MAX_UPLOAD_RETRIES" ]; then
+                    DELAY=$((attempt * RETRY_BASE_DELAY_SECONDS))
+                    echo "Upload attempt $attempt failed, retrying in ${DELAY}s..."
+                    sleep "$DELAY"
+                  fi
+                done
+
                 if [ -n "$ASCIINEMA_URL" ]; then
-                  COMMENT_BODY="${COMMENT_BODY}
+                  TABLE_BODY="${TABLE_BODY}
           | ${filename} | [▶️ View Recording](${ASCIINEMA_URL}) |"
                   echo "Uploaded: $ASCIINEMA_URL"
                   UPLOAD_COUNT=$((UPLOAD_COUNT + 1))
                 else
-                  COMMENT_BODY="${COMMENT_BODY}
+                  TABLE_BODY="${TABLE_BODY}
           | ${filename} | ❌ Upload failed |"
-                  echo "Failed to upload $castfile"
+                  echo "Failed to upload $castfile after $MAX_UPLOAD_RETRIES attempts"
                   FAIL_COUNT=$((FAIL_COUNT + 1))
                 fi
               fi
             done
-            
-            COMMENT_BODY="${COMMENT_BODY}
-          
-          ---
-          <sub>📹 Recordings uploaded automatically from [CI run #${RUN_ID}](https://github.com/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID})</sub>"
-            
+
             echo "Uploaded $UPLOAD_COUNT recordings, $FAIL_COUNT failures"
-            
-            # Check for existing recording comment using GraphQL (more efficient than fetching all comments)
-            # Filter by github-actions author to only match our own comments
-            EXISTING_COMMENT_ID=$(gh api graphql -f query='
+
+            # Build comment with summary outside collapsible and table inside
+            if [ "$FAIL_COUNT" -gt 0 ]; then
+              SUMMARY_EMOJI="⚠️"
+              SUMMARY_TEXT="${UPLOAD_COUNT}/${TOTAL_COUNT} recordings uploaded, ${FAIL_COUNT} failed"
+            else
+              SUMMARY_EMOJI="🎬"
+              SUMMARY_TEXT="${UPLOAD_COUNT} recordings uploaded"
+            fi
+
+            COMMENT_BODY="${COMMENT_MARKER}
+          ${SUMMARY_EMOJI} **CLI E2E Test Recordings** — ${SUMMARY_TEXT} (commit \`${SHORT_SHA}\`)
+
+          <details>
+          <summary>View recordings</summary>
+
+          | Test | Recording |
+          |------|-----------|${TABLE_BODY}
+
+          ---
+          <sub>📹 Recordings uploaded automatically from [CI run #${RUN_ID}](https://github.com/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID})</sub>
+
+          </details>"
+
+            # Delete any existing recording comments, then post the new one
+            EXISTING_COMMENT_IDS=$(gh api graphql -f query='
               query($owner: String!, $repo: String!, $pr: Int!) {
                 repository(owner: $owner, name: $repo) {
                   pullRequest(number: $pr) {
@@ -234,21 +261,19 @@ jobs:
                   }
                 }
               }' -f owner="$GITHUB_REPOSITORY_OWNER" -f repo="$GITHUB_EVENT_REPO_NAME" -F pr="$PR_NUMBER" \
-              --jq '.data.repository.pullRequest.comments.nodes[] | select(.author.login == "github-actions" and (.body | contains("'"${COMMENT_MARKER}"'"))) | .databaseId' \
-              | head -1) || true
-            
-            if [ -n "$EXISTING_COMMENT_ID" ]; then
-              echo "Updating existing comment $EXISTING_COMMENT_ID"
+              --jq '.data.repository.pullRequest.comments.nodes[] | select(.author.login == "github-actions" and (.body | contains("'"${COMMENT_MARKER}"'"))) | .databaseId') || true
+
+            for COMMENT_ID in $EXISTING_COMMENT_IDS; do
+              echo "Deleting old comment $COMMENT_ID"
               gh api \
-                --method PATCH \
+                --method DELETE \
                 -H "Accept: application/vnd.github+json" \
-                "/repos/${GITHUB_REPOSITORY}/issues/comments/${EXISTING_COMMENT_ID}" \
-                -f body="$COMMENT_BODY"
-            else
-              echo "Creating new comment on PR #${PR_NUMBER}"
-              gh pr comment "${PR_NUMBER}" --repo "$GITHUB_REPOSITORY" --body "$COMMENT_BODY"
-            fi
-            
+                "/repos/${GITHUB_REPOSITORY}/issues/comments/${COMMENT_ID}" || true
+            done
+
+            echo "Creating new comment on PR #${PR_NUMBER}"
+            gh pr comment "${PR_NUMBER}" --repo "$GITHUB_REPOSITORY" --body "$COMMENT_BODY"
+
             echo "Posted comment to PR #${PR_NUMBER}"
           else
             echo "No recordings found in $RECORDINGS_DIR"

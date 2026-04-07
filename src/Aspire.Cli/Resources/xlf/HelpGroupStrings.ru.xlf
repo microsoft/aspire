@@ -1,0 +1,57 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="ru" original="../HelpGroupStrings.resx">
+    <body>
+      <trans-unit id="AppCommands">
+        <source>App commands:</source>
+        <target state="translated">Команды приложения:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Deployment">
+        <source>Deployment:</source>
+        <target state="translated">Развертывание:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpHint">
+        <source>Use "aspire &lt;command&gt; --help" for more information about a command.</source>
+        <target state="translated">Используйте синтаксис "aspire &lt;command&gt; --help" для получения дополнительной информации о команде.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Monitoring">
+        <source>Monitoring:</source>
+        <target state="translated">Мониторинг:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Options">
+        <source>Options:</source>
+        <target state="translated">Параметры:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OtherCommands">
+        <source>Other commands:</source>
+        <target state="translated">другие команды:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceManagement">
+        <source>Resource management:</source>
+        <target state="translated">Управление ресурсами:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ToolsAndConfiguration">
+        <source>Tools &amp; configuration:</source>
+        <target state="translated">Инструменты и конфигурация:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Usage">
+        <source>Usage:</source>
+        <target state="translated">Использование:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UsageSyntax">
+        <source>aspire &lt;command&gt; [options]</source>
+        <target state="translated">aspire &lt;command&gt; [параметры]</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

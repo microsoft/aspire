@@ -7,9 +7,19 @@
         <target state="translated">AppHost</target>
         <note />
       </trans-unit>
+      <trans-unit id="AspireEmptyDotNetTemplate_Description">
+        <source>Empty (C# AppHost, dotnet template)</source>
+        <target state="new">Empty (C# AppHost, dotnet template)</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AspireEmpty_Description">
         <source>AppHost and service defaults</source>
         <target state="translated">AppHost およびサービスの既定値</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AspireJavaStarter_Description">
+        <source>Starter App (Java AppHost/Express/React)</source>
+        <target state="new">Starter App (Java AppHost/Express/React)</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireJsFrontendStarter_Description">
@@ -112,6 +122,16 @@
         <target state="translated">選択したパッケージ チャネルの NuGet.config を作成しました。</target>
         <note />
       </trans-unit>
+      <trans-unit id="NuGetConfigCreatedOrUpdatedConfirmationMessage">
+        <source>Created or updated NuGet.config in the project directory with required package sources.</source>
+        <target state="new">Created or updated NuGet.config in the project directory with required package sources.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NuGetConfigUpdatedConfirmationMessage">
+        <source>Updated NuGet.config with required package sources.</source>
+        <target state="new">Updated NuGet.config with required package sources.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ProjectAlreadyExists">
         <source>The new project cannot be created because it would overwrite existing files in the output folder. Please remove or move the conflicting files, or choose a different location.</source>
         <target state="translated">出力フォルダー内の既存のファイルを上書きするため、新しいプロジェクトを作成できません。競合するファイルを削除または移動するか、別の場所を選択してください。</target>
@@ -123,9 +143,9 @@
         <note>{0} is a path</note>
       </trans-unit>
       <trans-unit id="ProjectCreationFailed">
-        <source>Project creation failed with exit code {0}. For more information run with --debug switch.</source>
-        <target state="translated">プロジェクトの作成が、次の終了コードで失敗しました: {0}。詳細情報については、--debug スイッチを使用し実行してください。</target>
-        <note>{0} is a number, --debug should not be localized</note>
+        <source>Project creation failed with exit code {0}. See logs at {1}</source>
+        <target state="translated">プロジェクトの作成が、終了コード {0} で失敗しました。{1} でログを表示する</target>
+        <note>{0} is a number, {1} is the log file path</note>
       </trans-unit>
       <trans-unit id="PromptForTFMOptions_Description">
         <source>Configures whether to create a project for integration tests using MSTest, NUnit, or xUnit.net.</source>
@@ -153,13 +173,18 @@
         <note />
       </trans-unit>
       <trans-unit id="TemplateInstallationFailed">
-        <source>The template installation failed with exit code {0}. For more information run with --debug switch.</source>
-        <target state="translated">テンプレートのインストールが、次の終了コードで失敗しました: {0}。詳細情報については、--debug スイッチを使用し実行してください。</target>
-        <note>{0} is a number, --debug should not be localized</note>
+        <source>The template installation failed with exit code {0}. See logs at {1}</source>
+        <target state="translated">テンプレートのインストールが、終了コード {0} で失敗しました。{1} でログを表示する</target>
+        <note>{0} is a number, {1} is the log file path</note>
       </trans-unit>
       <trans-unit id="Unknown">
         <source>Unknown</source>
         <target state="translated">不明</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UpdateNuGetConfigConfirmation">
+        <source>Update NuGet.config to add missing package sources for the selected channel?</source>
+        <target state="new">Update NuGet.config to add missing package sources for the selected channel?</target>
         <note />
       </trans-unit>
       <trans-unit id="UseLocalhostTld_Description">
@@ -211,6 +236,16 @@
         <source>Yes</source>
         <target state="translated">はい</target>
         <note />
+      </trans-unit>
+      <trans-unit id="RunAspireRun">
+        <source>Run 'aspire run' to start your AppHost.</source>
+        <target state="new">Run 'aspire run' to start your AppHost.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RunCdThenAspireRun">
+        <source>Run 'cd "{0}"' and then 'aspire run' to start your AppHost.</source>
+        <target state="new">Run 'cd "{0}"' and then 'aspire run' to start your AppHost.</target>
+        <note>{0} is the relative path to the project directory</note>
       </trans-unit>
     </body>
   </file>

@@ -29,6 +29,8 @@ Instructions for GitHub Copilot and other AI coding agents working with the Aspi
 * Never change global.json unless explicitly asked to.
 * Never change package.json or package-lock.json files unless explicitly asked to.
 * Never change NuGet.config files unless explicitly asked to.
+* Do not use cryptographic hashes such as SHA-256 when the hash is not security-related. Prefer `System.IO.Hashing.XxHash3` when you need a stable non-cryptographic hash.
+* When code needs a temporary directory, prefer the repository temp directory abstractions first (for example `IFileSystemService.TempDirectory` / `ITempFileSystemService`) and otherwise use `Directory.CreateTempSubdirectory()` instead of `Path.Combine(Path.GetTempPath(), Path.GetRandomFileName())`; if you need a temporary file path, place it under a securely created temp directory.
 * Don't update files under `*/api/*.cs` (e.g. src/Aspire.Hosting/api/Aspire.Hosting.cs) as they are generated.
 
 ## Code Review Instructions
@@ -159,7 +161,28 @@ Note that tests for a project can be executed without first building from the ro
 dotnet test tests/Aspire.Hosting.Testing.Tests/Aspire.Hosting.Testing.Tests.csproj -- --filter-method "*.TestingBuilderHasAllPropertiesFromRealBuilder" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
 ```
 
+(5) To apply a timeout for a specific test run use `--hangdump` and `--hangdump-timeout` options after `--`, for example:
+```bash
+dotnet test tests/Aspire.Hosting.Testing.Tests/Aspire.Hosting.Testing.Tests.csproj -- --filter-method "*.TestingBuilderHasAllPropertiesFromRealBuilder" --hangdump --hangdump-timeout 2m
+```
+You need both options (`--hangdump-timeout` does not work without `--hangdump`). Timeout can be expressed in minutes (e.g. `3m` for 3-minute timeout), or seconds (e.g. `30s` for 30-seconds timeout).
+
 **Important**: Avoid passing `--no-build` unless you have just built in the same session and there have been no code changes since. In automation or while iterating on code, omit `--no-build` so changes are compiled and picked up by the test run.
+
+### CRITICAL: Do NOT use VSTest-style `--filter` with `dotnet test`
+
+This repo uses **Microsoft.Testing.Platform (MTP)** as the test runner, not VSTest. The classic `--filter` argument (before `--`) uses VSTest filter syntax and **will hang or behave unexpectedly** with MTP.
+
+```bash
+# WRONG - VSTest-style filter, will hang with MTP
+dotnet test tests/Project.Tests/Project.Tests.csproj --filter "FullyQualifiedName~ClassName"
+
+# CORRECT - MTP-native filters go after the -- separator
+dotnet test tests/Project.Tests/Project.Tests.csproj -- --filter-class "*.ClassName"
+dotnet test tests/Project.Tests/Project.Tests.csproj -- --filter-method "*.MethodName"
+```
+
+All test filtering must use MTP-native switches placed **after `--`**. See the filter switches listed below for the full set of options.
 
 ### CRITICAL: Excluding Quarantined and Outerloop Tests
 
@@ -206,11 +229,20 @@ These switches can be repeated to run tests on multiple classes or methods at on
 - **`Aspire.slnx`**: Main solution file (XML-based solution format)
 
 ### Continuous Integration
+
+#### GitHub Actions (primary, runs on PRs)
 - **`tests.yml`**: Main test workflow running across Windows/Linux/macOS
 - **`tests-quarantine.yml`**: Runs quarantined tests separately every 6 hours
 - **`tests-outerloop.yml`**: Runs outerloop tests separately every 6 hours
 - **`ci.yml`**: Main CI workflow triggered on PRs and pushes to main/release branches
 - **Build validation**: Includes package generation, API compatibility checks, template validation
+- **Workflow matcher maintenance**: When changing CI workflow job or step names that are referenced by automation or tests, update the corresponding workflow helpers, behavior tests, and docs together. For the transient rerun workflow, keep `.github/workflows/auto-rerun-transient-ci-failures.js`, `tests/Infrastructure.Tests/WorkflowScripts/AutoRerunTransientCiFailuresTests.cs`, and `docs/ci/auto-rerun-transient-ci-failures.md` aligned with the live workflow YAML.
+
+#### Azure DevOps (secondary, does NOT run tests on PRs)
+- **`eng/pipelines/azure-pipelines-public.yml`**: Weekly scheduled pipeline (Monday midnight UTC) that builds and runs tests on Helix
+- **⚠️ AzDO tests are easily broken** because they don't run on PRs — only weekly or via manual trigger (`/azp run aspire-tests`)
+- Changes to test infrastructure (`eng/Testing.props`, `eng/Testing.targets`, `tests/Directory.Build.*`, `tests/helix/*`) should be validated by triggering a manual AzDO run
+- See [docs/ci/azdo-public-pipeline.md](docs/ci/azdo-public-pipeline.md) for full architecture details including Helix test categories, archive process, and test routing
 
 ### Dependencies and Hidden Requirements
 - **Local .NET SDK**: Automatically uses local SDK when available after running restore due to paths configuration in global.json
@@ -228,6 +260,8 @@ These switches can be repeated to run tests on multiple classes or methods at on
 - Such tests are not run as part of the regular tests workflow (`tests.yml`).
     - Instead they are run in the `Quarantine` workflow (`tests-quarantine.yml`).
 - A github issue url is used with the attribute
+- To **reproduce or fix** a flaky/quarantined test, use the `fix-flaky-test` skill (`.github/skills/fix-flaky-test/SKILL.md`).
+- To **quarantine or unquarantine** a test, use the `test-management` skill (`.github/skills/test-management/SKILL.md`).
 
 Example: `[QuarantinedTest("..issue url..")]`
 
@@ -237,19 +271,19 @@ Use these commands in any issue or PR comment. They require write access to the 
 
 ```bash
 # Quarantine a flaky test (creates a new PR)
-/quarantine-test Namespace.Type.Method https://github.com/dotnet/aspire/issues/1234
+/quarantine-test Namespace.Type.Method https://github.com/microsoft/aspire/issues/1234
 
 # Quarantine multiple tests at once
-/quarantine-test TestMethod1 TestMethod2 https://github.com/dotnet/aspire/issues/1234
+/quarantine-test TestMethod1 TestMethod2 https://github.com/microsoft/aspire/issues/1234
 
 # Quarantine and push to an existing PR
-/quarantine-test TestMethod https://github.com/dotnet/aspire/issues/1234 --target-pr https://github.com/dotnet/aspire/pull/5678
+/quarantine-test TestMethod https://github.com/microsoft/aspire/issues/1234 --target-pr https://github.com/microsoft/aspire/pull/5678
 
 # Unquarantine a test (creates a new PR)
 /unquarantine-test Namespace.Type.Method
 
 # Unquarantine and push to an existing PR
-/unquarantine-test TestMethod --target-pr https://github.com/dotnet/aspire/pull/5678
+/unquarantine-test TestMethod --target-pr https://github.com/microsoft/aspire/pull/5678
 ```
 
 When you comment on a PR, the changes are automatically pushed to that PR's branch (no need for `--target-pr`).
@@ -260,7 +294,7 @@ For local development, use the QuarantineTools directly:
 
 ```bash
 # Quarantine a test
-dotnet run --project tools/QuarantineTools -- -q -i https://github.com/dotnet/aspire/issues/1234 Full.Namespace.Type.Method
+dotnet run --project tools/QuarantineTools -- -q -i https://github.com/microsoft/aspire/issues/1234 Full.Namespace.Type.Method
 
 # Unquarantine a test
 dotnet run --project tools/QuarantineTools -- -u Full.Namespace.Type.Method
@@ -272,29 +306,29 @@ dotnet run --project tools/QuarantineTools -- -u Full.Namespace.Type.Method
 - These tests are completely skipped until the underlying issue is resolved.
 - Use this for tests that are **blocked**, not for flaky tests (use `QuarantinedTest` for flaky tests).
 
-Example: `[ActiveIssue("https://github.com/dotnet/aspire/issues/1234")]`
+Example: `[ActiveIssue("https://github.com/microsoft/aspire/issues/1234")]`
 
 ### Disable/Enable via GitHub Commands (Preferred)
 
 ```bash
 # Disable a test due to an active issue (creates a new PR)
-/disable-test Namespace.Type.Method https://github.com/dotnet/aspire/issues/1234
+/disable-test Namespace.Type.Method https://github.com/microsoft/aspire/issues/1234
 
 # Disable and push to an existing PR
-/disable-test TestMethod https://github.com/dotnet/aspire/issues/1234 --target-pr https://github.com/dotnet/aspire/pull/5678
+/disable-test TestMethod https://github.com/microsoft/aspire/issues/1234 --target-pr https://github.com/microsoft/aspire/pull/5678
 
 # Enable a previously disabled test (creates a new PR)
 /enable-test Namespace.Type.Method
 
 # Enable and push to an existing PR
-/enable-test TestMethod --target-pr https://github.com/dotnet/aspire/pull/5678
+/enable-test TestMethod --target-pr https://github.com/microsoft/aspire/pull/5678
 ```
 
 ### Disable/Enable via Local Tool
 
 ```bash
 # Disable a test with ActiveIssue
-dotnet run --project tools/QuarantineTools -- -q -m activeissue -i https://github.com/dotnet/aspire/issues/1234 Full.Namespace.Type.Method
+dotnet run --project tools/QuarantineTools -- -q -m activeissue -i https://github.com/microsoft/aspire/issues/1234 Full.Namespace.Type.Method
 
 # Enable a test (remove ActiveIssue)
 dotnet run --project tools/QuarantineTools -- -u -m activeissue Full.Namespace.Type.Method
@@ -303,6 +337,7 @@ dotnet run --project tools/QuarantineTools -- -u -m activeissue Full.Namespace.T
 ## Outerloop tests
 
 - Tests that are long-running, resource-intensive, or require special infrastructure are marked with the `OuterloopTest` attribute.
+- In this repository, always use `OuterloopTest` for outerloop coverage; do not replace it with Arcade's `OuterLoop` attribute because our CI scripts and some test projects rely on assembly-level use of the custom trait.
 - Such tests are not run as part of the regular tests workflow (`tests.yml`).
     - Instead they are run in the `Outerloop` workflow (`tests-outerloop.yml`).
 - An optional reason can be provided with the attribute
@@ -319,7 +354,15 @@ Example: `[OuterloopTest("Long running integration test")]`
 
 ## Editing resources
 
-The `*.Designer.cs` files are in the repo, but are intended to match same named `*.resx` files. If you add/remove/change resources in a resx, make the matching changes in the `*.Designer.cs` file that matches that resx.
+The `*.Designer.cs` files are in the repo, but are intended to match same named `*.resx` files. If you add/remove/change resources in a resx, make the matching changes in the `*.Designer.cs` file that matches that resx. The `*.Designer.cs` files are generated by a Visual Studio design-time tool (`ResXFileCodeGenerator` or `PublicResXFileCodeGenerator`) and there is no command-line tool to regenerate them, so they must be updated manually.
+
+Some projects also have `*.xlf` (XLIFF) translation files in an `xlf` subdirectory next to the `.resx` files. After modifying a `.resx` file, run the following command on the affected project to update the `.xlf` files:
+
+```shell
+dotnet build /t:UpdateXlf <path-to-project.csproj>
+```
+
+Do not manually edit `*.xlf` files. They are updated by the `UpdateXlf` MSBuild target (provided by [Microsoft.DotNet.XliffTasks](https://github.com/dotnet/arcade/tree/main/src/Microsoft.DotNet.XliffTasks)).
 
 ## Markdown files
 
@@ -352,8 +395,14 @@ For most development tasks, following these instructions should be sufficient to
 The following specialized skills are available in `.github/skills/`:
 
 - **cli-e2e-testing**: Guide for writing Aspire CLI end-to-end tests using Hex1b terminal automation
+- **code-review**: Reviews a GitHub pull request for problems (bugs, security, correctness, convention violations). Use this when asked to review a PR or do a code review.
+- **fix-flaky-test**: Reproduces and fixes flaky/quarantined tests using the CI reproduce workflow (`reproduce-flaky-tests.yml`). Use this when investigating, reproducing, or fixing a flaky or quarantined test.
+- **dashboard-testing**: Guide for writing tests for the Aspire Dashboard using xUnit and bUnit
 - **test-management**: Quarantines or disables flaky/problematic tests using the QuarantineTools utility
 - **connection-properties**: Expert for creating and improving Connection Properties in Aspire resources
+- **dependency-update**: Guides dependency version updates by checking nuget.org, triggering the dotnet-migrate-package Azure DevOps pipeline, and monitoring runs
+- **api-review**: Reviews .NET API surface area PRs for design guideline violations, applies rules from .NET Framework Design Guidelines and Aspire conventions, and attributes findings to the author who introduced each API
+- **startup-perf**: Measures Aspire application startup performance using dotnet-trace and the TraceAnalyzer tool
 
 ## Pattern-Based Instructions
 
@@ -365,4 +414,4 @@ Additional instructions are automatically applied when editing files matching sp
 | `src/Aspire.Hosting*/README.md` | `.github/instructions/hosting-readme.instructions.md` - Hosting integration READMEs |
 | `src/Components/**/README.md` | `.github/instructions/client-readme.instructions.md` - Client integration READMEs |
 | `tools/QuarantineTools/*` | `.github/instructions/quarantine.instructions.md` - QuarantineTools usage |
-| `tests/agent-scenarios/**/prompt.md` | `.github/instructions/test-scenario-prompt.instructions.md` - Test scenario prompts |
+| `tests/**/*.cs` | `.github/instructions/test-review-guidelines.instructions.md` - Flaky test patterns and test review guidelines |

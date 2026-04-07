@@ -63,7 +63,7 @@ public class NuGetConfigMergerSnapshotTests
         // Add a deterministic PR hive for testing realistic PR channel mappings.
         hivesDir.CreateSubdirectory("pr-1234");
         var cacheDir = new DirectoryInfo(Path.Combine(root.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(root, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")));
+        var executionContext = new CliExecutionContext(root, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
         var packagingService = CreatePackagingService(executionContext);
 
         // Existing config purposely minimal (no packageSourceMapping yet)
@@ -90,7 +90,8 @@ public class NuGetConfigMergerSnapshotTests
         // Normalize machine-specific absolute hive paths in PR channel snapshots for stability
         if (channelName.StartsWith("pr-", StringComparison.OrdinalIgnoreCase))
         {
-            var hivePath = Path.Combine(hivesDir.FullName, channelName);
+            // Use forward slashes to match the normalized paths in NuGet config
+            var hivePath = Path.Combine(hivesDir.FullName, channelName).Replace('\\', '/');
             xmlString = xmlString.Replace(hivePath, "{PR_HIVE}");
         }
 
@@ -112,7 +113,7 @@ public class NuGetConfigMergerSnapshotTests
         // Add a deterministic PR hive for testing realistic PR channel mappings.
         hivesDir.CreateSubdirectory("pr-1234");
         var cacheDir2 = new DirectoryInfo(Path.Combine(root.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(root, hivesDir, cacheDir2, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")));
+        var executionContext = new CliExecutionContext(root, hivesDir, cacheDir2, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
         var packagingService = CreatePackagingService(executionContext);
 
         // Existing config purposely minimal (no packageSourceMapping yet)
@@ -152,7 +153,8 @@ public class NuGetConfigMergerSnapshotTests
         // Normalize machine-specific absolute hive paths in PR channel snapshots for stability
         if (channelName.StartsWith("pr-", StringComparison.OrdinalIgnoreCase))
         {
-            var hivePath = Path.Combine(hivesDir.FullName, channelName);
+            // Use forward slashes to match the normalized paths in NuGet config
+            var hivePath = Path.Combine(hivesDir.FullName, channelName).Replace('\\', '/');
             xmlString = xmlString.Replace(hivePath, "{PR_HIVE}");
         }
 
@@ -174,7 +176,7 @@ public class NuGetConfigMergerSnapshotTests
         // Add a deterministic PR hive for testing realistic PR channel mappings.
         hivesDir.CreateSubdirectory("pr-1234");
         var cacheDir3 = new DirectoryInfo(Path.Combine(root.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(root, hivesDir, cacheDir3, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")));
+        var executionContext = new CliExecutionContext(root, hivesDir, cacheDir3, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
         var packagingService = CreatePackagingService(executionContext);
 
         // Existing config purposely minimal (no packageSourceMapping yet)
@@ -213,7 +215,8 @@ public class NuGetConfigMergerSnapshotTests
         // Normalize machine-specific absolute hive paths in PR channel snapshots for stability
         if (channelName.StartsWith("pr-", StringComparison.OrdinalIgnoreCase))
         {
-            var hivePath = Path.Combine(hivesDir.FullName, channelName);
+            // Use forward slashes to match the normalized paths in NuGet config
+            var hivePath = Path.Combine(hivesDir.FullName, channelName).Replace('\\', '/');
             xmlString = xmlString.Replace(hivePath, "{PR_HIVE}");
         }
 
@@ -235,7 +238,7 @@ public class NuGetConfigMergerSnapshotTests
         // Add a deterministic PR hive for testing realistic PR channel mappings.
         hivesDir.CreateSubdirectory("pr-1234");
         var cacheDir4 = new DirectoryInfo(Path.Combine(root.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(root, hivesDir, cacheDir4, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")));
+        var executionContext = new CliExecutionContext(root, hivesDir, cacheDir4, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
         var packagingService = CreatePackagingService(executionContext);
 
         // Existing config purposely minimal (no packageSourceMapping yet)
@@ -272,7 +275,8 @@ public class NuGetConfigMergerSnapshotTests
         // Normalize machine-specific absolute hive paths in PR channel snapshots for stability
         if (channelName.StartsWith("pr-", StringComparison.OrdinalIgnoreCase))
         {
-            var hivePath = Path.Combine(hivesDir.FullName, channelName);
+            // Use forward slashes to match the normalized paths in NuGet config
+            var hivePath = Path.Combine(hivesDir.FullName, channelName).Replace('\\', '/');
             xmlString = xmlString.Replace(hivePath, "{PR_HIVE}");
         }
 
@@ -294,7 +298,7 @@ public class NuGetConfigMergerSnapshotTests
         // Add a deterministic PR hive for testing realistic PR channel mappings.
         hivesDir.CreateSubdirectory("pr-1234");
         var cacheDir5 = new DirectoryInfo(Path.Combine(root.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(root, hivesDir, cacheDir5, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")));
+        var executionContext = new CliExecutionContext(root, hivesDir, cacheDir5, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
         var packagingService = CreatePackagingService(executionContext);
 
         // Existing config purposely minimal (no packageSourceMapping yet)
@@ -336,7 +340,8 @@ public class NuGetConfigMergerSnapshotTests
         // Normalize machine-specific absolute hive paths in PR channel snapshots for stability
         if (channelName.StartsWith("pr-", StringComparison.OrdinalIgnoreCase))
         {
-            var hivePath = Path.Combine(hivesDir.FullName, channelName);
+            // Use forward slashes to match the normalized paths in NuGet config
+            var hivePath = Path.Combine(hivesDir.FullName, channelName).Replace('\\', '/');
             xmlString = xmlString.Replace(hivePath, "{PR_HIVE}");
         }
 

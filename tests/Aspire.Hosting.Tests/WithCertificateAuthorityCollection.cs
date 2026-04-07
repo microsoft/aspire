@@ -5,6 +5,7 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "5")]
 public class WithCertificateAuthorityCollectionTests
 {
     [Fact]

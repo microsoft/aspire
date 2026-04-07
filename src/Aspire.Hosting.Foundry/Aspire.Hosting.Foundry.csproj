@@ -1,0 +1,41 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <PackageTags>aspire integration hosting azure openai ai aifoundry foundry ai-search cloud</PackageTags>
+    <Description>Microsoft Foundry resource types for Aspire.</Description>
+    <PackageIconFullPath>$(SharedDir)Foundry_256x.png</PackageIconFullPath>
+    <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
+    <!--
+      CS8002: Referenced assembly does not have a strong name
+    -->
+    <NoWarn>$(NoWarn);CS8002;ASPIRECOMPUTE001;ASPIREPIPELINES001;ASPIREAZURE001;ASPIREPIPELINES003;ASPIREINTERACTION001</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.Hosting.Azure.Tests" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Foundry.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="$(RepoRoot)src\Shared\AzureRoleAssignmentUtils.cs" />
+    <Compile Remove="tools\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Aspire.Hosting.Azure\Aspire.Hosting.Azure.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.ApplicationInsights\Aspire.Hosting.Azure.ApplicationInsights.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.ContainerRegistry\Aspire.Hosting.Azure.ContainerRegistry.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.CosmosDB\Aspire.Hosting.Azure.CosmosDB.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.Search\Aspire.Hosting.Azure.Search.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.Storage\Aspire.Hosting.Azure.Storage.csproj" />
+    <PackageReference Include="Azure.AI.Projects" />
+    <PackageReference Include="Azure.Provisioning" />
+    <PackageReference Include="Azure.Provisioning.CognitiveServices" />
+    <PackageReference Include="Azure.Provisioning.ContainerRegistry" />
+    <PackageReference Include="Microsoft.AI.Foundry.Local" />
+    <PackageReference Include="Microsoft.Bcl.Memory" />
+  </ItemGroup>
+
+</Project>

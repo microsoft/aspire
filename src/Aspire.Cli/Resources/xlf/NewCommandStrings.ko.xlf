@@ -13,13 +13,13 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Create a new Aspire project.</source>
-        <target state="translated">새 Aspire 프로젝트를 만듭니다.</target>
+        <source>Create a new app from an Aspire starter template</source>
+        <target state="needs-review-translation">새 Aspire 프로젝트를 만듭니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="EnterTheOutputPath">
-        <source>Enter the output path:</source>
-        <target state="translated">출력 경로 입력:</target>
+        <source>Enter the output path</source>
+        <target state="new">Enter the output path</target>
         <note />
       </trans-unit>
       <trans-unit id="EnterTheProjectName">
@@ -32,14 +32,24 @@
         <target state="translated">프로젝트 이름이 잘못되었습니다.</target>
         <note />
       </trans-unit>
+      <trans-unit id="LanguageOptionDescription">
+        <source>The programming language for the AppHost</source>
+        <target state="new">The programming language for the AppHost</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NameArgumentDescription">
-        <source>The name of the project to create.</source>
-        <target state="translated">만들 프로젝트의 이름입니다.</target>
+        <source>The name of the project to create</source>
+        <target state="needs-review-translation">만들 프로젝트의 이름입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputArgumentDescription">
-        <source>The output path for the project.</source>
-        <target state="translated">프로젝트의 출력 경로입니다.</target>
+        <source>The output path for the project</source>
+        <target state="needs-review-translation">프로젝트의 출력 경로입니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResolvingTemplateVersion">
+        <source>Resolving template version...</source>
+        <target state="translated">템플릿 버전을 확인하는 중...</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAProjectTemplate">
@@ -53,8 +63,8 @@
         <note />
       </trans-unit>
       <trans-unit id="SourceArgumentDescription">
-        <source>The NuGet source to use for the project templates.</source>
-        <target state="translated">프로젝트 템플릿에 사용할 NuGet 소스입니다.</target>
+        <source>The NuGet source to use for the project templates</source>
+        <target state="needs-review-translation">프로젝트 템플릿에 사용할 NuGet 소스입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="UsePrereleaseTemplates">
@@ -63,8 +73,8 @@
         <note />
       </trans-unit>
       <trans-unit id="VersionArgumentDescription">
-        <source>The version of the project templates to use.</source>
-        <target state="translated">사용할 프로젝트 템플릿의 버전입니다.</target>
+        <source>The version of the project templates to use</source>
+        <target state="needs-review-translation">사용할 프로젝트 템플릿의 버전입니다.</target>
         <note />
       </trans-unit>
     </body>

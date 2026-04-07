@@ -81,13 +81,15 @@ internal sealed partial class DocsGetCommand : BaseCommand
         if (format is OutputFormat.Json)
         {
             var json = JsonSerializer.Serialize(doc, JsonSourceGenerationContext.RelaxedEscaping.DocsContent);
-            InteractionService.DisplayRawText(json);
+            // Structured output always goes to stdout.
+            InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
         }
         else
         {
             // Format the markdown for better terminal readability
             var formatted = FormatMarkdownForTerminal(doc.Content);
-            InteractionService.DisplayRawText(formatted);
+            // Structured output always goes to stdout.
+            InteractionService.DisplayRawText(formatted, ConsoleOutput.Standard);
         }
 
         return ExitCodeConstants.Success;

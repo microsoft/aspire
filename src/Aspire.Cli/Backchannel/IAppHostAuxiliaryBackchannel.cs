@@ -22,11 +22,6 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     string SocketPath { get; }
 
     /// <summary>
-    /// Gets the MCP connection information for the Dashboard.
-    /// </summary>
-    DashboardMcpConnectionInfo? McpInfo { get; }
-
-    /// <summary>
     /// Gets the AppHost information.
     /// </summary>
     AppHostInformation? AppHostInfo { get; }
@@ -50,7 +45,7 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     /// Gets the Dashboard URLs from the AppHost.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The Dashboard URLs state including health and login URLs.</returns>
+    /// <returns>The dashboard URL state including health and resolved dashboard URLs.</returns>
     Task<DashboardUrlsState?> GetDashboardUrlsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -112,11 +107,25 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     /// Executes a command on a resource.
     /// </summary>
     /// <param name="resourceName">The name of the resource.</param>
-    /// <param name="commandName">The name of the command (e.g., "resource-start", "resource-stop", "resource-restart").</param>
+    /// <param name="commandName">The name of the command (e.g., "start", "stop", "restart").</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The result of the command execution.</returns>
     Task<ExecuteResourceCommandResponse> ExecuteResourceCommandAsync(
         string resourceName,
         string commandName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Waits for a resource to reach a target status on the AppHost side.
+    /// </summary>
+    /// <param name="resourceName">The name of the resource.</param>
+    /// <param name="status">The target status ("up", "healthy", "down").</param>
+    /// <param name="timeoutSeconds">The timeout in seconds.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The result of the wait operation.</returns>
+    Task<WaitForResourceResponse> WaitForResourceAsync(
+        string resourceName,
+        string status,
+        int timeoutSeconds,
         CancellationToken cancellationToken = default);
 }

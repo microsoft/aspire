@@ -2,8 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
-using Hex1b;
 using Hex1b.Automation;
 using Xunit;
 
@@ -18,147 +18,77 @@ public sealed class LogsCommandTests(ITestOutputHelper output)
     [Fact]
     public async Task LogsCommandShowsResourceLogs()
     {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+
         var workspace = TemporaryWorkspace.Create(output);
 
-        var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
-        var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
-        var isCI = CliE2ETestHelpers.IsRunningInCI;
-        var recordingPath = CliE2ETestHelpers.GetTestResultsRecordingPath(nameof(LogsCommandShowsResourceLogs));
-
-        var builder = Hex1bTerminal.CreateBuilder()
-            .WithHeadless()
-            .WithDimensions(160, 48)
-            .WithAsciinemaRecording(recordingPath)
-            .WithPtyProcess("/bin/bash", ["--norc"]);
-
-        using var terminal = builder.Build();
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, mountDockerSocket: true, workspace: workspace);
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
-        // Pattern searchers for aspire new prompts
-        var waitingForTemplateSelectionPrompt = new CellPatternSearcher()
-            .Find("> Starter App");
-
-        var waitingForProjectNamePrompt = new CellPatternSearcher()
-            .Find($"Enter the project name ({workspace.WorkspaceRoot.Name}): ");
-
-        var waitingForOutputPathPrompt = new CellPatternSearcher()
-            .Find($"Enter the output path: (./AspireLogsTestApp): ");
-
-        var waitingForUrlsPrompt = new CellPatternSearcher()
-            .Find($"Use *.dev.localhost URLs");
-
-        var waitingForRedisPrompt = new CellPatternSearcher()
-            .Find($"Use Redis Cache");
-
-        var waitingForTestPrompt = new CellPatternSearcher()
-            .Find($"Do you want to create a test project?");
-
-        // Pattern searchers for start/stop commands
-        var waitForAppHostStartedSuccessfully = new CellPatternSearcher()
-            .Find("AppHost started successfully.");
-
-        var waitForAppHostStoppedSuccessfully = new CellPatternSearcher()
-            .Find("AppHost stopped successfully.");
-
-        // Pattern for verifying log output was written to file
-        var waitForApiserviceLogs = new CellPatternSearcher()
-            .Find("[apiservice]");
-
-        // Pattern for verifying JSON log output was written to file
-        var waitForLogsJsonOutput = new CellPatternSearcher()
-            .Find("\"resourceName\":");
-
-        // Pattern for aspire logs when no AppHosts running
-        var waitForNoRunningAppHosts = new CellPatternSearcher()
-            .Find("No running AppHost found");
-
         var counter = new SequenceCounter();
-        var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
-        sequenceBuilder.PrepareEnvironment(workspace, counter);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        if (isCI)
-        {
-            sequenceBuilder.InstallAspireCliFromPullRequest(prNumber, counter);
-            sequenceBuilder.SourceAspireCliEnvironment(counter);
-            sequenceBuilder.VerifyAspireCliVersion(commitSha, counter);
-        }
+        await auto.InstallAspireCliInDockerAsync(installMode, counter);
 
         // Create a new project using aspire new
-        sequenceBuilder.Type("aspire new")
-            .Enter()
-            .WaitUntil(s => waitingForTemplateSelectionPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(30))
-            .Enter() // select first template (Starter App)
-            .WaitUntil(s => waitingForProjectNamePrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .Type("AspireLogsTestApp")
-            .Enter()
-            .WaitUntil(s => waitingForOutputPathPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .Enter()
-            .WaitUntil(s => waitingForUrlsPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .Enter()
-            .WaitUntil(s => waitingForRedisPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .Enter()
-            .WaitUntil(s => waitingForTestPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.AspireNewAsync("AspireLogsTestApp", counter);
 
         // Navigate to the AppHost directory
-        sequenceBuilder.Type("cd AspireLogsTestApp/AspireLogsTestApp.AppHost")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("cd AspireLogsTestApp/AspireLogsTestApp.AppHost");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
-        // Start the AppHost in the background using aspire run --detach
-        sequenceBuilder.Type("aspire run --detach")
-            .Enter()
-            .WaitUntil(s => waitForAppHostStartedSuccessfully.Search(s).Count > 0, TimeSpan.FromMinutes(3))
-            .WaitForSuccessPrompt(counter);
+        // Start the AppHost in the background using aspire start
+        await auto.TypeAsync("aspire start");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Wait for resources to fully start and produce logs
-        sequenceBuilder.Type("sleep 15")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("sleep 15");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Test aspire logs for a specific resource (apiservice) - non-follow mode gets logs and exits
-        sequenceBuilder.Type("aspire logs apiservice > logs.txt 2>&1")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire logs apiservice > logs.txt 2>&1");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Debug: show file size and first few lines
-        sequenceBuilder.Type("wc -l logs.txt && head -5 logs.txt")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("wc -l logs.txt && head -5 logs.txt");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Verify the log file contains expected output
-        sequenceBuilder.Type("cat logs.txt | grep -E '\\[apiservice\\]' | head -3")
-            .Enter()
-            .WaitUntil(s => waitForApiserviceLogs.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("cat logs.txt | grep -E '\\[apiservice\\]' | head -3");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("[apiservice]", timeout: TimeSpan.FromSeconds(10));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Test aspire logs --format json for a specific resource
-        sequenceBuilder.Type("aspire logs apiservice --format json > logs_json.txt 2>&1")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire logs apiservice --format json > logs_json.txt 2>&1");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Verify the JSON log file contains expected output
-        sequenceBuilder.Type("cat logs_json.txt | grep '\"resourceName\"' | head -3")
-            .Enter()
-            .WaitUntil(s => waitForLogsJsonOutput.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("cat logs_json.txt | grep '\"resourceName\"' | head -3");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("\"resourceName\":", timeout: TimeSpan.FromSeconds(10));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Stop the AppHost using aspire stop
-        sequenceBuilder.Type("aspire stop")
-            .Enter()
-            .WaitUntil(s => waitForAppHostStoppedSuccessfully.Search(s).Count > 0, TimeSpan.FromMinutes(1))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire stop");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(StopCommandStrings.AppHostStoppedSuccessfully, timeout: TimeSpan.FromMinutes(1));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Exit the shell
-        sequenceBuilder.Type("exit")
-            .Enter();
-
-        var sequence = sequenceBuilder.Build();
-
-        await sequence.ApplyAsync(terminal, TestContext.Current.CancellationToken);
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
 
         await pendingRun;
     }

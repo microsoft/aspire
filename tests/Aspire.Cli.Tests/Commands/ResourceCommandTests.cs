@@ -18,7 +18,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("command --help");
+        var result = command.Parse("resource --help");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -33,7 +33,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("command");
+        var result = command.Parse("resource");
 
         // Missing required argument should fail
         var exitCode = await result.InvokeAsync().DefaultTimeout();
@@ -48,7 +48,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("command myresource");
+        var result = command.Parse("resource myresource");
 
         // Missing required command argument should fail
         var exitCode = await result.InvokeAsync().DefaultTimeout();
@@ -63,7 +63,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("command myresource my-command --help");
+        var result = command.Parse("resource myresource my-command --help");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.Success, exitCode);
@@ -77,14 +77,14 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("command myresource my-command --project /path/to/project.csproj --help");
+        var result = command.Parse("resource myresource my-command --apphost /path/to/project.csproj --help");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.Success, exitCode);
     }
 
     [Fact]
-    public async Task ResourceCommand_AcceptsKnownCommandNames()
+    public async Task ResourceCommand_AcceptsWellKnownCommandNames()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
@@ -92,19 +92,33 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var command = provider.GetRequiredService<RootCommand>();
 
-        // Test with resource-start
-        var startResult = command.Parse("command myresource resource-start --help");
+        // Test with start
+        var startResult = command.Parse("resource myresource start --help");
         var startExitCode = await startResult.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.Success, startExitCode);
 
-        // Test with resource-stop
-        var stopResult = command.Parse("command myresource resource-stop --help");
+        // Test with stop
+        var stopResult = command.Parse("resource myresource stop --help");
         var stopExitCode = await stopResult.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.Success, stopExitCode);
 
-        // Test with resource-restart
-        var restartResult = command.Parse("command myresource resource-restart --help");
+        // Test with restart
+        var restartResult = command.Parse("resource myresource restart --help");
         var restartExitCode = await restartResult.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.Success, restartExitCode);
+    }
+
+    [Fact]
+    public async Task ResourceCommand_AcceptsProjectOptionWithStart()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("resource myresource start --apphost /path/to/project.csproj --help");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
     }
 }

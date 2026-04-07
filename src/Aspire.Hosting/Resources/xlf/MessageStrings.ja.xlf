@@ -37,6 +37,11 @@
         <target state="translated">コマンドがありません</target>
         <note />
       </trans-unit>
+      <trans-unit id="PersistentContainerWithoutUserSecrets">
+        <source>Resource '{0}' has a persistent lifetime but the AppHost project does not have user secrets configured. Generated parameter values (such as passwords) may change on each restart, causing persistent containers to be recreated. Run 'aspire secret set' to initialize user secrets.</source>
+        <target state="translated">リソース '{0}' には永続的な有効期間がありますが、AppHost プロジェクトでユーザー シークレットが構成されていません。生成されるパラメーター値 (パスワードなど) は再起動のたびに変わる可能性があるため、永続コンテナーが再作成されることになります。'aspire secret set' を実行してユーザー シークレットを初期化します。</target>
+        <note />
+      </trans-unit>
       <trans-unit id="RequiredCommandNotFound">
         <source>Required command '{0}' was not found on PATH or at the specified location.</source>
         <target state="translated">必要なコマンド '{0}' が PATH または指定された場所に見つかりませんでした。</target>

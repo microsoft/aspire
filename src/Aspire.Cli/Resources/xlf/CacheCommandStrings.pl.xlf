@@ -18,13 +18,13 @@
         <note />
       </trans-unit>
       <trans-unit id="ClearCommand_Description">
-        <source>Clear all cache entries.</source>
-        <target state="translated">Wyczyść wszystkie wpisy w pamięci podręcznej.</target>
+        <source>Clear all cache entries</source>
+        <target state="needs-review-translation">Wyczyść wszystkie wpisy w pamięci podręcznej.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Manage disk cache for CLI operations.</source>
-        <target state="translated">Zarządzaj pamięcią podręczną dysków na potrzeby operacji interfejsu wiersza polecenia.</target>
+        <source>Manage disk cache for CLI operations</source>
+        <target state="needs-review-translation">Zarządzaj pamięcią podręczną dysków na potrzeby operacji interfejsu wiersza polecenia.</target>
         <note />
       </trans-unit>
     </body>

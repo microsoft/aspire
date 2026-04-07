@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Nodes;
+using Aspire.Hosting.ApplicationModel;
+using Aspire.TypeSystem;
 using Aspire.Hosting.RemoteHost.Ats;
 using Xunit;
 
@@ -341,5 +343,33 @@ public class HandleRefTests
         var json = new JsonObject { ["$handle"] = 42 };
 
         Assert.True(HandleRef.IsHandleRef(json));
+    }
+
+    [Fact]
+    public void Register_ConditionalReferenceExpression_CanBeRetrievedByTypeId()
+    {
+        var registry = new HandleRegistry();
+        var condition = new TestConditionProvider(bool.TrueString);
+        var conditional = ReferenceExpression.CreateConditional(
+            condition, bool.TrueString, ReferenceExpression.Create($",ssl=true"), ReferenceExpression.Empty);
+        var typeId = AtsConstants.ReferenceExpressionTypeId;
+
+        var handleId = registry.Register(conditional, typeId);
+        var found = registry.TryGet(handleId, out var retrieved, out var retrievedTypeId);
+
+        Assert.True(found);
+        Assert.Same(conditional, retrieved);
+        Assert.Equal(typeId, retrievedTypeId);
+    }
+
+    private sealed class TestConditionProvider(string value) : IValueProvider, IManifestExpressionProvider
+    {
+        public string ValueExpression => "test-condition";
+
+        public ValueTask<string?> GetValueAsync(CancellationToken cancellationToken = default)
+            => new(value);
+
+        public ValueTask<string?> GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken = default)
+            => new(value);
     }
 }

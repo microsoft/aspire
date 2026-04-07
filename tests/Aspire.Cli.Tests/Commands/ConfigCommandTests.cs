@@ -308,6 +308,102 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ConfigListCommand_WithoutAllFlag_ShowsHintInsteadOfFeatures()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+        });
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+
+        // Set a value so config list has something to display
+        var setResult = command.Parse("config set testkey testvalue");
+        await setResult.InvokeAsync().DefaultTimeout();
+
+        // List without --all
+        var listResult = command.Parse("config list");
+        var listExitCode = await listResult.InvokeAsync().DefaultTimeout();
+        Assert.Equal(0, listExitCode);
+
+        var output = string.Join("\n", outputWriter.Logs);
+        Assert.Contains("--all", output);
+    }
+
+    [Fact]
+    public async Task ConfigListCommand_WithAllFlag_ShowsFeatureDetails()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+        });
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+
+        // Set a value so config list has something to display
+        var setResult = command.Parse("config set testkey testvalue");
+        await setResult.InvokeAsync().DefaultTimeout();
+
+        // List with --all
+        var listResult = command.Parse("config list --all");
+        var listExitCode = await listResult.InvokeAsync().DefaultTimeout();
+        Assert.Equal(0, listExitCode);
+
+        var output = string.Join("\n", outputWriter.Logs);
+        Assert.Contains("default:", output);
+    }
+
+    [Fact]
+    public async Task ConfigListCommand_WithoutAllFlag_NoConfig_ShowsHintAboutAllFlag()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+        });
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+
+        // List without --all and with no config set
+        var listResult = command.Parse("config list");
+        var listExitCode = await listResult.InvokeAsync().DefaultTimeout();
+        Assert.Equal(0, listExitCode);
+
+        var output = string.Join("\n", outputWriter.Logs);
+        Assert.Contains("--all", output);
+    }
+
+    [Fact]
+    public async Task ConfigListCommand_WithAllFlag_NoConfig_ShowsAvailableFeatures()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+        });
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+
+        // List with --all and with no config set
+        var listResult = command.Parse("config list --all");
+        var listExitCode = await listResult.InvokeAsync().DefaultTimeout();
+        Assert.Equal(0, listExitCode);
+
+        var output = string.Join("\n", outputWriter.Logs);
+        Assert.Contains("default:", output);
+    }
+
+    [Fact]
     public async Task FeatureFlags_WhenSetToTrue_ReturnsTrue()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -418,6 +514,186 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
         // Verify the feature flag defaults to false
         var featureFlags = provider.GetRequiredService<IFeatures>();
         Assert.False(featureFlags.IsFeatureEnabled(KnownFeatures.ShowDeprecatedPackages, defaultValue: false));
+    }
+
+    [Fact]
+    public async Task ConfigSetCommand_WithColonNotation_CreatesNestedObject()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+        var result = command.Parse("config set features:polyglotSupportEnabled true");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(0, exitCode);
+
+        // Colon notation should be normalized to nested JSON, not stored as a flat key
+        var settingsPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "settings.json");
+        var json = await File.ReadAllTextAsync(settingsPath);
+        var settings = JsonNode.Parse(json)?.AsObject();
+        Assert.NotNull(settings);
+
+        // Should be stored as nested object, not as flat "features:polyglotSupportEnabled" key
+        Assert.False(settings.ContainsKey("features:polyglotSupportEnabled"));
+        Assert.True(settings["features"] is JsonObject);
+        var featuresObject = settings["features"]!.AsObject();
+        Assert.Equal("true", featuresObject["polyglotSupportEnabled"]?.ToString());
+    }
+
+    [Fact]
+    public async Task ConfigSetCommand_ColonThenDot_NoDuplicateKeys()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+
+        // Set with colon notation first
+        var result1 = command.Parse("config set features:polyglotSupportEnabled true");
+        var exitCode1 = await result1.InvokeAsync().DefaultTimeout();
+        Assert.Equal(0, exitCode1);
+
+        // Then set with dot notation
+        var result2 = command.Parse("config set features.polyglotSupportEnabled false");
+        var exitCode2 = await result2.InvokeAsync().DefaultTimeout();
+        Assert.Equal(0, exitCode2);
+
+        // Should have a single nested entry, no flat colon key
+        var settingsPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "settings.json");
+        var json = await File.ReadAllTextAsync(settingsPath);
+        var settings = JsonNode.Parse(json)?.AsObject();
+        Assert.NotNull(settings);
+
+        Assert.False(settings.ContainsKey("features:polyglotSupportEnabled"));
+        Assert.True(settings["features"] is JsonObject);
+        var featuresObject = settings["features"]!.AsObject();
+        Assert.Equal("false", featuresObject["polyglotSupportEnabled"]?.ToString());
+    }
+
+    [Fact]
+    public async Task ConfigSetCommand_DotThenColon_NoDuplicateKeys()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+
+        // Set with dot notation first
+        var result1 = command.Parse("config set features.polyglotSupportEnabled true");
+        var exitCode1 = await result1.InvokeAsync().DefaultTimeout();
+        Assert.Equal(0, exitCode1);
+
+        // Then set with colon notation
+        var result2 = command.Parse("config set features:polyglotSupportEnabled false");
+        var exitCode2 = await result2.InvokeAsync().DefaultTimeout();
+        Assert.Equal(0, exitCode2);
+
+        // Should have a single nested entry, no flat colon key
+        var settingsPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "settings.json");
+        var json = await File.ReadAllTextAsync(settingsPath);
+        var settings = JsonNode.Parse(json)?.AsObject();
+        Assert.NotNull(settings);
+
+        Assert.False(settings.ContainsKey("features:polyglotSupportEnabled"));
+        Assert.True(settings["features"] is JsonObject);
+        var featuresObject = settings["features"]!.AsObject();
+        Assert.Equal("false", featuresObject["polyglotSupportEnabled"]?.ToString());
+    }
+
+    [Fact]
+    public async Task ConfigDeleteCommand_WithColonNotation_DeletesNestedValue()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+
+        // Set with dot notation
+        var setResult = command.Parse("config set features.polyglotSupportEnabled true");
+        var setExitCode = await setResult.InvokeAsync().DefaultTimeout();
+        Assert.Equal(0, setExitCode);
+
+        // Delete with colon notation
+        var deleteResult = command.Parse("config delete features:polyglotSupportEnabled");
+        var deleteExitCode = await deleteResult.InvokeAsync().DefaultTimeout();
+        Assert.Equal(0, deleteExitCode);
+
+        // Verify the entire features structure is cleaned up
+        var settingsPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "settings.json");
+        var json = await File.ReadAllTextAsync(settingsPath);
+        var settings = JsonNode.Parse(json)?.AsObject();
+        Assert.NotNull(settings);
+        Assert.False(settings.ContainsKey("features"));
+    }
+
+    [Fact]
+    public async Task ConfigSetCommand_WithCorruptedFile_RecoversDuringLoad()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Manually create a corrupted settings file with duplicate keys
+        // (flat colon key + nested object for the same path)
+        var settingsDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire");
+        Directory.CreateDirectory(settingsDir);
+        var settingsPath = Path.Combine(settingsDir, "settings.json");
+        await File.WriteAllTextAsync(settingsPath, """
+            {
+              "features": {
+                "polyglotSupportEnabled": "false"
+              },
+              "features:polyglotSupportEnabled": "true"
+            }
+            """);
+
+        // Loading configuration should succeed after normalizing the corrupted file
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var provider = services.BuildServiceProvider();
+
+        // Verify the file was normalized - flat key should be gone, existing nested value preserved
+        var json = await File.ReadAllTextAsync(settingsPath);
+        var settings = JsonNode.Parse(json)?.AsObject();
+        Assert.NotNull(settings);
+        Assert.False(settings.ContainsKey("features:polyglotSupportEnabled"));
+        Assert.True(settings["features"] is JsonObject);
+        var featuresObject = settings["features"]!.AsObject();
+        Assert.Equal("false", featuresObject["polyglotSupportEnabled"]?.ToString());
+    }
+
+    [Fact]
+    public async Task ConfigSetCommand_WithCorruptedFile_PreservesExistingNestedValueOverFlatKey()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Create a settings file where both a nested value and a flat colon key exist
+        // for the same path but with different values.
+        var settingsDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire");
+        Directory.CreateDirectory(settingsDir);
+        var settingsPath = Path.Combine(settingsDir, "settings.json");
+        await File.WriteAllTextAsync(settingsPath, """
+            {
+              "features": {
+                "polyglotSupportEnabled": "nested-value"
+              },
+              "features:polyglotSupportEnabled": "flat-value"
+            }
+            """);
+
+        // Loading configuration triggers normalization
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var provider = services.BuildServiceProvider();
+
+        // The existing nested value should be preserved; the flat key value should be dropped
+        var json = await File.ReadAllTextAsync(settingsPath);
+        var settings = JsonNode.Parse(json)?.AsObject();
+        Assert.NotNull(settings);
+        Assert.False(settings.ContainsKey("features:polyglotSupportEnabled"));
+        var featuresObject = settings["features"]!.AsObject();
+        Assert.Equal("nested-value", featuresObject["polyglotSupportEnabled"]?.ToString());
     }
 }
 

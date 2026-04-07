@@ -58,40 +58,16 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="ScanningForRunningAppHosts" xml:space="preserve">
-    <value>Scanning for running AppHosts...</value>
-  </data>
-  <data name="SelectAppHost" xml:space="preserve">
-    <value>Select which AppHost to connect to:</value>
-  </data>
-  <data name="NoInScopeAppHostsShowingAll" xml:space="preserve">
-    <value>No in-scope AppHosts found. Showing all running AppHosts.</value>
-  </data>
-  <data name="NoRunningAppHostsFound" xml:space="preserve">
-    <value>No running AppHosts found.</value>
-  </data>
-  <data name="ProjectOptionDescription" xml:space="preserve">
-    <value>The path to the Aspire AppHost project file.</value>
-  </data>
-  <data name="StartDescription" xml:space="preserve">
-    <value>Start a stopped resource.</value>
-  </data>
-  <data name="StartResourceArgumentDescription" xml:space="preserve">
-    <value>The name of the resource to start.</value>
-  </data>
-  <data name="RestartDescription" xml:space="preserve">
-    <value>Restart a running resource.</value>
-  </data>
-  <data name="RestartResourceArgumentDescription" xml:space="preserve">
-    <value>The name of the resource to restart.</value>
+  <data name="SelectAppHostAction" xml:space="preserve">
+    <value>connect to</value>
   </data>
   <data name="CommandDescription" xml:space="preserve">
-    <value>Execute a command on a resource.</value>
+    <value>Execute a command on a resource (e.g. start, stop, restart)</value>
   </data>
   <data name="CommandResourceArgumentDescription" xml:space="preserve">
-    <value>The name of the resource to execute the command on.</value>
+    <value>The name of the resource to execute the command on</value>
   </data>
   <data name="CommandNameArgumentDescription" xml:space="preserve">
-    <value>The name of the command to execute.</value>
+    <value>The name of the command to execute (e.g. start, stop, restart)</value>
   </data>
 </root>

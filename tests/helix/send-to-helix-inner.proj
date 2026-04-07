@@ -10,7 +10,7 @@
     <DotNetCliPackageType>sdk</DotNetCliPackageType>
     <NeedsCreateDotNetDevScripts Condition="'$(OS)' != 'Windows_NT'">true</NeedsCreateDotNetDevScripts>
     <HasDocker Condition="'$(OS)' != 'Windows_NT'">true</HasDocker>
-    <!-- Disable playwright tests on helix/linux. Issue: https://github.com/dotnet/aspire/issues/4921 -->
+    <!-- Disable playwright tests on helix/linux. Issue: https://github.com/microsoft/aspire/issues/4921 -->
     <DisablePlaywrightTests Condition="'$(OS)' != 'Windows_NT'">true</DisablePlaywrightTests>
 
     <DotNetCliVersion>$(DotNetSdkPreviousVersionForTesting)</DotNetCliVersion>
@@ -46,6 +46,9 @@
 
     <_ShutdownDockerContainersCommand Condition="'$(OS)' != 'Windows_NT'">for f in `docker ps -aq`%3B do docker stop $f%3B docker rm $f%3B done</_ShutdownDockerContainersCommand>
     <_DeleteDockerVolumesCommand Condition="'$(OS)' != 'Windows_NT'">for f in `docker volume ls -q`%3B do docker volume rm $f%3B done</_DeleteDockerVolumesCommand>
+    <_UsesTestcontainersWorkItemCommand Condition="'$(OS)' != 'Windows_NT'">find "$HELIX_WORKITEM_ROOT" -type f \( -name 'Testcontainers*.dll' -o -name 'DotNet.Testcontainers*.dll' \) | grep -q .</_UsesTestcontainersWorkItemCommand>
+    <_DisableRyukForTestcontainersWorkItemCommand Condition="'$(OS)' != 'Windows_NT'">if $(_UsesTestcontainersWorkItemCommand)%3B then echo "Disabling Testcontainers Ryuk for this Helix work item." $(_ShellCommandSeparator) export TESTCONTAINERS_RYUK_DISABLED=true%3B fi</_DisableRyukForTestcontainersWorkItemCommand>
+    <_CleanupDockerForTestcontainersWorkItemCommand Condition="'$(OS)' != 'Windows_NT'">if $(_UsesTestcontainersWorkItemCommand)%3B then echo "Cleaning up Docker resources for this Testcontainers Helix work item." $(_ShellCommandSeparator) $(_ShutdownDockerContainersCommand) $(_ShellCommandSeparator) $(_DeleteDockerVolumesCommand) $(_ShellCommandSeparator) docker network prune -f%3B fi</_CleanupDockerForTestcontainersWorkItemCommand>
 
     <_CleanupProcessesCommand Condition="'$(OS)' == 'Windows_NT'">powershell -ExecutionPolicy ByPass -NoProfile -command "&amp; get-ciminstance win32_process | where-object ExecutablePath -Match 'dotnet-tests|dcp.exe' | foreach-object { echo $_.ProcessId $_.ExecutablePath %3B stop-process -id $_.ProcessId -force -ErrorAction SilentlyContinue }"</_CleanupProcessesCommand>
     <_CleanupProcessesCommand Condition="'$(OS)' != 'Windows_NT'">pgrep -lf "dotnet-tests|dcp.exe" | awk '{print %3B system("kill -9 "$1)}'</_CleanupProcessesCommand>
@@ -133,18 +136,21 @@
     <HelixPreCommand Include="$(_DeleteDockerVolumesCommand)" />
     <HelixPreCommand Include="docker network ls" />
     <HelixPreCommand Include="docker network prune -f" />
-
     <HelixPostCommand Include="docker container ls --all" />
     <HelixPostCommand Include="docker container ls --all --format json" />
     <HelixPostCommand Include="docker volume ls" />
     <HelixPostCommand Include="docker network ls" />
+    <HelixPostCommand Condition="'$(OS)' != 'Windows_NT'" Include="$(_CleanupDockerForTestcontainersWorkItemCommand)" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Issue: https://github.com/dotnet/aspire/pull/6181 -->
+    <!-- Issue: https://github.com/microsoft/aspire/pull/6181 -->
     <HelixPreCommand Include="$(_EnvVarSetKeyword) MSBUILDDEBUGPATH=$(_HelixCorrelationPayloadEnvVar)/msbuild-debug" />
 
     <HelixPreCommand Condition="'$(OS)' == 'Windows_NT'" Include="dotnet dev-certs https --trust" />
+
+    <!-- Set console code page to UTF-8 on Windows to ensure log files are saved in UTF-8 format -->
+    <HelixPreCommand Condition="'$(OS)' == 'Windows_NT'" Include="chcp 65001 >NUL" />
 
     <!-- Set the DCP env -->
     <HelixPreCommand Include="$(_EnvVarSetKeyword) DCP_DIAGNOSTICS_LOG_LEVEL=debug" />
@@ -161,6 +167,7 @@
 
     <HelixPerWorkItemPreCommand Condition="'$(OS)' == 'Windows_NT'">$(HelixPerWorkItemPreCommand) &amp; set DOTNET_ROOT=%HELIX_CORRELATION_PAYLOAD%\$(_DefaultSdkDirNameForTests)</HelixPerWorkItemPreCommand>
     <HelixPerWorkItemPreCommand Condition="'$(OS)' != 'Windows_NT'">$(HelixPerWorkItemPreCommand) &amp;&amp; export DOTNET_ROOT=$HELIX_CORRELATION_PAYLOAD/$(_DefaultSdkDirNameForTests)</HelixPerWorkItemPreCommand>
+    <HelixPerWorkItemPreCommand Condition="'$(OS)' != 'Windows_NT'">$(HelixPerWorkItemPreCommand) &amp;&amp; $(_DisableRyukForTestcontainersWorkItemCommand)</HelixPerWorkItemPreCommand>
   </PropertyGroup>
 
   <Target Name="PrepareDependencies" DependsOnTargets="$(PrepareDependenciesDependsOn)" />

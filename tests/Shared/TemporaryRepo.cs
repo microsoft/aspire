@@ -62,6 +62,15 @@ internal sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, Directo
         var repoDirectory = Directory.CreateDirectory(path);
         outputHelper.WriteLine($"Temporary workspace created at: {repoDirectory.FullName}");
 
+        // Create an empty settings file so directory-walking searches
+        // (ConfigurationHelper, ConfigurationService) stop here instead
+        // of finding the user's actual ~/.aspire/settings.json.
+        var aspireDir = Directory.CreateDirectory(Path.Combine(path, ".aspire"));
+        File.WriteAllText(Path.Combine(aspireDir.FullName, "settings.json"), "{}");
+
+        // Register workspace path for CaptureWorkspaceOnFailure attribute
+        TestContext.Current?.KeyValueStorage["WorkspacePath"] = repoDirectory.FullName;
+
         return new TemporaryWorkspace(outputHelper, repoDirectory);
     }
 }

@@ -55,7 +55,9 @@ internal static class TestExecutionContextFactory
             new DirectoryInfo(Path.GetTempPath()),
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "hives")),
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "cache")),
-            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "sdks")));
+            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "sdks")),
+            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "logs")),
+            "test.log");
     }
 }
 

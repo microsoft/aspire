@@ -22,7 +22,7 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
     {
         _infrastructure = infra;
         // Write a fake parameter for the container app environment
-        // so azd knows the Dashboard URL - see https://github.com/dotnet/aspire/issues/8449.
+        // so azd knows the Dashboard URL - see https://github.com/microsoft/aspire/issues/8449.
         // This is temporary until a real fix can be made in azd.
         AllocateParameter(_containerAppEnvironmentContext.Environment.ContainerAppDomain);
 
@@ -110,11 +110,10 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
         };
         containerApp.Configuration = configuration;
 
-        const string latestPreview = "2025-02-02-preview"; // these properties are currently only available in preview
-
         // default autoConfigureDataProtection to true for .NET projects
         if (Resource is ProjectResource)
         {
+            const string latestPreview = "2025-10-02-preview"; // this property is currently only available in preview
             containerApp.ResourceVersion = latestPreview;
 
             var value = new BicepValue<bool>(true);
@@ -125,11 +124,7 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
         // default kind to functionapp for Azure Functions
         if (Resource.HasAnnotationOfType<AzureFunctionsAnnotation>())
         {
-            containerApp.ResourceVersion = latestPreview;
-
-            var value = new BicepValue<string>("functionapp");
-            ((IBicepValue)value).Self = new BicepValueReference(containerApp, "Kind", ["kind"]);
-            containerApp.ProvisionableProperties["Kind"] = value;
+            containerApp.Kind = ContainerAppKind.Functionapp;
         }
 
         return containerApp;
@@ -145,12 +140,13 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
             return;
         }
 
-        // Only http, https, and tcp are supported
-        var unsupportedEndpoints = resolvedEndpoints.Where(r => r.Endpoint.UriScheme is not ("tcp" or "http" or "https")).ToArray();
+        // Validate transport layer: only http-based and tcp transports are supported by Container Apps.
+        // The URI scheme (e.g. "redis", "rediss", "foo") is independent of transport.
+        var unsupportedEndpoints = resolvedEndpoints.Where(r => r.Endpoint.Transport is not ("http" or "http2" or "tcp")).ToArray();
 
         if (unsupportedEndpoints.Length > 0)
         {
-            throw new NotSupportedException($"The endpoint(s) {string.Join(", ", unsupportedEndpoints.Select(r => $"'{r.Endpoint.Name}'"))} specify an unsupported scheme. The supported schemes are 'http', 'https', and 'tcp'.");
+            throw new NotSupportedException($"The endpoint(s) {string.Join(", ", unsupportedEndpoints.Select(r => $"'{r.Endpoint.Name}'"))} specify an unsupported transport. The supported transports are 'http', 'http2', and 'tcp'.");
         }
 
         // Group resolved endpoints by target port (aka destinations), this gives us the logical bindings or destinations
@@ -162,9 +158,9 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
                 Port = g.Key,
                 ResolvedEndpoints = g.Select(x => x.resolved).ToArray(),
                 External = g.Any(x => x.resolved.Endpoint.IsExternal),
-                IsHttpOnly = g.All(x => x.resolved.Endpoint.UriScheme is "http" or "https"),
+                IsHttpOnly = g.All(x => x.resolved.Endpoint.Transport is "http" or "http2"),
                 AnyH2 = g.Any(x => x.resolved.Endpoint.Transport is "http2"),
-                UniqueSchemes = g.Select(x => x.resolved.Endpoint.UriScheme).Distinct().ToArray(),
+                UniqueTransports = g.Select(x => x.resolved.Endpoint.Transport).Distinct().ToArray(),
                 Index = g.Min(x => x.index)
             })
             .ToList();
@@ -183,12 +179,11 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
             throw new NotSupportedException("External non-HTTP(s) endpoints are not supported");
         }
 
-        // Don't allow mixing http and tcp endpoints
-        // This means we want to fail if we see a group with http/https and tcp endpoints
-        static bool Compatible(string[] schemes) =>
-            schemes.All(s => s is "http" or "https") || schemes.All(s => s is "tcp");
+        // Don't allow mixing http and tcp transports on the same target port
+        static bool Compatible(string[] transports) =>
+            transports.All(t => t is "http" or "http2") || transports.All(t => t is "tcp");
 
-        if (endpointsByTargetPort.Any(g => !Compatible(g.UniqueSchemes)))
+        if (endpointsByTargetPort.Any(g => !Compatible(g.UniqueTransports)))
         {
             throw new NotSupportedException("HTTP(s) and TCP endpoints cannot be mixed");
         }
@@ -233,7 +228,7 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
                 var scheme = preserveHttp ? endpoint.UriScheme : "https";
                 var port = scheme is "http" ? 80 : 443;
 
-                _endpointMapping[endpoint.Name] = new(scheme, NormalizedContainerAppName, port, targetPort, true, httpIngress.External);
+                _endpointMapping[endpoint.Name] = new(scheme, NormalizedContainerAppName, port, targetPort, true, httpIngress.External, endpoint.TlsEnabled);
             }
 
             // Record HTTP endpoints being upgraded (logged once at environment level)
@@ -265,7 +260,7 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
             foreach (var resolved in g.ResolvedEndpoints)
             {
                 var endpoint = resolved.Endpoint;
-                _endpointMapping[endpoint.Name] = new(endpoint.UriScheme, NormalizedContainerAppName, resolved.ExposedPort.Value ?? g.Port.Value, g.Port.Value, false, g.External);
+                _endpointMapping[endpoint.Name] = new(endpoint.UriScheme, NormalizedContainerAppName, resolved.ExposedPort.Value ?? g.Port.Value, g.Port.Value, false, g.External, endpoint.TlsEnabled);
             }
         }
     }

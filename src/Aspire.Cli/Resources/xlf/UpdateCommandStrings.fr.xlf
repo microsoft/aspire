@@ -8,13 +8,13 @@
         <note />
       </trans-unit>
       <trans-unit id="AnalyzeAppHost">
-        <source>Analyze App Host</source>
-        <target state="translated">Analyser l’hôte d’application</target>
+        <source>Analyze AppHost</source>
+        <target state="needs-review-translation">Analyser l’hôte d’application</target>
         <note />
       </trans-unit>
       <trans-unit id="AnalyzeAppHostSdk">
-        <source>Analyze App Host SDK</source>
-        <target state="translated">Analyser le SDK hôte d’application</target>
+        <source>Analyze AppHost SDK</source>
+        <target state="needs-review-translation">Analyser le SDK hôte d’application</target>
         <note />
       </trans-unit>
       <trans-unit id="AnalyzeProjectFormat">
@@ -32,6 +32,11 @@
         <target state="translated">Voulez-vous appliquer ces modifications à NuGet.config ?</target>
         <note />
       </trans-unit>
+      <trans-unit id="ApplyingUpdates">
+        <source>Applying updates...</source>
+        <target state="translated">Application en cours des mises à jour...</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CentralPackageManagementNotSupported">
         <source>Central package management is currently not supported by 'aspire update'.</source>
         <target state="translated">Actuellement, la gestion centralisée des packages n’est pas prise en charge par « aspire update ».</target>
@@ -45,6 +50,11 @@
       <trans-unit id="ChannelOptionDescriptionWithStaging">
         <source>Channel to update to (stable, staging, daily)</source>
         <target state="translated">Canal vers lequel effectuer une mise à jour (stable, gestion intermédiaire, quotidien)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CheckingForUpdates">
+        <source>Checking for updates...</source>
+        <target state="translated">Recherche de mises à jour...</target>
         <note />
       </trans-unit>
       <trans-unit id="CouldNotFindPackageVersionInDirectoryPackagesProps">
@@ -63,8 +73,8 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Update integrations in the Aspire project. (Preview)</source>
-        <target state="translated">Mettre à jour les intégrations dans le projet Aspire. (Préversion)</target>
+        <source>Update integrations in the Aspire project (Preview)</source>
+        <target state="needs-review-translation">Mettre à jour les intégrations dans le projet Aspire. (Préversion)</target>
         <note />
       </trans-unit>
       <trans-unit id="DotNetToolSelfUpdateMessage">
@@ -75,6 +85,16 @@
       <trans-unit id="ExecutingUpdateStepFormat">
         <source>Executing: {0}</source>
         <target state="translated">Exécution : {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ExtractedNewCli">
+        <source>Extracted new CLI</source>
+        <target state="translated">Nous avons extrait la nouvelle CLI</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ExtractingNewCli">
+        <source>Extracting new CLI...</source>
+        <target state="translated">Extraction en cours de la nouvelle CLI...</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedDiscoverNuGetConfig">
@@ -94,7 +114,7 @@
       </trans-unit>
       <trans-unit id="FallbackParsingWarning">
         <source>Note: Update plan generated using fallback parsing due to unresolvable AppHost SDK. Dependency analysis may have reduced accuracy.</source>
-        <target state="translated">Remarque : plan de mise à jour généré à l’aide de l’analyse de secours en raison d’un Kit de développement logiciel (SDK) AppHost non résolu. L’analyse des dépendances peut avoir une précision réduite.</target>
+        <target state="needs-review-translation">Remarque : plan de mise à jour généré à l’aide de l’analyse de secours en raison d’un Kit de développement logiciel (SDK) AppHost non résolu. L’analyse des dépendances peut avoir une précision réduite.</target>
         <note />
       </trans-unit>
       <trans-unit id="MappingAddedFormat">
@@ -119,7 +139,7 @@
       </trans-unit>
       <trans-unit id="NoAppHostFoundUpdateCliPrompt">
         <source>No Aspire AppHost project found. Would you like to update the Aspire CLI instead?</source>
-        <target state="translated">Aucun projet Aspire AppHost trouvé. Voulez-vous plutôt mettre à jour l’interface CLI Aspire ?</target>
+        <target state="needs-review-translation">Aucun projet Aspire AppHost trouvé. Voulez-vous plutôt mettre à jour l’interface CLI Aspire ?</target>
         <note />
       </trans-unit>
       <trans-unit id="NoChangesDetectedInNuGetConfig">
@@ -153,8 +173,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="translated">Chemin d’accès au fichier projet AppHost Aspire.</target>
+        <source>The path to the Aspire AppHost project file</source>
+        <target state="needs-review-translation">Chemin d’accès au fichier projet AppHost Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectReferenceNoFullPath">
@@ -177,6 +197,16 @@
         <target state="translated">Niveau de qualité vers lequel effectuer une mise à jour (stable, gestion intermédiaire, quotidien)</target>
         <note />
       </trans-unit>
+      <trans-unit id="RegeneratedSdkCode">
+        <source>Regenerated SDK code with updated packages.</source>
+        <target state="translated">Nous avons régénéré le code de Kit de développement logiciel (SDK) avec les packages mis à jour.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RegeneratingSdkCode">
+        <source>Regenerating SDK code with updated packages...</source>
+        <target state="translated">Régénération en cours du code de Kit de développement logiciel (SDK) avec les packages mis à jour...</target>
+        <note />
+      </trans-unit>
       <trans-unit id="RemovedFeedFormat">
         <source>Removed: {0}</source>
         <target state="translated">Supprimé : {0}</target>
@@ -195,6 +225,11 @@
       <trans-unit id="SelectChannelPrompt">
         <source>Select a channel:</source>
         <target state="translated">Sélectionnez un canal :</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SelfOptionDescription">
+        <source>Update the Aspire CLI itself to the latest version</source>
+        <target state="new">Update the Aspire CLI itself to the latest version</target>
         <note />
       </trans-unit>
       <trans-unit id="UnxpectedCodePath">

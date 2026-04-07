@@ -29,6 +29,8 @@ using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Pipelines.Internal;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.UserSecrets;
+using Aspire.Shared.UserSecrets;
+using Microsoft.Extensions.Configuration.UserSecrets;
 using Aspire.Hosting.VersionChecking;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -186,9 +188,14 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         LogBuilderConstructing(options, innerBuilderOptions);
         _innerBuilder = new HostApplicationBuilder(innerBuilderOptions);
 
+        var configuredUserSecretsId = _innerBuilder.Configuration[KnownConfigNames.AspireUserSecretsId];
+        var userSecretsId = ResolveUserSecretsId(AppHostAssembly, _innerBuilder.Configuration);
+        AddConfiguredUserSecrets(_innerBuilder.Configuration, AppHostAssembly, configuredUserSecretsId, _innerBuilder.Environment.IsDevelopment());
+
         _innerBuilder.Services.AddSingleton(TimeProvider.System);
 
-        _innerBuilder.Services.AddSingleton<ILoggerProvider, BackchannelLoggerProvider>();
+        _innerBuilder.Services.AddSingleton<BackchannelLoggerProvider>();
+        _innerBuilder.Services.AddSingleton<ILoggerProvider>(sp => sp.GetRequiredService<BackchannelLoggerProvider>());
         _innerBuilder.Logging.AddFilter("Microsoft.Hosting.Lifetime", LogLevel.Warning);
         _innerBuilder.Logging.AddFilter("Microsoft.AspNetCore.Server.Kestrel", LogLevel.Error);
         _innerBuilder.Logging.AddFilter("Aspire.Hosting.Dashboard", LogLevel.Error);
@@ -204,7 +211,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         }
 
         // This is so that we can see certificate errors in the resource server in the console logs.
-        // See: https://github.com/dotnet/aspire/issues/2914
+        // See: https://github.com/microsoft/aspire/issues/2914
         _innerBuilder.Logging.AddFilter("Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServer", LogLevel.Warning);
 
         // Add the logging configuration again to allow the user to override the defaults
@@ -315,9 +322,13 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             return _directoryService;
         });
 
-        // Create and register the user secrets manager
+        // Create and register the user secrets manager (uses the userSecretsId resolved at top of constructor)
         var userSecretsFactory = new UserSecretsManagerFactory(_directoryService);
-        _userSecretsManager = userSecretsFactory.GetOrCreate(AppHostAssembly);
+
+        _userSecretsManager = !string.IsNullOrEmpty(userSecretsId)
+            ? userSecretsFactory.GetOrCreateFromId(userSecretsId)
+            : NoopUserSecretsManager.Instance;
+
         // Always register IUserSecretsManager so dependencies can resolve
         _innerBuilder.Services.AddSingleton(_userSecretsManager);
 
@@ -395,14 +406,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
                     // of persistent containers (as a new key would be a spec change).
                     _userSecretsManager.GetOrSetSecret(_innerBuilder.Configuration, "AppHost:OtlpApiKey", TokenGenerator.GenerateToken);
 
-                    // Set a random API key for the MCP Server if one isn't already present in configuration.
-                    // If a key is generated, it's stored in the user secrets store so that it will be auto-loaded
-                    // on subsequent runs and not recreated. This is important to ensure it doesn't change the state
-                    // of MCP clients.
-                    _userSecretsManager.GetOrSetSecret(_innerBuilder.Configuration, "AppHost:McpApiKey", TokenGenerator.GenerateToken);
-
                     // Set a random API key for the Dashboard Telemetry API if one isn't already present in configuration.
-                    // This is the canonical API key; it also falls back to McpApiKey for MCP if not set.
                     _userSecretsManager.GetOrSetSecret(_innerBuilder.Configuration, "AppHost:DashboardApiKey", TokenGenerator.GenerateToken);
 
                     // Determine the frontend browser token.
@@ -485,7 +489,11 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             _innerBuilder.Services.AddHostedService<OrchestratorHostService>();
 
             // DCP stuff
-            _innerBuilder.Services.AddSingleton<IDcpExecutor, DcpExecutor>();
+            _innerBuilder.Services.AddSingleton<DcpAppResourceStore>();
+            _innerBuilder.Services.AddSingleton<ExecutableCreator>();
+            _innerBuilder.Services.AddSingleton<ContainerCreator>();
+            _innerBuilder.Services.AddSingleton<DcpExecutor>();
+            _innerBuilder.Services.AddSingleton<IDcpExecutor>(sp => sp.GetRequiredService<DcpExecutor>());
             _innerBuilder.Services.AddSingleton<DcpExecutorEvents>();
             _innerBuilder.Services.AddSingleton<DcpHost>();
             _innerBuilder.Services.AddSingleton<IDcpDependencyCheckService, DcpDependencyCheck>();
@@ -496,6 +504,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             _innerBuilder.Services.AddSingleton<IKubernetesService, KubernetesService>();
 
             Eventing.Subscribe<BeforeStartEvent>(BuiltInDistributedApplicationEventSubscriptionHandlers.InitializeDcpAnnotations);
+            Eventing.Subscribe<BeforeStartEvent>(BuiltInDistributedApplicationEventSubscriptionHandlers.WarnPersistentContainersWithoutUserSecrets);
         }
 
         // Publishing support
@@ -766,6 +775,68 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         return builder;
     }
 
+    internal static string? ResolveUserSecretsId(Assembly? appHostAssembly, IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        // An explicitly configured value should win over any assembly-level UserSecretsId so guest AppHosts can
+        // direct secrets to their synthetic store instead of the generated server project's store.
+        var configuredUserSecretsId = configuration[KnownConfigNames.AspireUserSecretsId];
+        var assemblyUserSecretsId = appHostAssembly?.GetCustomAttribute<UserSecretsIdAttribute>()?.UserSecretsId;
+        return string.IsNullOrWhiteSpace(configuredUserSecretsId) ? assemblyUserSecretsId : configuredUserSecretsId;
+    }
+
+    internal static void AddConfiguredUserSecrets(IConfigurationManager configuration, Assembly? appHostAssembly, string? configuredUserSecretsId, bool isDevelopment)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        // Add explicitly configured user secrets early so they have the same precedence as the default AddUserSecrets
+        // called by HostApplicationBuilder for .NET projects, and can replace any assembly-level store when needed.
+        // Only add in Development environment, matching the behavior of the default AddUserSecrets.
+        if (!string.IsNullOrWhiteSpace(configuredUserSecretsId) && isDevelopment)
+        {
+            // Remove only the file-backed source for the assembly-derived user-secrets ID so the configured
+            // user-secrets store replaces that single source without affecting other configuration providers.
+            RemoveUserSecretsSource(configuration, appHostAssembly?.GetCustomAttribute<UserSecretsIdAttribute>()?.UserSecretsId);
+            configuration.AddUserSecrets(configuredUserSecretsId);
+        }
+    }
+
+    internal static void RemoveUserSecretsSource(IConfigurationManager configuration, string? userSecretsId)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        if (string.IsNullOrWhiteSpace(userSecretsId))
+        {
+            return;
+        }
+
+        var userSecretsFilePath = Path.GetFullPath(UserSecretsPathHelper.GetSecretsPathFromSecretsId(userSecretsId));
+
+        for (var i = configuration.Sources.Count - 1; i >= 0; i--)
+        {
+            if (configuration.Sources[i] is not FileConfigurationSource fileSource)
+            {
+                continue;
+            }
+
+            if (fileSource.Path is null)
+            {
+                continue;
+            }
+
+            var filePath = fileSource.FileProvider?.GetFileInfo(fileSource.Path).PhysicalPath;
+
+            if (filePath is not null && PathsEqual(filePath, userSecretsFilePath))
+            {
+                configuration.Sources.RemoveAt(i);
+            }
+        }
+    }
+
+    private static bool PathsEqual(string left, string right) =>
+        string.Equals(Path.GetFullPath(left), Path.GetFullPath(right), OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+
     private static DiagnosticListener LogBuilderConstructing(DistributedApplicationOptions appBuilderOptions, HostApplicationBuilderSettings hostBuilderOptions)
     {
         var diagnosticListener = new DiagnosticListener(HostingDiagnosticListenerName);
@@ -858,4 +929,3 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
     private static string? GetMetadataValue(IEnumerable<AssemblyMetadataAttribute>? assemblyMetadata, string key) =>
         assemblyMetadata?.FirstOrDefault(a => string.Equals(a.Key, key, StringComparison.OrdinalIgnoreCase))?.Value;
 }
-

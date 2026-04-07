@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Net.Sockets;
 using System.Reflection;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -14,7 +15,6 @@ using Aspire.Dashboard.Authentication.OtlpApiKey;
 using Aspire.Dashboard.Components;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Configuration;
-using Aspire.Dashboard.Mcp;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Model.Assistant.Prompts;
@@ -47,10 +47,23 @@ namespace Aspire.Dashboard;
 
 public sealed class DashboardWebApplication : IAsyncDisposable
 {
+    /// <summary>
+    /// Exit code returned for unexpected startup errors.
+    /// </summary>
+    public const int ExitCodeUnexpectedError = DashboardExitCodes.UnexpectedError;
+
+    /// <summary>
+    /// Exit code returned when dashboard configuration is invalid.
+    /// </summary>
+    public const int ExitCodeValidationFailure = DashboardExitCodes.ValidationFailure;
+
+    /// <summary>
+    /// Exit code returned when the configured address is already in use.
+    /// </summary>
+    public const int ExitCodeAddressInUse = DashboardExitCodes.AddressInUse;
+
     private const string DashboardAuthCookieName = ".Aspire.Dashboard.Auth";
     private const string DashboardAntiForgeryCookieName = ".Aspire.Dashboard.Antiforgery";
-    //private static readonly List<ConnectionType> s_allConnectionTypes = [ConnectionType.Frontend, ConnectionType.Otlp, ConnectionType.Mcp];
-
     private readonly WebApplication _app;
     private readonly ILogger<DashboardWebApplication> _logger;
     private readonly IOptionsMonitor<DashboardOptions> _dashboardOptionsMonitor;
@@ -58,7 +71,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     private readonly List<Func<ResolvedEndpointInfo>> _frontendEndPointAccessor = new();
     private Func<ResolvedEndpointInfo>? _otlpServiceGrpcEndPointAccessor;
     private Func<ResolvedEndpointInfo>? _otlpServiceHttpEndPointAccessor;
-    private Func<ResolvedEndpointInfo>? _mcpEndPointAccessor;
 
     public List<Func<ResolvedEndpointInfo>> FrontendEndPointsAccessor
     {
@@ -98,11 +110,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     public Func<ResolvedEndpointInfo> OtlpServiceHttpEndPointAccessor
     {
         get => _otlpServiceHttpEndPointAccessor ?? throw new InvalidOperationException("WebApplication not started yet.");
-    }
-
-    public Func<ResolvedEndpointInfo> McpEndPointAccessor
-    {
-        get => _mcpEndPointAccessor ?? throw new InvalidOperationException("WebApplication not started yet.");
     }
 
     public IOptionsMonitor<DashboardOptions> DashboardOptionsMonitor => _dashboardOptionsMonitor;
@@ -197,7 +204,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         ConfigureKestrelEndpoints(builder, dashboardOptions);
 
         var browserHttpsPort = dashboardOptions.Frontend.GetEndpointAddresses().FirstOrDefault(IsHttpsOrNull)?.Port;
-        var isAllHttps = browserHttpsPort is not null && IsHttpsOrNull(dashboardOptions.Otlp.GetGrpcEndpointAddress()) && IsHttpsOrNull(dashboardOptions.Otlp.GetHttpEndpointAddress()) && IsHttpsOrNull(dashboardOptions.Mcp.GetEndpointAddress());
+        var isAllHttps = browserHttpsPort is not null && IsHttpsOrNull(dashboardOptions.Otlp.GetGrpcEndpointAddress()) && IsHttpsOrNull(dashboardOptions.Otlp.GetHttpEndpointAddress());
         if (isAllHttps)
         {
             // Explicitly configure the HTTPS redirect port as we're possibly listening on multiple HTTPS addresses
@@ -262,11 +269,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         // Data from the server.
         builder.Services.TryAddSingleton<IDashboardClient, DashboardClient>();
-
-        // Host an in-process MCP server so the dashboard can expose MCP tools (resource listing, diagnostics).
-        // Register the MCP server directly via the SDK.
-
-        builder.Services.AddAspireMcpTools(dashboardOptions);
 
         builder.Services.TryAddScoped<DashboardCommandExecutor>();
 
@@ -390,12 +392,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                 // This isn't used by dotnet watch but still useful to have for debugging
                 _logger.LogInformation("OTLP/HTTP listening on: {OtlpEndpointUri}", _otlpServiceHttpEndPointAccessor().GetResolvedAddress());
             }
-            if (_mcpEndPointAccessor != null)
-            {
-                // This isn't used by dotnet watch but still useful to have for debugging
-                _logger.LogInformation("MCP listening on: {McpEndpointUri}", _mcpEndPointAccessor().GetResolvedAddress());
-            }
-
             // Only show OTLP security warning if OTLP endpoints are configured
             if ((_otlpServiceGrpcEndPointAccessor != null || _otlpServiceHttpEndPointAccessor != null) &&
                 _dashboardOptionsMonitor.CurrentValue.Otlp.AuthMode == OtlpAuthMode.Unsecured)
@@ -403,16 +399,9 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                 _logger.LogWarning("OTLP server is unsecured. Untrusted apps can send telemetry to the dashboard. For more information, visit https://go.microsoft.com/fwlink/?linkid=2267030");
             }
 
-            // Only show MCP security warning if MCP endpoint is configured
-            if (_mcpEndPointAccessor != null &&
-                _dashboardOptionsMonitor.CurrentValue.Mcp.AuthMode == McpAuthMode.Unsecured)
-            {
-                _logger.LogWarning("MCP server is unsecured. Untrusted apps can access sensitive information.");
-            }
-
             // Only show API security warning if API is enabled and unsecured
             // API runs on the frontend endpoint (no separate accessor needed)
-            if (_dashboardOptionsMonitor.CurrentValue.Api.Enabled == true &&
+            if (_dashboardOptionsMonitor.CurrentValue.Api.Enabled.GetValueOrDefault() &&
                 _dashboardOptionsMonitor.CurrentValue.Api.AuthMode == ApiAuthMode.Unsecured)
             {
                 _logger.LogWarning("Dashboard API is unsecured. Untrusted apps can access sensitive telemetry data.");
@@ -528,7 +517,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         _app.MapGrpcService<OtlpGrpcTraceService>();
         _app.MapGrpcService<OtlpGrpcLogsService>();
 
-        _app.MapDashboardMcp(dashboardOptions);
         _app.MapTelemetryApi(dashboardOptions);
         _app.MapDashboardApi(dashboardOptions);
         _app.MapDashboardHealthChecks();
@@ -594,7 +582,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         }
         EndpointInfo.TryAddEndpoint(endpoints, dashboardOptions.Otlp.GetGrpcEndpointAddress(), "OtlpGrpc", httpProtocols: HttpProtocols.Http2, requireCertificate: dashboardOptions.Otlp.AuthMode == OtlpAuthMode.ClientCertificate, connectionType: ConnectionType.OtlpGrpc);
         EndpointInfo.TryAddEndpoint(endpoints, dashboardOptions.Otlp.GetHttpEndpointAddress(), "OtlpHttp", httpProtocols: HttpProtocols.Http1AndHttp2, requireCertificate: dashboardOptions.Otlp.AuthMode == OtlpAuthMode.ClientCertificate, connectionType: ConnectionType.OtlpHttp);
-        EndpointInfo.TryAddEndpoint(endpoints, dashboardOptions.Mcp.GetEndpointAddress(), "Mcp", httpProtocols: HttpProtocols.Http1AndHttp2, requireCertificate: dashboardOptions.Otlp.AuthMode == OtlpAuthMode.ClientCertificate, connectionType: ConnectionType.Mcp);
 
         var initialValues = new Dictionary<string, string?>();
         foreach (var (address, addressEndpoints) in EndpointInfo.GroupEndpointsByAddress(endpoints))
@@ -682,9 +669,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                             case ConnectionType.OtlpHttp:
                                 _otlpServiceHttpEndPointAccessor ??= CreateEndPointAccessor(endpointConfiguration);
                                 break;
-                            case ConnectionType.Mcp:
-                                _mcpEndPointAccessor ??= CreateEndPointAccessor(endpointConfiguration);
-                                break;
                         }
                     }
 
@@ -724,12 +708,9 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             .AddScheme<FrontendCompositeAuthenticationHandlerOptions, FrontendCompositeAuthenticationHandler>(FrontendCompositeAuthenticationDefaults.AuthenticationScheme, o => { })
             .AddScheme<OtlpCompositeAuthenticationHandlerOptions, OtlpCompositeAuthenticationHandler>(OtlpCompositeAuthenticationDefaults.AuthenticationScheme, o => { })
             .AddScheme<OtlpApiKeyAuthenticationHandlerOptions, OtlpApiKeyAuthenticationHandler>(OtlpApiKeyAuthenticationDefaults.AuthenticationScheme, o => { })
-            .AddScheme<McpCompositeAuthenticationHandlerOptions, McpCompositeAuthenticationHandler>(McpCompositeAuthenticationDefaults.AuthenticationScheme, o => { })
-            .AddScheme<McpApiKeyAuthenticationHandlerOptions, McpApiKeyAuthenticationHandler>(McpApiKeyAuthenticationHandler.AuthenticationScheme, o => { })
             .AddScheme<ApiAuthenticationHandlerOptions, ApiAuthenticationHandler>(ApiAuthenticationHandler.AuthenticationScheme, o => { })
             .AddScheme<ConnectionTypeAuthenticationHandlerOptions, ConnectionTypeAuthenticationHandler>(ConnectionTypeAuthenticationDefaults.AuthenticationSchemeFrontend, o => o.RequiredConnectionTypes = [ConnectionType.Frontend])
             .AddScheme<ConnectionTypeAuthenticationHandlerOptions, ConnectionTypeAuthenticationHandler>(ConnectionTypeAuthenticationDefaults.AuthenticationSchemeOtlp, o => o.RequiredConnectionTypes = [ConnectionType.OtlpGrpc, ConnectionType.OtlpHttp])
-            .AddScheme<ConnectionTypeAuthenticationHandlerOptions, ConnectionTypeAuthenticationHandler>(ConnectionTypeAuthenticationDefaults.AuthenticationSchemeMcp, o => o.RequiredConnectionTypes = [ConnectionType.Mcp])
             .AddCertificate(options =>
             {
                 // Bind options to configuration so they can be overridden by environment variables.
@@ -870,12 +851,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                     .Build());
 
             options.AddPolicy(
-                name: McpApiKeyAuthenticationHandler.PolicyName,
-                policy: new AuthorizationPolicyBuilder(McpCompositeAuthenticationDefaults.AuthenticationScheme)
-                    .RequireClaim(McpApiKeyAuthenticationHandler.McpClaimName, [bool.TrueString])
-                    .Build());
-
-            options.AddPolicy(
                 name: ApiAuthenticationHandler.PolicyName,
                 policy: new AuthorizationPolicyBuilder(ApiAuthenticationHandler.AuthenticationScheme)
                     .RequireAuthenticatedUser()
@@ -937,11 +912,37 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     {
         if (_validationFailures.Count > 0)
         {
-            return -1;
+            return ExitCodeValidationFailure;
         }
 
-        _app.Run();
-        return 0;
+        try
+        {
+            _app.Run();
+            return 0;
+        }
+        catch (IOException ex) when (ContainsAddressInUse(ex))
+        {
+            Console.Error.WriteLine($"Error: {ex.Message}");
+            return ExitCodeAddressInUse;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error: {ex.Message}");
+            return ExitCodeUnexpectedError;
+        }
+    }
+
+    private static bool ContainsAddressInUse(Exception ex)
+    {
+        for (var current = ex.InnerException; current is not null; current = current.InnerException)
+        {
+            if (current is SocketException { SocketErrorCode: SocketError.AddressAlreadyInUse })
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public Task StartAsync(CancellationToken cancellationToken = default)

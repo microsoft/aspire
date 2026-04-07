@@ -1,247 +1,131 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Microsoft.AspNetCore.InternalTesting;
 using Aspire.Cli.Agents;
-using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Projects;
 
 namespace Aspire.Cli.Tests.Agents;
 
-public class CommonAgentApplicatorsTests(ITestOutputHelper outputHelper)
+public class CommonAgentApplicatorsTests
 {
-    private const string TestSkillRelativePath = ".github/skills/aspire/SKILL.md";
-    private const string TestDescription = "Create Aspire skill file";
-
     [Fact]
-    public void TryAddSkillFileApplicator_WhenNotYetAdded_AddsApplicatorAndReturnsTrue()
+    public void SkillLocation_All_ContainsAllLocations()
     {
-        // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var context = CreateScanContext(workspace.WorkspaceRoot);
-
-        // Act
-        var result = CommonAgentApplicators.TryAddSkillFileApplicator(
-            context,
-            workspace.WorkspaceRoot,
-            TestSkillRelativePath,
-            TestDescription);
-
-        // Assert
-        Assert.True(result);
-        Assert.True(context.HasSkillFileApplicator(TestSkillRelativePath));
-        Assert.Single(context.Applicators);
+        Assert.Equal(4, SkillLocation.All.Count);
+        Assert.Contains(SkillLocation.All, l => l == SkillLocation.Standard);
+        Assert.Contains(SkillLocation.All, l => l == SkillLocation.ClaudeCode);
+        Assert.Contains(SkillLocation.All, l => l == SkillLocation.GitHubSkills);
+        Assert.Contains(SkillLocation.All, l => l == SkillLocation.OpenCode);
     }
 
     [Fact]
-    public void TryAddSkillFileApplicator_WhenAlreadyAdded_DoesNotAddAgainAndReturnsFalse()
+    public void SkillLocation_Standard_IsDefaultAndIncludesUserLevel()
     {
-        // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var context = CreateScanContext(workspace.WorkspaceRoot);
-        context.MarkSkillFileApplicatorAdded(TestSkillRelativePath);
-
-        // Act
-        var result = CommonAgentApplicators.TryAddSkillFileApplicator(
-            context,
-            workspace.WorkspaceRoot,
-            TestSkillRelativePath,
-            TestDescription);
-
-        // Assert
-        Assert.False(result);
-        Assert.Empty(context.Applicators);
+        Assert.True(SkillLocation.Standard.IsDefault);
+        Assert.True(SkillLocation.Standard.IncludeUserLevel);
+        Assert.Equal(Path.Combine(".agents", "skills"), SkillLocation.Standard.RelativeSkillDirectory);
     }
 
     [Fact]
-    public void TryAddSkillFileApplicator_WhenSkillFileExistsWithSameContent_DoesNotAddApplicator()
+    public void SkillLocation_ClaudeCode_IsNotDefaultAndNoUserLevel()
     {
-        // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var context = CreateScanContext(workspace.WorkspaceRoot);
-        
-        // Create the skill file with the SAME content as SkillFileContent
-        var skillFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, TestSkillRelativePath);
-        var skillDirectory = Path.GetDirectoryName(skillFilePath)!;
-        Directory.CreateDirectory(skillDirectory);
-        File.WriteAllText(skillFilePath, CommonAgentApplicators.SkillFileContent);
-
-        // Act
-        var result = CommonAgentApplicators.TryAddSkillFileApplicator(
-            context,
-            workspace.WorkspaceRoot,
-            TestSkillRelativePath,
-            TestDescription);
-
-        // Assert - should not add applicator since skill file already exists with same content
-        Assert.False(result);
-        Assert.True(context.HasSkillFileApplicator(TestSkillRelativePath));
-        Assert.Empty(context.Applicators);
+        Assert.False(SkillLocation.ClaudeCode.IsDefault);
+        Assert.False(SkillLocation.ClaudeCode.IncludeUserLevel);
+        Assert.Equal(Path.Combine(".claude", "skills"), SkillLocation.ClaudeCode.RelativeSkillDirectory);
     }
 
     [Fact]
-    public void TryAddSkillFileApplicator_WhenSkillFileExistsWithDifferentContent_AddsUpdateApplicator()
+    public void SkillLocation_OnlyStandardIsDefault()
     {
-        // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var context = CreateScanContext(workspace.WorkspaceRoot);
-        
-        // Create the skill file with DIFFERENT content
-        var skillFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, TestSkillRelativePath);
-        var skillDirectory = Path.GetDirectoryName(skillFilePath)!;
-        Directory.CreateDirectory(skillDirectory);
-        File.WriteAllText(skillFilePath, "# Old Aspire Skill\n\nThis is outdated content.");
-
-        // Act
-        var result = CommonAgentApplicators.TryAddSkillFileApplicator(
-            context,
-            workspace.WorkspaceRoot,
-            TestSkillRelativePath,
-            TestDescription);
-
-        // Assert - should add an update applicator since content differs
-        Assert.True(result);
-        Assert.True(context.HasSkillFileApplicator(TestSkillRelativePath));
-        Assert.Single(context.Applicators);
-        Assert.Contains("update", context.Applicators[0].Description);
+        Assert.True(SkillLocation.Standard.IsDefault);
+        Assert.False(SkillLocation.ClaudeCode.IsDefault);
+        Assert.False(SkillLocation.GitHubSkills.IsDefault);
+        Assert.False(SkillLocation.OpenCode.IsDefault);
     }
 
     [Fact]
-    public async Task TryAddSkillFileApplicator_UpdateApplicator_ReplacesContent()
+    public void SkillDefinition_All_ContainsExpectedSkills()
     {
-        // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var context = CreateScanContext(workspace.WorkspaceRoot);
-        
-        // Create the skill file with old content
-        var skillFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, TestSkillRelativePath);
-        var skillDirectory = Path.GetDirectoryName(skillFilePath)!;
-        Directory.CreateDirectory(skillDirectory);
-        var oldContent = "# Old Aspire Skill\n\nThis is outdated content.";
-        File.WriteAllText(skillFilePath, oldContent);
-
-        // Act
-        CommonAgentApplicators.TryAddSkillFileApplicator(
-            context,
-            workspace.WorkspaceRoot,
-            TestSkillRelativePath,
-            TestDescription);
-        await context.Applicators[0].ApplyAsync(CancellationToken.None).DefaultTimeout();
-
-        // Assert - content should be replaced with new content
-        var newContent = await File.ReadAllTextAsync(skillFilePath);
-        Assert.NotEqual(oldContent, newContent);
-        Assert.Equal(CommonAgentApplicators.SkillFileContent, newContent);
+        Assert.Equal(3, SkillDefinition.All.Count);
+        Assert.Contains(SkillDefinition.All, s => s == SkillDefinition.Aspire);
+        Assert.Contains(SkillDefinition.All, s => s == SkillDefinition.PlaywrightCli);
+        Assert.Contains(SkillDefinition.All, s => s == SkillDefinition.DotnetInspect);
     }
 
     [Fact]
-    public void TryAddSkillFileApplicator_WhenSkillFileExistsWithDifferentLineEndings_DoesNotAddApplicator()
+    public void SkillDefinition_OnlyAspireIsDefault()
     {
-        // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var context = CreateScanContext(workspace.WorkspaceRoot);
-        
-        // Create the skill file with CRLF line endings (Windows style)
-        var skillFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, TestSkillRelativePath);
-        var skillDirectory = Path.GetDirectoryName(skillFilePath)!;
-        Directory.CreateDirectory(skillDirectory);
-        var contentWithCrlf = CommonAgentApplicators.SkillFileContent.ReplaceLineEndings("\r\n");
-        File.WriteAllText(skillFilePath, contentWithCrlf);
-
-        // Act
-        var result = CommonAgentApplicators.TryAddSkillFileApplicator(
-            context,
-            workspace.WorkspaceRoot,
-            TestSkillRelativePath,
-            TestDescription);
-
-        // Assert - should not add applicator since content is the same (just different line endings)
-        Assert.False(result);
-        Assert.True(context.HasSkillFileApplicator(TestSkillRelativePath));
-        Assert.Empty(context.Applicators);
+        Assert.True(SkillDefinition.Aspire.IsDefault);
+        Assert.False(SkillDefinition.PlaywrightCli.IsDefault);
+        Assert.False(SkillDefinition.DotnetInspect.IsDefault);
     }
 
     [Fact]
-    public async Task TryAddSkillFileApplicator_CreatesSkillFileWhenItDoesNotExist()
+    public void SkillDefinition_DotnetInspect_IsRestrictedToCSharp()
     {
-        // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var context = CreateScanContext(workspace.WorkspaceRoot);
-
-        // Act
-        CommonAgentApplicators.TryAddSkillFileApplicator(
-            context,
-            workspace.WorkspaceRoot,
-            TestSkillRelativePath,
-            TestDescription);
-        await context.Applicators[0].ApplyAsync(CancellationToken.None).DefaultTimeout();
-
-        // Assert
-        var skillFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, TestSkillRelativePath);
-        Assert.True(File.Exists(skillFilePath));
-        var content = await File.ReadAllTextAsync(skillFilePath);
-        Assert.Contains("# Aspire Skill", content);
-        Assert.Contains("Running Aspire in agent environments", content);
+        Assert.Equal([KnownLanguageId.CSharp], SkillDefinition.DotnetInspect.ApplicableLanguages);
+        Assert.Empty(SkillDefinition.Aspire.ApplicableLanguages);
+        Assert.Empty(SkillDefinition.PlaywrightCli.ApplicableLanguages);
     }
 
     [Fact]
-    public void TryAddSkillFileApplicator_DifferentPaths_AddsBothApplicators()
+    public void SkillDefinition_IsApplicableToLanguage_EmptyApplicableLanguages_AlwaysTrue()
     {
-        // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var context = CreateScanContext(workspace.WorkspaceRoot);
-        var path1 = ".github/skills/aspire/SKILL.md";
-        var path2 = ".claude/skills/aspire/SKILL.md";
-
-        // Act
-        var result1 = CommonAgentApplicators.TryAddSkillFileApplicator(
-            context,
-            workspace.WorkspaceRoot,
-            path1,
-            "Description 1");
-        var result2 = CommonAgentApplicators.TryAddSkillFileApplicator(
-            context,
-            workspace.WorkspaceRoot,
-            path2,
-            "Description 2");
-
-        // Assert - both should be added since they are different paths
-        Assert.True(result1);
-        Assert.True(result2);
-        Assert.Equal(2, context.Applicators.Count);
+        Assert.True(SkillDefinition.Aspire.IsApplicableToLanguage(null));
+        Assert.True(SkillDefinition.Aspire.IsApplicableToLanguage(new LanguageId(KnownLanguageId.CSharp)));
+        Assert.True(SkillDefinition.Aspire.IsApplicableToLanguage(new LanguageId(KnownLanguageId.TypeScript)));
     }
 
     [Fact]
-    public void TryAddSkillFileApplicator_SamePathTwice_OnlyAddsOnce()
+    public void SkillDefinition_IsApplicableToLanguage_WithRestrictions_MatchesCorrectly()
     {
-        // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var context = CreateScanContext(workspace.WorkspaceRoot);
-        var path = ".github/skills/aspire/SKILL.md";
-
-        // Act - try to add the same path twice (simulating VS Code and Copilot CLI both trying to add)
-        var result1 = CommonAgentApplicators.TryAddSkillFileApplicator(
-            context,
-            workspace.WorkspaceRoot,
-            path,
-            "Description 1");
-        var result2 = CommonAgentApplicators.TryAddSkillFileApplicator(
-            context,
-            workspace.WorkspaceRoot,
-            path,
-            "Description 2");
-
-        // Assert - only the first should be added
-        Assert.True(result1);
-        Assert.False(result2);
-        Assert.Single(context.Applicators);
+        // DotnetInspect is restricted to CSharp
+        Assert.False(SkillDefinition.DotnetInspect.IsApplicableToLanguage(null)); // no language detected => excluded
+        Assert.True(SkillDefinition.DotnetInspect.IsApplicableToLanguage(new LanguageId(KnownLanguageId.CSharp)));
+        Assert.False(SkillDefinition.DotnetInspect.IsApplicableToLanguage(new LanguageId(KnownLanguageId.TypeScript)));
+        Assert.False(SkillDefinition.DotnetInspect.IsApplicableToLanguage(new LanguageId(KnownLanguageId.Python)));
     }
 
-    private static AgentEnvironmentScanContext CreateScanContext(DirectoryInfo workingDirectory)
+    [Fact]
+    public void SkillDefinition_PlaywrightCli_HasNoSkillContent()
     {
-        return new AgentEnvironmentScanContext
-        {
-            WorkingDirectory = workingDirectory,
-            RepositoryRoot = workingDirectory
-        };
+        Assert.Null(SkillDefinition.PlaywrightCli.SkillContent);
+        Assert.Null(SkillDefinition.PlaywrightCli.EmbeddedResourceRoot);
+    }
+
+    [Fact]
+    public async Task SkillDefinition_Aspire_HasEmbeddedSkillAssets()
+    {
+        Assert.Null(SkillDefinition.Aspire.SkillContent);
+        Assert.Equal(CommonAgentApplicators.AspireSkillResourceRoot, SkillDefinition.Aspire.EmbeddedResourceRoot);
+
+        var skillFiles = await EmbeddedSkillResourceLoader.LoadTextFilesAsync(SkillDefinition.Aspire.EmbeddedResourceRoot!, CancellationToken.None);
+
+        Assert.Contains(skillFiles, file => file.RelativePath == "SKILL.md");
+        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("evals", "evals.json"));
+        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "agent-workflows.md"));
+        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "app-commands.md"));
+        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "resource-management.md"));
+        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "monitoring.md"));
+        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "deployment.md"));
+        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "tools-and-configuration.md"));
+        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "typescript-apphosts.md"));
+        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "playwright-handoff.md"));
+    }
+
+    [Fact]
+    public void SkillDefinition_Aspire_ExcludesEvalsFromInstall()
+    {
+        Assert.Contains(SkillDefinition.Aspire.InstallExcludedRelativePaths, path => path == Path.Combine("evals"));
+        Assert.False(SkillDefinition.Aspire.ShouldInstallFile(Path.Combine("evals", "evals.json")));
+        Assert.True(SkillDefinition.Aspire.ShouldInstallFile("SKILL.md"));
+    }
+
+    [Fact]
+    public void SkillDefinition_DotnetInspect_HasSkillContent()
+    {
+        Assert.NotNull(SkillDefinition.DotnetInspect.SkillContent);
+        Assert.Null(SkillDefinition.DotnetInspect.EmbeddedResourceRoot);
+        Assert.Contains("# dotnet-inspect", SkillDefinition.DotnetInspect.SkillContent);
     }
 }

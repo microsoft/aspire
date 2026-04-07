@@ -180,9 +180,6 @@
   <data name="MessageUnsecuredEndpointTitle" xml:space="preserve">
     <value>Endpoint is unsecured</value>
   </data>
-  <data name="MessageUnsecuredEndpointMcpBody" xml:space="preserve">
-    <value>Untrusted apps can access sensitive information about the running services.</value>
-  </data>
   <data name="MessageUnsecuredEndpointApiBody" xml:space="preserve">
     <value>Untrusted apps can access telemetry data via the API.</value>
   </data>

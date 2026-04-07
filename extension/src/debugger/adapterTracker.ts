@@ -5,10 +5,36 @@ import AspireDcpServer from '../dcp/AspireDcpServer';
 import { removeTrailingNewline } from '../utils/strings';
 import { dcpServerNotInitialized } from '../loc/strings';
 
-export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapter: string): vscode.Disposable {
+/**
+ * Callback invoked when a restart is requested on an app host debug session.
+ * Return `true` to suppress VS Code's automatic child session restart.
+ */
+export type AppHostRestartHandler = (debugSessionId: string) => boolean;
+
+export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapter: string, onAppHostRestartRequested?: AppHostRestartHandler): vscode.Disposable {
     return vscode.debug.registerDebugAdapterTrackerFactory(debugAdapter, {
         createDebugAdapterTracker(session: vscode.DebugSession) {
                 return {
+                    onWillReceiveMessage: message => {
+                        if (!isDebugConfigurationWithId(session.configuration)) {
+                            return;
+                        }
+
+                        // Detect restart requests on app host debug sessions.
+                        // When the user clicks "restart" on the app host child session,
+                        // suppress VS Code's automatic child restart so the Aspire debug
+                        // session can restart entirely instead.
+                        if (session.configuration.isApphost
+                            && (message.command === 'disconnect' || message.command === 'terminate')
+                            && message.arguments?.restart
+                            && onAppHostRestartRequested
+                            && session.configuration.debugSessionId) {
+                            const shouldSuppress = onAppHostRestartRequested(session.configuration.debugSessionId);
+                            if (shouldSuppress) {
+                                message.arguments.restart = false;
+                            }
+                        }
+                    },
                     onDidSendMessage: message => {
                         if (message.type === 'event' && message.event === 'output') {
                             if (!isDebugConfigurationWithId(session.configuration) || session.configuration.debugSessionId === null) {

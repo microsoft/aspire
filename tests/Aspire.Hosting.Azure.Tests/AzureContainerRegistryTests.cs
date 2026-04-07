@@ -229,6 +229,161 @@ public class AzureContainerRegistryTests
         Assert.True(configAnnotations.Count >= 2);
     }
 
+    [Fact]
+    public async Task WithPurgeTask_GeneratesCorrectBicep()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var acr = builder.AddAzureContainerRegistry("acr")
+            .WithPurgeTask("0 1 * * *", ago: TimeSpan.FromDays(7), keep: 5);
+
+        var (_, bicep) = await GetManifestWithBicep(acr.Resource);
+
+        await Verify(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task WithPurgeTask_MultipleTasks_GeneratesUniqueNames()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var acr = builder.AddAzureContainerRegistry("acr")
+            .WithPurgeTask("0 1 * * *", filter: "app1:.*", keep: 3)
+            .WithPurgeTask("0 2 * * 0", filter: "app2:.*", ago: TimeSpan.FromDays(30), keep: 10);
+
+        var (_, bicep) = await GetManifestWithBicep(acr.Resource);
+
+        await Verify(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task WithPurgeTask_CustomTaskName_UsedInBicep()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var acr = builder.AddAzureContainerRegistry("acr")
+            .WithPurgeTask("0 3 * * *", taskName: "myCustomPurge");
+
+        var (_, bicep) = await GetManifestWithBicep(acr.Resource);
+
+        await Verify(bicep, "bicep");
+    }
+
+    [Theory]
+    [InlineData("bad cron")]
+    [InlineData("")]
+    [InlineData("  ")]
+    public void WithPurgeTask_InvalidSchedule_Throws(string schedule)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var acr = builder.AddAzureContainerRegistry("acr");
+
+        Assert.ThrowsAny<ArgumentException>(() => acr.WithPurgeTask(schedule));
+    }
+
+    [Fact]
+    public void WithPurgeTask_NullSchedule_Throws()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var acr = builder.AddAzureContainerRegistry("acr");
+
+        Assert.ThrowsAny<ArgumentException>(() => acr.WithPurgeTask(null!));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void WithPurgeTask_InvalidKeep_Throws(int keep)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var acr = builder.AddAzureContainerRegistry("acr");
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => acr.WithPurgeTask("0 1 * * *", keep: keep));
+    }
+
+    [Theory]
+    [InlineData("-00:00:01")]
+    [InlineData("00:00:01")]
+    [InlineData("00:00:59")]
+    public void WithPurgeTask_InvalidAgo_Throws(string ago)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var acr = builder.AddAzureContainerRegistry("acr");
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => acr.WithPurgeTask("0 1 * * *", ago: TimeSpan.Parse(ago)));
+    }
+
+    [Fact]
+    public async Task WithPurgeTask_DuplicateTaskName_Throws()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var acr = builder.AddAzureContainerRegistry("acr")
+            .WithPurgeTask("0 1 * * *", taskName: "myPurge")
+            .WithPurgeTask("0 2 * * *", taskName: "myPurge");
+
+        await Assert.ThrowsAsync<ArgumentException>(async () => await GetManifestWithBicep(acr.Resource));
+    }
+
+    [Fact]
+    public async Task WithPurgeTask_WithHoursAndMinutesAgo_FormatsCorrectly()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var acr = builder.AddAzureContainerRegistry("acr")
+            .WithPurgeTask("0 0 * * *", ago: new TimeSpan(2, 3, 6, 0));
+
+        var (_, bicep) = await GetManifestWithBicep(acr.Resource);
+
+        await Verify(bicep, "bicep");
+    }
+
+    [Fact]
+    public void GetAzureContainerRegistry_ReturnsRegistryFromEnvironment()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var acr = builder.AddAzureContainerRegistry("acr");
+        var env = builder.AddAzureContainerAppEnvironment("env")
+                         .WithAzureContainerRegistry(acr);
+
+        var registryBuilder = env.GetAzureContainerRegistry();
+
+        Assert.Same(acr.Resource, registryBuilder.Resource);
+    }
+
+    [Fact]
+    public void GetAzureContainerRegistry_ReturnsDefaultRegistryWhenNoExplicitRegistry()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var env = builder.AddAzureContainerAppEnvironment("env");
+
+        var registryBuilder = env.GetAzureContainerRegistry();
+
+        Assert.NotNull(registryBuilder.Resource);
+        Assert.IsType<AzureContainerRegistryResource>(registryBuilder.Resource);
+    }
+
+    [Fact]
+    public void GetAzureContainerRegistry_ThrowWhenExplicitNoRegistry()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+#pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+        var registry = builder.AddContainerRegistry("ghcr", "ghcr.io", "owner/repo");
+
+        var env = builder.AddAzureContainerAppEnvironment("env")
+            .WithContainerRegistry(registry);
+#pragma warning restore ASPIRECOMPUTE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
+        Assert.Throws<InvalidOperationException>(() => env.GetAzureContainerRegistry());
+    }
+
     private sealed class Project : IProjectMetadata
     {
         public string ProjectPath => "project";

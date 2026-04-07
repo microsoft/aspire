@@ -13,13 +13,13 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Create a new Aspire project.</source>
-        <target state="translated">Utwórz nowy projekt usługi Aspire.</target>
+        <source>Create a new app from an Aspire starter template</source>
+        <target state="needs-review-translation">Utwórz nowy projekt usługi Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="EnterTheOutputPath">
-        <source>Enter the output path:</source>
-        <target state="translated">Wprowadź ścieżkę wyjściową:</target>
+        <source>Enter the output path</source>
+        <target state="new">Enter the output path</target>
         <note />
       </trans-unit>
       <trans-unit id="EnterTheProjectName">
@@ -32,14 +32,24 @@
         <target state="translated">Nieprawidłowa nazwa projektu.</target>
         <note />
       </trans-unit>
+      <trans-unit id="LanguageOptionDescription">
+        <source>The programming language for the AppHost</source>
+        <target state="new">The programming language for the AppHost</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NameArgumentDescription">
-        <source>The name of the project to create.</source>
-        <target state="translated">Nazwa projektu do utworzenia.</target>
+        <source>The name of the project to create</source>
+        <target state="needs-review-translation">Nazwa projektu do utworzenia.</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputArgumentDescription">
-        <source>The output path for the project.</source>
-        <target state="translated">Ścieżka wyjściowa projektu.</target>
+        <source>The output path for the project</source>
+        <target state="needs-review-translation">Ścieżka wyjściowa projektu.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResolvingTemplateVersion">
+        <source>Resolving template version...</source>
+        <target state="translated">Trwa rozpoznawanie wersji szablonu...</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAProjectTemplate">
@@ -53,8 +63,8 @@
         <note />
       </trans-unit>
       <trans-unit id="SourceArgumentDescription">
-        <source>The NuGet source to use for the project templates.</source>
-        <target state="translated">Źródło NuGet, które ma być używane dla szablonów projektu.</target>
+        <source>The NuGet source to use for the project templates</source>
+        <target state="needs-review-translation">Źródło NuGet, które ma być używane dla szablonów projektu.</target>
         <note />
       </trans-unit>
       <trans-unit id="UsePrereleaseTemplates">
@@ -63,8 +73,8 @@
         <note />
       </trans-unit>
       <trans-unit id="VersionArgumentDescription">
-        <source>The version of the project templates to use.</source>
-        <target state="translated">Wersja szablonów projektu do użycia.</target>
+        <source>The version of the project templates to use</source>
+        <target state="needs-review-translation">Wersja szablonów projektu do użycia.</target>
         <note />
       </trans-unit>
     </body>

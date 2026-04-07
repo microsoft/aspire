@@ -18,6 +18,7 @@ public static class OrleansServiceClientExtensions
     /// <param name="orleansServiceClient">The Orleans service client, containing clustering, etc.</param>
     /// <returns>The resource builder.</returns>
     /// <exception cref="InvalidOperationException">Clustering has not been configured.</exception>
+    [AspireExport("withOrleansClientReference", Description = "Adds an Orleans client reference to a resource")]
     public static IResourceBuilder<T> WithReference<T>(
         this IResourceBuilder<T> builder,
         OrleansServiceClient orleansServiceClient)

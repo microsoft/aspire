@@ -84,14 +84,24 @@ internal static class TelemetryConstants
         public const string SdkMinimumRequiredVersion = "aspire.cli.sdk.minimum_required_version";
 
         /// <summary>
-        /// Tag indicating the result of the SDK installation attempt.
-        /// </summary>
-        public const string SdkInstallResult = "aspire.cli.sdk.install_result";
-
-        /// <summary>
         /// Tag indicating the result of the SDK check operation.
         /// </summary>
         public const string SdkCheckResult = "aspire.cli.sdk.check_result";
+
+        /// <summary>
+        /// Tag for the operating system name.
+        /// </summary>
+        public const string OsName = "os.name";
+
+        /// <summary>
+        /// Tag for the operating system type.
+        /// </summary>
+        public const string OsType = "os.type";
+
+        /// <summary>
+        /// Tag for the operating system version.
+        /// </summary>
+        public const string OsVersion = "os.version";
     }
 
     /// <summary>

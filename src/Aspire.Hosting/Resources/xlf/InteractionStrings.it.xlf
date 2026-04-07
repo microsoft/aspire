@@ -50,8 +50,8 @@
       <trans-unit id="DeleteParameterMessageWithUserSecrets">
         <source>Are you sure you want to delete the value for parameter `{0}`?
 
-The value is currently saved in [user secrets](https://learn.microsoft.com/aspnet/core/security/app-secrets). You can choose to also delete it from there.</source>
-        <target state="translated">Eliminare il valore del parametro '{0}'? 
+The value is currently saved in [user secrets](https://aka.ms/aspire/user-secrets). You can choose to also delete it from there.</source>
+        <target state="needs-review-translation">Eliminare il valore del parametro '{0}'?
 
 Il valore è attualmente salvato nei [segreti utente](https://learn.microsoft.com/aspnet/core/security/app-secrets). È possibile scegliere di eliminarlo anche da lì.</target>
         <note>Contains markdown. {0} is the parameter name.</note>
@@ -64,6 +64,26 @@ Il valore è attualmente salvato nei [segreti utente](https://learn.microsoft.co
       <trans-unit id="DeleteParameterTitle">
         <source>Delete parameter value</source>
         <target state="translated">Elimina valore parametro</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeveloperCertificateNotFullyTrustedMessage">
+        <source>The most recent development certificate isn't fully trusted. See https://aka.ms/aspire/devcerts for more information.</source>
+        <target state="new">The most recent development certificate isn't fully trusted. See https://aka.ms/aspire/devcerts for more information.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeveloperCertificateNotFullyTrustedTitle">
+        <source>Development certificate not fully trusted</source>
+        <target state="new">Development certificate not fully trusted</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoDeveloperCertificateTrustedMessage">
+        <source>No trusted development certificate was found. See https://aka.ms/aspire/devcerts for more information.</source>
+        <target state="new">No trusted development certificate was found. See https://aka.ms/aspire/devcerts for more information.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoDeveloperCertificateTrustedTitle">
+        <source>No trusted development certificate</source>
+        <target state="new">No trusted development certificate</target>
         <note />
       </trans-unit>
       <trans-unit id="ParametersBarMessage">
@@ -107,8 +127,8 @@ Il valore è attualmente salvato nei [segreti utente](https://learn.microsoft.co
         <note />
       </trans-unit>
       <trans-unit id="ParametersInputsRememberDescriptionNotConfigured">
-        <source>Requires a `UserSecretsId` to be configured in the AppHost project file. Run `dotnet user-secrets init` in the AppHost directory to configure.</source>
-        <target state="translated">È necessario configurare un 'UserSecretsId' nel file di progetto AppHost. Eseguire 'dotnet user-secrets init' nella directory AppHost per configurarlo.</target>
+        <source>Requires user secrets to be configured for the AppHost. Run `aspire secret set &lt;key&gt; &lt;value&gt;` to initialize user secrets, or see [user secrets](https://aka.ms/aspire/user-secrets) for more information.</source>
+        <target state="new">Requires user secrets to be configured for the AppHost. Run `aspire secret set &lt;key&gt; &lt;value&gt;` to initialize user secrets, or see [user secrets](https://aka.ms/aspire/user-secrets) for more information.</target>
         <note />
       </trans-unit>
       <trans-unit id="ParametersInputsRememberLabel">
@@ -142,10 +162,10 @@ Il valore è attualmente salvato nei [segreti utente](https://learn.microsoft.co
         <note />
       </trans-unit>
       <trans-unit id="SetParameterMessage">
-        <source>Please provide a value for the parameter. The parameter can be saved to [user secrets](https://learn.microsoft.com/aspnet/core/security/app-secrets) for future use.
+        <source>Please provide a value for the parameter. The parameter can be saved to [user secrets](https://aka.ms/aspire/user-secrets) for future use.
 
 New parameter values may not be used until dependent resources are restarted.</source>
-        <target state="translated">Specificare un valore per il parametro. I parametri possono essere salvati nei [segreti utente](https://learn.microsoft.com/aspnet/core/security/app-secrets) per usi futuri.
+        <target state="needs-review-translation">Specificare un valore per il parametro. I parametri possono essere salvati nei [segreti utente](https://learn.microsoft.com/aspnet/core/security/app-secrets) per usi futuri.
 
 I nuovi valori del parametro potrebbero non essere usati finché le risorse dipendenti non vengono riavviate.</target>
         <note>Contains markdown</note>

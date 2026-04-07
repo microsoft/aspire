@@ -3,63 +3,23 @@
   <file datatype="xml" source-language="en" target-language="ru" original="../ResourceCommandStrings.resx">
     <body>
       <trans-unit id="CommandDescription">
-        <source>Execute a command on a resource.</source>
-        <target state="translated">Выполнить команду на ресурсе.</target>
+        <source>Execute a command on a resource (e.g. start, stop, restart)</source>
+        <target state="needs-review-translation">Выполнить команду на ресурсе.</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandNameArgumentDescription">
-        <source>The name of the command to execute.</source>
-        <target state="translated">Имя команды, которую нужно выполнить.</target>
+        <source>The name of the command to execute (e.g. start, stop, restart)</source>
+        <target state="needs-review-translation">Имя команды, которую нужно выполнить.</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandResourceArgumentDescription">
-        <source>The name of the resource to execute the command on.</source>
-        <target state="translated">Имя целевого ресурса, на котором будет выполняться команда.</target>
+        <source>The name of the resource to execute the command on</source>
+        <target state="needs-review-translation">Имя целевого ресурса, на котором будет выполняться команда.</target>
         <note />
       </trans-unit>
-      <trans-unit id="NoInScopeAppHostsShowingAll">
-        <source>No in-scope AppHosts found. Showing all running AppHosts.</source>
-        <target state="translated">Не найдено ни одного AppHost в области действия. Показаны все выполняющиеся AppHost.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="NoRunningAppHostsFound">
-        <source>No running AppHosts found.</source>
-        <target state="translated">Запущенные appHosts не найдены.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ProjectOptionDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="translated">Путь к файлу проекта Aspire AppHost.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RestartDescription">
-        <source>Restart a running resource.</source>
-        <target state="translated">Перезапустить уже запущенный ресурс.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RestartResourceArgumentDescription">
-        <source>The name of the resource to restart.</source>
-        <target state="translated">Имя ресурса, который нужно перезапустить.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ScanningForRunningAppHosts">
-        <source>Scanning for running AppHosts...</source>
-        <target state="translated">Выполняется сканирование на наличие запущенных хостов приложений...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SelectAppHost">
-        <source>Select which AppHost to connect to:</source>
-        <target state="translated">Выберите AppHost, к которому нужно подключиться:</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="StartDescription">
-        <source>Start a stopped resource.</source>
-        <target state="translated">Запустить остановленный ресурс.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="StartResourceArgumentDescription">
-        <source>The name of the resource to start.</source>
-        <target state="translated">Имя ресурса, который нужно запустить.</target>
+      <trans-unit id="SelectAppHostAction">
+        <source>connect to</source>
+        <target state="translated">подключить к</target>
         <note />
       </trans-unit>
     </body>

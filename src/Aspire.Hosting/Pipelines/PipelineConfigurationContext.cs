@@ -10,6 +10,7 @@ namespace Aspire.Hosting.Pipelines;
 /// Provides contextual information for pipeline configuration callbacks.
 /// </summary>
 [Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExport(ExposeProperties = true)]
 public class PipelineConfigurationContext
 {
     /// <summary>
@@ -45,6 +46,7 @@ public class PipelineConfigurationContext
     /// </summary>
     /// <param name="tag">The tag to search for.</param>
     /// <returns>A collection of steps that have the specified tag.</returns>
+    [AspireExport("getStepsByTag", Description = "Gets pipeline steps with the specified tag")]
     public IEnumerable<PipelineStep> GetSteps(string tag)
     {
         ArgumentNullException.ThrowIfNull(tag);
@@ -56,6 +58,8 @@ public class PipelineConfigurationContext
     /// </summary>
     /// <param name="resource">The resource to search for.</param>
     /// <returns>A collection of steps associated with the resource.</returns>
+    /// <remarks>This overload is not available in polyglot app hosts. Use <see cref="Steps"/> or <see cref="GetSteps(string)"/> instead.</remarks>
+    [AspireExportIgnore(Reason = "IResource parameters on callback context methods are not ATS-compatible. Use Steps or the tag-based overload instead.")]
     public IEnumerable<PipelineStep> GetSteps(IResource resource)
     {
         ArgumentNullException.ThrowIfNull(resource);
@@ -69,6 +73,8 @@ public class PipelineConfigurationContext
     /// <param name="resource">The resource to search for.</param>
     /// <param name="tag">The tag to search for.</param>
     /// <returns>A collection of steps that have the specified tag and are associated with the resource.</returns>
+    /// <remarks>This overload is not available in polyglot app hosts. Use <see cref="Steps"/> or <see cref="GetSteps(string)"/> instead.</remarks>
+    [AspireExportIgnore(Reason = "IResource parameters on callback context methods are not ATS-compatible. Use Steps or the tag-based overload instead.")]
     public IEnumerable<PipelineStep> GetSteps(IResource resource, string tag)
     {
         ArgumentNullException.ThrowIfNull(resource);

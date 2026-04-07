@@ -82,7 +82,8 @@ internal sealed class DocsSearchCommand : BaseCommand
         if (format is OutputFormat.Json)
         {
             var json = JsonSerializer.Serialize(response.Results.ToArray(), JsonSourceGenerationContext.RelaxedEscaping.SearchResultArray);
-            InteractionService.DisplayRawText(json);
+            // Structured output always goes to stdout.
+            InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
         }
         else
         {
@@ -90,10 +91,10 @@ internal sealed class DocsSearchCommand : BaseCommand
 
             // Results are already sorted by score (highest first) from the search service
             var table = new Table();
-            table.AddColumn("Title");
-            table.AddColumn("Slug");
-            table.AddColumn("Section");
-            table.AddColumn("Score");
+            table.AddBoldColumn(DocsCommandStrings.HeaderTitle);
+            table.AddBoldColumn(DocsCommandStrings.HeaderSlug);
+            table.AddBoldColumn(DocsCommandStrings.HeaderSection);
+            table.AddBoldColumn(DocsCommandStrings.HeaderScore);
 
             foreach (var result in response.Results)
             {
@@ -104,7 +105,7 @@ internal sealed class DocsSearchCommand : BaseCommand
                     result.Score.ToString("F2", CultureInfo.InvariantCulture)); // Two decimal places
             }
 
-            AnsiConsole.Write(table);
+            InteractionService.DisplayRenderable(table);
         }
 
         return ExitCodeConstants.Success;

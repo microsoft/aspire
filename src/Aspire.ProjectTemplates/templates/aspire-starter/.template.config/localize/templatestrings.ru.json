@@ -1,4 +1,4 @@
-﻿{
+{
   "author": "Майкрософт",
   "name": "Начальное приложение Aspire (ASP.NET Core/Blazor)",
   "description": "Шаблон проекта для создания приложения Aspire с веб-интерфейсом Blazor и серверной службой веб-API с необязательным кэшированием Redis.",
@@ -24,11 +24,9 @@
   "symbols/XUnitVersion/choices/v3mtp/description": "Выбирает xUnit.net версии 3 с платформой тестирования Майкрософт",
   "symbols/appHostHttpPort/description": "Номер порта, который будет использоваться для конечной точки HTTP в файле launchSettings.json проекта AppHost.",
   "symbols/appHostOtlpHttpPort/description": "Номер порта, который будет использоваться для конечной точки HTTP OTLP в файле launchSettings.json проекта AppHost.",
-  "symbols/appHostMcpHttpPort/description": "Номер порта для использования в конечной точке MCP HTTP в launchSettings.json проекта AppHost.",
   "symbols/appHostResourceHttpPort/description": "Номер порта, который будет использоваться для конечной точки HTTP службы ресурсов в файле launchSettings.json проекта AppHost.",
   "symbols/appHostHttpsPort/description": "Номер порта, который будет использоваться для конечной точки HTTPS в файле launchSettings.json проекта AppHost. Этот параметр применим только в том случае, если NO-HTTP не используется.",
   "symbols/appHostOtlpHttpsPort/description": "Номер порта, который будет использоваться для конечной точки OTLP HTTPS в файле launchSettings.json проекта AppHost.",
-  "symbols/appHostMcpHttpsPort/description": "Номер порта для использования в конечной точке MCP HTTPS в launchSettings.json проекта AppHost.",
   "symbols/appHostResourceHttpsPort/description": "Номер порта, который будет использоваться для конечной точки HTTPS службы ресурсов в файле launchSettings.json проекта AppHost.",
   "symbols/webHttpPort/description": "Номер порта, который будет использоваться для конечной точки HTTP в файле launchSettings.json веб-проекта.",
   "symbols/webHttpsPort/description": "Номер порта, который будет использоваться для конечной точки HTTPS в файле launchSettings.json веб-проекта. Этот параметр применим только в том случае, если NO-HTTP не используется.",
@@ -39,6 +37,7 @@
   "symbols/LocalhostTld/displayName": "Используйте домен верхнего уровня .dev.localhost в URL-адресе приложения",
   "symbols/LocalhostTld/description": "Следует ли объединять имя проекта с доменом верхнего уровня .dev.localhost в URL-адресе приложения для локальной разработки, например https://myapp.dev.localhost:12345. Поддерживается в .NET 10 и более поздних версиях.",
   "postActions/set-startup-project/description": "Устанавливает проект запуска в решении",
+  "postActions/set-startup-project/manualInstructions/default/text": "",
   "postActions/restore/description": "Восстановление пакетов NuGet, необходимых для этого проекта.",
   "postActions/restore/manualInstructions/default/text": "Выполнить команду \"dotnet restore\""
 }

@@ -18,6 +18,7 @@ namespace Aspire.Hosting.Azure;
 /// Use <see cref="AzureProvisioningResourceExtensions.ConfigureInfrastructure{T}(ApplicationModel.IResourceBuilder{T}, Action{AzureResourceInfrastructure})"/> to configure specific <see cref="Azure.Provisioning"/> properties.
 /// </remarks>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Hub = {HubName}")]
+[AspireExport(ExposeProperties = true)]
 public class AzureEventHubResource(string name, string hubName, AzureEventHubsResource parent)
     : Resource(name), IResourceWithParent<AzureEventHubsResource>, IResourceWithConnectionString, IResourceWithAzureFunctionsConfig
 {
@@ -35,11 +36,15 @@ public class AzureEventHubResource(string name, string hubName, AzureEventHubsRe
     /// <summary>
     /// Gets the parent Azure Event Hubs resource.
     /// </summary>
+    /// <remarks>This property is not available in polyglot app hosts.</remarks>
+    [AspireExportIgnore]
     public AzureEventHubsResource Parent { get; } = parent ?? throw new ArgumentNullException(nameof(parent));
 
     /// <summary>
     /// Gets the connection string expression for the Azure Event Hub.
     /// </summary>
+    /// <remarks>This property is not available in polyglot app hosts.</remarks>
+    [AspireExportIgnore]
     public ReferenceExpression ConnectionStringExpression => Parent.GetConnectionString(HubName);
 
     /// <summary>

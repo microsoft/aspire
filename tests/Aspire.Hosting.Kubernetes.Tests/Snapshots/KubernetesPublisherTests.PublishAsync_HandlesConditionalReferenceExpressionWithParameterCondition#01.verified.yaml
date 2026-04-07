@@ -1,0 +1,5 @@
+﻿parameters:
+  myapp:
+    enable_tls: "True"
+secrets: {}
+config: {}

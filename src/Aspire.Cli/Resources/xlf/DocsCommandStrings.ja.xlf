@@ -3,78 +3,103 @@
   <file datatype="xml" source-language="en" target-language="ja" original="../DocsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Browse and search Aspire documentation from aspire.dev.</source>
-        <target state="new">Browse and search Aspire documentation from aspire.dev.</target>
+        <source>Browse and search Aspire documentation from aspire.dev</source>
+        <target state="needs-review-translation">aspire.dev から Aspire ドキュメントを参照して検索します。</target>
         <note />
       </trans-unit>
       <trans-unit id="DocumentNotFound">
         <source>Documentation page '{0}' not found. Use 'aspire docs list' to see available pages.</source>
-        <target state="new">Documentation page '{0}' not found. Use 'aspire docs list' to see available pages.</target>
+        <target state="translated">ドキュメント ページ '{0}' が見つかりません。使用可能なページを表示するには、'aspire docs list' を使用します。</target>
         <note />
       </trans-unit>
       <trans-unit id="FormatOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="new">Output format (Table or Json).</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">出力形式 (テーブルまたは JSON)。</target>
         <note />
       </trans-unit>
       <trans-unit id="FoundDocumentationPages">
         <source>Found {0} documentation pages.</source>
-        <target state="new">Found {0} documentation pages.</target>
+        <target state="translated">{0} 件のドキュメント ページが見つかりました。</target>
         <note />
       </trans-unit>
       <trans-unit id="FoundSearchResults">
         <source>Found {0} results for '{1}'.</source>
-        <target state="new">Found {0} results for '{1}'.</target>
+        <target state="translated">'{1}' について {0} 件の結果が見つかりました。</target>
         <note />
       </trans-unit>
       <trans-unit id="GetDescription">
-        <source>Get the full content of a documentation page by its slug.</source>
-        <target state="new">Get the full content of a documentation page by its slug.</target>
+        <source>Get the full content of a documentation page by its slug</source>
+        <target state="needs-review-translation">スラッグを指定してドキュメント ページのすべてのコンテンツを取得します。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderScore">
+        <source>Score</source>
+        <target state="translated">スコア</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderSection">
+        <source>Section</source>
+        <target state="translated">セクション</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderSlug">
+        <source>Slug</source>
+        <target state="translated">スラグ</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderSummary">
+        <source>Summary</source>
+        <target state="translated">要約</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderTitle">
+        <source>Title</source>
+        <target state="translated">タイトル</target>
         <note />
       </trans-unit>
       <trans-unit id="LimitOptionDescription">
-        <source>Maximum number of search results to return (default: 5, max: 10).</source>
-        <target state="new">Maximum number of search results to return (default: 5, max: 10).</target>
+        <source>Maximum number of search results to return (default: 5, max: 10)</source>
+        <target state="needs-review-translation">返される検索結果の最大数 (既定値: 5、最大値: 10)。</target>
         <note />
       </trans-unit>
       <trans-unit id="ListDescription">
-        <source>List all available Aspire documentation pages.</source>
-        <target state="new">List all available Aspire documentation pages.</target>
+        <source>List all available Aspire documentation pages</source>
+        <target state="needs-review-translation">利用可能なすべての Aspire ドキュメント ページを一覧表示します。</target>
         <note />
       </trans-unit>
       <trans-unit id="LoadingDocumentation">
         <source>Loading documentation...</source>
-        <target state="new">Loading documentation...</target>
+        <target state="translated">ドキュメントを読み込んでいます...</target>
         <note />
       </trans-unit>
       <trans-unit id="NoDocumentationAvailable">
         <source>No documentation available. The aspire.dev docs may not have loaded correctly.</source>
-        <target state="new">No documentation available. The aspire.dev docs may not have loaded correctly.</target>
+        <target state="translated">使用可能なドキュメントがありません。aspire.dev ドキュメントが正しく読み込まれなかった可能性があります。</target>
         <note />
       </trans-unit>
       <trans-unit id="NoResultsFound">
         <source>No results found for '{0}'. Try different search terms.</source>
-        <target state="new">No results found for '{0}'. Try different search terms.</target>
+        <target state="translated">'{0}' の結果が見つかりません。別の検索語句でお試しください。</target>
         <note />
       </trans-unit>
       <trans-unit id="QueryArgumentDescription">
-        <source>The search query.</source>
-        <target state="new">The search query.</target>
+        <source>The search query</source>
+        <target state="needs-review-translation">検索クエリ。</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchDescription">
-        <source>Search Aspire documentation by keywords.</source>
-        <target state="new">Search Aspire documentation by keywords.</target>
+        <source>Search Aspire documentation by keywords</source>
+        <target state="needs-review-translation">キーワードを指定して Aspire ドキュメントを検索します。</target>
         <note />
       </trans-unit>
       <trans-unit id="SectionOptionDescription">
-        <source>Return only the specified section of the page.</source>
-        <target state="new">Return only the specified section of the page.</target>
+        <source>Return only the specified section of the page</source>
+        <target state="needs-review-translation">ページの指定したセクションのみを返します。</target>
         <note />
       </trans-unit>
       <trans-unit id="SlugArgumentDescription">
-        <source>The slug of the documentation page (e.g., 'redis-integration').</source>
-        <target state="new">The slug of the documentation page (e.g., 'redis-integration').</target>
+        <source>The slug of the documentation page (e.g., 'redis-integration')</source>
+        <target state="needs-review-translation">ドキュメント ページのスラッグ (例: 'redis-integration')。</target>
         <note />
       </trans-unit>
     </body>

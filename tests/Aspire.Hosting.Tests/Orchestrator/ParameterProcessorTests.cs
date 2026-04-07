@@ -19,6 +19,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Tests.Orchestrator;
 
+[Trait("Partition", "3")]
 public class ParameterProcessorTests
 {
     [Fact]
@@ -1168,24 +1169,6 @@ public class ParameterProcessorTests
         }
 
         public Task DeleteSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default)
-        {
-            return Task.CompletedTask;
-        }
-    }
-
-    private sealed class MockUserSecretsManager : IUserSecretsManager
-    {
-        public bool IsAvailable => true;
-        public string FilePath => "/mock/path/secrets.json";
-
-        public bool TrySetSecret(string name, string value) => true;
-
-        public void GetOrSetSecret(IConfigurationManager configuration, string name, Func<string> valueGenerator)
-        {
-            // Mock implementation - do nothing
-        }
-
-        public Task SaveStateAsync(JsonObject state, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
         }

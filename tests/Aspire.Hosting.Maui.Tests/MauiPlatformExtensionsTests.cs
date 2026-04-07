@@ -617,7 +617,7 @@ public class MauiPlatformExtensionsTests
 
     [Theory]
     [MemberData(nameof(AllPlatforms))]
-    public async Task WithOtlpDevTunnel_CleansUpIntermediateEnvironmentVariables(PlatformTestConfig config)
+    public async Task WithOtlpDevTunnel_SetsEndpointWithoutIntermediateEnvironmentVariables(PlatformTestConfig config)
     {
         // Arrange
         var projectContent = CreateProjectContent(config.RequiredTfm);
@@ -636,7 +636,7 @@ public class MauiPlatformExtensionsTests
 
             foreach (var endpointAnnotation in endpointAnnotations)
             {
-                endpointAnnotation.AllocatedEndpointSnapshot.SetValue(new AllocatedEndpoint(endpointAnnotation, "localhost", 1234));
+                endpointAnnotation.AllocatedEndpoint = new AllocatedEndpoint(endpointAnnotation, "localhost", 1234);
             }
 
             var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
@@ -644,18 +644,16 @@ public class MauiPlatformExtensionsTests
                 DistributedApplicationOperation.Run,
                 TestServiceProvider.Instance);
 
-            // Assert
+            // Assert - OTEL_EXPORTER_OTLP_ENDPOINT should be set directly from the tunnel endpoint
             Assert.True(envVars.TryGetValue("OTEL_EXPORTER_OTLP_ENDPOINT", out var endpointValue));
             Assert.False(string.IsNullOrWhiteSpace(endpointValue));
             Assert.True(Uri.TryCreate(endpointValue, UriKind.Absolute, out _));
 
+            // No intermediate service discovery or endpoint env vars should be present
             var tunnelConfig = maui.Resource.Annotations.OfType<OtlpDevTunnelConfigurationAnnotation>().Single();
             var stubName = tunnelConfig.OtlpStub.Name;
-            var serviceDiscoveryKey = $"services__{stubName}__otlp__0";
-            Assert.DoesNotContain(serviceDiscoveryKey, envVars.Keys);
-
-            var directEndpointKey = $"{EnvironmentVariableNameEncoder.Encode(stubName).ToUpperInvariant()}_OTLP";
-            Assert.DoesNotContain(directEndpointKey, envVars.Keys);
+            Assert.DoesNotContain(envVars.Keys, k => k.StartsWith($"services__{stubName}__"));
+            Assert.DoesNotContain(envVars.Keys, k => k.StartsWith($"{EnvironmentVariableNameEncoder.Encode(stubName).ToUpperInvariant()}_"));
         }
         finally
         {

@@ -13,6 +13,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Tests.Publishing;
 
+[Trait("Partition", "4")]
 public class PublishingActivityReporterTests
 {
     private readonly InteractionService _interactionService = CreateInteractionService();
@@ -46,6 +47,54 @@ public class PublishingActivityReporterTests
         Assert.False(activity.Data.IsError);
         Assert.False(activity.Data.IsWarning);
         Assert.Null(activity.Data.StepId);
+    }
+
+    [Fact]
+    public async Task CreateStepAsync_WithHierarchyMetadata_EmitsMetadataOnCreateAndComplete()
+    {
+        // Arrange
+        var reporter = CreatePublishingReporter();
+
+        // Act
+        var step = await reporter.CreateStepAsync("Child Step", "parent-step-id", 2, CancellationToken.None);
+
+        // Assert
+        var stepInternal = Assert.IsType<ReportingStep>(step);
+        Assert.Equal("parent-step-id", stepInternal.ParentStepId);
+        Assert.Equal(2, stepInternal.HierarchyLevel);
+
+        var activityReader = reporter.ActivityItemUpdated.Reader;
+        Assert.True(activityReader.TryRead(out var createActivity));
+        Assert.Equal("parent-step-id", createActivity.Data.ParentStepId);
+        Assert.Equal(2, createActivity.Data.HierarchyLevel);
+
+        await step.CompleteAsync("Done", CompletionState.Completed, CancellationToken.None);
+
+        Assert.True(activityReader.TryRead(out var completeActivity));
+        Assert.Equal("parent-step-id", completeActivity.Data.ParentStepId);
+        Assert.Equal(2, completeActivity.Data.HierarchyLevel);
+    }
+
+    [Fact]
+    public async Task CreateStepAsync_WithParentStepTitle_ResolvesParentStepId()
+    {
+        // Arrange
+        var reporter = CreatePublishingReporter();
+        var parentStep = Assert.IsType<ReportingStep>(await reporter.CreateStepAsync("Parent Step", CancellationToken.None));
+
+        // Clear the parent step creation activity
+        reporter.ActivityItemUpdated.Reader.TryRead(out _);
+
+        // Act
+        var childStep = Assert.IsType<ReportingStep>(await reporter.CreateStepAsync("Child Step", "Parent Step", 1, CancellationToken.None));
+
+        // Assert
+        Assert.Equal(parentStep.Id, childStep.ParentStepId);
+
+        var activityReader = reporter.ActivityItemUpdated.Reader;
+        Assert.True(activityReader.TryRead(out var createActivity));
+        Assert.Equal(parentStep.Id, createActivity.Data.ParentStepId);
+        Assert.Equal(1, createActivity.Data.HierarchyLevel);
     }
 
     [Fact]
@@ -271,7 +320,7 @@ public class PublishingActivityReporterTests
 
         // Act & Assert - Step is completed, so completing tasks should fail
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => task.CompleteAsync(null, cancellationToken: CancellationToken.None));
+            () => task.CompleteAsync((string?)null, cancellationToken: CancellationToken.None));
 
         var taskInternal = Assert.IsType<ReportingTask>(task);
         Assert.Contains($"Cannot complete task '{taskInternal.Id}' because its parent step", exception.Message);
@@ -332,15 +381,15 @@ public class PublishingActivityReporterTests
         var step3 = await reporter.CreateStepAsync("Step 3", CancellationToken.None);
 
         var task1 = await step1.CreateTaskAsync("Task 1", CancellationToken.None);
-        await task1.CompleteAsync(null, cancellationToken: CancellationToken.None);
+        await task1.CompleteAsync((string?)null, cancellationToken: CancellationToken.None);
         await step1.CompleteAsync("Step 1 completed", CompletionState.Completed, CancellationToken.None);
 
         var task2 = await step2.CreateTaskAsync("Task 2", CancellationToken.None);
-        await task2.CompleteAsync(null, cancellationToken: CancellationToken.None);
+        await task2.CompleteAsync((string?)null, cancellationToken: CancellationToken.None);
         await step2.CompleteAsync("Step 2 completed with warning", CompletionState.CompletedWithWarning, CancellationToken.None);
 
         var task3 = await step3.CreateTaskAsync("Task 3", CancellationToken.None);
-        await task3.CompleteAsync(null, cancellationToken: CancellationToken.None);
+        await task3.CompleteAsync((string?)null, cancellationToken: CancellationToken.None);
         await step3.CompleteAsync("Step 3 failed", CompletionState.CompletedWithError, CancellationToken.None);
 
         // Clear previous activities
@@ -368,7 +417,7 @@ public class PublishingActivityReporterTests
         var task = await step.CreateTaskAsync("Test Task", CancellationToken.None);
 
         // Act
-        await task.CompleteAsync(null, cancellationToken: CancellationToken.None);
+        await task.CompleteAsync((string?)null, cancellationToken: CancellationToken.None);
 
         // Assert
         var taskInternal = Assert.IsType<ReportingTask>(task);
@@ -385,13 +434,13 @@ public class PublishingActivityReporterTests
         var task = await step.CreateTaskAsync("Test Task", CancellationToken.None);
 
         // Complete the task first time
-        await task.CompleteAsync(null, cancellationToken: CancellationToken.None);
+        await task.CompleteAsync((string?)null, cancellationToken: CancellationToken.None);
 
         // Clear activities
         ClearActivities(reporter);
 
         // Act - Try to complete the same task again with the same state (should be idempotent, no exception)
-        await task.CompleteAsync(null, cancellationToken: CancellationToken.None);
+        await task.CompleteAsync((string?)null, cancellationToken: CancellationToken.None);
 
         // Assert - No new activity should be emitted (noop)
         AssertNoActivitiesEmitted(reporter);
@@ -410,7 +459,7 @@ public class PublishingActivityReporterTests
         var task = await step.CreateTaskAsync("Test Task", CancellationToken.None);
 
         // Complete the task first time successfully
-        await task.CompleteAsync(null, CompletionState.Completed, cancellationToken: CancellationToken.None);
+        await task.CompleteAsync((string?)null, CompletionState.Completed, cancellationToken: CancellationToken.None);
 
         // Clear activities
         ClearActivities(reporter);
@@ -485,7 +534,7 @@ public class PublishingActivityReporterTests
         var task = await step.CreateTaskAsync("Test Task", CancellationToken.None);
 
         // Complete the task first
-        await task.CompleteAsync(null, cancellationToken: CancellationToken.None);
+        await task.CompleteAsync((string?)null, cancellationToken: CancellationToken.None);
 
         // Act - Complete the step
         await step.CompleteAsync("Step completed", CompletionState.Completed, CancellationToken.None);
@@ -498,7 +547,7 @@ public class PublishingActivityReporterTests
         Assert.Contains($"Cannot update task '{taskInternal.Id}' because its parent step", updateException.Message);
 
         // For CompleteTaskAsync, since task is already completed, attempting to complete with same or different state should be idempotent
-        await task.CompleteAsync(null, cancellationToken: CancellationToken.None); // Should not throw
+        await task.CompleteAsync((string?)null, cancellationToken: CancellationToken.None); // Should not throw
         await task.CompleteAsync("Error", CompletionState.CompletedWithError, cancellationToken: CancellationToken.None); // Should also not throw (noop)
 
         // Creating new tasks for the completed step should also fail because the step is complete
@@ -686,8 +735,8 @@ public class PublishingActivityReporterTests
         var task2 = await step.CreateTaskAsync("Task 2", CancellationToken.None);
 
         // Complete all tasks successfully
-        await task1.SucceedAsync(null, CancellationToken.None);
-        await task2.SucceedAsync(null, CancellationToken.None);
+        await task1.SucceedAsync((string?)null, CancellationToken.None);
+        await task2.SucceedAsync((string?)null, CancellationToken.None);
 
         // Clear previous activities
         ClearActivities(reporter);
@@ -851,12 +900,12 @@ public class PublishingActivityReporterTests
     {
         // Arrange
         var reporter = CreatePublishingReporter();
-        var pipelineSummary = new List<KeyValuePair<string, string>>
+        var pipelineSummary = new List<PipelineSummaryItem>
         {
-            new("Target", "TestTarget"),
-            new("Environment", "test-env"),
-            new("Identifier", "test-123"),
-            new("Region", "test-region")
+            new("Target", "TestTarget", enableMarkdown: false),
+            new("Environment", "test-env", enableMarkdown: false),
+            new("Identifier", "test-123", enableMarkdown: false),
+            new("Region", "test-region", enableMarkdown: false)
         };
 
         // Act
@@ -868,10 +917,14 @@ public class PublishingActivityReporterTests
         Assert.Equal(PublishingActivityTypes.PublishComplete, activity.Type);
         Assert.NotNull(activity.Data.PipelineSummary);
         Assert.Equal(4, activity.Data.PipelineSummary.Count);
-        Assert.Equal(new KeyValuePair<string, string>("Target", "TestTarget"), activity.Data.PipelineSummary[0]);
-        Assert.Equal(new KeyValuePair<string, string>("Environment", "test-env"), activity.Data.PipelineSummary[1]);
-        Assert.Equal(new KeyValuePair<string, string>("Identifier", "test-123"), activity.Data.PipelineSummary[2]);
-        Assert.Equal(new KeyValuePair<string, string>("Region", "test-region"), activity.Data.PipelineSummary[3]);
+        Assert.Equal("Target", activity.Data.PipelineSummary[0].Key);
+        Assert.Equal("TestTarget", activity.Data.PipelineSummary[0].Value);
+        Assert.Equal("Environment", activity.Data.PipelineSummary[1].Key);
+        Assert.Equal("test-env", activity.Data.PipelineSummary[1].Value);
+        Assert.Equal("Identifier", activity.Data.PipelineSummary[2].Key);
+        Assert.Equal("test-123", activity.Data.PipelineSummary[2].Value);
+        Assert.Equal("Region", activity.Data.PipelineSummary[3].Key);
+        Assert.Equal("test-region", activity.Data.PipelineSummary[3].Value);
         Assert.True(activity.Data.IsComplete);
         Assert.False(activity.Data.IsError);
     }
@@ -955,7 +1008,7 @@ public class PublishingActivityReporterTests
         reporter.ActivityItemUpdated.Reader.TryRead(out _);
 
         // Act
-        step.Log(logLevel, logMessage, enableMarkdown: true);
+        step.Log(logLevel, new MarkdownString(logMessage));
 
         // Assert
         // Verify activity was emitted
@@ -986,7 +1039,7 @@ public class PublishingActivityReporterTests
         ClearActivities(reporter);
 
         // Act - Step is completed, so logging should be a no-op
-        step.Log(LogLevel.Information, "Test log", enableMarkdown: false);
+        step.Log(LogLevel.Information, "Test log");
 
         // Assert - No new activity should be emitted
         AssertNoActivitiesEmitted(reporter);
@@ -1018,6 +1071,85 @@ public class PublishingActivityReporterTests
         Assert.True(activityReader.TryRead(out var activity));
         Assert.Equal(PublishingActivityTypes.Task, activity.Type);
         Assert.Equal(markdownCompletionMessage, activity.Data.CompletionMessage);
+    }
+
+    [Fact]
+    public async Task CreateTaskAsync_WithMarkdownString_SetsEnableMarkdownTrue()
+    {
+        // Arrange
+        var reporter = CreatePublishingReporter();
+        var step = await reporter.CreateStepAsync("Test Step", CancellationToken.None);
+        reporter.ActivityItemUpdated.Reader.TryRead(out _); // Clear step activity
+
+        // Act
+        var task = await step.CreateTaskAsync(new MarkdownString("**Bold** task"), CancellationToken.None);
+
+        // Assert
+        Assert.NotNull(task);
+        var activityReader = reporter.ActivityItemUpdated.Reader;
+        Assert.True(activityReader.TryRead(out var activity));
+        Assert.Equal(PublishingActivityTypes.Task, activity.Type);
+        Assert.Equal("**Bold** task", activity.Data.StatusText);
+        Assert.True(activity.Data.EnableMarkdown);
+    }
+
+    [Fact]
+    public async Task UpdateTaskAsync_WithMarkdownString_SetsEnableMarkdownTrue()
+    {
+        // Arrange
+        var reporter = CreatePublishingReporter();
+        var step = await reporter.CreateStepAsync("Test Step", CancellationToken.None);
+        var task = await step.CreateTaskAsync("Initial status", CancellationToken.None);
+        ClearActivities(reporter);
+
+        // Act
+        await task.UpdateAsync(new MarkdownString("**Updated** status"), CancellationToken.None);
+
+        // Assert
+        var activityReader = reporter.ActivityItemUpdated.Reader;
+        Assert.True(activityReader.TryRead(out var activity));
+        Assert.Equal(PublishingActivityTypes.Task, activity.Type);
+        Assert.Equal("**Updated** status", activity.Data.StatusText);
+        Assert.True(activity.Data.EnableMarkdown);
+    }
+
+    [Fact]
+    public async Task CompleteTaskAsync_WithMarkdownString_SetsEnableMarkdownTrue()
+    {
+        // Arrange
+        var reporter = CreatePublishingReporter();
+        var step = await reporter.CreateStepAsync("Test Step", CancellationToken.None);
+        var task = await step.CreateTaskAsync("Test Task", CancellationToken.None);
+        ClearActivities(reporter);
+
+        // Act
+        await task.CompleteAsync(new MarkdownString("Deployed to **Azure**"), CompletionState.Completed, CancellationToken.None);
+
+        // Assert
+        var activityReader = reporter.ActivityItemUpdated.Reader;
+        Assert.True(activityReader.TryRead(out var activity));
+        Assert.Equal(PublishingActivityTypes.Task, activity.Type);
+        Assert.True(activity.Data.EnableMarkdown);
+        Assert.Equal("Deployed to **Azure**", activity.Data.CompletionMessage);
+    }
+
+    [Fact]
+    public async Task CompleteStepAsync_WithMarkdownString_SetsEnableMarkdownTrue()
+    {
+        // Arrange
+        var reporter = CreatePublishingReporter();
+        var step = await reporter.CreateStepAsync("Test Step", CancellationToken.None);
+        ClearActivities(reporter);
+
+        // Act
+        await step.CompleteAsync(new MarkdownString("Step **completed** successfully"), CompletionState.Completed, CancellationToken.None);
+
+        // Assert
+        var activityReader = reporter.ActivityItemUpdated.Reader;
+        Assert.True(activityReader.TryRead(out var activity));
+        Assert.Equal(PublishingActivityTypes.Step, activity.Type);
+        Assert.True(activity.Data.EnableMarkdown);
+        Assert.Equal("Step **completed** successfully", activity.Data.StatusText);
     }
 
     [Fact]

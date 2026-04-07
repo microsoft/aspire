@@ -1,16 +1,16 @@
-﻿<configuration>
+<configuration>
   <packageSources>
     <clear />
     <add key="NuGet" value="https://api.nuget.org/v3/index.json" />
     <add key="hexesoft" value="https://example.com/hexesoft/nuget/v3/index.json" />
     <add key="dotnet9" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" />
-    <add key="{PR_HIVE}" value="{PR_HIVE}" />
+    <add key="{PR_HIVE}/packages" value="{PR_HIVE}/packages" />
   </packageSources>
   <packageSourceMapping>
     <packageSource key="dotnet9">
       <package pattern="Microsoft.Extensions.SpecialPackage*" />
     </packageSource>
-    <packageSource key="{PR_HIVE}">
+    <packageSource key="{PR_HIVE}/packages">
       <package pattern="Aspire*" />
       <package pattern="*" />
     </packageSource>

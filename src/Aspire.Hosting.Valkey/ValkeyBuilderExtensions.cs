@@ -25,6 +25,8 @@ public static class ValkeyBuilderExtensions
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <param name="port">The host port to bind the underlying container to.</param>
     /// <remarks>
+    /// This overload is not available in polyglot app hosts. Use <see cref="AddValkey(IDistributedApplicationBuilder, string, int?, IResourceBuilder{ParameterResource})"/> instead.
+    ///
     /// <example>
     /// Use in application host
     /// <code lang="csharp">
@@ -54,6 +56,7 @@ public static class ValkeyBuilderExtensions
     /// </remarks>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// check this
+    [AspireExportIgnore(Reason = "Convenience overload. Use the overload with optional password parameter instead.")]
     public static IResourceBuilder<ValkeyResource> AddValkey(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -104,6 +107,7 @@ public static class ValkeyBuilderExtensions
     /// </example>
     /// </remarks>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport(Description = "Adds a Valkey container resource")]
     public static IResourceBuilder<ValkeyResource> AddValkey(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -141,7 +145,7 @@ public static class ValkeyBuilderExtensions
             .WithImage(ValkeyContainerImageTags.Image, ValkeyContainerImageTags.Tag)
             .WithImageRegistry(ValkeyContainerImageTags.Registry)
             .WithHealthCheck(healthCheckKey)
-            // see https://github.com/dotnet/aspire/issues/3838 for why the password is passed this way
+            // see https://github.com/microsoft/aspire/issues/3838 for why the password is passed this way
             .WithEntrypoint("/bin/sh")
             .WithEnvironment(context =>
             {
@@ -199,6 +203,7 @@ public static class ValkeyBuilderExtensions
     /// </example>
     /// </remarks>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport(Description = "Adds a data volume for Valkey and enables persistence")]
     public static IResourceBuilder<ValkeyResource> WithDataVolume(
         this IResourceBuilder<ValkeyResource> builder,
         string? name = null,
@@ -236,6 +241,7 @@ public static class ValkeyBuilderExtensions
     /// </example>
     /// </remarks>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport(Description = "Adds a data bind mount for Valkey and enables persistence")]
     public static IResourceBuilder<ValkeyResource> WithDataBindMount(
         this IResourceBuilder<ValkeyResource> builder,
         string source,
@@ -271,6 +277,7 @@ public static class ValkeyBuilderExtensions
     /// </example>
     /// </remarks>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport(Description = "Configures Valkey persistence")]
     public static IResourceBuilder<ValkeyResource> WithPersistence(
         this IResourceBuilder<ValkeyResource> builder,
         TimeSpan? interval = null,

@@ -1,0 +1,22 @@
+{
+  "name": "java-apphost-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@opentelemetry/auto-instrumentations-node": "^0.71.0",
+    "@opentelemetry/exporter-logs-otlp-grpc": "^0.213.0",
+    "@opentelemetry/exporter-metrics-otlp-grpc": "^0.213.0",
+    "@opentelemetry/exporter-trace-otlp-grpc": "^0.213.0",
+    "@opentelemetry/sdk-logs": "^0.213.0",
+    "@opentelemetry/sdk-metrics": "^2.6.0",
+    "@opentelemetry/sdk-node": "^0.213.0",
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "tsx": "^4.21.0"
+  }
+}

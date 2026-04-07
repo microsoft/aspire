@@ -199,6 +199,20 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
+    public void InitializeAsync_AddsOsInformationTags()
+    {
+        using var fixture = new TelemetryFixture();
+
+        var tags = fixture.Telemetry.GetDefaultTags();
+
+        var expectedOsName = AspireCliTelemetry.GetOsName();
+        var expectedOsType = AspireCliTelemetry.GetOsType();
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.OsName && (string?)t.Value == expectedOsName);
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.OsVersion && t.Value is string s && s == Environment.OSVersion.Version.ToString());
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.OsType && (string?)t.Value == expectedOsType);
+    }
+
+    [Fact]
     public void StartReportedActivity_IncludesAllDefaultTags()
     {
         var machineInfoProvider = new TelemetryFixture.TestMachineInformationProvider

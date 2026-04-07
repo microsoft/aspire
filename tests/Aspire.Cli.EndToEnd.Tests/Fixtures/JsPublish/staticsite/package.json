@@ -1,0 +1,8 @@
+{
+  "name": "staticsite",
+  "private": true,
+  "scripts": {
+    "dev": "npx serve dist",
+    "build": "mkdir -p dist && cp index.html dist/index.html"
+  }
+}

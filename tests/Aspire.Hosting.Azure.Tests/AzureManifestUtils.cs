@@ -2,10 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Tests.Utils;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Utils;
@@ -42,6 +44,33 @@ public sealed class AzureManifestUtils
 
         var bicepText = await File.ReadAllTextAsync(Path.Combine(manifestDir, path));
         return (manifestNode, bicepText);
+    }
+
+    public static async Task VerifyAllAzureBicep(IDistributedApplicationBuilder builder)
+    {
+        await using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        // Collect bicep for all Azure provisioning resources, ordered by name for deterministic output
+        var azureResources = model.Resources
+            .OfType<AzureProvisioningResource>()
+            .OrderBy(r => r.Name)
+            .ToList();
+
+        var sb = new StringBuilder();
+
+        foreach (var resource in azureResources)
+        {
+            var (_, bicep) = await GetManifestWithBicep(resource, skipPreparer: true);
+
+            sb.AppendLine($"// Resource: {resource.Name}");
+            sb.AppendLine(bicep);
+            sb.AppendLine();
+        }
+
+        await Verify(sb.ToString(), extension: "bicep")
+            .ScrubLinesWithReplace(s => s.Replace("\\r\\n", "\\n"));
     }
 
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]

@@ -15,6 +15,7 @@ namespace Aspire.Hosting.Azure;
 /// <summary>
 /// A resource that represents a Kusto cluster.
 /// </summary>
+[AspireExport(ExposeProperties = true)]
 public class AzureKustoClusterResource : AzureProvisioningResource, IResourceWithConnectionString, IResourceWithEndpoints
 {
     /// <summary>
@@ -35,11 +36,15 @@ public class AzureKustoClusterResource : AzureProvisioningResource, IResourceWit
     /// <summary>
     /// Gets the "name" output reference for the resource.
     /// </summary>
+    /// <remarks>This property is not available in polyglot app hosts.</remarks>
+    [AspireExportIgnore]
     public BicepOutputReference NameOutputReference => new("name", this);
 
     /// <summary>
     /// Gets the cluster URI output reference for the Azure Kusto cluster.
     /// </summary>
+    /// <remarks>This property is not available in polyglot app hosts.</remarks>
+    [AspireExportIgnore]
     public BicepOutputReference ClusterUri => new("clusterUri", this);
 
     /// <summary>

@@ -4,6 +4,8 @@
 using System.Diagnostics;
 using Aspire.Cli.Utils;
 
+using Aspire.Cli.Configuration;
+
 namespace Aspire.Cli.Projects;
 
 /// <summary>
@@ -28,6 +30,11 @@ internal interface IAppHostServerSession : IAsyncDisposable
     OutputCollector Output { get; }
 
     /// <summary>
+    /// Gets the authentication token for the server session.
+    /// </summary>
+    string AuthenticationToken { get; }
+
+    /// <summary>
     /// Gets an RPC client connected to this session.
     /// </summary>
     Task<IAppHostRpcClient> GetRpcClientAsync(CancellationToken cancellationToken);
@@ -43,7 +50,7 @@ internal interface IAppHostServerSessionFactory
     /// </summary>
     /// <param name="appHostPath">The path to the AppHost project directory.</param>
     /// <param name="sdkVersion">The Aspire SDK version to use.</param>
-    /// <param name="packages">The package references to include.</param>
+    /// <param name="integrations">The integration references to include.</param>
     /// <param name="launchSettingsEnvVars">Optional environment variables from launch settings.</param>
     /// <param name="debug">Whether to enable debug logging.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -51,7 +58,7 @@ internal interface IAppHostServerSessionFactory
     Task<AppHostServerSessionResult> CreateAsync(
         string appHostPath,
         string sdkVersion,
-        IEnumerable<(string PackageId, string Version)> packages,
+        IEnumerable<IntegrationReference> integrations,
         Dictionary<string, string>? launchSettingsEnvVars,
         bool debug,
         CancellationToken cancellationToken);
@@ -62,10 +69,10 @@ internal interface IAppHostServerSessionFactory
 /// </summary>
 /// <param name="Success">Whether the build was successful.</param>
 /// <param name="Session">The session if successful, null otherwise.</param>
-/// <param name="BuildOutput">The build output for error diagnostics.</param>
+/// <param name="BuildOutput">The build output for error diagnostics, may be null.</param>
 /// <param name="ChannelName">The NuGet channel name used, if any.</param>
 internal record AppHostServerSessionResult(
     bool Success,
     IAppHostServerSession? Session,
-    OutputCollector BuildOutput,
+    OutputCollector? BuildOutput,
     string? ChannelName);

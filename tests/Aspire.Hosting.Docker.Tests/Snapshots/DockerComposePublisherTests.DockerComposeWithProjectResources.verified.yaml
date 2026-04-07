@@ -1,4 +1,4 @@
-services:
+﻿services:
   docker-compose-dashboard:
     image: "mcr.microsoft.com/dotnet/nightly/aspire-dashboard:latest"
     ports:
@@ -33,13 +33,13 @@ services:
       services__project1__http__0: "http://project1:${PROJECT1_PORT}"
       PROJECT1_HTTPS: "https://project1:${PROJECT1_PORT}"
       PROJECT1_CUSTOM1: "http://project1:8000"
-      services__project1__custom1__0: "http://project1:8000"
+      services__project1__http__1: "http://project1:8000"
       PROJECT1_CUSTOM2: "http://project1:8001"
-      services__project1__custom2__0: "http://project1:8001"
+      services__project1__http__2: "http://project1:8001"
       PROJECT1_CUSTOM3: "http://project1:7002"
-      services__project1__custom3__0: "http://project1:7002"
+      services__project1__http__3: "http://project1:7002"
       PROJECT1_CUSTOM4: "http://project1:7004"
-      services__project1__custom4__0: "http://project1:7004"
+      services__project1__http__4: "http://project1:7004"
     networks:
       - "aspire"
 networks:

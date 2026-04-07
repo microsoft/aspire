@@ -3,6 +3,7 @@
 
 namespace Aspire.Cli.Tests.Utils;
 
+[Trait("Partition", "2")]
 public class PathLookupHelperTests
 {
     [Fact]

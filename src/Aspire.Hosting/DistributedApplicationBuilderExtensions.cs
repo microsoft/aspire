@@ -19,6 +19,7 @@ public static class DistributedApplicationBuilderExtensions
     /// <param name="name">The name of an existing resource.</param>
     /// <returns>A resource builder.</returns>
     /// <remarks>
+    /// <para>This method is not available in polyglot app hosts.</para>
     /// <para>
     /// The <see cref="CreateResourceBuilder{T}(IDistributedApplicationBuilder, string)"/> method is used to create an <see cref="IResourceBuilder{T}"/>
     /// for a specific resource where the original resource builder cannot be referenced. This does not create a new resource, but instead returns a
@@ -58,6 +59,7 @@ public static class DistributedApplicationBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExportIgnore(Reason = "Takes raw IResource generic constraint — low-level builder API for testing scenarios.")]
     public static IResourceBuilder<T> CreateResourceBuilder<T>(this IDistributedApplicationBuilder builder, string name) where T : IResource
     {
         ArgumentNullException.ThrowIfNull(builder, nameof(builder));
@@ -85,9 +87,11 @@ public static class DistributedApplicationBuilderExtensions
     /// <param name="resourceBuilder">When this method returns, contains the resource builder if the resource was found and is of the correct type; otherwise, <c>null</c>.</param>
     /// <returns><c>true</c> if the resource was found and is of the correct type; otherwise, <c>false</c>.</returns>
     /// <remarks>
+    /// <para>This method is not available in polyglot app hosts.</para>
     /// This method is similar to <see cref="CreateResourceBuilder{T}(IDistributedApplicationBuilder, string)"/> but returns <c>false</c> instead of throwing an exception
     /// when the resource is not found or is not of the correct type.
     /// </remarks>
+    [AspireExportIgnore(Reason = "Uses out parameter which is not ATS-compatible.")]
     public static bool TryCreateResourceBuilder<T>(this IDistributedApplicationBuilder builder, string name, [NotNullWhen(true)] out IResourceBuilder<T>? resourceBuilder) where T : IResource
     {
         ArgumentNullException.ThrowIfNull(builder, nameof(builder));

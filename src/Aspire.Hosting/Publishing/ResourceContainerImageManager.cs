@@ -440,10 +440,12 @@ internal sealed class ResourceContainerImageManager(
         }
 
         // Resolve build secrets
-        var resolvedBuildSecrets = new Dictionary<string, string?>();
+        var resolvedBuildSecrets = new Dictionary<string, BuildImageSecretValue>();
         foreach (var buildSecret in dockerfileBuildAnnotation.BuildSecrets)
         {
-            resolvedBuildSecrets[buildSecret.Key] = await ResolveValue(buildSecret.Value, cancellationToken).ConfigureAwait(false);
+            var secretType = buildSecret.Value is FileInfo ? BuildImageSecretType.File : BuildImageSecretType.Environment;
+            var resolvedValue = await ResolveValue(buildSecret.Value, cancellationToken).ConfigureAwait(false);
+            resolvedBuildSecrets[buildSecret.Key] = new BuildImageSecretValue(resolvedValue, secretType);
         }
 
         // ensure outputPath is created if specified since docker/podman won't create it for us

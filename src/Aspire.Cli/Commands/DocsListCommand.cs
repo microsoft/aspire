@@ -68,16 +68,17 @@ internal sealed class DocsListCommand : BaseCommand
         if (format is OutputFormat.Json)
         {
             var json = JsonSerializer.Serialize(docs.ToArray(), JsonSourceGenerationContext.RelaxedEscaping.DocsListItemArray);
-            InteractionService.DisplayRawText(json);
+            // Structured output always goes to stdout.
+            InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
         }
         else
         {
             InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, DocsCommandStrings.FoundDocumentationPages, docs.Count));
 
             var table = new Table();
-            table.AddColumn("Title");
-            table.AddColumn("Slug");
-            table.AddColumn("Summary");
+            table.AddBoldColumn(DocsCommandStrings.HeaderTitle);
+            table.AddBoldColumn(DocsCommandStrings.HeaderSlug);
+            table.AddBoldColumn(DocsCommandStrings.HeaderSummary);
 
             foreach (var doc in docs)
             {
@@ -87,7 +88,7 @@ internal sealed class DocsListCommand : BaseCommand
                     Markup.Escape(doc.Summary ?? "-"));
             }
 
-            AnsiConsole.Write(table);
+            InteractionService.DisplayRenderable(table);
         }
 
         return ExitCodeConstants.Success;

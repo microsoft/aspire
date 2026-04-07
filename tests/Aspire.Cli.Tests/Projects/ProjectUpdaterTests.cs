@@ -100,7 +100,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
             config.InteractionServiceFactory = (sp) =>
             {
-                var interactionService = new TestConsoleInteractionService();
+                var interactionService = new TestInteractionService();
                 interactionService.ConfirmCallback = (promptText, defaultValue) =>
                 {
                     throw new InvalidOperationException("Should not prompt when no work required.");
@@ -153,7 +153,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             </Project>
             """);
 
-        var packagesAddsExecuted = new List<(FileInfo ProjectFile, string PackageId, string PackageVersion, string? PackageSource)>();
+        var packagesAddsExecuted = new List<(FileInfo ProjectFile, string PackageId, string PackageVersion, string? PackageSource, bool NoRestore)>();
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
         {
             config.DotNetCliRunnerFactory = (sp) =>
@@ -206,10 +206,10 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                         var document = JsonDocument.Parse(json);
                         return (0, document);
                     },
-                    // FileInfo, string, string, string?, DotNetCliRunnerInvocationOptions, CancellationToken, int
-                    AddPackageAsyncCallback = (projectFile, packageId, packageVersion, source, _, _) =>
+                    // FileInfo, string, string, string?, ProcessInvocationOptions, CancellationToken, int
+                    AddPackageAsyncCallback = (projectFile, packageId, packageVersion, source, noRestore, _, _) =>
                     {
-                        packagesAddsExecuted.Add((projectFile, packageId, packageVersion, source!));
+                        packagesAddsExecuted.Add((projectFile, packageId, packageVersion, source!, noRestore));
                         return 0;
                     }
                 };
@@ -217,7 +217,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
             config.InteractionServiceFactory = (s) =>
             {
-                var interactionService = new TestConsoleInteractionService();
+                var interactionService = new TestInteractionService();
                 return interactionService;
             };
         });
@@ -284,7 +284,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             </Project>
             """);
 
-        var packagesAddsExecuted = new List<(FileInfo ProjectFile, string PackageId, string PackageVersion, string? PackageSource)>();
+        var packagesAddsExecuted = new List<(FileInfo ProjectFile, string PackageId, string PackageVersion, string? PackageSource, bool NoRestore)>();
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
         {
             config.DotNetCliRunnerFactory = (sp) =>
@@ -345,10 +345,10 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                         var document = JsonDocument.Parse(json);
                         return (0, document);
                     },
-                    // FileInfo, string, string, string?, DotNetCliRunnerInvocationOptions, CancellationToken, int
-                    AddPackageAsyncCallback = (projectFile, packageId, packageVersion, source, _, _) =>
+                    // FileInfo, string, string, string?, ProcessInvocationOptions, CancellationToken, int
+                    AddPackageAsyncCallback = (projectFile, packageId, packageVersion, source, noRestore, _, _) =>
                     {
-                        packagesAddsExecuted.Add((projectFile, packageId, packageVersion, source!));
+                        packagesAddsExecuted.Add((projectFile, packageId, packageVersion, source!, noRestore));
                         return 0;
                     }
                 };
@@ -356,7 +356,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
             config.InteractionServiceFactory = (s) =>
             {
-                var interactionService = new TestConsoleInteractionService();
+                var interactionService = new TestInteractionService();
                 return interactionService;
             };
         });
@@ -437,7 +437,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             </Project>
             """);
 
-        var packagesAddsExecuted = new List<(FileInfo ProjectFile, string PackageId, string PackageVersion, string? PackageSource)>();
+        var packagesAddsExecuted = new List<(FileInfo ProjectFile, string PackageId, string PackageVersion, string? PackageSource, bool NoRestore)>();
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
         {
             config.DotNetCliRunnerFactory = (sp) =>
@@ -499,9 +499,9 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                         return (0, document);
                     },
 
-                    AddPackageAsyncCallback = (projectFile, packageId, packageVersion, source, _, _) =>
+                    AddPackageAsyncCallback = (projectFile, packageId, packageVersion, source, noRestore, _, _) =>
                     {
-                        packagesAddsExecuted.Add((projectFile, packageId, packageVersion, source!));
+                        packagesAddsExecuted.Add((projectFile, packageId, packageVersion, source!, noRestore));
                         return 0;
                     }
                 };
@@ -509,7 +509,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
             config.InteractionServiceFactory = (s) =>
             {
-                var interactionService = new TestConsoleInteractionService();
+                var interactionService = new TestInteractionService();
                 return interactionService;
             };
         });
@@ -647,7 +647,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
             config.InteractionServiceFactory = (sp) =>
             {
-                var interactionService = new TestConsoleInteractionService();
+                var interactionService = new TestInteractionService();
                 interactionService.ConfirmCallback = (promptText, defaultValue) =>
                 {
                     return true;
@@ -752,7 +752,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
             config.InteractionServiceFactory = (sp) =>
             {
-                var interactionService = new TestConsoleInteractionService();
+                var interactionService = new TestInteractionService();
                 interactionService.ConfirmCallback = (promptText, defaultValue) =>
                 {
                     return true;
@@ -854,7 +854,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
             config.InteractionServiceFactory = (sp) =>
             {
-                var interactionService = new TestConsoleInteractionService();
+                var interactionService = new TestInteractionService();
                 interactionService.ConfirmCallback = (promptText, defaultValue) =>
                 {
                     // Should not be called since no updates are needed
@@ -893,7 +893,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var settingsDirectory = workingDirectory.CreateSubdirectory(".aspire");
         var hivesDirectory = settingsDirectory.CreateSubdirectory("hives");
         var cacheDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "cache"));
-        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")));
+        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
     }
 
     [Fact]
@@ -998,7 +998,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
             config.InteractionServiceFactory = (sp) =>
             {
-                var interactionService = new TestConsoleInteractionService();
+                var interactionService = new TestInteractionService();
                 interactionService.ConfirmCallback = (promptText, defaultValue) =>
                 {
                     return true;
@@ -1121,7 +1121,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
             config.InteractionServiceFactory = (sp) =>
             {
-                var interactionService = new TestConsoleInteractionService();
+                var interactionService = new TestInteractionService();
                 interactionService.ConfirmCallback = (promptText, defaultValue) =>
                 {
                     return true;
@@ -1235,7 +1235,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
             config.InteractionServiceFactory = (sp) =>
             {
-                var interactionService = new TestConsoleInteractionService();
+                var interactionService = new TestInteractionService();
                 interactionService.ConfirmCallback = (promptText, defaultValue) =>
                 {
                     return true;
@@ -1345,7 +1345,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
             config.InteractionServiceFactory = (sp) =>
             {
-                var interactionService = new TestConsoleInteractionService();
+                var interactionService = new TestInteractionService();
                 interactionService.ConfirmCallback = (promptText, defaultValue) =>
                 {
                     return true;
@@ -1433,7 +1433,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                         }
                     },
 
-                    AddPackageAsyncCallback = (projectFile, packageName, version, source, options, cancellationToken) =>
+                    AddPackageAsyncCallback = (projectFile, packageName, version, source, noRestore, options, cancellationToken) =>
                     {
                         // Simulate successful package addition
                         return 0;
@@ -1443,7 +1443,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
             config.InteractionServiceFactory = (sp) =>
             {
-                var interactionService = new TestConsoleInteractionService();
+                var interactionService = new TestInteractionService();
                 interactionService.ConfirmCallback = (promptText, defaultValue) =>
                 {
                     return true;
@@ -1545,7 +1545,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
             config.InteractionServiceFactory = (sp) =>
             {
-                var interactionService = new TestConsoleInteractionService();
+                var interactionService = new TestInteractionService();
                 interactionService.ConfirmCallback = (promptText, defaultValue) =>
                 {
                     return true;
@@ -1629,7 +1629,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
             config.InteractionServiceFactory = (sp) =>
             {
-                var interactionService = new TestConsoleInteractionService();
+                var interactionService = new TestInteractionService();
                 return interactionService;
             };
         });
@@ -1711,7 +1711,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
             config.InteractionServiceFactory = (sp) =>
             {
-                var interactionService = new TestConsoleInteractionService();
+                var interactionService = new TestInteractionService();
                 return interactionService;
             };
         });
@@ -1785,7 +1785,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
             config.InteractionServiceFactory = (sp) =>
             {
-                var interactionService = new TestConsoleInteractionService();
+                var interactionService = new TestInteractionService();
                 interactionService.ConfirmCallback = (promptText, defaultValue) =>
                 {
                     return true;
@@ -1868,7 +1868,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
             config.InteractionServiceFactory = (sp) =>
             {
-                var interactionService = new TestConsoleInteractionService();
+                var interactionService = new TestInteractionService();
                 interactionService.ConfirmCallback = (promptText, defaultValue) =>
                 {
                     return true;
@@ -1946,7 +1946,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                         var document = JsonDocument.Parse(json);
                         return (0, document);
                     },
-                    AddPackageAsyncCallback = (projectFile, packageName, version, source, options, cancellationToken) =>
+                    AddPackageAsyncCallback = (projectFile, packageName, version, source, noRestore, options, cancellationToken) =>
                     {
                         // Simulate successful package addition
                         return 0;
@@ -1956,7 +1956,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
             config.InteractionServiceFactory = (sp) =>
             {
-                var interactionService = new TestConsoleInteractionService();
+                var interactionService = new TestInteractionService();
                 interactionService.ConfirmCallback = (promptText, defaultValue) =>
                 {
                     return true;
@@ -2038,7 +2038,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
             config.InteractionServiceFactory = (sp) =>
             {
-                var interactionService = new TestConsoleInteractionService();
+                var interactionService = new TestInteractionService();
                 interactionService.ConfirmCallback = (promptText, defaultValue) =>
                 {
                     return true;
@@ -2117,7 +2117,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
             config.InteractionServiceFactory = (sp) =>
             {
-                var interactionService = new TestConsoleInteractionService();
+                var interactionService = new TestInteractionService();
                 interactionService.ConfirmCallback = (promptText, defaultValue) =>
                 {
                     return true;
@@ -2196,7 +2196,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                         var document = JsonDocument.Parse(json);
                         return (0, document);
                     },
-                    AddPackageAsyncCallback = (projectFilePath, packageName, packageVersion, nugetSource, options, cancellationToken) =>
+                    AddPackageAsyncCallback = (projectFilePath, packageName, packageVersion, nugetSource, noRestore, options, cancellationToken) =>
                     {
                         // Track which packages are updated
                         packagesUpdated.Add(packageName);
@@ -2208,7 +2208,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
             config.InteractionServiceFactory = (sp) =>
             {
-                var interactionService = new TestConsoleInteractionService();
+                var interactionService = new TestInteractionService();
                 interactionService.ConfirmCallback = (promptText, defaultValue) =>
                 {
                     return true;
@@ -2289,7 +2289,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             </Project>
             """);
 
-        var packagesAddsExecuted = new List<(FileInfo ProjectFile, string PackageId, string PackageVersion, string? PackageSource)>();
+        var packagesAddsExecuted = new List<(FileInfo ProjectFile, string PackageId, string PackageVersion, string? PackageSource, bool NoRestore)>();
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
         {
@@ -2325,9 +2325,9 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                         var document = JsonDocument.Parse(json);
                         return (0, document);
                     },
-                    AddPackageAsyncCallback = (projectFile, packageId, packageVersion, source, _, _) =>
+                    AddPackageAsyncCallback = (projectFile, packageId, packageVersion, source, noRestore, _, _) =>
                     {
-                        packagesAddsExecuted.Add((projectFile, packageId, packageVersion, source!));
+                        packagesAddsExecuted.Add((projectFile, packageId, packageVersion, source!, noRestore));
                         return 0;
                     }
                 };
@@ -2335,7 +2335,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
             config.InteractionServiceFactory = (sp) =>
             {
-                var interactionService = new TestConsoleInteractionService();
+                var interactionService = new TestInteractionService();
                 interactionService.ConfirmCallback = (promptText, defaultValue) =>
                 {
                     return true;
@@ -2545,6 +2545,64 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         // Assert
         var updatedContent = await File.ReadAllTextAsync(projectFile);
         await Verify(updatedContent, extension: "xml");
+    }
+    [Fact]
+    public async Task UpdateSdkVersionInCsprojAppHostAsync_RemovesPackageVersionFromDirectoryPackagesPropsForCpm()
+    {
+        // Arrange - simulates a CPM project with an old-format AppHost that has
+        // Aspire.Hosting.AppHost in both csproj (as PackageReference) and
+        // Directory.Packages.props (as PackageVersion). After SDK migration, the
+        // PackageReference is removed from csproj but the orphaned PackageVersion
+        // must also be removed to avoid NU1009.
+        // See: https://github.com/microsoft/aspire/issues/14550
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj");
+        var originalContent = """
+            <Project Sdk="Microsoft.NET.Sdk">
+                <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0" />
+                <PropertyGroup>
+                    <OutputType>Exe</OutputType>
+                    <TargetFramework>net9.0</TargetFramework>
+                </PropertyGroup>
+                <ItemGroup>
+                    <PackageReference Include="Aspire.Hosting.AppHost" />
+                    <PackageReference Include="Aspire.Hosting.Redis" />
+                </ItemGroup>
+            </Project>
+            """;
+
+        await File.WriteAllTextAsync(projectFile, originalContent);
+
+        // Create Directory.Packages.props with CPM enabled and PackageVersion for Aspire.Hosting.AppHost
+        var directoryPackagesPropsFile = Path.Combine(workspace.WorkspaceRoot.FullName, "Directory.Packages.props");
+        await File.WriteAllTextAsync(directoryPackagesPropsFile, """
+            <Project>
+                <PropertyGroup>
+                    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+                </PropertyGroup>
+                <ItemGroup>
+                    <PackageVersion Include="Aspire.Hosting.AppHost" Version="9.5.0" />
+                    <PackageVersion Include="Aspire.Hosting.Redis" Version="9.5.0" />
+                </ItemGroup>
+            </Project>
+            """);
+
+        var package = new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.0.2", Source = "nuget.org" };
+
+        // Act
+        await ProjectUpdater.UpdateSdkVersionInCsprojAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
+
+        // Assert - PackageVersion for Aspire.Hosting.AppHost should be removed from Directory.Packages.props
+        var updatedPropsContent = await File.ReadAllTextAsync(directoryPackagesPropsFile);
+        Assert.DoesNotContain("Aspire.Hosting.AppHost", updatedPropsContent);
+        // Other PackageVersion entries should be preserved
+        Assert.Contains("Aspire.Hosting.Redis", updatedPropsContent);
+
+        // Also verify the csproj was updated correctly
+        var updatedCsprojContent = await File.ReadAllTextAsync(projectFile);
+        Assert.DoesNotContain("Aspire.Hosting.AppHost", updatedCsprojContent);
+        Assert.Contains("Aspire.Hosting.Redis", updatedCsprojContent);
+        Assert.Contains("Aspire.AppHost.Sdk/13.0.2", updatedCsprojContent);
     }
 }
 

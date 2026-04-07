@@ -72,20 +72,17 @@ public sealed partial class TelemetryRepository
             // The HashSet is cleared after draining to prevent unbounded memory growth.
             var seenSpanIds = new HashSet<string>();
 
-            // Yield existing spans
-            foreach (var trace in existingTraces.PagedResult.Items)
-            {
-                foreach (var span in trace.Spans)
-                {
-                    // Filter by resource if specified
-                    if (resourceKey is not null && !span.Source.ResourceKey.Equals(resourceKey))
-                    {
-                        continue;
-                    }
+            // Yield existing spans ordered by start time so streaming clients
+            // receive the initial snapshot in chronological order.
+            var existingSpans = existingTraces.PagedResult.Items
+                .SelectMany(trace => trace.Spans)
+                .Where(span => resourceKey is null || span.Source.ResourceKey.Equals(resourceKey))
+                .OrderBy(span => span.StartTime);
 
-                    seenSpanIds.Add(span.SpanId);
-                    yield return span;
-                }
+            foreach (var span in existingSpans)
+            {
+                seenSpanIds.Add(span.SpanId);
+                yield return span;
             }
 
             // Drain any spans that arrived during the snapshot to ensure we don't miss them

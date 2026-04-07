@@ -19,6 +19,7 @@ namespace Aspire.Hosting.Docker.Resources.ComposeNodes;
 /// The <c>Service</c> class can be used to define a container's image, ports, volumes, environment settings,
 /// and advanced settings like logging and health checks.
 /// </example>
+[AspireExport(ExposeProperties = true)]
 [YamlSerializable]
 public sealed class Service : NamedComposeMember
 {

@@ -15,14 +15,30 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
     public async Task RunCommand_WhenSdkNotInstalled_ReturnsCorrectExitCode()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Create a minimal project file so project detection succeeds
+        var projectContent = """
+            <Project Sdk="Microsoft.NET.Sdk">
+                <PropertyGroup>
+                    <OutputType>Exe</OutputType>
+                    <TargetFramework>net10.0</TargetFramework>
+                    <IsAspireHost>true</IsAspireHost>
+                </PropertyGroup>
+            </Project>
+            """;
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"), projectContent);
+
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DotNetSdkInstallerFactory = _ => new TestDotNetSdkInstaller
             {
-                CheckAsyncCallback = _ => (false, null, "9.0.302", false) // SDK not installed
+                CheckAsyncCallback = _ => (false, null, "9.0.302") // SDK not installed
             };
 
-            options.InteractionServiceFactory = _ => new TestConsoleInteractionService();
+            // Use TestDotNetCliRunner to avoid real process execution
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner();
+
+            options.InteractionServiceFactory = _ => new TestInteractionService();
         });
         var provider = services.BuildServiceProvider();
 
@@ -41,10 +57,10 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
         {
             options.DotNetSdkInstallerFactory = _ => new TestDotNetSdkInstaller
             {
-                CheckAsyncCallback = _ => (false, null, "9.0.302", false) // SDK not installed
+                CheckAsyncCallback = _ => (false, null, "9.0.302") // SDK not installed
             };
 
-            options.InteractionServiceFactory = _ => new TestConsoleInteractionService();
+            options.InteractionServiceFactory = _ => new TestInteractionService();
 
             // Need to provide a project locator since AddCommand checks for project first
             options.ProjectLocatorFactory = _ => new TestProjectLocator();
@@ -59,39 +75,57 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task NewCommand_WhenSdkNotInstalled_ReturnsCorrectExitCode()
+    public async Task NewCommand_WhenSdkNotInstalled_OnlyShowsCliTemplates()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DotNetSdkInstallerFactory = _ => new TestDotNetSdkInstaller
             {
-                CheckAsyncCallback = _ => (false, null, "9.0.302", false) // SDK not installed
+                CheckAsyncCallback = _ => (false, null, "9.0.302") // SDK not installed
             };
 
-            options.InteractionServiceFactory = _ => new TestConsoleInteractionService();
+            options.InteractionServiceFactory = _ => new TestInteractionService();
         });
         var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("new");
+        // With no SDK, aspire-starter shouldn't be a valid subcommand
+        var result = command.Parse("new aspire-starter");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.SdkNotInstalled, exitCode);
+        // aspire-starter is not registered when SDK is unavailable, so it's an invalid command
+        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
     }
 
     [Fact]
     public async Task PublishCommand_WhenSdkNotInstalled_ReturnsCorrectExitCode()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Create a minimal project file so project detection succeeds
+        var projectContent = """
+            <Project Sdk="Microsoft.NET.Sdk">
+                <PropertyGroup>
+                    <OutputType>Exe</OutputType>
+                    <TargetFramework>net10.0</TargetFramework>
+                    <IsAspireHost>true</IsAspireHost>
+                </PropertyGroup>
+            </Project>
+            """;
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"), projectContent);
+
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DotNetSdkInstallerFactory = _ => new TestDotNetSdkInstaller
             {
-                CheckAsyncCallback = _ => (false, null, "9.0.302", false) // SDK not installed
+                CheckAsyncCallback = _ => (false, null, "9.0.302") // SDK not installed
             };
 
-            options.InteractionServiceFactory = _ => new TestConsoleInteractionService();
+            // Use TestDotNetCliRunner to avoid real process execution
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner();
+
+            options.InteractionServiceFactory = _ => new TestInteractionService();
         });
         var provider = services.BuildServiceProvider();
 
@@ -106,14 +140,30 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
     public async Task DeployCommand_WhenSdkNotInstalled_ReturnsCorrectExitCode()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Create a minimal project file so project detection succeeds
+        var projectContent = """
+            <Project Sdk="Microsoft.NET.Sdk">
+                <PropertyGroup>
+                    <OutputType>Exe</OutputType>
+                    <TargetFramework>net10.0</TargetFramework>
+                    <IsAspireHost>true</IsAspireHost>
+                </PropertyGroup>
+            </Project>
+            """;
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"), projectContent);
+
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DotNetSdkInstallerFactory = _ => new TestDotNetSdkInstaller
             {
-                CheckAsyncCallback = _ => (false, null, "9.0.302", false) // SDK not installed
+                CheckAsyncCallback = _ => (false, null, "9.0.302") // SDK not installed
             };
 
-            options.InteractionServiceFactory = _ => new TestConsoleInteractionService();
+            // Use TestDotNetCliRunner to avoid real process execution
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner();
+
+            options.InteractionServiceFactory = _ => new TestInteractionService();
         });
         var provider = services.BuildServiceProvider();
 
@@ -133,10 +183,10 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
             options.EnabledFeatures = [KnownFeatures.ExecCommandEnabled];
             options.DotNetSdkInstallerFactory = _ => new TestDotNetSdkInstaller
             {
-                CheckAsyncCallback = _ => (false, null, "9.0.302", false) // SDK not installed
+                CheckAsyncCallback = _ => (false, null, "9.0.302") // SDK not installed
             };
 
-            options.InteractionServiceFactory = _ => new TestConsoleInteractionService();
+            options.InteractionServiceFactory = _ => new TestInteractionService();
         });
         var provider = services.BuildServiceProvider();
 
@@ -155,7 +205,7 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
         {
             options.DotNetSdkInstallerFactory = _ => new TestDotNetSdkInstaller
             {
-                CheckAsyncCallback = _ => (true, "9.0.302", "9.0.302", false) // SDK installed
+                CheckAsyncCallback = _ => (true, "9.0.302", "9.0.302") // SDK installed
             };
             // Make sure project locator doesn't find projects so it fails at the expected point
             options.ProjectLocatorFactory = _ => new NoProjectFileProjectLocator();

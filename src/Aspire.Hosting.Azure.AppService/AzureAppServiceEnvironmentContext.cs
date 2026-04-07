@@ -46,6 +46,15 @@ internal sealed class AzureAppServiceEnvironmentContext(
             ProvisioningBuildOptions = provisioningOptions.ProvisioningBuildOptions
         };
 
+        // Add references to any prerequisite resources to ensure they are provisioned first
+        if (resource.TryGetAnnotationsOfType<DeploymentPrerequisitesAnnotation>(out var prereqs))
+        {
+            foreach (var prereq in prereqs.SelectMany(p => p.Resources))
+            {
+                provisioningResource.References.Add(prereq);
+            }
+        }
+
         return provisioningResource;
     }
 }

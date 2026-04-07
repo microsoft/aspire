@@ -26,45 +26,59 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task StartCommand_RequiresResourceArgument()
+    public async Task StartCommand_AcceptsNoBuildOption()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("start");
-
-        // Missing required argument should fail
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.NotEqual(ExitCodeConstants.Success, exitCode);
-    }
-
-    [Fact]
-    public async Task StartCommand_AcceptsResourceArgument()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("start myresource --help");
+        var result = command.Parse("start --no-build --help");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.Success, exitCode);
     }
 
     [Fact]
-    public async Task StartCommand_AcceptsProjectOption()
+    public async Task StartCommand_AcceptsFormatOption()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("start myresource --project /path/to/project.csproj --help");
+        var result = command.Parse("start --format json --help");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.Success, exitCode);
+    }
+
+    [Fact]
+    public async Task StartCommand_AcceptsIsolatedOption()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("start --isolated --help");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+    }
+
+    [Fact]
+    public void StartCommand_ForwardsUnmatchedTokensToAppHost()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("start -- --custom-arg value");
+
+        Assert.Empty(result.Errors);
+        Assert.Contains("--custom-arg", result.UnmatchedTokens);
+        Assert.Contains("value", result.UnmatchedTokens);
     }
 }

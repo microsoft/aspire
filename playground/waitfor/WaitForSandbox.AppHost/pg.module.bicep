@@ -76,4 +76,6 @@ resource db_connectionString 'Microsoft.KeyVault/vaults/secrets@2024-11-01' = {
 
 output name string = pg.name
 
+output id string = pg.id
+
 output hostName string = pg.properties.fullyQualifiedDomainName

@@ -50,6 +50,7 @@ pr:
 variables:
   - template: /eng/pipelines/common-variables.yml@self
   - template: /eng/common/templates-official/variables/pool-providers.yml@self
+
   # Variable group containing VscePublishToken for VS Code Marketplace publishing
   - ${{ if eq(parameters.publishVSCodeExtension, true) }}:
     - group: Aspire-Release-Secrets
@@ -104,6 +105,8 @@ resources:
 extends:
   template: v1/1ES.Official.PipelineTemplate.yml@1ESPipelineTemplates
   parameters:
+    settings:
+      networkIsolationPolicy: Permissive,CFSClean,CFSClean2
     featureFlags:
       autoEnablePREfastWithNewRuleset: false
       autoEnableRoslynWithNewRuleset: false
@@ -120,7 +123,7 @@ extends:
         justificationForDisabling: 'see https://portal.microsofticm.com/imp/v3/incidents/incident/482258316/summary'
       sourceAnalysisPool:
         name: NetCore1ESPool-Internal
-        image: windows.vs2022preview.amd64
+        image: windows.vs2026preview.scout.amd64
         os: windows
       tsa:
         enabled: true
@@ -214,7 +217,7 @@ extends:
 
             pool:
               name: NetCore1ESPool-Internal
-              image: windows.vs2022preview.amd64
+              image: windows.vs2026preview.scout.amd64
               os: windows
 
             variables:
@@ -224,6 +227,7 @@ extends:
             preSteps:
               - checkout: self
                 fetchDepth: 1
+                clean: true
 
             steps:
               - task: DownloadPipelineArtifact@2
@@ -290,10 +294,143 @@ extends:
                   publishVSCodeExtension: ${{ parameters.publishVSCodeExtension }}
                   vscePublishToken: $(VscePublishToken)
                   vscePublishPreRelease: ${{ parameters.vscePublishPreRelease }}
-      - ${{ if and(notin(variables['Build.Reason'], 'PullRequest'), eq(variables['Build.SourceBranch'], 'refs/heads/main')) }}:
-        - template: /eng/common/templates-official/job/onelocbuild.yml@self
-          parameters:
-            LclSource: lclFilesfromPackage
-            LclPackageId: 'LCL-JUNO-PROD-ASPIRE'
-            MirrorRepo: aspire
-            MirrorBranch: main
+
+              # Extract the Aspire version from a generated nupkg filename so downstream
+              # stages can use it. Aspire.Hosting.AppHost has no RID in its filename and
+              # does not suppress final package version stabilization, so stripping the
+              # prefix cleanly yields the stable version for installer publishing.
+              - pwsh: |
+                  $ErrorActionPreference = 'Stop'
+                  $shippingDir = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping"
+                  $nupkg = Get-ChildItem -Path $shippingDir -Filter "Aspire.Hosting.AppHost.*.nupkg" -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Name -notmatch '\.symbols\.' } |
+                    Select-Object -First 1
+
+                  if (-not $nupkg) {
+                    Write-Error "Could not find Aspire.Hosting.AppHost nupkg in $shippingDir"
+                    exit 1
+                  }
+
+                  $version = $nupkg.Name -replace '^Aspire\.Hosting\.AppHost\.', '' -replace '\.nupkg$', ''
+
+                  if ($version -notmatch '^\d+\.\d+\.\d+') {
+                    Write-Error "Extracted version '$version' does not look like a valid semver. Check the nupkg name."
+                    exit 1
+                  }
+
+                  Write-Host "Detected Aspire version: $version (from $($nupkg.Name))"
+                  Write-Host "##vso[task.setvariable variable=aspireVersion;isOutput=true]$version"
+                name: computeVersion
+                displayName: 🟣Compute Aspire version from nupkg
+
+              - pwsh: |
+                  $ErrorActionPreference = 'Stop'
+                  $artifactVersion = dotnet msbuild "$(Build.SourcesDirectory)/src/Aspire.Dashboard/Aspire.Dashboard.csproj" -getProperty:PackageVersion -property:SuppressFinalPackageVersion=true -property:OfficialBuildId=$(BUILD.BUILDNUMBER)
+                  $artifactVersion = $artifactVersion.Trim()
+
+                  if ($artifactVersion -notmatch '^\d+\.\d+\.\d+') {
+                    Write-Error "Computed artifact version '$artifactVersion' does not look like a valid semver. Check PackageVersion evaluation."
+                    exit 1
+                  }
+
+                  Write-Host "Detected installer artifact version: $artifactVersion"
+                  Write-Host "##vso[task.setvariable variable=aspireArtifactVersion;isOutput=true]$artifactVersion"
+                name: computeArtifactVersion
+                displayName: 🟣Compute installer artifact version
+
+              # Determine stable vs prerelease for installer pipelines.
+              - pwsh: |
+                  $ErrorActionPreference = 'Stop'
+                  $versionKind = dotnet msbuild "$(Build.SourcesDirectory)/eng/Versions.props" -getProperty:DotNetFinalVersionKind
+                  $versionKind = $versionKind.Trim()
+                  Write-Host "DotNetFinalVersionKind: '$versionKind'"
+
+                  if ($versionKind -eq 'release') {
+                    $channel = 'stable'
+                  } else {
+                    $channel = 'prerelease'
+                  }
+
+                  Write-Host "Installer channel: $channel"
+                  Write-Host "##vso[task.setvariable variable=installerChannel;isOutput=true]$channel"
+                name: computeChannel
+                displayName: 🟣Determine installer channel
+
+      # OneLocBuild is temporarily disabled while we work with the loc team
+      # to reconfigure it after the repo migration from dotnet/aspire to microsoft/aspire.
+      # - ${{ if and(notin(variables['Build.Reason'], 'PullRequest'), eq(variables['Build.SourceBranch'], 'refs/heads/main')) }}:
+      #   - template: /eng/common/templates-official/job/onelocbuild.yml@self
+      #     parameters:
+      #       LclSource: lclFilesfromPackage
+      #       LclPackageId: 'LCL-JUNO-PROD-ASPIRE'
+      #       GitHubOrg: microsoft
+      #       MirrorRepo: aspire
+      #       MirrorBranch: main
+
+    # ----------------------------------------------------------------
+    # Generate and test installer packages (WinGet + Homebrew).
+    # Artifacts are consumed by release-publish-nuget.yml for stable
+    # publishing. No publishing happens from this pipeline.
+    # ----------------------------------------------------------------
+    - stage: prepare_installers
+      displayName: Prepare Installers
+      dependsOn:
+        - build
+      variables:
+        aspireVersion: $[ stageDependencies.build.Windows.outputs['computeVersion.aspireVersion'] ]
+        aspireArtifactVersion: $[ stageDependencies.build.Windows.outputs['computeArtifactVersion.aspireArtifactVersion'] ]
+        installerChannel: $[ stageDependencies.build.Windows.outputs['computeChannel.installerChannel'] ]
+      condition: |
+        and(
+          succeeded(),
+          ne(variables['Build.Reason'], 'PullRequest'),
+          or(
+            ne(dependencies.build.outputs['Windows.computeChannel.installerChannel'], 'stable'),
+            or(
+              eq(variables['Build.SourceBranch'], 'refs/heads/main'),
+              startsWith(variables['Build.SourceBranch'], 'refs/heads/release/')
+            )
+          )
+        )
+      jobs:
+      - template: /eng/common/templates-official/jobs/jobs.yml@self
+        parameters:
+          enableMicrobuild: false
+          enablePublishUsingPipelines: false
+          enablePublishBuildAssets: false
+          enablePublishBuildArtifacts: true
+          enableTelemetry: true
+          workspace:
+            clean: all
+          jobs:
+          - job: WinGet
+            displayName: WinGet Manifest
+            timeoutInMinutes: 30
+            pool:
+              name: NetCore1ESPool-Internal
+              image: 1es-windows-2022
+              os: windows
+            steps:
+            - checkout: self
+              fetchDepth: 1
+            - template: /eng/pipelines/templates/prepare-winget-manifest.yml@self
+              parameters:
+                version: $(aspireVersion)
+                artifactVersion: $(aspireArtifactVersion)
+                channel: $(installerChannel)
+
+          - job: Homebrew
+            displayName: Homebrew Cask
+            timeoutInMinutes: 30
+            condition: and(succeeded(), eq(variables['installerChannel'], 'stable'))
+            pool:
+              name: Azure Pipelines
+              vmImage: macOS-latest-internal
+              os: macOS
+            steps:
+            - checkout: self
+              fetchDepth: 1
+            - template: /eng/pipelines/templates/prepare-homebrew-cask.yml@self
+              parameters:
+                version: $(aspireVersion)
+                artifactVersion: $(aspireArtifactVersion)

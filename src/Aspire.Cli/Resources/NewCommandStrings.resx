@@ -107,19 +107,19 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>Create a new Aspire project.</value>
+    <value>Create a new app from an Aspire starter template</value>
   </data>
   <data name="NameArgumentDescription" xml:space="preserve">
-    <value>The name of the project to create.</value>
+    <value>The name of the project to create</value>
   </data>
   <data name="OutputArgumentDescription" xml:space="preserve">
-    <value>The output path for the project.</value>
+    <value>The output path for the project</value>
   </data>
   <data name="SourceArgumentDescription" xml:space="preserve">
-    <value>The NuGet source to use for the project templates.</value>
+    <value>The NuGet source to use for the project templates</value>
   </data>
   <data name="VersionArgumentDescription" xml:space="preserve">
-    <value>The version of the project templates to use.</value>
+    <value>The version of the project templates to use</value>
   </data>
   <data name="SelectATemplateVersion" xml:space="preserve">
     <value>Select a template version:</value>
@@ -128,7 +128,7 @@
     <value>(use pre-release templates)</value>
   </data>
   <data name="EnterTheOutputPath" xml:space="preserve">
-    <value>Enter the output path:</value>
+    <value>Enter the output path</value>
   </data>
   <data name="EnterTheProjectName" xml:space="preserve">
     <value>Enter the project name</value>
@@ -144,5 +144,11 @@
   </data>
   <data name="ChannelOptionDescriptionWithStaging" xml:space="preserve">
     <value>Channel to use for templates (stable, staging, daily)</value>
+  </data>
+  <data name="LanguageOptionDescription" xml:space="preserve">
+    <value>The programming language for the AppHost</value>
+  </data>
+  <data name="ResolvingTemplateVersion" xml:space="preserve">
+    <value>Resolving template version...</value>
   </data>
 </root>

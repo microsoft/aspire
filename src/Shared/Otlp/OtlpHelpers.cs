@@ -86,20 +86,6 @@ public static partial class OtlpHelpers
         return TimeSpan.Zero;
     }
 
-    /// <summary>
-    /// Formats a Unix nanosecond timestamp to a time string (HH:mm:ss.fff).
-    /// </summary>
-    /// <returns>Formatted time string or empty string if null.</returns>
-    public static string FormatNanoTimestamp(ulong? nanos)
-    {
-        if (nanos.HasValue)
-        {
-            return UnixNanoSecondsToDateTime(nanos.Value)
-                .ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture);
-        }
-        return "";
-    }
-
     public static string GetResourceName(IOtlpResource resource, IReadOnlyList<IOtlpResource> allResources)
     {
         var count = 0;

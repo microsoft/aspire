@@ -27,8 +27,8 @@ internal interface IMcpResourceToolRefreshService
     /// Refreshes the resource tool map by discovering MCP tools from connected resources.
     /// </summary>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The refreshed resource tool map.</returns>
-    Task<IReadOnlyDictionary<string, ResourceToolEntry>> RefreshResourceToolMapAsync(CancellationToken cancellationToken);
+    /// <returns>A tuple containing the refreshed resource tool map and a flag indicating whether the tool set changed.</returns>
+    Task<(IReadOnlyDictionary<string, ResourceToolEntry> ToolMap, bool Changed)> RefreshResourceToolMapAsync(CancellationToken cancellationToken);
 
     /// <summary>
     /// Sends a tools list changed notification to connected MCP clients.

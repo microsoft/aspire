@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="ko" original="../DoCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Execute a specific pipeline step and its dependencies. (Preview)</source>
-        <target state="translated">특정 파이프라인 단계와 그에 필요한 종속 항목을 실행하세요. (미리 보기)</target>
+        <source>Execute a specific pipeline step and its dependencies (Preview)</source>
+        <target state="needs-review-translation">특정 파이프라인 단계와 그에 필요한 종속 항목을 실행하세요. (미리 보기)</target>
         <note />
       </trans-unit>
       <trans-unit id="GeneratingArtifacts">
@@ -28,13 +28,13 @@
         <note />
       </trans-unit>
       <trans-unit id="OutputPathArgumentDescription">
-        <source>The optional output path for artifacts.</source>
-        <target state="translated">아티팩트의 선택적 출력 경로입니다.</target>
+        <source>The optional output path for artifacts</source>
+        <target state="needs-review-translation">아티팩트의 선택적 출력 경로입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="StepArgumentDescription">
-        <source>The name of the step to execute.</source>
-        <target state="translated">실행할 단계의 이름입니다.</target>
+        <source>The name of the step to execute</source>
+        <target state="needs-review-translation">실행할 단계의 이름입니다.</target>
         <note />
       </trans-unit>
     </body>

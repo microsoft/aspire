@@ -4,7 +4,7 @@
 using System.IO.Pipes;
 using System.Net.Sockets;
 using Aspire.Cli.Backchannel;
-using Aspire.Hosting.Ats;
+using Aspire.TypeSystem;
 using StreamJsonRpc;
 
 namespace Aspire.Cli.Projects;
@@ -24,18 +24,36 @@ internal sealed class AppHostRpcClient : IAppHostRpcClient
     }
 
     /// <summary>
-    /// Creates and connects an RPC client to the specified socket path.
+    /// Creates and connects an RPC client to the specified socket path and authenticates the session.
     /// </summary>
-    public static async Task<AppHostRpcClient> ConnectAsync(string socketPath, CancellationToken cancellationToken)
+    public static async Task<AppHostRpcClient> ConnectAsync(string socketPath, string authenticationToken, CancellationToken cancellationToken)
     {
+        ArgumentException.ThrowIfNullOrEmpty(authenticationToken);
+
         var stream = await ConnectToServerAsync(socketPath, cancellationToken);
+        JsonRpc? jsonRpc = null;
 
-        var formatter = BackchannelJsonSerializerContext.CreateRpcMessageFormatter();
-        var handler = new HeaderDelimitedMessageHandler(stream, stream, formatter);
-        var jsonRpc = new JsonRpc(handler);
-        jsonRpc.StartListening();
+        try
+        {
+            var formatter = BackchannelJsonSerializerContext.CreateRpcMessageFormatter();
+            var handler = new HeaderDelimitedMessageHandler(stream, stream, formatter);
+            jsonRpc = new JsonRpc(handler);
+            jsonRpc.StartListening();
 
-        return new AppHostRpcClient(stream, jsonRpc);
+            var authenticated = await jsonRpc.InvokeWithCancellationAsync<bool>("authenticate", [authenticationToken], cancellationToken);
+            if (!authenticated)
+            {
+                throw new InvalidOperationException("Failed to authenticate to the AppHost server.");
+            }
+
+            return new AppHostRpcClient(stream, jsonRpc);
+        }
+        catch
+        {
+            jsonRpc?.Dispose();
+            await stream.DisposeAsync();
+            throw;
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -52,15 +70,29 @@ internal sealed class AppHostRpcClient : IAppHostRpcClient
         => _jsonRpc.InvokeWithCancellationAsync<Dictionary<string, string>>(
             "scaffoldAppHost", [languageId, targetPath, projectName], cancellationToken);
 
+    // The generateCode and getCapabilities RPC methods each have a single server-side handler
+    // that accepts optional filtering parameters. The typed methods below provide distinct
+    // C# signatures that call the same underlying RPC endpoint with different arguments.
+
     /// <inheritdoc />
     public Task<Dictionary<string, string>> GenerateCodeAsync(string languageId, CancellationToken cancellationToken)
         => _jsonRpc.InvokeWithCancellationAsync<Dictionary<string, string>>(
-            "generateCode", [languageId], cancellationToken);
+            "generateCode", [languageId, null], cancellationToken);
+
+    /// <inheritdoc />
+    public Task<Dictionary<string, string>> GenerateCodeForAssemblyAsync(string languageId, string assemblyName, CancellationToken cancellationToken)
+        => _jsonRpc.InvokeWithCancellationAsync<Dictionary<string, string>>(
+            "generateCode", [languageId, assemblyName], cancellationToken);
 
     /// <inheritdoc />
     public Task<Commands.Sdk.CapabilitiesInfo> GetCapabilitiesAsync(CancellationToken cancellationToken)
         => _jsonRpc.InvokeWithCancellationAsync<Commands.Sdk.CapabilitiesInfo>(
-            "getCapabilities", [], cancellationToken);
+            "getCapabilities", [null], cancellationToken);
+
+    /// <inheritdoc />
+    public Task<Commands.Sdk.CapabilitiesInfo> GetCapabilitiesForAssembliesAsync(IReadOnlyList<string> assemblyNames, CancellationToken cancellationToken)
+        => _jsonRpc.InvokeWithCancellationAsync<Commands.Sdk.CapabilitiesInfo>(
+            "getCapabilities", [assemblyNames], cancellationToken);
 
     // ═══════════════════════════════════════════════════════════════
     // GENERIC INVOKE
@@ -160,8 +192,8 @@ internal sealed class AppHostRpcClient : IAppHostRpcClient
 internal sealed class AppHostRpcClientFactory : IAppHostRpcClientFactory
 {
     /// <inheritdoc />
-    public async Task<IAppHostRpcClient> ConnectAsync(string socketPath, CancellationToken cancellationToken)
+    public async Task<IAppHostRpcClient> ConnectAsync(string socketPath, string authenticationToken, CancellationToken cancellationToken)
     {
-        return await AppHostRpcClient.ConnectAsync(socketPath, cancellationToken);
+        return await AppHostRpcClient.ConnectAsync(socketPath, authenticationToken, cancellationToken);
     }
 }

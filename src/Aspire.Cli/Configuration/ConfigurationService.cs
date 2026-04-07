@@ -1,14 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Configuration;
 
-internal sealed class ConfigurationService(IConfiguration configuration, CliExecutionContext executionContext, FileInfo globalSettingsFile) : IConfigurationService
+internal sealed class ConfigurationService(IConfiguration configuration, CliExecutionContext executionContext, FileInfo globalSettingsFile, ILogger<ConfigurationService> logger) : IConfigurationService
 {
     public async Task SetConfigurationAsync(string key, string value, bool isGlobal = false, CancellationToken cancellationToken = default)
     {
@@ -20,7 +20,10 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         if (File.Exists(settingsFilePath))
         {
             var existingContent = await File.ReadAllTextAsync(settingsFilePath, cancellationToken);
-            settings = JsonNode.Parse(existingContent)?.AsObject() ?? new JsonObject();
+            // Handle empty files or whitespace-only content
+            settings = string.IsNullOrWhiteSpace(existingContent)
+                ? new JsonObject()
+                : JsonNode.Parse(existingContent, nodeOptions: null, ConfigurationHelper.ParseOptions)?.AsObject() ?? new JsonObject();
         }
         else
         {
@@ -30,16 +33,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         // Set the configuration value using dot notation support
         SetNestedValue(settings, key, value);
 
-        // Ensure directory exists
-        var directory = Path.GetDirectoryName(settingsFilePath);
-        if (directory is not null && !Directory.Exists(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
-        // Write the updated settings
-        var jsonContent = JsonSerializer.Serialize(settings, JsonSourceGenerationContext.Default.JsonObject);
-        await File.WriteAllTextAsync(settingsFilePath, jsonContent, cancellationToken);
+        await ConfigurationHelper.WriteSettingsFileAsync(settingsFilePath, settings, cancellationToken);
     }
 
     public async Task<bool> DeleteConfigurationAsync(string key, bool isGlobal = false, CancellationToken cancellationToken = default)
@@ -54,7 +48,14 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         try
         {
             var existingContent = await File.ReadAllTextAsync(settingsFilePath, cancellationToken);
-            var settings = JsonNode.Parse(existingContent)?.AsObject();
+
+            // Handle empty files or whitespace-only content
+            if (string.IsNullOrWhiteSpace(existingContent))
+            {
+                return false;
+            }
+
+            var settings = JsonNode.Parse(existingContent, nodeOptions: null, ConfigurationHelper.ParseOptions)?.AsObject();
 
             if (settings is null)
             {
@@ -66,9 +67,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
 
             if (deleted)
             {
-                // Write the updated settings
-                var jsonContent = JsonSerializer.Serialize(settings, JsonSourceGenerationContext.Default.JsonObject);
-                await File.WriteAllTextAsync(settingsFilePath, jsonContent, cancellationToken);
+                await ConfigurationHelper.WriteSettingsFileAsync(settingsFilePath, settings, cancellationToken);
             }
 
             return deleted;
@@ -98,18 +97,31 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         // Walk up the directory tree to find existing settings file
         while (searchDirectory is not null)
         {
-            var settingsFilePath = ConfigurationHelper.BuildPathToSettingsJsonFile(searchDirectory.FullName);
-
-            if (File.Exists(settingsFilePath))
+            // Prefer aspire.config.json (new format)
+            var newSettingsPath = Path.Combine(searchDirectory.FullName, AspireConfigFile.FileName);
+            if (File.Exists(newSettingsPath))
             {
-                return settingsFilePath;
+                logger.LogInformation("Found settings file at {Path}", newSettingsPath);
+                return newSettingsPath;
+            }
+
+            // TODO: Remove legacy .aspire/settings.json fallback once confident most users have migrated.
+            // Tracked by https://github.com/microsoft/aspire/issues/15239
+            // Fall back to .aspire/settings.json (legacy)
+            var legacySettingsPath = ConfigurationHelper.BuildPathToSettingsJsonFile(searchDirectory.FullName);
+            if (File.Exists(legacySettingsPath))
+            {
+                logger.LogInformation("Found legacy settings file at {Path}", legacySettingsPath);
+                return legacySettingsPath;
             }
 
             searchDirectory = searchDirectory.Parent;
         }
 
-        // If no existing settings file found, create one in current directory
-        return ConfigurationHelper.BuildPathToSettingsJsonFile(executionContext.WorkingDirectory.FullName);
+        // If no existing settings file found, default to aspire.config.json in current directory
+        var defaultPath = Path.Combine(executionContext.WorkingDirectory.FullName, AspireConfigFile.FileName);
+        logger.LogDebug("No existing settings file found, defaulting to {Path}", defaultPath);
+        return defaultPath;
     }
 
     public async Task<Dictionary<string, string>> GetAllConfigurationAsync(CancellationToken cancellationToken = default)
@@ -143,7 +155,14 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         try
         {
             var content = await File.ReadAllTextAsync(filePath, cancellationToken);
-            var settings = JsonNode.Parse(content)?.AsObject();
+
+            // Handle empty files or whitespace-only content
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                return;
+            }
+
+            var settings = JsonNode.Parse(content, nodeOptions: null, ConfigurationHelper.ParseOptions)?.AsObject();
 
             if (settings is not null)
             {
@@ -159,10 +178,21 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
     /// <summary>
     /// Sets a nested value in a JsonObject using dot notation.
     /// Creates intermediate objects as needed and replaces primitives with objects when necessary.
+    /// Also removes any conflicting flattened keys (colon-separated format) to prevent duplicate key errors.
     /// </summary>
     private static void SetNestedValue(JsonObject settings, string key, string value)
     {
+        // Normalize colon-separated keys to dot notation since both represent
+        // the same configuration hierarchy (e.g., "features:polyglotSupportEnabled"
+        // is equivalent to "features.polyglotSupportEnabled")
+        key = key.Replace(':', '.');
+
         var keyParts = key.Split('.');
+
+        // Remove any conflicting flattened keys (e.g., "features:showAllTemplates" when setting "features.showAllTemplates")
+        // This prevents duplicate key errors when loading the configuration
+        RemoveConflictingFlattenedKeys(settings, keyParts);
+
         var currentObject = settings;
 
         // Navigate to the parent object, creating objects as needed
@@ -185,12 +215,45 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
     }
 
     /// <summary>
+    /// Removes any flattened keys (colon-separated) that would conflict with a nested structure.
+    /// For example, when setting "features.showAllTemplates", remove "features:showAllTemplates".
+    /// </summary>
+    private static void RemoveConflictingFlattenedKeys(JsonObject settings, string[] keyParts)
+    {
+        // Build all possible flattened key patterns that could conflict
+        // For key "a.b.c", we need to remove "a:b:c" from the root
+        var flattenedKey = string.Join(":", keyParts);
+        settings.Remove(flattenedKey);
+
+        // Also check for partial flattened keys at each level
+        // For example, if we have "a.b.c", we should also check for "a:b" in the root
+        // that might contain a "c" value
+        for (int i = 1; i < keyParts.Length; i++)
+        {
+            var partialKey = string.Join(":", keyParts.Take(i));
+            if (settings.ContainsKey(partialKey) && settings[partialKey] is not JsonObject)
+            {
+                // This is a flattened value that conflicts with our nested structure
+                settings.Remove(partialKey);
+            }
+        }
+    }
+
+    /// <summary>
     /// Deletes a nested value from a JsonObject using dot notation.
     /// Cleans up empty parent objects after deletion.
     /// </summary>
     private static bool DeleteNestedValue(JsonObject settings, string key)
     {
+        // Normalize colon-separated keys to dot notation
+        key = key.Replace(':', '.');
+
         var keyParts = key.Split('.');
+
+        // Remove any flat colon-separated key at root level (legacy format)
+        var flattenedKey = string.Join(":", keyParts);
+        var removedFlat = settings.Remove(flattenedKey);
+
         var currentObject = settings;
         var objectPath = new List<(JsonObject obj, string key)>();
 
@@ -202,7 +265,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
 
             if (!currentObject.ContainsKey(part) || currentObject[part] is not JsonObject)
             {
-                return false; // Path doesn't exist
+                return removedFlat; // Path doesn't exist, but may have removed flat key
             }
 
             currentObject = currentObject[part]!.AsObject();
@@ -213,7 +276,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         // Check if the final key exists
         if (!currentObject.ContainsKey(finalKey))
         {
-            return false;
+            return removedFlat;
         }
 
         // Remove the final key
@@ -246,7 +309,9 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
     {
         foreach (var kvp in obj)
         {
-            var key = string.IsNullOrEmpty(prefix) ? kvp.Key : $"{prefix}.{kvp.Key}";
+            // Normalize colon-separated keys to dot notation for consistent display
+            var normalizedKey = kvp.Key.Replace(':', '.');
+            var key = string.IsNullOrEmpty(prefix) ? normalizedKey : $"{prefix}.{normalizedKey}";
 
             if (kvp.Value is JsonObject nestedObj)
             {

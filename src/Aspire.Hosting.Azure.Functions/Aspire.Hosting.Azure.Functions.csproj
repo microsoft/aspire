@@ -18,6 +18,7 @@
   <ItemGroup>
     <Compile Include="$(SharedDir)AzureRoleAssignmentUtils.cs" />
     <Compile Include="$(SharedDir)CommandLineArgsParser.cs" />
+    <Compile Include="$(SharedDir)KnownOtelConfigNames.cs" />
     <Compile Include="$(SharedDir)\LaunchProfiles\*.cs" />
   </ItemGroup>
 

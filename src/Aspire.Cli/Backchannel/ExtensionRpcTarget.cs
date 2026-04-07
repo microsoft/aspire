@@ -56,6 +56,6 @@ internal class ExtensionRpcTarget(IConfiguration configuration) : IExtensionRpcT
 
     public Task<string[]> GetCliCapabilitiesAsync()
     {
-        return Task.FromResult(new[] { KnownCapabilities.BuildDotnetUsingCli });
+        return Task.FromResult(KnownCapabilities.GetAdvertisedCapabilities());
     }
 }

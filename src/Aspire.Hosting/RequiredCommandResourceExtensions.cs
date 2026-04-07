@@ -25,6 +25,7 @@ public static class RequiredCommandResourceExtensions
     /// 2. It is discoverable on the current process PATH (respecting PATHEXT on Windows).
     /// If the command is not found, a warning message will be logged but the resource will be allowed to attempt to start.
     /// </remarks>
+    [AspireExport(Description = "Adds a required command dependency")]
     public static IResourceBuilder<T> WithRequiredCommand<T>(
         this IResourceBuilder<T> builder,
         string command,
@@ -54,11 +55,13 @@ public static class RequiredCommandResourceExtensions
     /// <param name="helpLink">An optional help link URL to guide users when the command is missing or fails validation.</param>
     /// <returns>The resource builder.</returns>
     /// <remarks>
+    /// <para>This method is not available in polyglot app hosts. Use the overload without validation callback instead.</para>
     /// The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
     /// The callback should return a <see cref="RequiredCommandValidationResult"/> indicating whether the command is valid.
     /// If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
     /// </remarks>
     [Experimental("ASPIRECOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "RequiredCommandValidationContext exposes IServiceProvider — not usable from polyglot hosts.")]
     public static IResourceBuilder<T> WithRequiredCommand<T>(
         this IResourceBuilder<T> builder,
         string command,

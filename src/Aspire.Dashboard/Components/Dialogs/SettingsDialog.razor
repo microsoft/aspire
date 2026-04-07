@@ -32,6 +32,19 @@
             <p class="setting-subtext">@Loc[nameof(Dialogs.SettingsDialogLanguagePageReloads)]</p>
         </div>
 
+        <div class="input-container">
+            <FluentRadioGroup TValue="TimeFormat"
+                              Label="@Loc[nameof(Dialogs.SettingsDialogTimeFormat)]"
+                              @bind-Value="@_timeFormat"
+                              @bind-Value:after="OnTimeFormatChanged"
+                              Orientation="Orientation.Vertical">
+                @foreach (var format in Enum.GetValues<TimeFormat>())
+                {
+                    <FluentRadio Value="@format">@FormatTimeFormatOption(format)</FluentRadio>
+                }
+            </FluentRadioGroup>
+        </div>
+
         <div>
             <span class="setting-title">@Loc[nameof(Dialogs.SettingsDialogDashboardLogsAndTelemetry)]</span>
             <div>

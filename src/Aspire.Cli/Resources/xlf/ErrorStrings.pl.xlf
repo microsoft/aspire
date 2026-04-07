@@ -4,22 +4,22 @@
     <body>
       <trans-unit id="AlreadyConnectedToBackchannel">
         <source>Already connected to AppHost backchannel.</source>
-        <target state="translated">Nawiązano już połączenie z kanałem backchannel hosta aplikacji.</target>
+        <target state="needs-review-translation">Nawiązano już połączenie z kanałem backchannel hosta aplikacji.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostIncompatibleWithCli">
         <source>AppHost is incompatible with the CLI. The AppHost must be updated to a version that supports the {0} capability.</source>
-        <target state="translated">Host aplikacji jest niezgodny z interfejsem wiersza polecenia. Host aplikacji musi zostać zaktualizowany do wersji obsługującej funkcję {0}.</target>
+        <target state="needs-review-translation">Host aplikacji jest niezgodny z interfejsem wiersza polecenia. Host aplikacji musi zostać zaktualizowany do wersji obsługującej funkcję {0}.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostWasSpecifiedButDoesntExist">
         <source>AppHost file was specified in '{0}' but it does not exist at '{1}'.</source>
-        <target state="translated">Plik AppHost został określony w ścieżce „{0}”, ale nie istnieje w lokalizacji „{1}”.</target>
+        <target state="needs-review-translation">Plik AppHost został określony w ścieżce „{0}”, ale nie istnieje w lokalizacji „{1}”.</target>
         <note>{0} is a path</note>
       </trans-unit>
       <trans-unit id="AppHostsMayNotBeBuildable">
-        <source>No buildable app hosts were found, but there may have been unbuildable app hosts.</source>
-        <target state="translated">Nie znaleziono hostów aplikacji z możliwością kompilacji, ale mogły istnieć hosty aplikacji, których nie można było skompilować.</target>
+        <source>No buildable AppHosts were found, but there may have been unbuildable AppHosts.</source>
+        <target state="needs-review-translation">Nie znaleziono hostów aplikacji z możliwością kompilacji, ale mogły istnieć hosty aplikacji, których nie można było skompilować.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireHostingVersionNull">
@@ -44,7 +44,7 @@
       </trans-unit>
       <trans-unit id="CommandNotSupportedWithSingleFileAppHost">
         <source>This command is not yet supported with single file AppHosts.</source>
-        <target state="translated">To polecenie nie jest jeszcze obsługiwane w przypadku hostów AppHost z jednym plikiem.</target>
+        <target state="needs-review-translation">To polecenie nie jest jeszcze obsługiwane w przypadku hostów AppHost z jednym plikiem.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigurationKeyNotFound">
@@ -107,6 +107,11 @@
         <target state="translated">Nie można wyszukać pakietów. Kod zakończenia: {0}.</target>
         <note>{0} is a number</note>
       </trans-unit>
+      <trans-unit id="InvalidJsonInConfigFile">
+        <source>The configuration file '{0}' contains invalid JSON: {1}</source>
+        <target state="new">The configuration file '{0}' contains invalid JSON: {1}</target>
+        <note>{0} is the file path, {1} is the exception message</note>
+      </trans-unit>
       <trans-unit id="InvalidLocaleProvided">
         <source>Invalid locale {0} provided will not be used.</source>
         <target state="translated">Podane nieprawidłowe ustawienia regionalne {0} nie będą używane.</target>
@@ -118,8 +123,8 @@
         <note />
       </trans-unit>
       <trans-unit id="MinimumSdkVersionNotMet">
-        <source>The Aspire CLI requires .NET SDK version {0} or later. Detected: {1}.</source>
-        <target state="translated">Interfejs wiersza polecenia platformy Aspire wymaga zestawu .NET SDK w wersji {0} lub nowszej. Wykryto {1}.</target>
+        <source>C# AppHost requires .NET SDK version {0} or later. Detected: {1}.</source>
+        <target state="needs-review-translation">Interfejs wiersza polecenia platformy Aspire wymaga zestawu .NET SDK w wersji {0} lub nowszej. Wykryto {1}.</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleProjectFilesFound">
@@ -138,8 +143,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeAnalyzed">
-        <source>The project could not be analyzed due to a build error. For more information run with --debug switch.</source>
-        <target state="translated">Nie można przeanalizować projektu z powodu błędu kompilacji. Aby uzyskać więcej informacji, uruchom polecenie przełącznika --debug.</target>
+        <source>The project could not be analyzed due to a build error. See logs at {0}</source>
+        <target state="translated">Nie można przeanalizować projektu z powodu błędu kompilacji. Zobacz dzienniki pod adresem {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectFileDoesntExist">
@@ -154,17 +159,27 @@
       </trans-unit>
       <trans-unit id="ProjectFileNotAppHostProject">
         <source>Project file is not an Aspire AppHost project.</source>
-        <target state="translated">Plik projektu nie jest projektem hosta AppHost platformy Aspire.</target>
+        <target state="needs-review-translation">Plik projektu nie jest projektem hosta AppHost platformy Aspire.</target>
         <note />
       </trans-unit>
+      <trans-unit id="ProjectFileUnsupportedInCurrentEnvironment">
+        <source>Project is not supported in the current environment: {0}</source>
+        <target state="new">Project is not supported in the current environment: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ProjectFilesCreatedButNodeToolsNotFound">
+        <source>Project files were created, but Aspire could not run 'npm install' automatically because the required Node.js tools were not found on PATH. You may see missing package errors or red squiggles in your IDE until you install Node.js and run 'npm install' in the project directory.</source>
+        <target state="new">Project files were created, but Aspire could not run 'npm install' automatically because the required Node.js tools were not found on PATH. You may see missing package errors or red squiggles in your IDE until you install Node.js and run 'npm install' in the project directory.</target>
+        <note>Do not translate 'npm install', 'Node.js', or 'PATH'.</note>
+      </trans-unit>
       <trans-unit id="ProjectIsNotAppHost">
-        <source>The project does not contain an Aspire apphost.</source>
-        <target state="translated">Projekt nie zawiera hosta AppHost platformy Aspire.</target>
+        <source>The project does not contain an Aspire AppHost.</source>
+        <target state="needs-review-translation">Projekt nie zawiera hosta AppHost platformy Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="SingleFileAppHostFeatureNotEnabled">
         <source>Single file AppHost feature is not enabled. To use .cs AppHost files, enable the feature using configuration.</source>
-        <target state="translated">Funkcja hosta AppHost z jednym plikiem nie jest włączona. Aby użyć plików .cs hosta AppHost, włącz tę funkcję przy użyciu konfiguracji.</target>
+        <target state="needs-review-translation">Funkcja hosta AppHost z jednym plikiem nie jest włączona. Aby użyć plików .cs hosta AppHost, włącz tę funkcję przy użyciu konfiguracji.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnableToRetrieveAssemblyVersion">

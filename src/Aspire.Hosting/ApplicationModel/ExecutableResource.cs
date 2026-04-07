@@ -25,7 +25,15 @@ public class ExecutableResource : Resource, IResourceWithEnvironment, IResourceW
     /// <param name="name">The name of the resource.</param>
     /// <param name="command">The command to execute.</param>
     /// <param name="workingDirectory">The working directory of the executable. Can be empty.</param>
-    public ExecutableResource(string name, string command, string workingDirectory) : base(name)
+    public ExecutableResource(string name, string command, string workingDirectory) : this(name, command, workingDirectory, skipValidation: false)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ExecutableResource"/> class without name validation.
+    /// Used for internal resources that are never deployed and don't need to follow naming rules.
+    /// </summary>
+    internal ExecutableResource(string name, string command, string workingDirectory, bool skipValidation) : base(name, skipValidation)
     {
         Annotations.Add(new ExecutableAnnotation
         {

@@ -3,7 +3,6 @@
 
 using Aspire.Cli.Tests.Utils;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
-using Hex1b;
 using Hex1b.Automation;
 using Xunit;
 
@@ -51,7 +50,6 @@ public sealed class PythonFastApiDeploymentTests(ITestOutputHelper output)
         }
 
         var workspace = TemporaryWorkspace.Create(output);
-        var recordingPath = DeploymentE2ETestHelpers.GetTestResultsRecordingPath(nameof(DeployPythonFastApiTemplateToAzureContainerApps));
         var startTime = DateTime.UtcNow;
         var deploymentUrls = new Dictionary<string, string>();
         // Generate a unique resource group name with pattern: e2e-[testcasename]-[runid]-[attempt]
@@ -67,107 +65,49 @@ public sealed class PythonFastApiDeploymentTests(ITestOutputHelper output)
 
         try
         {
-            var builder = Hex1bTerminal.CreateBuilder()
-                .WithHeadless()
-                .WithDimensions(160, 48)
-                .WithAsciinemaRecording(recordingPath)
-                .WithPtyProcess("/bin/bash", ["--norc"]);
-
-            using var terminal = builder.Build();
+            using var terminal = DeploymentE2ETestHelpers.CreateTestTerminal();
             var pendingRun = terminal.RunAsync(cancellationToken);
 
-            // Pattern searchers for aspire new interactive prompts
-            var waitingForTemplateSelectionPrompt = new CellPatternSearcher()
-                .FindPattern("> Starter App");
-
-            // Wait for the FastAPI/React template to be highlighted (after pressing Down twice)
-            // Use Find() instead of FindPattern() because parentheses and slashes are regex special characters
-            var waitingForPythonReactTemplateSelected = new CellPatternSearcher()
-                .Find("> Starter App (FastAPI/React)");
-
-            var waitingForProjectNamePrompt = new CellPatternSearcher()
-                .Find($"Enter the project name ({workspace.WorkspaceRoot.Name}): ");
-
-            var waitingForOutputPathPrompt = new CellPatternSearcher()
-                .Find("Enter the output path:");
-
-            var waitingForUrlsPrompt = new CellPatternSearcher()
-                .Find("Use *.dev.localhost URLs");
-
-            var waitingForRedisPrompt = new CellPatternSearcher()
-                .Find("Use Redis Cache");
-
-            // Pattern searchers for aspire add prompts
-            var waitingForAddVersionSelectionPrompt = new CellPatternSearcher()
-                .Find("(based on NuGet.config)");
-
-            // Pattern searcher for deployment success
-            var waitingForPipelineSucceeded = new CellPatternSearcher()
-                .Find("PIPELINE SUCCEEDED");
-
             var counter = new SequenceCounter();
-            var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+            var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
             // Step 1: Prepare environment
             output.WriteLine("Step 1: Preparing environment...");
-            sequenceBuilder.PrepareEnvironment(workspace, counter);
+            await auto.PrepareEnvironmentAsync(workspace, counter);
 
             // Step 2: Set up CLI environment (in CI)
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
                 output.WriteLine("Step 2: Using pre-installed Aspire CLI from local build...");
-                sequenceBuilder.SourceAspireCliEnvironment(counter);
+                await auto.SourceAspireCliEnvironmentAsync(counter);
             }
 
             // Step 3: Create Python FastAPI project using aspire new with interactive prompts
-            // Navigate down to select Starter App (FastAPI/React) which is the 3rd option
             output.WriteLine("Step 3: Creating Python FastAPI project...");
-            sequenceBuilder.Type("aspire new")
-                .Enter()
-                .WaitUntil(s => waitingForTemplateSelectionPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(60))
-                // Navigate to Starter App (FastAPI/React) - it's the 3rd option (after ASP.NET and JS)
-                .Key(Hex1b.Input.Hex1bKey.DownArrow)
-                .Key(Hex1b.Input.Hex1bKey.DownArrow)
-                .WaitUntil(s => waitingForPythonReactTemplateSelected.Search(s).Count > 0, TimeSpan.FromSeconds(5))
-                .Enter() // Select Starter App (FastAPI/React)
-                .WaitUntil(s => waitingForProjectNamePrompt.Search(s).Count > 0, TimeSpan.FromSeconds(30))
-                .Type(projectName)
-                .Enter()
-                .WaitUntil(s => waitingForOutputPathPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-                .Enter() // Accept default output path
-                .WaitUntil(s => waitingForUrlsPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-                .Enter() // Select "No" for localhost URLs (default)
-                .WaitUntil(s => waitingForRedisPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-                // For Redis prompt, default is "Yes" so we need to select "No" by pressing Down
-                .Key(Hex1b.Input.Hex1bKey.DownArrow)
-                .Enter() // Select "No" for Redis Cache
-                .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(5));
+            await auto.AspireNewAsync(projectName, counter, template: AspireTemplate.PythonReact, useRedisCache: false);
 
             // Step 4: Navigate to project directory
             output.WriteLine("Step 4: Navigating to project directory...");
-            sequenceBuilder
-                .Type($"cd {projectName}")
-                .Enter()
-                .WaitForSuccessPrompt(counter);
+            await auto.TypeAsync($"cd {projectName}");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
 
             // Step 5: Add Aspire.Hosting.Azure.AppContainers package
             output.WriteLine("Step 5: Adding Azure Container Apps hosting package...");
-            sequenceBuilder.Type("aspire add Aspire.Hosting.Azure.AppContainers")
-                .Enter();
+            await auto.TypeAsync("aspire add Aspire.Hosting.Azure.AppContainers");
+            await auto.EnterAsync();
 
             // In CI, aspire add shows a version selection prompt
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
-                sequenceBuilder
-                    .WaitUntil(s => waitingForAddVersionSelectionPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(60))
-                    .Enter(); // select first version (PR build)
+                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
+                await auto.EnterAsync(); // select first version (PR build)
             }
 
-            sequenceBuilder.WaitForSuccessPrompt(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
 
             // Step 6: Modify apphost.cs to add Azure Container App Environment
             // Note: Python template uses single-file AppHost (apphost.cs in project root)
-            sequenceBuilder.ExecuteCallback(() =>
             {
                 var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
                 // Single-file AppHost is in the project root, not a subdirectory
@@ -190,30 +130,28 @@ builder.Build().Run();
                 File.WriteAllText(appHostFilePath, content);
 
                 output.WriteLine($"Modified apphost.cs at: {appHostFilePath}");
-            });
+            }
 
             // Step 7: Set environment for deployment
             // - Unset ASPIRE_PLAYGROUND to avoid conflicts
             // - Set Azure location to westus3 (same as other tests to use region with capacity)
             // - Set AZURE__RESOURCEGROUP to use our unique resource group name
-            sequenceBuilder.Type($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}")
-                .Enter()
-                .WaitForSuccessPrompt(counter);
+            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
 
             // Step 9: Deploy to Azure Container Apps using aspire deploy
             output.WriteLine("Step 7: Starting Azure Container Apps deployment...");
-            sequenceBuilder
-                .Type("aspire deploy --clear-cache")
-                .Enter()
-                // Wait for pipeline to complete successfully
-                .WaitUntil(s => waitingForPipelineSucceeded.Search(s).Count > 0, TimeSpan.FromMinutes(30))
-                .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(2));
+            await auto.TypeAsync("aspire deploy --clear-cache");
+            await auto.EnterAsync();
+            // Wait for pipeline to complete successfully
+            await auto.WaitUntilTextAsync("PIPELINE SUCCEEDED", timeout: TimeSpan.FromMinutes(30));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
             // Step 10: Extract deployment URLs and verify endpoints with retry
             // Retry each endpoint for up to 3 minutes (18 attempts * 10 seconds)
             output.WriteLine("Step 8: Verifying deployed endpoints...");
-            sequenceBuilder
-                .Type($"RG_NAME=\"{resourceGroupName}\" && " +
+            await auto.TypeAsync($"RG_NAME=\"{resourceGroupName}\" && " +
                       "echo \"Resource group: $RG_NAME\" && " +
                       "if ! az group show -n \"$RG_NAME\" &>/dev/null; then echo \"❌ Resource group not found\"; exit 1; fi && " +
                       // Get external endpoints only (exclude .internal. which are not publicly accessible)
@@ -230,17 +168,14 @@ builder.Build().Run();
                       "done; " +
                       "if [ \"$success\" -eq 0 ]; then echo \"  ❌ Failed after 18 attempts\"; failed=1; fi; " +
                       "done && " +
-                      "if [ \"$failed\" -ne 0 ]; then echo \"❌ One or more endpoint checks failed\"; exit 1; fi")
-                .Enter()
-                .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(5));
+                      "if [ \"$failed\" -ne 0 ]; then echo \"❌ One or more endpoint checks failed\"; exit 1; fi");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
 
             // Step 11: Exit terminal
-            sequenceBuilder
-                .Type("exit")
-                .Enter();
+            await auto.TypeAsync("exit");
+            await auto.EnterAsync();
 
-            var sequence = sequenceBuilder.Build();
-            await sequence.ApplyAsync(terminal, cancellationToken);
             await pendingRun;
 
             var duration = DateTime.UtcNow - startTime;

@@ -3,78 +3,103 @@
   <file datatype="xml" source-language="en" target-language="es" original="../DocsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Browse and search Aspire documentation from aspire.dev.</source>
-        <target state="new">Browse and search Aspire documentation from aspire.dev.</target>
+        <source>Browse and search Aspire documentation from aspire.dev</source>
+        <target state="needs-review-translation">Examine y busque la documentación de Aspire en aspire.dev.</target>
         <note />
       </trans-unit>
       <trans-unit id="DocumentNotFound">
         <source>Documentation page '{0}' not found. Use 'aspire docs list' to see available pages.</source>
-        <target state="new">Documentation page '{0}' not found. Use 'aspire docs list' to see available pages.</target>
+        <target state="translated">No se encontró la página de documentación '{0}'. Use 'aspire docs list' para ver las páginas disponibles.</target>
         <note />
       </trans-unit>
       <trans-unit id="FormatOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="new">Output format (Table or Json).</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">Formato de salida (tabla o JSON).</target>
         <note />
       </trans-unit>
       <trans-unit id="FoundDocumentationPages">
         <source>Found {0} documentation pages.</source>
-        <target state="new">Found {0} documentation pages.</target>
+        <target state="translated">Se encontraron {0} páginas de documentación.</target>
         <note />
       </trans-unit>
       <trans-unit id="FoundSearchResults">
         <source>Found {0} results for '{1}'.</source>
-        <target state="new">Found {0} results for '{1}'.</target>
+        <target state="translated">Se encontraron {0} resultados para '{1}'.</target>
         <note />
       </trans-unit>
       <trans-unit id="GetDescription">
-        <source>Get the full content of a documentation page by its slug.</source>
-        <target state="new">Get the full content of a documentation page by its slug.</target>
+        <source>Get the full content of a documentation page by its slug</source>
+        <target state="needs-review-translation">Obtenga el contenido completo de una página de documentación por su identificador.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderScore">
+        <source>Score</source>
+        <target state="translated">Puntuación</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderSection">
+        <source>Section</source>
+        <target state="translated">Sección</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderSlug">
+        <source>Slug</source>
+        <target state="translated">Espacio</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderSummary">
+        <source>Summary</source>
+        <target state="translated">Resumen</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderTitle">
+        <source>Title</source>
+        <target state="translated">Título</target>
         <note />
       </trans-unit>
       <trans-unit id="LimitOptionDescription">
-        <source>Maximum number of search results to return (default: 5, max: 10).</source>
-        <target state="new">Maximum number of search results to return (default: 5, max: 10).</target>
+        <source>Maximum number of search results to return (default: 5, max: 10)</source>
+        <target state="needs-review-translation">Número máximo de resultados de búsqueda que se devolverán (predeterminado: 5, máximo: 10).</target>
         <note />
       </trans-unit>
       <trans-unit id="ListDescription">
-        <source>List all available Aspire documentation pages.</source>
-        <target state="new">List all available Aspire documentation pages.</target>
+        <source>List all available Aspire documentation pages</source>
+        <target state="needs-review-translation">Muestra todas las páginas de documentación disponibles de Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="LoadingDocumentation">
         <source>Loading documentation...</source>
-        <target state="new">Loading documentation...</target>
+        <target state="translated">Cargando documentación...</target>
         <note />
       </trans-unit>
       <trans-unit id="NoDocumentationAvailable">
         <source>No documentation available. The aspire.dev docs may not have loaded correctly.</source>
-        <target state="new">No documentation available. The aspire.dev docs may not have loaded correctly.</target>
+        <target state="translated">No hay documentación disponible. Es posible que los documentos de aspire.dev no se hayan cargado correctamente.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoResultsFound">
         <source>No results found for '{0}'. Try different search terms.</source>
-        <target state="new">No results found for '{0}'. Try different search terms.</target>
+        <target state="translated">No se encontraron resultados para "{0}". Intente términos de búsqueda diferentes.</target>
         <note />
       </trans-unit>
       <trans-unit id="QueryArgumentDescription">
-        <source>The search query.</source>
-        <target state="new">The search query.</target>
+        <source>The search query</source>
+        <target state="needs-review-translation">Consulta de búsqueda.</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchDescription">
-        <source>Search Aspire documentation by keywords.</source>
-        <target state="new">Search Aspire documentation by keywords.</target>
+        <source>Search Aspire documentation by keywords</source>
+        <target state="needs-review-translation">Busque en la documentación de Aspire por palabras clave.</target>
         <note />
       </trans-unit>
       <trans-unit id="SectionOptionDescription">
-        <source>Return only the specified section of the page.</source>
-        <target state="new">Return only the specified section of the page.</target>
+        <source>Return only the specified section of the page</source>
+        <target state="needs-review-translation">Devuelve solo la sección especificada de la página.</target>
         <note />
       </trans-unit>
       <trans-unit id="SlugArgumentDescription">
-        <source>The slug of the documentation page (e.g., 'redis-integration').</source>
-        <target state="new">The slug of the documentation page (e.g., 'redis-integration').</target>
+        <source>The slug of the documentation page (e.g., 'redis-integration')</source>
+        <target state="needs-review-translation">El identificador de la página de documentación (por ejemplo, 'redis-integration').</target>
         <note />
       </trans-unit>
     </body>

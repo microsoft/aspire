@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Encodings.Web;
-using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Utils;
 using Markdig.Renderers;
 using Markdig.Renderers.Html;

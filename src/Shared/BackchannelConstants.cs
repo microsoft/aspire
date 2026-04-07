@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Globalization;
+using System.IO.Hashing;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -33,15 +34,19 @@ namespace Aspire.Hosting.Backchannel;
 /// <strong>Socket Naming Format</strong>
 /// </para>
 /// <para>
-/// New format: <c>auxi.sock.{hash}.{pid}</c>
+/// New format: <c>auxi.sock.{appHostHash}.{instanceHash}.{pid}</c>
 /// </para>
 /// <list type="bullet">
 /// <item><c>auxi.sock</c> - Prefix (not "aux" because that's reserved on Windows)</item>
-/// <item><c>{hash}</c> - SHA256(AppHost project path)[0:16] - identifies the AppHost project</item>
+/// <item><c>{appHostHash}</c> - xxHash(AppHost project path)[0:16] - identifies the AppHost project</item>
+/// <item><c>{instanceHash}</c> - random hex identifier[0:12] - makes each socket name non-deterministic</item>
 /// <item><c>{pid}</c> - Process ID of the AppHost - identifies the specific instance</item>
 /// </list>
 /// <para>
-/// Old format (for backward compatibility): <c>auxi.sock.{hash}</c>
+/// Previous format (for backward compatibility): <c>auxi.sock.{appHostHash}.{pid}</c>
+/// </para>
+/// <para>
+/// Old format (for backward compatibility): <c>auxi.sock.{appHostHash}</c>
 /// </para>
 /// <para>
 /// <strong>Why PID in the Filename?</strong>
@@ -72,15 +77,29 @@ internal static class BackchannelConstants
     public const string SocketPrefix = "auxi.sock";
 
     /// <summary>
-    /// Number of hex characters to use from the SHA256 hash.
+    /// Number of hex characters to use from the stable xxHash-based AppHost identifier.
     /// </summary>
     /// <remarks>
     /// Using 16 chars (64 bits) balances uniqueness against path length constraints.
     /// Unix socket paths are limited to ~104 characters on most systems.
-    /// Full path example: ~/.aspire/cli/backchannels/auxi.sock.bc43b855b6848166.46730
-    /// = ~65 characters, well under the limit.
+    /// Full path example: ~/.aspire/cli/backchannels/auxi.sock.bc43b855b6848166.a1b2c3d4e5f6.46730
+    /// = ~78 characters, well under the limit.
     /// </remarks>
     public const int HashLength = 16;
+
+    /// <summary>
+    /// Number of hex characters to use for compact local identifiers.
+    /// </summary>
+    /// <remarks>
+    /// Using 12 chars (48 bits) keeps socket and package cache paths short while still providing
+    /// enough variation for local file names that are not part of a security boundary.
+    /// </remarks>
+    public const int CompactIdentifierLength = 12;
+
+    /// <summary>
+    /// Number of hex characters to use from the randomized instance identifier.
+    /// </summary>
+    public const int InstanceHashLength = CompactIdentifierLength;
 
     /// <summary>
     /// Gets the backchannels directory path for the given home directory.
@@ -103,16 +122,15 @@ internal static class BackchannelConstants
     /// <returns>A 16-character lowercase hex string.</returns>
     public static string ComputeHash(string appHostPath)
     {
-        var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(appHostPath));
-        return Convert.ToHexString(hashBytes)[..HashLength].ToLowerInvariant();
+        return ComputeStableIdentifier(appHostPath, HashLength);
     }
 
     /// <summary>
     /// Computes the full socket path for an AppHost instance.
     /// </summary>
     /// <remarks>
-    /// Called by AppHost when creating the socket. Includes the PID to ensure
-    /// uniqueness across multiple instances of the same AppHost.
+    /// Called by AppHost when creating the socket. Includes a randomized instance hash and the PID
+    /// to ensure uniqueness across multiple instances of the same AppHost.
     /// </remarks>
     /// <param name="appHostPath">The full path to the AppHost project file.</param>
     /// <param name="homeDirectory">The user's home directory.</param>
@@ -122,7 +140,8 @@ internal static class BackchannelConstants
     {
         var dir = GetBackchannelsDirectory(homeDirectory);
         var hash = ComputeHash(appHostPath);
-        return Path.Combine(dir, $"{SocketPrefix}.{hash}.{processId}");
+        var instanceHash = CreateRandomIdentifier(InstanceHashLength);
+        return Path.Combine(dir, $"{SocketPrefix}.{hash}.{instanceHash}.{processId}");
     }
 
     /// <summary>
@@ -147,7 +166,8 @@ internal static class BackchannelConstants
     /// </summary>
     /// <remarks>
     /// Returns all socket files for an AppHost, regardless of PID. This includes
-    /// both old format (<c>auxi.sock.{hash}</c>) and new format (<c>auxi.sock.{hash}.{pid}</c>).
+    /// old format (<c>auxi.sock.{hash}</c>), previous format (<c>auxi.sock.{hash}.{pid}</c>),
+    /// and current format (<c>auxi.sock.{hash}.{instanceHash}.{pid}</c>).
     /// </remarks>
     /// <param name="appHostPath">The full path to the AppHost project file.</param>
     /// <param name="homeDirectory">The user's home directory.</param>
@@ -163,13 +183,15 @@ internal static class BackchannelConstants
             return [];
         }
 
-        // Match both old format (auxi.sock.{hash}) and new format (auxi.sock.{hash}.{pid})
+        // Match old format (auxi.sock.{hash}), previous format (auxi.sock.{hash}.{pid}),
+        // and current format (auxi.sock.{hash}.{instanceHash}.{pid})
         // Use pattern with "*" to match optional PID suffix
         var allMatches = Directory.GetFiles(dir, prefixFileName + "*");
         
-        // Filter to only include exact match (old format) or .{pid} suffix (new format)
-        // This avoids matching auxi.sock.{hash}abc (different hash that starts with same chars)
-        // and also avoids matching files like auxi.sock.{hash}.12345.bak
+        // Filter to only include exact match (old format), .{pid} suffix (previous format),
+        // or .{instanceHash}.{pid} suffix (current format). This avoids matching
+        // auxi.sock.{hash}abc (different hash that starts with same chars) and files
+        // like auxi.sock.{hash}.12345.bak.
         return allMatches.Where(f =>
         {
             var fileName = Path.GetFileName(f);
@@ -177,12 +199,24 @@ internal static class BackchannelConstants
             {
                 return true; // Old format: exact match
             }
-            if (fileName.StartsWith(prefixFileName + ".", StringComparison.Ordinal) &&
-                int.TryParse(fileName.AsSpan(prefixFileName.Length + 1), NumberStyles.None, CultureInfo.InvariantCulture, out _))
+
+            if (!fileName.StartsWith(prefixFileName + ".", StringComparison.Ordinal))
             {
-                return true; // New format: prefix followed by dot and integer PID
+                return false;
             }
-            return false;
+
+            var suffix = fileName[(prefixFileName.Length + 1)..];
+            var segments = suffix.Split('.');
+
+            if (segments.Length == 1 &&
+                int.TryParse(segments[0], NumberStyles.None, CultureInfo.InvariantCulture, out _))
+            {
+                return true; // Previous format: prefix followed by integer PID
+            }
+
+            return segments.Length == 2 &&
+                   IsHex(segments[0]) &&
+                   int.TryParse(segments[1], NumberStyles.None, CultureInfo.InvariantCulture, out _);
         }).ToArray();
     }
 
@@ -190,7 +224,8 @@ internal static class BackchannelConstants
     /// Extracts the hash from a socket filename.
     /// </summary>
     /// <remarks>
-    /// Works with both old format (<c>auxi.sock.{hash}</c>) and new format (<c>auxi.sock.{hash}.{pid}</c>).
+    /// Works with old format (<c>auxi.sock.{hash}</c>), previous format (<c>auxi.sock.{hash}.{pid}</c>),
+    /// and current format (<c>auxi.sock.{hash}.{instanceHash}.{pid}</c>).
     /// </remarks>
     /// <param name="socketPath">The full socket path or filename.</param>
     /// <returns>The hash portion, or <c>null</c> if the format is unrecognized.</returns>
@@ -198,12 +233,13 @@ internal static class BackchannelConstants
     {
         var fileName = Path.GetFileName(socketPath);
 
-        // Handle new format: auxi.sock.{hash}.{pid}
+        // Handle current format: auxi.sock.{hash}.{instanceHash}.{pid}
+        // Handle previous format: auxi.sock.{hash}.{pid}
         // Handle old format: auxi.sock.{hash}
         if (fileName.StartsWith($"{SocketPrefix}.", StringComparison.Ordinal))
         {
             var afterPrefix = fileName[($"{SocketPrefix}.".Length)..];
-            // If there's another dot, it's new format - return just the hash part
+            // If there's another dot, it's a multi-segment format - return just the AppHost hash part
             var dotIndex = afterPrefix.IndexOf('.');
             return dotIndex > 0 ? afterPrefix[..dotIndex] : afterPrefix;
         }
@@ -220,7 +256,7 @@ internal static class BackchannelConstants
     }
 
     /// <summary>
-    /// Extracts the PID from a socket filename (new format only).
+    /// Extracts the PID from a socket filename when one is present.
     /// </summary>
     /// <param name="socketPath">The full socket path or filename.</param>
     /// <returns>The PID if present and valid, or <c>null</c> for old format sockets.</returns>
@@ -273,7 +309,8 @@ internal static class BackchannelConstants
     /// support PID-based orphan detection.
     /// </para>
     /// <para>
-    /// <strong>Limitation:</strong> This method only cleans up new format sockets (<c>auxi.sock.{hash}.{pid}</c>)
+    /// <strong>Limitation:</strong> This method only cleans up sockets that include a PID
+    /// (<c>auxi.sock.{hash}.{pid}</c> or <c>auxi.sock.{hash}.{instanceHash}.{pid}</c>)
     /// because old format sockets (<c>auxi.sock.{hash}</c>) don't have a PID for orphan detection.
     /// Old format sockets are cleaned up via connection-based detection in the CLI.
     /// </para>
@@ -291,7 +328,7 @@ internal static class BackchannelConstants
             return deleted;
         }
 
-        // Find all sockets for this hash (both old and new format)
+        // Find all sockets for this hash across all supported formats.
         var pattern = $"{SocketPrefix}.{hash}*";
         foreach (var socketPath in Directory.GetFiles(backchannelsDirectory, pattern))
         {
@@ -316,5 +353,49 @@ internal static class BackchannelConstants
         }
 
         return deleted;
+    }
+
+    /// <summary>
+    /// Computes a compact stable identifier from a string value.
+    /// </summary>
+    /// <remarks>
+    /// Uses XxHash3 because these identifiers are only used for local naming and lookup. They do not
+    /// protect secrets or cross a trust boundary, so a fast non-cryptographic hash is preferable to SHA-2.
+    /// </remarks>
+    /// <param name="value">The string value to hash.</param>
+    /// <param name="length">The number of lowercase hex characters to return.</param>
+    /// <returns>A lowercase hex identifier truncated to <paramref name="length"/> characters.</returns>
+    public static string ComputeStableIdentifier(string value, int length = CompactIdentifierLength)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(value);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(length);
+        var xxHash = new XxHash3();
+        xxHash.Append(Encoding.UTF8.GetBytes(value));
+
+        return ToLowerHexIdentifier(xxHash.GetCurrentHash(), length);
+    }
+
+    /// <summary>
+    /// Creates a compact randomized identifier.
+    /// </summary>
+    /// <param name="length">The number of lowercase hex characters to return.</param>
+    /// <returns>A lowercase hex identifier truncated to <paramref name="length"/> characters.</returns>
+    public static string CreateRandomIdentifier(int length = CompactIdentifierLength)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(length);
+
+        Span<byte> randomBytes = stackalloc byte[(length + 1) / 2];
+        RandomNumberGenerator.Fill(randomBytes);
+
+        return ToLowerHexIdentifier(randomBytes, length);
+    }
+
+    private static bool IsHex(string value)
+        => !string.IsNullOrEmpty(value) && value.All(static c => char.IsAsciiHexDigit(c));
+
+    private static string ToLowerHexIdentifier(ReadOnlySpan<byte> bytes, int length)
+    {
+        var hex = Convert.ToHexString(bytes).ToLowerInvariant();
+        return hex[..Math.Min(length, hex.Length)];
     }
 }

@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "2")]
 public class FileSystemServiceTests
 {
     private static IConfiguration CreateConfiguration(bool preserveTempFiles = false)

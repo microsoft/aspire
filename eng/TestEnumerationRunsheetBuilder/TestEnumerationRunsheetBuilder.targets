@@ -1,0 +1,131 @@
+<Project>
+  <!--
+    TestEnumerationRunsheetBuilder - Test Project Metadata Generation
+
+    This runsheet builder runs during the build for each test project and generates
+    a .tests-metadata.json file containing project metadata for CI matrix generation.
+
+    For projects with SplitTestsOnCI=true, it also invokes GenerateTestPartitionsForCI
+    to create a .tests-partitions.json file with partition/class entries.
+
+    Output files (in artifacts/helix/):
+      - <ProjectName>.tests-metadata.json  (always)
+      - <ProjectName>.tests-partitions.json (if SplitTestsOnCI=true)
+
+    These files are consumed by build-test-matrix.ps1 to generate the canonical
+    test matrix, which is then expanded by platform-specific scripts.
+
+    See docs/ci/TestingOnCI.md for full documentation.
+  -->
+
+  <PropertyGroup>
+    <!-- Normalize project directory path to use forward slashes for cross-platform matching -->
+    <_NormalizedProjectDirectory>$([System.String]::Copy('$(MSBuildProjectDirectory)').Replace('\','/'))</_NormalizedProjectDirectory>
+    <!-- Skip projects that should be excluded -->
+    <_ShouldSkipProject Condition="'$(_ShouldSkipProject)' == '' and $(_NormalizedProjectDirectory.Contains('tests/Shared'))">true</_ShouldSkipProject>
+    <_ShouldSkipProject Condition="'$(_ShouldSkipProject)' == '' and $(_NormalizedProjectDirectory.Contains('tests/testproject'))">true</_ShouldSkipProject>
+    <_ShouldSkipProject Condition="'$(_ShouldSkipProject)' == '' and $(_NormalizedProjectDirectory.Contains('tests/TestingAppHost1'))">true</_ShouldSkipProject>
+
+    <_ShouldSkipProject Condition="'$(_ShouldSkipProject)' == '' and '$(IncludeTemplateTests)' != 'true' and '$(MSBuildProjectName)' == 'Aspire.Templates.Tests'">true</_ShouldSkipProject>
+    <_ShouldSkipProject Condition="'$(_ShouldSkipProject)' == '' and '$(IncludeCliE2ETests)' != 'true' and '$(MSBuildProjectName)' == 'Aspire.Cli.EndToEnd.Tests'">true</_ShouldSkipProject>
+
+    <!-- Deployment tests: skip by default, include only when OnlyDeploymentTests=true -->
+    <_ShouldSkipProject Condition="'$(_ShouldSkipProject)' == '' and '$(OnlyDeploymentTests)' != 'true' and '$(MSBuildProjectName)' == 'Aspire.Deployment.EndToEnd.Tests'">true</_ShouldSkipProject>
+    <!-- When OnlyDeploymentTests=true, skip everything EXCEPT the deployment test project -->
+    <_ShouldSkipProject Condition="'$(_ShouldSkipProject)' == '' and '$(OnlyDeploymentTests)' == 'true' and '$(MSBuildProjectName)' != 'Aspire.Deployment.EndToEnd.Tests'">true</_ShouldSkipProject>
+
+    <_ShouldSkipProject Condition="'$(_ShouldSkipProject)' == '' and '$(SkipTests)' == 'true'">true</_ShouldSkipProject>
+  </PropertyGroup>
+
+
+  <Target Name="RunTests"
+          Outputs="%(TestToRun.ResultsStdOutPath)"
+          Condition="'$(_ShouldSkipProject)' != 'true' and '$(IsGitHubActionsRunner)' == 'true' and '$(RunOnGithubActions)' == 'true'">
+    <!-- Build and generate test partitions for split test projects -->
+    <MSBuild Projects="$(MSBuildProjectFullPath)"
+             Properties="GenerateCIPartitions=true;BuildOs=$(BuildOs)"
+             Targets="Build;GenerateTestPartitionsForCI"
+             Condition="'$(SplitTestsOnCI)' == 'true'" />
+
+    <!-- Write .tests-metadata.json file -->
+    <PropertyGroup>
+      <!-- Calculate relative project path for metadata -->
+      <_RelativeProjectPath>$([System.String]::Copy('$(MSBuildProjectFullPath)').Replace('$(RepoRoot)', ''))</_RelativeProjectPath>
+      <!-- Remove leading slash/backslash if present -->
+      <_RelativeProjectPath Condition="$(_RelativeProjectPath.StartsWith('/')) or $(_RelativeProjectPath.StartsWith('\\'))">$(_RelativeProjectPath.Substring(1))</_RelativeProjectPath>
+
+      <!-- Determine requiresNugets based on project properties -->
+      <_RequiresNugets>false</_RequiresNugets>
+      <_RequiresNugets Condition="'$(RequiresNugets)' == 'true'">true</_RequiresNugets>
+
+      <!-- Determine requiresTestSdk based on project properties -->
+      <_RequiresTestSdk>false</_RequiresTestSdk>
+      <_RequiresTestSdk Condition="'$(RequiresTestSdk)' == 'true'">true</_RequiresTestSdk>
+
+      <!-- Determine requiresCliArchive based on project properties -->
+      <_RequiresCliArchive>false</_RequiresCliArchive>
+      <_RequiresCliArchive Condition="'$(RequiresCliArchive)' == 'true'">true</_RequiresCliArchive>
+
+      <!-- Determine enablePlaywrightInstall based on project properties -->
+      <_EnablePlaywrightInstall>false</_EnablePlaywrightInstall>
+      <_EnablePlaywrightInstall Condition="'$(EnablePlaywrightInstall)' == 'true'">true</_EnablePlaywrightInstall>
+
+      <!-- Build JSON array of supported OSes -->
+      <_SupportedOSesJson />
+      <_SupportedOSesJson Condition="'$(RunOnGithubActionsWindows)' == 'true'">$(_SupportedOSesJson)"windows",</_SupportedOSesJson>
+      <_SupportedOSesJson Condition="'$(RunOnGithubActionsLinux)' == 'true'">$(_SupportedOSesJson)"linux",</_SupportedOSesJson>
+      <_SupportedOSesJson Condition="'$(RunOnGithubActionsMacOS)' == 'true'">$(_SupportedOSesJson)"macos",</_SupportedOSesJson>
+      <!-- Remove trailing comma -->
+      <_SupportedOSesJson Condition="'$(_SupportedOSesJson)' != ''">$(_SupportedOSesJson.TrimEnd(','))</_SupportedOSesJson>
+
+      <!-- Use custom timeout values if provided, otherwise use defaults -->
+      <_TestSessionTimeout Condition="'$(TestSessionTimeout)' != ''">$(TestSessionTimeout)</_TestSessionTimeout>
+      <_TestSessionTimeout Condition="'$(TestSessionTimeout)' == ''">20m</_TestSessionTimeout>
+      <_TestHangTimeout Condition="'$(TestHangTimeout)' != ''">$(TestHangTimeout)</_TestHangTimeout>
+      <_TestHangTimeout Condition="'$(TestHangTimeout)' == ''">10m</_TestHangTimeout>
+      <_UncollectedTestsSessionTimeout Condition="'$(UncollectedTestsSessionTimeout)' != ''">$(UncollectedTestsSessionTimeout)</_UncollectedTestsSessionTimeout>
+      <_UncollectedTestsSessionTimeout Condition="'$(UncollectedTestsSessionTimeout)' == ''">15m</_UncollectedTestsSessionTimeout>
+      <_UncollectedTestsHangTimeout Condition="'$(UncollectedTestsHangTimeout)' != ''">$(UncollectedTestsHangTimeout)</_UncollectedTestsHangTimeout>
+      <_UncollectedTestsHangTimeout Condition="'$(UncollectedTestsHangTimeout)' == ''">10m</_UncollectedTestsHangTimeout>
+
+      <!-- Build custom runners JSON (only include keys that are explicitly set) -->
+      <_RunnersJsonParts />
+      <_RunnersJsonParts Condition="'$(GithubActionsRunnerWindows)' != ''">$(_RunnersJsonParts)"windows": "$(GithubActionsRunnerWindows)",</_RunnersJsonParts>
+      <_RunnersJsonParts Condition="'$(GithubActionsRunnerLinux)' != ''">$(_RunnersJsonParts)"linux": "$(GithubActionsRunnerLinux)",</_RunnersJsonParts>
+      <_RunnersJsonParts Condition="'$(GithubActionsRunnerMacOS)' != ''">$(_RunnersJsonParts)"macos": "$(GithubActionsRunnerMacOS)",</_RunnersJsonParts>
+      <_RunnersJsonParts Condition="'$(_RunnersJsonParts)' != ''">$(_RunnersJsonParts.TrimEnd(','))</_RunnersJsonParts>
+      <_RunnersJsonLine Condition="'$(_RunnersJsonParts)' != ''">,
+  "runners": {$(_RunnersJsonParts)}</_RunnersJsonLine>
+
+      <!-- Build metadata JSON -->
+      <_MetadataJson>{
+  "projectName": "$(MSBuildProjectName)",
+  "shortName": "$(_ShortName)",
+  "testClassNamesPrefix": "$(MSBuildProjectName)",
+  "testProjectPath": "$(_RelativeProjectPath)",
+  "requiresNugets": "$(_RequiresNugets.ToLowerInvariant())",
+  "requiresTestSdk": "$(_RequiresTestSdk.ToLowerInvariant())",
+  "requiresCliArchive": "$(_RequiresCliArchive.ToLowerInvariant())",
+  "enablePlaywrightInstall": "$(_EnablePlaywrightInstall.ToLowerInvariant())",
+  "splitTests": "$(SplitTestsOnCI)",
+  "supportedOSes": [$(_SupportedOSesJson)],
+  "testSessionTimeout": "$(_TestSessionTimeout)",
+  "testHangTimeout": "$(_TestHangTimeout)",
+  "uncollectedTestsSessionTimeout": "$(_UncollectedTestsSessionTimeout)",
+  "uncollectedTestsHangTimeout": "$(_UncollectedTestsHangTimeout)"$(_RunnersJsonLine)
+}</_MetadataJson>
+
+      <!-- Use TestArchiveTestsDir if set (for Templates/EndToEnd tests), otherwise use default helix dir -->
+      <_MetadataOutputDir Condition="'$(TestArchiveTestsDir)' != ''">$(TestArchiveTestsDir)</_MetadataOutputDir>
+      <_MetadataOutputDir Condition="'$(TestArchiveTestsDir)' == ''">$([MSBuild]::NormalizeDirectory($(ArtifactsDir), 'helix'))</_MetadataOutputDir>
+      <_MetadataFile>$(_MetadataOutputDir)$(MSBuildProjectName).tests-metadata.json</_MetadataFile>
+    </PropertyGroup>
+
+    <!-- Create helix directory and write metadata file -->
+    <MakeDir Directories="$(_MetadataOutputDir)" />
+    <WriteLinesToFile File="$(_MetadataFile)" Overwrite="true" Lines="$(_MetadataJson)" />
+
+    <Message Text="Wrote test metadata: $(_MetadataFile) (requiresNugets=$(_RequiresNugets), requiresTestSdk=$(_RequiresTestSdk), requiresCliArchive=$(_RequiresCliArchive), enablePlaywright=$(_EnablePlaywrightInstall), supportedOSes=$(_SupportedOSesJson), path=$(_RelativeProjectPath))" Importance="Low" />
+  </Target>
+
+</Project>

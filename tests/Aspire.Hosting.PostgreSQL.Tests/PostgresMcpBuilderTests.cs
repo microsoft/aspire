@@ -78,9 +78,7 @@ public class PostgresMcpBuilderTests
             .WithEndpoint("tcp", e =>
             {
                 e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 5432);
-                var snapshot = new ValueSnapshot<AllocatedEndpoint>();
-                snapshot.SetValue(new AllocatedEndpoint(e, "postgres.dev.internal", 5432, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
-                e.AllAllocatedEndpoints.TryAdd(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, snapshot);
+                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "postgres.dev.internal", 5432, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
             })
             .AddDatabase("db")
             .WithPostgresMcp();

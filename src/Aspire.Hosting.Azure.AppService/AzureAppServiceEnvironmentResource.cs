@@ -145,8 +145,13 @@ public class AzureAppServiceEnvironmentResource :
     {
         var dashboardUri = await DashboardUriReference.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
 
+        if (!string.IsNullOrEmpty(dashboardUri))
+        {
+            context.Summary.Add("📊 Dashboard", new MarkdownString($"[{dashboardUri}]({dashboardUri})"));
+        }
+
         await context.ReportingStep.CompleteAsync(
-            $"Dashboard available at [{dashboardUri}]({dashboardUri})",
+            new MarkdownString($"Dashboard available at [{dashboardUri}]({dashboardUri})"),
             CompletionState.Completed,
             context.CancellationToken).ConfigureAwait(false);
     }
@@ -194,7 +199,7 @@ public class AzureAppServiceEnvironmentResource :
             // Report each error through the activity reporter for user-friendly display
             foreach (var error in errors)
             {
-                context.ReportingStep.Log(LogLevel.Error, error, enableMarkdown: false);
+                context.ReportingStep.Log(LogLevel.Error, error);
             }
 
             await context.ReportingStep.CompleteAsync(

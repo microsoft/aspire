@@ -10,6 +10,7 @@ using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Model.Assistant.Prompts;
+using Aspire.Dashboard.Model.GenAI;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
@@ -96,6 +97,9 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
 
     [Inject]
     public required ComponentTelemetryContextProvider TelemetryContextProvider { get; init; }
+
+    [Inject]
+    public required ITelemetryErrorRecorder ErrorRecorder { get; init; }
 
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
@@ -427,6 +431,45 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
             filterLoc: FilterLoc,
             dialogsLoc: DialogsLoc,
             contentLayout: _contentLayout);
+    }
+
+    private static bool HasGenAISpans(OtlpTrace trace)
+    {
+        foreach (var span in trace.Spans)
+        {
+            if (GenAIHelpers.HasGenAIAttribute(span.Attributes))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private async Task OnGenAIClickedAsync(OtlpTrace trace)
+    {
+        var firstSpan = trace.Spans.FirstOrDefault(s => GenAIHelpers.HasGenAIAttribute(s.Attributes));
+        if (firstSpan == null)
+        {
+            return;
+        }
+
+        await GenAIVisualizerDialog.OpenDialogAsync(
+            DialogService,
+            firstSpan,
+            selectedLogEntryId: null,
+            TelemetryRepository,
+            ErrorRecorder,
+            _resources,
+            () =>
+            {
+                var latestTrace = TelemetryRepository.GetTrace(trace.TraceId);
+                if (latestTrace is null)
+                {
+                    return [];
+                }
+                return latestTrace.Spans.Where(span => GenAIHelpers.HasGenAIAttribute(span.Attributes)).ToList();
+            });
     }
 
     private AIContext CreateAIContext()

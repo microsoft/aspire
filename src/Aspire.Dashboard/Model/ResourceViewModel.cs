@@ -209,14 +209,14 @@ public sealed class ResourceViewModelNameComparer : IComparer<ResourceViewModel>
         // Use display name by itself first.
         // This is to avoid the problem of using the full name where one resource is called "database" and another is called "database-admin".
         // The full names could end up "database-xyz" and "database-admin-xyz", which would put resources out of order.
-        var displayNameResult = StringComparers.ResourceName.Compare(x.DisplayName, y.DisplayName);
+        var displayNameResult = string.Compare(x.DisplayName, y.DisplayName, StringComparisons.ResourceName);
         if (displayNameResult != 0)
         {
             return displayNameResult;
         }
 
         // Display names are the same so compare with full names.
-        return StringComparers.ResourceName.Compare(x.Name, y.Name);
+        return string.Compare(x.Name, y.Name, StringComparisons.ResourceName);
     }
 }
 
@@ -225,9 +225,9 @@ public sealed class CommandViewModel
 {
     // Known resource command constants.
     // Keep in sync with KnownResourceCommands in Aspire.Hosting.
-    public const string StartCommand = "resource-start";
-    public const string StopCommand = "resource-stop";
-    public const string RestartCommand = "resource-restart";
+    public const string StartCommand = "start";
+    public const string StopCommand = "stop";
+    public const string RestartCommand = "restart";
     private static readonly string[] s_knownResourceCommands = [StartCommand, StopCommand, RestartCommand];
 
     public string Name { get; }
@@ -295,7 +295,7 @@ public sealed class EnvironmentVariableViewModel : IPropertyGridItem
     {
         // Name should always have a value, but somehow an empty/whitespace name can reach this point.
         // Better to allow the dashboard to run with an env var with no name than break when loading resources.
-        // https://github.com/dotnet/aspire/issues/5309
+        // https://github.com/microsoft/aspire/issues/5309
         Name = name;
         Value = value;
         FromSpec = fromSpec;

@@ -84,3 +84,5 @@ resource hub2 'Microsoft.SignalRService/webPubSub/hubs@2024-03-01' = {
 output endpoint string = 'https://${wps1.properties.hostName}'
 
 output name string = wps1.name
+
+output id string = wps1.id

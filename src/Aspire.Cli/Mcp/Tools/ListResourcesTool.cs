@@ -15,11 +15,10 @@ namespace Aspire.Cli.Mcp.Tools;
 [JsonSerializable(typeof(ResourceJson[]))]
 [JsonSerializable(typeof(ResourceUrlJson))]
 [JsonSerializable(typeof(ResourceVolumeJson))]
-[JsonSerializable(typeof(ResourceEnvironmentVariableJson))]
-[JsonSerializable(typeof(ResourceHealthReportJson))]
-[JsonSerializable(typeof(ResourcePropertyJson))]
+[JsonSerializable(typeof(Dictionary<string, string?>))]
+[JsonSerializable(typeof(Dictionary<string, ResourceHealthReportJson>))]
 [JsonSerializable(typeof(ResourceRelationshipJson))]
-[JsonSerializable(typeof(ResourceCommandJson))]
+[JsonSerializable(typeof(Dictionary<string, ResourceCommandJson>))]
 [JsonSourceGenerationOptions(
     WriteIndented = true,
     PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower,

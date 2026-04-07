@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Configuration;
-using Aspire.Cli.DotNet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Hosting;
@@ -11,22 +10,12 @@ using SystemCommand = System.CommandLine.Command;
 
 namespace Aspire.Cli.NuGet;
 
-internal sealed class NuGetPackagePrefetcher(ILogger<NuGetPackagePrefetcher> logger, CliExecutionContext executionContext, IFeatures features, IPackagingService packagingService, ICliUpdateNotifier cliUpdateNotifier, IDotNetSdkInstaller sdkInstaller) : BackgroundService
+internal sealed class NuGetPackagePrefetcher(ILogger<NuGetPackagePrefetcher> logger, CliExecutionContext executionContext, IFeatures features, IPackagingService packagingService, ICliUpdateNotifier cliUpdateNotifier) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         // Wait for command to be selected
         var command = await WaitForCommandSelectionAsync(stoppingToken);
-
-        // Check if SDK is installed before attempting to prefetch packages
-        // This prevents dirtying the cache when SDK is not available
-        var (sdkAvailable, _, _, _) = await sdkInstaller.CheckAsync(stoppingToken);
-
-        if (!sdkAvailable)
-        {
-            logger.LogDebug("SDK is not installed. Skipping package prefetching to avoid cache pollution.");
-            return;
-        }
 
         var shouldPrefetchTemplates = ShouldPrefetchTemplatePackages(command);
         var shouldPrefetchCli = ShouldPrefetchCliPackages(command);
@@ -107,7 +96,7 @@ internal sealed class NuGetPackagePrefetcher(ILogger<NuGetPackagePrefetcher> log
         }
 
         // Default behavior: prefetch templates for all commands except run, publish, deploy
-        // Because of this: https://github.com/dotnet/aspire/issues/6956
+        // Because of this: https://github.com/microsoft/aspire/issues/6956
         return command is null || !IsRuntimeOnlyCommand(command);
     }
 

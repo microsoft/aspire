@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "2")]
 public class OperationModesTests(ITestOutputHelper outputHelper)
 {
     [Fact]

@@ -17,6 +17,8 @@ public static class CertificateAuthorityCollectionResourceExtensions
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <param name="name">The name of the certificate authority collection resource.</param>
     /// <returns>An <see cref="IResourceBuilder{CertificateAuthorityCollectionResource}"/> instance.</returns>
+    /// <remarks>This method is not available in polyglot app hosts.</remarks>
+    [AspireExportIgnore(Reason = "All companion With* methods require X509Certificate2 — the resource would be unusable in polyglot hosts (zero configurable methods).")]
     public static IResourceBuilder<CertificateAuthorityCollection> AddCertificateAuthorityCollection(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -41,6 +43,8 @@ public static class CertificateAuthorityCollectionResourceExtensions
     /// <param name="builder">The <see cref="IResourceBuilder{CertificateAuthorityCollectionResource}"/>.</param>
     /// <param name="certificate">The certificate to add.</param>
     /// <returns>The updated <see cref="IResourceBuilder{CertificateAuthorityCollectionResource}"/>.</returns>
+    /// <remarks>This method is not available in polyglot app hosts.</remarks>
+    [AspireExportIgnore(Reason = "Uses X509Certificate2 which is not ATS-compatible.")]
     public static IResourceBuilder<CertificateAuthorityCollection> WithCertificate(this IResourceBuilder<CertificateAuthorityCollection> builder, X509Certificate2 certificate)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -56,6 +60,8 @@ public static class CertificateAuthorityCollectionResourceExtensions
     /// <param name="builder">The <see cref="IResourceBuilder{CertificateAuthorityCollectionResource}"/>.</param>
     /// <param name="certificates">The collection of certificates to add.</param>
     /// <returns>The updated <see cref="IResourceBuilder{CertificateAuthorityCollectionResource}"/>.</returns>
+    /// <remarks>This method is not available in polyglot app hosts.</remarks>
+    [AspireExportIgnore(Reason = "Uses X509Certificate2Collection which is not ATS-compatible.")]
     public static IResourceBuilder<CertificateAuthorityCollection> WithCertificates(this IResourceBuilder<CertificateAuthorityCollection> builder, X509Certificate2Collection certificates)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -71,6 +77,8 @@ public static class CertificateAuthorityCollectionResourceExtensions
     /// <param name="builder">The <see cref="IResourceBuilder{CertificateAuthorityCollectionResource}"/>.</param>
     /// <param name="certificates">The collection of certificates to add.</param>
     /// <returns>The updated <see cref="IResourceBuilder{CertificateAuthorityCollectionResource}"/>.</returns>
+    /// <remarks>This method is not available in polyglot app hosts.</remarks>
+    [AspireExportIgnore(Reason = "Uses X509Certificate2 which is not ATS-compatible.")]
     public static IResourceBuilder<CertificateAuthorityCollection> WithCertificates(this IResourceBuilder<CertificateAuthorityCollection> builder, IEnumerable<X509Certificate2> certificates)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -89,6 +97,7 @@ public static class CertificateAuthorityCollectionResourceExtensions
     /// <param name="filter">An optional filter to apply to the certificates.</param>
     /// <returns>The updated <see cref="IResourceBuilder{CertificateAuthorityCollectionResource}"/>.</returns>
     /// <remarks>
+    /// <para>This method is not available in polyglot app hosts.</para>
     /// <example>
     /// This example adds all certificates from the "Root" store in the "LocalMachine" location.
     /// <code language="csharp">
@@ -104,6 +113,7 @@ public static class CertificateAuthorityCollectionResourceExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExportIgnore(Reason = "Uses StoreName and StoreLocation which are not ATS-compatible.")]
     public static IResourceBuilder<CertificateAuthorityCollection> WithCertificatesFromStore(this IResourceBuilder<CertificateAuthorityCollection> builder, StoreName storeName, StoreLocation storeLocation, Func<X509Certificate2, bool>? filter = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -127,6 +137,7 @@ public static class CertificateAuthorityCollectionResourceExtensions
     /// <param name="filter">An optional filter to apply to the loaded certificates before they are added to the collection.</param>
     /// <returns>The updated <see cref="IResourceBuilder{CertificateAuthorityCollection}"/>.</returns>
     /// <remarks>
+    /// <para>This method is not available in polyglot app hosts.</para>
     /// <example>
     /// This example adds certificates from a PEM file located at "../path/to/certificates.pem".
     /// <code language="csharp">
@@ -142,6 +153,7 @@ public static class CertificateAuthorityCollectionResourceExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExportIgnore(Reason = "Uses Func<X509Certificate2, bool> which is not ATS-compatible.")]
     public static IResourceBuilder<CertificateAuthorityCollection> WithCertificatesFromFile(this IResourceBuilder<CertificateAuthorityCollection> builder, string pemFilePath, Func<X509Certificate2, bool>? filter = null)
     {
         ArgumentNullException.ThrowIfNull(builder);

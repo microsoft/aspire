@@ -1,0 +1,95 @@
+name: Generate ATS Diffs
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 16 * * *' # 8am PST (16:00 UTC)
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  generate-and-pr:
+    runs-on: ubuntu-latest
+    if: ${{ github.repository_owner == 'microsoft' }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Restore
+        run: ./restore.sh
+
+      - name: Build CLI
+        run: ./dotnet.sh build src/Aspire.Cli/Aspire.Cli.csproj --configuration Release
+
+      - name: Discover and dump ATS capabilities
+        env:
+          ASPIRE_REPO_ROOT: ${{ github.workspace }}
+        run: |
+          ASPIRE_CLI="./dotnet.sh run --no-build --project src/Aspire.Cli/Aspire.Cli.csproj --configuration Release -- --nologo"
+          FAILURES=0
+
+          # Dump core Aspire.Hosting capabilities (no integration argument)
+          echo "::group::Aspire.Hosting (core)"
+          if ! $ASPIRE_CLI sdk dump --format ci -o src/Aspire.Hosting/api/Aspire.Hosting.ats.txt; then
+            echo "::error::Failed to dump core Aspire.Hosting capabilities"
+            exit 1
+          fi
+          echo "::endgroup::"
+
+          # Discover Aspire.Hosting.* integration projects with [AspireExport] attributes
+          # Find project directories by resolving matched files to their nearest .csproj
+          # Exclude infrastructure projects that define/analyze the attribute rather than use it
+          PROJECTS=$(grep -rl '\[AspireExport(' src/Aspire.Hosting.*/ --include='*.cs' \
+                      | grep -v '/obj/' | grep -v '/bin/' \
+                      | grep -v 'Aspire.Hosting.Analyzers' \
+                      | grep -v 'Aspire.Hosting.CodeGeneration' \
+                      | grep -v 'Aspire.Hosting.RemoteHost' \
+                      | while read -r file; do
+                          # Walk up from the file to find the directory containing a .csproj
+                          dir=$(dirname "$file")
+                          while [ "$dir" != "." ] && [ "$dir" != "/" ]; do
+                            if ls "$dir"/*.csproj 1>/dev/null 2>&1; then
+                              echo "$dir"
+                              break
+                            fi
+                            dir=$(dirname "$dir")
+                          done
+                        done | sort -u)
+
+          for proj in $PROJECTS; do
+            proj_name=$(basename "$proj")
+            csproj="$proj/$proj_name.csproj"
+            if [ -f "$csproj" ]; then
+              echo "::group::$proj_name"
+              mkdir -p "$proj/api"
+              if ! $ASPIRE_CLI sdk dump --format ci "$csproj" -o "$proj/api/$proj_name.ats.txt"; then
+                echo "::error::Failed to dump ATS capabilities for $proj_name"
+                FAILURES=$((FAILURES + 1))
+              fi
+              echo "::endgroup::"
+            fi
+          done
+
+          if [ "$FAILURES" -gt 0 ]; then
+            echo "::error::$FAILURES project(s) failed ATS capability dump"
+            exit 1
+          fi
+
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
+        with:
+          app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+
+      - name: Create or update pull request
+        uses: dotnet/actions-create-pull-request@e8d799aa1f8b17f324f9513832811b0a62f1e0b1
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          branch: update-ats-diffs
+          base: main
+          labels: |
+            NO-MERGE
+          title: "[Automated] Update ATS API Surface Area"
+          body: "Auto-generated update to the ATS (Aspire Type System) capability surface to compare current surface vs latest release. This should only be merged once this surface area ships in a new release."

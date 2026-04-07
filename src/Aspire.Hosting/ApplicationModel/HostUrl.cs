@@ -11,7 +11,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// Represents a URL on the host machine. When referenced in a container resource, localhost will be
 /// replaced with the configured container host name.
 /// </summary>
-public record HostUrl(string Url) : IValueProvider, IManifestExpressionProvider
+public record HostUrl(string Url) : IExpressionValue, IValueProvider, IManifestExpressionProvider
 {
     // Goes into the manifest as a value, not an expression
     string IManifestExpressionProvider.ValueExpression => Url;
@@ -55,12 +55,13 @@ public record HostUrl(string Url) : IValueProvider, IManifestExpressionProvider
                     // Determine what hostname means that we want to contact the host machine from the container. If using the new tunnel feature, this needs to be the address of the tunnel instance.
                     // Otherwise we want to try and determine the container runtime appropriate hostname (host.docker.internal or host.containers.internal).
                     uri.Host = options.Value.EnableAspireContainerTunnel? KnownHostNames.DefaultContainerTunnelHostName : dcpInfo?.Containers?.ContainerHostName ?? KnownHostNames.DockerDesktopHostBridge;
+                    var model = context.ExecutionContext.ServiceProvider.GetService<DistributedApplicationModel>();
 
-                    if (options.Value.EnableAspireContainerTunnel)
+                    if (options.Value.EnableAspireContainerTunnel && model is { })
                     {
                         // If we're running with the container tunnel enabled, we need to lookup the port on the tunnel that corresponds to the
                         // target port on the host machine.
-                        var model = context.ExecutionContext.ServiceProvider.GetRequiredService<DistributedApplicationModel>();
+                        
                         var targetEndpoint = model.Resources.Where(r => !r.IsContainer())
                             .OfType<IResourceWithEndpoints>()
                             .Select(r =>

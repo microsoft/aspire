@@ -1,0 +1,12 @@
+<Project>
+
+  <PropertyGroup>
+    <EnableAspireIntegrationAnalyzers Condition="'$(EnableAspireIntegrationAnalyzers)' == ''">false</EnableAspireIntegrationAnalyzers>
+    <_AspireIntegrationAnalyzerAssembly Condition="'$(_AspireIntegrationAnalyzerAssembly)' == ''">$(MSBuildThisFileDirectory)Aspire.Hosting.Integration.Analyzers.dll</_AspireIntegrationAnalyzerAssembly>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(EnableAspireIntegrationAnalyzers)' == 'true'">
+    <Analyzer Include="$(_AspireIntegrationAnalyzerAssembly)" Condition="Exists('$(_AspireIntegrationAnalyzerAssembly)')" />
+  </ItemGroup>
+
+</Project>

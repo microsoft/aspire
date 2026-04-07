@@ -3,13 +3,13 @@
   <file datatype="xml" source-language="en" target-language="tr" original="../InteractionServiceStrings.resx">
     <body>
       <trans-unit id="AppHostConnectionLost">
-        <source>The connection to the app host was lost: {0}.</source>
-        <target state="translated">Uygulama ana işleminin bağlantısı kesildi: {0}.</target>
+        <source>The connection to the AppHost was lost: {0}.</source>
+        <target state="needs-review-translation">Uygulama ana işleminin bağlantısı kesildi: {0}.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostNotCompatibleConsiderUpgrading">
-        <source>The AppHost version is not compatible. Please upgrade the apphost or Aspire CLI.</source>
-        <target state="translated">AppHost sürümü uyumlu değil. Lütfen AppHost veya Aspire CLI'yı yükseltin.</target>
+        <source>The AppHost version is not compatible. Please upgrade the AppHost or Aspire CLI.</source>
+        <target state="needs-review-translation">AppHost sürümü uyumlu değil. Lütfen AppHost veya Aspire CLI'yı yükseltin.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireCLIVersion">
@@ -23,8 +23,8 @@
         <note />
       </trans-unit>
       <trans-unit id="BuildingAppHost">
-        <source>Building apphost...</source>
-        <target state="translated">AppHost oluşturuluyor...</target>
+        <source>Building AppHost...</source>
+        <target state="needs-review-translation">AppHost oluşturuluyor...</target>
         <note />
       </trans-unit>
       <trans-unit id="CheckingCertificates">
@@ -63,13 +63,13 @@
         <note>Represents a type of link</note>
       </trans-unit>
       <trans-unit id="ErrorConnectingToAppHost">
-        <source>An error occurred while connecting to the app host. The app host possibly crashed before it was available: {0}.</source>
-        <target state="translated">Uygulama ana işlemiyle bağlantı kurulurken bir hata oluştu. Uygulama ana işlemi, kullanılabilir duruma gelmeden önce muhtemelen çöktü: {0}.</target>
+        <source>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}.</source>
+        <target state="needs-review-translation">Uygulama ana işlemiyle bağlantı kurulurken bir hata oluştu. Uygulama ana işlemi, kullanılabilir duruma gelmeden önce muhtemelen çöktü: {0}.</target>
         <note />
       </trans-unit>
       <trans-unit id="FindingAppHosts">
-        <source>Finding apphosts...</source>
-        <target state="translated">AppHost'lar bulunuyor...</target>
+        <source>Finding AppHosts...</source>
+        <target state="needs-review-translation">AppHost'lar bulunuyor...</target>
         <note />
       </trans-unit>
       <trans-unit id="InteractiveInputNotSupported">
@@ -83,8 +83,8 @@
         <note>Do not translate [dim] and [link]. Also leave [/] as-is. {0} is a URL</note>
       </trans-unit>
       <trans-unit id="NewCliVersionAvailable">
-        <source>[yellow]A new version of the Aspire CLI is available: {0}[/]</source>
-        <target state="translated">[yellow]Aspire CLI'nin yeni bir sürümü kullanılabilir: {0}[/]</target>
+        <source>[yellow]A new version of Aspire is available: {0}[/]</source>
+        <target state="new">[yellow]A new version of Aspire is available: {0}[/]</target>
         <note>Do not translate [yellow] and also leave [/] as-is. {0} is the version number</note>
       </trans-unit>
       <trans-unit id="NoItemsAvailableForSelection">
@@ -98,23 +98,28 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeBuilt">
-        <source>The project could not be built. For more information run with --debug switch.</source>
-        <target state="translated">Proje oluşturulamadı. Daha fazla bilgi için --debug anahtarıyla çalıştırın.</target>
+        <source>The project could not be built. See logs at {0}</source>
+        <target state="translated">Proje oluşturulamadı. {0} adresinde günlüklere bakın</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ProjectCouldNotBeCreated">
+        <source>The app could not be created. See logs at {0}</source>
+        <target state="new">The app could not be created. See logs at {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionDoesntExist">
-        <source>The --project option specified a project that does not exist.</source>
-        <target state="translated">--project seçeneği var olmayan bir projeyi belirtti.</target>
+        <source>The --apphost option specified a project that does not exist.</source>
+        <target state="translated">--apphost seçeneği var olmayan bir projeyi belirtti.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionNotSpecifiedMultipleAppHostsFound">
-        <source>The --project option was not specified and multiple app host project files were detected.</source>
-        <target state="translated">--project seçeneği belirtilmedi ve birden fazla uygulama ana işlemi projesi dosyası algılandı.</target>
+        <source>The --apphost option was not specified and multiple AppHost project files were detected.</source>
+        <target state="needs-review-translation">--apphost seçeneği belirtilmedi ve birden fazla uygulama ana işlemi projesi dosyası algılandı.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionNotSpecifiedNoCsprojFound">
-        <source>The project argument was not specified and no app host project files were detected.</source>
-        <target state="translated">Proje bağımsız değişkeni belirtilmedi ve uygulama ana işlemi projesinin dosyaları tespit edilemedi.</target>
+        <source>The project argument was not specified and no AppHost project files were detected.</source>
+        <target state="needs-review-translation">Proje bağımsız değişkeni belirtilmedi ve uygulama ana işlemi projesinin dosyaları tespit edilemedi.</target>
         <note />
       </trans-unit>
       <trans-unit id="RequiredCapability">
@@ -127,14 +132,19 @@
         <target state="translated">Aranıyor...</target>
         <note />
       </trans-unit>
+      <trans-unit id="SeeLogsAt">
+        <source>See logs at {0}</source>
+        <target state="translated">{0} adresinde günlüklere bakın</target>
+        <note>{0} is the log file path</note>
+      </trans-unit>
       <trans-unit id="SelectAppHostToUse">
-        <source>Select an apphost to use:</source>
-        <target state="translated">Kullanılacak AppHost seçeneğini belirtin:</target>
+        <source>Select an AppHost to use:</source>
+        <target state="needs-review-translation">Kullanılacak AppHost seçeneğini belirtin:</target>
         <note />
       </trans-unit>
       <trans-unit id="SpecifiedProjectFileNotAppHostProject">
         <source>The specified project file is not an Aspire AppHost project.</source>
-        <target state="translated">Belirtilen proje dosyası bir Aspire AppHost projesi değil.</target>
+        <target state="needs-review-translation">Belirtilen proje dosyası bir Aspire AppHost projesi değil.</target>
         <note />
       </trans-unit>
       <trans-unit id="StoppingAspire">
@@ -153,8 +163,8 @@
         <note />
       </trans-unit>
       <trans-unit id="UnbuildableAppHostsDetected">
-        <source>No app hosts were found (there may be app hosts project files with syntax errors/invalid SDK versions).</source>
-        <target state="translated">Uygulama ana işlemi bulunamadı (söz dizimi hataları veya geçersiz SDK sürümlerine sahip uygulama ana işlemleri proje dosyaları olabilir).</target>
+        <source>No AppHosts were found (there may be AppHost project files with syntax errors/invalid SDK versions).</source>
+        <target state="needs-review-translation">Uygulama ana işlemi bulunamadı (söz dizimi hataları veya geçersiz SDK sürümlerine sahip uygulama ana işlemleri proje dosyaları olabilir).</target>
         <note />
       </trans-unit>
       <trans-unit id="UnexpectedErrorOccurred">
@@ -162,9 +172,14 @@
         <target state="translated">Beklenmeyen bir hata oluştu: {0}</target>
         <note>{0} is the exception message</note>
       </trans-unit>
+      <trans-unit id="UpdatedSettingsFile">
+        <source>Updated settings file at {0}.</source>
+        <target state="new">Updated settings file at {0}.</target>
+        <note>{0} is a path</note>
+      </trans-unit>
       <trans-unit id="WaitingForDebuggerToAttachToAppHost">
-        <source>Waiting for debugger to attach to app host process</source>
-        <target state="translated">Hata ayıklayıcının uygulama ana işlemine eklenmesi bekleniyor</target>
+        <source>Waiting for debugger to attach to AppHost process</source>
+        <target state="needs-review-translation">Hata ayıklayıcının uygulama ana işlemine eklenmesi bekleniyor</target>
         <note />
       </trans-unit>
     </body>

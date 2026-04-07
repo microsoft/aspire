@@ -19,11 +19,10 @@ namespace Aspire.Dashboard.Model.Serialization;
 [JsonSerializable(typeof(ResourceJson))]
 [JsonSerializable(typeof(ResourceUrlJson))]
 [JsonSerializable(typeof(ResourceVolumeJson))]
-[JsonSerializable(typeof(ResourceEnvironmentVariableJson))]
-[JsonSerializable(typeof(ResourceHealthReportJson))]
-[JsonSerializable(typeof(ResourcePropertyJson))]
+[JsonSerializable(typeof(Dictionary<string, string?>))]
+[JsonSerializable(typeof(Dictionary<string, ResourceHealthReportJson>))]
 [JsonSerializable(typeof(ResourceRelationshipJson))]
-[JsonSerializable(typeof(ResourceCommandJson))]
+[JsonSerializable(typeof(Dictionary<string, ResourceCommandJson>))]
 internal sealed partial class ResourceJsonSerializerContext : JsonSerializerContext
 {
     /// <summary>

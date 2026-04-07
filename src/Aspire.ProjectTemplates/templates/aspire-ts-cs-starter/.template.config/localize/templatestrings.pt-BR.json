@@ -1,4 +1,4 @@
-﻿{
+{
   "author": "Microsoft",
   "name": "Aplicativo Inicial Aspire (ASP.NET Core/React)",
   "description": "Um modelo de projeto para criar um aplicativo Aspire com front-end React e serviço de back-end C# com API Mínima, com cache Redis opcional.",
@@ -10,11 +10,9 @@
   "symbols/UseRedisCache/description": "Configura se o aplicativo deve usar Redis para cache. Requer um runtime de contêiner com suporte para execução local; confira https://aka.ms/aspire/containers para obter mais detalhes.",
   "symbols/appHostHttpPort/description": "Número da porta a ser usado para o ponto de extremidade HTTP launchSettings.json do projeto AppHost.",
   "symbols/appHostOtlpHttpPort/description": "Número da porta a ser usado para o ponto de extremidade HTTP OTLP launchSettings.json do projeto AppHost.",
-  "symbols/appHostMcpHttpPort/description": "Número da porta a ser usado para o ponto de extremidade HTTP do MCP launchSettings.json do projeto AppHost.",
   "symbols/appHostResourceHttpPort/description": "Número da porta a ser usado para o ponto de extremidade HTTP do serviço de recurso launchSettings.json do projeto AppHost.",
   "symbols/appHostHttpsPort/description": "Número da porta a ser usado para o ponto de extremidade HTTPS launchSettings.json do projeto AppHost. Essa opção só é aplicável quando o parâmetro no-https não é usado.",
   "symbols/appHostOtlpHttpsPort/description": "Número da porta a ser usado para o ponto de extremidade HTTPS OTLP launchSettings.json do projeto AppHost.",
-  "symbols/appHostMcpHttpsPort/description": "Número da porta a ser usado para o ponto de extremidade HTTPS do MCP launchSettings.json do projeto AppHost.",
   "symbols/appHostResourceHttpsPort/description": "Número da porta a ser usado para o ponto de extremidade HTTPS do serviço de recurso launchSettings.json do projeto AppHost.",
   "symbols/serverHttpPort/description": "Número da porta a ser usado para o ponto de extremidade HTTP em launchSettings.json do projeto Servidor.",
   "symbols/serverHttpsPort/description": "Número da porta a ser usado para o ponto de extremidade HTTPS em launchSettings.json do projeto Servidor. Esta opção só se aplica quando o parâmetro no-https não é usado.",
@@ -23,6 +21,7 @@
   "symbols/LocalhostTld/displayName": "Usar o TLD .dev.localhost na URL do aplicativo",
   "symbols/LocalhostTld/description": "Se quiser combinar o nome do projeto com o TLD .dev.localhost na URL do aplicativo para desenvolvimento local, por exemplo, https://myapp.dev.localhost:12345. Com suporte no .NET 10 e posterior.",
   "postActions/set-startup-project/description": "Define o projeto de inicialização na solução",
+  "postActions/set-startup-project/manualInstructions/default/text": "",
   "postActions/restore/description": "Restaurar os pacotes NuGet exigidos por esse projeto.",
   "postActions/restore/manualInstructions/default/text": "Execute 'dotnet restore'"
 }

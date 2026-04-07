@@ -118,7 +118,7 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>Execute commands in the context of an Aspire application resource. Starts the AppHost, waits for resources to initialize, then runs the specified command in the target resource's environment. (Preview)
+    <value>Execute commands in the context of an Aspire application resource. Starts the AppHost, waits for resources to initialize, then runs the specified command in the target resource's environment (Preview)
 
 Examples:
   aspire exec --resource api dotnet build
@@ -151,9 +151,9 @@ Examples:
     <value>Running exec...</value>
   </data>
   <data name="StoppingAppHost" xml:space="preserve">
-    <value>Stopping app host...</value>
+    <value>Stopping AppHost...</value>
   </data>
   <data name="WorkdirArgumentDescription" xml:space="preserve">
-    <value>The working directory to execute the command in.</value>
+    <value>The working directory to execute the command in</value>
   </data>
 </root>

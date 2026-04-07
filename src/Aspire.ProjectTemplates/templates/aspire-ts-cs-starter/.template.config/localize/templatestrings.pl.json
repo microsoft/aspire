@@ -1,4 +1,4 @@
-﻿{
+{
   "author": "Microsoft",
   "name": "Aplikacja startowa Aspire (ASP.NET Core/React)",
   "description": "Szablon projektu do tworzenia aplikacji Aspire z frontonem React i minimalną usługą zaplecza interfejsu API w języku C#, z opcjonalnym buforowaniem Redis.",
@@ -10,11 +10,9 @@
   "symbols/UseRedisCache/description": "Określa, czy konfigurować aplikację do korzystania z magazynu danych Redis na potrzeby buforowania. Wymaga obsługiwanego środowiska uruchomieniowego kontenera na potrzeby uruchomienia lokalnego. Aby uzyskać więcej informacji, zobacz https://aka.ms/aspire/containers.",
   "symbols/appHostHttpPort/description": "Numer portu do użycia dla punktu końcowego HTTP w pliku launchSettings.json projektu AppHost.",
   "symbols/appHostOtlpHttpPort/description": "Numer portu do użycia dla punktu końcowego HTTP OTLP w pliku launchSettings.json projektu AppHost.",
-  "symbols/appHostMcpHttpPort/description": "Numer portu do użycia dla punktu końcowego HTTP MCP w pliku launchSettings.json projektu AppHost.",
   "symbols/appHostResourceHttpPort/description": "Numer portu do użycia dla punktu końcowego HTTP usługi zasobów w pliku launchSettings.json projektu AppHost.",
   "symbols/appHostHttpsPort/description": "Numer portu do użycia dla punktu końcowego HTTPS w pliku launchSettings.json projektu AppHost. Ta opcja ma zastosowanie tylko wtedy, gdy parametr no-https nie jest używany.",
   "symbols/appHostOtlpHttpsPort/description": "Numer portu do użycia dla punktu końcowego HTTPS OTLP w pliku launchSettings.json projektu AppHost.",
-  "symbols/appHostMcpHttpsPort/description": "Numer portu do użycia dla punktu końcowego HTTPS MCP w pliku launchSettings.json projektu AppHost.",
   "symbols/appHostResourceHttpsPort/description": "Numer portu do użycia dla punktu końcowego HTTPS usługi zasobów w pliku launchSettings.json projektu AppHost.",
   "symbols/serverHttpPort/description": "Numer portu do użycia dla punktu końcowego HTTP w pliku launchSettings.json projektu sieci Web.",
   "symbols/serverHttpsPort/description": "Numer portu do użycia dla punktu końcowego HTTPS w pliku launchSettings.json projektu serwera. Ta opcja ma zastosowanie tylko wtedy, gdy parametr no-https nie jest używany.",
@@ -23,6 +21,7 @@
   "symbols/LocalhostTld/displayName": "Użyj pliku .dev.localhost TLD w adresie URL aplikacji",
   "symbols/LocalhostTld/description": "Określa, czy połączyć nazwę projektu z TLD .dev.localhost w adresie URL aplikacji na potrzeby lokalnego programowania, np. https://myapp.dev.localhost:12345. Obsługiwane na platformie .NET 10 lub nowszej.",
   "postActions/set-startup-project/description": "Ustawia projekt startowy w rozwiązaniu",
+  "postActions/set-startup-project/manualInstructions/default/text": "",
   "postActions/restore/description": "Przywróć pakiety NuGet wymagane przez ten projekt.",
   "postActions/restore/manualInstructions/default/text": "Uruchom polecenie „dotnet restore”"
 }

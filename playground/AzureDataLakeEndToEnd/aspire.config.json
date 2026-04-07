@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "AzureDataLakeEndToEnd.AppHost/AzureDataLakeEndToEnd.AppHost.csproj"
+  }
+}

@@ -170,7 +170,8 @@ internal sealed class DashboardClient : IDashboardClient
                     HttpHandler = httpHandler,
                     ServiceConfig = new() { MethodConfigs = { methodConfig } },
                     LoggerFactory = _loggerFactory,
-                    ThrowOperationCanceledOnCancellation = true
+                    ThrowOperationCanceledOnCancellation = true,
+                    MaxReceiveMessageSize = 16 * 1024 * 1024 // 16 MB
                 });
 
             X509CertificateCollection GetFileCertificate()
@@ -421,6 +422,15 @@ internal sealed class DashboardClient : IDashboardClient
                 else
                 {
                     throw new FormatException($"Unexpected {nameof(WatchResourcesUpdate)} kind: {response.KindCase}");
+                }
+
+                // Resolve resource colors for all resources so that color assignment is
+                // deterministic of order returned from the service, not order that the color for a resource is first used.
+                if (changes is not null)
+                {
+                    var resolvedNames = _resourceByName.Values
+                        .Select(r => ResourceViewModel.GetResourceName(r, _resourceByName));
+                    ColorGenerator.Instance.ResolveAll(resolvedNames);
                 }
             }
 

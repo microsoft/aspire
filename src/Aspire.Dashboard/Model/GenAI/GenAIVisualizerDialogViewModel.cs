@@ -227,6 +227,45 @@ public sealed class GenAIVisualizerDialogViewModel
                 {
                     return false;
                 }
+                else if (partViewModel.MessagePart is BlobPart blobPart)
+                {
+                    if (!string.IsNullOrEmpty(blobPart.Content))
+                    {
+                        return false;
+                    }
+                }
+                else if (partViewModel.MessagePart is UriPart uriPart)
+                {
+                    if (!string.IsNullOrEmpty(uriPart.Uri))
+                    {
+                        return false;
+                    }
+                }
+                else if (partViewModel.MessagePart is FilePart filePart)
+                {
+                    if (!string.IsNullOrEmpty(filePart.FileId))
+                    {
+                        return false;
+                    }
+                }
+                else if (partViewModel.MessagePart is ReasoningPart reasoningPart)
+                {
+                    if (!string.IsNullOrEmpty(reasoningPart.Content))
+                    {
+                        return false;
+                    }
+                }
+                else if (partViewModel.MessagePart is ServerToolCallPart)
+                {
+                    return false;
+                }
+                else if (partViewModel.MessagePart is ServerToolCallResponsePart serverToolCallResponsePart)
+                {
+                    if (serverToolCallResponsePart.ServerToolCallResponse is not null)
+                    {
+                        return false;
+                    }
+                }
             }
         }
 
@@ -249,17 +288,22 @@ public sealed class GenAIVisualizerDialogViewModel
         {
             if (!string.IsNullOrEmpty(systemInstructions))
             {
-                var instructionParts = DeserializeWithErrorHandling(GenAIHelpers.GenAISystemInstructions, systemInstructions, GenAIMessagesContext.Default.ListMessagePart)!;
-                viewModel.Items.Add(CreateMessage(viewModel, currentIndex, GenAIItemType.SystemMessage, instructionParts.Select(GenAIItemPartViewModel.CreateMessagePart).ToList(), internalId: null));
+                var (instructionParts, truncated) = GenAIMessageParsingHelper.DeserializeArrayIncrementally<MessagePart>(systemInstructions, GenAIMessageParsingHelper.ReadMessagePart);
+                var parts = instructionParts.Select(GenAIItemPartViewModel.CreateMessagePart).ToList();
+                if (truncated)
+                {
+                    parts.Add(GenAIItemPartViewModel.CreateErrorMessage(Resources.Dialogs.GenAIUnexpectedOrTruncatedContent));
+                }
+                viewModel.Items.Add(CreateMessage(viewModel, currentIndex, GenAIItemType.SystemMessage, parts, internalId: null));
                 currentIndex++;
             }
             if (!string.IsNullOrEmpty(inputMessages))
             {
-                ParseMessages(viewModel, inputMessages, GenAIHelpers.GenAIInputMessages, isOutput: false, ref currentIndex);
+                ParseMessages(viewModel, inputMessages, isOutput: false, ref currentIndex);
             }
             if (!string.IsNullOrEmpty(outputMessages))
             {
-                ParseMessages(viewModel, outputMessages, GenAIHelpers.GenAIOutputInstructions, isOutput: true, ref currentIndex);
+                ParseMessages(viewModel, outputMessages, isOutput: true, ref currentIndex);
             }
 
             return;
@@ -308,20 +352,31 @@ public sealed class GenAIVisualizerDialogViewModel
         ParseLangSmithFormat(viewModel, ref currentIndex);
     }
 
-    private static int ParseMessages(GenAIVisualizerDialogViewModel viewModel, string messages, string description, bool isOutput, ref int currentIndex)
+    private static int ParseMessages(GenAIVisualizerDialogViewModel viewModel, string messages, bool isOutput, ref int currentIndex)
     {
-        var inputParts = DeserializeWithErrorHandling(description, messages, GenAIMessagesContext.Default.ListChatMessage)!;
-        foreach (var msg in inputParts)
+        var (chatMessages, truncated) = GenAIMessageParsingHelper.DeserializeArrayIncrementally(messages, GenAIMessageParsingHelper.ReadChatMessage);
+        foreach (var (role, parts, partsTruncated) in chatMessages)
         {
-            var parts = msg.Parts.Select(GenAIItemPartViewModel.CreateMessagePart).ToList();
-            var type = msg.Role switch
+            var viewParts = parts.Select(GenAIItemPartViewModel.CreateMessagePart).ToList();
+            if (partsTruncated)
+            {
+                viewParts.Add(GenAIItemPartViewModel.CreateErrorMessage(Resources.Dialogs.GenAIUnexpectedOrTruncatedContent));
+            }
+            var type = role switch
             {
                 "system" => GenAIItemType.SystemMessage,
-                "user" => msg.Parts.All(p => p is ToolCallResponsePart) ? GenAIItemType.ToolMessage : GenAIItemType.UserMessage,
+                "user" => parts.All(p => p is ToolCallResponsePart or ServerToolCallResponsePart) ? GenAIItemType.ToolMessage : GenAIItemType.UserMessage,
                 "assistant" => isOutput ? GenAIItemType.OutputMessage : GenAIItemType.AssistantMessage,
                 _ => GenAIItemType.UserMessage
             };
-            viewModel.Items.Add(CreateMessage(viewModel, currentIndex, type, parts, internalId: null));
+            viewModel.Items.Add(CreateMessage(viewModel, currentIndex, type, viewParts, internalId: null));
+            currentIndex++;
+        }
+
+        if (truncated)
+        {
+            var truncationType = isOutput ? GenAIItemType.OutputMessage : GenAIItemType.UserMessage;
+            viewModel.Items.Add(CreateMessage(viewModel, currentIndex, truncationType, [GenAIItemPartViewModel.CreateErrorMessage(Resources.Dialogs.GenAIUnexpectedOrTruncatedContent)], internalId: null));
             currentIndex++;
         }
 
@@ -460,7 +515,7 @@ public sealed class GenAIVisualizerDialogViewModel
                 break;
             case GenAIItemType.ToolMessage:
                 var toolEvent = DeserializeEventJson(message, GenAIEventsContext.Default.ToolEvent)!;
-                var toolResponse = ProcessJsonPayload(toolEvent.Content);
+                var toolResponse = GenAIMessageParsingHelper.TryParseStringJsonNode(toolEvent.Content);
                 messagePartViewModels.Add(GenAIItemPartViewModel.CreateMessagePart(new ToolCallResponsePart { Id = toolEvent.Id, Response = toolResponse }));
                 break;
             case GenAIItemType.OutputMessage:
@@ -497,7 +552,7 @@ public sealed class GenAIVisualizerDialogViewModel
                         continue;
                     }
 
-                    var args = ProcessJsonPayload(function.Arguments);
+                    var args = GenAIMessageParsingHelper.TryParseStringJsonNode(function.Arguments);
                     messagePartViewModels.Add(GenAIItemPartViewModel.CreateMessagePart(new ToolCallRequestPart { Name = function.Name, Arguments = args }));
                 }
             }
@@ -520,29 +575,6 @@ public sealed class GenAIVisualizerDialogViewModel
                 Content description: {description}
                 """, ex);
         }
-    }
-
-    // Args might be a serialized object string instead of a raw object.
-    // To avoid extra escaping in displaying serialized object string, attempt to convert to object.
-    private static JsonNode? ProcessJsonPayload(JsonNode? args)
-    {
-        if (args?.GetValueKind() == JsonValueKind.String && args.GetValue<string>() is { } argsJson)
-        {
-            try
-            {
-                var node = JsonNode.Parse(argsJson);
-                if (node?.GetValueKind() is JsonValueKind.Object or JsonValueKind.Array)
-                {
-                    args = node;
-                }
-            }
-            catch (Exception)
-            {
-                // Not a JSON string. Ignore.
-            }
-        }
-
-        return args;
     }
 
     private static bool TryMapEventName(string name, [NotNullWhen(true)] out GenAIItemType? type)

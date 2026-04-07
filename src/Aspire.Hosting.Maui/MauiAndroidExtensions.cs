@@ -30,6 +30,9 @@ public static class MauiAndroidExtensions
     /// are attached, use the overload with deviceId parameter to specify which device to use.
     /// Make sure an Android device is connected and visible via <c>adb devices</c>.
     /// </para>
+    /// <para>
+    /// This overload is not available in polyglot app hosts. Use <see cref="AddAndroidDevice(IResourceBuilder{MauiProjectResource}, string, string)"/> instead.
+    /// </para>
     /// </remarks>
     /// <example>
     /// Add an Android device to a MAUI project:
@@ -42,6 +45,7 @@ public static class MauiAndroidExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
+    [AspireExportIgnore(Reason = "Convenience overload. Use the overload with name and optional device ID instead.")]
     public static IResourceBuilder<MauiAndroidDeviceResource> AddAndroidDevice(
         this IResourceBuilder<MauiProjectResource> builder)
     {
@@ -71,6 +75,9 @@ public static class MauiAndroidExtensions
     /// are attached, use the overload with deviceId parameter to specify which device to use.
     /// Make sure an Android device is connected and visible via <c>adb devices</c>.
     /// </para>
+    /// <para>
+    /// This overload is not available in polyglot app hosts. Use <see cref="AddAndroidDevice(IResourceBuilder{MauiProjectResource}, string, string)"/> instead.
+    /// </para>
     /// </remarks>
     /// <example>
     /// Add multiple Android devices to a MAUI project:
@@ -84,6 +91,7 @@ public static class MauiAndroidExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
+    [AspireExportIgnore(Reason = "Convenience overload. Use the overload with the optional device ID parameter instead.")]
     public static IResourceBuilder<MauiAndroidDeviceResource> AddAndroidDevice(
         this IResourceBuilder<MauiProjectResource> builder,
         [ResourceName] string name)
@@ -134,6 +142,7 @@ public static class MauiAndroidExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
+    [AspireExport(Description = "Adds an Android device resource for a .NET MAUI project.")]
     public static IResourceBuilder<MauiAndroidDeviceResource> AddAndroidDevice(
         this IResourceBuilder<MauiProjectResource> builder,
         [ResourceName] string name,
@@ -210,6 +219,9 @@ public static class MauiAndroidExtensions
     /// <para>
     /// To target a specific emulator, use the overload that accepts an emulatorId parameter.
     /// </para>
+    /// <para>
+    /// This overload is not available in polyglot app hosts. Use <see cref="AddAndroidEmulator(IResourceBuilder{MauiProjectResource}, string, string)"/> instead.
+    /// </para>
     /// </remarks>
     /// <example>
     /// Add an Android emulator to a MAUI project:
@@ -224,6 +236,7 @@ public static class MauiAndroidExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
+    [AspireExportIgnore(Reason = "Convenience overload. Use the overload with name and optional emulator ID instead.")]
     public static IResourceBuilder<MauiAndroidEmulatorResource> AddAndroidEmulator(
         this IResourceBuilder<MauiProjectResource> builder)
     {
@@ -255,6 +268,9 @@ public static class MauiAndroidExtensions
     /// <para>
     /// To target a specific emulator, use the overload that accepts an emulatorId parameter.
     /// </para>
+    /// <para>
+    /// This overload is not available in polyglot app hosts. Use <see cref="AddAndroidEmulator(IResourceBuilder{MauiProjectResource}, string, string)"/> instead.
+    /// </para>
     /// </remarks>
     /// <example>
     /// Add multiple Android emulators to a MAUI project:
@@ -268,6 +284,7 @@ public static class MauiAndroidExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
+    [AspireExportIgnore(Reason = "Convenience overload. Use the overload with the optional emulator ID parameter instead.")]
     public static IResourceBuilder<MauiAndroidEmulatorResource> AddAndroidEmulator(
         this IResourceBuilder<MauiProjectResource> builder,
         [ResourceName] string name)
@@ -319,6 +336,7 @@ public static class MauiAndroidExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
+    [AspireExport(Description = "Adds an Android emulator resource for a .NET MAUI project.")]
     public static IResourceBuilder<MauiAndroidEmulatorResource> AddAndroidEmulator(
         this IResourceBuilder<MauiProjectResource> builder,
         [ResourceName] string name,

@@ -1,0 +1,11 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "aspire",
+      "request": "launch",
+      "name": "Aspire: Launch default apphost",
+      "program": "${workspaceFolder}"
+    }
+  ]
+}

@@ -1,0 +1,127 @@
+<Project>
+  <!--
+    Bundle.proj - Standalone project for creating the Aspire CLI bundle.
+
+    Usage: dotnet msbuild eng/Bundle.proj /p:TargetRid=linux-x64 /p:Configuration=Release
+
+    This project:
+    1. Publishes the unified managed binary (Aspire.Managed) as self-contained
+    2. Publishes native CLI (unless SkipNativeBuild=true)
+    3. Restores DCP package
+    4. Runs CreateLayout to assemble the bundle
+
+    Options:
+    - SkipNativeBuild=true: Skip building native CLI (use pre-built from artifacts)
+    - SkipManagedBuild=true: Skip building managed projects (use pre-built)
+    - BundleVersion: Version string for the bundle (auto-computed in CI if not set)
+  -->
+
+  <!-- Import Versions.props for version info -->
+  <Import Project="Versions.props" />
+
+  <PropertyGroup>
+    <!-- Configuration -->
+    <Configuration Condition="'$(Configuration)' == ''">Debug</Configuration>
+
+    <!-- Runtime ID for the bundle -->
+    <TargetRid Condition="'$(TargetRid)' == '' and '$(TargetRids)' != ''">$(TargetRids)</TargetRid>
+    <TargetRid Condition="'$(TargetRid)' == '' and $([MSBuild]::IsOSPlatform('Windows'))">win-x64</TargetRid>
+    <TargetRid Condition="'$(TargetRid)' == '' and $([MSBuild]::IsOSPlatform('OSX'))">osx-arm64</TargetRid>
+    <TargetRid Condition="'$(TargetRid)' == ''">linux-x64</TargetRid>
+
+    <!-- Paths -->
+    <RepoRoot>$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..'))</RepoRoot>
+    <ArtifactsDir>$(RepoRoot)artifacts\</ArtifactsDir>
+    <ArtifactsLogDir>$(ArtifactsDir)log\$(Configuration)\</ArtifactsLogDir>
+    <BundleOutputDir>$(ArtifactsDir)bundle\$(TargetRid)\</BundleOutputDir>
+
+    <!-- Project paths -->
+    <CliProjectPath>$(RepoRoot)src\Aspire.Cli\Aspire.Cli.csproj</CliProjectPath>
+    <ManagedProjectPath>$(RepoRoot)src\Aspire.Managed\Aspire.Managed.csproj</ManagedProjectPath>
+    <AppHostProjectPath>$(RepoRoot)src\Aspire.Hosting.AppHost\Aspire.Hosting.AppHost.csproj</AppHostProjectPath>
+    <CreateLayoutProjectPath>$(RepoRoot)tools\CreateLayout\CreateLayout.csproj</CreateLayoutProjectPath>
+
+    <!-- Bundle version: use VersionSuffix from CI if provided, else dev version for local builds -->
+    <!-- In GitHub Actions CI: VersionSuffix is set via /p:VersionSuffix=pr.XXXX.gSHA -->
+    <BundleVersion Condition="'$(BundleVersion)' == '' and '$(VersionSuffix)' != ''">$(VersionPrefix)-$(VersionSuffix)</BundleVersion>
+    <BundleVersion Condition="'$(BundleVersion)' == ''">$(VersionPrefix)-dev</BundleVersion>
+
+    <!-- Forward VersionSuffix to Exec-invoked dotnet commands (MSBuild properties don't flow to child processes) -->
+    <_VersionSuffixArg Condition="'$(VersionSuffix)' != ''">/p:VersionSuffix=$(VersionSuffix)</_VersionSuffixArg>
+
+    <!-- Binlog arguments for dotnet commands -->
+    <_BinlogArg Condition="'$(ContinuousIntegrationBuild)' == 'true'">-bl:$(ArtifactsLogDir)</_BinlogArg>
+  </PropertyGroup>
+
+  <!-- Main target with conditional dependencies -->
+  <Target Name="Build" DependsOnTargets="
+    _ShowBanner;
+    _CleanCaches;
+    _PublishManagedProjects;
+    _RestoreDcpPackage;
+    _RunCreateLayout;
+    _PublishNativeCli">
+    <Message Importance="high" Text="" />
+    <Message Importance="high" Text="Bundle created at: $(BundleOutputDir)" />
+  </Target>
+
+  <Target Name="_ShowBanner">
+    <MakeDir Directories="$(ArtifactsLogDir)" Condition="'$(ContinuousIntegrationBuild)' == 'true'" />
+
+    <Message Importance="high" Text="" />
+    <Message Importance="high" Text="========================================" />
+    <Message Importance="high" Text="Building Aspire CLI Bundle" />
+    <Message Importance="high" Text="  RID: $(TargetRid)" />
+    <Message Importance="high" Text="  Configuration: $(Configuration)" />
+    <Message Importance="high" Text="  Version: $(BundleVersion)" />
+    <Message Importance="high" Text="  Output: $(BundleOutputDir)" />
+    <Message Importance="high" Text="========================================" />
+    <Message Importance="high" Text="" />
+  </Target>
+
+  <Target Name="_CleanCaches" Condition="'$(ContinuousIntegrationBuild)' == 'true'">
+    <Message Importance="high" Text="Cleaning caches to free disk space..." />
+    <Exec Command="dotnet nuget locals http-cache --clear" IgnoreExitCode="true" StandardOutputImportance="low" />
+  </Target>
+
+  <Target Name="_PublishNativeCli" Condition="'$(SkipNativeBuild)' != 'true'">
+    <PropertyGroup>
+      <_CliBinlog Condition="'$(ContinuousIntegrationBuild)' == 'true'">-bl:$(ArtifactsLogDir)PublishCli.binlog</_CliBinlog>
+      <!-- The tar.gz archive produced by CreateLayout is embedded as a resource in the CLI binary -->
+      <_BundleArchivePath>$(ArtifactsDir)bundle\aspire-$(BundleVersion)-$(TargetRid).tar.gz</_BundleArchivePath>
+    </PropertyGroup>
+    <Message Importance="high" Text="Publishing native AOT CLI with embedded bundle: $(_BundleArchivePath)" />
+    <Exec Command="dotnet publish &quot;$(CliProjectPath)&quot; -c $(Configuration) -r $(TargetRid) /p:BundlePayloadPath=&quot;$(_BundleArchivePath)&quot; $(_VersionSuffixArg) $(_CliBinlog)" />
+  </Target>
+
+  <Target Name="_PublishManagedProjects" Condition="'$(SkipManagedBuild)' != 'true'">
+    <PropertyGroup>
+      <_ManagedBinlog Condition="'$(ContinuousIntegrationBuild)' == 'true'">-bl:$(ArtifactsLogDir)PublishManaged.binlog</_ManagedBinlog>
+    </PropertyGroup>
+    <Message Importance="high" Text="Publishing aspire-managed (self-contained)..." />
+    <!-- Publish as self-contained single-file for the target RID -->
+    <Exec Command="dotnet publish &quot;$(ManagedProjectPath)&quot; -c $(Configuration) -r $(TargetRid) --self-contained /p:GenerateDocumentationFile=false /p:EnforceCodeStyleInBuild=false $(_VersionSuffixArg) $(_ManagedBinlog)" />
+  </Target>
+
+  <Target Name="_RestoreDcpPackage">
+    <PropertyGroup>
+      <_DcpBinlog Condition="'$(ContinuousIntegrationBuild)' == 'true'">-bl:$(ArtifactsLogDir)RestoreDcp.binlog</_DcpBinlog>
+    </PropertyGroup>
+    <Message Importance="high" Text="Restoring DCP package..." />
+    <Exec Command="dotnet restore &quot;$(AppHostProjectPath)&quot; $(_DcpBinlog)" />
+  </Target>
+
+  <Target Name="_RunCreateLayout">
+    <PropertyGroup>
+      <!-- Remove trailing slashes for command line arguments -->
+      <_BundleOutputDirArg>$(BundleOutputDir.TrimEnd('\').TrimEnd('/'))</_BundleOutputDirArg>
+      <_ArtifactsDirArg>$(ArtifactsDir.TrimEnd('\').TrimEnd('/'))</_ArtifactsDirArg>
+
+      <_CreateLayoutArgs>--output "$(_BundleOutputDirArg)" --artifacts "$(_ArtifactsDirArg)" --rid $(TargetRid) --bundle-version $(BundleVersion) --verbose --archive</_CreateLayoutArgs>
+    </PropertyGroup>
+
+    <Message Importance="high" Text="Creating bundle layout..." />
+    <Exec Command="dotnet run --project &quot;$(CreateLayoutProjectPath)&quot; -c $(Configuration) -- $(_CreateLayoutArgs)" />
+  </Target>
+
+</Project>

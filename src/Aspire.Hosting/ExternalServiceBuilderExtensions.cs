@@ -24,6 +24,7 @@ public static class ExternalServiceBuilderExtensions
     /// <param name="name">The name of the resource.</param>
     /// <param name="url">The URL of the external service.</param>
     /// <returns>An <see cref="IResourceBuilder{ExternalServiceResource}"/> instance.</returns>
+    [AspireExport(Description = "Adds an external service resource")]
     public static IResourceBuilder<ExternalServiceResource> AddExternalService(this IDistributedApplicationBuilder builder, [ResourceName] string name, string url)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -45,6 +46,7 @@ public static class ExternalServiceBuilderExtensions
     /// <param name="name">The name of the resource.</param>
     /// <param name="uri">The URI of the external service.</param>
     /// <returns>An <see cref="IResourceBuilder{ExternalServiceResource}"/> instance.</returns>
+    [AspireExport("addExternalServiceUri", Description = "Adds an external service with a URI")]
     public static IResourceBuilder<ExternalServiceResource> AddExternalService(this IDistributedApplicationBuilder builder, [ResourceName] string name, Uri uri)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -61,6 +63,7 @@ public static class ExternalServiceBuilderExtensions
     /// <param name="name">The name of the resource.</param>
     /// <param name="urlParameter">The parameter containing the URL of the external service.</param>
     /// <returns>An <see cref="IResourceBuilder{ExternalServiceResource}"/> instance.</returns>
+    [AspireExport("addExternalServiceParameter", Description = "Adds an external service with a parameter URL")]
     public static IResourceBuilder<ExternalServiceResource> AddExternalService(this IDistributedApplicationBuilder builder, [ResourceName] string name, IResourceBuilder<ParameterResource> urlParameter)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -182,6 +185,7 @@ public static class ExternalServiceBuilderExtensions
     /// different one can be specified.
     /// </para>
     /// </remarks>
+    [AspireExport("withExternalServiceHttpHealthCheck", Description = "Adds an HTTP health check to an external service")]
     public static IResourceBuilder<ExternalServiceResource> WithHttpHealthCheck(this IResourceBuilder<ExternalServiceResource> builder, string? path = null, int? statusCode = null)
     {
         if (path is not null && !Uri.IsWellFormedUriString(path, UriKind.Relative))

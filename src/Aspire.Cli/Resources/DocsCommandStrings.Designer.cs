@@ -194,5 +194,35 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("FoundSearchResults", resourceCulture);
             }
         }
+
+        internal static string HeaderTitle {
+            get {
+                return ResourceManager.GetString("HeaderTitle", resourceCulture);
+            }
+        }
+
+        internal static string HeaderSlug {
+            get {
+                return ResourceManager.GetString("HeaderSlug", resourceCulture);
+            }
+        }
+
+        internal static string HeaderSummary {
+            get {
+                return ResourceManager.GetString("HeaderSummary", resourceCulture);
+            }
+        }
+
+        internal static string HeaderSection {
+            get {
+                return ResourceManager.GetString("HeaderSection", resourceCulture);
+            }
+        }
+
+        internal static string HeaderScore {
+            get {
+                return ResourceManager.GetString("HeaderScore", resourceCulture);
+            }
+        }
     }
 }

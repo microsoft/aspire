@@ -10,6 +10,7 @@ internal static class BrowserStorageKeys
 {
     public const string UnsecuredTelemetryMessageDismissedKey = "Aspire_Telemetry_UnsecuredMessageDismissed";
     public const string UnsecuredEndpointMessageDismissedKey = "Aspire_Security_UnsecuredEndpointMessageDismissed";
+    public const string TimeFormat = "Aspire_TimeFormat";
 
     public const string TracesPageState = "Aspire_PageState_Traces";
     public const string StructuredLogsPageState = "Aspire_PageState_StructuredLogs";

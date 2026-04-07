@@ -41,10 +41,10 @@ public class CliSmokeTests(ITestOutputHelper outputHelper)
             Console.SetError(errorWriter);
             Environment.SetEnvironmentVariable(envVar, loc);
             // Suppress first-time use notice to avoid extra lines in stderr
-            Environment.SetEnvironmentVariable(CliConfigNames.NoLogo, "true");
+            Environment.SetEnvironmentVariable(Aspire.Cli.CliConfigNames.NoLogo, "true");
             await Program.Main([]).DefaultTimeout();
             Environment.SetEnvironmentVariable(envVar, null);
-            Environment.SetEnvironmentVariable(CliConfigNames.NoLogo, null);
+            Environment.SetEnvironmentVariable(Aspire.Cli.CliConfigNames.NoLogo, null);
             Console.SetError(oldErrorOutput);
 
             var errorOutput = errorWriter.ToString();
@@ -91,4 +91,70 @@ public class CliSmokeTests(ITestOutputHelper outputHelper)
 
         outputHelper.WriteLine(result.Process.StandardOutput.ReadToEnd());
     }
+
+    [Fact]
+    public void VersionFlagSuppressesBanner()
+    {
+        using var result = RemoteExecutor.Invoke(async () =>
+        {
+            await using var outputWriter = new StringWriter();
+            var oldOutput = Console.Out;
+            Console.SetOut(outputWriter);
+
+            await Program.Main(["--version"]).DefaultTimeout();
+
+            Console.SetOut(oldOutput);
+            var output = outputWriter.ToString();
+
+            // Write to stdout so it can be captured by the test harness
+            Console.WriteLine($"Output: {output}");
+
+            // The output should only contain the version, not the animated banner
+            // The banner contains "Welcome to the" and ASCII art
+            Assert.DoesNotContain("Welcome to the", output);
+            Assert.DoesNotContain("█████", output);
+            
+            // The output should contain a version number
+            Assert.Contains(".", output); // Version should have at least one dot
+        }, options: s_remoteInvokeOptions);
+
+        outputHelper.WriteLine(result.Process.StandardOutput.ReadToEnd());
+    }
+
+#if DEBUG
+    [Fact]
+    public void RenderScenarioOutputsPublishSummaryStressCase()
+    {
+        using var result = RemoteExecutor.Invoke(async () =>
+        {
+            await using var outputWriter = new StringWriter();
+            await using var errorWriter = new StringWriter();
+            var oldOut = Console.Out;
+            var oldError = Console.Error;
+            Console.SetOut(outputWriter);
+            Console.SetError(errorWriter);
+
+            Environment.SetEnvironmentVariable(CliConfigNames.NoLogo, "true");
+
+            var exitCode = await Program.Main(["--non-interactive", "render", "--scenario", "publish-summary-duration-extremes", "--console-width", "80"]).DefaultTimeout();
+
+            Environment.SetEnvironmentVariable(CliConfigNames.NoLogo, null);
+            Console.SetOut(oldOut);
+            Console.SetError(oldError);
+
+            var combinedOutput = outputWriter.ToString() + errorWriter.ToString();
+
+            Console.WriteLine(combinedOutput);
+
+            Assert.Equal(ExitCodeConstants.Success, exitCode);
+            Assert.Contains("=== Duration extremes ===", combinedOutput);
+            Assert.Contains("Steps Summary:", combinedOutput);
+            Assert.Contains("Tiny 0.2ms event", combinedOutput);
+            Assert.Contains("Zero event", combinedOutput);
+            Assert.Contains('╴', combinedOutput);
+        }, options: s_remoteInvokeOptions);
+
+        outputHelper.WriteLine(result.Process.StandardOutput.ReadToEnd());
+    }
+#endif
 }

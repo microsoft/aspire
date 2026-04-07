@@ -9,7 +9,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.AIFoundry\Aspire.Hosting.Azure.AIFoundry.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.JavaScript\Aspire.Hosting.JavaScript.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Foundry\Aspire.Hosting.Foundry.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.AppConfiguration\Aspire.Hosting.Azure.AppConfiguration.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.AppService\Aspire.Hosting.Azure.AppService.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting\Aspire.Hosting.csproj" />

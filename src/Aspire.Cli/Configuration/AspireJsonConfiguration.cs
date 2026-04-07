@@ -102,6 +102,13 @@ internal sealed class AspireJsonConfiguration
         }
 
         var json = File.ReadAllText(filePath);
+
+        // Handle empty files or whitespace-only content
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+
         return JsonSerializer.Deserialize(json, JsonSourceGenerationContext.Default.AspireJsonConfiguration);
     }
 
@@ -156,32 +163,65 @@ internal sealed class AspireJsonConfiguration
     }
 
     /// <summary>
-    /// Gets all package references including the base Aspire.Hosting packages.
-    /// Uses the SdkVersion for base packages.
+    /// Gets the effective SDK version for package-based AppHost preparation.
+    /// Falls back to <paramref name="defaultSdkVersion"/> when no SDK version is configured.
     /// </summary>
-    /// <returns>Enumerable of (PackageName, Version) tuples.</returns>
-    public IEnumerable<(string Name, string Version)> GetAllPackages()
+    public string GetEffectiveSdkVersion(string defaultSdkVersion)
     {
-        var sdkVersion = SdkVersion ?? throw new InvalidOperationException("SdkVersion must be set before calling GetAllPackages. Use LoadOrCreate to ensure it's set.");
+        return string.IsNullOrWhiteSpace(SdkVersion) ? defaultSdkVersion : SdkVersion;
+    }
 
-        // Base packages always included
-        yield return ("Aspire.Hosting", sdkVersion);
-        yield return ("Aspire.Hosting.AppHost", sdkVersion);
+    /// <summary>
+    /// Gets all integration references (both NuGet packages and project references)
+    /// including the base Aspire.Hosting package.
+    /// A value ending in ".csproj" is treated as a project reference; otherwise as a NuGet version.
+    /// Empty package versions are resolved to the effective SDK version.
+    /// </summary>
+    /// <param name="defaultSdkVersion">Default SDK version to use when not configured.</param>
+    /// <param name="settingsDirectory">The directory containing .aspire/settings.json, used to resolve relative project paths.</param>
+    /// <returns>Enumerable of IntegrationReference objects.</returns>
+    public IEnumerable<IntegrationReference> GetIntegrationReferences(string defaultSdkVersion, string settingsDirectory)
+    {
+        var sdkVersion = GetEffectiveSdkVersion(defaultSdkVersion);
 
-        // Additional packages from settings
-        if (Packages is not null)
+        // Base package always included
+        yield return IntegrationReference.FromPackage("Aspire.Hosting", sdkVersion);
+
+        if (Packages is null)
         {
-            foreach (var (packageName, version) in Packages)
-            {
-                // Skip base packages as they're already included
-                if (string.Equals(packageName, "Aspire.Hosting", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(packageName, "Aspire.Hosting.AppHost", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
+            yield break;
+        }
 
-                yield return (packageName, version);
+        foreach (var (packageName, value) in Packages)
+        {
+            // Skip base packages and SDK-only packages
+            if (string.Equals(packageName, "Aspire.Hosting", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(packageName, "Aspire.Hosting.AppHost", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var trimmedValue = value?.Trim();
+
+            if (string.IsNullOrEmpty(trimmedValue))
+            {
+                // NuGet package reference with no explicit version — fall back to the SDK version
+                yield return IntegrationReference.FromPackage(packageName, sdkVersion);
+                continue;
+            }
+
+            if (trimmedValue.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+            {
+                // Project reference — resolve relative path to absolute
+                var absolutePath = Path.GetFullPath(Path.Combine(settingsDirectory, trimmedValue));
+                yield return IntegrationReference.FromProject(packageName, absolutePath);
+            }
+            else
+            {
+                // NuGet package reference with explicit version
+                yield return IntegrationReference.FromPackage(packageName, trimmedValue);
             }
         }
     }
+
 }

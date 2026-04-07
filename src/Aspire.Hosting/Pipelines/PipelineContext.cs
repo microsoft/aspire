@@ -16,6 +16,7 @@ namespace Aspire.Hosting.Pipelines;
 /// <param name="logger">The logger for pipeline operations.</param>
 /// <param name="cancellationToken">The cancellation token for the pipeline operation.</param>
 [Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExport(ExposeProperties = true)]
 public sealed class PipelineContext(
     DistributedApplicationModel model,
     DistributedApplicationExecutionContext executionContext,

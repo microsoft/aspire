@@ -23,6 +23,8 @@
     <_InstallersToPublish Include="$(ArtifactsDir)**\*.wixpack.zip" Condition="'$(PostBuildSign)' == 'true'" />
     <_InstallerManifestFilesToPublish Include="$(ArtifactsDir)VSSetup\$(Configuration)\Insertion\**\*.zip" />
     <_DashboardFilesToPublish Include="$(DashboardPublishedArtifactsOutputDir)\**\*.zip" />
+    <_CliInstallScriptsToPublish Include="$(RepoRoot)eng\scripts\get-aspire-cli.sh" />
+    <_CliInstallScriptsToPublish Include="$(RepoRoot)eng\scripts\get-aspire-cli.ps1" />
   </ItemGroup>
 
   <Target Name="_PublishBlobItems">
@@ -41,6 +43,8 @@
          The signature file is created by signVsix.proj which runs after publish, so validation happens there. -->
     <Error Condition="@(_ExtensionFilesToPublish->Count()) != 1" Text="Expected exactly 1 VS Code extension VSIX file but found @(_ExtensionFilesToPublish->Count()). Files: @(_ExtensionFilesToPublish, ', ')" />
     <Error Condition="@(_ExtensionManifestFiles->Count()) != 1" Text="Expected exactly 1 VS Code extension manifest file but found @(_ExtensionManifestFiles->Count()). Files: @(_ExtensionManifestFiles, ', ')" />
+    <Error Condition="!Exists('$(RepoRoot)eng\scripts\get-aspire-cli.sh')" Text="Expected CLI install script at $(RepoRoot)eng\scripts\get-aspire-cli.sh." />
+    <Error Condition="!Exists('$(RepoRoot)eng\scripts\get-aspire-cli.ps1')" Text="Expected CLI install script at $(RepoRoot)eng\scripts\get-aspire-cli.ps1." />
 
     <ItemGroup>
       <!-- Extract RID from each archive file -->
@@ -95,14 +99,16 @@
       <_ExtensionFilesToPublish Include="$(ArtifactsPackagesDir)**\aspire-vscode-*.vsix.zip" />
     </ItemGroup>
 
-    <!-- Generate checksums for aspire-cli packages -->
+    <!-- Generate checksums for aspire-cli packages and install scripts -->
     <ItemGroup>
       <_CliFileToPublish Include="@(_ArchiveFiles)" />
       <GenerateChecksumItems Include="@(_CliFileToPublish)" DestinationPath="%(FullPath).sha512" />
+      <GenerateChecksumItems Include="@(_CliInstallScriptsToPublish)" DestinationPath="$(ArtifactsPackagesDir)\%(Filename)%(Extension).sha512" />
     </ItemGroup>
 
     <GenerateChecksums Items="@(GenerateChecksumItems)" />
     <ItemGroup>
+      <_CliFileToPublish Include="@(_CliInstallScriptsToPublish)" />
       <_CliFileToPublish Include="@(GenerateChecksumItems->'%(DestinationPath)')" />
     </ItemGroup>
 

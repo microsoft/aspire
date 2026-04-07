@@ -6,7 +6,6 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Mcp.Tools;
-using Aspire.Cli.Otlp;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Otlp.Serialization;
@@ -55,7 +54,7 @@ public class ListTracesToolTests
         // Arrange - Create mock HTTP handler with sample traces response
         var apiResponseObj = new TelemetryApiResponse
         {
-            Data = new TelemetryDataJson
+            Data = new OtlpTelemetryDataJson
             {
                 ResourceSpans =
                 [
@@ -112,7 +111,7 @@ public class ListTracesToolTests
             ReturnedCount = 3
         };
 
-        var apiResponse = JsonSerializer.Serialize(apiResponseObj, OtlpCliJsonSerializerContext.Default.TelemetryApiResponse);
+        var apiResponse = JsonSerializer.Serialize(apiResponseObj, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
 
         // Create resources that match the OtlpResourceSpansJson entries
         var resources = new ResourceInfoJson[]
@@ -121,7 +120,7 @@ public class ListTracesToolTests
             new() { Name = "api-service", InstanceId = "instance-2", HasLogs = true, HasTraces = true, HasMetrics = true },
             new() { Name = "worker-service", InstanceId = "instance-1", HasLogs = true, HasTraces = true, HasMetrics = true }
         };
-        var resourcesResponse = JsonSerializer.Serialize(resources, OtlpCliJsonSerializerContext.Default.ResourceInfoJsonArray);
+        var resourcesResponse = JsonSerializer.Serialize(resources, OtlpJsonSerializerContext.Default.ResourceInfoJsonArray);
 
         using var mockHandler = new MockHttpMessageHandler(request =>
         {
@@ -224,17 +223,17 @@ public class ListTracesToolTests
         // Arrange - Create mock HTTP handler with empty traces response
         var apiResponseObj = new TelemetryApiResponse
         {
-            Data = new TelemetryDataJson { ResourceSpans = [] },
+            Data = new OtlpTelemetryDataJson { ResourceSpans = [] },
             TotalCount = 0,
             ReturnedCount = 0
         };
-        var apiResponse = JsonSerializer.Serialize(apiResponseObj, OtlpCliJsonSerializerContext.Default.TelemetryApiResponse);
+        var apiResponse = JsonSerializer.Serialize(apiResponseObj, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
 
         var resources = new ResourceInfoJson[]
         {
             new() { Name = "api-service", InstanceId = null, HasLogs = true, HasTraces = true, HasMetrics = true }
         };
-        var resourcesResponse = JsonSerializer.Serialize(resources, OtlpCliJsonSerializerContext.Default.ResourceInfoJsonArray);
+        var resourcesResponse = JsonSerializer.Serialize(resources, OtlpJsonSerializerContext.Default.ResourceInfoJsonArray);
 
         using var mockHandler = new MockHttpMessageHandler(request =>
         {
@@ -281,15 +280,15 @@ public class ListTracesToolTests
         {
             new() { Name = "other-resource", InstanceId = null, HasLogs = true, HasTraces = true, HasMetrics = true }
         };
-        var resourcesResponse = JsonSerializer.Serialize(resources, OtlpCliJsonSerializerContext.Default.ResourceInfoJsonArray);
+        var resourcesResponse = JsonSerializer.Serialize(resources, OtlpJsonSerializerContext.Default.ResourceInfoJsonArray);
 
         var emptyTracesResponse = new TelemetryApiResponse
         {
-            Data = new TelemetryDataJson { ResourceSpans = [] },
+            Data = new OtlpTelemetryDataJson { ResourceSpans = [] },
             TotalCount = 0,
             ReturnedCount = 0
         };
-        var emptyTracesJson = JsonSerializer.Serialize(emptyTracesResponse, OtlpCliJsonSerializerContext.Default.TelemetryApiResponse);
+        var emptyTracesJson = JsonSerializer.Serialize(emptyTracesResponse, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
 
         using var mockHandler = new MockHttpMessageHandler(request =>
         {
@@ -362,7 +361,7 @@ public class ListTracesToolTests
 
         var apiResponseObj = new TelemetryApiResponse
         {
-            Data = new TelemetryDataJson
+            Data = new OtlpTelemetryDataJson
             {
                 ResourceSpans =
                 [
@@ -383,14 +382,14 @@ public class ListTracesToolTests
             ReturnedCount = 1
         };
 
-        var apiResponse = JsonSerializer.Serialize(apiResponseObj, OtlpCliJsonSerializerContext.Default.TelemetryApiResponse);
+        var apiResponse = JsonSerializer.Serialize(apiResponseObj, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
 
         var resources = new ResourceInfoJson[]
         {
             new() { Name = "api-service", InstanceId = null, HasLogs = true, HasTraces = true, HasMetrics = true },
             new() { Name = "worker-service", InstanceId = null, HasLogs = true, HasTraces = true, HasMetrics = true }
         };
-        var resourcesResponse = JsonSerializer.Serialize(resources, OtlpCliJsonSerializerContext.Default.ResourceInfoJsonArray);
+        var resourcesResponse = JsonSerializer.Serialize(resources, OtlpJsonSerializerContext.Default.ResourceInfoJsonArray);
 
         string? capturedUrl = null;
         using var mockHandler = new MockHttpMessageHandler(request =>
@@ -438,8 +437,10 @@ public class ListTracesToolTests
         TestAuxiliaryBackchannelMonitor? monitor = null,
         IHttpClientFactory? httpClientFactory = null)
     {
+        var actualMonitor = monitor ?? new TestAuxiliaryBackchannelMonitor();
+        IDashboardInfoProvider dashboardInfoProvider = new BackchannelDashboardInfoProvider(actualMonitor, NullLogger<BackchannelDashboardInfoProvider>.Instance);
         return new ListTracesTool(
-            monitor ?? new TestAuxiliaryBackchannelMonitor(),
+            dashboardInfoProvider,
             httpClientFactory ?? s_httpClientFactory,
             NullLogger<ListTracesTool>.Instance);
     }

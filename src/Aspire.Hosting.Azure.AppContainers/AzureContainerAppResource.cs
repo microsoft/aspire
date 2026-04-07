@@ -39,13 +39,6 @@ public class AzureContainerAppResource : AzureProvisioningResource
 
             var steps = new List<PipelineStep>();
 
-            if (!targetResource.TryGetEndpoints(out var endpoints))
-            {
-                endpoints = [];
-            }
-
-            var anyPublicEndpoints = endpoints.Any(e => e.IsExternal);
-
             var printResourceSummary = new PipelineStep
             {
                 Name = $"print-{targetResource.Name}-summary",
@@ -56,15 +49,17 @@ public class AzureContainerAppResource : AzureProvisioningResource
 
                     var domainValue = await containerAppEnv.ContainerAppDomain.GetValueAsync(ctx.CancellationToken).ConfigureAwait(false);
 
-                    if (anyPublicEndpoints)
+                    if (targetResource.TryGetEndpoints(out var endpoints) && endpoints.Any(e => e.IsExternal))
                     {
                         var endpoint = $"https://{targetResource.Name.ToLowerInvariant()}.{domainValue}";
 
-                        ctx.ReportingStep.Log(LogLevel.Information, $"Successfully deployed **{targetResource.Name}** to [{endpoint}]({endpoint})", enableMarkdown: true);
+                        ctx.ReportingStep.Log(LogLevel.Information, new MarkdownString($"Successfully deployed **{targetResource.Name}** to [{endpoint}]({endpoint})"));
+                        ctx.Summary.Add(targetResource.Name, new MarkdownString($"[{endpoint}]({endpoint})"));
                     }
                     else
                     {
-                        ctx.ReportingStep.Log(LogLevel.Information, $"Successfully deployed **{targetResource.Name}** to Azure Container Apps environment **{containerAppEnv.Name}**. No public endpoints were configured.", enableMarkdown: true);
+                        ctx.ReportingStep.Log(LogLevel.Information, new MarkdownString($"Successfully deployed **{targetResource.Name}** to Azure Container Apps environment **{containerAppEnv.Name}**. No public endpoints were configured."));
+                        ctx.Summary.Add(targetResource.Name, "No public endpoints");
                     }
                 },
                 Tags = ["print-summary"],

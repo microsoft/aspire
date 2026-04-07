@@ -1,0 +1,11 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Run AppHost",
+            "type": "aspire",
+            "request": "launch",
+            "program": "${workspaceFolder}/apphost.ts"
+        }
+    ]
+}

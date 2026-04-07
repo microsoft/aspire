@@ -3,6 +3,7 @@
 
 using System.Text.Json;
 using Aspire.Dashboard.Otlp.Model.Serialization;
+using Aspire.Otlp.Serialization;
 using Google.Protobuf;
 using OpenTelemetry.Proto.Collector.Logs.V1;
 using OpenTelemetry.Proto.Collector.Metrics.V1;

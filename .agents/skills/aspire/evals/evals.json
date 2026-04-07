@@ -1,0 +1,42 @@
+{
+  "skill_name": "aspire",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I'd like to add postgres to my aspire TypeScript app, send help",
+      "expected_output": "The apphost.ts contains a call to `addPostgres` and `addDatabase` with appropriate configuration for the Postgres database. The agent should identify the need to add Postgres, determine the necessary configuration, and modify the apphost.ts file accordingly.",
+      "files": [
+        "evals/files/typescript-postgres-app"
+      ],
+      "expectations": [
+        "The aspire docs search or get command was called for postgres.",
+        "The agent should call `aspire add postgres` and the appropriate packages are added to the aspire.config.json file.",
+        "The agent reads the `.modules/*` TS files for info on the available APIs."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "could you please help me add aspire to my existing express app?",
+      "expected_output": "The apphost.ts file is created in the root of the workspace.",
+      "files": [
+        "evals/files/existing-express-app"
+      ],
+      "expectations": [
+        "The agent identifies that there is an existing express app and calls `aspire init` selects `TypeScript (Node.js)`.",
+        "The agent correctly wires the existing express app into the apphost.ts file, ensuring that the express app is properly initialized and can be started using the aspire CLI."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Help me expose one of those fancy aspire dashboard commands from my AppHost.cs?",
+      "expected_output": "The apphost.cs file has an added call to `WithCommand` on the target resource.",
+      "files": [
+        "evals/files/csharp-apphost-command"
+      ],
+      "expectations": [
+        "The aspire docs search or get command was called for custom resource commands.",
+        "The agent chains a call to the target resource in apphost.cs with `WithCommand`, providing the necessary configuration for the command."
+      ]
+    }
+  ]
+}

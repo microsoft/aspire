@@ -6,6 +6,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <summary>
 /// A resource that represents a SQL Server container.
 /// </summary>
+[AspireExport(ExposeProperties = true)]
 public class SqlServerServerResource : ContainerResource, IResourceWithConnectionString
 {
     internal const string PrimaryEndpointName = "tcp";

@@ -32,6 +32,11 @@ internal interface IAuxiliaryBackchannelMonitor
     IAppHostAuxiliaryBackchannel? SelectedConnection { get; }
 
     /// <summary>
+    /// Gets the AppHost path of the currently resolved connection, or <c>null</c> if no connection is available.
+    /// </summary>
+    string? ResolvedAppHostPath => SelectedConnection?.AppHostInfo?.AppHostPath;
+
+    /// <summary>
     /// Gets all connections that are within the scope of the specified working directory.
     /// </summary>
     /// <param name="workingDirectory">The working directory to check against.</param>

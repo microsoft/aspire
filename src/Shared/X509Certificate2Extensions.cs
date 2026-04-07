@@ -46,8 +46,7 @@ internal static class X509Certificate2Extensions
         ArgumentNullException.ThrowIfNull(certificate);
 
         var byteArray = certificate.Extensions.OfType<X509Extension>()
-            .Where(e => string.Equals(AspNetHttpsOid, e.Oid?.Value, StringComparison.Ordinal))
-            .Single()
+            .Single(e => string.Equals(AspNetHttpsOid, e.Oid?.Value, StringComparison.Ordinal))
             .RawData;
 
         if ((byteArray.Length == AspNetHttpsOidFriendlyName.Length && byteArray[0] == (byte)'A') || byteArray.Length == 0)
@@ -116,5 +115,18 @@ internal static class X509Certificate2Extensions
         ArgumentNullException.ThrowIfNull(certificate);
 
         return certificate.Extensions.OfType<X509SubjectKeyIdentifierExtension>().Any(ski => !string.IsNullOrEmpty(ski.SubjectKeyIdentifier));
+    }
+
+    /// <summary>
+    /// Orders certificates by version descending, then by expiration date descending,
+    /// matching the ordering logic ASP.NET Core uses.
+    /// </summary>
+    /// <param name="certificates">The certificates to order.</param>
+    /// <returns>The certificates ordered by version descending, then by expiration date descending.</returns>
+    public static IOrderedEnumerable<X509Certificate2> OrderByVersion(this IEnumerable<X509Certificate2> certificates)
+    {
+        return certificates
+            .OrderByDescending(c => c.GetCertificateVersion())
+            .ThenByDescending(c => c.NotAfter);
     }
 }

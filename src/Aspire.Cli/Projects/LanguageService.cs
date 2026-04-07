@@ -11,7 +11,7 @@ namespace Aspire.Cli.Projects;
 /// </summary>
 internal sealed class LanguageService : ILanguageService
 {
-    private const string LanguageConfigKey = "language";
+    private const string LanguageConfigKey = "appHost.language";
 
     private readonly IConfigurationService _configurationService;
     private readonly IInteractionService _interactionService;
@@ -33,7 +33,11 @@ internal sealed class LanguageService : ILanguageService
     /// <inheritdoc />
     public async Task<IAppHostProject?> GetConfiguredProjectAsync(CancellationToken cancellationToken = default)
     {
-        var languageId = await _configurationService.GetConfigurationAsync(LanguageConfigKey, cancellationToken);
+        // Try new nested key first, then fall back to legacy flat key.
+        // TODO: Remove "language" fallback once legacy .aspire/settings.json is no longer supported.
+        // Tracked by https://github.com/microsoft/aspire/issues/15239
+        var languageId = await _configurationService.GetConfigurationAsync(LanguageConfigKey, cancellationToken)
+            ?? await _configurationService.GetConfigurationAsync("language", cancellationToken);
 
         if (string.IsNullOrWhiteSpace(languageId))
         {
@@ -131,7 +135,7 @@ internal sealed class LanguageService : ILanguageService
         if (saveSelection)
         {
             await SetLanguageAsync(selectedLanguage.LanguageId, isGlobal: false, cancellationToken);
-            _interactionService.DisplayMessage("check_mark", $"Language preference saved to local settings: {selectedProject.DisplayName}");
+            _interactionService.DisplayMessage(KnownEmojis.CheckMark, $"Language preference saved to local configuration: {selectedProject.DisplayName}");
         }
 
         return selectedProject;

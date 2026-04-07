@@ -22,11 +22,20 @@ internal sealed class AuxiliaryBackchannelService(
     : BackgroundService
 {
     private Socket? _serverSocket;
+    private readonly TaskCompletionSource _listeningTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     /// <summary>
     /// Gets the Unix socket path where the auxiliary backchannel is listening.
     /// </summary>
     public string? SocketPath { get; private set; }
+
+    /// <summary>
+    /// Gets a task that completes when the server socket is bound and listening for connections.
+    /// </summary>
+    /// <remarks>
+    /// Used by tests to wait until the backchannel is ready before attempting to connect.
+    /// </remarks>
+    internal Task ListeningTask => _listeningTcs.Task;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -72,6 +81,7 @@ internal sealed class AuxiliaryBackchannelService(
             _serverSocket.Listen(backlog: 10); // Allow multiple pending connections
 
             logger.LogDebug("Auxiliary backchannel listening on {SocketPath}", SocketPath);
+            _listeningTcs.TrySetResult();
 
             // Accept connections in a loop (supporting multiple concurrent connections)
             while (!stoppingToken.IsCancellationRequested)
@@ -163,6 +173,12 @@ internal sealed class AuxiliaryBackchannelService(
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
             logger.LogDebug("Client connection handler was cancelled");
+        }
+        catch (IOException ex) when (ex.InnerException is SocketException { SocketErrorCode: SocketError.ConnectionReset })
+        {
+            // IOException wrapping a ConnectionReset SocketException is expected when the client
+            // disconnects abruptly (e.g., process exit). This is a normal condition and not an error.
+            logger.LogDebug(ex, "Client disconnected from auxiliary backchannel");
         }
         catch (Exception ex)
         {

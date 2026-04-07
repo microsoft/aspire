@@ -1,0 +1,11 @@
+---
+apiVersion: "v1"
+kind: "ConfigMap"
+metadata:
+  name: "api-config"
+  labels:
+    app.kubernetes.io/name: "aspire-hosting-tests"
+    app.kubernetes.io/component: "api"
+    app.kubernetes.io/instance: "{{ .Release.Name }}"
+data:
+  PORT: "{{ .Values.config.api.PORT }}"

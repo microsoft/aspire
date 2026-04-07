@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Utils;
+using Aspire.Shared;
 using Aspire.Shared.Model;
 using Aspire.Shared.Model.Serialization;
 
@@ -12,6 +13,16 @@ namespace Aspire.Cli.Backchannel;
 /// </summary>
 internal static class ResourceSnapshotMapper
 {
+    /// <summary>
+    /// Filters resource snapshots by name, matching against both
+    /// <see cref="ResourceSnapshot.Name"/> and <see cref="ResourceSnapshot.DisplayName"/>.
+    /// </summary>
+    internal static IEnumerable<ResourceSnapshot> WhereMatchesResourceName(IEnumerable<ResourceSnapshot> snapshots, string resourceName)
+    {
+        return snapshots.Where(s => string.Equals(s.Name, resourceName, StringComparisons.ResourceName)
+                                 || string.Equals(s.DisplayName, resourceName, StringComparisons.ResourceName));
+    }
+
     /// <summary>
     /// Maps a list of <see cref="ResourceSnapshot"/> to a list of <see cref="ResourceJson"/>.
     /// </summary>
@@ -53,32 +64,25 @@ internal static class ResourceSnapshotMapper
             })
             .ToArray();
 
-        var healthReports = snapshot.HealthReports
-            .Select(h => new ResourceHealthReportJson
+        var healthReports = snapshot.HealthReports.OrderBy(h => h.Name).ToDistinctDictionary(
+            h => h.Name,
+            h => new ResourceHealthReportJson
             {
-                Name = h.Name,
                 Status = h.Status,
                 Description = h.Description,
                 ExceptionMessage = h.ExceptionText
-            })
-            .ToArray();
+            });
 
         var environment = snapshot.EnvironmentVariables
             .Where(e => e.IsFromSpec)
-            .Select(e => new ResourceEnvironmentVariableJson
-            {
-                Name = e.Name,
-                Value = includeEnvironmentVariableValues ? e.Value : null
-            })
-            .ToArray();
+            .OrderBy(e => e.Name)
+            .ToDistinctDictionary(
+                e => e.Name,
+                e => includeEnvironmentVariableValues ? e.Value : null);
 
-        var properties = snapshot.Properties
-            .Select(p => new ResourcePropertyJson
-            {
-                Name = p.Key,
-                Value = p.Value
-            })
-            .ToArray();
+        var properties = snapshot.Properties.OrderBy(p => p.Key).ToDistinctDictionary(
+            p => p.Key,
+            p => p.Value);
 
         // Build relationships by matching DisplayName
         var relationships = new List<ResourceRelationshipJson>();
@@ -101,12 +105,13 @@ internal static class ResourceSnapshotMapper
         // Only include enabled commands
         var commands = snapshot.Commands
             .Where(c => string.Equals(c.State, "Enabled", StringComparison.OrdinalIgnoreCase))
-            .Select(c => new ResourceCommandJson
-            {
-                Name = c.Name,
-                Description = c.Description
-            })
-            .ToArray();
+            .OrderBy(c => c.Name)
+            .ToDistinctDictionary(
+                c => c.Name,
+                c => new ResourceCommandJson
+                {
+                    Description = c.Description
+                });
 
         // Get source information using the shared ResourceSourceViewModel
         var sourceViewModel = ResourceSource.GetSourceModel(snapshot.ResourceType, snapshot.Properties);
@@ -141,6 +146,35 @@ internal static class ResourceSnapshotMapper
             Relationships = relationships.ToArray(),
             Commands = commands
         };
+    }
+
+    /// <summary>
+    /// Resolves a user-provided resource name to matching snapshots.
+    /// First tries an exact match on <see cref="ResourceSnapshot.Name"/>, then falls back
+    /// to matching by <see cref="ResourceSnapshot.DisplayName"/> only when the display name is
+    /// unique (i.e., not a replica set).
+    /// </summary>
+    /// <param name="resourceName">The user-provided resource name to resolve.</param>
+    /// <param name="snapshots">All available resource snapshots.</param>
+    /// <returns>The matching snapshots.</returns>
+    public static IReadOnlyList<ResourceSnapshot> ResolveResources(string resourceName, IReadOnlyList<ResourceSnapshot> snapshots)
+    {
+        // First try exact match on the unique resource Name.
+        var exactMatches = snapshots.Where(s => string.Equals(s.Name, resourceName, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (exactMatches.Count > 0)
+        {
+            return exactMatches;
+        }
+
+        // Fall back to matching by DisplayName, but only when there is exactly one match
+        // (no replicas). When there are replicas the user must specify the full suffixed name.
+        var displayNameMatches = snapshots.Where(s => string.Equals(s.DisplayName, resourceName, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (displayNameMatches.Count == 1)
+        {
+            return displayNameMatches;
+        }
+
+        return [];
     }
 
     /// <summary>

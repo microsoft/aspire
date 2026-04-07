@@ -16,16 +16,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="$(VendoringDir)OpenTelemetry.Instrumentation.SqlClient\**\*.cs" LinkBase="OpenTelemetry.Instrumentation.SqlClient" />
-  </ItemGroup>
-
-  <ItemGroup>
     <PackageReference Include="AspNetCore.HealthChecks.SqlServer" />
     <PackageReference Include="Microsoft.Data.SqlClient" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.SqlClient" />
   </ItemGroup>
 
 </Project>

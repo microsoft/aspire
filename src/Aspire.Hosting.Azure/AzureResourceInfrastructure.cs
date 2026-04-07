@@ -9,6 +9,7 @@ namespace Aspire.Hosting.Azure;
 /// <summary>
 /// An Azure Provisioning <see cref="Infrastructure" /> which represents the root Bicep module that is generated for an Azure resource.
 /// </summary>
+[AspireExport(ExposeProperties = true)]
 public sealed class AzureResourceInfrastructure : Infrastructure
 {
     internal AzureResourceInfrastructure(AzureProvisioningResource resource, string name) : base(name)

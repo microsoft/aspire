@@ -3,63 +3,23 @@
   <file datatype="xml" source-language="en" target-language="zh-Hant" original="../ResourceCommandStrings.resx">
     <body>
       <trans-unit id="CommandDescription">
-        <source>Execute a command on a resource.</source>
-        <target state="translated">在資源上執行命令。</target>
+        <source>Execute a command on a resource (e.g. start, stop, restart)</source>
+        <target state="needs-review-translation">在資源上執行命令。</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandNameArgumentDescription">
-        <source>The name of the command to execute.</source>
-        <target state="translated">所要執行命令的名稱。</target>
+        <source>The name of the command to execute (e.g. start, stop, restart)</source>
+        <target state="needs-review-translation">所要執行命令的名稱。</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandResourceArgumentDescription">
-        <source>The name of the resource to execute the command on.</source>
-        <target state="translated">要執行命令的資源名稱。</target>
+        <source>The name of the resource to execute the command on</source>
+        <target state="needs-review-translation">要執行命令的資源名稱。</target>
         <note />
       </trans-unit>
-      <trans-unit id="NoInScopeAppHostsShowingAll">
-        <source>No in-scope AppHosts found. Showing all running AppHosts.</source>
-        <target state="translated">未找到符合範圍的 AppHost。顯示所有正在執行的 AppHost。</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="NoRunningAppHostsFound">
-        <source>No running AppHosts found.</source>
-        <target state="translated">找不到正在執行的 AppHost。</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ProjectOptionDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="translated">Aspire AppHost 專案檔案的路徑。</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RestartDescription">
-        <source>Restart a running resource.</source>
-        <target state="translated">重新啟動正在執行的資源。</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RestartResourceArgumentDescription">
-        <source>The name of the resource to restart.</source>
-        <target state="translated">要重新啟動的資源名稱。</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ScanningForRunningAppHosts">
-        <source>Scanning for running AppHosts...</source>
-        <target state="translated">正在掃描執行中的 AppHost...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SelectAppHost">
-        <source>Select which AppHost to connect to:</source>
-        <target state="translated">選取要連接的 AppHost:</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="StartDescription">
-        <source>Start a stopped resource.</source>
-        <target state="translated">啟動已停止的資源。</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="StartResourceArgumentDescription">
-        <source>The name of the resource to start.</source>
-        <target state="translated">要啟動的資源名稱。</target>
+      <trans-unit id="SelectAppHostAction">
+        <source>connect to</source>
+        <target state="translated">連線至</target>
         <note />
       </trans-unit>
     </body>

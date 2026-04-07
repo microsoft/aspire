@@ -37,14 +37,36 @@ func NewResourceBuilderBase(handle *Handle, client *AspireClient) ResourceBuilde
 }
 
 // ReferenceExpression represents a reference expression.
+// Supports value mode (Format + Args) and conditional mode (Condition + WhenTrue + WhenFalse).
 type ReferenceExpression struct {
 	Format string
 	Args   []any
+
+	// Conditional mode fields
+	Condition     any
+	WhenTrue      *ReferenceExpression
+	WhenFalse     *ReferenceExpression
+	MatchValue    string
+	isConditional bool
 }
 
-// NewReferenceExpression creates a new reference expression.
+// NewReferenceExpression creates a new reference expression in value mode.
 func NewReferenceExpression(format string, args ...any) *ReferenceExpression {
 	return &ReferenceExpression{Format: format, Args: args}
+}
+
+// NewConditionalReferenceExpression creates a conditional reference expression from its parts.
+func NewConditionalReferenceExpression(condition any, matchValue string, whenTrue *ReferenceExpression, whenFalse *ReferenceExpression) *ReferenceExpression {
+	if matchValue == "" {
+		matchValue = "True"
+	}
+	return &ReferenceExpression{
+		Condition:     condition,
+		WhenTrue:      whenTrue,
+		WhenFalse:     whenFalse,
+		MatchValue:    matchValue,
+		isConditional: true,
+	}
 }
 
 // RefExpr is a convenience function for creating reference expressions.
@@ -54,8 +76,18 @@ func RefExpr(format string, args ...any) *ReferenceExpression {
 
 // ToJSON returns the reference expression as a JSON-serializable map.
 func (r *ReferenceExpression) ToJSON() map[string]any {
+	if r.isConditional {
+		return map[string]any{
+			"$expr": map[string]any{
+				"condition":  SerializeValue(r.Condition),
+				"whenTrue":   r.WhenTrue.ToJSON(),
+				"whenFalse":  r.WhenFalse.ToJSON(),
+				"matchValue": r.MatchValue,
+			},
+		}
+	}
 	return map[string]any{
-		"$refExpr": map[string]any{
+		"$expr": map[string]any{
 			"format": r.Format,
 			"args":   r.Args,
 		},

@@ -2,19 +2,54 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="ko" original="../TelemetryCommandStrings.resx">
     <body>
-      <trans-unit id="AppHostNotRunning">
-        <source>No running AppHost found. Use 'aspire run' to start one first.</source>
-        <target state="translated">실행 중인 AppHost를 찾을 수 없습니다. 'aspire run'을 사용하여 먼저 하나를 시작합니다.</target>
+      <trans-unit id="ApiKeyOptionDescription">
+        <source>API key for authenticating with the dashboard (optional, for dashboards with API key authentication)</source>
+        <target state="new">API key for authenticating with the dashboard (optional, for dashboards with API key authentication)</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardApiNotAvailable">
         <source>Dashboard API is not available. Ensure the AppHost is running with Dashboard enabled.</source>
-        <target state="translated">대시보드 API를 사용할 수 없습니다. AppHost가 대시보드를 활성화한 상태로 실행 중인지 확인하세요.</target>
+        <target state="needs-review-translation">대시보드 API를 사용할 수 없습니다. AppHost가 대시보드를 활성화한 상태로 실행 중인지 확인하세요.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardApiNotEnabled">
+        <source>The dashboard at '{0}' does not have the telemetry API enabled. Configure the dashboard with Dashboard:Api:Enabled set to true.</source>
+        <target state="new">The dashboard at '{0}' does not have the telemetry API enabled. Configure the dashboard with Dashboard:Api:Enabled set to true.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardAuthFailed">
+        <source>Authentication denied by the dashboard. Use --api-key to specify a valid API key that matches the dashboard's configured API key (Dashboard:Api:PrimaryApiKey).</source>
+        <target state="new">Authentication denied by the dashboard. Use --api-key to specify a valid API key that matches the dashboard's configured API key (Dashboard:Api:PrimaryApiKey).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardConnectionFailed">
+        <source>Could not connect to the dashboard at '{0}'. Verify the dashboard is running and the URL is correct.</source>
+        <target state="new">Could not connect to the dashboard at '{0}'. Verify the dashboard is running and the URL is correct.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardUrlAndAppHostExclusive">
+        <source>The --dashboard-url and --apphost options cannot be used together. Specify one or the other.</source>
+        <target state="new">The --dashboard-url and --apphost options cannot be used together. Specify one or the other.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardUrlInvalid">
+        <source>The value '{0}' is not a valid URL. Specify an absolute URL like 'http://localhost:18888'.</source>
+        <target state="new">The value '{0}' is not a valid URL. Specify an absolute URL like 'http://localhost:18888'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardUrlNotReachable">
+        <source>The specified --dashboard-url '{0}' does not appear to be a valid Aspire Dashboard. Verify the URL is correct.</source>
+        <target state="new">The specified --dashboard-url '{0}' does not appear to be a valid Aspire Dashboard. Verify the URL is correct.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardUrlOptionDescription">
+        <source>URL of a standalone Aspire Dashboard to connect to directly (bypasses AppHost discovery)</source>
+        <target state="new">URL of a standalone Aspire Dashboard to connect to directly (bypasses AppHost discovery)</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>View telemetry data (logs, spans, traces) from a running Aspire application.</source>
-        <target state="translated">실행 중인 Aspire 애플리케이션의 원격 분석 데이터(로그, 범위, 추적)를 확인합니다.</target>
+        <source>View OpenTelemetry data (logs, spans, traces) from a running AppHost</source>
+        <target state="needs-review-translation">실행 중인 Aspire 애플리케이션의 원격 분석 데이터(로그, 범위, 추적)를 확인합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedToFetchTelemetry">
@@ -23,18 +58,43 @@
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
-        <source>Stream telemetry in real-time as it arrives.</source>
-        <target state="translated">원격 분석 데이터를 실시간으로 스트림합니다.</target>
+        <source>Stream telemetry in real-time as it arrives</source>
+        <target state="needs-review-translation">원격 분석 데이터를 실시간으로 스트림합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="FormatOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">출력 형식(테이블 또는 JSON)입니다.</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">출력 형식(테이블 또는 JSON)입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="HasErrorOptionDescription">
-        <source>Filter by error status (true to show only errors, false to exclude errors).</source>
-        <target state="translated">오류 상태로 필터링합니다(true면 오류만, false면 오류 제외).</target>
+        <source>Filter by error status (true to show only errors, false to exclude errors)</source>
+        <target state="needs-review-translation">오류 상태로 필터링합니다(true면 오류만, false면 오류 제외).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderDuration">
+        <source>Duration</source>
+        <target state="translated">기간</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderName">
+        <source>Name</source>
+        <target state="translated">이름</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderSpans">
+        <source>Spans</source>
+        <target state="translated">범위</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderStatus">
+        <source>Status</source>
+        <target state="translated">상태</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderTimestamp">
+        <source>Timestamp</source>
+        <target state="translated">타임스탬프</target>
         <note />
       </trans-unit>
       <trans-unit id="LimitMustBePositive">
@@ -43,58 +103,43 @@
         <note />
       </trans-unit>
       <trans-unit id="LimitOptionDescription">
-        <source>Maximum number of items to return.</source>
-        <target state="translated">반환할 최대 항목 수입니다.</target>
+        <source>Maximum number of items to return</source>
+        <target state="needs-review-translation">반환할 최대 항목 수입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="LogsDescription">
-        <source>View structured logs from the Dashboard telemetry API.</source>
-        <target state="translated">대시보드 원격 분석 API에서 구조화된 로그를 확인합니다.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="NoInScopeAppHostsShowingAll">
-        <source>No AppHosts found in current directory. Showing all running AppHosts.</source>
-        <target state="translated">현재 디렉터리에 AppHost가 없습니다. 실행 중인 모든 AppHost를 표시하는 중입니다.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ProjectOptionDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="translated">Aspire AppHost 프로젝트 파일의 경로입니다.</target>
+        <source>View structured logs from the Dashboard telemetry API</source>
+        <target state="needs-review-translation">대시보드 원격 분석 API에서 구조화된 로그를 확인합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
-        <source>Filter by resource name.</source>
-        <target state="translated">리소스 이름으로 필터링</target>
+        <source>Filter by resource name</source>
+        <target state="needs-review-translation">리소스 이름으로 필터링</target>
         <note />
       </trans-unit>
-      <trans-unit id="ScanningForRunningAppHosts">
-        <source>Scanning for running AppHosts...</source>
-        <target state="translated">실행 중인 AppHost를 검색하는 중...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SelectAppHost">
-        <source>Select an AppHost:</source>
-        <target state="translated">AppHost 선택:</target>
+      <trans-unit id="SelectAppHostAction">
+        <source>view telemetry for</source>
+        <target state="translated">원격 분석 데이터 보기</target>
         <note />
       </trans-unit>
       <trans-unit id="SeverityOptionDescription">
-        <source>Filter logs by minimum severity (Trace, Debug, Information, Warning, Error, Critical).</source>
-        <target state="translated">최소 심각도(Trace, Debug, Information, Warning, Error, Critical)로 로그를 필터링합니다.</target>
+        <source>Filter logs by minimum severity (Trace, Debug, Information, Warning, Error, Critical)</source>
+        <target state="needs-review-translation">최소 심각도(Trace, Debug, Information, Warning, Error, Critical)로 로그를 필터링합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="SpansDescription">
-        <source>View spans from the Dashboard telemetry API.</source>
-        <target state="translated">대시보드 원격 분석 API에서 범위를 확인합니다.</target>
+        <source>View spans from the Dashboard telemetry API</source>
+        <target state="needs-review-translation">대시보드 원격 분석 API에서 범위를 확인합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="TraceIdArgumentDescription">
         <source>The trace ID to view. If not specified, lists all traces.</source>
-        <target state="translated">조회할 추적 ID입니다. 지정하지 않으면 모든 추적이 나열됩니다.</target>
+        <target state="needs-review-translation">조회할 추적 ID입니다. 지정하지 않으면 모든 추적이 나열됩니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="TraceIdOptionDescription">
-        <source>Filter by trace ID.</source>
-        <target state="translated">추적 ID로 필터링합니다.</target>
+        <source>Filter by trace ID</source>
+        <target state="needs-review-translation">추적 ID로 필터링합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="TraceNotFound">
@@ -103,13 +148,13 @@
         <note />
       </trans-unit>
       <trans-unit id="TracesDescription">
-        <source>View traces from the Dashboard telemetry API.</source>
-        <target state="translated">대시보드 원격 분석 API에서 추적을 확인하세요.</target>
+        <source>View traces from the Dashboard telemetry API</source>
+        <target state="needs-review-translation">대시보드 원격 분석 API에서 추적을 확인하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnexpectedContentType">
-        <source>Dashboard API returned unexpected content type. Expected JSON response.</source>
-        <target state="translated">대시보드 API에서 예상치 못한 콘텐츠 형식이 반환되었습니다. JSON 응답이 필요합니다.</target>
+        <source>Dashboard API returned unexpected content type '{0}'. Expected JSON response.</source>
+        <target state="new">Dashboard API returned unexpected content type '{0}'. Expected JSON response.</target>
         <note />
       </trans-unit>
     </body>

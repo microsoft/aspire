@@ -7,9 +7,9 @@ using System.Text.Json;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Serialization;
 using Aspire.Dashboard.Otlp.Model;
-using Aspire.Dashboard.Otlp.Model.Serialization;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
+using Aspire.Otlp.Serialization;
 using Aspire.Dashboard.Tests.TelemetryRepositoryTests;
 using Aspire.Tests.Shared.DashboardModel;
 using Google.Protobuf.Collections;
@@ -1205,7 +1205,7 @@ public sealed class TelemetryExportServiceTests
 
         Assert.NotNull(deserialized.Environment);
         Assert.Single(deserialized.Environment);
-        Assert.Equal("MY_VAR", deserialized.Environment[0].Name);
+        Assert.True(deserialized.Environment.ContainsKey("MY_VAR"));
 
         // Relationships are resolved by matching DisplayName. Since there's only one resource
         // with that display name (not a replica), the display name is used as the resource name.
@@ -1238,10 +1238,12 @@ public sealed class TelemetryExportServiceTests
         var deserialized = JsonSerializer.Deserialize(json, ResourceJsonSerializerContext.Default.ResourceJson);
         Assert.NotNull(deserialized);
         Assert.NotNull(deserialized.Environment);
-        Assert.Equal(2, deserialized.Environment.Length);
-        Assert.Contains(deserialized.Environment, e => e.Name == "FROM_SPEC_VAR" && e.Value == "spec-value");
-        Assert.Contains(deserialized.Environment, e => e.Name == "ANOTHER_SPEC_VAR" && e.Value == "another-spec-value");
-        Assert.DoesNotContain(deserialized.Environment, e => e.Name == "NOT_FROM_SPEC_VAR");
+        Assert.Equal(2, deserialized.Environment.Count);
+        Assert.Contains("FROM_SPEC_VAR", deserialized.Environment.Keys);
+        Assert.Equal("spec-value", deserialized.Environment["FROM_SPEC_VAR"]);
+        Assert.Contains("ANOTHER_SPEC_VAR", deserialized.Environment.Keys);
+        Assert.Equal("another-spec-value", deserialized.Environment["ANOTHER_SPEC_VAR"]);
+        Assert.DoesNotContain("NOT_FROM_SPEC_VAR", deserialized.Environment.Keys);
     }
 
     [Fact]
@@ -1275,6 +1277,6 @@ public sealed class TelemetryExportServiceTests
 
         Assert.NotNull(deserialized.Environment);
         Assert.Single(deserialized.Environment);
-        Assert.Equal(japaneseEnvValue, deserialized.Environment[0].Value);
+        Assert.Equal(japaneseEnvValue, deserialized.Environment["JAPANESE_VAR"]);
     }
 }

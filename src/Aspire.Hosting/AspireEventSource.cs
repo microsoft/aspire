@@ -318,6 +318,7 @@ internal sealed class AspireEventSource : EventSource
     }
 
     [Event(37, Level = EventLevel.Informational, Message = "Creating DCP resources for Aspire executable...")]
+    [Obsolete("Use DcpObjectCreationStart/Stop events with kind=Executable and resourceName=executableName instead.")]
     public void CreateAspireExecutableResourcesStart(string executableName)
     {
         if (IsEnabled())
@@ -327,6 +328,7 @@ internal sealed class AspireEventSource : EventSource
     }
 
     [Event(38, Level = EventLevel.Informational, Message = "Aspire executable resources created")]
+    [Obsolete("Use DcpObjectCreationStart/Stop events with kind=Executable and resourceName=executableName instead.")]
     public void CreateAspireExecutableResourcesStop(string executableName)
     {
         if (IsEnabled())
@@ -368,6 +370,42 @@ internal sealed class AspireEventSource : EventSource
         if (IsEnabled())
         {
             WriteEvent(42, kind, resourceName);
+        }
+    }
+
+    [Event(43, Level = EventLevel.Informational, Message = "Development certificate trust check is starting...")]
+    public void DevelopmentCertificateTrustCheckStart()
+    {
+        if (IsEnabled())
+        {
+            WriteEvent(43);
+        }
+    }
+
+    [Event(44, Level = EventLevel.Informational, Message = "Development certificate trust check completed")]
+    public void DevelopmentCertificateTrustCheckStop()
+    {
+        if (IsEnabled())
+        {
+            WriteEvent(44);
+        }
+    }
+
+    [Event(45, Level = EventLevel.Informational, Message = "DCP Service object preparation starting...")]
+    public void DcpServiceObjectPreparationStart()
+    {
+        if (IsEnabled())
+        {
+            WriteEvent(45);
+        }
+    }
+
+    [Event(46, Level = EventLevel.Informational, Message = "DCP Service object preparation completed")]
+    public void DcpServiceObjectPreparationStop()
+    {
+        if (IsEnabled())
+        {
+            WriteEvent(46);
         }
     }
 }

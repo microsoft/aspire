@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "CdkSample.AppHost/CdkSample.AppHost.csproj"
+  }
+}

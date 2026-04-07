@@ -16,7 +16,7 @@
 
     <!-- We don't need to code sign .js files because they are not used in Windows Script Host. -->
     <FileExtensionSignInfo Update=".js" CertificateName="None" />
-    <!-- Remove .py files from being signed. See https://github.com/dotnet/aspire/issues/13004 -->
+    <!-- Remove .py files from being signed. See https://github.com/microsoft/aspire/issues/13004 -->
     <FileExtensionSignInfo Update=".py" CertificateName="None" />
   </ItemGroup>
 
@@ -38,7 +38,6 @@
     <FileSignInfo Include="Markdig.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="MessagePack.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="MessagePack.Annotations.dll" CertificateName="3PartySHA2" />
-    <FileSignInfo Include="ModelContextProtocol.AspNetCore.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="ModelContextProtocol.Core.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="ModelContextProtocol.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="OpenAI.dll" CertificateName="3PartySHA2" />
@@ -51,11 +50,15 @@
     <FileSignInfo Include="OpenTelemetry.Extensions.Hosting.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="OpenTelemetry.PersistentStorage.Abstractions.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="OpenTelemetry.PersistentStorage.FileSystem.dll" CertificateName="3PartySHA2" />
+    <FileSignInfo Include="NSec.Cryptography.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="Semver.dll" CertificateName="3PartySHA2" />
+    <FileSignInfo Include="Sigstore.dll" CertificateName="3PartySHA2" />
+    <FileSignInfo Include="Tuf.dll" CertificateName="3PartySHA2" />
 
     <FileSignInfo Condition="$([System.OperatingSystem]::IsWindows())" Include="aspire.exe" CertificateName="MicrosoftDotNet500" />
     <FileSignInfo Condition="$([System.OperatingSystem]::IsLinux())" Include="aspire" CertificateName="MicrosoftDotNet500" />
     <FileSignInfo Condition="$([System.OperatingSystem]::IsMacOS())" Include="aspire" CertificateName="MacDeveloperHardenWithNotarization" />
+    <FileSignInfo Condition="$([System.OperatingSystem]::IsWindows())" Include="get-aspire-cli.ps1" CertificateName="MicrosoftDotNet500" />
 
     <!-- Sign the manifest catalog on Windows -->
     <FileSignInfo Condition="$([System.OperatingSystem]::IsWindows())" Include="manifest.cat" CertificateName="MicrosoftDotNet500" />
@@ -68,6 +71,7 @@
     <ItemsToSign Include="$(VisualStudioSetupInsertionPath)\**\*.zip" Condition="'$(PostBuildSign)' != 'true'" />
     <ItemsToSign Include="$(ArtifactsPackagesDir)**\aspire-cli-*.zip" />
     <ItemsToSign Include="$(ArtifactsPackagesDir)**\aspire-cli-*.tar.gz" />
+    <ItemsToSign Include="$(RepoRoot)eng\scripts\get-aspire-cli.ps1" Condition="$([System.OperatingSystem]::IsWindows())" />
     <!-- 
       Note: VS Code extension (.vsix) is NOT included here.
       Signing the VSIX changes its hash, breaking manifest integrity verification.

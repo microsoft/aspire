@@ -1,5 +1,5 @@
-import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
+import { AspireEditorCommandProvider } from '../editor/AspireEditorCommandProvider';
 
-export async function deployCommand(terminalProvider: AspireTerminalProvider) {
-    terminalProvider.sendAspireCommandToAspireTerminal('deploy');
+export async function deployCommand(editorCommandProvider: AspireEditorCommandProvider) {
+    await editorCommandProvider.tryExecuteDeployAppHost(false);
 }

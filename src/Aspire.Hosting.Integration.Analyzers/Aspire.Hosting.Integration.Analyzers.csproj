@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <UsePublicApiAnalyzers>false</UsePublicApiAnalyzers>
+    <EnablePackageValidation>false</EnablePackageValidation>
+    <IsPackable>false</IsPackable>
+    <LangVersion>12.0</LangVersion>
+    <!--
+      Analyzer projects don't need XML docs
+      CS1573: Parameter 'parameter' has no matching param tag in the XML comment for 'parameter' (but other parameters do)
+      CS1591: Missing XML comment for publicly visible type or member 'Type_or_Member'
+      CS1712: Type parameter 'type_parameter' has no matching typeparam tag in the XML comment on 'type_or_member' (but other type parameters do)
+    -->
+    <NoWarn>$(NoWarn),1573,1591,1712</NoWarn>
+    <!--
+      We manually control the dependency versions that the analyzer uses as it needs to be loaded into the compiler host, e.g. Visual Studio,
+      which may have a different set of dependencies.
+    -->
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Shared Infrastructure from Aspire.Hosting.Analyzers -->
+    <Compile Include="..\Aspire.Hosting.Analyzers\Infrastructure\BoundedCacheWithFactory.cs" Link="Infrastructure\BoundedCacheWithFactory.cs" />
+    <Compile Include="..\Aspire.Hosting.Analyzers\Infrastructure\WellKnownTypeData.cs" Link="Infrastructure\WellKnownTypeData.cs" />
+    <Compile Include="..\Aspire.Hosting.Analyzers\Infrastructure\WellKnownTypes.cs" Link="Infrastructure\WellKnownTypes.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The version of Roslyn used needs to consider the min-supported version of VS and .NET SDK for Aspire.
+         Roslyn 4.8 aligns with .NET SDK 8.0.100 & VS 17.8 and the min-supported Aspire VS version is 17.10, so
+         we take the minimum of those. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" PrivateAssets="All" />
+    <PackageReference Update="Microsoft.DotNet.GenAPI.Task" Version="9.0.103-servicing.25065.25" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.Hosting.Analyzers.Tests" />
+  </ItemGroup>
+
+</Project>

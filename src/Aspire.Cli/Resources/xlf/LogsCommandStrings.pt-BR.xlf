@@ -2,29 +2,19 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="pt-BR" original="../LogsCommandStrings.resx">
     <body>
-      <trans-unit id="AppHostNotRunning">
-        <source>No running AppHost found. Use 'aspire run' to start one first.</source>
-        <target state="translated">Nenhum AppHost em execução encontrado. Use "aspire run" para iniciar um primeiro.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="Description">
-        <source>Display logs from resources in a running Aspire apphost.</source>
-        <target state="translated">Exiba logs de recursos em um apphost do Aspire em execução.</target>
+        <source>Display logs from resources in a running AppHost</source>
+        <target state="needs-review-translation">Exiba logs de recursos em um apphost do Aspire em execução.</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
-        <source>Stream logs in real-time as they are written.</source>
-        <target state="translated">Transmita logs em tempo real conforme eles são gravados.</target>
+        <source>Stream logs in real-time as they are written</source>
+        <target state="needs-review-translation">Transmita logs em tempo real conforme eles são gravados.</target>
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output logs in JSON format (NDJSON).</source>
-        <target state="translated">Logs de saída no formato JSON (NDJSON).</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="NoInScopeAppHostsShowingAll">
-        <source>No AppHosts found in current directory. Showing all running AppHosts.</source>
-        <target state="translated">Nenhum AppHosts encontrado no diretório atual. Mostrando todos os AppHosts em execução.</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">Logs de saída no formato JSON (NDJSON).</target>
         <note />
       </trans-unit>
       <trans-unit id="NoResourcesFound">
@@ -32,14 +22,14 @@
         <target state="translated">Nenhum recurso encontrado.</target>
         <note />
       </trans-unit>
-      <trans-unit id="ProjectOptionDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="translated">O caminho para o arquivo de projeto do Aspire AppHost.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The name of the resource to get logs for. If not specified, logs from all resources are shown.</source>
-        <target state="translated">O nome do recurso para o qual obter logs. Se não for especificado, os logs de todos os recursos serão mostrados.</target>
+        <target state="needs-review-translation">O nome do recurso para o qual obter logs. Se não for especificado, os logs de todos os recursos serão mostrados.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceNotFound">
+        <source>Resource '{0}' was not found.</source>
+        <target state="translated">O recurso "{0}" não foi encontrado.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceRequiredWithoutFollow">
@@ -47,14 +37,9 @@
         <target state="translated">Um nome de recurso é necessário ao não usar --follow. Use --follow para transmitir logs de todos os recursos.</target>
         <note />
       </trans-unit>
-      <trans-unit id="ScanningForRunningAppHosts">
-        <source>Scanning for running AppHosts...</source>
-        <target state="translated">Verificando se há AppHosts em execução...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SelectAppHost">
-        <source>Select an AppHost:</source>
-        <target state="translated">Selecione um AppHost:</target>
+      <trans-unit id="SelectAppHostAction">
+        <source>stream logs from</source>
+        <target state="translated">fazer streaming de logs de</target>
         <note />
       </trans-unit>
       <trans-unit id="TailMustBePositive">
@@ -63,13 +48,23 @@
         <note />
       </trans-unit>
       <trans-unit id="TailOptionDescription">
-        <source>Number of lines to show from the end of logs (default: all).</source>
-        <target state="translated">Número de linhas a serem mostradas a partir do final dos logs (padrão: todos).</target>
+        <source>Number of lines to show from the end of logs (default: all)</source>
+        <target state="needs-review-translation">Número de linhas a serem mostradas a partir do final dos logs (padrão: todos).</target>
         <note />
       </trans-unit>
       <trans-unit id="TailRequiresResource">
         <source>The --tail option requires a resource name to be specified.</source>
         <target state="translated">A opção --tail requer que um nome de recurso seja especificado.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TimestampsOptionDescription">
+        <source>Show timestamps for each log line</source>
+        <target state="new">Show timestamps for each log line</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="GettingLogs">
+        <source>Getting logs...</source>
+        <target state="translated">Obtendo logs...</target>
         <note />
       </trans-unit>
     </body>

@@ -3,63 +3,23 @@
   <file datatype="xml" source-language="en" target-language="tr" original="../ResourceCommandStrings.resx">
     <body>
       <trans-unit id="CommandDescription">
-        <source>Execute a command on a resource.</source>
-        <target state="new">Execute a command on a resource.</target>
+        <source>Execute a command on a resource (e.g. start, stop, restart)</source>
+        <target state="needs-review-translation">Bir kaynak üzerinde bir komut çalıştırın.</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandNameArgumentDescription">
-        <source>The name of the command to execute.</source>
-        <target state="new">The name of the command to execute.</target>
+        <source>The name of the command to execute (e.g. start, stop, restart)</source>
+        <target state="needs-review-translation">Yürütülecek komutun adı.</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandResourceArgumentDescription">
-        <source>The name of the resource to execute the command on.</source>
-        <target state="new">The name of the resource to execute the command on.</target>
+        <source>The name of the resource to execute the command on</source>
+        <target state="needs-review-translation">Komutu yürütecek kaynağın adı.</target>
         <note />
       </trans-unit>
-      <trans-unit id="NoInScopeAppHostsShowingAll">
-        <source>No in-scope AppHosts found. Showing all running AppHosts.</source>
-        <target state="new">No in-scope AppHosts found. Showing all running AppHosts.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="NoRunningAppHostsFound">
-        <source>No running AppHosts found.</source>
-        <target state="translated">Çalışan AppHost bulunamadı.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ProjectOptionDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="translated">Aspire AppHost proje dosyasının yolu.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RestartDescription">
-        <source>Restart a running resource.</source>
-        <target state="new">Restart a running resource.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RestartResourceArgumentDescription">
-        <source>The name of the resource to restart.</source>
-        <target state="new">The name of the resource to restart.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ScanningForRunningAppHosts">
-        <source>Scanning for running AppHosts...</source>
-        <target state="translated">Çalışan AppHost'lar taranıyor...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SelectAppHost">
-        <source>Select which AppHost to connect to:</source>
-        <target state="new">Select which AppHost to connect to:</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="StartDescription">
-        <source>Start a stopped resource.</source>
-        <target state="new">Start a stopped resource.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="StartResourceArgumentDescription">
-        <source>The name of the resource to start.</source>
-        <target state="new">The name of the resource to start.</target>
+      <trans-unit id="SelectAppHostAction">
+        <source>connect to</source>
+        <target state="translated">şuna bağlanın:</target>
         <note />
       </trans-unit>
     </body>

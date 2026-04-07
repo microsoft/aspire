@@ -10,6 +10,13 @@ internal class ExpressionResolver(CancellationToken cancellationToken)
 {
     async Task<ResolvedValue> EvalExpressionAsync(ReferenceExpression expr, ValueProviderContext context)
     {
+        if (expr.IsConditional)
+        {
+            var conditionResult = await ResolveInternalAsync(expr.Condition!, context).ConfigureAwait(false);
+            var branch = string.Equals(conditionResult.Value, expr.MatchValue, StringComparison.OrdinalIgnoreCase) ? expr.WhenTrue! : expr.WhenFalse!;
+            return await EvalExpressionAsync(branch, context).ConfigureAwait(false);
+        }
+
         // This logic is similar to ReferenceExpression.GetValueAsync, except that we recurse on
         // our own resolver method
         var args = new object?[expr.ValueProviders.Count];

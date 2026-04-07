@@ -15,6 +15,7 @@ namespace Aspire.Hosting.Pipelines;
 /// allowing each step to track its own tasks and completion state independently.
 /// </remarks>
 [Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExport(ExposeProperties = true)]
 public sealed class PipelineStepContext
 {
     /// <summary>

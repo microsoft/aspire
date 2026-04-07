@@ -40,7 +40,7 @@
       "type": "stdio",
       "command": "dnx",
       "args": [
-        "Hex1b.McpServer@0.47.0",
+        "Hex1b.McpServer@0.105.0",
         "--yes"
       ]
     },

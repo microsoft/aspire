@@ -1,0 +1,72 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="pt-BR" original="../CertificatesCommandStrings.resx">
+    <body>
+      <trans-unit id="CleanCancelled">
+        <source>Certificate clean operation was cancelled by the user.</source>
+        <target state="new">Certificate clean operation was cancelled by the user.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CleanDescription">
+        <source>Remove all HTTPS development certificates</source>
+        <target state="new">Remove all HTTPS development certificates</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CleanFailure">
+        <source>Failed to clean HTTPS development certificates.</source>
+        <target state="new">Failed to clean HTTPS development certificates.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CleanFailureDetailsFormat">
+        <source>Certificate clean operation failed: {0}</source>
+        <target state="new">Certificate clean operation failed: {0}</target>
+        <note>{0} is the error message from the failed operation</note>
+      </trans-unit>
+      <trans-unit id="CleanProgress">
+        <source>Cleaning development certificates (may require elevated permissions)...</source>
+        <target state="new">Cleaning development certificates (may require elevated permissions)...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CleanSuccess">
+        <source>All HTTPS development certificates cleaned successfully.</source>
+        <target state="new">All HTTPS development certificates cleaned successfully.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Description">
+        <source>Manage HTTPS development certificates</source>
+        <target state="new">Manage HTTPS development certificates</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TrustCancelled">
+        <source>Certificate trust operation was cancelled by the user.</source>
+        <target state="new">Certificate trust operation was cancelled by the user.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TrustDescription">
+        <source>Trust the HTTPS development certificate, creating one if necessary</source>
+        <target state="new">Trust the HTTPS development certificate, creating one if necessary</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TrustFailure">
+        <source>Failed to trust HTTPS development certificate.</source>
+        <target state="new">Failed to trust HTTPS development certificate.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TrustFailureDetailsFormat">
+        <source>Certificate trust operation returned: {0}</source>
+        <target state="new">Certificate trust operation returned: {0}</target>
+        <note>{0} is the EnsureCertificateResult value</note>
+      </trans-unit>
+      <trans-unit id="TrustProgress">
+        <source>Trusting development certificate (may require elevated permissions)...</source>
+        <target state="new">Trusting development certificate (may require elevated permissions)...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TrustSuccess">
+        <source>HTTPS development certificate trusted successfully.</source>
+        <target state="new">HTTPS development certificate trusted successfully.</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

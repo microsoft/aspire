@@ -7,7 +7,6 @@ using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Mcp;
 using Aspire.Cli.Mcp.Tools;
-using Aspire.Cli.Otlp;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Dashboard.Otlp.Model;
@@ -87,7 +86,7 @@ public class ListStructuredLogsToolTests
         // Include aspire.log_id attribute to verify it's extracted to log_id field and filtered from attributes
         var apiResponseObj = new TelemetryApiResponse
         {
-            Data = new TelemetryDataJson
+            Data = new OtlpTelemetryDataJson
             {
                 ResourceLogs =
                 [
@@ -140,7 +139,7 @@ public class ListStructuredLogsToolTests
             ReturnedCount = 3
         };
 
-        var apiResponse = JsonSerializer.Serialize(apiResponseObj, OtlpCliJsonSerializerContext.Default.TelemetryApiResponse);
+        var apiResponse = JsonSerializer.Serialize(apiResponseObj, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
 
         // Create resources that match the OtlpResourceLogsJson entries
         var resources = new ResourceInfoJson[]
@@ -149,7 +148,7 @@ public class ListStructuredLogsToolTests
             new() { Name = "api-service", InstanceId = "instance-2", HasLogs = true, HasTraces = true, HasMetrics = true },
             new() { Name = "worker-service", InstanceId = "instance-1", HasLogs = true, HasTraces = true, HasMetrics = true }
         };
-        var resourcesResponse = JsonSerializer.Serialize(resources, OtlpCliJsonSerializerContext.Default.ResourceInfoJsonArray);
+        var resourcesResponse = JsonSerializer.Serialize(resources, OtlpJsonSerializerContext.Default.ResourceInfoJsonArray);
 
         using var mockHandler = new MockHttpMessageHandler(request =>
         {
@@ -242,17 +241,17 @@ public class ListStructuredLogsToolTests
         // Arrange - Create mock HTTP handler with empty logs response
         var apiResponseObj = new TelemetryApiResponse
         {
-            Data = new TelemetryDataJson { ResourceLogs = [] },
+            Data = new OtlpTelemetryDataJson { ResourceLogs = [] },
             TotalCount = 0,
             ReturnedCount = 0
         };
-        var apiResponse = JsonSerializer.Serialize(apiResponseObj, OtlpCliJsonSerializerContext.Default.TelemetryApiResponse);
+        var apiResponse = JsonSerializer.Serialize(apiResponseObj, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
 
         var resources = new ResourceInfoJson[]
         {
             new() { Name = "api-service", InstanceId = null, HasLogs = true, HasTraces = true, HasMetrics = true }
         };
-        var resourcesResponse = JsonSerializer.Serialize(resources, OtlpCliJsonSerializerContext.Default.ResourceInfoJsonArray);
+        var resourcesResponse = JsonSerializer.Serialize(resources, OtlpJsonSerializerContext.Default.ResourceInfoJsonArray);
 
         using var mockHandler = new MockHttpMessageHandler(request =>
         {
@@ -299,15 +298,15 @@ public class ListStructuredLogsToolTests
         {
             new() { Name = "other-resource", InstanceId = null, HasLogs = true, HasTraces = true, HasMetrics = true }
         };
-        var resourcesResponse = JsonSerializer.Serialize(resources, OtlpCliJsonSerializerContext.Default.ResourceInfoJsonArray);
+        var resourcesResponse = JsonSerializer.Serialize(resources, OtlpJsonSerializerContext.Default.ResourceInfoJsonArray);
 
         var emptyLogsResponse = new TelemetryApiResponse
         {
-            Data = new TelemetryDataJson { ResourceLogs = [] },
+            Data = new OtlpTelemetryDataJson { ResourceLogs = [] },
             TotalCount = 0,
             ReturnedCount = 0
         };
-        var emptyLogsJson = JsonSerializer.Serialize(emptyLogsResponse, OtlpCliJsonSerializerContext.Default.TelemetryApiResponse);
+        var emptyLogsJson = JsonSerializer.Serialize(emptyLogsResponse, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
 
         using var mockHandler = new MockHttpMessageHandler(request =>
         {
@@ -399,8 +398,10 @@ public class ListStructuredLogsToolTests
         TestAuxiliaryBackchannelMonitor? monitor = null,
         IHttpClientFactory? httpClientFactory = null)
     {
+        var actualMonitor = monitor ?? new TestAuxiliaryBackchannelMonitor();
+        IDashboardInfoProvider dashboardInfoProvider = new BackchannelDashboardInfoProvider(actualMonitor, NullLogger<BackchannelDashboardInfoProvider>.Instance);
         return new ListStructuredLogsTool(
-            monitor ?? new TestAuxiliaryBackchannelMonitor(),
+            dashboardInfoProvider,
             httpClientFactory ?? s_httpClientFactory,
             NullLogger<ListStructuredLogsTool>.Instance);
     }

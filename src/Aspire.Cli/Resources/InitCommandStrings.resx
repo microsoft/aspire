@@ -61,7 +61,7 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>Initialize Aspire support in an existing solution or create a single-file AppHost.</value>
+    <value>Initialize Aspire in an existing codebase</value>
   </data>
   <data name="SolutionDetected" xml:space="preserve">
     <value>Solution detected: {0}</value>
@@ -92,5 +92,14 @@
   </data>
   <data name="AddingServiceDefaultsProjectToSolution" xml:space="preserve">
     <value>Adding ServiceDefaults project to solution...</value>
+  </data>
+  <data name="ResolvingTemplateVersion" xml:space="preserve">
+    <value>Resolving template version...</value>
+  </data>
+  <data name="SolutionAndProjectInSameDirectory" xml:space="preserve">
+    <value>The solution file '{0}' and project file '{1}' are in the same directory. The AppHost and ServiceDefaults projects cannot be created inside an existing project directory. Move the solution file to a parent directory or the project file to a subdirectory.</value>
+  </data>
+  <data name="LanguageOptionDescription" xml:space="preserve">
+    <value>The programming language for the AppHost (csharp, typescript)</value>
   </data>
 </root>

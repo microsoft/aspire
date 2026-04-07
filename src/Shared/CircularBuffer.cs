@@ -278,12 +278,7 @@ internal sealed class CircularBuffer<T> : IList<T>, ICollection<T>, IEnumerable<
 
     private void Decrement(ref int index)
     {
-        if (index <= 0)
-        {
-            index = Capacity - 1;
-        }
-
-        --index;
+        index = (index <= 0) ? Capacity - 1 : index - 1;
     }
 
     public CircularBuffer<T> Clone()

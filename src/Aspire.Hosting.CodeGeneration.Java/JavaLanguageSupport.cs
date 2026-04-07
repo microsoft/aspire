@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Hosting.Ats;
+using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.Java;
 
@@ -9,7 +9,7 @@ namespace Aspire.Hosting.CodeGeneration.Java;
 /// Provides language support for Java AppHosts.
 /// Implements scaffolding, detection, and runtime configuration.
 /// </summary>
-public sealed class JavaLanguageSupport : ILanguageSupport
+internal sealed class JavaLanguageSupport : ILanguageSupport
 {
     /// <summary>
     /// The language/runtime identifier for Java.
@@ -32,31 +32,20 @@ public sealed class JavaLanguageSupport : ILanguageSupport
     {
         var files = new Dictionary<string, string>();
 
-        // Create AppHost.java - must be in same package as generated code (aspire)
-        // because Java only allows one public class per file
         files["AppHost.java"] = """
             // Aspire Java AppHost
             // For more information, see: https://aspire.dev
+            
+            import aspire.*;
 
-            package aspire;
+            void main(String[] args) throws Exception {
+                var builder = DistributedApplication.CreateBuilder(args);
 
-            public class AppHost {
-                public static void main(String[] args) {
-                    try {
-                        IDistributedApplicationBuilder builder = Aspire.createBuilder(null);
+                // Add your resources here, for example:
+                // var redis = builder.addRedis("cache");
+                // var postgres = builder.addPostgres("db");
 
-                        // Add your resources here, for example:
-                        // var redis = builder.addRedis("cache");
-                        // var postgres = builder.addPostgres("db");
-
-                        DistributedApplication app = builder.build();
-                        app.run(null);
-                    } catch (Exception e) {
-                        System.err.println("Failed to run: " + e.getMessage());
-                        e.printStackTrace();
-                        System.exit(1);
-                    }
-                }
+                builder.build().run();
             }
             """;
 
@@ -76,8 +65,6 @@ public sealed class JavaLanguageSupport : ILanguageSupport
                 "https": {
                   "applicationUrl": "https://localhost:{{httpsPort}};http://localhost:{{httpPort}}",
                   "environmentVariables": {
-                    "ASPNETCORE_ENVIRONMENT": "Development",
-                    "DOTNET_ENVIRONMENT": "Development",
                     "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:{{otlpPort}}",
                     "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:{{resourceServicePort}}"
                   }
@@ -118,8 +105,8 @@ public sealed class JavaLanguageSupport : ILanguageSupport
                 // On Windows, use cmd /c; on Unix, use sh -c
                 Command = OperatingSystem.IsWindows() ? "cmd" : "sh",
                 Args = OperatingSystem.IsWindows()
-                    ? ["/c", "javac -d . .modules\\Transport.java .modules\\Base.java .modules\\Aspire.java AppHost.java && java aspire.AppHost"]
-                    : ["-c", "javac -d . .modules/Transport.java .modules/Base.java .modules/Aspire.java AppHost.java && java aspire.AppHost"]
+                    ? ["/c", "if not exist .java-build mkdir .java-build && javac --enable-preview --source 25 -d .java-build @.modules\\sources.txt AppHost.java && java --enable-preview -cp .java-build AppHost {args}"]
+                    : ["-c", "mkdir -p .java-build && javac --enable-preview --source 25 -d .java-build @.modules/sources.txt AppHost.java && java --enable-preview -cp .java-build AppHost {args}"]
             }
         };
     }

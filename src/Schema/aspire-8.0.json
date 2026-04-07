@@ -767,8 +767,7 @@
         "properties": {
           "scheme": {
             "type": "string",
-            "description": "The scheme used in URIs for this binding.",
-            "enum": [ "http", "https", "tcp", "udp" ]
+            "description": "The scheme used in URIs for this binding."
           },
           "protocol": {
             "type": "string",

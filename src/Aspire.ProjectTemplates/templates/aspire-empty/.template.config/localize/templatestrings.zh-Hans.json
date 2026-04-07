@@ -1,4 +1,4 @@
-﻿{
+{
   "author": "Microsoft",
   "name": "Aspire 空应用",
   "description": "用于创建空 Aspire 应用的项目模板。",
@@ -12,17 +12,16 @@
   "symbols/AspireVersion/choices/!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!/description": "选择 Aspire !!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!",
   "symbols/appHostHttpPort/description": "该端口号将用于 AppHost 项目的 launchSettings.json 中的 HTTP 终结点。",
   "symbols/appHostOtlpHttpPort/description": "该端口号将用于 AppHost 项目的 launchSettings.json 中的 OTLP HTTP 终结点。",
-  "symbols/appHostMcpHttpPort/description": "该端口号将用于 AppHost 项目的 launchSettings.json 中的 MCP HTTP 终结点。",
   "symbols/appHostResourceHttpPort/description": "该端口号将用于 AppHost 项目的 launchSettings.json 中的资源服务 HTTP 终结点。",
   "symbols/appHostHttpsPort/description": "该端口号将用于 AppHost 项目的 launchSettings.json 中的 HTTPS 终结点。仅当不使用参数 no-https 时，此选项才适用。",
   "symbols/appHostOtlpHttpsPort/description": "该端口号将用于 AppHost 项目的 launchSettings.json 中的 OTLP HTTPS 终结点。",
-  "symbols/appHostMcpHttpsPort/description": "该端口号将用于 AppHost 项目的 launchSettings.json 中的 MCP HTTPS 终结点。",
   "symbols/appHostResourceHttpsPort/description": "该端口号将用于 AppHost 项目的 launchSettings.json 中的资源服务 HTTPS 终结点。",
   "symbols/skipRestore/description": "如果指定，则在创建时跳过项目的自动还原。",
   "symbols/NoHttps/description": "是否禁用 HTTPS。",
   "symbols/LocalhostTld/displayName": "在应用程序 URL 中使用 .dev.localhost TLD",
   "symbols/LocalhostTld/description": "是否在应用程序 URL 中将项目名称与 .dev.localhost TLD 合并以用于本地开发，例如 https://myapp.dev.localhost:12345。在 .NET 10 及更高版本中受支持。",
   "postActions/set-startup-project/description": "在解决方案中设置启动项目",
+  "postActions/set-startup-project/manualInstructions/default/text": "",
   "postActions/restore/description": "还原此项目所需的 NuGet 包。",
   "postActions/restore/manualInstructions/default/text": "运行 \"dotnet restore\""
 }

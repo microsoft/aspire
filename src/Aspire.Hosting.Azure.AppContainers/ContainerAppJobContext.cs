@@ -18,7 +18,7 @@ internal sealed class ContainerAppJobContext(IResource resource, ContainerAppEnv
     {
         _infrastructure = infra;
         // Write a fake parameter for the container app environment
-        // so azd knows the Dashboard URL - see https://github.com/dotnet/aspire/issues/8449.
+        // so azd knows the Dashboard URL - see https://github.com/microsoft/aspire/issues/8449.
         // This is temporary until a real fix can be made in azd.
         AllocateParameter(_containerAppEnvironmentContext.Environment.ContainerAppDomain);
 

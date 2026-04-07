@@ -7,6 +7,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// A resource that represents a Valkey resource independent of the hosting model.
 /// </summary>
 /// <param name="name">The name of the resource.</param>
+[AspireExport(ExposeProperties = true)]
 public class ValkeyResource(string name) : ContainerResource(name), IResourceWithConnectionString
 {
     internal const string PrimaryEndpointName = "tcp";

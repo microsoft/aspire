@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="fr" original="../DoctorCommandStrings.resx">
     <body>
@@ -14,12 +14,102 @@
       </trans-unit>
       <trans-unit id="Description">
         <source>Diagnose Aspire environment issues and verify setup</source>
-        <target state="translated">Diagnostiquer les problèmes liés à l’environnement Aspire et vérifier la configuration</target>
+        <target state="needs-review-translation">Diagnostiquer les problèmes liés à l’environnement Aspire et vérifier la configuration</target>
         <note />
       </trans-unit>
       <trans-unit id="DetailedPrerequisitesLink">
-        <source>For detailed prerequisites: https://aka.ms/aspire-prerequisites</source>
-        <target state="translated">Pour les prérequis détaillés : https://aka.ms/aspire-prerequisites</target>
+        <source>For detailed prerequisites: {0}</source>
+        <target state="new">For detailed prerequisites: {0}</target>
+        <note>{0} is a clickable URL</note>
+      </trans-unit>
+      <trans-unit id="DevCertsCleanAndTrustFixFormat">
+        <source>Run '{0}' to remove all certificates, then run '{1}' to create and trust a new one.</source>
+        <target state="new">Run '{0}' to remove all certificates, then run '{1}' to create and trust a new one.</target>
+        <note>{0} is the aspire certs clean command, {1} is the aspire certs trust command (not localizable)</note>
+      </trans-unit>
+      <trans-unit id="DevCertsMultipleNoneTrustedDetailsFormat">
+        <source>Found certificates: {0}. Having multiple certificates can cause confusion.</source>
+        <target state="new">Found certificates: {0}. Having multiple certificates can cause confusion.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevCertsMultipleNoneTrustedMessageFormat">
+        <source>Multiple HTTPS development certificates found ({0} certificates), but none are trusted</source>
+        <target state="new">Multiple HTTPS development certificates found ({0} certificates), but none are trusted</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevCertsMultipleSomeUntrustedDetailsFormat">
+        <source>Found certificates: {0}. Having multiple certificates can cause confusion when selecting which one to use.</source>
+        <target state="new">Found certificates: {0}. Having multiple certificates can cause confusion when selecting which one to use.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevCertsMultipleSomeUntrustedMessageFormat">
+        <source>Multiple HTTPS development certificates found ({0} certificates)</source>
+        <target state="new">Multiple HTTPS development certificates found ({0} certificates)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevCertsNoCertificateDetails">
+        <source>Aspire uses HTTPS for secure communication between the dashboard and your services during local development.</source>
+        <target state="new">Aspire uses HTTPS for secure communication between the dashboard and your services during local development.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevCertsNoCertificateMessage">
+        <source>No HTTPS development certificate found</source>
+        <target state="new">No HTTPS development certificate found</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevCertsNotTrustedDetailsFormat">
+        <source>Certificate {0} exists in the personal store but was not found in the trusted root store.</source>
+        <target state="new">Certificate {0} exists in the personal store but was not found in the trusted root store.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevCertsNotTrustedMessage">
+        <source>HTTPS development certificate is not trusted</source>
+        <target state="new">HTTPS development certificate is not trusted</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevCertsOldVersionDetailsFormat">
+        <source>Older certificate versions (&lt; v{0}) may not support all certificate trust scenarios.</source>
+        <target state="new">Older certificate versions (&lt; v{0}) may not support all certificate trust scenarios.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevCertsOldVersionMessageFormat">
+        <source>HTTPS development certificate has an older version ({0})</source>
+        <target state="new">HTTPS development certificate has an older version ({0})</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevCertsPartiallyTrustedDetailsFormat">
+        <source>The certificate is in the trusted store, but SSL_CERT_DIR is not configured to include '{0}'. Some applications may not trust the certificate. 'aspire run' will configure this automatically.</source>
+        <target state="new">The certificate is in the trusted store, but SSL_CERT_DIR is not configured to include '{0}'. Some applications may not trust the certificate. 'aspire run' will configure this automatically.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevCertsPartiallyTrustedFixFormat">
+        <source>Set SSL_CERT_DIR in your shell profile: {0}</source>
+        <target state="new">Set SSL_CERT_DIR in your shell profile: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevCertsPartiallyTrustedMessage">
+        <source>HTTPS development certificate is only partially trusted</source>
+        <target state="new">HTTPS development certificate is only partially trusted</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevCertsTrustFixFormat">
+        <source>Run '{0}' to trust the HTTPS development certificate.</source>
+        <target state="new">Run '{0}' to trust the HTTPS development certificate.</target>
+        <note>{0} is the aspire certs trust command (not localizable)</note>
+      </trans-unit>
+      <trans-unit id="DevCertsTrustLabelFull">
+        <source>[trusted]</source>
+        <target state="new">[trusted]</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevCertsTrustLabelPartial">
+        <source>[partial]</source>
+        <target state="new">[partial]</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevCertsTrustedMessage">
+        <source>HTTPS development certificate is trusted</source>
+        <target state="new">HTTPS development certificate is trusted</target>
         <note />
       </trans-unit>
       <trans-unit id="EnvironmentCategoryHeader">
@@ -33,8 +123,8 @@
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output results as JSON for tooling integration</source>
-        <target state="translated">Afficher les résultats au format JSON pour l’intégration des outils</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">Afficher les résultats au format JSON pour l’intégration des outils</target>
         <note />
       </trans-unit>
       <trans-unit id="SdkCategoryHeader">

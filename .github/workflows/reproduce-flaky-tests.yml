@@ -1,0 +1,368 @@
+# Reproduces flaky tests by running them repeatedly across multiple OS runners.
+#
+# HOW TO USE:
+# 1. Edit the CONFIGURATION section below with the test you want to reproduce
+# 2. Push to your branch
+# 3. Trigger: gh workflow run reproduce-flaky-tests.yml --repo microsoft/aspire --ref <your-branch>
+# 4. Check the results across OSes and runners
+#
+# The configuration is designed to be edited by agents (Copilot, etc.)
+# who modify the env vars below and push to trigger a run.
+
+name: Reproduce Flaky Tests
+
+on:
+  workflow_dispatch: {}
+
+# ============================================================
+# CONFIGURATION — Edit these values to customize the test run
+# ============================================================
+env:
+  # Test project shortname (maps to tests/Aspire.{name}.Tests/ or tests/{name}.Tests/)
+  # Examples: Hosting, Core, Dashboard, Components.Common, Cli.EndToEnd
+  TEST_PROJECT: "Hosting"
+
+  # Test filter arguments passed to dotnet test (after the -- separator).
+  # Use quotes around wildcard patterns to prevent shell glob expansion.
+  # Examples:
+  #   --filter-method "*.TestMethodName"
+  #   --filter-class "*.TestClassName"
+  #   --filter-method "*.Test1" --filter-method "*.Test2"
+  TEST_FILTER: '--filter-method "*.YourTestMethodName"'
+
+  # Target operating systems (comma-separated)
+  # Options: ubuntu-latest, windows-latest, macos-latest
+  TARGET_OSES: "ubuntu-latest,windows-latest"
+
+  # Number of parallel runners per OS
+  # Total jobs = RUNNERS_PER_OS × number of OSes (must be ≤ 256)
+  RUNNERS_PER_OS: "3"
+
+  # Number of test iterations each runner executes
+  ITERATIONS_PER_RUNNER: "3"
+
+jobs:
+
+  setup:
+    name: Generate matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.generate.outputs.matrix }}
+    steps:
+      - name: Validate configuration
+        shell: bash
+        run: |
+          ERRORS=0
+
+          # Validate RUNNERS_PER_OS is a positive integer
+          if ! [[ "${{ env.RUNNERS_PER_OS }}" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::RUNNERS_PER_OS must be a positive integer, got '${{ env.RUNNERS_PER_OS }}'"
+            ERRORS=1
+          fi
+
+          # Validate ITERATIONS_PER_RUNNER is a positive integer
+          if ! [[ "${{ env.ITERATIONS_PER_RUNNER }}" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::ITERATIONS_PER_RUNNER must be a positive integer, got '${{ env.ITERATIONS_PER_RUNNER }}'"
+            ERRORS=1
+          fi
+
+          # Validate TARGET_OSES is not empty and contains only known runners
+          if [[ -z "${{ env.TARGET_OSES }}" ]]; then
+            echo "::error::TARGET_OSES must not be empty"
+            ERRORS=1
+          else
+            IFS=',' read -ra CHECK_OSES <<< "${{ env.TARGET_OSES }}"
+            for os in "${CHECK_OSES[@]}"; do
+              os=$(echo "$os" | xargs)
+              if [[ "$os" != "ubuntu-latest" && "$os" != "windows-latest" && "$os" != "macos-latest" ]]; then
+                echo "::error::Unknown OS in TARGET_OSES: '$os'. Allowed: ubuntu-latest, windows-latest, macos-latest"
+                ERRORS=1
+              fi
+            done
+          fi
+
+          # Validate TEST_FILTER is not the placeholder
+          if [[ "${{ env.TEST_FILTER }}" == *"YourTestMethodName"* ]]; then
+            echo "::error::TEST_FILTER still contains the placeholder 'YourTestMethodName'. Configure it with the actual test to reproduce."
+            ERRORS=1
+          fi
+
+          if [[ $ERRORS -ne 0 ]]; then exit 1; fi
+
+      - name: Generate runner matrix
+        id: generate
+        shell: bash
+        run: |
+          IFS=',' read -ra OSES <<< "${{ env.TARGET_OSES }}"
+          RUNNERS=${{ env.RUNNERS_PER_OS }}
+
+          ENTRIES=""
+          for os in "${OSES[@]}"; do
+            os=$(echo "$os" | xargs)
+            for i in $(seq 1 "$RUNNERS"); do
+              if [ -n "$ENTRIES" ]; then ENTRIES="$ENTRIES,"; fi
+              ENTRIES="${ENTRIES}{\"os\":\"${os}\",\"index\":${i}}"
+            done
+          done
+
+          MATRIX="{\"include\":[${ENTRIES}]}"
+          echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
+
+          TOTAL=$(echo "$ENTRIES" | tr ',' '\n' | wc -l)
+          echo "Generated matrix: $TOTAL runners across ${#OSES[@]} OS(es)"
+          echo "Each runner will execute ${{ env.ITERATIONS_PER_RUNNER }} iterations"
+          echo "Total test executions: $(( TOTAL * ${{ env.ITERATIONS_PER_RUNNER }} ))"
+
+  reproduce:
+    name: "${{ matrix.os }} #${{ matrix.index }}"
+    needs: setup
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
+    env:
+      DOTNET_ROOT: ${{ github.workspace }}/.dotnet
+
+    steps:
+      - name: Setup vars (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          echo "DOTNET_SCRIPT=./dotnet.sh" >> $GITHUB_ENV
+          echo "BUILD_SCRIPT=./build.sh" >> $GITHUB_ENV
+          echo "${{ github.workspace }}/.dotnet" >> $GITHUB_PATH
+
+      - name: Setup vars (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          echo "DOTNET_SCRIPT=.\dotnet.cmd" >> $env:GITHUB_ENV
+          echo "BUILD_SCRIPT=.\build.cmd" >> $env:GITHUB_ENV
+          echo "${{ github.workspace }}\.dotnet" >> $env:GITHUB_PATH
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Trust HTTPS development certificate (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          EXIT_CODE=0
+          ${{ env.DOTNET_SCRIPT }} dev-certs https --trust || EXIT_CODE=$?
+          if [ $EXIT_CODE -ne 0 ] && [ $EXIT_CODE -ne 4 ]; then
+            echo "dev-certs https --trust failed with exit code $EXIT_CODE"
+            exit $EXIT_CODE
+          fi
+        env:
+          WSL_INTEROP: ""
+
+      - name: Verify Docker is running (Linux)
+        if: runner.os == 'Linux'
+        run: docker info
+
+      - name: Unlock macOS keychain
+        if: runner.os == 'macOS'
+        uses: ./.github/actions/unlock-macos-keychain
+
+      - name: Compute test project path
+        shell: pwsh
+        run: |
+          $testShortName = "${{ env.TEST_PROJECT }}"
+          $projectPath1 = "${{ github.workspace }}/tests/$testShortName.Tests/$testShortName.Tests.csproj"
+          $projectPath2 = "${{ github.workspace }}/tests/Aspire.$testShortName.Tests/Aspire.$testShortName.Tests.csproj"
+
+          if (Test-Path -Path $projectPath1) {
+              $projectPath = $projectPath1
+          } elseif (Test-Path -Path $projectPath2) {
+              $projectPath = $projectPath2
+          } else {
+              Write-Error "No test project found for shortname '$testShortName'. Looked at: $projectPath1, $projectPath2"
+              exit 1
+          }
+
+          echo "TEST_PROJECT_PATH=$projectPath" >> $env:GITHUB_ENV
+          Write-Host "Resolved test project: $projectPath"
+
+      - name: Build test project
+        run: >
+          ${{ env.BUILD_SCRIPT }}
+          -restore -ci -build
+          -projects ${{ env.TEST_PROJECT_PATH }}
+          /p:InstallBrowsersForPlaywright=false
+          /p:RunQuarantinedTests=true
+
+      - name: Run test iterations (Linux/macOS)
+        if: runner.os != 'Windows'
+        env:
+          ASPIRE__TEST__DCPLOGBASEPATH: ${{ github.workspace }}/testresults/dcp
+          NUGET_PACKAGES: ${{ github.workspace }}/.packages
+          TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
+        run: |
+          PASS=0
+          FAIL=0
+          ITERATIONS=${{ env.ITERATIONS_PER_RUNNER }}
+
+          for i in $(seq 1 "$ITERATIONS"); do
+            echo "::group::Iteration $i/$ITERATIONS"
+
+            # Cleanup between iterations
+            rm -rf "${{ github.workspace }}/testresults" 2>/dev/null || true
+            pgrep -lf "dcp" 2>/dev/null | grep -E "\bdcp(\.exe|ctl)?\b" | awk '{print $1}' | while read pid; do
+              kill -9 "$pid" 2>/dev/null || true
+            done
+            sleep 1
+
+            # Run test (capture output for zero-test detection)
+            ITER_OUTPUT="${{ github.workspace }}/iter-output-$i.log"
+            set +e  # Disable errexit so pipefail doesn't abort before PIPESTATUS capture
+            ${{ env.DOTNET_SCRIPT }} test "${{ env.TEST_PROJECT_PATH }}" \
+              /p:ContinuousIntegrationBuild=true \
+              /p:_NonQuarantinedTestRunAdditionalArgs="" \
+              -tl:false \
+              --no-restore \
+              --no-build \
+              -- \
+              --timeout 10m \
+              --results-directory "${{ github.workspace }}/testresults" \
+              ${{ env.TEST_FILTER }} \
+              2>&1 | tee "$ITER_OUTPUT"
+            RESULT=${PIPESTATUS[0]}
+            set -e
+
+            # Detect zero-test runs (--ignore-exit-code 8 in Testing.props masks exit code 8)
+            if [ "$RESULT" -eq 0 ]; then
+              if ! grep -qE "Total:\s*[1-9]" "$ITER_OUTPUT" 2>/dev/null; then
+                echo "::error::Iteration $i: Zero tests executed. Verify TEST_FILTER and quarantine settings."
+                RESULT=8
+              fi
+            fi
+            rm -f "$ITER_OUTPUT"
+
+            if [ "$RESULT" -eq 0 ]; then
+              echo "✅ Iteration $i: PASS"
+              PASS=$((PASS + 1))
+            else
+              echo "❌ Iteration $i: FAIL (exit $RESULT)"
+              FAIL=$((FAIL + 1))
+              mkdir -p "${{ github.workspace }}/all-results/failure-$i"
+              cp -r "${{ github.workspace }}/testresults/"* "${{ github.workspace }}/all-results/failure-$i/" 2>/dev/null || true
+            fi
+
+            echo "::endgroup::"
+          done
+
+          echo ""
+          echo "========================================"
+          echo "Summary for runner #${{ matrix.index }} on ${{ matrix.os }}"
+          echo "  Passed: $PASS / $ITERATIONS"
+          echo "  Failed: $FAIL / $ITERATIONS"
+          echo "========================================"
+
+          if [ "$FAIL" -gt 0 ]; then exit 1; fi
+
+      - name: Run test iterations (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          ASPIRE__TEST__DCPLOGBASEPATH: ${{ github.workspace }}/testresults/dcp
+          NUGET_PACKAGES: ${{ github.workspace }}/.packages
+          TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
+        run: |
+          $pass = 0
+          $fail = 0
+          $iterations = [int]"${{ env.ITERATIONS_PER_RUNNER }}"
+
+          for ($i = 1; $i -le $iterations; $i++) {
+            Write-Host "::group::Iteration $i/$iterations"
+
+            # Cleanup between iterations
+            Remove-Item -Recurse -Force "${{ github.workspace }}/testresults" -ErrorAction SilentlyContinue
+            Get-Process | Where-Object { $_.ProcessName -match '^dcp' } | Stop-Process -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 1
+
+            # Run test (capture output for zero-test detection)
+            $iterOutput = Join-Path "${{ github.workspace }}" "iter-output-$i.log"
+            & ${{ env.DOTNET_SCRIPT }} test "${{ env.TEST_PROJECT_PATH }}" `
+              /p:ContinuousIntegrationBuild=true `
+              /p:_NonQuarantinedTestRunAdditionalArgs="" `
+              -tl:false `
+              --no-restore `
+              --no-build `
+              -- `
+              --timeout 10m `
+              --results-directory "${{ github.workspace }}/testresults" `
+              ${{ env.TEST_FILTER }} *> $iterOutput
+            $result = $LASTEXITCODE
+            Get-Content $iterOutput
+
+            # Detect zero-test runs (--ignore-exit-code 8 in Testing.props masks exit code 8)
+            if ($result -eq 0) {
+              $content = Get-Content $iterOutput -Raw -ErrorAction SilentlyContinue
+              if (-not ($content -match 'Total:\s*[1-9]')) {
+                Write-Host "::error::Iteration ${i}: Zero tests executed. Verify TEST_FILTER and quarantine settings."
+                $result = 8
+              }
+            }
+            Remove-Item $iterOutput -ErrorAction SilentlyContinue
+
+            if ($result -eq 0) {
+              Write-Host "✅ Iteration ${i}: PASS"
+              $pass++
+            } else {
+              Write-Host "❌ Iteration ${i}: FAIL (exit $result)"
+              $fail++
+              $dest = "${{ github.workspace }}/all-results/failure-$i"
+              New-Item -ItemType Directory -Path $dest -Force | Out-Null
+              Copy-Item -Recurse "${{ github.workspace }}/testresults/*" $dest -ErrorAction SilentlyContinue
+            }
+
+            Write-Host "::endgroup::"
+          }
+
+          Write-Host ""
+          Write-Host "========================================"
+          Write-Host "Summary for runner #${{ matrix.index }} on ${{ matrix.os }}"
+          Write-Host "  Passed: $pass / $iterations"
+          Write-Host "  Failed: $fail / $iterations"
+          Write-Host "========================================"
+
+          if ($fail -gt 0) { exit 1 }
+
+      - name: Upload failure logs
+        if: failure()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: failures-${{ matrix.os }}-${{ matrix.index }}
+          path: all-results/
+          if-no-files-found: ignore
+
+  results:
+    if: always()
+    runs-on: ubuntu-latest
+    name: Reproduce Results
+    needs: [reproduce]
+    steps:
+      - name: Summary
+        shell: bash
+        run: |
+          echo "## Reproduce Flaky Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Setting | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Project | \`${{ env.TEST_PROJECT }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Filter | \`${{ env.TEST_FILTER }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| OSes | ${{ env.TARGET_OSES }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Runners per OS | ${{ env.RUNNERS_PER_OS }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Iterations per runner | ${{ env.ITERATIONS_PER_RUNNER }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.reproduce.result }}" = "success" ]; then
+            echo "### ✅ All iterations passed on all runners" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.reproduce.result }}" = "failure" ]; then
+            echo "### ❌ Some runners reported failures" >> $GITHUB_STEP_SUMMARY
+            echo "Check individual job logs and uploaded failure artifacts for details." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ⚠️ Reproduce job was ${{ needs.reproduce.result }}" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Fail if reproduce did not succeed
+        if: ${{ needs.reproduce.result != 'success' }}
+        run: exit 1

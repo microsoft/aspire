@@ -33,17 +33,19 @@ jobs:
 
         - ${{ if eq(parameters.agentOs, 'windows') }}:
           - scriptName: build.cmd
+          - dotnetScript: dotnet.cmd
         - ${{ else }}:
           - scriptName: build.sh
+          - dotnetScript: dotnet.sh
 
         pool:
           ${{ if eq(parameters.agentOs, 'windows') }}:
             name: NetCore1ESPool-Internal
-            image: windows.vs2022preview.amd64
+            image: windows.vs2026preview.scout.amd64
             os: windows
           ${{ if eq(parameters.agentOs, 'linux') }}:
             name: NetCore1ESPool-Internal
-            image: 1es-mariner-2
+            image: build.azurelinux.3.amd64
             os: linux
           ${{ if eq(parameters.agentOs, 'macos') }}:
             name: Azure Pipelines
@@ -62,12 +64,26 @@ jobs:
 
         steps:
           - script: >-
+              $(Build.SourcesDirectory)/$(dotnetScript)
+              msbuild
+              $(Build.SourcesDirectory)/eng/Bundle.proj
+              /restore
+              /p:Configuration=$(_BuildConfig)
+              /p:TargetRid=${{ targetRid }}
+              /p:BundleVersion=ci-bundlepayload
+              /p:SkipNativeBuild=true
+              /p:ContinuousIntegrationBuild=true
+              /bl:$(Build.Arcade.LogsPath)BundlePayload.binlog
+            displayName: 🟣Build bundle payload
+
+          - script: >-
               $(Build.SourcesDirectory)/$(scriptName)
               --ci
               --build
               --restore
               /p:SkipManagedBuild=true
               /p:TargetRids=${{ targetRid }}
+              /p:BundlePayloadPath=$(Build.SourcesDirectory)/artifacts/bundle/aspire-ci-bundlepayload-${{ targetRid }}.tar.gz
               $(_buildArgs)
               ${{ parameters.extraBuildArgs }}
               /bl:$(Build.Arcade.LogsPath)Build.binlog

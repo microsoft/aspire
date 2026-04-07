@@ -580,41 +580,18 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
                 _resources,
                 () =>
                 {
-                    // Update the context with all visible log entries with a GenAI system property.
-                    var filters = ViewModel.GetFilters();
-                    filters.Add(new FieldTelemetryFilter
+                    var trace = TelemetryRepository.GetTrace(logEntry.TraceId);
+                    if (trace is null)
                     {
-                        Field = KnownStructuredLogFields.SpanIdField,
-                        Condition = FilterCondition.NotEqual,
-                        Value = string.Empty
-                    });
-                    filters.Add(new FieldTelemetryFilter
-                    {
-                        Field = KnownStructuredLogFields.TraceIdField,
-                        Condition = FilterCondition.NotEqual,
-                        Value = string.Empty
-                    });
-
-                    var logs = TelemetryRepository.GetLogs(new GetLogsContext
-                    {
-                        ResourceKey = ViewModel.ResourceKey,
-                        StartIndex = 0,
-                        Count = int.MaxValue,
-                        Filters = filters
-                    });
+                        return [];
+                    }
 
                     var genAISpans = new List<OtlpSpan>();
-                    foreach (var l in logs.Items.DistinctBy(l => (l.SpanId, l.TraceId)))
+                    foreach (var s in trace.Spans)
                     {
-                        var span = TelemetryRepository.GetSpan(l.TraceId, l.SpanId);
-                        if (span == null)
+                        if (GenAIHelpers.HasGenAIAttribute(s.Attributes))
                         {
-                            continue;
-                        }
-
-                        if (GenAIHelpers.HasGenAIAttribute(l.Attributes) || GenAIHelpers.HasGenAIAttribute(span.Attributes))
-                        {
-                            genAISpans.Add(span);
+                            genAISpans.Add(s);
                         }
                     }
 

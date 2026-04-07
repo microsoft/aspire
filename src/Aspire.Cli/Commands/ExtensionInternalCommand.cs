@@ -48,7 +48,8 @@ internal sealed class ExtensionInternalCommand : BaseCommand
                     SelectedProjectFile = result.SelectedProjectFile?.FullName,
                     AllProjectFileCandidates = result.AllProjectFileCandidates.Select(f => f.FullName).ToList()
                 }, BackchannelJsonSerializerContext.Default.AppHostProjectSearchResultPoco);
-                InteractionService.DisplayRawText(json);
+                // Structured output always goes to stdout.
+                InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
                 return ExitCodeConstants.Success;
             }
             catch

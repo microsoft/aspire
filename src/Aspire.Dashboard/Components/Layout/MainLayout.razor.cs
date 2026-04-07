@@ -30,7 +30,6 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     private IDisposable? _aiDisplayChangedSubscription;
     private const string SettingsDialogId = "SettingsDialog";
     private const string HelpDialogId = "HelpDialog";
-    private const string McpDialogId = "McpServerDialog";
 
     [Inject]
     public required ThemeManager ThemeManager { get; init; }
@@ -112,7 +111,14 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
         var result = await JS.InvokeAsync<BrowserInfo>("window.getBrowserInfo");
         TimeProvider.SetBrowserTimeZone(result.TimeZone);
+        TimeProvider.SetBrowserTimeFormat(result.Is24HourTime ? TimeFormat.TwentyFourHour : TimeFormat.TwelveHour);
         TelemetryContextProvider.SetBrowserUserAgent(result.UserAgent);
+
+        var timeFormatResult = await LocalStorage.GetAsync<TimeFormat>(BrowserStorageKeys.TimeFormat);
+        if (timeFormatResult.Success)
+        {
+            TimeProvider.SetConfiguredTimeFormat(timeFormatResult.Value);
+        }
 
         await DisplayUnsecuredEndpointsMessageAsync();
 
@@ -125,10 +131,6 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         if (ShouldShowUnsecuredTelemetryMessage())
         {
             unsecuredEndpointsMessage.AppendLine(Loc[nameof(Resources.Layout.MessageUnsecuredEndpointTelemetryBody)]);
-        }
-        if (ShouldShowUnsecuredMcpMessage())
-        {
-            unsecuredEndpointsMessage.AppendLine(Loc[nameof(Resources.Layout.MessageUnsecuredEndpointMcpBody)]);
         }
         if (ShouldShowUnsecuredApiMessage())
         {
@@ -181,18 +183,10 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
                !Options.CurrentValue.Otlp.SuppressUnsecuredMessage;
     }
 
-    private bool ShouldShowUnsecuredMcpMessage()
-    {
-        // Only show warning if MCP endpoint is configured
-        return Options.CurrentValue.Mcp.GetEndpointAddress() != null &&
-               Options.CurrentValue.Mcp.AuthMode == McpAuthMode.Unsecured &&
-               !Options.CurrentValue.Mcp.SuppressUnsecuredMessage;
-    }
-
     private bool ShouldShowUnsecuredApiMessage()
     {
         // Only show warning if API is enabled and unsecured
-        return Options.CurrentValue.Api.Enabled == true &&
+        return Options.CurrentValue.Api.Enabled.GetValueOrDefault() &&
                Options.CurrentValue.Api.AuthMode == ApiAuthMode.Unsecured;
     }
 
@@ -215,33 +209,6 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             _isNavMenuOpen = false;
             CloseMobileNavMenu();
         }
-    }
-
-    private async Task LaunchMcpAsync()
-    {
-        DialogParameters parameters = new()
-        {
-            Title = "Aspire MCP server",
-            PrimaryAction = null,
-            SecondaryAction = null,
-            TrapFocus = true,
-            Modal = true,
-            Width = "min(800px, 100vw)",
-            Id = McpDialogId,
-            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, HandleDialogClose)
-        };
-
-        if (_openPageDialog is not null)
-        {
-            if (Equals(_openPageDialog.Id, McpDialogId) && !_openPageDialog.Result.IsCompleted)
-            {
-                return;
-            }
-
-            await _openPageDialog.CloseAsync();
-        }
-
-        _openPageDialog = await DialogService.ShowDialogAsync<McpServerDialog>(parameters).ConfigureAwait(true);
     }
 
     private async Task LaunchHelpAsync()

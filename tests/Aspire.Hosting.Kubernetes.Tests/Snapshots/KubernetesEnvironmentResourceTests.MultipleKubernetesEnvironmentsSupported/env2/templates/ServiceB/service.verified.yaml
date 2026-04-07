@@ -18,7 +18,3 @@ spec:
       protocol: "TCP"
       port: {{ .Values.parameters.ServiceB.port_http | int }}
       targetPort: {{ .Values.parameters.ServiceB.port_http | int }}
-    - name: "https"
-      protocol: "TCP"
-      port: {{ .Values.parameters.ServiceB.port_https | int }}
-      targetPort: {{ .Values.parameters.ServiceB.port_https | int }}

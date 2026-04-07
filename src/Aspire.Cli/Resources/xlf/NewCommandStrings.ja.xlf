@@ -13,13 +13,13 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Create a new Aspire project.</source>
-        <target state="translated">新しい Aspire プロジェクトを作成します。</target>
+        <source>Create a new app from an Aspire starter template</source>
+        <target state="needs-review-translation">新しい Aspire プロジェクトを作成します。</target>
         <note />
       </trans-unit>
       <trans-unit id="EnterTheOutputPath">
-        <source>Enter the output path:</source>
-        <target state="translated">出力パスを入力してください:</target>
+        <source>Enter the output path</source>
+        <target state="new">Enter the output path</target>
         <note />
       </trans-unit>
       <trans-unit id="EnterTheProjectName">
@@ -32,14 +32,24 @@
         <target state="translated">プロジェクト名が無効です。</target>
         <note />
       </trans-unit>
+      <trans-unit id="LanguageOptionDescription">
+        <source>The programming language for the AppHost</source>
+        <target state="new">The programming language for the AppHost</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NameArgumentDescription">
-        <source>The name of the project to create.</source>
-        <target state="translated">作成するプロジェクトの名前。</target>
+        <source>The name of the project to create</source>
+        <target state="needs-review-translation">作成するプロジェクトの名前。</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputArgumentDescription">
-        <source>The output path for the project.</source>
-        <target state="translated">プロジェクトの出力パス。</target>
+        <source>The output path for the project</source>
+        <target state="needs-review-translation">プロジェクトの出力パス。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResolvingTemplateVersion">
+        <source>Resolving template version...</source>
+        <target state="translated">テンプレートのバージョンを解決しています...</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAProjectTemplate">
@@ -53,8 +63,8 @@
         <note />
       </trans-unit>
       <trans-unit id="SourceArgumentDescription">
-        <source>The NuGet source to use for the project templates.</source>
-        <target state="translated">プロジェクト テンプレートに使用する NuGet ソース。</target>
+        <source>The NuGet source to use for the project templates</source>
+        <target state="needs-review-translation">プロジェクト テンプレートに使用する NuGet ソース。</target>
         <note />
       </trans-unit>
       <trans-unit id="UsePrereleaseTemplates">
@@ -63,8 +73,8 @@
         <note />
       </trans-unit>
       <trans-unit id="VersionArgumentDescription">
-        <source>The version of the project templates to use.</source>
-        <target state="translated">使用するプロジェクト テンプレートのバージョン。</target>
+        <source>The version of the project templates to use</source>
+        <target state="needs-review-translation">使用するプロジェクト テンプレートのバージョン。</target>
         <note />
       </trans-unit>
     </body>

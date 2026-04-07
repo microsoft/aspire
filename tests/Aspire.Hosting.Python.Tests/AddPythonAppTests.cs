@@ -98,7 +98,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
     [Fact]
     [RequiresTools(["python"])]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/8466")]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/8466")]
     public async Task PythonResourceFinishesSuccessfully()
     {
         var (projectDirectory, _, scriptName) = CreateTempPythonProject(outputHelper);
@@ -263,8 +263,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
     private static (string projectDirectory, string pythonExecutable, string scriptName) CreateTempPythonProject(ITestOutputHelper outputHelper, bool instrument = false)
     {
-        var projectDirectory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        Directory.CreateDirectory(projectDirectory);
+        var projectDirectory = Directory.CreateTempSubdirectory().FullName;
 
         if (instrument)
         {
@@ -550,8 +549,11 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     [Fact]
     public void WithVirtualEnvironment_UsesAppHostDirectoryWhenVenvOnlyExistsThere()
     {
-        using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempAppDir = new TestTempDirectory();
+        using var tempProjectDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(options =>
+        {
+            options.ProjectDirectory = tempProjectDir.Path;
+        }).WithTestAndResourceLogging(outputHelper);
         
         // Create app directory as a subdirectory of AppHost (realistic scenario)
         var appDirName = "python-app";
@@ -593,7 +595,11 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     [Fact]
     public void WithVirtualEnvironment_PrefersAppDirectoryWhenVenvExistsInBoth()
     {
-        using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
+        using var tempProjectDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(options =>
+        {
+            options.ProjectDirectory = tempProjectDir.Path;
+        }).WithTestAndResourceLogging(outputHelper);
         
         // Create app directory as a subdirectory of AppHost (realistic scenario)
         var appDirName = "python-app";
@@ -662,7 +668,11 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     [Fact]
     public void WithVirtualEnvironment_ExplicitPath_UsesVerbatim()
     {
-        using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
+        using var tempProjectDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(options =>
+        {
+            options.ProjectDirectory = tempProjectDir.Path;
+        }).WithTestAndResourceLogging(outputHelper);
         
         // Create app directory as a subdirectory of AppHost
         var appDirName = "python-app";
@@ -2391,4 +2401,3 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         await eventing.PublishAsync(new BeforeStartEvent(app.Services, appModel), CancellationToken.None);
     }
 }
-

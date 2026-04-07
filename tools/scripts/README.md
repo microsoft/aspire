@@ -21,7 +21,7 @@ This tool helps you quickly investigate GitHub Actions test failures by:
 
 - .NET 10 SDK or later
 - GitHub CLI (`gh`) installed and authenticated
-- Access to the dotnet/aspire repository (or appropriate permissions for your target repo)
+- Access to the microsoft/aspire repository (or appropriate permissions for your target repo)
 
 ### Usage
 
@@ -38,7 +38,7 @@ dotnet tools/scripts/DownloadFailingJobLogs.cs 19846215629
 
 You can find the run ID from the GitHub Actions URL:
 ```
-https://github.com/dotnet/aspire/actions/runs/19846215629
+https://github.com/microsoft/aspire/actions/runs/19846215629
                                                   ^^^^^^^^^^
                                                   run ID
 ```
@@ -65,7 +65,7 @@ Found 1 failed jobs
 === Failed Job 1/1 ===
 Name: Tests / Integrations macos (Hosting.Azure) / Hosting.Azure (macos-latest)
 ID: 56864254427
-URL: https://github.com/dotnet/aspire/actions/runs/19846215629/job/56864254427
+URL: https://github.com/microsoft/aspire/actions/runs/19846215629/job/56864254427
 Downloading job logs...
 Saved job logs to: failed_job_0_Tests___Integrations_macos__Hosting_Azure____Hosting_Azure__macos-latest_.log (354209 characters)
 

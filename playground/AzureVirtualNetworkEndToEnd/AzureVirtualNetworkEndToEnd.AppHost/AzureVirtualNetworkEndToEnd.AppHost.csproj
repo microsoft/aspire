@@ -13,6 +13,7 @@
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure.AppContainers" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure.Network" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure.Sql" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure.Storage" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
 

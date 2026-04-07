@@ -132,12 +132,16 @@ public class AzureContainerAppEnvironmentResource :
 
         var dashboardUrl = $"https://aspire-dashboard.ext.{domainValue}";
 
+        context.Summary.Add("📊 Dashboard", new MarkdownString($"[{dashboardUrl}]({dashboardUrl})"));
+
         await context.ReportingStep.CompleteAsync(
-            $"Dashboard available at [{dashboardUrl}]({dashboardUrl})",
+            new MarkdownString($"Dashboard available at [{dashboardUrl}]({dashboardUrl})"),
             CompletionState.Completed,
             context.CancellationToken).ConfigureAwait(false);
     }
     internal bool UseAzdNamingConvention { get; set; }
+
+    internal bool UseCompactResourceNaming { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether the Aspire dashboard should be included in the container app environment.

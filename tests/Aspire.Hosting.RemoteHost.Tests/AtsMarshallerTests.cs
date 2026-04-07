@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Nodes;
-using Aspire.Hosting.Ats;
+using System.Text.Json.Serialization;
+using Aspire.Hosting.ApplicationModel;
+using Aspire.TypeSystem;
 using Aspire.Hosting.RemoteHost.Ats;
 using Xunit;
 
@@ -16,7 +18,17 @@ public class AtsMarshallerTests
         {
             Capabilities = [],
             HandleTypes = [],
-            DtoTypes = [new AtsDtoTypeInfo { TypeId = "test/TestDto", Name = "TestDto", ClrType = typeof(TestDto), Properties = [] }],
+            DtoTypes = [
+                new AtsDtoTypeInfo { TypeId = "test/TestDto", Name = "TestDto", ClrType = typeof(TestDto), Properties = [] },
+                new AtsDtoTypeInfo { TypeId = "test/TestDtoWithEnum", Name = "TestDtoWithEnum", ClrType = typeof(TestDtoWithEnum), Properties = [] },
+                new AtsDtoTypeInfo { TypeId = "test/TestDto", Name = "TestDto", ClrType = typeof(TestDto), Properties = [] },
+                new AtsDtoTypeInfo { TypeId = "test/SelfReferencingDto", Name = "SelfReferencingDto", ClrType = typeof(SelfReferencingDto), Properties = [] },
+                new AtsDtoTypeInfo { TypeId = "test/ParentDto", Name = "ParentDto", ClrType = typeof(ParentDto), Properties = [] },
+                new AtsDtoTypeInfo { TypeId = "test/ChildDto", Name = "ChildDto", ClrType = typeof(ChildDto), Properties = [] },
+                new AtsDtoTypeInfo { TypeId = "test/DtoWithJsonPropertyName", Name = "DtoWithJsonPropertyName", ClrType = typeof(DtoWithJsonPropertyName), Properties = [] },
+                new AtsDtoTypeInfo { TypeId = "test/DtoWithJsonIgnore", Name = "DtoWithJsonIgnore", ClrType = typeof(DtoWithJsonIgnore), Properties = [] },
+                new AtsDtoTypeInfo { TypeId = "test/DtoWithReadOnlyProperty", Name = "DtoWithReadOnlyProperty", ClrType = typeof(DtoWithReadOnlyProperty), Properties = [] },
+            ],
             EnumTypes = []
         };
     }
@@ -33,6 +45,36 @@ public class AtsMarshallerTests
     {
         return CreateTestMarshaller(registry);
     }
+
+    public static TheoryData<Type, JsonValue, object> WholeDoubleAdditionalIntegralTypes => new()
+    {
+        { typeof(byte), JsonValue.Create(42.0)!, (byte)42 },
+        { typeof(short), JsonValue.Create(42.0)!, (short)42 },
+        { typeof(uint), JsonValue.Create(42.0)!, 42u },
+        { typeof(ulong), JsonValue.Create(42.0)!, 42ul },
+        { typeof(ushort), JsonValue.Create(42.0)!, (ushort)42 },
+        { typeof(sbyte), JsonValue.Create(42.0)!, (sbyte)42 },
+    };
+
+    public static TheoryData<Type, JsonValue> FractionalAdditionalIntegralTypes => new()
+    {
+        { typeof(byte), JsonValue.Create(42.5)! },
+        { typeof(short), JsonValue.Create(42.5)! },
+        { typeof(uint), JsonValue.Create(42.5)! },
+        { typeof(ulong), JsonValue.Create(42.5)! },
+        { typeof(ushort), JsonValue.Create(42.5)! },
+        { typeof(sbyte), JsonValue.Create(42.5)! },
+    };
+
+    public static TheoryData<Type, JsonValue> OverflowAdditionalIntegralTypes => new()
+    {
+        { typeof(byte), JsonValue.Create(256.0)! },
+        { typeof(short), JsonValue.Create(32768.0)! },
+        { typeof(uint), JsonValue.Create(-1.0)! },
+        { typeof(ulong), JsonValue.Create(-1.0)! },
+        { typeof(ushort), JsonValue.Create(65536.0)! },
+        { typeof(sbyte), JsonValue.Create(128.0)! },
+    };
 
     [Theory]
     [InlineData(typeof(string))]
@@ -154,6 +196,43 @@ public class AtsMarshallerTests
     }
 
     [Fact]
+    public void MarshalToJson_MarshalsCancellationTokenAsTokenId()
+    {
+        using var registry = new CancellationTokenRegistry();
+        var marshaller = CreateTestMarshaller(ctRegistry: registry);
+        using var cts = new CancellationTokenSource();
+
+        var result = marshaller.MarshalToJson(cts.Token);
+
+        var tokenValue = Assert.IsAssignableFrom<JsonValue>(result);
+        var tokenId = tokenValue.GetValue<string>();
+        Assert.StartsWith("ct_", tokenId);
+        Assert.True(registry.TryGetToken(tokenId, out var token));
+        Assert.True(token.CanBeCanceled);
+    }
+
+    [Fact]
+    public void MarshalToJson_WithCancellationTokenTypeRef_MarshalsAsTokenId()
+    {
+        using var registry = new CancellationTokenRegistry();
+        var marshaller = CreateTestMarshaller(ctRegistry: registry);
+        using var cts = new CancellationTokenSource();
+        var typeRef = new AtsTypeRef
+        {
+            TypeId = AtsConstants.CancellationToken,
+            Category = AtsTypeCategory.Primitive
+        };
+
+        var result = marshaller.MarshalToJson(cts.Token, typeRef);
+
+        var tokenValue = Assert.IsAssignableFrom<JsonValue>(result);
+        var tokenId = tokenValue.GetValue<string>();
+        Assert.StartsWith("ct_", tokenId);
+        Assert.True(registry.TryGetToken(tokenId, out var token));
+        Assert.True(token.CanBeCanceled);
+    }
+
+    [Fact]
     public void ConvertPrimitive_ConvertsStringCorrectly()
     {
         var value = JsonValue.Create("test");
@@ -171,6 +250,47 @@ public class AtsMarshallerTests
         var result = AtsMarshaller.ConvertPrimitive(value!, typeof(int));
 
         Assert.Equal(42, result);
+    }
+
+    [Fact]
+    public void ConvertPrimitive_ConvertsIntFromWholeDouble()
+    {
+        var value = JsonValue.Create(11433.0);
+
+        var result = AtsMarshaller.ConvertPrimitive(value!, typeof(int));
+
+        Assert.Equal(11433, result);
+    }
+
+    [Fact]
+    public void ConvertPrimitive_ThrowsForIntFromFractionalDouble()
+    {
+        var value = JsonValue.Create(11433.5);
+
+        Assert.Throws<InvalidCastException>(() => AtsMarshaller.ConvertPrimitive(value!, typeof(int)));
+    }
+
+    [Theory]
+    [MemberData(nameof(WholeDoubleAdditionalIntegralTypes))]
+    public void ConvertPrimitive_ConvertsWholeDoubleForAdditionalIntegralTypes(Type targetType, JsonValue value, object expected)
+    {
+        var result = AtsMarshaller.ConvertPrimitive(value, targetType);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [MemberData(nameof(FractionalAdditionalIntegralTypes))]
+    public void ConvertPrimitive_RejectsFractionalDoubleForAdditionalIntegralTypes(Type targetType, JsonValue value)
+    {
+        Assert.Throws<InvalidCastException>(() => AtsMarshaller.ConvertPrimitive(value, targetType));
+    }
+
+    [Theory]
+    [MemberData(nameof(OverflowAdditionalIntegralTypes))]
+    public void ConvertPrimitive_RejectsOutOfRangeValuesForAdditionalIntegralTypes(Type targetType, JsonValue value)
+    {
+        Assert.Throws<InvalidCastException>(() => AtsMarshaller.ConvertPrimitive(value, targetType));
     }
 
     [Fact]
@@ -211,6 +331,17 @@ public class AtsMarshallerTests
         var result = marshaller.UnmarshalFromJson(null, typeof(string), context);
 
         Assert.Null(result);
+    }
+
+    [Fact]
+    public void UnmarshalFromJson_ReturnsCancellationTokenNoneForNullNode()
+    {
+        var (marshaller, context) = CreateMarshallerWithContext();
+
+        var result = marshaller.UnmarshalFromJson(null, typeof(CancellationToken), context);
+
+        var token = Assert.IsType<CancellationToken>(result);
+        Assert.Equal(CancellationToken.None, token);
     }
 
     [Fact]
@@ -440,6 +571,24 @@ public class AtsMarshallerTests
     }
 
     [Fact]
+    public void ConvertPrimitive_ConvertsLongFromWholeDouble()
+    {
+        var value = JsonValue.Create(5000000000d);
+
+        var result = AtsMarshaller.ConvertPrimitive(value!, typeof(long));
+
+        Assert.Equal(5000000000L, result);
+    }
+
+    [Fact]
+    public void ConvertPrimitive_RejectsLongFromUnsafeDouble()
+    {
+        var value = JsonValue.Create(9007199254740992d);
+
+        Assert.Throws<InvalidCastException>(() => AtsMarshaller.ConvertPrimitive(value!, typeof(long)));
+    }
+
+    [Fact]
     public void ConvertPrimitive_ConvertsDouble()
     {
         var value = JsonValue.Create(3.14159);
@@ -447,6 +596,16 @@ public class AtsMarshallerTests
         var result = AtsMarshaller.ConvertPrimitive(value!, typeof(double));
 
         Assert.Equal(3.14159, result);
+    }
+
+    [Fact]
+    public void ConvertPrimitive_ConvertsLargeDoubleWithoutDecimalCoercion()
+    {
+        var value = JsonValue.Create(1e100);
+
+        var result = AtsMarshaller.ConvertPrimitive(value!, typeof(double));
+
+        Assert.Equal(1e100, result);
     }
 
     [Fact]
@@ -467,6 +626,14 @@ public class AtsMarshallerTests
         var result = AtsMarshaller.ConvertPrimitive(value!, typeof(decimal));
 
         Assert.Equal(123.456m, result);
+    }
+
+    [Fact]
+    public void ConvertPrimitive_RejectsDecimalFromOutOfRangeDouble()
+    {
+        var value = JsonValue.Create(1e100);
+
+        Assert.Throws<InvalidCastException>(() => AtsMarshaller.ConvertPrimitive(value!, typeof(decimal)));
     }
 
     [Fact]
@@ -626,6 +793,201 @@ public class AtsMarshallerTests
         return (marshaller, context);
     }
 
+    [Fact]
+    public void MarshalToJson_HandlesDirectCircularReference()
+    {
+        var marshaller = CreateMarshaller();
+        var dto = new SelfReferencingDto { Name = "root" };
+        dto.Self = dto;
+
+        var result = marshaller.MarshalToJson(dto);
+
+        Assert.NotNull(result);
+        var obj = Assert.IsType<JsonObject>(result);
+        Assert.Equal("root", obj["name"]!.GetValue<string>());
+        Assert.True(obj["self"] is null || obj["self"]!.GetValueKind() == System.Text.Json.JsonValueKind.Null);
+    }
+
+    [Fact]
+    public void MarshalToJson_HandlesMutualCircularReference()
+    {
+        var marshaller = CreateMarshaller();
+        var parent = new ParentDto { Label = "parent" };
+        var child = new ChildDto { Label = "child", Parent = parent };
+        parent.Child = child;
+
+        var result = marshaller.MarshalToJson(parent);
+
+        Assert.NotNull(result);
+        var obj = Assert.IsType<JsonObject>(result);
+        Assert.Equal("parent", obj["label"]!.GetValue<string>());
+        var childObj = Assert.IsType<JsonObject>(obj["child"]);
+        Assert.Equal("child", childObj["label"]!.GetValue<string>());
+        // The back-reference to parent should be null (cycle broken)
+        Assert.True(childObj["parent"] is null || childObj["parent"]!.GetValueKind() == System.Text.Json.JsonValueKind.Null);
+    }
+
+    [Fact]
+    public void MarshalToJson_HandlesCircularReferenceWithTypeRef()
+    {
+        var marshaller = CreateMarshaller();
+        var dto = new SelfReferencingDto { Name = "typed" };
+        dto.Self = dto;
+
+        var typeRef = new AtsTypeRef { TypeId = "test/SelfReferencingDto", Category = AtsTypeCategory.Dto };
+
+        var result = marshaller.MarshalToJson(dto, typeRef);
+
+        Assert.NotNull(result);
+        var obj = Assert.IsType<JsonObject>(result);
+        Assert.Equal("typed", obj["name"]!.GetValue<string>());
+        Assert.True(obj["self"] is null || obj["self"]!.GetValueKind() == System.Text.Json.JsonValueKind.Null);
+    }
+
+    [Fact]
+    public void MarshalToJson_PreservesNonCircularNestedDtos()
+    {
+        var marshaller = CreateMarshaller();
+        var parent = new ParentDto { Label = "parent" };
+        var child = new ChildDto { Label = "child", Parent = null };
+        parent.Child = child;
+
+        var result = marshaller.MarshalToJson(parent);
+
+        Assert.NotNull(result);
+        var obj = Assert.IsType<JsonObject>(result);
+        Assert.Equal("parent", obj["label"]!.GetValue<string>());
+        var childObj = Assert.IsType<JsonObject>(obj["child"]);
+        Assert.Equal("child", childObj["label"]!.GetValue<string>());
+        Assert.True(childObj["parent"] is null || childObj["parent"]!.GetValueKind() == System.Text.Json.JsonValueKind.Null);
+    }
+
+    [Fact]
+    public void ApplyDtoProperties_UpdatesWritableProperties()
+    {
+        var marshaller = CreateMarshaller();
+        var dto = new TestDto { Name = "original", Count = 0 };
+        var source = new JsonObject { ["name"] = "updated", ["count"] = 42 };
+
+        marshaller.ApplyDtoProperties(source, dto, typeof(TestDto));
+
+        Assert.Equal("updated", dto.Name);
+        Assert.Equal(42, dto.Count);
+    }
+
+    [Fact]
+    public void ApplyDtoProperties_OnlyUpdatesProvidedProperties()
+    {
+        var marshaller = CreateMarshaller();
+        var dto = new TestDto { Name = "original", Count = 10 };
+        var source = new JsonObject { ["name"] = "updated" };
+
+        marshaller.ApplyDtoProperties(source, dto, typeof(TestDto));
+
+        Assert.Equal("updated", dto.Name);
+        Assert.Equal(10, dto.Count); // Count unchanged since not in JSON
+    }
+
+    [Fact]
+    public void ApplyDtoProperties_SkipsNonDeserializableProperties()
+    {
+        var marshaller = CreateMarshaller();
+        var dto = new DtoWithComplexProperty { Name = "original", Complex = new NonDeserializableType("keep-me") };
+        var source = new JsonObject
+        {
+            ["name"] = "updated",
+            ["complex"] = new JsonObject { ["value"] = "should-be-ignored" }
+        };
+
+        marshaller.ApplyDtoProperties(source, dto, typeof(DtoWithComplexProperty));
+
+        Assert.Equal("updated", dto.Name);
+        Assert.Equal("keep-me", dto.Complex.Value); // Complex property unchanged
+    }
+
+    [Fact]
+    public void ApplyDtoProperties_RespectsJsonPropertyName()
+    {
+        var marshaller = CreateMarshaller();
+        var dto = new DtoWithJsonPropertyName { DisplayName = "original", Value = 0 };
+        var source = new JsonObject { ["display_name"] = "updated", ["val"] = 99 };
+
+        marshaller.ApplyDtoProperties(source, dto, typeof(DtoWithJsonPropertyName));
+
+        Assert.Equal("updated", dto.DisplayName);
+        Assert.Equal(99, dto.Value);
+    }
+
+    [Fact]
+    public void ApplyDtoProperties_RespectsJsonPropertyName_IgnoresCamelCaseKey()
+    {
+        var marshaller = CreateMarshaller();
+        var dto = new DtoWithJsonPropertyName { DisplayName = "original", Value = 5 };
+        // Use camelCase CLR name instead of the [JsonPropertyName] — should NOT match
+        var source = new JsonObject { ["displayName"] = "should-not-apply" };
+
+        marshaller.ApplyDtoProperties(source, dto, typeof(DtoWithJsonPropertyName));
+
+        Assert.Equal("original", dto.DisplayName);
+    }
+
+    [Fact]
+    public void ApplyDtoProperties_RespectsJsonIgnore()
+    {
+        var marshaller = CreateMarshaller();
+        var dto = new DtoWithJsonIgnore { Name = "original", Secret = "keep-me" };
+        var source = new JsonObject { ["name"] = "updated", ["secret"] = "should-be-ignored" };
+
+        marshaller.ApplyDtoProperties(source, dto, typeof(DtoWithJsonIgnore));
+
+        Assert.Equal("updated", dto.Name);
+        Assert.Equal("keep-me", dto.Secret); // JsonIgnore property unchanged
+    }
+
+    [Fact]
+    public void ApplyDtoProperties_SkipsReadOnlyProperties()
+    {
+        var marshaller = CreateMarshaller();
+        var dto = new DtoWithReadOnlyProperty { Name = "original" };
+        var source = new JsonObject { ["name"] = "updated", ["computed"] = "should-be-ignored" };
+
+        marshaller.ApplyDtoProperties(source, dto, typeof(DtoWithReadOnlyProperty));
+
+        Assert.Equal("updated", dto.Name);
+        Assert.Equal("read-only", dto.Computed); // Read-only property unchanged
+    }
+
+    [Fact]
+    public void ApplyDtoProperties_SkipsIncompatibleJsonValues()
+    {
+        var marshaller = CreateMarshaller();
+        var dto = new TestDto { Name = "original", Count = 10 };
+        // Send a string for an int property — should be silently skipped
+        var source = new JsonObject { ["count"] = "not-a-number" };
+
+        marshaller.ApplyDtoProperties(source, dto, typeof(TestDto));
+
+        Assert.Equal("original", dto.Name);
+        Assert.Equal(10, dto.Count); // Count unchanged due to incompatible value
+    }
+
+    [Fact]
+    public void IsDtoType_ReturnsTrueForRegisteredDtoType()
+    {
+        var marshaller = CreateMarshaller();
+
+        Assert.True(marshaller.IsDtoType(typeof(TestDto)));
+    }
+
+    [Fact]
+    public void IsDtoType_ReturnsFalseForNonDtoType()
+    {
+        var marshaller = CreateMarshaller();
+
+        Assert.False(marshaller.IsDtoType(typeof(string)));
+        Assert.False(marshaller.IsDtoType(typeof(TestClass)));
+    }
+
     private enum TestEnum
     {
         ValueA,
@@ -642,5 +1004,327 @@ public class AtsMarshallerTests
     {
         public string? Name { get; set; }
         public int Count { get; set; }
+    }
+
+    [AspireDto]
+    private sealed class TestDtoWithEnum
+    {
+        public string? Label { get; set; }
+        public TestEnum Status { get; set; }
+    }
+
+    [AspireDto]
+    private sealed class SelfReferencingDto
+    {
+        public string? Name { get; set; }
+        public SelfReferencingDto? Self { get; set; }
+    }
+
+    [AspireDto]
+    private sealed class ParentDto
+    {
+        public string? Label { get; set; }
+        public ChildDto? Child { get; set; }
+    }
+
+    [AspireDto]
+    private sealed class ChildDto
+    {
+        public string? Label { get; set; }
+        public ParentDto? Parent { get; set; }
+    }
+
+    [AspireDto]
+    private sealed class DtoWithComplexProperty
+    {
+        public string? Name { get; set; }
+        public NonDeserializableType Complex { get; set; } = new("default");
+    }
+
+    /// <summary>
+    /// A type that cannot be deserialized by System.Text.Json (multiple parameterized constructors, none annotated).
+    /// Simulates EndpointReference in ResourceUrlAnnotation.
+    /// </summary>
+    private sealed class NonDeserializableType
+    {
+        public string Value { get; }
+        public NonDeserializableType(string value) => Value = value;
+        public NonDeserializableType(string value, int extra) => Value = value + extra;
+    }
+
+    [AspireDto]
+    private sealed class DtoWithJsonPropertyName
+    {
+        [JsonPropertyName("display_name")]
+        public string? DisplayName { get; set; }
+
+        [JsonPropertyName("val")]
+        public int Value { get; set; }
+    }
+
+    [AspireDto]
+    private sealed class DtoWithJsonIgnore
+    {
+        public string? Name { get; set; }
+
+        [JsonIgnore]
+        public string? Secret { get; set; }
+    }
+
+    [AspireDto]
+    private sealed class DtoWithReadOnlyProperty
+    {
+        public string? Name { get; set; }
+        public string Computed { get; } = "read-only";
+    }
+
+    [Fact]
+    public void MarshalToJson_MarshalsConditionalReferenceExpressionAsHandle()
+    {
+        var registry = new HandleRegistry();
+        var marshaller = CreateMarshaller(registry);
+        var condition = new TestConditionValueProvider(bool.TrueString);
+        var whenTrue = ReferenceExpression.Create($",ssl=true");
+        var whenFalse = ReferenceExpression.Empty;
+        var conditional = ReferenceExpression.CreateConditional(condition, bool.TrueString, whenTrue, whenFalse);
+
+        var result = marshaller.MarshalToJson(conditional);
+
+        Assert.NotNull(result);
+        Assert.IsType<JsonObject>(result);
+        var jsonObj = (JsonObject)result;
+        Assert.NotNull(jsonObj["$handle"]);
+        Assert.NotNull(jsonObj["$type"]);
+    }
+
+    [Fact]
+    public void MarshalToJson_ConditionalReferenceExpression_RoundTripsViaHandle()
+    {
+        var registry = new HandleRegistry();
+        var marshaller = CreateMarshaller(registry);
+        var condition = new TestConditionValueProvider(bool.TrueString);
+        var whenTrue = ReferenceExpression.Create($",ssl=true");
+        var whenFalse = ReferenceExpression.Empty;
+        var conditional = ReferenceExpression.CreateConditional(condition, bool.TrueString, whenTrue, whenFalse);
+
+        var json = marshaller.MarshalToJson(conditional);
+        Assert.NotNull(json);
+
+        var handleId = json["$handle"]!.GetValue<string>();
+        var found = registry.TryGet(handleId, out var retrieved, out _);
+
+        Assert.True(found);
+        Assert.Same(conditional, retrieved);
+    }
+
+    [Fact]
+    public async Task MarshalToJson_ConditionalReferenceExpression_PreservesValueAfterRoundTrip()
+    {
+        var registry = new HandleRegistry();
+        var marshaller = CreateMarshaller(registry);
+        var condition = new TestConditionValueProvider(bool.TrueString);
+        var whenTrue = ReferenceExpression.Create($",ssl=true");
+        var whenFalse = ReferenceExpression.Empty;
+        var conditional = ReferenceExpression.CreateConditional(condition, bool.TrueString, whenTrue, whenFalse);
+
+        var json = marshaller.MarshalToJson(conditional);
+        var handleId = json!["$handle"]!.GetValue<string>();
+        registry.TryGet(handleId, out var retrieved, out _);
+        var retrievedConditional = Assert.IsType<ReferenceExpression>(retrieved);
+
+        Assert.StartsWith("cond-test-condition", retrievedConditional.Name);
+        Assert.Equal(",ssl=true", await retrievedConditional.GetValueAsync(default));
+    }
+
+    [Fact]
+    public async Task MarshalToJson_ConditionalReferenceExpression_FalseConditionRoundTrips()
+    {
+        var registry = new HandleRegistry();
+        var marshaller = CreateMarshaller(registry);
+        var condition = new TestConditionValueProvider(bool.FalseString);
+        var whenTrue = ReferenceExpression.Create($",ssl=true");
+        var whenFalse = ReferenceExpression.Empty;
+        var conditional = ReferenceExpression.CreateConditional(condition, bool.TrueString, whenTrue, whenFalse);
+
+        var json = marshaller.MarshalToJson(conditional);
+        var handleId = json!["$handle"]!.GetValue<string>();
+        registry.TryGet(handleId, out var retrieved, out _);
+        var retrievedConditional = Assert.IsType<ReferenceExpression>(retrieved);
+
+        Assert.Null(await retrievedConditional.GetValueAsync(default));
+    }
+
+    private sealed class TestConditionValueProvider(string value) : IValueProvider, IManifestExpressionProvider
+    {
+        public string ValueExpression => "test-condition";
+
+        public ValueTask<string?> GetValueAsync(CancellationToken cancellationToken = default)
+            => new(value);
+
+        public ValueTask<string?> GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken = default)
+            => new(value);
+    }
+
+    [Fact]
+    public void UnmarshalFromJson_UnmarshalsCondExprToReferenceExpression()
+    {
+        var registry = new HandleRegistry();
+
+        // Register a condition IValueProvider as a handle
+        var condition = new TestConditionValueProvider(bool.TrueString);
+        var conditionHandleId = registry.Register(condition, AtsConstants.ReferenceExpressionTypeId);
+
+        var (marshaller, context) = CreateMarshallerWithContext(registry);
+
+        // Build the unified $expr JSON with conditional mode
+        var json = new JsonObject
+        {
+            ["$expr"] = new JsonObject
+            {
+                ["condition"] = new JsonObject
+                {
+                    ["$handle"] = conditionHandleId
+                },
+                ["whenTrue"] = new JsonObject
+                {
+                    ["$expr"] = new JsonObject
+                    {
+                        ["format"] = ",ssl=true"
+                    }
+                },
+                ["whenFalse"] = new JsonObject
+                {
+                    ["$expr"] = new JsonObject
+                    {
+                        ["format"] = ""
+                    }
+                }
+            }
+        };
+
+        var result = marshaller.UnmarshalFromJson(json, typeof(ReferenceExpression), context);
+        var cre = Assert.IsType<ReferenceExpression>(result);
+
+        Assert.NotNull(cre);
+    }
+
+    [Fact]
+    public async Task UnmarshalFromJson_CondExpr_TrueConditionReturnsWhenTrueValue()
+    {
+        var registry = new HandleRegistry();
+
+        var condition = new TestConditionValueProvider(bool.TrueString);
+        var conditionHandleId = registry.Register(condition, AtsConstants.ReferenceExpressionTypeId);
+
+        var (marshaller, context) = CreateMarshallerWithContext(registry);
+
+        var json = new JsonObject
+        {
+            ["$expr"] = new JsonObject
+            {
+                ["condition"] = new JsonObject
+                {
+                    ["$handle"] = conditionHandleId
+                },
+                ["whenTrue"] = new JsonObject
+                {
+                    ["$expr"] = new JsonObject
+                    {
+                        ["format"] = ",ssl=true"
+                    }
+                },
+                ["whenFalse"] = new JsonObject
+                {
+                    ["$expr"] = new JsonObject
+                    {
+                        ["format"] = ""
+                    }
+                }
+            }
+        };
+
+        var result = marshaller.UnmarshalFromJson(json, typeof(ReferenceExpression), context);
+        var cre = Assert.IsType<ReferenceExpression>(result);
+        var value = await cre.GetValueAsync(default);
+
+        Assert.Equal(",ssl=true", value);
+    }
+
+    [Fact]
+    public async Task UnmarshalFromJson_CondExpr_FalseConditionReturnsWhenFalseValue()
+    {
+        var registry = new HandleRegistry();
+
+        var condition = new TestConditionValueProvider(bool.FalseString);
+        var conditionHandleId = registry.Register(condition, AtsConstants.ReferenceExpressionTypeId);
+
+        var (marshaller, context) = CreateMarshallerWithContext(registry);
+
+        var json = new JsonObject
+        {
+            ["$expr"] = new JsonObject
+            {
+                ["condition"] = new JsonObject
+                {
+                    ["$handle"] = conditionHandleId
+                },
+                ["whenTrue"] = new JsonObject
+                {
+                    ["$expr"] = new JsonObject
+                    {
+                        ["format"] = ",ssl=true"
+                    }
+                },
+                ["whenFalse"] = new JsonObject
+                {
+                    ["$expr"] = new JsonObject
+                    {
+                        ["format"] = ""
+                    }
+                }
+            }
+        };
+
+        var result = marshaller.UnmarshalFromJson(json, typeof(ReferenceExpression), context);
+        var cre = Assert.IsType<ReferenceExpression>(result);
+        var value = await cre.GetValueAsync(default);
+
+        // An empty format string with no value providers results in null from ReferenceExpression.GetValueAsync
+        Assert.Null(value);
+    }
+
+    [Fact]
+    public void UnmarshalFromJson_CondExpr_ThrowsWhenConditionHandleMissing()
+    {
+        var registry = new HandleRegistry();
+        var (marshaller, context) = CreateMarshallerWithContext(registry);
+
+        var json = new JsonObject
+        {
+            ["$expr"] = new JsonObject
+            {
+                ["condition"] = new JsonObject
+                {
+                    ["$handle"] = "nonexistent-handle-id"
+                },
+                ["whenTrue"] = new JsonObject
+                {
+                    ["$expr"] = new JsonObject
+                    {
+                        ["format"] = ",ssl=true"
+                    }
+                },
+                ["whenFalse"] = new JsonObject
+                {
+                    ["$expr"] = new JsonObject
+                    {
+                        ["format"] = ""
+                    }
+                }
+            }
+        };
+
+        Assert.Throws<CapabilityException>(() =>
+            marshaller.UnmarshalFromJson(json, typeof(ReferenceExpression), context));
     }
 }

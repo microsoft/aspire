@@ -77,6 +77,11 @@ internal sealed class ResourceJson
     public string? DashboardUrl { get; set; }
 
     /// <summary>
+    /// The relationships of the resource.
+    /// </summary>
+    public ResourceRelationshipJson[]? Relationships { get; set; }
+
+    /// <summary>
     /// The URLs/endpoints associated with the resource.
     /// </summary>
     public ResourceUrlJson[]? Urls { get; set; }
@@ -87,29 +92,28 @@ internal sealed class ResourceJson
     public ResourceVolumeJson[]? Volumes { get; set; }
 
     /// <summary>
-    /// The environment variables associated with the resource.
+    /// The properties of the resource.
+    /// Dictionary key is the property name, value is the property value.
     /// </summary>
-    public ResourceEnvironmentVariableJson[]? Environment { get; set; }
+    public Dictionary<string, string?>? Properties { get; set; }
+
+    /// <summary>
+    /// The environment variables associated with the resource.
+    /// Dictionary key is the environment variable name, value is the environment variable value.
+    /// </summary>
+    public Dictionary<string, string?>? Environment { get; set; }
 
     /// <summary>
     /// The health reports associated with the resource.
+    /// Dictionary key is the health report name.
     /// </summary>
-    public ResourceHealthReportJson[]? HealthReports { get; set; }
-
-    /// <summary>
-    /// The properties of the resource.
-    /// </summary>
-    public ResourcePropertyJson[]? Properties { get; set; }
-
-    /// <summary>
-    /// The relationships of the resource.
-    /// </summary>
-    public ResourceRelationshipJson[]? Relationships { get; set; }
+    public Dictionary<string, ResourceHealthReportJson>? HealthReports { get; set; }
 
     /// <summary>
     /// The commands available for the resource.
+    /// Dictionary key is the command name.
     /// </summary>
-    public ResourceCommandJson[]? Commands { get; set; }
+    public Dictionary<string, ResourceCommandJson>? Commands { get; set; }
 }
 
 /// <summary>
@@ -118,7 +122,7 @@ internal sealed class ResourceJson
 internal sealed class ResourceUrlJson
 {
     /// <summary>
-    /// The name of the URL/endpoint.
+    /// The name of the endpoint.
     /// </summary>
     public string? Name { get; set; }
 
@@ -167,32 +171,10 @@ internal sealed class ResourceVolumeJson
 }
 
 /// <summary>
-/// Represents an environment variable in JSON format.
-/// </summary>
-internal sealed class ResourceEnvironmentVariableJson
-{
-    /// <summary>
-    /// The name of the environment variable.
-    /// </summary>
-    public string? Name { get; set; }
-
-    /// <summary>
-    /// The value of the environment variable.
-    /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
-    public string? Value { get; set; }
-}
-
-/// <summary>
 /// Represents a health report in JSON format.
 /// </summary>
 internal sealed class ResourceHealthReportJson
 {
-    /// <summary>
-    /// The name of the health report.
-    /// </summary>
-    public string? Name { get; set; }
-
     /// <summary>
     /// The health status.
     /// </summary>
@@ -207,29 +189,6 @@ internal sealed class ResourceHealthReportJson
     /// The exception message if any.
     /// </summary>
     public string? ExceptionMessage { get; set; }
-}
-
-/// <summary>
-/// Represents a property in JSON format.
-/// </summary>
-internal sealed class ResourcePropertyJson
-{
-    /// <summary>
-    /// The name of the property.
-    /// </summary>
-    public string? Name { get; set; }
-
-    /// <summary>
-    /// The value of the property.
-    /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
-    public string? Value { get; set; }
-
-    /// <summary>
-    /// Whether this property contains sensitive data.
-    /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public bool IsSensitive { get; set; }
 }
 
 /// <summary>
@@ -253,11 +212,6 @@ internal sealed class ResourceRelationshipJson
 /// </summary>
 internal sealed class ResourceCommandJson
 {
-    /// <summary>
-    /// The name of the command.
-    /// </summary>
-    public string? Name { get; set; }
-
     /// <summary>
     /// The description of the command.
     /// </summary>

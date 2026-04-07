@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="it" original="../AgentCommandStrings.resx">
     <body>
@@ -23,18 +23,173 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Manage AI agent integrations.</source>
-        <target state="translated">Gestire le integrazioni dell'agente AI.</target>
+        <source>Manage AI agent environment configuration</source>
+        <target state="needs-review-translation">Gestire le integrazioni dell'agente AI.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_ConfigureMcpServer">
+        <source>Install Aspire MCP server</source>
+        <target state="new">Install Aspire MCP server</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_Description">
-        <source>Initialize agent environment configuration for detected agents.</source>
-        <target state="translated">Consente di inizializzare la configurazione dell'ambiente agente per gli agenti rilevati.</target>
+        <source>Initialize agent environment configuration for detected agents</source>
+        <target state="needs-review-translation">Consente di inizializzare la configurazione dell'ambiente agente per gli agenti rilevati.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_ConfiguresDetectedAgentEnvironments">
+        <source>(configures detected agent environments)</source>
+        <target state="new">(configures detected agent environments)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_FailedToInstallSkill">
+        <source>Failed to install {0} skill at {1}: {2}</source>
+        <target state="new">Failed to install {0} skill at {1}: {2}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_InstalledPlaywrightCli">
+        <source>Installed Playwright CLI.</source>
+        <target state="new">Installed Playwright CLI.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_InstalledSkill">
+        <source>Installed {0} skill ({1}).</source>
+        <target state="new">Installed {0} skill ({1}).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_PlaywrightCliSkipped">
+        <source>Playwright CLI requires npm, which was not found on PATH. Skipping installation.</source>
+        <target state="new">Playwright CLI requires npm, which was not found on PATH. Skipping installation.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PlaywrightCliInstaller_FailedToDownload">
+        <source>Failed to download {0}.</source>
+        <target state="new">Failed to download {0}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PlaywrightCliInstaller_FailedToGenerateSkillFiles">
+        <source>Failed to generate Playwright CLI skill files.</source>
+        <target state="new">Failed to generate Playwright CLI skill files.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PlaywrightCliInstaller_FailedToInstallGlobally">
+        <source>Failed to install {0} globally via npm.</source>
+        <target state="new">Failed to install {0} globally via npm.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PlaywrightCliInstaller_FailedToResolvePackage">
+        <source>Failed to resolve {0} from the npm registry.</source>
+        <target state="new">Failed to resolve {0} from the npm registry.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PlaywrightCliInstaller_InstalledWithMirrorWarnings">
+        <source>Installed Playwright CLI (some locations failed to mirror).</source>
+        <target state="new">Installed Playwright CLI (some locations failed to mirror).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PlaywrightCliInstaller_InstallingStatus">
+        <source>Installing Playwright CLI...</source>
+        <target state="new">Installing Playwright CLI...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PlaywrightCliInstaller_IntegrityVerificationFailed">
+        <source>Integrity verification failed for {0}. The downloaded package may have been tampered with.</source>
+        <target state="new">Integrity verification failed for {0}. The downloaded package may have been tampered with.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PlaywrightCliInstaller_ProvenanceVerificationFailed">
+        <source>Provenance verification failed for {0}: {1}</source>
+        <target state="new">Provenance verification failed for {0}: {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkillDescription_Aspire">
+        <source>Aspire CLI commands and workflows for distributed apps</source>
+        <target state="new">Aspire CLI commands and workflows for distributed apps</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkillDescription_DotnetInspect">
+        <source>Query .NET API surfaces across NuGet packages and platform libraries</source>
+        <target state="new">Query .NET API surfaces across NuGet packages and platform libraries</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkillDescription_PlaywrightCli">
+        <source>Browser automation and functional testing</source>
+        <target state="new">Browser automation and functional testing</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkillLocation_ClaudeCodeDescription">
+        <source>Required for Claude Code</source>
+        <target state="new">Required for Claude Code</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkillLocation_ClaudeCodeName">
+        <source>Claude Code (.claude/skills/)</source>
+        <target state="new">Claude Code (.claude/skills/)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkillLocation_GitHubSkillsDescription">
+        <source>Legacy location for GitHub Copilot skills</source>
+        <target state="new">Legacy location for GitHub Copilot skills</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkillLocation_GitHubSkillsName">
+        <source>VS Code / GitHub Copilot (.github/skills/)</source>
+        <target state="new">VS Code / GitHub Copilot (.github/skills/)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkillLocation_OpenCodeDescription">
+        <source>Legacy location for OpenCode skills</source>
+        <target state="new">Legacy location for OpenCode skills</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkillLocation_OpenCodeName">
+        <source>OpenCode (.opencode/skill/)</source>
+        <target state="new">OpenCode (.opencode/skill/)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkillLocation_StandardDescription">
+        <source>Supported by VS Code, GitHub Copilot, and OpenCode (also installs at ~/)</source>
+        <target state="new">Supported by VS Code, GitHub Copilot, and OpenCode (also installs at ~/)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkillLocation_StandardName">
+        <source>Standard (.agents/skills/)</source>
+        <target state="new">Standard (.agents/skills/)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_SelectSkillLocations">
+        <source>Where should skill files be installed?</source>
+        <target state="new">Where should skill files be installed?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_SelectSkills">
+        <source>Which skills should be installed?</source>
+        <target state="new">Which skills should be installed?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MalformedConfigFileError">
+        <source>The configuration file '{0}' contains malformed JSON. Please fix the file manually and re-run the command.</source>
+        <target state="translated">Il file di configurazione "{0}" contiene un JSON non valido. Correggere il file manualmente ed eseguire di nuovo il comando.</target>
         <note />
       </trans-unit>
       <trans-unit id="McpCommand_Description">
-        <source>Start the MCP (Model Context Protocol) server.</source>
-        <target state="translated">Avviare il server MCP (Model Context Protocol).</target>
+        <source>Start the MCP (Model Context Protocol) server</source>
+        <target state="needs-review-translation">Avviare il server MCP (Model Context Protocol).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkipNoneDescription">
+        <source>None — skip</source>
+        <target state="new">None — skip</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkippedMalformedConfigFile">
+        <source>Skipping update of '{0}'.</source>
+        <target state="translated">Ignorato l'aggiornamento di "{0}".</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigurationCompletedWithErrors">
+        <source>Configuration completed with errors. Please fix the reported issues and re-run the command.</source>
+        <target state="translated">Configurazione completata con errori. Correggere i problemi segnalati ed eseguire di nuovo il comando.</target>
         <note />
       </trans-unit>
     </body>

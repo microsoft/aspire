@@ -3,6 +3,7 @@
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
 
@@ -15,22 +16,25 @@ internal sealed class OpenCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
 {
     private const string OpenCodeConfigFileName = "opencode.jsonc";
     private const string AspireServerName = "aspire";
-    private static readonly string s_skillFilePath = Path.Combine(".opencode", "skill", CommonAgentApplicators.AspireSkillName, "SKILL.md");
-    private const string SkillFileDescription = "Create Aspire skill file (.opencode/skill/aspire/SKILL.md)";
+    private static readonly string s_skillBaseDirectory = Path.Combine(".opencode", "skill");
 
     private readonly IOpenCodeCliRunner _openCodeCliRunner;
+    private readonly PlaywrightCliInstaller _playwrightCliInstaller;
     private readonly ILogger<OpenCodeAgentEnvironmentScanner> _logger;
 
     /// <summary>
     /// Initializes a new instance of <see cref="OpenCodeAgentEnvironmentScanner"/>.
     /// </summary>
     /// <param name="openCodeCliRunner">The OpenCode CLI runner for checking if OpenCode is installed.</param>
+    /// <param name="playwrightCliInstaller">The Playwright CLI installer for secure installation.</param>
     /// <param name="logger">The logger for diagnostic output.</param>
-    public OpenCodeAgentEnvironmentScanner(IOpenCodeCliRunner openCodeCliRunner, ILogger<OpenCodeAgentEnvironmentScanner> logger)
+    public OpenCodeAgentEnvironmentScanner(IOpenCodeCliRunner openCodeCliRunner, PlaywrightCliInstaller playwrightCliInstaller, ILogger<OpenCodeAgentEnvironmentScanner> logger)
     {
         ArgumentNullException.ThrowIfNull(openCodeCliRunner);
+        ArgumentNullException.ThrowIfNull(playwrightCliInstaller);
         ArgumentNullException.ThrowIfNull(logger);
         _openCodeCliRunner = openCodeCliRunner;
+        _playwrightCliInstaller = playwrightCliInstaller;
         _logger = logger;
     }
 
@@ -62,25 +66,8 @@ internal sealed class OpenCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
                 _logger.LogDebug("Aspire MCP server is already configured");
             }
 
-            // Add Playwright configuration callback if not already configured
-            if (!HasPlaywrightServerConfigured(configFilePath))
-            {
-                _logger.LogDebug("Registering Playwright MCP configuration callback for OpenCode");
-                CommonAgentApplicators.AddPlaywrightConfigurationCallback(
-                    context,
-                    ct => ApplyPlaywrightMcpConfigurationAsync(configDirectory, ct));
-            }
-            else
-            {
-                _logger.LogDebug("Playwright MCP server is already configured");
-            }
-
-            // Try to add skill file applicator for OpenCode
-            CommonAgentApplicators.TryAddSkillFileApplicator(
-                context,
-                context.RepositoryRoot,
-                s_skillFilePath,
-                SkillFileDescription);
+            // Register Playwright CLI installation applicator
+            CommonAgentApplicators.AddPlaywrightCliApplicator(context, _playwrightCliInstaller, s_skillBaseDirectory);
         }
         else
         {
@@ -95,17 +82,8 @@ internal sealed class OpenCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
                 _logger.LogDebug("Adding OpenCode applicator to create new opencode.jsonc at: {ConfigDirectory}", configDirectory.FullName);
                 context.AddApplicator(CreateApplicator(configDirectory));
                 
-                // Register Playwright configuration callback
-                CommonAgentApplicators.AddPlaywrightConfigurationCallback(
-                    context,
-                    ct => ApplyPlaywrightMcpConfigurationAsync(configDirectory, ct));
-                
-                // Try to add skill file applicator for OpenCode
-                CommonAgentApplicators.TryAddSkillFileApplicator(
-                    context,
-                    context.RepositoryRoot,
-                    s_skillFilePath,
-                    SkillFileDescription);
+                // Register Playwright CLI installation applicator
+                CommonAgentApplicators.AddPlaywrightCliApplicator(context, _playwrightCliInstaller, s_skillBaseDirectory);
             }
             else
             {
@@ -203,23 +181,12 @@ internal sealed class OpenCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
         CancellationToken cancellationToken)
     {
         var configFilePath = Path.Combine(configDirectory.FullName, OpenCodeConfigFileName);
-        JsonObject config;
+        var config = await McpConfigFileHelper.ReadConfigAsync(configFilePath, cancellationToken, RemoveJsonComments);
 
-        // Read existing config or create new
-        if (File.Exists(configFilePath))
+        // Ensure schema is set for new configs
+        if (!config.ContainsKey("$schema"))
         {
-            var existingContent = await File.ReadAllTextAsync(configFilePath, cancellationToken);
-
-            // Remove comments for parsing
-            var jsonContent = RemoveJsonComments(existingContent);
-            config = JsonNode.Parse(jsonContent)?.AsObject() ?? new JsonObject();
-        }
-        else
-        {
-            config = new JsonObject
-            {
-                ["$schema"] = "https://opencode.ai/config.json"
-            };
+            config["$schema"] = "https://opencode.ai/config.json";
         }
 
         // Ensure "mcp" object exists
@@ -243,85 +210,4 @@ internal sealed class OpenCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
         await File.WriteAllTextAsync(configFilePath, jsonOutput, cancellationToken);
     }
 
-    /// <summary>
-    /// Creates or updates the opencode.jsonc file with Playwright MCP configuration.
-    /// </summary>
-    private static async Task ApplyPlaywrightMcpConfigurationAsync(
-        DirectoryInfo configDirectory,
-        CancellationToken cancellationToken)
-    {
-        var configFilePath = Path.Combine(configDirectory.FullName, OpenCodeConfigFileName);
-        JsonObject config;
-
-        // Read existing config or create new
-        if (File.Exists(configFilePath))
-        {
-            var existingContent = await File.ReadAllTextAsync(configFilePath, cancellationToken);
-
-            // Remove comments for parsing
-            var jsonContent = RemoveJsonComments(existingContent);
-            config = JsonNode.Parse(jsonContent)?.AsObject() ?? new JsonObject();
-        }
-        else
-        {
-            config = new JsonObject
-            {
-                ["$schema"] = "https://opencode.ai/config.json"
-            };
-        }
-
-        // Ensure "mcp" object exists
-        if (!config.ContainsKey("mcp") || config["mcp"] is not JsonObject)
-        {
-            config["mcp"] = new JsonObject();
-        }
-
-        var mcp = config["mcp"]!.AsObject();
-
-        // Add Playwright MCP server configuration
-        mcp["playwright"] = new JsonObject
-        {
-            ["type"] = "local",
-            ["command"] = new JsonArray("npx", "-y", "@playwright/mcp@latest"),
-            ["enabled"] = true
-        };
-
-        // Write the updated config using AOT-compatible serialization
-        var jsonOutput = JsonSerializer.Serialize(config, JsonSourceGenerationContext.Default.JsonObject);
-        await File.WriteAllTextAsync(configFilePath, jsonOutput, cancellationToken);
-    }
-
-    /// <summary>
-    /// Checks if the Playwright MCP server is already configured in the opencode.jsonc file.
-    /// </summary>
-    private static bool HasPlaywrightServerConfigured(string configFilePath)
-    {
-        if (!File.Exists(configFilePath))
-        {
-            return false;
-        }
-
-        try
-        {
-            var content = File.ReadAllText(configFilePath);
-            var jsonContent = RemoveJsonComments(content);
-            var config = JsonNode.Parse(jsonContent)?.AsObject();
-            
-            if (config is null)
-            {
-                return false;
-            }
-
-            if (config.TryGetPropertyValue("mcp", out var mcpNode) && mcpNode is JsonObject mcp)
-            {
-                return mcp.ContainsKey("playwright");
-            }
-
-            return false;
-        }
-        catch (JsonException)
-        {
-            return false;
-        }
-    }
 }

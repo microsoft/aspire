@@ -1,4 +1,4 @@
-﻿{
+{
   "author": "Microsoft",
   "name": "Aplicación starter de Starter (ASP.NET Core/React)",
   "description": "Plantilla de proyecto para crear una aplicación Desi con un front-end de React y un servicio back-end de API mínimo de C#, con almacenamiento en caché de Redis opcional.",
@@ -10,11 +10,9 @@
   "symbols/UseRedisCache/description": "Configure si se va a configurar la aplicación para que use Redis para el almacenamiento en caché. Requiere un entorno de ejecución de contenedor compatible para ejecutarse localmente. Consulte https://aka.ms/aspire/containers para obtener más detalles.",
   "symbols/appHostHttpPort/description": "Número de puerto que se va a usar para el punto de conexión HTTP en launchSettings.json del proyecto AppHost.",
   "symbols/appHostOtlpHttpPort/description": "Número de puerto que se va a usar para el punto de conexión HTTP de OTLP en launchSettings.json del proyecto AppHost.",
-  "symbols/appHostMcpHttpPort/description": "Número de puerto que se va a usar para el punto de conexión MCP HTTP en launchSettings.json del proyecto AppHost.",
   "symbols/appHostResourceHttpPort/description": "Número de puerto que se va a usar para el punto de conexión HTTP del servicio de recursos en launchSettings.json del proyecto AppHost.",
   "symbols/appHostHttpsPort/description": "Número de puerto que se va a usar para el punto de conexión HTTPS en launchSettings.json del proyecto AppHost. Esta opción solo es aplicable cuando no se usa el parámetro no-https.",
   "symbols/appHostOtlpHttpsPort/description": "Número de puerto que se va a usar para el punto de conexión HTTPS de OTLP en launchSettings.json del proyecto AppHost.",
-  "symbols/appHostMcpHttpsPort/description": "Número de puerto que se va a usar para el punto de conexión MCP HTTPS en launchSettings.json del proyecto AppHost.",
   "symbols/appHostResourceHttpsPort/description": "Número de puerto a usar para el punto de conexión HTTPS del servicio de recursos en launchSettings.json del proyecto AppHost.",
   "symbols/serverHttpPort/description": "Número de puerto que se va a usar para el punto de conexión HTTP en launchSettings.json del proyecto de servidor.",
   "symbols/serverHttpsPort/description": "Número de puerto que se va a usar para el punto de conexión HTTPS en launchSettings.json del proyecto de servidor. Esta opción solo es aplicable cuando no se usa el parámetro no-https.",
@@ -23,6 +21,7 @@
   "symbols/LocalhostTld/displayName": "Usar el TLD .dev.localhost en la dirección URL de la aplicación",
   "symbols/LocalhostTld/description": "Si se debe combinar el nombre del proyecto con el TLD .dev.localhost en la URL de la aplicación para el desarrollo local, por ejemplo, https://myapp.dev.localhost:12345. Compatible con .NET 10 y versiones posteriores.",
   "postActions/set-startup-project/description": "Establece el proyecto de inicio en la solución",
+  "postActions/set-startup-project/manualInstructions/default/text": "",
   "postActions/restore/description": "Restaure los paquetes NuGet necesarios para este proyecto.",
   "postActions/restore/manualInstructions/default/text": "Ejecutar \"dotnet restore\""
 }

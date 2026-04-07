@@ -1,3 +1,5 @@
+#pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
@@ -20,6 +22,7 @@ using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Tests.Dashboard;
 
+[Trait("Partition", "3")]
 public class DashboardLifecycleHookTests(ITestOutputHelper testOutputHelper)
 {
     [Theory]
@@ -139,7 +142,7 @@ public class DashboardLifecycleHookTests(ITestOutputHelper testOutputHelper)
 
         var httpEndpoint = new EndpointReference(dashboardResource, "http");
         httpEndpoint.EndpointAnnotation.AllocatedEndpoint = new(httpEndpoint.EndpointAnnotation, "localhost", 8080);
-        var otlpGrpcEndpoint = new EndpointReference(dashboardResource, DashboardEventHandlers.OtlpGrpcEndpointName);
+        var otlpGrpcEndpoint = new EndpointReference(dashboardResource, KnownEndpointNames.OtlpGrpcEndpointName);
         otlpGrpcEndpoint.EndpointAnnotation.AllocatedEndpoint = new(otlpGrpcEndpoint.EndpointAnnotation, "localhost", 4317);
 
         var context = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { ServiceProvider = TestServiceProvider.Instance });
@@ -340,14 +343,11 @@ public class DashboardLifecycleHookTests(ITestOutputHelper testOutputHelper)
             var netCoreFramework = frameworks.First(f => f.GetProperty("name").GetString() == "Microsoft.NETCore.App");
             var aspNetCoreFramework = frameworks.First(f => f.GetProperty("name").GetString() == "Microsoft.AspNetCore.App");
 
-            // The versions should be updated to match the AppHost's target framework versions
-            // In the test environment, the AppHost targets .NET 8.0, so the versions should be "8.0.0"
             Assert.Equal("8.0.0", netCoreFramework.GetProperty("version").GetString());
             Assert.Equal("8.0.0", aspNetCoreFramework.GetProperty("version").GetString());
         }
         finally
         {
-            // Cleanup
             if (Directory.Exists(tempDir))
             {
                 Directory.Delete(tempDir, recursive: true);
@@ -363,7 +363,6 @@ public class DashboardLifecycleHookTests(ITestOutputHelper testOutputHelper)
         var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
         var configuration = new ConfigurationBuilder().Build();
 
-        // Create a temporary test dashboard directory with exe, dll and runtimeconfig.json
         var tempDir = Path.GetTempFileName();
         File.Delete(tempDir);
         Directory.CreateDirectory(tempDir);
@@ -374,7 +373,6 @@ public class DashboardLifecycleHookTests(ITestOutputHelper testOutputHelper)
             var dashboardDll = Path.Combine(tempDir, "Aspire.Dashboard.dll");
             var runtimeConfig = Path.Combine(tempDir, "Aspire.Dashboard.runtimeconfig.json");
 
-            // Create mock files
             File.WriteAllText(dashboardExe, "mock exe content");
             File.WriteAllText(dashboardDll, "mock dll content");
 
@@ -415,11 +413,10 @@ public class DashboardLifecycleHookTests(ITestOutputHelper testOutputHelper)
             Assert.Equal("exec", args[0]);
             Assert.Equal("--runtimeconfig", args[1]);
             Assert.True(File.Exists((string)args[2]), "Custom runtime config file should exist");
-            Assert.Equal(dashboardDll, args[3]); // Should point to the DLL, not the EXE
+            Assert.Equal(dashboardDll, args[3]);
         }
         finally
         {
-            // Cleanup
             if (Directory.Exists(tempDir))
             {
                 Directory.Delete(tempDir, recursive: true);
@@ -435,18 +432,16 @@ public class DashboardLifecycleHookTests(ITestOutputHelper testOutputHelper)
         var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
         var configuration = new ConfigurationBuilder().Build();
 
-        // Create a temporary test dashboard directory with Unix executable (no extension), dll and runtimeconfig.json
         var tempDir = Path.GetTempFileName();
         File.Delete(tempDir);
         Directory.CreateDirectory(tempDir);
 
         try
         {
-            var dashboardExe = Path.Combine(tempDir, "Aspire.Dashboard"); // No extension for Unix
+            var dashboardExe = Path.Combine(tempDir, "Aspire.Dashboard");
             var dashboardDll = Path.Combine(tempDir, "Aspire.Dashboard.dll");
             var runtimeConfig = Path.Combine(tempDir, "Aspire.Dashboard.runtimeconfig.json");
 
-            // Create mock files
             File.WriteAllText(dashboardExe, "mock exe content");
             File.WriteAllText(dashboardDll, "mock dll content");
 
@@ -487,11 +482,10 @@ public class DashboardLifecycleHookTests(ITestOutputHelper testOutputHelper)
             Assert.Equal("exec", args[0]);
             Assert.Equal("--runtimeconfig", args[1]);
             Assert.True(File.Exists((string)args[2]), "Custom runtime config file should exist");
-            Assert.Equal(dashboardDll, args[3]); // Should point to the DLL, not the EXE
+            Assert.Equal(dashboardDll, args[3]);
         }
         finally
         {
-            // Cleanup
             if (Directory.Exists(tempDir))
             {
                 Directory.Delete(tempDir, recursive: true);
@@ -507,7 +501,6 @@ public class DashboardLifecycleHookTests(ITestOutputHelper testOutputHelper)
         var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
         var configuration = new ConfigurationBuilder().Build();
 
-        // Create a temporary test dashboard directory with direct dll and runtimeconfig.json
         var tempDir = Path.GetTempFileName();
         File.Delete(tempDir);
         Directory.CreateDirectory(tempDir);
@@ -517,7 +510,6 @@ public class DashboardLifecycleHookTests(ITestOutputHelper testOutputHelper)
             var dashboardDll = Path.Combine(tempDir, "Aspire.Dashboard.dll");
             var runtimeConfig = Path.Combine(tempDir, "Aspire.Dashboard.runtimeconfig.json");
 
-            // Create mock files
             File.WriteAllText(dashboardDll, "mock dll content");
 
             var originalConfig = new
@@ -557,11 +549,10 @@ public class DashboardLifecycleHookTests(ITestOutputHelper testOutputHelper)
             Assert.Equal("exec", args[0]);
             Assert.Equal("--runtimeconfig", args[1]);
             Assert.True(File.Exists((string)args[2]), "Custom runtime config file should exist");
-            Assert.Equal(dashboardDll, args[3]); // Should point to the same DLL, not modify it
+            Assert.Equal(dashboardDll, args[3]);
         }
         finally
         {
-            // Cleanup
             if (Directory.Exists(tempDir))
             {
                 Directory.Delete(tempDir, recursive: true);
@@ -583,13 +574,19 @@ public class DashboardLifecycleHookTests(ITestOutputHelper testOutputHelper)
         codespacesOptions ??= Options.Create(new CodespacesOptions());
         dashboardOptions ??= Options.Create(new DashboardOptions { DashboardPath = "test.dll" });
         var rewriter = new CodespacesUrlRewriter(codespacesOptions);
+        var executionContextServiceProvider = new TestServiceProvider(configuration)
+            .AddService<IDeveloperCertificateService>(new TestDeveloperCertificateService([], supportsContainerTrust: true, trustCertificate: true, tlsTerminate: true));
+        var executionContext = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+        {
+            ServiceProvider = executionContextServiceProvider
+        });
 
         return new DashboardEventHandlers(
             configuration,
             dashboardOptions,
             distributedApplicationLogger ?? NullLogger<DistributedApplication>.Instance,
             new TestDashboardEndpointProvider(),
-            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            executionContext,
             resourceNotificationService,
             resourceLoggerService,
             loggerFactory ?? NullLoggerFactory.Instance,

@@ -2,29 +2,19 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="cs" original="../LogsCommandStrings.resx">
     <body>
-      <trans-unit id="AppHostNotRunning">
-        <source>No running AppHost found. Use 'aspire run' to start one first.</source>
-        <target state="translated">Nenašel se žádný spuštěný hostitel aplikací. Nejprve spusťte spuštění pomocí příkazu „aspire run“.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="Description">
-        <source>Display logs from resources in a running Aspire apphost.</source>
-        <target state="translated">Umožňuje zobrazit protokoly z prostředků v běžícím hostiteli aplikací Aspire.</target>
+        <source>Display logs from resources in a running AppHost</source>
+        <target state="needs-review-translation">Umožňuje zobrazit protokoly z prostředků v běžícím hostiteli aplikací Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
-        <source>Stream logs in real-time as they are written.</source>
-        <target state="translated">Streamujte protokoly v reálném čase při jejich zápisu.</target>
+        <source>Stream logs in real-time as they are written</source>
+        <target state="needs-review-translation">Streamujte protokoly v reálném čase při jejich zápisu.</target>
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output logs in JSON format (NDJSON).</source>
-        <target state="translated">Výstupní protokoly ve formátu JSON (NDJSON).</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="NoInScopeAppHostsShowingAll">
-        <source>No AppHosts found in current directory. Showing all running AppHosts.</source>
-        <target state="translated">V aktuálním adresáři se nenašli žádní hostitelé aplikací. Zobrazují se všichni spuštění hostitelé aplikací.</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">Výstupní protokoly ve formátu JSON (NDJSON).</target>
         <note />
       </trans-unit>
       <trans-unit id="NoResourcesFound">
@@ -32,14 +22,14 @@
         <target state="translated">Nenašly se žádné prostředky.</target>
         <note />
       </trans-unit>
-      <trans-unit id="ProjectOptionDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="translated">Cesta k souboru projektu Aspire AppHost.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The name of the resource to get logs for. If not specified, logs from all resources are shown.</source>
-        <target state="translated">Název prostředku, pro který se mají načíst protokoly. Pokud se nezadá, zobrazí se protokoly ze všech prostředků.</target>
+        <target state="needs-review-translation">Název prostředku, pro který se mají načíst protokoly. Pokud se nezadá, zobrazí se protokoly ze všech prostředků.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceNotFound">
+        <source>Resource '{0}' was not found.</source>
+        <target state="translated">Prostředek „{0}“ se nenašel.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceRequiredWithoutFollow">
@@ -47,14 +37,9 @@
         <target state="translated">Pokud nepoužíváte --follow, vyžaduje se název prostředku. Pokud chcete streamovat protokoly ze všech prostředků, použijte --follow.</target>
         <note />
       </trans-unit>
-      <trans-unit id="ScanningForRunningAppHosts">
-        <source>Scanning for running AppHosts...</source>
-        <target state="translated">Vyhledávání spuštěných hostitelů aplikací...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SelectAppHost">
-        <source>Select an AppHost:</source>
-        <target state="translated">Vyberte hostitele aplikací:</target>
+      <trans-unit id="SelectAppHostAction">
+        <source>stream logs from</source>
+        <target state="translated">streamovat protokoly z</target>
         <note />
       </trans-unit>
       <trans-unit id="TailMustBePositive">
@@ -63,13 +48,23 @@
         <note />
       </trans-unit>
       <trans-unit id="TailOptionDescription">
-        <source>Number of lines to show from the end of logs (default: all).</source>
-        <target state="translated">Počet řádků, které se mají zobrazit od konce protokolů (výchozí: vše).</target>
+        <source>Number of lines to show from the end of logs (default: all)</source>
+        <target state="needs-review-translation">Počet řádků, které se mají zobrazit od konce protokolů (výchozí: vše).</target>
         <note />
       </trans-unit>
       <trans-unit id="TailRequiresResource">
         <source>The --tail option requires a resource name to be specified.</source>
         <target state="translated">Možnost --tail vyžaduje zadání názvu prostředku.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TimestampsOptionDescription">
+        <source>Show timestamps for each log line</source>
+        <target state="new">Show timestamps for each log line</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="GettingLogs">
+        <source>Getting logs...</source>
+        <target state="translated">Načítají se protokoly...</target>
         <note />
       </trans-unit>
     </body>

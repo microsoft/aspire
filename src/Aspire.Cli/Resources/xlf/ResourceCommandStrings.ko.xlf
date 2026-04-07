@@ -3,63 +3,23 @@
   <file datatype="xml" source-language="en" target-language="ko" original="../ResourceCommandStrings.resx">
     <body>
       <trans-unit id="CommandDescription">
-        <source>Execute a command on a resource.</source>
-        <target state="translated">리소스에서 명령을 실행합니다.</target>
+        <source>Execute a command on a resource (e.g. start, stop, restart)</source>
+        <target state="needs-review-translation">리소스에서 명령을 실행합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandNameArgumentDescription">
-        <source>The name of the command to execute.</source>
-        <target state="translated">실행할 명령의 이름입니다.</target>
+        <source>The name of the command to execute (e.g. start, stop, restart)</source>
+        <target state="needs-review-translation">실행할 명령의 이름입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandResourceArgumentDescription">
-        <source>The name of the resource to execute the command on.</source>
-        <target state="translated">명령을 실행할 대상 리소스의 이름입니다.</target>
+        <source>The name of the resource to execute the command on</source>
+        <target state="needs-review-translation">명령을 실행할 대상 리소스의 이름입니다.</target>
         <note />
       </trans-unit>
-      <trans-unit id="NoInScopeAppHostsShowingAll">
-        <source>No in-scope AppHosts found. Showing all running AppHosts.</source>
-        <target state="translated">범위 내 AppHost를 찾을 수 없습니다. 실행 중인 모든 AppHost를 표시하는 중입니다.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="NoRunningAppHostsFound">
-        <source>No running AppHosts found.</source>
-        <target state="translated">실행 중인 AppHost를 찾을 수 없습니다.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ProjectOptionDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="translated">Aspire AppHost 프로젝트 파일의 경로입니다.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RestartDescription">
-        <source>Restart a running resource.</source>
-        <target state="translated">실행 중인 리소스를 다시 시작합니다.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RestartResourceArgumentDescription">
-        <source>The name of the resource to restart.</source>
-        <target state="translated">다시 시작할 리소스의 이름입니다.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ScanningForRunningAppHosts">
-        <source>Scanning for running AppHosts...</source>
-        <target state="translated">실행 중인 AppHost를 검색하는 중...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SelectAppHost">
-        <source>Select which AppHost to connect to:</source>
-        <target state="translated">연결할 AppHost 선택:</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="StartDescription">
-        <source>Start a stopped resource.</source>
-        <target state="translated">중지된 리소스를 시작합니다.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="StartResourceArgumentDescription">
-        <source>The name of the resource to start.</source>
-        <target state="translated">시작할 리소스의 이름입니다.</target>
+      <trans-unit id="SelectAppHostAction">
+        <source>connect to</source>
+        <target state="translated">연결 대상</target>
         <note />
       </trans-unit>
     </body>

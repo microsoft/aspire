@@ -12,10 +12,13 @@ using Aspire.Cli.Utils;
 namespace Aspire.Cli.Commands;
 
 /// <summary>
-/// Legacy MCP command for backward compatibility. Hidden in favor of 'aspire agent' command.
+/// MCP command for interacting with MCP tools exposed by running resources.
+/// Also provides legacy 'start' and 'init' subcommands for backward compatibility.
 /// </summary>
 internal sealed class McpCommand : BaseCommand
 {
+    internal override HelpGroup HelpGroup => HelpGroup.ToolsAndConfiguration;
+
     public McpCommand(
         IInteractionService interactionService,
         IFeatures features,
@@ -23,12 +26,17 @@ internal sealed class McpCommand : BaseCommand
         CliExecutionContext executionContext,
         McpStartCommand startCommand,
         McpInitCommand initCommand,
+        McpToolsCommand toolsCommand,
+        McpCallCommand callCommand,
         AspireCliTelemetry telemetry)
         : base("mcp", McpCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
-        // Mark as hidden - use 'aspire agent' instead
-        Hidden = true;
+        Subcommands.Add(toolsCommand);
+        Subcommands.Add(callCommand);
 
+        // Legacy subcommands — hidden, use 'aspire agent' instead
+        startCommand.Hidden = true;
+        initCommand.Hidden = true;
         Subcommands.Add(startCommand);
         Subcommands.Add(initCommand);
     }

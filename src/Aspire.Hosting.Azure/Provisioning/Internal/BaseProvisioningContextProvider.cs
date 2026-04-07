@@ -152,8 +152,17 @@ internal abstract partial class BaseProvisioningContextProvider(
 
             var rgData = new ResourceGroupData(location);
             rgData.Tags.Add("aspire", "true");
-            var operation = await resourceGroups.CreateOrUpdateAsync(WaitUntil.Completed, resourceGroupName, rgData, cancellationToken).ConfigureAwait(false);
-            resourceGroup = operation.Value;
+
+            try
+            {
+                var operation = await resourceGroups.CreateOrUpdateAsync(WaitUntil.Completed, resourceGroupName, rgData, cancellationToken).ConfigureAwait(false);
+                resourceGroup = operation.Value;
+            }
+            catch (RequestFailedException createEx)
+            {
+                var errorMessage = AzureBicepResource.ExtractDetailedErrorMessage(createEx);
+                throw new ProvisioningFailedException($"Failed to create resource group '{resourceGroupName}': {errorMessage}", createEx);
+            }
 
             _logger.LogInformation("Resource group {rgName} created.", resourceGroup.Name);
         }

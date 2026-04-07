@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
@@ -7,7 +7,6 @@ using Aspire.Cli.Commands;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
-using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Commands;
@@ -55,7 +54,6 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/dotnet/aspire/issues/12304")]
     public async Task GetAppHostsCommand_WithSingleProject_ReturnsSuccessWithValidJson()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -97,7 +95,6 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/dotnet/aspire/issues/12300")]
     public async Task GetAppHostsCommand_WithMultipleProjects_ReturnsSuccessWithAllCandidates()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -243,6 +240,8 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
         {
             throw new NotImplementedException();
         }
+
+        public Task<FileInfo?> GetAppHostFromSettingsAsync(CancellationToken cancellationToken = default) => Task.FromResult<FileInfo?>(null);
     }
 
     private sealed class MultipleProjectsProjectLocator : IProjectLocator
@@ -296,6 +295,8 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
         {
             throw new NotImplementedException();
         }
+
+        public Task<FileInfo?> GetAppHostFromSettingsAsync(CancellationToken cancellationToken = default) => Task.FromResult<FileInfo?>(null);
     }
 
     private sealed class NoProjectFileProjectLocator : IProjectLocator
@@ -306,7 +307,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
             bool createSettingsFile, 
             CancellationToken cancellationToken)
         {
-            throw new ProjectLocatorException("No AppHost project found.");
+            throw new ProjectLocatorException("No AppHost project found.", ProjectLocatorFailureReason.NoProjectFileFound);
         }
 
         public Task<FileInfo?> UseOrFindAppHostProjectFileAsync(
@@ -314,7 +315,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
             bool createSettingsFile, 
             CancellationToken cancellationToken)
         {
-            throw new ProjectLocatorException("No AppHost project found.");
+            throw new ProjectLocatorException("No AppHost project found.", ProjectLocatorFailureReason.NoProjectFileFound);
         }
 
         public Task<AppHostProjectSearchResult> UseOrFindServiceProjectFileAsync(
@@ -341,6 +342,8 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
         {
             throw new NotImplementedException();
         }
+
+        public Task<FileInfo?> GetAppHostFromSettingsAsync(CancellationToken cancellationToken = default) => Task.FromResult<FileInfo?>(null);
     }
 
     private sealed class ThrowingProjectLocator : IProjectLocator
@@ -386,5 +389,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
         {
             throw new NotImplementedException();
         }
+
+        public Task<FileInfo?> GetAppHostFromSettingsAsync(CancellationToken cancellationToken = default) => Task.FromResult<FileInfo?>(null);
     }
 }

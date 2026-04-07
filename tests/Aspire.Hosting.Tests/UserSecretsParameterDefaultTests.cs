@@ -14,6 +14,7 @@ using Microsoft.Extensions.Configuration.UserSecrets;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "2")]
 public class UserSecretsParameterDefaultTests
 {
     private static readonly ConstructorInfo s_userSecretsIdAttrCtor = typeof(UserSecretsIdAttribute).GetConstructor([typeof(string)])!;

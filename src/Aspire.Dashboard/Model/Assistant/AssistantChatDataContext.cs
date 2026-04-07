@@ -102,10 +102,11 @@ public sealed class AssistantChatDataContext
         return SharedAIHelpers.GetTraceJson(spans, r => OtlpHelpers.GetResourceName(r, resources), AIHelpers.GetDashboardUrl(_dashboardOptions.CurrentValue));
     }
 
+    // resourceName is provided as a non-nullable string to prevent the JSON schema from including an array. An array breaks VS integration.
     [Description("Get structured logs for resources.")]
     public async Task<string> GetStructuredLogsAsync(
         [Description("The resource name. This limits logs returned to the specified resource. If no resource name is specified then structured logs for all resources are returned.")]
-        string? resourceName = null,
+        string resourceName,
         CancellationToken cancellationToken = default)
     {
         // TODO: The resourceName might be a name that resolves to multiple replicas, e.g. catalogservice has two replicas.
@@ -147,10 +148,11 @@ public sealed class AssistantChatDataContext
         return response;
     }
 
+    // resourceName is provided as a non-nullable string to prevent the JSON schema from including an array. An array breaks VS integration.
     [Description("Get distributed traces for resources. A distributed trace is used to track operations. A distributed trace can span multiple resources across a distributed system. Includes a list of distributed traces with their IDs, resources in the trace, duration and whether an error occurred in the trace.")]
     public async Task<string> GetTracesAsync(
         [Description("The resource name. This limits traces returned to the specified resource. If no resource name is specified then distributed traces for all resources are returned.")]
-        string? resourceName = null,
+        string resourceName,
         CancellationToken cancellationToken = default)
     {
         // TODO: The resourceName might be a name that resolves to multiple replicas, e.g. catalogservice has two replicas.
@@ -229,7 +231,7 @@ public sealed class AssistantChatDataContext
         return response;
     }
 
-    [Description("Get console logs for a resource. The console logs includes standard output from resources and resource commands. Known resource commands are 'resource-start', 'resource-stop' and 'resource-restart' which are used to start and stop resources. Don't print the full console logs in the response to the user. Console logs should be examined when determining why a resource isn't running.")]
+    [Description("Get console logs for a resource. The console logs includes standard output from resources and resource commands. Known resource commands are 'start', 'stop' and 'restart' which are used to start and stop resources. Don't print the full console logs in the response to the user. Console logs should be examined when determining why a resource isn't running.")]
     public async Task<string> GetConsoleLogsAsync(
         [Description("The resource name.")]
         string resourceName,

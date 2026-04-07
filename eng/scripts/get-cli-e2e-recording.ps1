@@ -55,7 +55,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$Repo = "dotnet/aspire"
+$Repo = "microsoft/aspire"
 
 # Check for gh CLI
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {

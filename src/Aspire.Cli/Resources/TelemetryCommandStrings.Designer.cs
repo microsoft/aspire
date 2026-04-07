@@ -106,15 +106,6 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to The path to the Aspire AppHost project file..
-        /// </summary>
-        internal static string ProjectOptionDescription {
-            get {
-                return ResourceManager.GetString("ProjectOptionDescription", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Stream telemetry in real-time as it arrives..
         /// </summary>
         internal static string FollowOptionDescription {
@@ -187,43 +178,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Scanning for running AppHosts....
-        /// </summary>
-        internal static string ScanningForRunningAppHosts {
-            get {
-                return ResourceManager.GetString("ScanningForRunningAppHosts", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Select an AppHost:.
-        /// </summary>
-        internal static string SelectAppHost {
-            get {
-                return ResourceManager.GetString("SelectAppHost", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to No AppHosts found in current directory. Showing all running AppHosts..
-        /// </summary>
-        internal static string NoInScopeAppHostsShowingAll {
-            get {
-                return ResourceManager.GetString("NoInScopeAppHostsShowingAll", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to No running AppHost found. Use 'aspire run' to start one first..
-        /// </summary>
-        internal static string AppHostNotRunning {
-            get {
-                return ResourceManager.GetString("AppHostNotRunning", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Dashboard API is not available. Ensure the AppHost is running with Dashboard enabled..
+        ///   Looks up a localized string similar to Dashboard API is not available. Ensure the apphost is running with Dashboard enabled..
         /// </summary>
         internal static string DashboardApiNotAvailable {
             get {
@@ -250,11 +205,95 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Dashboard API returned unexpected content type. Expected JSON response..
+        ///   Looks up a localized string similar to Dashboard API returned unexpected content type '{0}'. Expected JSON response..
         /// </summary>
         internal static string UnexpectedContentType {
             get {
                 return ResourceManager.GetString("UnexpectedContentType", resourceCulture);
+            }
+        }
+
+        internal static string SelectAppHostAction {
+            get {
+                return ResourceManager.GetString("SelectAppHostAction", resourceCulture);
+            }
+        }
+
+        internal static string HeaderTimestamp {
+            get {
+                return ResourceManager.GetString("HeaderTimestamp", resourceCulture);
+            }
+        }
+
+        internal static string HeaderName {
+            get {
+                return ResourceManager.GetString("HeaderName", resourceCulture);
+            }
+        }
+
+        internal static string HeaderDuration {
+            get {
+                return ResourceManager.GetString("HeaderDuration", resourceCulture);
+            }
+        }
+
+        internal static string HeaderSpans {
+            get {
+                return ResourceManager.GetString("HeaderSpans", resourceCulture);
+            }
+        }
+
+        internal static string HeaderStatus {
+            get {
+                return ResourceManager.GetString("HeaderStatus", resourceCulture);
+            }
+        }
+
+        internal static string DashboardUrlOptionDescription {
+            get {
+                return ResourceManager.GetString("DashboardUrlOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string ApiKeyOptionDescription {
+            get {
+                return ResourceManager.GetString("ApiKeyOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string DashboardUrlAndAppHostExclusive {
+            get {
+                return ResourceManager.GetString("DashboardUrlAndAppHostExclusive", resourceCulture);
+            }
+        }
+
+        internal static string DashboardAuthFailed {
+            get {
+                return ResourceManager.GetString("DashboardAuthFailed", resourceCulture);
+            }
+        }
+
+        internal static string DashboardUrlNotReachable {
+            get {
+                return ResourceManager.GetString("DashboardUrlNotReachable", resourceCulture);
+            }
+        }
+
+        internal static string DashboardApiNotEnabled {
+            get {
+                return ResourceManager.GetString("DashboardApiNotEnabled", resourceCulture);
+            }
+        }
+
+        internal static string DashboardConnectionFailed {
+            get {
+                return ResourceManager.GetString("DashboardConnectionFailed", resourceCulture);
+            }
+        }
+
+        internal static string DashboardUrlInvalid {
+            get {
+                return ResourceManager.GetString("DashboardUrlInvalid", resourceCulture);
             }
         }
     }

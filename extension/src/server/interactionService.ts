@@ -2,20 +2,21 @@ import { MessageConnection } from 'vscode-jsonrpc';
 import * as vscode from 'vscode';
 import * as fs from 'fs/promises';
 import { getRelativePathToWorkspace, isFolderOpenInWorkspace } from '../utils/workspace';
-import { yesLabel, noLabel, directLink, codespacesLink, openAspireDashboard, failedToShowPromptEmpty, incompatibleAppHostError, aspireHostingSdkVersion, aspireCliVersion, requiredCapability, fieldRequired, aspireDebugSessionNotInitialized, errorMessage, failedToStartDebugSession, dashboard, codespaces } from '../loc/strings';
+import { yesLabel, noLabel, directLink, codespacesLink, openAspireDashboard, settingsLabel, failedToShowPromptEmpty, incompatibleAppHostError, aspireHostingSdkVersion, aspireCliVersion, requiredCapability, fieldRequired, aspireDebugSessionNotInitialized, errorMessage, failedToStartDebugSession, dashboard, codespaces, selectDirectoryTitle, selectFileTitle } from '../loc/strings';
 import { ICliRpcClient } from './rpcClient';
 import { ProgressNotifier } from './progressNotifier';
 import { applyTextStyle, formatText } from '../utils/strings';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { AspireExtendedDebugConfiguration, EnvVar } from '../dcp/types';
-import { AspireDebugSession } from '../debugger/AspireDebugSession';
-import { AnsiColors } from '../utils/AspireTerminalProvider';
+import { AnsiColors, AspireTerminal } from '../utils/AspireTerminalProvider';
+import { AspireDebugSession, DashboardBrowserType } from '../debugger/AspireDebugSession';
 import { isDirectory } from '../utils/io';
 
 export interface IInteractionService {
     showStatus: (statusText: string | null) => void;
     promptForString: (promptText: string, defaultValue: string | null, required: boolean, rpcClient: ICliRpcClient) => Promise<string | null>;
     promptForSecretString: (promptText: string, required: boolean, rpcClient: ICliRpcClient) => Promise<string | null>;
+    promptForFilePath: (promptText: string, defaultValue: string | null, directory: boolean) => Promise<string | null>;
     confirm: (promptText: string, defaultValue: boolean) => Promise<boolean | null>;
     promptForSelection: (promptText: string, choices: string[]) => Promise<string | null>;
     promptForSelections: (promptText: string, choices: string[]) => Promise<string[] | null>;
@@ -33,8 +34,9 @@ export interface IInteractionService {
     logMessage: (logLevel: CSLogLevel, message: string) => void;
     launchAppHost(projectFile: string, args: string[], environment: EnvVar[], debug: boolean): Promise<void>;
     stopDebugging: () => void;
+    closeDashboard: () => void;
     notifyAppHostStartupCompleted: () => void;
-    startDebugSession: (workingDirectory: string, projectFile: string | null, debug: boolean) => Promise<void>;
+    startDebugSession: (workingDirectory: string, projectFile: string | null, debug: boolean, options?: DebugSessionOptions) => Promise<void>;
     writeDebugSessionMessage: (message: string, stdout: boolean, textStyle?: string) => void;
 }
 
@@ -91,14 +93,21 @@ function getConsoleLineText(line: ConsoleLine): string {
     return line.line ?? line.Line ?? '';
 }
 
+type DebugSessionOptions = {
+    command?: string;
+    args?: string[];
+};
+
 export class InteractionService implements IInteractionService {
     private _getAspireDebugSession: () => AspireDebugSession | null;
+    private _getAspireTerminal?: () => AspireTerminal;
 
     private _rpcClient?: ICliRpcClient;
     private _progressNotifier: ProgressNotifier;
 
-    constructor(getAspireDebugSession: () => AspireDebugSession | null, rpcClient: ICliRpcClient) {
+    constructor(getAspireDebugSession: () => AspireDebugSession | null, rpcClient: ICliRpcClient, getAspireTerminal?: () => AspireTerminal) {
         this._getAspireDebugSession = getAspireDebugSession;
+        this._getAspireTerminal = getAspireTerminal;
         this._rpcClient = rpcClient;
         this._progressNotifier = new ProgressNotifier(this._rpcClient);
     }
@@ -167,6 +176,28 @@ export class InteractionService implements IInteractionService {
         });
 
         return input ?? null;
+    }
+
+    async promptForFilePath(promptText: string, defaultValue: string | null, directory: boolean): Promise<string | null> {
+        extensionLogOutputChannel.info(`Prompting for file path: ${promptText}, directory: ${directory}, default: ${defaultValue ?? 'null'}`);
+
+        const defaultUri = defaultValue ? vscode.Uri.file(defaultValue) : undefined;
+        const openLabel = directory ? selectDirectoryTitle : selectFileTitle;
+
+        const result = await vscode.window.showOpenDialog({
+            canSelectFiles: !directory,
+            canSelectFolders: directory,
+            canSelectMany: false,
+            defaultUri,
+            openLabel,
+            title: formatText(promptText),
+        });
+
+        if (!result || result.length === 0) {
+            return null;
+        }
+
+        return result[0].fsPath;
     }
 
     async confirm(promptText: string, defaultValue: boolean): Promise<boolean | null> {
@@ -303,13 +334,38 @@ export class InteractionService implements IInteractionService {
             this.writeDebugSessionMessage(codespacesUrl, true, AnsiColors.Blue);
         }
 
-        //  If aspire.enableAspireDashboardAutoLaunch is true, the dashboard will be launched automatically and we do not need
-        // to show an information message.
-        const enableDashboardAutoLaunch = vscode.workspace.getConfiguration('aspire').get<boolean>('enableAspireDashboardAutoLaunch', true);
-        if (enableDashboardAutoLaunch) {
-            // Open the dashboard URL in an external browser. Prefer codespaces URL if available.
+        // Refresh the Aspire panel so it picks up dashboard URLs for the running app host
+        vscode.commands.executeCommand('aspire-vscode.refreshRunningAppHosts');
+
+        //  If aspire.enableAspireDashboardAutoLaunch is 'launch', the dashboard will be launched automatically.
+        //  If 'notification', a notification is shown with a link. If 'off', do nothing.
+        const aspireConfig = vscode.workspace.getConfiguration('aspire');
+        const rawDashboardAutoLaunch = aspireConfig.get<unknown>('enableAspireDashboardAutoLaunch', 'launch');
+
+        // Handle legacy boolean values from before this setting was changed to an enum
+        let dashboardAutoLaunch: 'launch' | 'notification' | 'off';
+        if (rawDashboardAutoLaunch === true) {
+            dashboardAutoLaunch = 'launch';
+        } else if (rawDashboardAutoLaunch === false) {
+            dashboardAutoLaunch = 'notification';
+        } else if (rawDashboardAutoLaunch === 'launch' || rawDashboardAutoLaunch === 'notification' || rawDashboardAutoLaunch === 'off') {
+            dashboardAutoLaunch = rawDashboardAutoLaunch;
+        } else {
+            dashboardAutoLaunch = 'launch';
+        }
+
+        if (dashboardAutoLaunch === 'launch') {
+            // Open the dashboard URL in the configured browser. Prefer codespaces URL if available.
             const urlToOpen = codespacesUrl || baseUrl;
-            vscode.env.openExternal(vscode.Uri.parse(urlToOpen));
+            const debugSession = this._getAspireDebugSession();
+            if (debugSession) {
+                const browserType = aspireConfig.get<DashboardBrowserType>('dashboardBrowser', 'openExternalBrowser');
+                await debugSession.openDashboard(urlToOpen, browserType);
+            }
+            return;
+        }
+
+        if (dashboardAutoLaunch === 'off') {
             return;
         }
 
@@ -320,6 +376,8 @@ export class InteractionService implements IInteractionService {
         if (codespacesUrl) {
             actions.push({ title: codespacesLink });
         }
+
+        actions.push({ title: settingsLabel });
 
         // Delay 1 second to allow a slight pause between progress notification and message
         setTimeout(() => {
@@ -340,17 +398,26 @@ export class InteractionService implements IInteractionService {
                 else if (selected.title === codespacesLink && codespacesUrl) {
                     vscode.env.openExternal(vscode.Uri.parse(codespacesUrl));
                 }
+                else if (selected.title === settingsLabel) {
+                    vscode.commands.executeCommand('workbench.action.openSettings', 'aspire.enableAspireDashboardAutoLaunch');
+                }
             });
         }, 1000);
     }
 
     async displayLines(lines: ConsoleLine[]) {
-        const displayText = lines.map(line => getConsoleLineText(line)).join('\n');
-        lines.forEach(line => extensionLogOutputChannel.info(formatText(getConsoleLineText(line))));
-
-        // Open a new temp file with the displayText
-        const doc = await vscode.workspace.openTextDocument({ content: displayText, language: 'plaintext' });
-        await vscode.window.showTextDocument(doc, { preview: false });
+        const debugSession = this._getAspireDebugSession();
+        const aspireTerminal = !debugSession ? this._getAspireTerminal?.() : undefined;
+        for (const line of lines) {
+            const text = getConsoleLineText(line);
+            const stream = line.stream ?? line.Stream;
+            extensionLogOutputChannel.info(formatText(text));
+            if (debugSession) {
+                debugSession.sendMessage(text, true, stream !== 'stderr' ? 'stdout' : 'stderr');
+            } else if (aspireTerminal) {
+                aspireTerminal.terminal.sendText(text, true);
+            }
+        }
     }
 
     displayCancellationMessage() {
@@ -437,14 +504,18 @@ export class InteractionService implements IInteractionService {
         debugSession.notifyAppHostStartupCompleted();
     }
 
-    async startDebugSession(workingDirectory: string, projectFile: string | null, debug: boolean): Promise<void> {
+    async startDebugSession(workingDirectory: string, projectFile: string | null, debug: boolean, options?: DebugSessionOptions): Promise<void> {
         this.clearProgressNotification();
+
+        const command = options?.command ?? 'run';
 
         const debugConfiguration: AspireExtendedDebugConfiguration = {
             type: 'aspire',
-            name: `Aspire: ${getRelativePathToWorkspace(projectFile ?? workingDirectory)}`,
+            name: `Aspire ${command}: ${getRelativePathToWorkspace(projectFile ?? workingDirectory)}`,
             request: 'launch',
             program: projectFile ?? workingDirectory,
+            command: command as AspireExtendedDebugConfiguration['command'],
+            args: options?.args,
             noDebug: !debug,
         };
 
@@ -458,6 +529,13 @@ export class InteractionService implements IInteractionService {
     clearProgressNotification() {
         this._progressNotifier.clear();
     }
+
+    /**
+     * Closes the dashboard browser. Delegates to the current AspireDebugSession.
+     */
+    closeDashboard(): void {
+        // No-op when called from InteractionService - the debug session handles closing in dispose()
+    }
 }
 
 function tryExecuteEndpoint(interactionService: IInteractionService, withAuthentication: (callback: (...params: any[]) => any) => (...params: any[]) => any) {
@@ -469,6 +547,7 @@ function tryExecuteEndpoint(interactionService: IInteractionService, withAuthent
             const message = (err && (((err as any).message) ?? String(err))) || 'An unknown error occurred';
             extensionLogOutputChannel.error(`Interaction service endpoint '${name}' failed: ${message}`);
             vscode.window.showErrorMessage(errorMessage(message));
+
             interactionService.showStatus(null);
             throw err;
         }
@@ -481,6 +560,7 @@ export function addInteractionServiceEndpoints(connection: MessageConnection, in
     connection.onRequest("showStatus", middleware('showStatus', interactionService.showStatus.bind(interactionService)));
     connection.onRequest("promptForString", middleware('promptForString', async (promptText: string, defaultValue: string | null, required: boolean) => interactionService.promptForString(promptText, defaultValue, required, rpcClient)));
     connection.onRequest("promptForSecretString", middleware('promptForSecretString', async (promptText: string, required: boolean) => interactionService.promptForSecretString(promptText, required, rpcClient)));
+    connection.onRequest("promptForFilePath", middleware('promptForFilePath', async (promptText: string, defaultValue: string | null, directory: boolean) => interactionService.promptForFilePath(promptText, defaultValue, directory)));
     connection.onRequest("confirm", middleware('confirm', interactionService.confirm.bind(interactionService)));
     connection.onRequest("promptForSelection", middleware('promptForSelection', interactionService.promptForSelection.bind(interactionService)));
     connection.onRequest("promptForSelections", middleware('promptForSelections', interactionService.promptForSelections.bind(interactionService)));
@@ -499,6 +579,6 @@ export function addInteractionServiceEndpoints(connection: MessageConnection, in
     connection.onRequest("launchAppHost", middleware('launchAppHost', async (projectFile: string, args: string[], environment: EnvVar[], debug: boolean) => interactionService.launchAppHost(projectFile, args, environment, debug)));
     connection.onRequest("stopDebugging", middleware('stopDebugging', interactionService.stopDebugging.bind(interactionService)));
     connection.onRequest("notifyAppHostStartupCompleted", middleware('notifyAppHostStartupCompleted', interactionService.notifyAppHostStartupCompleted.bind(interactionService)));
-    connection.onRequest("startDebugSession", middleware('startDebugSession', async (workingDirectory: string, projectFile: string | null, debug: boolean) => interactionService.startDebugSession(workingDirectory, projectFile, debug)));
+    connection.onRequest("startDebugSession", middleware('startDebugSession', async (workingDirectory: string, projectFile: string | null, debug: boolean, options?: DebugSessionOptions) => interactionService.startDebugSession(workingDirectory, projectFile, debug, options)));
     connection.onRequest("writeDebugSessionMessage", middleware('writeDebugSessionMessage', interactionService.writeDebugSessionMessage.bind(interactionService)));
 }

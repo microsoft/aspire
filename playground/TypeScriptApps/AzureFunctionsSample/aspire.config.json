@@ -1,0 +1,13 @@
+{
+  "appHost": {
+    "path": "AppHost/apphost.ts",
+    "language": "typescript/nodejs"
+  },
+  "packages": {
+    "Aspire.Hosting.Azure.Storage": "13.2.0",
+    "Aspire.Hosting.JavaScript": "13.2.0",
+    "Aspire.Hosting.Azure": "13.2.0",
+    "Aspire.Hosting.Azure.EventHubs": "13.2.0"
+  }
+
+}

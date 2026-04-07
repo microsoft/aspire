@@ -3,7 +3,7 @@
 
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using Aspire.Hosting.Tests;
+using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.TestUtilities;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
@@ -26,7 +26,7 @@ public partial class McpDocsE2ETests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        var repoRoot = MSBuildUtils.GetRepoRoot();
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var cliProjectPath = Path.Combine(repoRoot, "src", "Aspire.Cli", "Aspire.Cli.csproj");
 
         if (!File.Exists(cliProjectPath))
@@ -34,13 +34,7 @@ public partial class McpDocsE2ETests : IAsyncLifetime
             throw new InvalidOperationException($"Could not find CLI project at: {cliProjectPath}");
         }
 
-        // Use --no-build when running locally (not in CI) to speed up iteration
-        var isCi = Environment.GetEnvironmentVariable("CI") == "true" ||
-                   Environment.GetEnvironmentVariable("TF_BUILD") == "True";
-
-        string[] arguments = isCi
-            ? ["run", "--project", cliProjectPath, "--", "agent", "mcp"]
-            : ["run", "--project", cliProjectPath, "--no-build", "--", "agent", "mcp"];
+        string[] arguments = ["run", "--project", cliProjectPath, "--", "agent", "mcp"];
 
         var options = new StdioClientTransportOptions
         {

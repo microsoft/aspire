@@ -39,7 +39,9 @@ Key differences from CLI E2E tests:
 
 ### Core Classes
 
-- **`DeploymentE2ETestHelpers`** (`Helpers/DeploymentE2ETestHelpers.cs`): Terminal automation helpers
+- **`DeploymentE2ETestHelpers`** (`Helpers/DeploymentE2ETestHelpers.cs`): Terminal factory and environment helpers
+- **`DeploymentE2EAutomatorHelpers`** (`Helpers/DeploymentE2EAutomatorHelpers.cs`): Async extension methods on `Hex1bTerminalAutomator` for deployment scenarios
+- **`Hex1bAutomatorTestHelpers`** (shared): Common async extension methods on `Hex1bTerminalAutomator` (`WaitForSuccessPromptAsync`, `AspireNewAsync`, etc.)
 - **`AzureAuthenticationHelpers`** (`Helpers/AzureAuthenticationHelpers.cs`): Azure auth and resource naming
 - **`DeploymentReporter`** (`Helpers/DeploymentReporter.cs`): GitHub step summary reporting
 - **`SequenceCounter`** (`Helpers/SequenceCounter.cs`): Prompt tracking (same as CLI E2E)
@@ -83,29 +85,27 @@ public sealed class MyDeploymentTests(ITestOutputHelper output)
         // 2. Setup
         var resourceGroupName = AzureAuthenticationHelpers.GenerateResourceGroupName("my-scenario");
         var workspace = TemporaryWorkspace.Create(output);
-        var recordingPath = DeploymentE2ETestHelpers.GetTestResultsRecordingPath(nameof(DeployMyScenario));
         var startTime = DateTime.UtcNow;
 
         try
         {
             // 3. Build terminal and run deployment
-            var builder = Hex1bTerminal.CreateBuilder()
-                .WithHeadless()
-                .WithAsciinemaRecording(recordingPath)
-                .WithPtyProcess("/bin/bash", ["--norc"]);
-
-            using var terminal = builder.Build();
+            using var terminal = DeploymentE2ETestHelpers.CreateTestTerminal();
             var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
             var counter = new SequenceCounter();
-            var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+            var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
-            // Build sequence: prepare, create project, deploy, verify
-            sequenceBuilder.PrepareEnvironment(workspace, counter);
-            // ... add deployment steps ...
+            await auto.PrepareEnvironmentAsync(workspace, counter);
+            if (DeploymentE2ETestHelpers.IsRunningInCI)
+            {
+                await auto.SourceAspireCliEnvironmentAsync(counter);
+            }
+            await auto.AspireNewAsync("MyProject", counter, useRedisCache: false);
+            // ... deployment steps ...
 
-            var sequence = sequenceBuilder.Build();
-            await sequence.ApplyAsync(terminal, TestContext.Current.CancellationToken);
+            await auto.TypeAsync("exit");
+            await auto.EnterAsync();
             await pendingRun;
 
             // 4. Report success
@@ -132,6 +132,19 @@ public sealed class MyDeploymentTests(ITestOutputHelper output)
     }
 }
 ```
+
+## Extension Methods
+
+### DeploymentE2EAutomatorHelpers Extensions on Hex1bTerminalAutomator
+
+| Method | Description |
+|--------|-------------|
+| `PrepareEnvironmentAsync(workspace, counter)` | Sets up the terminal environment with custom prompt and workspace directory |
+| `InstallAspireCliFromPullRequestAsync(prNumber, counter)` | Downloads and installs the Aspire CLI from a PR build artifact |
+| `InstallAspireCliReleaseAsync(counter)` | Installs the latest released Aspire CLI |
+| `SourceAspireCliEnvironmentAsync(counter)` | Adds `~/.aspire/bin` to PATH so the `aspire` command is available |
+
+These extend `Hex1bTerminalAutomator` and are used alongside the shared `Hex1bAutomatorTestHelpers` methods (`WaitForSuccessPromptAsync`, `AspireNewAsync`, etc.) documented in the [CLI E2E Testing Skill](../cli-e2e-testing/SKILL.md).
 
 ## Azure Authentication
 

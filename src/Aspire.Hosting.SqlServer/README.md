@@ -58,4 +58,4 @@ https://aspire.dev/integrations/databases/efcore/sql-server/
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

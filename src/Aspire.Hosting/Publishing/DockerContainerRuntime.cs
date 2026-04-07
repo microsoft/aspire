@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES003
+#pragma warning disable ASPIRECONTAINERRUNTIME001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Process;
@@ -17,7 +18,7 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
 
     protected override string RuntimeExecutable => "docker";
     public override string Name => "Docker";
-    private async Task<int> RunDockerBuildAsync(string contextPath, string dockerfilePath, ContainerImageBuildOptions? options, Dictionary<string, string?> buildArguments, Dictionary<string, string?> buildSecrets, string? stage, CancellationToken cancellationToken)
+    private async Task<int> RunDockerBuildAsync(string contextPath, string dockerfilePath, ContainerImageBuildOptions? options, Dictionary<string, string?> buildArguments, Dictionary<string, BuildImageSecretValue> buildSecrets, string? stage, CancellationToken cancellationToken)
     {
         var imageName = !string.IsNullOrEmpty(options?.Tag)
             ? $"{options.ImageName}:{options.Tag}"
@@ -107,12 +108,12 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
                 InheritEnv = true,
             };
 
-            // Add build secrets as environment variables
+            // Add build secrets as environment variables (only for environment-type secrets)
             foreach (var buildSecret in buildSecrets)
             {
-                if (buildSecret.Value is not null)
+                if (buildSecret.Value.Type == BuildImageSecretType.Environment && buildSecret.Value.Value is not null)
                 {
-                    spec.EnvironmentVariables[buildSecret.Key.ToUpperInvariant()] = buildSecret.Value;
+                    spec.EnvironmentVariables[buildSecret.Key.ToUpperInvariant()] = buildSecret.Value.Value;
                 }
             }
 
@@ -145,7 +146,7 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
         }
     }
 
-    public override async Task BuildImageAsync(string contextPath, string dockerfilePath, ContainerImageBuildOptions? options, Dictionary<string, string?> buildArguments, Dictionary<string, string?> buildSecrets, string? stage, CancellationToken cancellationToken)
+    public override async Task BuildImageAsync(string contextPath, string dockerfilePath, ContainerImageBuildOptions? options, Dictionary<string, string?> buildArguments, Dictionary<string, BuildImageSecretValue> buildSecrets, string? stage, CancellationToken cancellationToken)
     {
         // Normalize the context path to handle trailing slashes and relative paths
         var normalizedContextPath = Path.GetFullPath(contextPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);

@@ -2,29 +2,19 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="ru" original="../LogsCommandStrings.resx">
     <body>
-      <trans-unit id="AppHostNotRunning">
-        <source>No running AppHost found. Use 'aspire run' to start one first.</source>
-        <target state="translated">Запущенные хосты приложений не найдены. Сначала запустите один из них с помощью команды "aspire run".</target>
-        <note />
-      </trans-unit>
       <trans-unit id="Description">
-        <source>Display logs from resources in a running Aspire apphost.</source>
-        <target state="translated">Отображать журналы ресурсов в запущенном хосте приложений Aspire.</target>
+        <source>Display logs from resources in a running AppHost</source>
+        <target state="needs-review-translation">Отображать журналы ресурсов в запущенном хосте приложений Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
-        <source>Stream logs in real-time as they are written.</source>
-        <target state="translated">Потоковая передача журналов в реальном времени по мере их записи.</target>
+        <source>Stream logs in real-time as they are written</source>
+        <target state="needs-review-translation">Потоковая передача журналов в реальном времени по мере их записи.</target>
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output logs in JSON format (NDJSON).</source>
-        <target state="translated">Вывод журналов в формате JSON (NDJSON).</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="NoInScopeAppHostsShowingAll">
-        <source>No AppHosts found in current directory. Showing all running AppHosts.</source>
-        <target state="translated">Хосты приложений не найдены в текущем каталоге. Отображаются все запущенные хосты приложений.</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">Вывод журналов в формате JSON (NDJSON).</target>
         <note />
       </trans-unit>
       <trans-unit id="NoResourcesFound">
@@ -32,14 +22,14 @@
         <target state="translated">Ресурсы не найдены.</target>
         <note />
       </trans-unit>
-      <trans-unit id="ProjectOptionDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="translated">Путь к файлу проекта Aspire AppHost.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The name of the resource to get logs for. If not specified, logs from all resources are shown.</source>
-        <target state="translated">Имя ресурса, для которого нужно получить журналы. Если не указано, отображаются журналы из всех ресурсов.</target>
+        <target state="needs-review-translation">Имя ресурса, для которого нужно получить журналы. Если не указано, отображаются журналы из всех ресурсов.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceNotFound">
+        <source>Resource '{0}' was not found.</source>
+        <target state="translated">Ресурс "{0}" не найден.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceRequiredWithoutFollow">
@@ -47,14 +37,9 @@
         <target state="translated">При отсутствии параметра --follow необходимо указать имя ресурса. Используйте --follow для потоковой передачи журналов из всех ресурсов.</target>
         <note />
       </trans-unit>
-      <trans-unit id="ScanningForRunningAppHosts">
-        <source>Scanning for running AppHosts...</source>
-        <target state="translated">Выполняется сканирование на наличие запущенных хостов приложений...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SelectAppHost">
-        <source>Select an AppHost:</source>
-        <target state="translated">Выберите хост приложения:</target>
+      <trans-unit id="SelectAppHostAction">
+        <source>stream logs from</source>
+        <target state="translated">потоковая передача журналов из</target>
         <note />
       </trans-unit>
       <trans-unit id="TailMustBePositive">
@@ -63,13 +48,23 @@
         <note />
       </trans-unit>
       <trans-unit id="TailOptionDescription">
-        <source>Number of lines to show from the end of logs (default: all).</source>
-        <target state="translated">Количество строк, отображаемых с конца журналов (по умолчанию: все).</target>
+        <source>Number of lines to show from the end of logs (default: all)</source>
+        <target state="needs-review-translation">Количество строк, отображаемых с конца журналов (по умолчанию: все).</target>
         <note />
       </trans-unit>
       <trans-unit id="TailRequiresResource">
         <source>The --tail option requires a resource name to be specified.</source>
         <target state="translated">Параметр --tail требует указания имени ресурса.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TimestampsOptionDescription">
+        <source>Show timestamps for each log line</source>
+        <target state="new">Show timestamps for each log line</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="GettingLogs">
+        <source>Getting logs...</source>
+        <target state="translated">Выполняется получение журналов...</target>
         <note />
       </trans-unit>
     </body>

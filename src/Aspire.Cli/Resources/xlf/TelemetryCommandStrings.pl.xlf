@@ -2,114 +2,159 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="pl" original="../TelemetryCommandStrings.resx">
     <body>
-      <trans-unit id="AppHostNotRunning">
-        <source>No running AppHost found. Use 'aspire run' to start one first.</source>
-        <target state="translated">Nie znaleziono uruchomionego hosta aplikacji. Najpierw uruchom go poleceniem „aspire run”.</target>
+      <trans-unit id="ApiKeyOptionDescription">
+        <source>API key for authenticating with the dashboard (optional, for dashboards with API key authentication)</source>
+        <target state="new">API key for authenticating with the dashboard (optional, for dashboards with API key authentication)</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardApiNotAvailable">
         <source>Dashboard API is not available. Ensure the AppHost is running with Dashboard enabled.</source>
-        <target state="new">Dashboard API is not available. Ensure the AppHost is running with Dashboard enabled.</target>
+        <target state="needs-review-translation">Interfejs API pulpitu nawigacyjnego jest niedostępny. Upewnij się, że host aplikacji działa z włączonym pulpitem nawigacyjnym.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardApiNotEnabled">
+        <source>The dashboard at '{0}' does not have the telemetry API enabled. Configure the dashboard with Dashboard:Api:Enabled set to true.</source>
+        <target state="new">The dashboard at '{0}' does not have the telemetry API enabled. Configure the dashboard with Dashboard:Api:Enabled set to true.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardAuthFailed">
+        <source>Authentication denied by the dashboard. Use --api-key to specify a valid API key that matches the dashboard's configured API key (Dashboard:Api:PrimaryApiKey).</source>
+        <target state="new">Authentication denied by the dashboard. Use --api-key to specify a valid API key that matches the dashboard's configured API key (Dashboard:Api:PrimaryApiKey).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardConnectionFailed">
+        <source>Could not connect to the dashboard at '{0}'. Verify the dashboard is running and the URL is correct.</source>
+        <target state="new">Could not connect to the dashboard at '{0}'. Verify the dashboard is running and the URL is correct.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardUrlAndAppHostExclusive">
+        <source>The --dashboard-url and --apphost options cannot be used together. Specify one or the other.</source>
+        <target state="new">The --dashboard-url and --apphost options cannot be used together. Specify one or the other.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardUrlInvalid">
+        <source>The value '{0}' is not a valid URL. Specify an absolute URL like 'http://localhost:18888'.</source>
+        <target state="new">The value '{0}' is not a valid URL. Specify an absolute URL like 'http://localhost:18888'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardUrlNotReachable">
+        <source>The specified --dashboard-url '{0}' does not appear to be a valid Aspire Dashboard. Verify the URL is correct.</source>
+        <target state="new">The specified --dashboard-url '{0}' does not appear to be a valid Aspire Dashboard. Verify the URL is correct.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardUrlOptionDescription">
+        <source>URL of a standalone Aspire Dashboard to connect to directly (bypasses AppHost discovery)</source>
+        <target state="new">URL of a standalone Aspire Dashboard to connect to directly (bypasses AppHost discovery)</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>View telemetry data (logs, spans, traces) from a running Aspire application.</source>
-        <target state="new">View telemetry data (logs, spans, traces) from a running Aspire application.</target>
+        <source>View OpenTelemetry data (logs, spans, traces) from a running AppHost</source>
+        <target state="needs-review-translation">Wyświetl dane telemetryczne (logi, zakresy, śledzenia) z uruchomionej aplikacji Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedToFetchTelemetry">
         <source>Failed to fetch telemetry: {0}</source>
-        <target state="new">Failed to fetch telemetry: {0}</target>
+        <target state="translated">Nie można pobrać telemetrii: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
-        <source>Stream telemetry in real-time as it arrives.</source>
-        <target state="new">Stream telemetry in real-time as it arrives.</target>
+        <source>Stream telemetry in real-time as it arrives</source>
+        <target state="needs-review-translation">Strumieniuj telemetrię w czasie rzeczywistym, gdy tylko nadejdzie.</target>
         <note />
       </trans-unit>
       <trans-unit id="FormatOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="new">Output format (Table or Json).</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">Format wyjściowy (tabela lub JSON).</target>
         <note />
       </trans-unit>
       <trans-unit id="HasErrorOptionDescription">
-        <source>Filter by error status (true to show only errors, false to exclude errors).</source>
-        <target state="new">Filter by error status (true to show only errors, false to exclude errors).</target>
+        <source>Filter by error status (true to show only errors, false to exclude errors)</source>
+        <target state="needs-review-translation">Filtruj według statusu błędu (wartość true, aby pokazać tylko błędy, false, aby je wykluczyć).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderDuration">
+        <source>Duration</source>
+        <target state="translated">Czas trwania</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderName">
+        <source>Name</source>
+        <target state="translated">Nazwa</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderSpans">
+        <source>Spans</source>
+        <target state="translated">Zakresy</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderStatus">
+        <source>Status</source>
+        <target state="translated">Stan</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderTimestamp">
+        <source>Timestamp</source>
+        <target state="translated">Znacznik czasu</target>
         <note />
       </trans-unit>
       <trans-unit id="LimitMustBePositive">
         <source>The --limit value must be a positive number.</source>
-        <target state="new">The --limit value must be a positive number.</target>
+        <target state="translated">Wartość --limit musi być liczbą dodatnią.</target>
         <note />
       </trans-unit>
       <trans-unit id="LimitOptionDescription">
-        <source>Maximum number of items to return.</source>
-        <target state="new">Maximum number of items to return.</target>
+        <source>Maximum number of items to return</source>
+        <target state="needs-review-translation">Maksymalna liczba elementów do zwrócenia.</target>
         <note />
       </trans-unit>
       <trans-unit id="LogsDescription">
-        <source>View structured logs from the Dashboard telemetry API.</source>
-        <target state="new">View structured logs from the Dashboard telemetry API.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="NoInScopeAppHostsShowingAll">
-        <source>No AppHosts found in current directory. Showing all running AppHosts.</source>
-        <target state="translated">Nie znaleziono hostów aplikacji w bieżącym katalogu. Wyświetlanie wszystkich uruchomionych hostów aplikacji.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ProjectOptionDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="translated">Ścieżka do pliku projektu hosta AppHost platformy Aspire.</target>
+        <source>View structured logs from the Dashboard telemetry API</source>
+        <target state="needs-review-translation">Wyświetl strukturalne logi z interfejsu API telemetrii pulpitu nawigacyjnego.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
-        <source>Filter by resource name.</source>
-        <target state="translated">Filtruj według nazwy zasobu.</target>
+        <source>Filter by resource name</source>
+        <target state="needs-review-translation">Filtruj według nazwy zasobu.</target>
         <note />
       </trans-unit>
-      <trans-unit id="ScanningForRunningAppHosts">
-        <source>Scanning for running AppHosts...</source>
-        <target state="translated">Skanowanie w poszukiwaniu uruchomionych hostów aplikacji...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SelectAppHost">
-        <source>Select an AppHost:</source>
-        <target state="translated">Wybierz hosta aplikacji:</target>
+      <trans-unit id="SelectAppHostAction">
+        <source>view telemetry for</source>
+        <target state="translated">wyświetl dane telemetryczne dla</target>
         <note />
       </trans-unit>
       <trans-unit id="SeverityOptionDescription">
-        <source>Filter logs by minimum severity (Trace, Debug, Information, Warning, Error, Critical).</source>
-        <target state="new">Filter logs by minimum severity (Trace, Debug, Information, Warning, Error, Critical).</target>
+        <source>Filter logs by minimum severity (Trace, Debug, Information, Warning, Error, Critical)</source>
+        <target state="needs-review-translation">Filtruj logi według minimalnego poziomu ważności (Śledzenie, Debugowanie, Informacja, Ostrzeżenie, Błąd, Krytyczne).</target>
         <note />
       </trans-unit>
       <trans-unit id="SpansDescription">
-        <source>View spans from the Dashboard telemetry API.</source>
-        <target state="new">View spans from the Dashboard telemetry API.</target>
+        <source>View spans from the Dashboard telemetry API</source>
+        <target state="needs-review-translation">Wyświetl zakresy z interfejsu API telemetrii pulpitu nawigacyjnego.</target>
         <note />
       </trans-unit>
       <trans-unit id="TraceIdArgumentDescription">
         <source>The trace ID to view. If not specified, lists all traces.</source>
-        <target state="new">The trace ID to view. If not specified, lists all traces.</target>
+        <target state="needs-review-translation">Identyfikator śledzenia do wyświetlenia. Jeśli nie zostanie podany, wyświetli listę wszystkich śledzeń.</target>
         <note />
       </trans-unit>
       <trans-unit id="TraceIdOptionDescription">
-        <source>Filter by trace ID.</source>
-        <target state="new">Filter by trace ID.</target>
+        <source>Filter by trace ID</source>
+        <target state="needs-review-translation">Filtruj według identyfikatora śledzenia.</target>
         <note />
       </trans-unit>
       <trans-unit id="TraceNotFound">
         <source>Trace with ID '{0}' was not found.</source>
-        <target state="new">Trace with ID '{0}' was not found.</target>
+        <target state="translated">Nie znaleziono śledzenia o identyfikatorze „{0}”.</target>
         <note />
       </trans-unit>
       <trans-unit id="TracesDescription">
-        <source>View traces from the Dashboard telemetry API.</source>
-        <target state="new">View traces from the Dashboard telemetry API.</target>
+        <source>View traces from the Dashboard telemetry API</source>
+        <target state="needs-review-translation">Wyświetl ślady z interfejsu API telemetrii pulpitu nawigacyjnego.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnexpectedContentType">
-        <source>Dashboard API returned unexpected content type. Expected JSON response.</source>
-        <target state="new">Dashboard API returned unexpected content type. Expected JSON response.</target>
+        <source>Dashboard API returned unexpected content type '{0}'. Expected JSON response.</source>
+        <target state="new">Dashboard API returned unexpected content type '{0}'. Expected JSON response.</target>
         <note />
       </trans-unit>
     </body>

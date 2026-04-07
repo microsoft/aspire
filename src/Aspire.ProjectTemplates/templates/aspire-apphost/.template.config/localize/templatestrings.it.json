@@ -1,4 +1,4 @@
-﻿{
+{
   "author": "Microsoft",
   "name": "AppHost di Aspire",
   "description": "Modello di progetto per la creazione di un progetto AppHost di Aspire (agente di orchestrazione).",
@@ -8,17 +8,16 @@
   "symbols/Framework/choices/net10.0/description": "Destinazione net10.0",
   "symbols/appHostHttpPort/description": "Numero di porta da usare per l'endpoint HTTP in launchSettings.json. del progetto AppHost.",
   "symbols/appHostOtlpHttpPort/description": "Numero di porta da usare per l'endpoint OTLP HTTP in launchSettings.json. del progetto AppHost.",
-  "symbols/appHostMcpHttpPort/description": "Numero di porta da usare per l'endpoint MCP HTTP in launchSettings.json. del progetto AppHost.",
   "symbols/appHostResourceHttpPort/description": "Numero di porta da usare per l'endpoint HTTP del servizio risorse in launchSettings.json del progetto AppHost.",
   "symbols/appHostHttpsPort/description": "Numero di porta da usare per l'endpoint HTTPS in launchSettings.json. del progetto AppHost. Questa opzione è applicabile solo quando il parametro no-https non viene usato.",
   "symbols/appHostOtlpHttpsPort/description": "Numero di porta da usare per l'endpoint OTLP HTTPS in launchSettings.json. del progetto AppHost.",
-  "symbols/appHostMcpHttpsPort/description": "Numero di porta da usare per l'endpoint MCP HTTPS in launchSettings.json. del progetto AppHost.",
   "symbols/appHostResourceHttpsPort/description": "Numero di porta da usare per l'endpoint HTTPS del servizio risorse in launchSettings.json del progetto AppHost.",
   "symbols/skipRestore/description": "Se specificato, ignora il ripristino automatico del progetto durante la creazione.",
   "symbols/NoHttps/description": "Indica se disattivare HTTPS.",
   "symbols/LocalhostTld/displayName": "Usa il TLD .dev.localhost nell'URL dell'applicazione",
   "symbols/LocalhostTld/description": "Indica se combinare il nome del progetto con il dominio di primo livello .dev.localhost nell'URL dell'applicazione per lo sviluppo in locale, ad esempio https://myapp.dev.localhost:12345. Supportato su .NET 10 e versioni successive.",
   "postActions/set-startup-project/description": "Imposta il progetto di avvio nella soluzione",
+  "postActions/set-startup-project/manualInstructions/default/text": "",
   "postActions/restore/description": "Ripristina i pacchetti NuGet richiesti da questo progetto.",
   "postActions/restore/manualInstructions/default/text": "Esegui 'dotnet restore'"
 }

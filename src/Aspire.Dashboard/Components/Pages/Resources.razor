@@ -262,8 +262,8 @@
             @* Don't display footer with the resource graph *@
             <div hidden="@(PageViewModel.SelectedViewKind == ResourceViewKind.Graph)">
                 <TotalItemsFooter @ref="_totalItemsFooter"
-                                  SingularText="@Loc[nameof(Dashboard.Resources.Resources.TotalItemsFooterSingularText)]"
-                                  PluralText="@Loc[nameof(Dashboard.Resources.Resources.TotalItemsFooterPluralText)]"
+                                  SingularText="@(PageViewModel.SelectedViewKind == ResourceViewKind.Parameters ? Loc[nameof(Dashboard.Resources.Resources.TotalItemsFooterParametersSingularText)] : Loc[nameof(Dashboard.Resources.Resources.TotalItemsFooterSingularText)])"
+                                  PluralText="@(PageViewModel.SelectedViewKind == ResourceViewKind.Parameters ? Loc[nameof(Dashboard.Resources.Resources.TotalItemsFooterParametersPluralText)] : Loc[nameof(Dashboard.Resources.Resources.TotalItemsFooterPluralText)])"
                                   TotalItemCount="@_totalItemsCount"/>
             </div>
         </FooterSection>

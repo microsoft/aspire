@@ -32,7 +32,9 @@ internal static class AzureContainerRegistryHelpers
         var registryEndpoint = await registry.Endpoint.GetValueAsync(context.CancellationToken).ConfigureAwait(false) ??
             throw new InvalidOperationException("Failed to retrieve container registry endpoint.");
 
-        var loginTask = await context.ReportingStep.CreateTaskAsync($"Logging in to **{registryName}**", context.CancellationToken).ConfigureAwait(false);
+        var loginTask = await context.ReportingStep.CreateTaskAsync(
+            new MarkdownString($"Logging in to **{registryName}**"),
+            context.CancellationToken).ConfigureAwait(false);
         await using (loginTask.ConfigureAwait(false))
         {
             try
@@ -49,11 +51,16 @@ internal static class AzureContainerRegistryHelpers
                     tokenCredentialProvider.TokenCredential,
                     context.CancellationToken).ConfigureAwait(false);
 
-                await loginTask.CompleteAsync($"Successfully logged in to **{registryEndpoint}**", CompletionState.Completed, context.CancellationToken).ConfigureAwait(false);
+                await loginTask.CompleteAsync(
+                    new MarkdownString($"Successfully logged in to **{registryEndpoint}**"),
+                    CompletionState.Completed,
+                    context.CancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                await loginTask.FailAsync($"Login to ACR **{registryEndpoint}** failed: {ex.Message}", cancellationToken: context.CancellationToken).ConfigureAwait(false);
+                await loginTask.FailAsync(
+                    new MarkdownString($"Login to ACR **{registryEndpoint}** failed: {ex.Message}"),
+                    context.CancellationToken).ConfigureAwait(false);
                 throw;
             }
         }

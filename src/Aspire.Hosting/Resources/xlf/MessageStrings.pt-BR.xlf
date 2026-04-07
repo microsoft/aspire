@@ -37,6 +37,11 @@
         <target state="translated">Comando ausente</target>
         <note />
       </trans-unit>
+      <trans-unit id="PersistentContainerWithoutUserSecrets">
+        <source>Resource '{0}' has a persistent lifetime but the AppHost project does not have user secrets configured. Generated parameter values (such as passwords) may change on each restart, causing persistent containers to be recreated. Run 'aspire secret set' to initialize user secrets.</source>
+        <target state="translated">O recurso '{0}' tem um tempo de vida persistente, mas o projeto AppHost não tem segredos de usuário configurados. Os valores de parâmetro gerados (como senhas) podem ser alterados em cada reinicialização, fazendo com que contêineres persistentes sejam recriados. Execute 'aspire secret set' para inicializar os segredos de usuário.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="RequiredCommandNotFound">
         <source>Required command '{0}' was not found on PATH or at the specified location.</source>
         <target state="translated">O comando obrigatório ''{0}'' não foi encontrado em PATH ou no local especificado.</target>

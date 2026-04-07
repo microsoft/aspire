@@ -3,63 +3,23 @@
   <file datatype="xml" source-language="en" target-language="cs" original="../ResourceCommandStrings.resx">
     <body>
       <trans-unit id="CommandDescription">
-        <source>Execute a command on a resource.</source>
-        <target state="translated">Spusťte příkaz pro prostředek.</target>
+        <source>Execute a command on a resource (e.g. start, stop, restart)</source>
+        <target state="needs-review-translation">Spusťte příkaz pro prostředek.</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandNameArgumentDescription">
-        <source>The name of the command to execute.</source>
-        <target state="translated">Název příkazu, který se má spustit</target>
+        <source>The name of the command to execute (e.g. start, stop, restart)</source>
+        <target state="needs-review-translation">Název příkazu, který se má spustit</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandResourceArgumentDescription">
-        <source>The name of the resource to execute the command on.</source>
-        <target state="translated">Název prostředku, na kterém se má příkaz provést</target>
+        <source>The name of the resource to execute the command on</source>
+        <target state="needs-review-translation">Název prostředku, na kterém se má příkaz provést</target>
         <note />
       </trans-unit>
-      <trans-unit id="NoInScopeAppHostsShowingAll">
-        <source>No in-scope AppHosts found. Showing all running AppHosts.</source>
-        <target state="translated">Nebyli nalezeni žádní hostitelé aplikací v daném oboru. Zobrazují se všichni spuštění hostitelé aplikací.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="NoRunningAppHostsFound">
-        <source>No running AppHosts found.</source>
-        <target state="translated">Nebyl nalezen žádný spuštěný hostitel aplikací.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ProjectOptionDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="translated">Cesta k souboru projektu Aspire AppHost.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RestartDescription">
-        <source>Restart a running resource.</source>
-        <target state="translated">Restartujte spuštěný prostředek.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RestartResourceArgumentDescription">
-        <source>The name of the resource to restart.</source>
-        <target state="translated">Název prostředku, který se má restartovat</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ScanningForRunningAppHosts">
-        <source>Scanning for running AppHosts...</source>
-        <target state="translated">Vyhledávání spuštěných hostitelů aplikací...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SelectAppHost">
-        <source>Select which AppHost to connect to:</source>
-        <target state="translated">Vyberte hostitele aplikace, ke kterému se chcete připojit:</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="StartDescription">
-        <source>Start a stopped resource.</source>
-        <target state="translated">Spusťte zastavený prostředek.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="StartResourceArgumentDescription">
-        <source>The name of the resource to start.</source>
-        <target state="translated">Název prostředku, který se má spustit</target>
+      <trans-unit id="SelectAppHostAction">
+        <source>connect to</source>
+        <target state="translated">připojit k</target>
         <note />
       </trans-unit>
     </body>

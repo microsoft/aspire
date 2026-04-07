@@ -214,7 +214,7 @@ public class AddYarpTests(ITestOutputHelper testOutputHelper)
         var dockerfile = await annotation.DockerfileFactory(context);
 
         Assert.Contains("FROM", dockerfile);
-        Assert.Contains("dotnet/nightly/yarp:2.3.0-preview.4", dockerfile);
+        Assert.Contains("dotnet/nightly/yarp:2.3-preview", dockerfile);
         Assert.Contains("AS yarp", dockerfile);
         Assert.Contains("WORKDIR /app", dockerfile);
         Assert.Contains("COPY . /app/wwwroot", dockerfile);

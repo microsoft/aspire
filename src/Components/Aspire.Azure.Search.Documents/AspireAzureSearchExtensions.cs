@@ -1,12 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire;
 using Aspire.Azure.Common;
 using Aspire.Azure.Search.Documents;
 using Azure;
 using Azure.Core;
 using Azure.Core.Extensions;
-using Azure.Identity;
 using Azure.Search.Documents;
 using Azure.Search.Documents.Indexes;
 using Microsoft.Extensions.Azure;
@@ -87,7 +87,7 @@ public static class AspireAzureSearchExtensions
                 }
                 else
                 {
-                    return new SearchIndexClient(settings.Endpoint, settings.Credential ?? new DefaultAzureCredential(), options);
+                    return new SearchIndexClient(settings.Endpoint, settings.Credential ?? AzureCredentialHelper.CreateDefaultAzureCredential(), options);
                 }
             });
         }

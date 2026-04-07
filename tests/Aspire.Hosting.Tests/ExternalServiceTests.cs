@@ -9,6 +9,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "2")]
 public class ExternalServiceTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
@@ -325,8 +326,8 @@ public class ExternalServiceTests(ITestOutputHelper testOutputHelper)
         // Verify the resource is in the correct state
         Assert.Equal(KnownResourceStates.FailedToStart, resourceEvent.Snapshot.State?.Text);
 
+        await appStartTask; // Ensure start completes before stopping
         await app.StopAsync();
-        await appStartTask; // Ensure start completes
     }
 
     [Fact]
@@ -352,8 +353,8 @@ public class ExternalServiceTests(ITestOutputHelper testOutputHelper)
         // Verify the resource is in the correct state
         Assert.Equal(KnownResourceStates.FailedToStart, resourceEvent.Snapshot.State?.Text);
 
+        await appStartTask; // Ensure start completes before stopping
         await app.StopAsync();
-        await appStartTask; // Ensure start completes
     }
 
     [Fact]
@@ -379,8 +380,8 @@ public class ExternalServiceTests(ITestOutputHelper testOutputHelper)
         // Verify the resource is in the correct state
         Assert.Equal(KnownResourceStates.Running, resourceEvent.Snapshot.State?.Text);
 
+        await appStartTask; // Ensure start completes before stopping
         await app.StopAsync();
-        await appStartTask; // Ensure start completes
     }
 
     [Fact]

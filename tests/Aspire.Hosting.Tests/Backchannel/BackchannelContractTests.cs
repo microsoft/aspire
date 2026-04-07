@@ -9,6 +9,7 @@ namespace Aspire.Hosting.Backchannel;
 /// <summary>
 /// Validates that backchannel request/response types follow the contract rules.
 /// </summary>
+[Trait("Partition", "4")]
 public class BackchannelContractTests
 {
     // V2 request/response types that must follow the contract

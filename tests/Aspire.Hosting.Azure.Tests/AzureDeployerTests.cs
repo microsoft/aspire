@@ -1,7 +1,8 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREAZURE001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
@@ -124,7 +125,6 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
     /// the containers and does not attempt to push them.
     /// </summary>
     [Fact]
-    [RequiresTools(["az"])] // Requires Azure CLI to compile Bicep templates
     public async Task DeployAsync_WithBuildOnlyContainers()
     {
         // Arrange
@@ -244,7 +244,6 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresTools(["az"])] // Requires Azure CLI to compile Bicep templates
     public async Task DeployAsync_WithContainer_Works()
     {
         // Arrange
@@ -305,7 +304,6 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresTools(["az"])] // Requires Azure CLI to compile Bicep templates
     public async Task DeployAsync_WithDockerfile_Works()
     {
         // Arrange
@@ -372,7 +370,6 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresTools(["az"])] // Requires Azure CLI to compile Bicep templates
     public async Task DeployAsync_WithProjectResource_Works()
     {
         // Arrange
@@ -441,7 +438,6 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
     [Theory]
     [InlineData("deploy")]
     [InlineData("diagnostics")]
-    [QuarantinedTest("https://github.com/dotnet/aspire/issues/13287")]
     public async Task DeployAsync_WithMultipleComputeEnvironments_Works(string step)
     {
         // Arrange
@@ -569,7 +565,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         ConfigureTestServices(builder, interactionService: testInteractionService, bicepProvisioner: new NoOpBicepProvisioner());
 
         // Add a parameter that will be unresolved
-        var param = builder.AddParameter("test-param");
+        var param = builder.AddParameter("unresolved-test-param");
         builder.AddAzureEnvironment();
 
         // Act
@@ -584,20 +580,20 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         Assert.Collection(parameterInputs.Inputs,
             input =>
             {
-                Assert.Equal("test-param", input.Label);
+                Assert.Equal("unresolved-test-param", input.Label);
                 Assert.Equal(InputType.Text, input.InputType);
-                Assert.Equal("Enter value for test-param", input.Placeholder);
+                Assert.Equal("Enter value for unresolved-test-param", input.Placeholder);
             });
 
         // Complete the parameter inputs interaction
-        parameterInputs.Inputs[0].Value = "test-value";
+        parameterInputs.Inputs[0].Value = "resolved-test-value";
         parameterInputs.CompletionTcs.SetResult(InteractionResult.Ok(parameterInputs.Inputs));
 
         // Wait for the run task to complete (or timeout)
         await runTask.WaitAsync(TimeSpan.FromSeconds(10));
 
         var setValue = await param.Resource.GetValueAsync(default);
-        Assert.Equal("test-value", setValue);
+        Assert.Equal("resolved-test-value", setValue);
     }
 
     [Fact]
@@ -740,7 +736,6 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresTools(["az"])] // Requires Azure CLI to compile Bicep templates
     public async Task DeployAsync_WithOnlyAzureResources_PrintsDashboardUrl()
     {
         // Arrange
@@ -910,7 +905,6 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresTools(["az"])] // Requires Azure CLI to compile Bicep templates
     public async Task DeployAsync_WithAzureFunctionsProject_Works()
     {
         // Arrange
@@ -1072,7 +1066,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         // Act
         using var app = builder.Build();
         await app.StartAsync();
-        await app.StopAsync();
+        await app.WaitForShutdownAsync();
 
         if (step == "diagnostics")
         {
@@ -1106,30 +1100,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         var fakeContainerRuntime = new FakeContainerRuntime();
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "diagnostics");
         var mockActivityReporter = new TestPipelineActivityReporter(testOutputHelper);
-        var armClientProvider = new TestArmClientProvider(deploymentName =>
-        {
-            return deploymentName switch
-            {
-                string name when name.StartsWith("env") => new Dictionary<string, object>
-                {
-                    ["AZURE_CONTAINER_REGISTRY_NAME"] = new { type = "String", value = "testregistry" },
-                    ["AZURE_CONTAINER_REGISTRY_ENDPOINT"] = new { type = "String", value = "testregistry.azurecr.io" },
-                    ["AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID"] = new { type = "String", value = "/subscriptions/test/resourceGroups/test-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/test-identity" },
-                    ["planId"] = new { type = "String", value = "/subscriptions/test/resourceGroups/test-rg/providers/Microsoft.Web/serverfarms/testplan" },
-                    ["AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_CLIENT_ID"] = new { type = "String", value = "test-client-id" }
-                },
-                string name when name.StartsWith("kv") => new Dictionary<string, object>
-                {
-                    ["vaultUri"] = new { type = "String", value = "https://testkv.vault.azure.net/" }
-                },
-                string name when name.StartsWith("cache") => new Dictionary<string, object>
-                {
-                    ["hostName"] = new { type = "String", value = "testcache.redis.cache.windows.net" }
-                },
-                _ => []
-            };
-        });
-        ConfigureTestServices(builder, armClientProvider: armClientProvider, processRunner: mockProcessRunner, activityReporter: mockActivityReporter, containerRuntime: fakeContainerRuntime);
+        ConfigureTestServices(builder, processRunner: mockProcessRunner, activityReporter: mockActivityReporter, containerRuntime: fakeContainerRuntime);
 
         // Set up the scenario: AppService environment with Redis using access key authentication
         // and a compute resource that references the Redis cache
@@ -1159,7 +1130,52 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         // Act
         using var app = builder.Build();
         await app.StartAsync();
-        await app.StopAsync();
+        await app.WaitForShutdownAsync();
+
+        // In diagnostics mode, verify the deployment graph shows correct dependencies
+        var logs = mockActivityReporter.LoggedMessages
+                        .Where(s => s.StepTitle == "diagnostics")
+                        .Select(s => s.Message)
+                        .ToList();
+
+        // Verify that diagnostics complete without hanging (test will timeout if there's a hang)
+        Assert.NotEmpty(logs);
+
+        // Use Verify to snapshot the diagnostic output showing the dependency graph
+        // The key assertion is that provision-api-website depends on provision-cache
+        // because the Redis resource writes the secret that the API consumes
+        await Verify(logs);
+    }
+
+    [Fact]
+    public async Task DeployAsync_WithPrivateEndpoints_CreatesCorrectDependencies()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "diagnostics");
+        var mockActivityReporter = new TestPipelineActivityReporter(testOutputHelper);
+        ConfigureTestServices(builder, activityReporter: mockActivityReporter);
+
+        builder.AddAzureContainerAppEnvironment("env");
+
+        var vnet = builder.AddAzureVirtualNetwork("vnet");
+        var peSubnet = vnet.AddSubnet("pe-subnet", "10.0.3.0/24");
+
+        var sql = builder.AddAzureSqlServer("sql");
+
+        var cosmos = builder.AddAzureCosmosDB("cosmos");
+
+        peSubnet.AddPrivateEndpoint(sql);
+        peSubnet.AddPrivateEndpoint(cosmos);
+
+        // Add a compute resource that references the SQL server and Cosmos DB
+        builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithReference(sql)
+            .WithReference(cosmos);
+
+        using var app = builder.Build();
+        await app.StartAsync();
+        await app.WaitForShutdownAsync();
 
         // In diagnostics mode, verify the deployment graph shows correct dependencies
         var logs = mockActivityReporter.LoggedMessages
@@ -1199,6 +1215,44 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         await Verify(logs);
     }
 
+    [Fact]
+    public async Task DeployAsync_WithRequestFailedException_DoesNotIncludeVerboseHttpDetails()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.Deploy);
+        var mockActivityReporter = new TestPipelineActivityReporter(testOutputHelper);
+
+        ConfigureTestServices(builder, bicepProvisioner: new FailingBicepProvisioner(), activityReporter: mockActivityReporter);
+
+        builder.AddAzureEnvironment();
+        builder.AddAzureSqlServer("sql").AddDatabase("db");
+
+        using var app = builder.Build();
+        await app.RunAsync().WaitAsync(TimeSpan.FromSeconds(5));
+
+        // Collect all error-level messages from the pipeline activity reporter
+        var errorLogs = mockActivityReporter.LoggedMessages
+                .Where(m => m.LogLevel >= LogLevel.Error)
+                .Select(s => s.Message)
+                .ToList();
+
+        // Collect all completed step/task messages
+        var completedStepMessages = mockActivityReporter.CompletedSteps
+                .Where(s => s.CompletionState == CompletionState.CompletedWithError)
+                .Select(s => s.CompletionText)
+                .ToList();
+
+        var completedTaskMessages = mockActivityReporter.CompletedTasks
+                .Where(t => t.CompletionState == CompletionState.CompletedWithError)
+                .Select(t => t.CompletionMessage ?? t.TaskStatusText)
+                .ToList();
+
+        var allMessages = errorLogs.Concat(completedStepMessages).Concat(completedTaskMessages).ToList();
+
+        Assert.NotEmpty(allMessages);
+
+        await Verify(allMessages);
+    }
+
     private void ConfigureTestServices(IDistributedApplicationTestingBuilder builder,
         IInteractionService? interactionService = null,
         IBicepProvisioner? bicepProvisioner = null,
@@ -1235,6 +1289,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         {
             builder.Services.AddSingleton(bicepProvisioner);
         }
+        builder.Services.AddSingleton(_ => ProvisioningTestHelpers.CreateBicepCompiler());
         builder.Services.AddSingleton<IProcessRunner>(processRunner ?? new MockProcessRunner());
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Services.AddSingleton<IContainerRuntime>(containerRuntime ?? new FakeContainerRuntime());
@@ -1264,6 +1319,54 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         {
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class FailingBicepProvisioner : IBicepProvisioner
+    {
+        public Task<bool> ConfigureResourceAsync(IConfiguration configuration, AzureBicepResource resource, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(false);
+        }
+
+        public Task GetOrCreateResourceAsync(AzureBicepResource resource, ProvisioningContext context, CancellationToken cancellationToken)
+        {
+            // Build a mock Azure Response with JSON error body, simulating what the ARM
+            // deployment API returns when a deployment fails. This ensures the
+            // ExtractDetailedErrorMessage method can parse the JSON and produce a clean
+            // error message rather than falling back to the verbose Message property.
+            var jsonContent = """{"error":{"code":"LocationNotAvailableForResourceType","message":"The provided location 'asia' is not available for resource type 'Microsoft.ManagedIdentity/userAssignedIdentities'."}}""";
+            var response = new TestAzureResponse(400, "Bad Request", jsonContent);
+
+            throw new global::Azure.RequestFailedException(response);
+        }
+    }
+
+    /// <summary>
+    /// Minimal Azure Response subclass for testing. Provides JSON content that
+    /// ExtractDetailedErrorMessage can parse, simulating a real Azure SDK error.
+    /// </summary>
+    private sealed class TestAzureResponse : global::Azure.Response
+    {
+        private readonly int _status;
+        private readonly string _reasonPhrase;
+
+        public TestAzureResponse(int status, string reasonPhrase, string content)
+        {
+            _status = status;
+            _reasonPhrase = reasonPhrase;
+            ContentStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(content));
+        }
+
+        public override int Status => _status;
+        public override string ReasonPhrase => _reasonPhrase;
+        public override Stream? ContentStream { get; set; }
+        public override string ClientRequestId { get; set; } = string.Empty;
+
+        public override void Dispose() { }
+        protected override bool TryGetHeader(string name, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? value) { value = null; return false; }
+        protected override bool TryGetHeaderValues(string name, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out IEnumerable<string>? values) { values = null; return false; }
+        protected override bool ContainsHeader(string name) => false;
+        protected override IEnumerable<global::Azure.Core.HttpHeader> EnumerateHeaders() => [];
     }
 
     private sealed class Project : IProjectMetadata

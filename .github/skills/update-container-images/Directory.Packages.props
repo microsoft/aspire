@@ -1,0 +1,8 @@
+<Project>
+  <!-- Override the repo-level Central Package Management for single-file C# scripts in this directory.
+       The #:package directives in .cs files generate a csproj with inline PackageReference versions,
+       which conflicts with CPM. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+</Project>

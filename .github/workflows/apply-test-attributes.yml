@@ -13,7 +13,7 @@ concurrency:
 jobs:
   quarantine_test:
     if: >-
-      github.repository == 'dotnet/aspire' &&
+      github.repository == 'microsoft/aspire' &&
       (
         startsWith(github.event.comment.body, '/quarantine-test ') ||
         startsWith(github.event.comment.body, '/unquarantine-test ') ||
@@ -132,8 +132,12 @@ jobs:
               return;
             }
           } else {
-            // For unquarantine/enable: test names only
-            testNames = parts;
+            // For unquarantine/enable: test names only, ignore any trailing URLs
+            testNames = parts.filter(p => !urlPattern.test(p));
+            if (testNames.length === 0) {
+              failWithError('No test name(s) provided. Only URLs were found in the arguments.');
+              return;
+            }
           }
 
           // Validate target PR URL is from the same repo if provided
@@ -353,17 +357,28 @@ jobs:
             body: body
           });
 
+    # Generate the App token only after verifying the commenter has write access,
+    # to avoid minting a privileged token for unauthorized users.
+    - name: Generate GitHub App Token
+      if: success()
+      id: app-token
+      uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
+      with:
+        app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+        private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+
     # Credentials must persist for git push operations later in workflow
     - name: Checkout repo
       if: success()
-      uses: actions/checkout@v4 # zizmor: ignore[artipacked]
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2 # zizmor: ignore[artipacked]
       with:
         ref: ${{ steps.determine-target.outputs.checkout_ref }}
         fetch-depth: 0
+        token: ${{ steps.app-token.outputs.token }}
 
     - name: Setup .NET
       if: success()
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
       with:
         global-json-file: global.json
 
@@ -431,6 +446,7 @@ jobs:
         CHECKOUT_REF: ${{ steps.determine-target.outputs.checkout_ref }}
         IS_NEW_PR: ${{ steps.determine-target.outputs.is_new_pr }}
       with:
+        github-token: ${{ steps.app-token.outputs.token }}
         script: |
           const { spawnSync } = require('child_process');
           const fs = require('fs');

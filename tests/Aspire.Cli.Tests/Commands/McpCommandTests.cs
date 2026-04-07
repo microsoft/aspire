@@ -84,7 +84,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task McpCommandIsHidden()
+    public async Task McpCommandIsVisible()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
@@ -94,7 +94,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
         var mcpCommand = rootCommand.Subcommands.FirstOrDefault(c => c.Name == "mcp");
 
         Assert.NotNull(mcpCommand);
-        Assert.True(mcpCommand.Hidden, "The mcp command should be hidden for backward compatibility");
+        Assert.False(mcpCommand.Hidden, "The mcp command should be visible (contains tools and call subcommands)");
     }
 
     [Fact]

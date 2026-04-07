@@ -14,13 +14,13 @@ namespace Aspire.Cli.Utils;
 
 internal static class AppHostHelper
 {
-    internal static async Task<(bool IsCompatibleAppHost, bool SupportsBackchannel, string? AspireHostingVersion)> CheckAppHostCompatibilityAsync(IDotNetCliRunner runner, IInteractionService interactionService, FileInfo projectFile, AspireCliTelemetry telemetry, DirectoryInfo workingDirectory, CancellationToken cancellationToken)
+    internal static async Task<(bool IsCompatibleAppHost, bool SupportsBackchannel, string? AspireHostingVersion)> CheckAppHostCompatibilityAsync(IDotNetCliRunner runner, IInteractionService interactionService, FileInfo projectFile, AspireCliTelemetry telemetry, DirectoryInfo workingDirectory, string logFilePath, CancellationToken cancellationToken)
     {
         var appHostInformation = await GetAppHostInformationAsync(runner, interactionService, projectFile, telemetry, workingDirectory, cancellationToken);
 
         if (appHostInformation.ExitCode != 0)
         {
-            interactionService.DisplayError(ErrorStrings.ProjectCouldNotBeAnalyzed);
+            interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectCouldNotBeAnalyzed, logFilePath));
             return (false, false, null);
         }
 
@@ -56,31 +56,35 @@ internal static class AppHostHelper
 
         var relativePath = Path.GetRelativePath(workingDirectory.FullName, projectFile.FullName);
         var appHostInformationResult = await interactionService.ShowStatusAsync(
-            $":microscope: {InteractionServiceStrings.CheckingProjectType}: {relativePath}",
+            $"{InteractionServiceStrings.CheckingProjectType}: {relativePath}",
             () => runner.GetAppHostInformationAsync(
                 projectFile,
-                new DotNetCliRunnerInvocationOptions(),
-                cancellationToken));
+                new ProcessInvocationOptions(),
+                cancellationToken),
+            emoji: KnownEmojis.Microscope);
 
         return appHostInformationResult;
     }
 
-    internal static async Task<int> BuildAppHostAsync(IDotNetCliRunner runner, IInteractionService interactionService, FileInfo projectFile, DotNetCliRunnerInvocationOptions options, DirectoryInfo workingDirectory, CancellationToken cancellationToken)
+    internal static async Task<int> BuildAppHostAsync(IDotNetCliRunner runner, IInteractionService interactionService, FileInfo projectFile, bool noRestore, ProcessInvocationOptions options, DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
         var relativePath = Path.GetRelativePath(workingDirectory.FullName, projectFile.FullName);
         return await interactionService.ShowStatusAsync(
-            $":hammer_and_wrench:  {InteractionServiceStrings.BuildingAppHost} {relativePath}",
+            $"{InteractionServiceStrings.BuildingAppHost} {relativePath}",
             () => runner.BuildAsync(
                 projectFile,
+                noRestore,
                 options,
-                cancellationToken));
+                cancellationToken),
+            emoji: KnownEmojis.HammerAndWrench);
     }
 
     /// <summary>
     /// Computes the auxiliary backchannel socket path prefix for a given AppHost project file.
     /// </summary>
     /// <remarks>
-    /// Since socket names now include the AppHost's PID (e.g., <c>auxi.sock.{hash}.{pid}</c>),
+    /// Since socket names now include a randomized instance hash and the AppHost's PID
+    /// (e.g., <c>auxi.sock.{hash}.{instanceHash}.{pid}</c>),
     /// the CLI cannot compute the exact socket path. Use this prefix with a glob pattern
     /// to find matching sockets, or use <see cref="FindMatchingSockets"/> instead.
     /// </remarks>
@@ -103,15 +107,16 @@ internal static class AppHostHelper
     /// Extracts the hash portion from an auxiliary socket path.
     /// </summary>
     /// <remarks>
-    /// Works with both old format (<c>auxi.sock.{hash}</c>) and new format (<c>auxi.sock.{hash}.{pid}</c>).
+    /// Works with old format (<c>auxi.sock.{hash}</c>), previous format (<c>auxi.sock.{hash}.{pid}</c>),
+    /// and current format (<c>auxi.sock.{hash}.{instanceHash}.{pid}</c>).
     /// </remarks>
-    /// <param name="socketPath">The full socket path (e.g., "/path/to/auxi.sock.b67075ff12d56865.12345").</param>
+    /// <param name="socketPath">The full socket path (e.g., "/path/to/auxi.sock.b67075ff12d56865.a1b2c3d4e5f6.12345").</param>
     /// <returns>The hash portion (e.g., "b67075ff12d56865"), or null if the format is unrecognized.</returns>
     internal static string? ExtractHashFromSocketPath(string socketPath)
         => BackchannelConstants.ExtractHash(socketPath);
 
     /// <summary>
-    /// Extracts the PID from an auxiliary socket path (new format only).
+    /// Extracts the PID from an auxiliary socket path when one is present.
     /// </summary>
     /// <param name="socketPath">The full socket path.</param>
     /// <returns>The PID if present and valid, or null for old format sockets.</returns>
@@ -135,18 +140,4 @@ internal static class AppHostHelper
     /// <returns>The number of orphaned sockets deleted.</returns>
     internal static int CleanupOrphanedSockets(string backchannelsDirectory, string hash, int currentPid)
         => BackchannelConstants.CleanupOrphanedSockets(backchannelsDirectory, hash, currentPid);
-
-    /// <summary>
-    /// Gets the log file path for an AppHost process.
-    /// </summary>
-    /// <param name="pid">The process ID of the AppHost.</param>
-    /// <param name="homeDirectory">The user's home directory.</param>
-    /// <param name="timeProvider">The time provider for timestamp generation.</param>
-    /// <returns>The log file path.</returns>
-    internal static FileInfo GetLogFilePath(int pid, string homeDirectory, TimeProvider timeProvider)
-    {
-        var logsPath = Path.Combine(homeDirectory, ".aspire", "cli", "logs");
-        var logFilePath = Path.Combine(logsPath, $"apphost-{pid}-{timeProvider.GetUtcNow():yyyy-MM-dd-HH-mm-ss}.log");
-        return new FileInfo(logFilePath);
-    }
 }

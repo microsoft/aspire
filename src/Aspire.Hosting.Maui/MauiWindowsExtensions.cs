@@ -23,6 +23,9 @@ public static class MauiWindowsExtensions
     /// <para>
     /// The resource name will default to "{projectName}-windows".
     /// </para>
+    /// <para>
+    /// This overload is not available in polyglot app hosts. Use <see cref="AddWindowsDevice(IResourceBuilder{MauiProjectResource}, string)"/> instead.
+    /// </para>
     /// </remarks>
     /// <example>
     /// Add a Windows device to a MAUI project:
@@ -35,6 +38,7 @@ public static class MauiWindowsExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
+    [AspireExportIgnore(Reason = "Convenience overload. Use the named overload instead.")]
     public static IResourceBuilder<MauiWindowsPlatformResource> AddWindowsDevice(
         this IResourceBuilder<MauiProjectResource> builder)
     {
@@ -70,6 +74,7 @@ public static class MauiWindowsExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
+    [AspireExport(Description = "Adds a Windows platform resource for a .NET MAUI project.")]
     public static IResourceBuilder<MauiWindowsPlatformResource> AddWindowsDevice(
         this IResourceBuilder<MauiProjectResource> builder,
         [ResourceName] string name)

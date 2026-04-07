@@ -1,6 +1,6 @@
 # Aspire Release Process
 
-This document describes the release process for dotnet/aspire, including both the automated workflows and manual steps required by the release manager.
+This document describes the release process for microsoft/aspire, including both the automated workflows and manual steps required by the release manager.
 
 ## Overview
 
@@ -24,11 +24,9 @@ Before starting a release:
    - The build will be selected from a dropdown when running the release pipeline
    - The build should have a `BAR ID - NNNNNN` tag (auto-extracted by the pipeline)
 
-2. **Version Number**: Know the release version (e.g., `13.2.0` or `13.2.0-preview.1`)
+2. **Release Branch**: Ensure the release branch exists (e.g., `release/9.2`)
 
-3. **Release Branch**: Ensure the release branch exists (e.g., `release/9.2`)
-
-4. **Permissions**:
+3. **Permissions**:
    - Access to run Azure DevOps pipelines with the publishing pool
    - GitHub write access for creating tags/releases/PRs
 
@@ -45,7 +43,6 @@ Before starting a release:
 
    | Parameter | Description | Example |
    |-----------|-------------|---------|
-   | `ReleaseVersion` | The version being released | `13.2.0` |
    | `GaChannelName` | Target GA channel | `Aspire 9.x GA` |
    | `DryRun` | Set `true` to test without publishing | `false` |
    | `SkipNuGetPublish` | Set `true` if re-running after NuGet success | `false` |
@@ -85,7 +82,7 @@ After automation completes:
    - Baseline version PR: Updates `PackageValidationBaselineVersion`
 
 2. **Verify the release**:
-   - Check the [GitHub Releases page](https://github.com/dotnet/aspire/releases)
+   - Check the [GitHub Releases page](https://github.com/microsoft/aspire/releases)
    - Verify packages on [NuGet.org](https://www.nuget.org/packages?q=owner%3Adotnet+aspire)
    - Test installation: `dotnet new install Aspire.ProjectTemplates::VERSION`
 
@@ -99,12 +96,15 @@ Both automations are designed to be **idempotent** and safe to re-run.
 
 ### Azure DevOps Pipeline Failures
 
-| Stage Failed | Resolution |
-|--------------|------------|
-| Validate | Fix the input parameters and re-run |
-| ExtractBarBuildId | Check that the build has a `BAR ID - NNNNNN` tag |
-| PublishNuGet | Check NuGet.org for partial success, then re-run (uses `--skip-duplicate`) |
-| PromoteToChannel | Re-run with `SkipNuGetPublish: true` |
+The pipeline runs as a single stage with all steps in sequence. If a step fails:
+
+| Step Failed | Resolution |
+|-------------|------------|
+| Validate Parameters | Fix the input parameters and re-run |
+| Extract BAR Build ID | Check that the build has a `BAR ID - NNNNNN` tag |
+| List/Verify Packages | Check that the build artifacts are available |
+| Push Packages to NuGet.org | Check NuGet.org for partial success; the `1ES.PublishNuget@1` task handles duplicates via `allowPackageConflicts: true` |
+| Promote Build to Channel | Re-run with `SkipNuGetPublish: true` |
 
 ### GitHub Actions Failures
 
@@ -120,22 +120,30 @@ Both automations are designed to be **idempotent** and safe to re-run.
 
 ### 1ES Pipeline Compliance
 
-The AzDO pipeline extends the 1ES Pipeline Templates (`v1/1ES.Official.PipelineTemplate.yml`) to be compliant with Microsoft organization requirements. This provides:
+The AzDO pipeline extends the 1ES Official Pipeline Templates (`v1/1ES.Official.PipelineTemplate.yml@1ESPipelineTemplates`) to be compliant with Microsoft organization requirements. This provides:
 - SDL (Security Development Lifecycle) compliance scanning
 - Proper pool configuration for internal pipelines
 - Component governance integration
+- **Secure NuGet publishing** via the `1ES.PublishNuget@1` task with managed service connections
+
+> **Note**: This pipeline does not use the MicroBuild template since we're not signing packages - packages are already signed during the main build pipeline. We only download and publish pre-signed artifacts.
 
 ### Variable Groups (Azure DevOps)
 
-The pipeline requires the `Aspire-Release-Secrets` variable group containing:
-
-| Variable | Description |
-|----------|-------------|
-| `NuGetApiKey` | API key for publishing to NuGet.org |
+The pipeline uses the `Aspire-Release-Secrets` variable group. Note that NuGet publishing credentials are managed via a service connection, not a variable group secret.
 
 ### Service Connections (Azure DevOps)
 
-- `Darc: Maestro Production` - Used for darc channel promotion
+| Connection Name | Purpose |
+|-----------------|---------|
+| `NuGet.org - microsoft/aspire` | NuGet service connection for publishing packages to NuGet.org |
+| `Darc: Maestro Production` | Used for darc channel promotion |
+
+> **Note**: The `NuGet.org - microsoft/aspire` service connection must be configured in Azure DevOps Project Settings → Service connections with:
+> - **Type**: NuGet
+> - **Authentication**: ApiKey
+> - **Feed URL**: `https://api.nuget.org/v3/index.json`
+> - **ApiKey**: A scoped NuGet.org API key with push permissions for Aspire packages
 
 ### Approved GitHub Actions
 
@@ -162,12 +170,14 @@ This indicates a mismatch between the expected release commit and an existing ta
 2. If the existing tag is wrong, it must be manually deleted (requires admin)
 3. If the SHA is wrong, correct it and re-run
 
-### NuGet publish rate limiting
+### NuGet publish failures
 
-The pipeline implements exponential backoff retry (3 attempts). If you still hit rate limits:
+The `1ES.PublishNuget@1` task is configured with `allowPackageConflicts: true`, which means it will skip packages that already exist on NuGet.org. If publishing fails:
 
-1. Wait 5-10 minutes
-2. Re-run with `SkipNuGetPublish: false` (it will skip already-published packages)
+1. Check the pipeline logs for specific error messages
+2. Verify the service connection `NuGet.org - microsoft/aspire` is properly configured
+3. Ensure the API key in the service connection has push permissions for the package IDs
+4. Re-run the pipeline (it will skip already-published packages)
 
 ### PR creation fails
 
@@ -186,14 +196,21 @@ The workflow checks for existing PRs before creating. If a PR exists with a diff
 │  ┌──────────────────────────────────────────────────────────────────┐   │
 │  │                    Azure DevOps Pipeline                         │   │
 │  │                release-publish-nuget.yml                         │   │
+│  │          (1ES.Official.PipelineTemplate.yml)                     │   │
 │  │                                                                  │   │
 │  │  Resource: aspire-build (select from dropdown)                   │   │
-│  │  Input: ReleaseVersion, GaChannelName                            │   │
+│  │  Input: GaChannelName                                            │   │
 │  │                                                                  │   │
 │  │  ┌─────────────┐   ┌──────────────┐   ┌──────────────────────┐   │   │
-│  │  │  Validate   │──▶│ Extract BAR  │──▶│  Publish to NuGet    │   │   │
-│  │  │   Inputs    │   │   Build ID   │   │   (--skip-duplicate) │   │   │
+│  │  │  Validate   │──▶│ Extract BAR  │──▶│  Download & Verify   │   │   │
+│  │  │   Inputs    │   │   Build ID   │   │     Packages         │   │   │
 │  │  └─────────────┘   └──────────────┘   └──────────────────────┘   │   │
+│  │                                                    │             │   │
+│  │                                                    ▼             │   │
+│  │                                       ┌──────────────────────┐   │   │
+│  │                                       │  1ES.PublishNuget@1  │   │   │
+│  │                                       │  (via svc connection)│   │   │
+│  │                                       └──────────────────────┘   │   │
 │  │                                                    │             │   │
 │  │                                                    ▼             │   │
 │  │                                       ┌──────────────────────┐   │   │

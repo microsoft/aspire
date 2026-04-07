@@ -49,6 +49,7 @@ public static class MauiOtlpExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
+    [AspireExport(Description = "Configures a .NET MAUI platform resource to send OpenTelemetry data through a development tunnel.")]
     public static IResourceBuilder<T> WithOtlpDevTunnel<T>(
         this IResourceBuilder<T> builder)
         where T : IMauiPlatformResource, IResourceWithEnvironment
@@ -115,7 +116,7 @@ public static class MauiOtlpExtensions
 
         // Manually allocate the stub endpoint so dev tunnel can start
         // Dev tunnels wait for ResourceEndpointsAllocatedEvent before starting
-        appBuilder.Eventing.Subscribe<BeforeStartEvent>((evt, ct) =>
+        appBuilder.OnBeforeStart((evt, ct) =>
         {
             var endpoint = stubResource.Annotations.OfType<EndpointAnnotation>().FirstOrDefault();
             if (endpoint is not null && endpoint.AllocatedEndpoint is null)
@@ -131,36 +132,20 @@ public static class MauiOtlpExtensions
 
     /// <summary>
     /// Applies OTLP configuration to a specific MAUI platform resource.
-    /// Uses service discovery through WithReference to get the tunneled endpoint, then overrides OTEL_EXPORTER_OTLP_ENDPOINT.
+    /// Gets the tunneled endpoint directly and sets OTEL_EXPORTER_OTLP_ENDPOINT.
     /// </summary>
     private static void ApplyOtlpConfigurationToPlatform<T>(
         IResourceBuilder<T> platformBuilder,
         OtlpDevTunnelConfigurationAnnotation tunnelConfig)
         where T : IMauiPlatformResource, IResourceWithEnvironment
     {
-        // Use WithReference to inject service discovery variables for the stub through the dev tunnel
-        // This adds SERVICES__<STUBNAME>__OTLP__0=https://tunnel-url which we'll use and then clean up
-        platformBuilder.WithReference(tunnelConfig.OtlpStubBuilder, tunnelConfig.DevTunnel);
+        // Get the tunnel endpoint for the OTLP stub directly, bypassing service discovery injection
+        var tunnelEndpoint = tunnelConfig.DevTunnel.GetEndpoint(tunnelConfig.OtlpStub, "otlp");
 
-        // Override OTEL_EXPORTER_OTLP_ENDPOINT with the tunneled URL and clean up extra variables
-        platformBuilder.WithEnvironment(context =>
-        {
-            // Read the service discovery variable that WithReference just added
-            // Format: services__{resourcename}__otlp__0 (lowercase)
-            var serviceDiscoveryKey = $"services__{tunnelConfig.OtlpStub.Name}__otlp__0";
-            if (context.EnvironmentVariables.TryGetValue(serviceDiscoveryKey, out var tunnelUrl))
-            {
-                // Override OTEL_EXPORTER_OTLP_ENDPOINT with the tunnel URL
-                context.EnvironmentVariables["OTEL_EXPORTER_OTLP_ENDPOINT"] = tunnelUrl;
+        // Ensure the platform resource waits for the tunnel to be ready
+        platformBuilder.WithReferenceRelationship(tunnelConfig.DevTunnel);
 
-                // Remove the service discovery variables since we're using direct OTLP configuration
-                context.EnvironmentVariables.Remove(serviceDiscoveryKey);
-
-                // Also remove the {RESOURCENAME}_{ENDPOINTNAME} format variable (e.g., MAUI_APP-OTLP_OTLP)
-                // The resource name is encoded and uppercased when DevTunnelsResourceBuilderExtensions.WithReference is invoked
-                var directEndpointKey = $"{EnvironmentVariableNameEncoder.Encode(tunnelConfig.OtlpStub.Name).ToUpperInvariant()}_OTLP";
-                context.EnvironmentVariables.Remove(directEndpointKey);
-            }
-        });
+        // Set OTEL_EXPORTER_OTLP_ENDPOINT directly to the tunnel endpoint URL
+        platformBuilder.WithEnvironment(KnownOtelConfigNames.ExporterOtlpEndpoint, tunnelEndpoint);
     }
 }

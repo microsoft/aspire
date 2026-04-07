@@ -28,18 +28,18 @@
         <note>{0} is the key, {1} is the value</note>
       </trans-unit>
       <trans-unit id="DeleteCommand_Description">
-        <source>Delete a configuration value.</source>
-        <target state="translated">删除配置值。</target>
+        <source>Delete a configuration value</source>
+        <target state="needs-review-translation">删除配置值。</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteCommand_GlobalArgumentDescription">
-        <source>Delete the configuration value from the global $HOME/.aspire/settings.json instead of the local settings file.</source>
-        <target state="translated">从全局 $HOME/.aspire/settings.json 而不是本地设置文件中删除配置值。</target>
+        <source>Delete the configuration value from the global $HOME/.aspire/settings.json instead of the local settings file</source>
+        <target state="needs-review-translation">从全局 $HOME/.aspire/settings.json 而不是本地设置文件中删除配置值。</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteCommand_KeyArgumentDescription">
-        <source>The configuration key to delete.</source>
-        <target state="translated">要删除的配置键。</target>
+        <source>The configuration key to delete</source>
+        <target state="needs-review-translation">要删除的配置键。</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteCommand_PromptForGlobal">
@@ -53,8 +53,8 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Manage configuration settings.</source>
-        <target state="translated">管理配置设置。</target>
+        <source>Manage CLI configuration including feature flags</source>
+        <target state="needs-review-translation">管理配置设置。</target>
         <note />
       </trans-unit>
       <trans-unit id="ExtensionActionPrompt">
@@ -63,13 +63,13 @@
         <note />
       </trans-unit>
       <trans-unit id="GetCommand_Description">
-        <source>Get a configuration value.</source>
-        <target state="translated">获取配置值。</target>
+        <source>Get a configuration value</source>
+        <target state="needs-review-translation">获取配置值。</target>
         <note />
       </trans-unit>
       <trans-unit id="GetCommand_KeyArgumentDescription">
-        <source>The configuration key to retrieve.</source>
-        <target state="translated">要检索的配置键。</target>
+        <source>The configuration key to retrieve</source>
+        <target state="needs-review-translation">要检索的配置键。</target>
         <note />
       </trans-unit>
       <trans-unit id="GetCommand_PromptForKey">
@@ -82,14 +82,24 @@
         <target state="translated">全局配置</target>
         <note />
       </trans-unit>
+      <trans-unit id="HeaderKey">
+        <source>Key</source>
+        <target state="translated">键</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderValue">
+        <source>Value</source>
+        <target state="translated">值</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InfoCommand_AvailableFeatures">
         <source>Available features</source>
         <target state="translated">可用的功能</target>
         <note />
       </trans-unit>
       <trans-unit id="InfoCommand_Description">
-        <source>Display configuration file paths and available features.</source>
-        <target state="translated">显示配置文件路径和可用功能。</target>
+        <source>Display configuration file paths and available features</source>
+        <target state="needs-review-translation">显示配置文件路径和可用功能。</target>
         <note />
       </trans-unit>
       <trans-unit id="InfoCommand_GlobalSettingsPath">
@@ -98,8 +108,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InfoCommand_JsonOptionDescription">
-        <source>Output information in JSON format.</source>
-        <target state="translated">以 JSON 格式输出信息。</target>
+        <source>Output information in JSON format</source>
+        <target state="needs-review-translation">以 JSON 格式输出信息。</target>
         <note />
       </trans-unit>
       <trans-unit id="InfoCommand_LocalSettingsPath">
@@ -112,9 +122,19 @@
         <target state="translated">设置文件属性</target>
         <note />
       </trans-unit>
+      <trans-unit id="ListCommand_AllFeaturesHint">
+        <source>Run 'aspire config list --all' to see all available feature flags.</source>
+        <target state="new">Run 'aspire config list --all' to see all available feature flags.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ListCommand_AllOptionDescription">
+        <source>Show all available features that can be configured</source>
+        <target state="new">Show all available features that can be configured</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ListCommand_Description">
-        <source>List all configuration values.</source>
-        <target state="translated">列出所有配置值。</target>
+        <source>List all configuration values</source>
+        <target state="needs-review-translation">列出所有配置值。</target>
         <note />
       </trans-unit>
       <trans-unit id="LocalConfigurationHeader">
@@ -138,18 +158,18 @@
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_Description">
-        <source>Set a configuration value.</source>
-        <target state="translated">设置配置值。</target>
+        <source>Set a configuration value</source>
+        <target state="needs-review-translation">设置配置值。</target>
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_GlobalArgumentDescription">
-        <source>Set the configuration value globally in $HOME/.aspire/settings.json instead of the local settings file.</source>
-        <target state="translated">在 $HOME/.aspire/settings.json 而不是本地设置文件中全局设置配置值。</target>
+        <source>Set the configuration value globally in $HOME/.aspire/settings.json instead of the local settings file</source>
+        <target state="needs-review-translation">在 $HOME/.aspire/settings.json 而不是本地设置文件中全局设置配置值。</target>
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_KeyArgumentDescription">
-        <source>The configuration key to set.</source>
-        <target state="translated">要设置的配置键。</target>
+        <source>The configuration key to set</source>
+        <target state="needs-review-translation">要设置的配置键。</target>
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_PromptForGlobal">
@@ -178,8 +198,13 @@
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_ValueArgumentDescription">
-        <source>The configuration value to set.</source>
-        <target state="translated">要设置的配置值。</target>
+        <source>The configuration value to set</source>
+        <target state="needs-review-translation">要设置的配置值。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SetFeatureHint">
+        <source>Use 'aspire config set features.&lt;name&gt; true|false' to enable or disable a feature.</source>
+        <target state="translated">使用 'aspire config set features.&lt;name&gt; true|false' 启用或禁用功能。</target>
         <note />
       </trans-unit>
     </body>

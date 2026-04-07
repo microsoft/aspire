@@ -189,11 +189,11 @@ suite('InteractionService endpoints', () => {
 		stub.restore();
 	});
 
-	test("displayDashboardUrls writes URLs to output channel and shows info message when autoLaunch disabled", async () => {
+	test("displayDashboardUrls writes URLs to output channel and shows info message when autoLaunch is notification", async () => {
 		const stub = sinon.stub(extensionLogOutputChannel, 'info');
 		const showInformationMessageStub = sinon.stub(vscode.window, 'showInformationMessage').resolves();
 		const getConfigurationStub = sinon.stub(vscode.workspace, 'getConfiguration').returns({
-			get: (key: string, defaultValue?: any) => key === 'enableAspireDashboardAutoLaunch' ? false : defaultValue
+			get: (key: string, defaultValue?: any) => key === 'enableAspireDashboardAutoLaunch' ? 'notification' : defaultValue
 		} as any);
 		const testInfo = await createTestRpcServer();
 
@@ -212,17 +212,17 @@ suite('InteractionService endpoints', () => {
 
 		assert.ok(outputLines.some(line => line.includes(baseUrl)), 'Output should contain base URL');
 		assert.ok(outputLines.some(line => line.includes(codespacesUrl)), 'Output should contain codespaces URL');
-		assert.equal(showInformationMessageStub.callCount, 1, 'Should show info message when autoLaunch is disabled');
+		assert.equal(showInformationMessageStub.callCount, 1, 'Should show info message when autoLaunch is notification');
 		stub.restore();
 		showInformationMessageStub.restore();
 		getConfigurationStub.restore();
 	});
 
-	test("displayDashboardUrls writes URLs but does not show info message when autoLaunch enabled", async () => {
+	test("displayDashboardUrls writes URLs but does not show info message when autoLaunch is launch", async () => {
 		const stub = sinon.stub(extensionLogOutputChannel, 'info');
 		const showInformationMessageStub = sinon.stub(vscode.window, 'showInformationMessage').resolves();
 		const getConfigurationStub = sinon.stub(vscode.workspace, 'getConfiguration').returns({
-			get: (key: string, defaultValue?: any) => key === 'enableAspireDashboardAutoLaunch' ? true : defaultValue
+			get: (key: string, defaultValue?: any) => key === 'enableAspireDashboardAutoLaunch' ? 'launch' : defaultValue
 		} as any);
 		const testInfo = await createTestRpcServer();
 
@@ -239,7 +239,7 @@ suite('InteractionService endpoints', () => {
 		// No need to wait since no setTimeout should be called when autoLaunch is enabled
 		assert.ok(outputLines.some(line => line.includes(baseUrl)), 'Output should contain base URL');
 		assert.ok(outputLines.some(line => line.includes(codespacesUrl)), 'Output should contain codespaces URL');
-		assert.equal(showInformationMessageStub.callCount, 0, 'Should not show info message when autoLaunch is enabled');
+		assert.equal(showInformationMessageStub.callCount, 0, 'Should not show info message when autoLaunch is launch');
 		stub.restore();
 		showInformationMessageStub.restore();
 		getConfigurationStub.restore();
@@ -247,16 +247,51 @@ suite('InteractionService endpoints', () => {
 
 	test("displayLines endpoint", async () => {
 		const stub = sinon.stub(extensionLogOutputChannel, 'info');
-		const testInfo = await createTestRpcServer();
-		const openTextDocumentStub = sinon.stub(vscode.workspace, 'openTextDocument');
+		const sentMessages: { message: string; category: string }[] = [];
+		const mockDebugSession = {
+			sendMessage: (message: string, addNewLine: boolean, category: 'stdout' | 'stderr') => {
+				sentMessages.push({ message, category });
+			}
+		} as unknown as AspireDebugSession;
+		const testInfo = await createTestRpcServer(null, () => mockDebugSession);
 
 		testInfo.interactionService.displayLines([
 			{ Stream: 'stdout', Line: 'line1' },
 			{ Stream: 'stderr', Line: 'line2' }
 		]);
 
-		assert.ok(openTextDocumentStub.calledOnce, 'openTextDocument should be called once');
-		openTextDocumentStub.restore();
+		assert.strictEqual(sentMessages.length, 2, 'Should send two messages to debug session');
+		assert.strictEqual(sentMessages[0].message, 'line1');
+		assert.strictEqual(sentMessages[0].category, 'stdout');
+		assert.strictEqual(sentMessages[1].message, 'line2');
+		assert.strictEqual(sentMessages[1].category, 'stderr');
+		stub.restore();
+	});
+
+	test("displayLines without debug session falls back to Aspire terminal", async () => {
+		const stub = sinon.stub(extensionLogOutputChannel, 'info');
+		const sentTexts: string[] = [];
+		const mockTerminal = {
+			terminal: {
+				sendText: (text: string, addNewLine: boolean) => {
+					sentTexts.push(text);
+				}
+			},
+			dispose: () => {}
+		};
+		const testInfo = await createTestRpcServer(null, () => null);
+		// Inject a mock terminal provider via the InteractionService constructor
+		(testInfo.interactionService as any)._getAspireTerminal = () => mockTerminal;
+
+		testInfo.interactionService.displayLines([
+			{ Stream: 'stdout', Line: 'line1' },
+			{ Stream: 'stderr', Line: 'line2' }
+		]);
+
+		assert.strictEqual(sentTexts.length, 2, 'Should send two lines to Aspire terminal');
+		assert.strictEqual(sentTexts[0], 'line1');
+		assert.strictEqual(sentTexts[1], 'line2');
+		stub.restore();
 	});
 });
 

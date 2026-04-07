@@ -37,6 +37,11 @@
         <target state="translated">Отсутствует команда</target>
         <note />
       </trans-unit>
+      <trans-unit id="PersistentContainerWithoutUserSecrets">
+        <source>Resource '{0}' has a persistent lifetime but the AppHost project does not have user secrets configured. Generated parameter values (such as passwords) may change on each restart, causing persistent containers to be recreated. Run 'aspire secret set' to initialize user secrets.</source>
+        <target state="translated">Ресурс "{0}" имеет постоянный срок службы, но в проекте AppHost не настроены пользовательские секреты. Сгенерированные значения параметров (например, пароли) могут изменяться при каждом перезапуске, из-за чего постоянные контейнеры будут пересоздаваться. Выполните команду "aspire secret set" для инициализации секретов пользователей.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="RequiredCommandNotFound">
         <source>Required command '{0}' was not found on PATH or at the specified location.</source>
         <target state="translated">Требуемая команда "{0}" не найдена в PATH или в указанном расположении.</target>

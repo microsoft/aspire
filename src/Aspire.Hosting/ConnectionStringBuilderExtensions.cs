@@ -37,6 +37,7 @@ public static class ConnectionStringBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExport("addConnectionStringExpression", Description = "Adds a connection string with a reference expression")]
     public static IResourceBuilder<ConnectionStringResource> AddConnectionString(this IDistributedApplicationBuilder builder, [ResourceName] string name, ReferenceExpression connectionStringExpression)
     {
         var cs = new ConnectionStringResource(name, connectionStringExpression);
@@ -120,7 +121,8 @@ public static class ConnectionStringBuilderExtensions
     /// </summary>
     /// <remarks>
     /// This method also enables appending custom data to the connection string based on other resources that expose connection strings.
-    /// <param name="builder">Distributed application builder</param>
+    /// </remarks>
+    /// <param name="builder">The distributed application builder.</param>
     /// <param name="name">The name of the resource.</param>
     /// <param name="connectionStringBuilder">The callback to configure the connection string expression.</param>
     /// <returns>An <see cref="IResourceBuilder{ConnectionStringResource}"/> instance.</returns>
@@ -140,7 +142,7 @@ public static class ConnectionStringBuilderExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
-    /// </remarks>
+    [AspireExport("addConnectionStringBuilder", Description = "Adds a connection string with a builder callback", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<ConnectionStringResource> AddConnectionString(this IDistributedApplicationBuilder builder, [ResourceName] string name, Action<ReferenceExpressionBuilder> connectionStringBuilder)
     {
         var rb = new ReferenceExpressionBuilder();
