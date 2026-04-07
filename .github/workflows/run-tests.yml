@@ -561,6 +561,26 @@ jobs:
 
           Write-Host "✓ Test execution completed successfully (found $validFileCount valid .trx file(s))"
 
+      - name: Check for dump files
+        if: always()
+        shell: pwsh
+        run: |
+          $testResultsDir = "${{ github.workspace }}/testresults"
+          if (-not (Test-Path $testResultsDir)) {
+            Write-Host "No test results directory found, skipping dump file check"
+            return
+          }
+
+          # Check for dump files (.dmp) produced by --crashdump or --hangdump.
+          $dumpFiles = Get-ChildItem -Path $testResultsDir -Filter *.dmp -Recurse -ErrorAction SilentlyContinue
+          if ($dumpFiles.Count -gt 0) {
+            Write-Host "::error::Dump file(s) detected — the test runner crashed or timed out:"
+            foreach ($df in $dumpFiles) { Write-Host "  - $($df.FullName)" }
+            exit 1
+          }
+
+          Write-Host "✓ No dump files detected"
+
       - name: Dump docker info
         if: ${{ always() && runner.os == 'Linux' }}
         run: |
