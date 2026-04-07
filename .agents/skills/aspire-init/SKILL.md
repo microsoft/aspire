@@ -7,6 +7,8 @@ description: "One-time skill for completing Aspire initialization after `aspire 
 
 This is a **one-time setup skill**. It completes the Aspire initialization that `aspire init` started. After this skill finishes successfully, it should be deleted — the evergreen `aspire` skill handles ongoing AppHost work.
 
+Keep this as **one skill with context-specific references**. Load the reference files that match the repo you discover instead of trying to keep every edge case in the main document.
+
 ## Guiding principles
 
 ### Minimize changes to the user's code
@@ -262,34 +264,13 @@ For C# AppHosts, there are two sub-modes:
 
 Check which mode you're in by looking at what exists at the `appHost.path` location.
 
-### Mixed SDK repos: keep a `.csproj` AppHost on .NET 10 without changing .NET 8 services
+If you're in **full project mode**, also load [references/full-solution-apphosts.md](references/full-solution-apphosts.md). It covers:
 
-This guidance is specifically for **full project mode** C# AppHosts (the AppHost has its own `.csproj`).
-
-Some repos pin the root `global.json` to an older SDK such as .NET 8. A `.csproj`-based Aspire AppHost should still stay on the current Aspire-supported SDK (for example, .NET 10), while the existing service projects can remain on `net8.0`.
-
-**Do not downgrade the AppHost project to match the repo's root SDK pin.** Instead, create an SDK boundary around the AppHost:
-
-- Keep the repo root `global.json` unchanged
-- Put the AppHost in its own directory
-- Add a **nested `global.json` next to the AppHost** that pins the newer SDK
-- Leave existing services targeting `net8.0`
-
-This works because the .NET 10 SDK can build and run `net8.0` projects just fine.
-
-**Important caveat:** if the repo's root solution is normally built from the repo root under SDK 8, do not assume that build can own a `net10.0` AppHost project. In mixed-SDK repos, prefer a **separate AppHost project folder** with a nested `global.json`, kept outside the repo's normal root-build path when necessary.
-
-If you use full project mode because a solution exists, be careful: adding a `net10.0` AppHost project to a root solution that is built under SDK 8 may break the repo's normal build. If that's likely, tell the user and prefer keeping the AppHost isolated rather than silently wiring it into the root solution.
-
-Example nested `global.json` beside the AppHost:
-
-```json
-{
-  "sdk": {
-    "version": "10.0.100"
-  }
-}
-```
+- mixed-SDK solution boundaries
+- when to add or avoid solution membership
+- ServiceDefaults in solution-backed repos
+- legacy `Program.cs` / `Startup.cs` / `IHostBuilder` migration decisions
+- validation specific to `.csproj` AppHosts
 
 ## Workflow
 
@@ -373,6 +354,8 @@ Ask the user:
 ### Step 4: Create ServiceDefaults (C# only)
 
 > **Skip this step for TypeScript AppHosts.** OTel is handled in Step 8.
+
+If the AppHost is in **full project mode**, consult [references/full-solution-apphosts.md](references/full-solution-apphosts.md) before making ServiceDefaults changes. Some existing solutions need bootstrap updates before `AddServiceDefaults()` and `MapDefaultEndpoints()` can be applied safely.
 
 If no ServiceDefaults project exists in the repo, create one:
 
@@ -592,6 +575,8 @@ If no `tsconfig.json` exists and `aspire restore` didn't create one, create a mi
 ### Step 7: Add ServiceDefaults to .NET projects (C# AppHost only)
 
 > **Skip this step for TypeScript AppHosts.**
+
+If any selected .NET service still uses a legacy `IHostBuilder` / `Startup.cs` bootstrap, consult [references/full-solution-apphosts.md](references/full-solution-apphosts.md) before editing it. Do not assume ServiceDefaults can be dropped into old hosting patterns unchanged.
 
 For each .NET project that the user selected for ServiceDefaults:
 
@@ -880,6 +865,10 @@ aspire add communitytoolkit-rust
 After adding, run `aspire restore` (TypeScript) or `dotnet restore` (C#) to update available APIs, then check what methods are now available.
 
 **Always prefer a typed integration over raw `AddExecutable`/`AddContainer`.** Typed integrations handle working directories, port injection, health checks, and dashboard integration automatically.
+
+## References
+
+- For solution-backed C# AppHosts (`.sln`/`.slnx` + `.csproj` AppHost), see [references/full-solution-apphosts.md](references/full-solution-apphosts.md).
 
 ## AppHost wiring reference
 
