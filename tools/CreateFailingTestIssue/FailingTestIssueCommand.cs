@@ -1052,7 +1052,7 @@ internal static class FailingTestIssueCommand
 
     private static void ValidateZipEntries(string zipPath, string extractDirectory)
     {
-        var fullExtractPath = Path.GetFullPath(extractDirectory);
+        var fullExtractPath = Path.GetFullPath(extractDirectory) + Path.DirectorySeparatorChar;
         using var archive = ZipFile.OpenRead(zipPath);
         foreach (var entry in archive.Entries)
         {
