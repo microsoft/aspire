@@ -263,6 +263,11 @@ internal static class HttpHealthCheckHelpers
     /// <summary>
     /// Gets a friendly error message for the given exception.
     /// </summary>
+    // NOTE: The timeout vs. cancellation distinction here is best-effort. The health check
+    // infrastructure cancels the same CancellationToken for both its own timeout and explicit
+    // caller cancellation, so IsCancellationRequested is true in both cases. A truly reliable
+    // distinction would require a separate internal timeout CTS, but the added complexity
+    // isn't warranted — both messages are user-friendly and actionable.
     public static string GetFriendlyErrorMessage(Uri uri, Exception exception, CancellationToken cancellationToken)
     {
         return exception switch
@@ -304,12 +309,14 @@ internal sealed class StaticUriHealthCheck : IHealthCheck
         {
             var result = await _uriHealthCheck.CheckHealthAsync(context, cancellationToken).ConfigureAwait(false);
 
-            // Wrap unhealthy results from UriHealthCheck with friendly messages
+            // Wrap unhealthy results from UriHealthCheck with friendly messages.
+            // When UriHealthCheck gets a non-matching status code it sets Description
+            // (not Exception), so preserve that description when available.
             if (result.Status == HealthStatus.Unhealthy)
             {
                 var friendlyMessage = result.Exception is not null
                     ? HttpHealthCheckHelpers.GetFriendlyErrorMessage(_uri, result.Exception, cancellationToken)
-                    : $"Health check failed for {_uri}.";
+                    : result.Description ?? $"Health check failed for {_uri}.";
                 return HealthCheckResult.Unhealthy(friendlyMessage, result.Exception);
             }
 
@@ -377,12 +384,14 @@ internal sealed class ParameterUriHealthCheck : IHealthCheck
 
             var result = await uriHealthCheck.CheckHealthAsync(context, cancellationToken).ConfigureAwait(false);
 
-            // Wrap unhealthy results from UriHealthCheck with friendly messages
+            // Wrap unhealthy results from UriHealthCheck with friendly messages.
+            // When UriHealthCheck gets a non-matching status code it sets Description
+            // (not Exception), so preserve that description when available.
             if (result.Status == HealthStatus.Unhealthy)
             {
                 var friendlyMessage = result.Exception is not null
                     ? HttpHealthCheckHelpers.GetFriendlyErrorMessage(targetUri, result.Exception, cancellationToken)
-                    : $"Health check failed for {targetUri}.";
+                    : result.Description ?? $"Health check failed for {targetUri}.";
                 return HealthCheckResult.Unhealthy(friendlyMessage, result.Exception);
             }
 
