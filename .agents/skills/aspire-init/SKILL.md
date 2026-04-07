@@ -693,21 +693,31 @@ Before validating, present the user with optional quality-of-life improvements. 
 1. **Cookie and session isolation with `dev.localhost`**: When multiple services run on `localhost`, they share cookies and session storage — which can cause hard-to-debug auth problems. Using `*.dev.localhost` subdomains isolates each service's cookies and storage. Note: URLs still include ports (e.g., `frontend.dev.localhost:5173`), but the subdomain isolation prevents cross-service cookie collisions.
    > "Would you like me to set up `dev.localhost` subdomains for your services? This gives each service its own cookie/session scope so they don't interfere with each other. URLs will look like `frontend.dev.localhost:5173` — the `*.dev.localhost` domain resolves to 127.0.0.1 automatically on most systems, no `/etc/hosts` changes needed."
 
-   ```csharp
-   // C#
-   var frontend = builder.AddViteApp("frontend", "../frontend")
-       .WithHttpsDeveloperCertificate()
-       .WithHttpsEndpoint(env: "PORT")
-       .WithUrlForEndpoint("https", url => url.Host = "frontend.dev.localhost");
+   **How to do it:** Update the `profiles` section in `aspire.config.json` — replace `localhost` with `<projectname>.dev.localhost` in all URLs. This is the same mechanism `aspire new` uses. **Do NOT use `withUrlForEndpoint` in the AppHost for this** — the config file is the right place.
+
+   ```json
+   {
+     "profiles": {
+       "https": {
+         "applicationUrl": "https://myproject.dev.localhost:17042;http://myproject.dev.localhost:15042",
+         "environmentVariables": {
+           "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://myproject.dev.localhost:21042",
+           "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://myproject.dev.localhost:22042"
+         }
+       },
+       "http": {
+         "applicationUrl": "http://myproject.dev.localhost:15042",
+         "environmentVariables": {
+           "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://myproject.dev.localhost:19042",
+           "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://myproject.dev.localhost:20042",
+           "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true"
+         }
+       }
+     }
+   }
    ```
 
-   ```typescript
-   // TypeScript
-   const frontend = builder.addViteApp("frontend", "../frontend")
-       .withHttpsDeveloperCertificate()
-       .withHttpsEndpoint({ env: "PORT" })
-       .withUrlForEndpoint("https", url => { url.host = "frontend.dev.localhost"; });
-   ```
+   Use the project/repo name (lowercased) as the subdomain prefix. Keep the existing port numbers — just swap `localhost` for `<name>.dev.localhost`.
 
 2. **Custom URL labels in the dashboard**: Rename endpoint URLs in the Aspire dashboard for clarity:
    ```csharp
@@ -957,21 +967,21 @@ var api = builder.AddCSharpApp("api", "../src/Api")
     .WithHttpsEndpoint(name: "internal", port: 8444);
 ```
 
-**Cookie/session isolation with `dev.localhost`**: When multiple services share `localhost`, cookies and session storage can leak between them. Using `*.dev.localhost` subdomains gives each service its own cookie scope. URLs still have ports (e.g., `frontend.dev.localhost:5173`), but the subdomain isolation prevents cross-service collisions:
+**Cookie/session isolation with `dev.localhost`**: When multiple services share `localhost`, cookies and session storage can leak between them. Using `*.dev.localhost` subdomains gives each service its own cookie scope. URLs still have ports (e.g., `frontend.dev.localhost:5173`), but the subdomain isolation prevents cross-service collisions.
 
-```csharp
-var frontend = builder.AddViteApp("frontend", "../frontend")
-    .WithHttpsDeveloperCertificate()
-    .WithHttpsEndpoint(env: "PORT")
-    .WithUrlForEndpoint("https", url => url.Host = "frontend.dev.localhost");
+**The right way**: Update `applicationUrl` in the `profiles` section of `aspire.config.json` — replace `localhost` with `<projectname>.dev.localhost`. Do NOT use `withUrlForEndpoint` in the AppHost for this. Example:
 
-var api = builder.AddCSharpApp("api", "../src/Api")
-    .WithUrlForEndpoint("https", url => url.Host = "api.dev.localhost");
+```json
+{
+  "profiles": {
+    "https": {
+      "applicationUrl": "https://myapp.dev.localhost:17042;http://myapp.dev.localhost:15042"
+    }
+  }
+}
 ```
 
 > Note: `*.dev.localhost` resolves to `127.0.0.1` on most systems without any `/etc/hosts` changes.
-
-Use `aspire docs search "url for endpoint"` to check the latest API shape if unsure.
 
 ### Dependency ordering: `WaitFor` and `WaitForCompletion`
 
