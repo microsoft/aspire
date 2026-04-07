@@ -10,56 +10,74 @@ namespace Aspire.Hosting
 {
     public static partial class MauiAndroidExtensions
     {
+        [AspireExport("addAndroidDevice", Description = "Adds an Android device resource for a .NET MAUI project.")]
         public static ApplicationModel.IResourceBuilder<Maui.MauiAndroidDeviceResource> AddAndroidDevice(this ApplicationModel.IResourceBuilder<Maui.MauiProjectResource> builder, string name, string? deviceId = null) { throw null; }
 
+        [AspireExportIgnore(Reason = "Convenience overload. Use the overload with the optional device ID parameter instead.")]
         public static ApplicationModel.IResourceBuilder<Maui.MauiAndroidDeviceResource> AddAndroidDevice(this ApplicationModel.IResourceBuilder<Maui.MauiProjectResource> builder, string name) { throw null; }
 
+        [AspireExportIgnore(Reason = "Convenience overload. Use the overload with name and optional device ID instead.")]
         public static ApplicationModel.IResourceBuilder<Maui.MauiAndroidDeviceResource> AddAndroidDevice(this ApplicationModel.IResourceBuilder<Maui.MauiProjectResource> builder) { throw null; }
 
+        [AspireExport("addAndroidEmulator", Description = "Adds an Android emulator resource for a .NET MAUI project.")]
         public static ApplicationModel.IResourceBuilder<Maui.MauiAndroidEmulatorResource> AddAndroidEmulator(this ApplicationModel.IResourceBuilder<Maui.MauiProjectResource> builder, string name, string? emulatorId = null) { throw null; }
 
+        [AspireExportIgnore(Reason = "Convenience overload. Use the overload with the optional emulator ID parameter instead.")]
         public static ApplicationModel.IResourceBuilder<Maui.MauiAndroidEmulatorResource> AddAndroidEmulator(this ApplicationModel.IResourceBuilder<Maui.MauiProjectResource> builder, string name) { throw null; }
 
+        [AspireExportIgnore(Reason = "Convenience overload. Use the overload with name and optional emulator ID instead.")]
         public static ApplicationModel.IResourceBuilder<Maui.MauiAndroidEmulatorResource> AddAndroidEmulator(this ApplicationModel.IResourceBuilder<Maui.MauiProjectResource> builder) { throw null; }
     }
 
     public static partial class MauiiOSExtensions
     {
+        [AspireExport("addiOSDevice", Description = "Adds an iOS device resource for a .NET MAUI project.")]
         public static ApplicationModel.IResourceBuilder<Maui.MauiiOSDeviceResource> AddiOSDevice(this ApplicationModel.IResourceBuilder<Maui.MauiProjectResource> builder, string name, string? deviceId = null) { throw null; }
 
+        [AspireExportIgnore(Reason = "Convenience overload. Use the overload with the optional device UDID parameter instead.")]
         public static ApplicationModel.IResourceBuilder<Maui.MauiiOSDeviceResource> AddiOSDevice(this ApplicationModel.IResourceBuilder<Maui.MauiProjectResource> builder, string name) { throw null; }
 
+        [AspireExportIgnore(Reason = "Convenience overload. Use the overload with name and optional device UDID instead.")]
         public static ApplicationModel.IResourceBuilder<Maui.MauiiOSDeviceResource> AddiOSDevice(this ApplicationModel.IResourceBuilder<Maui.MauiProjectResource> builder) { throw null; }
 
+        [AspireExport("addiOSSimulator", Description = "Adds an iOS simulator resource for a .NET MAUI project.")]
         public static ApplicationModel.IResourceBuilder<Maui.MauiiOSSimulatorResource> AddiOSSimulator(this ApplicationModel.IResourceBuilder<Maui.MauiProjectResource> builder, string name, string? simulatorId = null) { throw null; }
 
+        [AspireExportIgnore(Reason = "Convenience overload. Use the overload with the optional simulator UDID parameter instead.")]
         public static ApplicationModel.IResourceBuilder<Maui.MauiiOSSimulatorResource> AddiOSSimulator(this ApplicationModel.IResourceBuilder<Maui.MauiProjectResource> builder, string name) { throw null; }
 
+        [AspireExportIgnore(Reason = "Convenience overload. Use the overload with name and optional simulator UDID instead.")]
         public static ApplicationModel.IResourceBuilder<Maui.MauiiOSSimulatorResource> AddiOSSimulator(this ApplicationModel.IResourceBuilder<Maui.MauiProjectResource> builder) { throw null; }
     }
 
     public static partial class MauiMacCatalystExtensions
     {
+        [AspireExport("addMacCatalystDevice", Description = "Adds a Mac Catalyst platform resource for a .NET MAUI project.")]
         public static ApplicationModel.IResourceBuilder<Maui.MauiMacCatalystPlatformResource> AddMacCatalystDevice(this ApplicationModel.IResourceBuilder<Maui.MauiProjectResource> builder, string name) { throw null; }
 
+        [AspireExportIgnore(Reason = "Convenience overload. Use the named overload instead.")]
         public static ApplicationModel.IResourceBuilder<Maui.MauiMacCatalystPlatformResource> AddMacCatalystDevice(this ApplicationModel.IResourceBuilder<Maui.MauiProjectResource> builder) { throw null; }
     }
 
     public static partial class MauiOtlpExtensions
     {
+        [AspireExport("withOtlpDevTunnel", Description = "Configures a .NET MAUI platform resource to send OpenTelemetry data through a development tunnel.")]
         public static ApplicationModel.IResourceBuilder<T> WithOtlpDevTunnel<T>(this ApplicationModel.IResourceBuilder<T> builder)
             where T : Maui.IMauiPlatformResource, ApplicationModel.IResourceWithEnvironment { throw null; }
     }
 
     public static partial class MauiProjectExtensions
     {
+        [AspireExport("addMauiProject", Description = "Adds a .NET MAUI project to the application model.")]
         public static ApplicationModel.IResourceBuilder<Maui.MauiProjectResource> AddMauiProject(this IDistributedApplicationBuilder builder, string name, string projectPath) { throw null; }
     }
 
     public static partial class MauiWindowsExtensions
     {
+        [AspireExport("addWindowsDevice", Description = "Adds a Windows platform resource for a .NET MAUI project.")]
         public static ApplicationModel.IResourceBuilder<Maui.MauiWindowsPlatformResource> AddWindowsDevice(this ApplicationModel.IResourceBuilder<Maui.MauiProjectResource> builder, string name) { throw null; }
 
+        [AspireExportIgnore(Reason = "Convenience overload. Use the named overload instead.")]
         public static ApplicationModel.IResourceBuilder<Maui.MauiWindowsPlatformResource> AddWindowsDevice(this ApplicationModel.IResourceBuilder<Maui.MauiProjectResource> builder) { throw null; }
     }
 }
