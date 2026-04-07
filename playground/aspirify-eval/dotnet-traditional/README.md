@@ -1,13 +1,132 @@
-# BoardApp — .NET Traditional
+# BoardApp — .NET Traditional (Pre-Aspirification)
 
-A traditional .NET app with a JS frontend. NOT aspirified — used as eval for `aspire init`.
+A traditional .NET LOB app with a Vue frontend. This app is **intentionally not aspirified** — it represents the "before" state for evaluating the `aspire-init` skill.
 
-## Running manually
+## Architecture
 
-1. Start Postgres on localhost:5432
-2. Start Redis on localhost:6379
-3. Copy `.env` and set values
-4. `cd src/MigrationRunner && dotnet run` (run migrations)
-5. `cd src/BoardApi && dotnet run` (start API on :5220)
-6. `cd src/AdminDashboard && dotnet run` (start admin on :5230)
-7. `cd frontend && npm install && npm run dev` (start frontend on :5173)
+```
+frontend/          → Vue 3 + Vite (port 5173), proxies /api/* to BoardApi
+src/BoardApi/      → ASP.NET minimal API (port 5220), EF Core + Postgres, Redis caching
+src/AdminDashboard/→ Blazor Server (port 5230), shares DB with BoardApi
+src/MigrationRunner/→ Worker service, runs EF Core migrations then exits
+src/BoardData/     → Class library, shared EF Core DbContext + models
+BoardApp.slnx      → Solution file tying it all together
+.env               → All config: DB connection, Redis, API keys, secrets
+```
+
+## Dependencies
+
+- [.NET 10 SDK](https://dotnet.microsoft.com/download)
+- [Node.js 20+](https://nodejs.org/)
+- PostgreSQL (localhost:5432)
+- Redis (localhost:6379)
+
+## Configuration
+
+All config lives in `.env` at the repo root:
+
+| Variable | Purpose | Secret? |
+|----------|---------|---------|
+| `DATABASE_URL` | Postgres connection string | Yes (contains password) |
+| `REDIS_URL` | Redis host:port | No |
+| `EXTERNAL_API_KEY` | Third-party notification service key | Yes |
+| `ADMIN_SECRET` | Admin dashboard auth token | Yes |
+| `FEATURE_ENABLE_NOTIFICATIONS` | Feature flag | No |
+
+Each .NET service reads these via `Environment.GetEnvironmentVariable()`. The frontend reads `API_URL` in `vite.config.ts` for the dev proxy target.
+
+## Running locally (without Aspire)
+
+You need 4 terminal windows and 2 infrastructure services running.
+
+### 1. Start infrastructure
+
+```bash
+# Terminal 1: Start Postgres (or use an existing instance)
+docker run -d --name boardapp-pg \
+  -e POSTGRES_PASSWORD=localdev123 \
+  -e POSTGRES_DB=boardapp \
+  -p 5432:5432 \
+  postgres:16
+
+# Terminal 1: Start Redis
+docker run -d --name boardapp-redis \
+  -p 6379:6379 \
+  redis:7
+```
+
+### 2. Load environment variables
+
+```bash
+# In each terminal where you run a .NET service:
+export $(cat .env | xargs)
+```
+
+### 3. Run database migrations
+
+```bash
+# Terminal 2:
+cd src/MigrationRunner
+dotnet run
+# Wait for "Migrations complete." then this process exits
+```
+
+### 4. Start the API
+
+```bash
+# Terminal 2 (reuse after migrations):
+cd src/BoardApi
+dotnet run --urls http://localhost:5220
+```
+
+### 5. Start the admin dashboard
+
+```bash
+# Terminal 3:
+cd src/AdminDashboard
+dotnet run --urls http://localhost:5230
+```
+
+### 6. Start the frontend
+
+```bash
+# Terminal 4:
+cd frontend
+npm install
+npm run dev
+# Opens on http://localhost:5173
+```
+
+## Verifying it works
+
+- **Frontend**: http://localhost:5173 — should show "BoardApp" with a list of seeded items
+- **API health**: http://localhost:5220/api/health — should return `{"status":"healthy"}`
+- **API items**: http://localhost:5220/api/items — should return seeded board items
+- **Admin stats**: http://localhost:5230/admin/stats — should return item/user counts
+- **Cached count**: http://localhost:5220/api/cached-count — tests Redis connectivity
+
+## Pain points (what Aspire should fix)
+
+This is the developer experience the `aspire-init` skill should improve:
+
+1. **4 terminals** to run everything — no single command to start
+2. **Manual infrastructure** — have to remember to start Postgres and Redis
+3. **`.env` file** with secrets in plaintext — easy to commit accidentally
+4. **Hardcoded ports** — if 5220 is busy, everything breaks
+5. **No service discovery** — frontend proxy target is hardcoded
+6. **No observability** — no traces, no metrics, no centralized logs
+7. **Migration ordering** — have to manually run migrations before starting API
+8. **No health visibility** — no dashboard showing what's running/healthy
+
+## Expected Aspire outcome
+
+After running `aspire init` and the init skill, `aspire start` should:
+
+- Start Postgres and Redis as containers (persistent lifetime)
+- Run MigrationRunner, wait for completion, then start API and Admin
+- Start the Vue frontend with proper service discovery to the API
+- Show all services in the Aspire dashboard with health status
+- Store `EXTERNAL_API_KEY` and `ADMIN_SECRET` as secure parameters
+- Wire up OpenTelemetry for traces/metrics/logs
+- Replace the `.env` file entirely
+
