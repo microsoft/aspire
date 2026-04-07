@@ -8,7 +8,6 @@ using Aspire.Dashboard.Utils;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web.Virtualization;
-using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components;
 
@@ -20,13 +19,9 @@ public sealed partial class LogViewer
     private static readonly MarkupString s_spaceMarkup = new MarkupString("&#32;");
 
     private LogEntries? _logEntries;
-    private bool _logsChanged;
 
     [Inject]
     public required BrowserTimeProvider TimeProvider { get; init; }
-
-    [Inject]
-    public required DimensionManager DimensionManager { get; init; }
 
     [Inject]
     public required ILogger<LogViewer> Logger { get; init; }
@@ -53,10 +48,11 @@ public sealed partial class LogViewer
         {
             field = value;
 
-            // Set max item count when the Virtualize component is set.
+            // Set max item count and anchor mode when the Virtualize component is set.
             if (field != null)
             {
                 VirtualizeHelper<LogEntry>.TrySetMaxItemCount(field, 10_000);
+                VirtualizeHelper<LogEntry>.TrySetAnchorModeEnd(field);
             }
         }
     }
@@ -78,7 +74,6 @@ public sealed partial class LogViewer
         {
             Logger.LogDebug("Log entries changed.");
 
-            _logsChanged = true;
             _logEntries = LogEntries;
         }
 
@@ -96,29 +91,12 @@ public sealed partial class LogViewer
         return ValueTask.FromResult(new ItemsProviderResult<LogEntry>(entries.Skip(r.StartIndex).Take(r.Count), entries.Count));
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    protected override void OnAfterRender(bool firstRender)
     {
-        if (_logsChanged)
-        {
-            await JS.InvokeVoidAsync("resetContinuousScrollPosition");
-            _logsChanged = false;
-        }
         if (firstRender)
         {
             Logger.LogDebug("Initializing log viewer.");
-
-            await JS.InvokeVoidAsync("initializeContinuousScroll");
-            DimensionManager.OnViewportInformationChanged += OnBrowserResize;
         }
-    }
-
-    private void OnBrowserResize(object? o, EventArgs args)
-    {
-        InvokeAsync(async () =>
-        {
-            await JS.InvokeVoidAsync("resetContinuousScrollPosition");
-            await JS.InvokeVoidAsync("initializeContinuousScroll");
-        });
     }
 
     private string GetDisplayTimestamp(DateTimeOffset timestamp)
@@ -137,7 +115,6 @@ public sealed partial class LogViewer
     {
         Logger.LogDebug("Disposing log viewer.");
 
-        DimensionManager.OnViewportInformationChanged -= OnBrowserResize;
         return ValueTask.CompletedTask;
     }
 }

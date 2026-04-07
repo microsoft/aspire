@@ -119,7 +119,7 @@ app.MapGet("/big-trace", async () =>
         IncludeBrokenLinks = true
     };
 
-    await traceCreator.CreateTraceAsync("bigtrace", count: 10, createChildren: true);
+    await traceCreator.CreateTraceAsync("bigtrace", count: 50, createChildren: true);
 
     return "Big trace created";
 });

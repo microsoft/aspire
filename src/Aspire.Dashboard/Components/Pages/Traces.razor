@@ -4,7 +4,6 @@
 @using Aspire.Dashboard.Resources
 @using Aspire.Dashboard.Components.Controls.Grid
 
-@inject IJSRuntime JS
 @inject IStringLocalizer<Dashboard.Resources.Traces> Loc
 @inject IStringLocalizer<StructuredFiltering> FilterLoc
 @inject IStringLocalizer<ControlsStrings> ControlsStringsLoc
@@ -97,7 +96,6 @@
                                     RowClass="@GetRowClass"
                                     GenerateHeader="GenerateHeaderOption.Sticky"
                                     ItemSize="46"
-                                    OverscanCount="100"
                                     ResizableColumns="true"
                                     ResizeColumnOnAllRows="false"
                                     ItemsProvider="@GetData"

@@ -132,10 +132,11 @@
                                             TGridItem="SpanWaterfallViewModel"
                                             RowClass="@GetRowClass"
                                             GridTemplateColumns="@_manager.GetGridTemplateColumns()"
+                                            ItemSize="32"
                                             RowSize="DataGridRowSize.Small"
-                                            OverscanCount="100"
                                             ShowHover="true"
                                             ItemKey="@(r => r.Span.SpanId)"
+                                            Loading="false"
                                             OnRowClick="@(r => r.ExecuteOnDefault(d => OnShowPropertiesAsync(d, buttonId: null)))">
                                 <ChildContent>
                                     <AspireTemplateColumn ColumnId="@NameColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailNameHeader)]" Tooltip="true" TooltipText="@(c => c.GetTooltip(_resources))" Class="expand-col">

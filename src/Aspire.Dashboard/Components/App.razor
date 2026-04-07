@@ -29,12 +29,7 @@
 <body class="before-upgrade">
     <Routes @rendermode="@(new InteractiveServerRenderMode(prerender: false))" />
     <ReconnectModal />
-    @*
-        Use Blazor JS shipped in dashboard's wwwroot. This is done because the dashboard is currently built for .NET 8, and in .NET 8 the Blazor JS is embedded in the components assembly.
-        But in .NET 10 and later the Blazor JS file is an asset. We can rely on Blazor JS always being available. Remove and use asset file in the future once .NET 10 is the minimum version.
-        This file is copied from .NET 10 P4.
-    *@
-    <script src="framework/blazor.web.js"></script>
+    <script src="@Assets["_framework/blazor.web.js"]"></script>
     <script src="js/app.js"></script>
     <script src="js/app-reconnect.js"></script>
 

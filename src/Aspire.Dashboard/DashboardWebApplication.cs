@@ -262,7 +262,11 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
                 // Only loopback proxies are allowed by default. Clear that restriction because forwarders are
                 // being enabled by explicit configuration.
+#if NET10_0_OR_GREATER
+                options.KnownIPNetworks.Clear();
+#else
                 options.KnownNetworks.Clear();
+#endif
                 options.KnownProxies.Clear();
             });
         }
@@ -507,6 +511,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         _app.UseMiddleware<BrowserSecurityHeadersMiddleware>();
         _app.UseAntiforgery();
 
+        _app.MapStaticAssets();
         _app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 
         // OTLP HTTP services.

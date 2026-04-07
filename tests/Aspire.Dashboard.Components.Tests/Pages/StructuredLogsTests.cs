@@ -210,8 +210,6 @@ public partial class StructuredLogsTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentToolbar(this);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
 
-        JSInterop.SetupVoid("initializeContinuousScroll");
-
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         Services.AddSingleton<ILogger<StructuredLogs>>(NullLogger<StructuredLogs>.Instance);
         Services.AddSingleton<StructuredLogsViewModel>();

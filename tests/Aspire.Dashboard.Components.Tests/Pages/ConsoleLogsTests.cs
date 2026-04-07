@@ -842,9 +842,6 @@ public partial class ConsoleLogsTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
         FluentUISetupHelpers.SetupFluentToolbar(this);
 
-        JSInterop.SetupVoid("initializeContinuousScroll");
-        JSInterop.SetupVoid("resetContinuousScrollPosition");
-
         FluentUISetupHelpers.AddCommonDashboardServices(this, browserTimeProvider: timeProvider);
 
         var loggerFactory = IntegrationTestHelpers.CreateLoggerFactory(_testOutputHelper);

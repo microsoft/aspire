@@ -40,7 +40,7 @@ public class TraceCreator
         {
             if (i > 0)
             {
-                await Task.Delay(Random.Shared.Next(10, 50));
+                await Task.Delay(Random.Shared.Next(5, 20));
             }
 
             var name = $"{traceName}-Span-{i}";
@@ -82,11 +82,11 @@ public class TraceCreator
 
             _allActivities.Add(activity);
 
-            await Task.Delay(Random.Shared.Next(10, 50));
+            await Task.Delay(Random.Shared.Next(5, 20));
 
             await CreateChildActivityAsync(name);
 
-            await Task.Delay(Random.Shared.Next(10, 50));
+            await Task.Delay(Random.Shared.Next(5, 20));
         }
     }
 

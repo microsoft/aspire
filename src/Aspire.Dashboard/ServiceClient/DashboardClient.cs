@@ -183,7 +183,11 @@ internal sealed class DashboardClient : IDashboardClient
                 var filePath = _dashboardOptions.ResourceServiceClient.ClientCertificate.FilePath;
                 var password = _dashboardOptions.ResourceServiceClient.ClientCertificate.Password;
 
+#if NET10_0_OR_GREATER
+                return [X509CertificateLoader.LoadPkcs12FromFile(filePath, password)];
+#else
                 return [new X509Certificate2(filePath, password)];
+#endif
             }
 
             X509CertificateCollection GetKeyStoreCertificate()

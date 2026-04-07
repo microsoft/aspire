@@ -636,8 +636,6 @@ public partial class TraceDetailsTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentToolbar(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
 
-        JSInterop.SetupVoid("initializeContinuousScroll");
-
         loggerFactory ??= NullLoggerFactory.Instance;
 
         FluentUISetupHelpers.AddCommonDashboardServices(this);

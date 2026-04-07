@@ -17,15 +17,21 @@ namespace Aspire.Dashboard.Utils;
 public static class VirtualizeHelper<TItem>
 {
     private static readonly Func<Virtualize<TItem>, int>? s_getMaxItemCount =
-        CreateGetter();
+        CreateIntGetter("MaxItemCount");
 
     private static readonly Action<Virtualize<TItem>, int>? s_setMaxItemCount =
-        CreateSetter();
+        CreateIntSetter("MaxItemCount");
 
-    private static Func<Virtualize<TItem>, int>? CreateGetter()
+    private static readonly Func<Virtualize<TItem>, int>? s_getAnchorMode =
+        CreateEnumAsIntGetter("AnchorMode");
+
+    private static readonly Action<Virtualize<TItem>, int>? s_setAnchorMode =
+        CreateEnumAsIntSetter("AnchorMode");
+
+    private static Func<Virtualize<TItem>, int>? CreateIntGetter(string propertyName)
     {
         var type = typeof(Virtualize<TItem>);
-        var prop = type.GetProperty("MaxItemCount", BindingFlags.Instance | BindingFlags.Public);
+        var prop = type.GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public);
 
         if (prop == null || !prop.CanRead)
         {
@@ -38,10 +44,10 @@ public static class VirtualizeHelper<TItem>
         return Expression.Lambda<Func<Virtualize<TItem>, int>>(body, instance).Compile();
     }
 
-    private static Action<Virtualize<TItem>, int>? CreateSetter()
+    private static Action<Virtualize<TItem>, int>? CreateIntSetter(string propertyName)
     {
         var type = typeof(Virtualize<TItem>);
-        var prop = type.GetProperty("MaxItemCount", BindingFlags.Instance | BindingFlags.Public);
+        var prop = type.GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public);
 
         if (prop == null || !prop.CanWrite)
         {
@@ -51,6 +57,41 @@ public static class VirtualizeHelper<TItem>
         var instance = Expression.Parameter(type, "virtualize");
         var valueParam = Expression.Parameter(typeof(int), "value");
         var body = Expression.Assign(Expression.Property(instance, prop), valueParam);
+
+        return Expression.Lambda<Action<Virtualize<TItem>, int>>(body, instance, valueParam).Compile();
+    }
+
+    private static Func<Virtualize<TItem>, int>? CreateEnumAsIntGetter(string propertyName)
+    {
+        var type = typeof(Virtualize<TItem>);
+        var prop = type.GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public);
+
+        if (prop == null || !prop.CanRead)
+        {
+            return null;
+        }
+
+        var instance = Expression.Parameter(type, "virtualize");
+        var body = Expression.Convert(Expression.Property(instance, prop), typeof(int));
+
+        return Expression.Lambda<Func<Virtualize<TItem>, int>>(body, instance).Compile();
+    }
+
+    private static Action<Virtualize<TItem>, int>? CreateEnumAsIntSetter(string propertyName)
+    {
+        var type = typeof(Virtualize<TItem>);
+        var prop = type.GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public);
+
+        if (prop == null || !prop.CanWrite)
+        {
+            return null;
+        }
+
+        var instance = Expression.Parameter(type, "virtualize");
+        var valueParam = Expression.Parameter(typeof(int), "value");
+        var body = Expression.Assign(
+            Expression.Property(instance, prop),
+            Expression.Convert(valueParam, prop.PropertyType));
 
         return Expression.Lambda<Action<Virtualize<TItem>, int>>(body, instance, valueParam).Compile();
     }
@@ -68,6 +109,29 @@ public static class VirtualizeHelper<TItem>
         }
 
         s_setMaxItemCount(virtualize, max);
+        return true;
+    }
+
+    /// <summary>
+    /// Sets AnchorMode to End on the Virtualize component via reflection.
+    /// VirtualizeAnchorMode.End pins the viewport to the bottom so new items at the end auto-scroll into view.
+    /// </summary>
+    public static bool TrySetAnchorModeEnd(Virtualize<TItem> virtualize)
+    {
+        // VirtualizeAnchorMode.End = 2
+        const int end = 2;
+
+        if (s_getAnchorMode == null || s_setAnchorMode == null)
+        {
+            return false;
+        }
+
+        if (s_getAnchorMode(virtualize) == end)
+        {
+            return false;
+        }
+
+        s_setAnchorMode(virtualize, end);
         return true;
     }
 }
@@ -105,5 +169,16 @@ public static class FluentDataGridHelper<TGridItem>
         }
 
         return VirtualizeHelper<(int, TGridItem)>.TrySetMaxItemCount(virtualize, max);
+    }
+
+    public static bool TrySetAnchorModeEnd(FluentDataGrid<TGridItem> dataGrid)
+    {
+        var virtualize = GetVirtualize(dataGrid);
+        if (virtualize == null)
+        {
+            return false;
+        }
+
+        return VirtualizeHelper<(int, TGridItem)>.TrySetAnchorModeEnd(virtualize);
     }
 }

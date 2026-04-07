@@ -406,7 +406,11 @@ public sealed class DebugSessionOptions
 
             try
             {
+#if NET10_0_OR_GREATER
+                _serverCertificate = X509CertificateLoader.LoadCertificate(data);
+#else
                 _serverCertificate = new X509Certificate2(data);
+#endif
             }
             catch (Exception ex)
             {

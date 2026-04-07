@@ -43,7 +43,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     private List<SelectViewModel<LogLevel?>> _logLevels = default!;
     private Subscription? _resourcesSubscription;
     private Subscription? _logsSubscription;
-    private bool _resourceChanged;
     private string? _elementIdBeforeDetailsViewOpened;
     private AspirePageContentLayout? _contentLayout;
     private string _filter = string.Empty;
@@ -82,9 +81,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     [Inject]
     public required ITelemetryErrorRecorder ErrorRecorder { get; init; }
-
-    [Inject]
-    public required DimensionManager DimensionManager { get; set; }
 
     [Inject]
     public required IOptions<DashboardOptions> DashboardOptions { get; init; }
@@ -280,15 +276,11 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     private Task HandleSelectedResourceChangedAsync()
     {
-        _resourceChanged = true;
-
         return this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
     }
 
     private async Task HandleSelectedLogLevelChangedAsync()
     {
-        _resourceChanged = true;
-
         await ClearSelectedLogEntryAsync();
         await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
     }
@@ -439,34 +431,19 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             _contentLayout);
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    protected override void OnAfterRender(bool firstRender)
     {
-        // Check to see whether max item count should be set on every render.
+        // Check to see whether max item count and anchor mode should be set on every render.
         // This is required because the data grid's virtualize component can be recreated on data change.
-        if (_dataGrid != null && FluentDataGridHelper<OtlpLogEntry>.TrySetMaxItemCount(_dataGrid, 10_000))
+        if (_dataGrid != null)
         {
-            StateHasChanged();
+            var stateChanged = FluentDataGridHelper<OtlpLogEntry>.TrySetMaxItemCount(_dataGrid, 10_000);
+            stateChanged |= FluentDataGridHelper<OtlpLogEntry>.TrySetAnchorModeEnd(_dataGrid);
+            if (stateChanged)
+            {
+                StateHasChanged();
+            }
         }
-
-        if (_resourceChanged)
-        {
-            await JS.InvokeVoidAsync("resetContinuousScrollPosition");
-            _resourceChanged = false;
-        }
-        if (firstRender)
-        {
-            await JS.InvokeVoidAsync("initializeContinuousScroll");
-            DimensionManager.OnViewportInformationChanged += OnBrowserResize;
-        }
-    }
-
-    private void OnBrowserResize(object? o, EventArgs args)
-    {
-        InvokeAsync(async () =>
-        {
-            await JS.InvokeVoidAsync("resetContinuousScrollPosition");
-            await JS.InvokeVoidAsync("initializeContinuousScroll");
-        });
     }
 
     private string? PauseText => PauseManager.AreStructuredLogsPaused(out var startTime)
@@ -481,7 +458,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         _aiContext?.Dispose();
         _resourcesSubscription?.Dispose();
         _logsSubscription?.Dispose();
-        DimensionManager.OnViewportInformationChanged -= OnBrowserResize;
         TelemetryContext.Dispose();
     }
 
