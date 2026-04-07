@@ -3,7 +3,6 @@
 
 using System.Net.Http.Json;
 using System.Text.Json;
-using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Otlp.Serialization;
@@ -19,7 +18,7 @@ namespace Aspire.Cli.Mcp.Tools;
 /// MCP tool for listing structured logs for a specific distributed trace.
 /// Gets log data directly from the Dashboard telemetry API.
 /// </summary>
-internal sealed class ListTraceStructuredLogsTool(IAuxiliaryBackchannelMonitor auxiliaryBackchannelMonitor, IHttpClientFactory httpClientFactory, ILogger<ListTraceStructuredLogsTool> logger) : CliMcpTool
+internal sealed class ListTraceStructuredLogsTool(IDashboardInfoProvider dashboardInfoProvider, IHttpClientFactory httpClientFactory, ILogger<ListTraceStructuredLogsTool> logger) : CliMcpTool
 {
     public override string Name => KnownMcpTools.ListTraceStructuredLogs;
 
@@ -44,7 +43,7 @@ internal sealed class ListTraceStructuredLogsTool(IAuxiliaryBackchannelMonitor a
     public override async ValueTask<CallToolResult> CallToolAsync(CallToolContext context, CancellationToken cancellationToken)
     {
         var arguments = context.Arguments;
-        var (apiToken, apiBaseUrl, dashboardBaseUrl) = await McpToolHelpers.GetDashboardInfoAsync(auxiliaryBackchannelMonitor, logger, cancellationToken).ConfigureAwait(false);
+        var (apiToken, apiBaseUrl, dashboardBaseUrl) = await dashboardInfoProvider.GetDashboardInfoAsync(cancellationToken).ConfigureAwait(false);
 
         // Extract traceId from arguments (required)
         string? traceId = null;
@@ -75,7 +74,7 @@ internal sealed class ListTraceStructuredLogsTool(IAuxiliaryBackchannelMonitor a
             logger.LogDebug("Fetching structured logs from {Url}", url);
 
             var response = await client.GetAsync(url, cancellationToken).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
+            TelemetryCommandHelpers.EnsureTelemetryApiResponse(response);
 
             var apiResponse = await response.Content.ReadFromJsonAsync(OtlpJsonSerializerContext.Default.TelemetryApiResponse, cancellationToken).ConfigureAwait(false);
             var resourceLogs = apiResponse?.Data?.ResourceLogs;
@@ -101,7 +100,10 @@ internal sealed class ListTraceStructuredLogsTool(IAuxiliaryBackchannelMonitor a
         catch (HttpRequestException ex)
         {
             logger.LogError(ex, "Failed to fetch structured logs for trace from Dashboard API");
-            throw new McpProtocolException($"Failed to fetch structured logs for trace: {ex.Message}", McpErrorCode.InternalError);
+            var errorMessage = dashboardInfoProvider.IsDirectConnection
+                ? await TelemetryCommandHelpers.GetDashboardApiErrorMessageAsync(ex, apiBaseUrl, httpClientFactory, logger, cancellationToken)
+                : $"Failed to fetch structured logs for trace: {ex.Message}";
+            throw new McpProtocolException(errorMessage, McpErrorCode.InternalError);
         }
     }
 }

@@ -29,7 +29,7 @@ public static class AzureAppConfigurationExtensions
     ///
     /// These can be replaced by calling <see cref="WithRoleAssignments{T}(IResourceBuilder{T}, IResourceBuilder{AzureAppConfigurationResource}, AppConfigurationBuiltInRole[])"/>.
     /// </remarks>
-    [AspireExport("addAzureAppConfiguration", Description = "Adds an Azure App Configuration resource")]
+    [AspireExport(Description = "Adds an Azure App Configuration resource")]
     public static IResourceBuilder<AzureAppConfigurationResource> AddAzureAppConfiguration(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -93,7 +93,7 @@ public static class AzureAppConfigurationExtensions
     /// <param name="builder">The Azure App Configuration resource builder.</param>
     /// <param name="configureEmulator">Callback that exposes underlying container used for emulation to allow for customization.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("runAsEmulator", Description = "Configures Azure App Configuration to run with the local emulator", RunSyncOnBackgroundThread = true)]
+    [AspireExport(Description = "Configures Azure App Configuration to run with the local emulator", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureAppConfigurationResource> RunAsEmulator(this IResourceBuilder<AzureAppConfigurationResource> builder, Action<IResourceBuilder<AzureAppConfigurationEmulatorResource>>? configureEmulator = null)
     {
         if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
@@ -127,7 +127,7 @@ public static class AzureAppConfigurationExtensions
     /// <param name="builder">The builder for the <see cref="AzureAppConfigurationEmulatorResource"/>.</param>
     /// <param name="path">Relative path to the AppHost where emulator storage is persisted between runs. Defaults to the path '.aace'</param>
     /// <returns>A builder for the <see cref="AzureAppConfigurationEmulatorResource"/>.</returns>
-    [AspireExport("withDataBindMount", Description = "Adds a data bind mount for the App Configuration emulator")]
+    [AspireExport(Description = "Adds a data bind mount for the App Configuration emulator")]
     public static IResourceBuilder<AzureAppConfigurationEmulatorResource> WithDataBindMount(this IResourceBuilder<AzureAppConfigurationEmulatorResource> builder, string? path = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -141,7 +141,7 @@ public static class AzureAppConfigurationExtensions
     /// <param name="builder">The builder for the <see cref="AzureAppConfigurationEmulatorResource"/>.</param>
     /// <param name="name">The name of the volume. Defaults to an auto-generated name based on the application and resource names.</param>
     /// <returns>A builder for the <see cref="AzureAppConfigurationEmulatorResource"/>.</returns>
-    [AspireExport("withDataVolume", Description = "Adds a data volume for the App Configuration emulator")]
+    [AspireExport(Description = "Adds a data volume for the App Configuration emulator")]
     public static IResourceBuilder<AzureAppConfigurationEmulatorResource> WithDataVolume(this IResourceBuilder<AzureAppConfigurationEmulatorResource> builder, string? name = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -155,7 +155,7 @@ public static class AzureAppConfigurationExtensions
     /// <param name="builder">Builder for the Azure App Configuration emulator container</param>
     /// <param name="port">The port to bind on the host. If <see langword="null"/> is used, a random port will be assigned.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withHostPort", Description = "Sets the host port for the App Configuration emulator")]
+    [AspireExport(Description = "Sets the host port for the App Configuration emulator")]
     public static IResourceBuilder<AzureAppConfigurationEmulatorResource> WithHostPort(this IResourceBuilder<AzureAppConfigurationEmulatorResource> builder, int? port)
     {
         ArgumentNullException.ThrowIfNull(builder);

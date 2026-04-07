@@ -31,7 +31,7 @@ public static class DockerComposeServiceExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("publishAsDockerComposeService", Description = "Publishes the resource as a Docker Compose service with custom service configuration")]
+    [AspireExport(Description = "Publishes the resource as a Docker Compose service with custom service configuration")]
     public static IResourceBuilder<T> PublishAsDockerComposeService<T>(this IResourceBuilder<T> builder, Action<DockerComposeServiceResource, Service> configure)
         where T : IComputeResource
     {

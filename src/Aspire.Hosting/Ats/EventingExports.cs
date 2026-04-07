@@ -17,7 +17,7 @@ internal static class EventingExports
     /// </summary>
     /// <param name="serviceProvider">The service provider handle.</param>
     /// <returns>The distributed application eventing handle.</returns>
-    [AspireExport("getEventing", Description = "Gets the distributed application eventing service from the service provider")]
+    [AspireExport(Description = "Gets the distributed application eventing service from the service provider")]
     internal static IDistributedApplicationEventing GetEventing(this IServiceProvider serviceProvider)
     {
         ArgumentNullException.ThrowIfNull(serviceProvider);
@@ -31,7 +31,7 @@ internal static class EventingExports
     /// <param name="builder">The resource builder.</param>
     /// <param name="callback">The callback to invoke when the event fires.</param>
     /// <returns>The resource builder.</returns>
-    [AspireExport("onBeforeResourceStarted", Description = "Subscribes to the BeforeResourceStarted event")]
+    [AspireExport(Description = "Subscribes to the BeforeResourceStarted event")]
     internal static IResourceBuilder<T> OnBeforeResourceStarted<T>(this IResourceBuilder<T> builder, Func<BeforeResourceStartedEvent, Task> callback)
         where T : IResource
     {
@@ -47,7 +47,7 @@ internal static class EventingExports
     /// <param name="builder">The resource builder.</param>
     /// <param name="callback">The callback to invoke when the event fires.</param>
     /// <returns>The resource builder.</returns>
-    [AspireExport("onResourceStopped", Description = "Subscribes to the ResourceStopped event")]
+    [AspireExport(Description = "Subscribes to the ResourceStopped event")]
     internal static IResourceBuilder<T> OnResourceStopped<T>(this IResourceBuilder<T> builder, Func<ResourceStoppedEvent, Task> callback)
         where T : IResource
     {
@@ -63,7 +63,7 @@ internal static class EventingExports
     /// <param name="builder">The resource builder.</param>
     /// <param name="callback">The callback to invoke when the event fires.</param>
     /// <returns>The resource builder.</returns>
-    [AspireExport("onConnectionStringAvailable", Description = "Subscribes to the ConnectionStringAvailable event")]
+    [AspireExport(Description = "Subscribes to the ConnectionStringAvailable event")]
     internal static IResourceBuilder<T> OnConnectionStringAvailable<T>(this IResourceBuilder<T> builder, Func<ConnectionStringAvailableEvent, Task> callback)
         where T : IResourceWithConnectionString
     {
@@ -79,7 +79,7 @@ internal static class EventingExports
     /// <param name="builder">The resource builder.</param>
     /// <param name="callback">The callback to invoke when the event fires.</param>
     /// <returns>The resource builder.</returns>
-    [AspireExport("onInitializeResource", Description = "Subscribes to the InitializeResource event")]
+    [AspireExport(Description = "Subscribes to the InitializeResource event")]
     internal static IResourceBuilder<T> OnInitializeResource<T>(this IResourceBuilder<T> builder, Func<InitializeResourceEvent, Task> callback)
         where T : IResource
     {
@@ -95,7 +95,7 @@ internal static class EventingExports
     /// <param name="builder">The resource builder.</param>
     /// <param name="callback">The callback to invoke when the event fires.</param>
     /// <returns>The resource builder.</returns>
-    [AspireExport("onResourceEndpointsAllocated", Description = "Subscribes to the ResourceEndpointsAllocated event")]
+    [AspireExport(Description = "Subscribes to the ResourceEndpointsAllocated event")]
     internal static IResourceBuilder<T> OnResourceEndpointsAllocated<T>(this IResourceBuilder<T> builder, Func<ResourceEndpointsAllocatedEvent, Task> callback)
         where T : IResourceWithEndpoints
     {
@@ -111,7 +111,7 @@ internal static class EventingExports
     /// <param name="builder">The resource builder.</param>
     /// <param name="callback">The callback to invoke when the event fires.</param>
     /// <returns>The resource builder.</returns>
-    [AspireExport("onResourceReady", Description = "Subscribes to the ResourceReady event")]
+    [AspireExport(Description = "Subscribes to the ResourceReady event")]
     internal static IResourceBuilder<T> OnResourceReady<T>(this IResourceBuilder<T> builder, Func<ResourceReadyEvent, Task> callback)
         where T : IResource
     {

@@ -18,15 +18,18 @@ namespace Aspire.Cli.NuGet;
 internal sealed class BundleNuGetPackageCache : INuGetPackageCache
 {
     private readonly IBundleService _bundleService;
+    private readonly LayoutProcessRunner _layoutProcessRunner;
     private readonly ILogger<BundleNuGetPackageCache> _logger;
     private readonly IFeatures _features;
 
     public BundleNuGetPackageCache(
         IBundleService bundleService,
+        LayoutProcessRunner layoutProcessRunner,
         ILogger<BundleNuGetPackageCache> logger,
         IFeatures features)
     {
         _bundleService = bundleService;
+        _layoutProcessRunner = layoutProcessRunner;
         _logger = logger;
         _features = features;
     }
@@ -155,7 +158,7 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
         _logger.LogDebug("NuGet search args: {Args}", string.Join(" ", args));
         _logger.LogDebug("Working directory: {WorkingDir}", workingDirectory.FullName);
 
-        var (exitCode, output, error) = await LayoutProcessRunner.RunAsync(
+        var (exitCode, output, error) = await _layoutProcessRunner.RunAsync(
             managedPath,
             args,
             workingDirectory: workingDirectory.FullName,

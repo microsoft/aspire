@@ -194,12 +194,12 @@ message ResourceRelationship {
 message ResourceProperty {
     // Name of the data item, e.g. "container.id", "executable.pid", "project.path", ...
     string name = 1;
-    // TODO move display_name to reference data, sent once when the connection starts (https://github.com/dotnet/aspire/issues/1644)
+    // TODO move display_name to reference data, sent once when the connection starts (https://github.com/microsoft/aspire/issues/1644)
     // Optional display name, may be localized
     optional string display_name = 2;
     // The data value. May be null, a number, a string, a boolean, a dictionary of values (Struct), or a list of values (ValueList).
     google.protobuf.Value value = 3;
-    // TODO move is_sensitive to reference data, sent once when the connection starts (https://github.com/dotnet/aspire/issues/1644)
+    // TODO move is_sensitive to reference data, sent once when the connection starts (https://github.com/microsoft/aspire/issues/1644)
     // Whether the value is sensitive and should be masked in the UI by default.
     // Defaults to false. When true, the user must explicitly unmask the value to view it.
     optional bool is_sensitive = 4;

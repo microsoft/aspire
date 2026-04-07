@@ -118,7 +118,7 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>List running apphosts</value>
+    <value>List running AppHosts</value>
   </data>
   <data name="JsonOptionDescription" xml:space="preserve">
     <value>Output format (Table or Json)</value>
@@ -139,6 +139,6 @@
     <value>Unknown</value>
   </data>
   <data name="ResourcesOptionDescription" xml:space="preserve">
-    <value>Include resource details for each running apphost. Only applies to JSON output.</value>
+    <value>Include resource details for each running AppHost. Only applies to JSON output.</value>
   </data>
 </root>

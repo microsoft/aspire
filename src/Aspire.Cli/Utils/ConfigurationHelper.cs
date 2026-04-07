@@ -70,6 +70,34 @@ internal static class ConfigurationHelper
     }
 
     /// <summary>
+    /// Searches upward from <paramref name="startDirectory"/> for the nearest
+    /// <c>aspire.config.json</c> or legacy <c>.aspire/settings.json</c>.
+    /// </summary>
+    /// <returns>The full path to the config file, or <c>null</c> if none is found.</returns>
+    internal static string? FindNearestConfigFilePath(DirectoryInfo startDirectory)
+    {
+        var searchDir = startDirectory;
+        while (searchDir is not null)
+        {
+            var configPath = Path.Combine(searchDir.FullName, AspireConfigFile.FileName);
+            if (File.Exists(configPath))
+            {
+                return configPath;
+            }
+
+            var legacyPath = BuildPathToSettingsJsonFile(searchDir.FullName);
+            if (File.Exists(legacyPath))
+            {
+                return legacyPath;
+            }
+
+            searchDir = searchDir.Parent;
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Serializes a JsonObject and writes it to a settings file, creating the directory if needed.
     /// </summary>
     internal static async Task WriteSettingsFileAsync(string filePath, JsonObject settings, CancellationToken cancellationToken = default)

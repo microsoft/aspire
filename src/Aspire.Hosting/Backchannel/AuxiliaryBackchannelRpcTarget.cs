@@ -361,10 +361,10 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     }
 
     /// <summary>
-    /// Gets the Dashboard URLs including the login token.
+    /// Gets the dashboard URLs for the running AppHost.
     /// </summary>
     /// <param name="cancellationToken">A cancellation token.</param>
-    /// <returns>The Dashboard URLs state including health and login URLs.</returns>
+    /// <returns>The dashboard URL state including health and resolved dashboard URLs.</returns>
     public async Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken = default)
     {
         logger.LogInformation("GetDashboardUrlsAsync called on auxiliary backchannel");

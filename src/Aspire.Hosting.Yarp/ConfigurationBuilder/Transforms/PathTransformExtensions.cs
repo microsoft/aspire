@@ -36,7 +36,7 @@ public static class PathTransformExtensions
     /// <param name="route">The route to configure.</param>
     /// <param name="path">The path value to set.</param>
     /// <returns>The configured <see cref="YarpRoute"/>.</returns>
-    [AspireExport("withTransformPathSet", Description = "Adds the transform which sets the request path with the given value.")]
+    [AspireExport(Description = "Adds the transform which sets the request path with the given value.")]
     internal static YarpRoute WithTransformPathSet(this YarpRoute route, string path)
     {
         ArgumentNullException.ThrowIfNull(route);
@@ -68,7 +68,7 @@ public static class PathTransformExtensions
     /// <param name="route">The route to configure.</param>
     /// <param name="prefix">The path prefix to add.</param>
     /// <returns>The configured <see cref="YarpRoute"/>.</returns>
-    [AspireExport("withTransformPathPrefix", Description = "Adds the transform which will prefix the request path with the given value.")]
+    [AspireExport(Description = "Adds the transform which will prefix the request path with the given value.")]
     internal static YarpRoute WithTransformPathPrefix(this YarpRoute route, string prefix)
     {
         ArgumentNullException.ThrowIfNull(route);
@@ -100,7 +100,7 @@ public static class PathTransformExtensions
     /// <param name="route">The route to configure.</param>
     /// <param name="prefix">The matching prefix to remove.</param>
     /// <returns>The configured <see cref="YarpRoute"/>.</returns>
-    [AspireExport("withTransformPathRemovePrefix", Description = "Adds the transform which will remove the matching prefix from the request path.")]
+    [AspireExport(Description = "Adds the transform which will remove the matching prefix from the request path.")]
     internal static YarpRoute WithTransformPathRemovePrefix(this YarpRoute route, string prefix)
     {
         ArgumentNullException.ThrowIfNull(route);
@@ -132,7 +132,7 @@ public static class PathTransformExtensions
     /// <param name="route">The route to configure.</param>
     /// <param name="pattern">The route pattern to apply.</param>
     /// <returns>The configured <see cref="YarpRoute"/>.</returns>
-    [AspireExport("withTransformPathRouteValues", Description = "Adds the transform which will set the request path with route values.")]
+    [AspireExport(Description = "Adds the transform which will set the request path with route values.")]
     internal static YarpRoute WithTransformPathRouteValues(this YarpRoute route, [StringSyntax("Route")] string pattern)
     {
         ArgumentNullException.ThrowIfNull(route);

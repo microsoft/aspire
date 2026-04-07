@@ -3,6 +3,7 @@
 
 using System.CommandLine;
 using System.Globalization;
+using System.Text.Json;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
@@ -25,6 +26,7 @@ internal sealed class RestoreCommand : BaseCommand
 
     private readonly IProjectLocator _projectLocator;
     private readonly IAppHostProjectFactory _projectFactory;
+    private readonly ILanguageDiscovery _languageDiscovery;
     private readonly IDotNetCliRunner _runner;
     private readonly IDotNetSdkInstaller _sdkInstaller;
     private readonly IInteractionService _interactionService;
@@ -35,6 +37,7 @@ internal sealed class RestoreCommand : BaseCommand
     public RestoreCommand(
         IProjectLocator projectLocator,
         IAppHostProjectFactory projectFactory,
+        ILanguageDiscovery languageDiscovery,
         IDotNetCliRunner runner,
         IDotNetSdkInstaller sdkInstaller,
         IFeatures features,
@@ -47,6 +50,7 @@ internal sealed class RestoreCommand : BaseCommand
     {
         _projectLocator = projectLocator;
         _projectFactory = projectFactory;
+        _languageDiscovery = languageDiscovery;
         _runner = runner;
         _sdkInstaller = sdkInstaller;
         _interactionService = interactionService;
@@ -63,13 +67,50 @@ internal sealed class RestoreCommand : BaseCommand
         {
             using var activity = Telemetry.StartDiagnosticActivity(Name);
 
-            var searchResult = await _projectLocator.UseOrFindAppHostProjectFileAsync(
-                passedAppHostProjectFile,
-                MultipleAppHostProjectsFoundBehavior.Prompt,
-                createSettingsFile: false,
-                cancellationToken);
+            FileInfo? effectiveAppHostFile = null;
+            GuestAppHostProject? configOnlyGuestProject = null;
+            DirectoryInfo? configOnlyProjectDirectory = null;
 
-            var effectiveAppHostFile = searchResult.SelectedProjectFile;
+            try
+            {
+                var searchResult = await _projectLocator.UseOrFindAppHostProjectFileAsync(
+                    passedAppHostProjectFile,
+                    MultipleAppHostProjectsFoundBehavior.Prompt,
+                    createSettingsFile: false,
+                    cancellationToken);
+
+                effectiveAppHostFile = searchResult.SelectedProjectFile;
+            }
+            catch (ProjectLocatorException ex) when (ex.FailureReason is ProjectLocatorFailureReason.NoProjectFileFound or ProjectLocatorFailureReason.ProjectFileDoesntExist)
+            {
+                (configOnlyGuestProject, configOnlyProjectDirectory) = TryResolveConfigOnlyGuestProject(passedAppHostProjectFile);
+
+                if (configOnlyGuestProject is null || configOnlyProjectDirectory is null)
+                {
+                    throw;
+                }
+            }
+
+            if (configOnlyGuestProject is not null && configOnlyProjectDirectory is not null)
+            {
+                _logger.LogDebug(
+                    "Restoring SDK code for config-only guest AppHost in {Directory}",
+                    configOnlyProjectDirectory.FullName);
+
+                var success = await _interactionService.ShowStatusAsync(
+                    RestoreCommandStrings.RestoringSdkCode,
+                    async () => await configOnlyGuestProject.BuildAndGenerateSdkAsync(configOnlyProjectDirectory, cancellationToken),
+                    emoji: KnownEmojis.Gear);
+
+                if (success)
+                {
+                    _interactionService.DisplaySuccess(
+                        string.Format(CultureInfo.CurrentCulture, RestoreCommandStrings.RestoreSucceeded, AspireConfigFile.FileName));
+                    return ExitCodeConstants.Success;
+                }
+
+                return ExitCodeConstants.FailedToBuildArtifacts;
+            }
 
             if (effectiveAppHostFile is null)
             {
@@ -96,7 +137,7 @@ internal sealed class RestoreCommand : BaseCommand
 
                 var restoreExitCode = await _interactionService.ShowStatusAsync(
                     RestoreCommandStrings.RestoringSdkCode,
-                    async () => await _runner.RestoreAsync(effectiveAppHostFile, new DotNetCliRunnerInvocationOptions(), cancellationToken),
+                    async () => await _runner.RestoreAsync(effectiveAppHostFile, new ProcessInvocationOptions(), cancellationToken),
                     emoji: KnownEmojis.Gear);
 
                 if (restoreExitCode == 0)
@@ -148,5 +189,76 @@ internal sealed class RestoreCommand : BaseCommand
             InteractionService.DisplayError(errorMessage);
             return ExitCodeConstants.FailedToBuildArtifacts;
         }
+    }
+
+    private (GuestAppHostProject? Project, DirectoryInfo? Directory) TryResolveConfigOnlyGuestProject(FileInfo? passedAppHostProjectFile)
+    {
+        var searchDirectory = GetFallbackSearchDirectory(passedAppHostProjectFile);
+        if (searchDirectory is null)
+        {
+            return (null, null);
+        }
+
+        while (searchDirectory is not null)
+        {
+            AspireConfigFile? config;
+            try
+            {
+                config = AspireConfigFile.Load(searchDirectory.FullName);
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogDebug(ex, "Ignoring invalid config while resolving config-only guest AppHost in {Directory}", searchDirectory.FullName);
+                return (null, null);
+            }
+
+            if (config is not null)
+            {
+                if (!string.IsNullOrWhiteSpace(config.AppHost?.Path))
+                {
+                    return (null, null);
+                }
+
+                if (!string.IsNullOrWhiteSpace(config.AppHost?.Language))
+                {
+                    var language = _languageDiscovery.GetLanguageById(config.AppHost.Language);
+                    if (language is null)
+                    {
+                        _logger.LogDebug("Configured AppHost language '{Language}' is not available for config-only restore in {Directory}", config.AppHost.Language, searchDirectory.FullName);
+                        return (null, null);
+                    }
+
+                    if (_projectFactory.GetProject(language) is GuestAppHostProject guestProject)
+                    {
+                        _logger.LogInformation(
+                            "Using config-only guest AppHost restore for language {Language} in {Directory}",
+                            language.LanguageId.Value,
+                            searchDirectory.FullName);
+                        return (guestProject, searchDirectory);
+                    }
+
+                    return (null, null);
+                }
+            }
+
+            searchDirectory = searchDirectory.Parent;
+        }
+
+        return (null, null);
+    }
+
+    private DirectoryInfo? GetFallbackSearchDirectory(FileInfo? passedAppHostProjectFile)
+    {
+        if (passedAppHostProjectFile is null)
+        {
+            return ExecutionContext.WorkingDirectory;
+        }
+
+        if (Directory.Exists(passedAppHostProjectFile.FullName))
+        {
+            return new DirectoryInfo(passedAppHostProjectFile.FullName);
+        }
+
+        return null;
     }
 }

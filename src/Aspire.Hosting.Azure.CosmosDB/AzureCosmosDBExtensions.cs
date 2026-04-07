@@ -32,7 +32,7 @@ public static class AzureCosmosExtensions
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("addAzureCosmosDB", Description = "Adds an Azure Cosmos DB resource")]
+    [AspireExport(Description = "Adds an Azure Cosmos DB resource")]
     public static IResourceBuilder<AzureCosmosDBResource> AddAzureCosmosDB(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -57,7 +57,7 @@ public static class AzureCosmosExtensions
     /// For more information, see <a href="https://learn.microsoft.com/azure/cosmos-db/how-to-develop-emulator?tabs=docker-linux#export-the-emulators-tlsssl-certificate"></a>.
     /// This version of the package defaults to the <inheritdoc cref="CosmosDBEmulatorContainerImageTags.Tag"/> tag of the <inheritdoc cref="CosmosDBEmulatorContainerImageTags.Registry"/>/<inheritdoc cref="CosmosDBEmulatorContainerImageTags.Image"/> container image.
     /// </remarks>
-    [AspireExport("runAsEmulator", Description = "Configures the Azure Cosmos DB resource to run using the local emulator", RunSyncOnBackgroundThread = true)]
+    [AspireExport(Description = "Configures the Azure Cosmos DB resource to run using the local emulator", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureCosmosDBResource> RunAsEmulator(this IResourceBuilder<AzureCosmosDBResource> builder, Action<IResourceBuilder<AzureCosmosDBEmulatorResource>>? configureContainer = null)
         => RunAsEmulator(builder, configureContainer, useVNextPreview: false);
 
@@ -71,7 +71,7 @@ public static class AzureCosmosExtensions
     /// <remarks>
     /// This version of the package defaults to the <inheritdoc cref="CosmosDBEmulatorContainerImageTags.TagVNextPreview"/> tag of the <inheritdoc cref="CosmosDBEmulatorContainerImageTags.Registry"/>/<inheritdoc cref="CosmosDBEmulatorContainerImageTags.Image"/> container image.
     /// </remarks>
-    [AspireExport("runAsPreviewEmulator", Description = "Configures the Azure Cosmos DB resource to run using the preview emulator", RunSyncOnBackgroundThread = true)]
+    [AspireExport(Description = "Configures the Azure Cosmos DB resource to run using the preview emulator", RunSyncOnBackgroundThread = true)]
     [Experimental("ASPIRECOSMOSDB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureCosmosDBResource> RunAsPreviewEmulator(this IResourceBuilder<AzureCosmosDBResource> builder, Action<IResourceBuilder<AzureCosmosDBEmulatorResource>>? configureContainer = null)
         => RunAsEmulator(builder, configureContainer, useVNextPreview: true);
@@ -234,7 +234,7 @@ public static class AzureCosmosExtensions
     /// <param name="builder">The builder for the <see cref="AzureCosmosDBEmulatorResource"/>.</param>
     /// <param name="name">The name of the volume. Defaults to an auto-generated name based on the application and resource names.</param>
     /// <returns>A builder for the <see cref="AzureCosmosDBEmulatorResource"/>.</returns>
-    [AspireExport("withDataVolume", Description = "Adds a named volume for the data folder to an Azure Cosmos DB emulator resource")]
+    [AspireExport(Description = "Adds a named volume for the data folder to an Azure Cosmos DB emulator resource")]
     public static IResourceBuilder<AzureCosmosDBEmulatorResource> WithDataVolume(this IResourceBuilder<AzureCosmosDBEmulatorResource> builder, string? name = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -251,7 +251,7 @@ public static class AzureCosmosExtensions
     /// <param name="builder">Builder for the Cosmos emulator container</param>
     /// <param name="port">Host port to bind to the emulator gateway port.</param>
     /// <returns>Cosmos emulator resource builder.</returns>
-    [AspireExport("withGatewayPort", Description = "Sets the host port for the Cosmos DB emulator gateway endpoint")]
+    [AspireExport(Description = "Sets the host port for the Cosmos DB emulator gateway endpoint")]
     public static IResourceBuilder<AzureCosmosDBEmulatorResource> WithGatewayPort(this IResourceBuilder<AzureCosmosDBEmulatorResource> builder, int? port)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -271,7 +271,7 @@ public static class AzureCosmosExtensions
     /// <remarks>Not calling this method will result in the default of 10 partitions. The actual started partitions is always one more than specified.
     /// See <a href="https://learn.microsoft.com/azure/cosmos-db/emulator-windows-arguments#change-the-number-of-default-containers">this documentation</a> about setting the partition count.
     /// </remarks>
-    [AspireExport("withPartitionCount", Description = "Sets the partition count for the Azure Cosmos DB emulator")]
+    [AspireExport(Description = "Sets the partition count for the Azure Cosmos DB emulator")]
     public static IResourceBuilder<AzureCosmosDBEmulatorResource> WithPartitionCount(this IResourceBuilder<AzureCosmosDBEmulatorResource> builder, int count)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -315,7 +315,7 @@ public static class AzureCosmosExtensions
     /// <param name="name">The name of the database resource.</param>
     /// <param name="databaseName">The name of the database. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("addCosmosDatabase", Description = "Adds an Azure Cosmos DB database resource")]
+    [AspireExport(Description = "Adds an Azure Cosmos DB database resource")]
     public static IResourceBuilder<AzureCosmosDBDatabaseResource> AddCosmosDatabase(this IResourceBuilder<AzureCosmosDBResource> builder, [ResourceName] string name, string? databaseName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -338,7 +338,7 @@ public static class AzureCosmosExtensions
     /// <param name="partitionKeyPath">Partition key path for the container.</param>
     /// <param name="containerName">The name of the container. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("addContainer", Description = "Adds an Azure Cosmos DB container resource")]
+    [AspireExport(Description = "Adds an Azure Cosmos DB container resource")]
     public static IResourceBuilder<AzureCosmosDBContainerResource> AddContainer(this IResourceBuilder<AzureCosmosDBDatabaseResource> builder, [ResourceName] string name, string partitionKeyPath, string? containerName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -394,7 +394,7 @@ public static class AzureCosmosExtensions
     /// </summary>
     /// <param name="builder">The builder for the Azure Cosmos DB resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withDefaultAzureSku", Description = "Configures Azure Cosmos DB to use the default Azure SKU")]
+    [AspireExport(Description = "Configures Azure Cosmos DB to use the default Azure SKU")]
     public static IResourceBuilder<AzureCosmosDBResource> WithDefaultAzureSku(this IResourceBuilder<AzureCosmosDBResource> builder)
     {
         builder.Resource.UseDefaultAzureSku = true;
@@ -410,7 +410,7 @@ public static class AzureCosmosExtensions
     /// <remarks>
     /// The Data Explorer is only available with <see cref="RunAsPreviewEmulator"/>.
     /// </remarks>
-    [AspireExport("withDataExplorer", Description = "Exposes the Data Explorer endpoint for the preview emulator")]
+    [AspireExport(Description = "Exposes the Data Explorer endpoint for the preview emulator")]
     [Experimental("ASPIRECOSMOSDB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureCosmosDBEmulatorResource> WithDataExplorer(this IResourceBuilder<AzureCosmosDBEmulatorResource> builder, int? port = null)
     {
@@ -473,7 +473,7 @@ public static class AzureCosmosExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("withAccessKeyAuthentication", Description = "Configures Azure Cosmos DB to use access key authentication")]
+    [AspireExport(Description = "Configures Azure Cosmos DB to use access key authentication")]
     public static IResourceBuilder<AzureCosmosDBResource> WithAccessKeyAuthentication(this IResourceBuilder<AzureCosmosDBResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);

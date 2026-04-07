@@ -33,6 +33,12 @@
 
   <ItemGroup>
     <None Include="TestSelector\TestFixtures\**\*" CopyToOutputDirectory="PreserveNewest" TargetPath="TestFixtures\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\..\tools\GenerateCITimeline\GitHubApi.cs" Link="CITimeline\GitHubApi.cs" />
+    <Compile Include="..\..\tools\GenerateCITimeline\TimelineRenderer.cs" Link="CITimeline\TimelineRenderer.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="CITimeline\TestData\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

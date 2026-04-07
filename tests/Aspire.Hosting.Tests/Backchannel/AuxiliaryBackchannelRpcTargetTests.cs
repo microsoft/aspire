@@ -3,6 +3,7 @@
 
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -411,5 +412,41 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         Assert.Equal($"{TestTimestamp} Second log", logs[1].Content);
 
         await app.StopAsync();
+    }
+
+    [Fact]
+    public async Task GetDashboardUrlsAsync_ReturnsBaseUrl_WhenDashboardAllowsAnonymousAccess()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.DisableDashboard = false,
+            outputHelper,
+            $"{KnownConfigNames.AspNetCoreUrls}=http://localhost",
+            $"{KnownConfigNames.DashboardOtlpGrpcEndpointUrl}=http://localhost",
+            $"{KnownConfigNames.DashboardUnsecuredAllowAnonymous}=true");
+
+        using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(default).DefaultTimeout();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dashboard = Assert.Single(model.Resources, r => r.Name == KnownResourceNames.AspireDashboard);
+        var endpoint = dashboard.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == "http");
+        endpoint.AllocatedEndpoint = new(endpoint, "localhost", 18888, targetPortExpression: "18888");
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(dashboard, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running,
+            ResourceReadyEvent = new EventSnapshot(Task.CompletedTask)
+        });
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services);
+
+        var result = await target.GetDashboardUrlsAsync().DefaultTimeout();
+
+        Assert.True(result.DashboardHealthy);
+        Assert.Equal("http://localhost:18888", result.BaseUrlWithLoginToken);
+        Assert.Null(result.CodespacesUrlWithLoginToken);
     }
 }

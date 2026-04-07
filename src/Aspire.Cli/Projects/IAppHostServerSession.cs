@@ -30,6 +30,11 @@ internal interface IAppHostServerSession : IAsyncDisposable
     OutputCollector Output { get; }
 
     /// <summary>
+    /// Gets the authentication token for the server session.
+    /// </summary>
+    string AuthenticationToken { get; }
+
+    /// <summary>
     /// Gets an RPC client connected to this session.
     /// </summary>
     Task<IAppHostRpcClient> GetRpcClientAsync(CancellationToken cancellationToken);

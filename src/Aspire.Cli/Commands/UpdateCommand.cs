@@ -375,17 +375,18 @@ internal sealed class UpdateCommand : BaseCommand
             }
 
             // Backup current executable if it exists
-            var unixTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            var backupPath = $"{targetExePath}.old.{unixTimestamp}";
+            var exeDir = Path.GetDirectoryName(targetExePath)!;
+            FileDeleteHelper.TryCleanupOldItems(exeDir, exeName);
+
+            string? backupPath = null;
             if (File.Exists(targetExePath))
             {
                 InteractionService.DisplayMessage(KnownEmojis.FloppyDisk, "Backing up current CLI...");
-                _logger.LogDebug("Creating backup: {BackupPath}", backupPath);
-
-                // Clean up old backup files
-                CleanupOldBackupFiles(targetExePath);
 
                 // Rename current executable to .old.[timestamp]
+                var unixTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                backupPath = $"{targetExePath}.old.{unixTimestamp}";
+                _logger.LogDebug("Creating backup: {BackupPath}", backupPath);
                 File.Move(targetExePath, backupPath);
             }
 
@@ -410,7 +411,7 @@ internal sealed class UpdateCommand : BaseCommand
                 }
 
                 // If we get here, the update was successful, clean up old backups
-                CleanupOldBackupFiles(targetExePath);
+                FileDeleteHelper.TryCleanupOldItems(exeDir, exeName);
 
                 // The new binary will extract its embedded bundle on first run via EnsureExtractedAsync.
                 // No proactive extraction needed — the payload is inside the new binary's embedded resources,
@@ -426,7 +427,7 @@ internal sealed class UpdateCommand : BaseCommand
             {
                 // If anything goes wrong, restore the backup
                 _logger.LogWarning("Update failed, restoring backup");
-                if (File.Exists(backupPath))
+                if (backupPath is not null && File.Exists(backupPath))
                 {
                     if (File.Exists(targetExePath))
                     {
@@ -519,39 +520,6 @@ internal sealed class UpdateCommand : BaseCommand
         catch
         {
             return null;
-        }
-    }
-
-    internal void CleanupOldBackupFiles(string targetExePath)
-    {
-        try
-        {
-            var directory = Path.GetDirectoryName(targetExePath);
-            if (string.IsNullOrEmpty(directory))
-            {
-                return;
-            }
-
-            var exeName = Path.GetFileName(targetExePath);
-            var searchPattern = $"{exeName}.old.*";
-
-            var oldBackupFiles = Directory.GetFiles(directory, searchPattern);
-            foreach (var backupFile in oldBackupFiles)
-            {
-                try
-                {
-                    File.Delete(backupFile);
-                    _logger.LogDebug("Deleted old backup file: {BackupFile}", backupFile);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogDebug(ex, "Failed to delete old backup file: {BackupFile}", backupFile);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "Failed to cleanup old backup files for: {TargetExePath}", targetExePath);
         }
     }
 

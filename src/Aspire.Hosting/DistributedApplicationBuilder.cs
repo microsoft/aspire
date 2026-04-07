@@ -489,7 +489,11 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             _innerBuilder.Services.AddHostedService<OrchestratorHostService>();
 
             // DCP stuff
-            _innerBuilder.Services.AddSingleton<IDcpExecutor, DcpExecutor>();
+            _innerBuilder.Services.AddSingleton<DcpAppResourceStore>();
+            _innerBuilder.Services.AddSingleton<ExecutableCreator>();
+            _innerBuilder.Services.AddSingleton<ContainerCreator>();
+            _innerBuilder.Services.AddSingleton<DcpExecutor>();
+            _innerBuilder.Services.AddSingleton<IDcpExecutor>(sp => sp.GetRequiredService<DcpExecutor>());
             _innerBuilder.Services.AddSingleton<DcpExecutorEvents>();
             _innerBuilder.Services.AddSingleton<DcpHost>();
             _innerBuilder.Services.AddSingleton<IDcpDependencyCheckService, DcpDependencyCheck>();

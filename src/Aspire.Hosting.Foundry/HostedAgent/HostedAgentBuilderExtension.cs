@@ -317,7 +317,7 @@ public static class HostedAgentResourceBuilderExtensions
     /// If a project resource is not provided, the method will attempt to find an existing
     /// Microsoft Foundry project resource in the application model.
     /// </summary>
-    [AspireExport("addAndPublishPromptAgent", Description = "Adds and publishes a prompt agent to a Microsoft Foundry project.")]
+    [AspireExport(Description = "Adds and publishes a prompt agent to a Microsoft Foundry project.")]
     public static IResourceBuilder<AzurePromptAgentResource> AddAndPublishPromptAgent(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project, IResourceBuilder<FoundryDeploymentResource> model, [ResourceName] string name, string? instructions)
     {

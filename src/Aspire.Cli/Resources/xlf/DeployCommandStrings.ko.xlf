@@ -13,7 +13,7 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Deploy an apphost to its deployment targets (Preview)</source>
+        <source>Deploy an AppHost to its deployment targets (Preview)</source>
         <target state="needs-review-translation">Aspire 앱호스트의 콘텐츠를 정의된 배포 대상에 배포하세요. (미리 보기)</target>
         <note />
       </trans-unit>

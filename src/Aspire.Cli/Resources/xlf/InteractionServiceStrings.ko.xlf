@@ -3,12 +3,12 @@
   <file datatype="xml" source-language="en" target-language="ko" original="../InteractionServiceStrings.resx">
     <body>
       <trans-unit id="AppHostConnectionLost">
-        <source>The connection to the app host was lost: {0}.</source>
-        <target state="translated">앱 호스트에 대한 연결이 끊어졌습니다. {0}.</target>
+        <source>The connection to the AppHost was lost: {0}.</source>
+        <target state="needs-review-translation">앱 호스트에 대한 연결이 끊어졌습니다. {0}.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostNotCompatibleConsiderUpgrading">
-        <source>The apphost version is not compatible. Please upgrade the apphost or Aspire CLI.</source>
+        <source>The AppHost version is not compatible. Please upgrade the AppHost or Aspire CLI.</source>
         <target state="needs-review-translation">AppHost 버전이 호환되지 않습니다. AppHost 또는 Aspire CLI를 업그레이드해 주세요.</target>
         <note />
       </trans-unit>
@@ -23,8 +23,8 @@
         <note />
       </trans-unit>
       <trans-unit id="BuildingAppHost">
-        <source>Building apphost...</source>
-        <target state="translated">apphost를 빌드하는 중...</target>
+        <source>Building AppHost...</source>
+        <target state="needs-review-translation">apphost를 빌드하는 중...</target>
         <note />
       </trans-unit>
       <trans-unit id="CheckingCertificates">
@@ -63,13 +63,13 @@
         <note>Represents a type of link</note>
       </trans-unit>
       <trans-unit id="ErrorConnectingToAppHost">
-        <source>An error occurred while connecting to the app host. The app host possibly crashed before it was available: {0}.</source>
-        <target state="translated">앱 호스트에 연결하는 동안 오류가 발생했습니다. 앱 호스트가 사용 가능하기 전에 충돌했을 수 있음: {0}.</target>
+        <source>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}.</source>
+        <target state="needs-review-translation">앱 호스트에 연결하는 동안 오류가 발생했습니다. 앱 호스트가 사용 가능하기 전에 충돌했을 수 있음: {0}.</target>
         <note />
       </trans-unit>
       <trans-unit id="FindingAppHosts">
-        <source>Finding apphosts...</source>
-        <target state="translated">apphost를 찾는 중...</target>
+        <source>Finding AppHosts...</source>
+        <target state="needs-review-translation">apphost를 찾는 중...</target>
         <note />
       </trans-unit>
       <trans-unit id="InteractiveInputNotSupported">
@@ -102,19 +102,24 @@
         <target state="translated">프로젝트를 빌드할 수 없습니다. {0}에서 로그 보기</target>
         <note />
       </trans-unit>
+      <trans-unit id="ProjectCouldNotBeCreated">
+        <source>The app could not be created. See logs at {0}</source>
+        <target state="new">The app could not be created. See logs at {0}</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ProjectOptionDoesntExist">
         <source>The --apphost option specified a project that does not exist.</source>
         <target state="translated">--apphost 옵션에서 존재하지 않는 프로젝트를 지정했습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionNotSpecifiedMultipleAppHostsFound">
-        <source>The --apphost option was not specified and multiple app host project files were detected.</source>
-        <target state="translated">--apphost 옵션이 지정되지 않았고 앱 호스트 프로젝트 파일이 여러 개 검색되었습니다.</target>
+        <source>The --apphost option was not specified and multiple AppHost project files were detected.</source>
+        <target state="needs-review-translation">--apphost 옵션이 지정되지 않았고 앱 호스트 프로젝트 파일이 여러 개 검색되었습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionNotSpecifiedNoCsprojFound">
-        <source>The project argument was not specified and no app host project files were detected.</source>
-        <target state="translated">프로젝트 인수가 지정되지 않았고 앱 호스트 프로젝트 파일이 감지되지 않았습니다.</target>
+        <source>The project argument was not specified and no AppHost project files were detected.</source>
+        <target state="needs-review-translation">프로젝트 인수가 지정되지 않았고 앱 호스트 프로젝트 파일이 감지되지 않았습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="RequiredCapability">
@@ -133,12 +138,12 @@
         <note>{0} is the log file path</note>
       </trans-unit>
       <trans-unit id="SelectAppHostToUse">
-        <source>Select an apphost to use:</source>
-        <target state="translated">사용할 apphost를 선택하세요:</target>
+        <source>Select an AppHost to use:</source>
+        <target state="needs-review-translation">사용할 apphost를 선택하세요:</target>
         <note />
       </trans-unit>
       <trans-unit id="SpecifiedProjectFileNotAppHostProject">
-        <source>The specified project file is not an Aspire apphost project.</source>
+        <source>The specified project file is not an Aspire AppHost project.</source>
         <target state="needs-review-translation">지정한 프로젝트 파일은 Aspire AppHost 프로젝트가 아닙니다.</target>
         <note />
       </trans-unit>
@@ -158,8 +163,8 @@
         <note />
       </trans-unit>
       <trans-unit id="UnbuildableAppHostsDetected">
-        <source>No app hosts were found (there may be app hosts project files with syntax errors/invalid SDK versions).</source>
-        <target state="translated">앱 호스트를 찾을 수 없습니다 (구문 오류나 잘못된 SDK 버전이 있는 앱 호스트 프로젝트 파일이 있을 수 있습니다).</target>
+        <source>No AppHosts were found (there may be AppHost project files with syntax errors/invalid SDK versions).</source>
+        <target state="needs-review-translation">앱 호스트를 찾을 수 없습니다 (구문 오류나 잘못된 SDK 버전이 있는 앱 호스트 프로젝트 파일이 있을 수 있습니다).</target>
         <note />
       </trans-unit>
       <trans-unit id="UnexpectedErrorOccurred">
@@ -173,8 +178,8 @@
         <note>{0} is a path</note>
       </trans-unit>
       <trans-unit id="WaitingForDebuggerToAttachToAppHost">
-        <source>Waiting for debugger to attach to app host process</source>
-        <target state="translated">디버거가 앱 호스트 프로세스에 연결되기를 기다리는 중</target>
+        <source>Waiting for debugger to attach to AppHost process</source>
+        <target state="needs-review-translation">디버거가 앱 호스트 프로세스에 연결되기를 기다리는 중</target>
         <note />
       </trans-unit>
     </body>

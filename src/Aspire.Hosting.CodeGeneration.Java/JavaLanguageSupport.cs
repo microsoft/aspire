@@ -9,7 +9,7 @@ namespace Aspire.Hosting.CodeGeneration.Java;
 /// Provides language support for Java AppHosts.
 /// Implements scaffolding, detection, and runtime configuration.
 /// </summary>
-public sealed class JavaLanguageSupport : ILanguageSupport
+internal sealed class JavaLanguageSupport : ILanguageSupport
 {
     /// <summary>
     /// The language/runtime identifier for Java.

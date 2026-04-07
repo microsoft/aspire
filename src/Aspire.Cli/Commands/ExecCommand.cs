@@ -147,7 +147,7 @@ internal class ExecCommand : BaseCommand
                 return ExitCodeConstants.FailedToDotnetRunAppHost;
             }
 
-            var runOptions = new DotNetCliRunnerInvocationOptions
+            var runOptions = new ProcessInvocationOptions
             {
                 StandardOutputCallback = runOutputCollector.AppendOutput,
                 StandardErrorCallback = runOutputCollector.AppendError,

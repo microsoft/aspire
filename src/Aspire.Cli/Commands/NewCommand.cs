@@ -3,6 +3,7 @@
 
 using System.CommandLine;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
@@ -366,6 +367,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             if (!resolveResult.Success)
             {
                 InteractionService.DisplayError(resolveResult.ErrorMessage);
+                InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ProjectCouldNotBeCreated, ExecutionContext.LogFilePath));
                 return ExitCodeConstants.InvalidCommand;
             }
 

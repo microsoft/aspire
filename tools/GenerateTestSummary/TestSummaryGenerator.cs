@@ -188,13 +188,21 @@ sealed partial class TestSummaryGenerator
 
         // Add top tests per run
         overallTableBuilder.AppendLine();
-        overallTableBuilder.AppendLine("## Slowest Tests Per Test Run");
+        overallTableBuilder.AppendLine("<details>");
+        overallTableBuilder.AppendLine("<summary><b>Slowest Tests Per Test Run</b></summary>");
+        overallTableBuilder.AppendLine();
         overallTableBuilder.Append(GenerateTopTestsPerRun(basePath));
+        overallTableBuilder.AppendLine();
+        overallTableBuilder.AppendLine("</details>");
 
         // Add duration statistics
         overallTableBuilder.AppendLine();
-        overallTableBuilder.AppendLine("## Duration Statistics");
+        overallTableBuilder.AppendLine("<details>");
+        overallTableBuilder.AppendLine("<summary><b>Duration Statistics</b></summary>");
+        overallTableBuilder.AppendLine();
         overallTableBuilder.Append(GenerateDurationStatistics(basePath));
+        overallTableBuilder.AppendLine();
+        overallTableBuilder.AppendLine("</details>");
 
         // Add effective time analysis if infra timing data is available
         if (infraTiming?.HasData == true)
@@ -422,7 +430,8 @@ sealed partial class TestSummaryGenerator
         statsBuilder.AppendLine();
 
         // Top 100 slowest tests
-        statsBuilder.AppendLine("### Top 100 Slowest Tests");
+        statsBuilder.AppendLine("<details>");
+        statsBuilder.AppendLine("<summary><b>Top 100 Slowest Tests</b></summary>");
         statsBuilder.AppendLine();
         var slowestTests = testDetails.OrderByDescending(t => t.DurationSeconds).Take(100);
         statsBuilder.AppendLine("| Duration | Status | Test Name | Test Run |");
@@ -434,6 +443,7 @@ sealed partial class TestSummaryGenerator
             statsBuilder.AppendLine(CultureInfo.InvariantCulture, $"| {test.DurationSeconds:F2}s | {icon} {test.Outcome} | {test.TestName} | {test.TestRun} |");
         }
         statsBuilder.AppendLine();
+        statsBuilder.AppendLine("</details>");
 
         return statsBuilder.ToString();
     }

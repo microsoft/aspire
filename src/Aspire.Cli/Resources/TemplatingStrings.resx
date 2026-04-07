@@ -241,6 +241,15 @@
   <data name="NuGetConfigCreatedConfirmationMessage" xml:space="preserve">
     <value>Created NuGet.config for the selected package channel.</value>
   </data>
+  <data name="UpdateNuGetConfigConfirmation" xml:space="preserve">
+    <value>Update NuGet.config to add missing package sources for the selected channel?</value>
+  </data>
+  <data name="NuGetConfigUpdatedConfirmationMessage" xml:space="preserve">
+    <value>Updated NuGet.config with required package sources.</value>
+  </data>
+  <data name="NuGetConfigCreatedOrUpdatedConfirmationMessage" xml:space="preserve">
+    <value>Created or updated NuGet.config in the project directory with required package sources.</value>
+  </data>
   <data name="UseLocalhostTld_Prompt" xml:space="preserve">
     <value>Use *.dev.localhost URLs</value>
   </data>
@@ -254,10 +263,10 @@
     <value>Configures whether to use *.dev.localhost URLs for local development.</value>
   </data>
   <data name="RunCdThenAspireRun" xml:space="preserve">
-    <value>Run 'cd "{0}"' and then 'aspire run' to start your apphost.</value>
+    <value>Run 'cd "{0}"' and then 'aspire run' to start your AppHost.</value>
     <comment>{0} is the relative path to the project directory</comment>
   </data>
   <data name="RunAspireRun" xml:space="preserve">
-    <value>Run 'aspire run' to start your apphost.</value>
+    <value>Run 'aspire run' to start your AppHost.</value>
   </data>
 </root>

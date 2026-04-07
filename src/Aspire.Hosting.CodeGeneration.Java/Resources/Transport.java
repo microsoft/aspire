@@ -181,6 +181,31 @@ class AspireClient {
         }
     }
 
+    public void authenticate(String token) {
+        int id = requestId.incrementAndGet();
+
+        List<Object> params = List.of(token);
+
+        Map<String, Object> request = new HashMap<>();
+        request.put("jsonrpc", "2.0");
+        request.put("id", id);
+        request.put("method", "authenticate");
+        request.put("params", params);
+
+        debug("Sending request authenticate with id=" + id);
+
+        try {
+            sendMessage(request);
+            Object result = readResponse(id);
+            if (!(result instanceof Boolean authenticated) || !authenticated) {
+                throw new RuntimeException("Failed to authenticate to the AppHost server.");
+            }
+        } catch (IOException e) {
+            handleDisconnect();
+            throw new RuntimeException("Failed to authenticate: " + e.getMessage(), e);
+        }
+    }
+
     private void sendMessage(Map<String, Object> message) throws IOException {
         String json = toJson(message);
         byte[] content = json.getBytes(StandardCharsets.UTF_8);

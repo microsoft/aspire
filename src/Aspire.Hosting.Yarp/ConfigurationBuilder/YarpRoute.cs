@@ -54,7 +54,7 @@ public static class YarpRouteExtensions
     /// <summary>
     /// Set the parameters used to match requests.
     /// </summary>
-    [AspireExport("withMatch", Description = "Sets the route match criteria.")]
+    [AspireExport(Description = "Sets the route match criteria.")]
     internal static YarpRoute WithMatch(this YarpRoute route, YarpRouteMatch match)
     {
         ArgumentNullException.ThrowIfNull(match);
@@ -74,7 +74,7 @@ public static class YarpRouteExtensions
     /// <summary>
     /// Only match requests with the given Path pattern.
     /// </summary>
-    [AspireExport("withMatchPath", Description = "Matches requests with the specified path pattern.")]
+    [AspireExport(Description = "Matches requests with the specified path pattern.")]
     public static YarpRoute WithMatchPath(this YarpRoute route, string path)
     {
         route.ConfigureMatch(match => match with { Path = path });
@@ -84,7 +84,7 @@ public static class YarpRouteExtensions
     /// <summary>
     /// Only match requests that use these optional HTTP methods. E.g. GET, POST.
     /// </summary>
-    [AspireExport("withMatchMethods", Description = "Matches requests that use the specified HTTP methods.")]
+    [AspireExport(Description = "Matches requests that use the specified HTTP methods.")]
     public static YarpRoute WithMatchMethods(this YarpRoute route, params string[] methods)
     {
         route.ConfigureMatch(match => match with { Methods = methods });
@@ -105,7 +105,7 @@ public static class YarpRouteExtensions
     /// <summary>
     /// Only match requests that contain all of these headers.
     /// </summary>
-    [AspireExport("withMatchHeaders", Description = "Matches requests that contain the specified headers.")]
+    [AspireExport(Description = "Matches requests that contain the specified headers.")]
     internal static YarpRoute WithMatchHeaders(this YarpRoute route, params YarpRouteHeaderMatch[] headers)
     {
         ArgumentNullException.ThrowIfNull(headers);
@@ -118,7 +118,7 @@ public static class YarpRouteExtensions
     ///  Only match requests with the given Host header. Supports wildcards and ports.
     ///  For unicode host names, do not use punycode.
     /// </summary>
-    [AspireExport("withMatchHosts", Description = "Matches requests that contain the specified host headers.")]
+    [AspireExport(Description = "Matches requests that contain the specified host headers.")]
     public static YarpRoute WithMatchHosts(this YarpRoute route, params string[] hosts)
     {
         route.ConfigureMatch(match => match with { Hosts = hosts.ToList() });
@@ -139,7 +139,7 @@ public static class YarpRouteExtensions
     /// <summary>
     ///  Only match requests that contain all of these query parameters.
     /// </summary>
-    [AspireExport("withMatchRouteQueryParameter", Description = "Matches requests that contain the specified query parameters.")]
+    [AspireExport(Description = "Matches requests that contain the specified query parameters.")]
     internal static YarpRoute WithMatchRouteQueryParameter(this YarpRoute route, params YarpRouteQueryParameterMatch[] queryParameters)
     {
         ArgumentNullException.ThrowIfNull(queryParameters);
@@ -153,7 +153,7 @@ public static class YarpRouteExtensions
     /// <summary>
     /// Set the order for the destination
     /// </summary>
-    [AspireExport("withOrder", Description = "Sets the route order.")]
+    [AspireExport(Description = "Sets the route order.")]
     public static YarpRoute WithOrder(this YarpRoute route, int? order)
     {
         route.Configure(r => r with { Order = order });
@@ -163,7 +163,7 @@ public static class YarpRouteExtensions
     /// <summary>
     /// Set the MaxRequestBodySize for the destination
     /// </summary>
-    [AspireExport("withMaxRequestBodySize", Description = "Sets the maximum request body size for the route.")]
+    [AspireExport(Description = "Sets the maximum request body size for the route.")]
     public static YarpRoute WithMaxRequestBodySize(this YarpRoute route, long maxRequestBodySize)
     {
         route.Configure(r => r with { MaxRequestBodySize = maxRequestBodySize });
@@ -183,7 +183,7 @@ public static class YarpRouteExtensions
     /// <summary>
     /// Set the Transforms of the destination
     /// </summary>
-    [AspireExport("withTransforms", Description = "Sets the transforms for the route.")]
+    [AspireExport(Description = "Sets the transforms for the route.")]
     public static YarpRoute WithTransforms(this YarpRoute route, IReadOnlyList<IReadOnlyDictionary<string, string>>? transforms)
     {
         route.Configure(r => r with { Transforms = transforms });
@@ -212,7 +212,7 @@ public static class YarpRouteExtensions
     /// <summary>
     /// Add a new transform to the destination.
     /// </summary>
-    [AspireExport("withTransform", Description = "Adds a transform to the route.")]
+    [AspireExport(Description = "Adds a transform to the route.")]
     internal static YarpRoute WithTransform(this YarpRoute route, IReadOnlyDictionary<string, string> transform)
     {
         ArgumentNullException.ThrowIfNull(transform);

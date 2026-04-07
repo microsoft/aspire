@@ -74,8 +74,10 @@
     <!--
       Add command line to the log.
       -->
-    <Exec Command="echo === COMMAND LINE === > %(TestToRun.ResultsStdOutPath)
-                   echo $(_TestRunnerCommand) >> %(TestToRun.ResultsStdOutPath)" />
+    <WriteLinesToFile File="%(TestToRun.ResultsStdOutPath)"
+                      Overwrite="false"
+                      Encoding="UTF-8"
+                      Lines=";=== COMMAND LINE ===;$(_TestRunnerCommand);=== END COMMAND LINE ===;%20;" />
 
     <Message Text="Searching for $(SpecializedTestType) tests: $(_TestAssembly) [$(_TestEnvironment)]" Importance="high"/>
     <Exec Command='$(_TestRunnerCommand)'

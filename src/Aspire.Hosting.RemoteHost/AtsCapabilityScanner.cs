@@ -1303,12 +1303,19 @@ public static class AtsCapabilityScanner
                     methodCapabilityName = customMethodName;
                     methodCapabilityId = $"{package}/{customMethodName}";
                 }
-                else
+                else if (exposeAllMethods)
                 {
-                    // Auto-exposed via ExposeMethods=true - use TypeName.methodName pattern
+                    // Auto-exposed via ExposeMethods=true - use TypeName.methodName pattern to avoid collisions
                     var camelCaseMethodName = ToCamelCase(method.Name);
                     methodCapabilityName = $"{typeName}.{camelCaseMethodName}";
                     methodCapabilityId = $"{package}/{methodCapabilityName}";
+                }
+                else
+                {
+                    // Explicit [AspireExport] without Id - use plain methodName like static exports
+                    var camelCaseMethodName = ToCamelCase(method.Name);
+                    methodCapabilityName = camelCaseMethodName;
+                    methodCapabilityId = $"{package}/{camelCaseMethodName}";
                 }
 
                 // Build parameters (first parameter is the context/instance)
@@ -1356,6 +1363,7 @@ public static class AtsCapabilityScanner
 
                 // Get description from attribute if specified
                 var description = memberExportAttr?.Description ?? $"Invokes the {method.Name} method";
+                var obsoleteData = AttributeDataReader.GetObsoleteData(method);
 
                 // Get simple method name (without type prefix)
                 var simpleMethodName = customMethodName ?? ToCamelCase(method.Name);
@@ -1366,6 +1374,8 @@ public static class AtsCapabilityScanner
                     MethodName = simpleMethodName,
                     OwningTypeName = typeName,
                     Description = description,
+                    IsObsolete = obsoleteData is not null,
+                    ObsoleteMessage = obsoleteData?.Message,
                     Parameters = paramInfos,
                     ReturnType = returnTypeRef ?? CreateVoidTypeRef(),
                     TargetTypeId = typeId,
@@ -1406,19 +1416,29 @@ public static class AtsCapabilityScanner
         diagnostic = null;
         var methodLocation = $"{method.DeclaringType?.FullName ?? method.DeclaringType?.Name ?? "Unknown"}.{method.Name}";
 
-        // Get method name from attribute
-        var methodNameFromAttr = exportAttr.Id;
-        if (string.IsNullOrEmpty(methodNameFromAttr))
+        // Get method name from attribute, falling back to the camelCase of the method name
+        var rawId = exportAttr.Id;
+        string methodNameFromAttr;
+        if (rawId is not null)
         {
-            diagnostic = AtsDiagnostic.Warning(
-                $"[AspireExport] attribute on '{methodLocation}' is missing method name argument",
-                methodLocation);
-            return null;
+            if (string.IsNullOrWhiteSpace(rawId))
+            {
+                diagnostic = AtsDiagnostic.Warning(
+                    $"[AspireExport] attribute on '{methodLocation}' has an empty method name argument",
+                    methodLocation);
+                return null;
+            }
+            methodNameFromAttr = rawId;
+        }
+        else
+        {
+            methodNameFromAttr = ToCamelCase(method.Name);
         }
 
         // Get named arguments
         var description = exportAttr.Description;
         var methodNameOverride = exportAttr.MethodName;
+        var obsoleteData = AttributeDataReader.GetObsoleteData(method);
 
         var methodName = methodNameOverride ?? methodNameFromAttr;
         // New format: {AssemblyName}/{methodName}
@@ -1491,6 +1511,8 @@ public static class AtsCapabilityScanner
             CapabilityId = capabilityId,
             MethodName = methodName,
             Description = description,
+            IsObsolete = obsoleteData is not null,
+            ObsoleteMessage = obsoleteData?.Message,
             Parameters = paramInfos,
             ReturnType = returnTypeRef ?? CreateVoidTypeRef(),
             TargetTypeId = extendsTypeId,
@@ -2548,7 +2570,8 @@ public static class AtsCapabilityScanner
     /// </summary>
     private static bool HasExportIgnoreAttribute(PropertyInfo property)
     {
-        return AttributeDataReader.HasAspireExportIgnoreData(property);
+        return AttributeDataReader.HasAspireExportIgnoreData(property) ||
+               (property.DeclaringType is not null && AttributeDataReader.HasAspireExportIgnoreData(property.DeclaringType));
     }
 
     /// <summary>
@@ -2556,7 +2579,8 @@ public static class AtsCapabilityScanner
     /// </summary>
     private static bool HasExportIgnoreAttribute(MethodInfo method)
     {
-        return AttributeDataReader.HasAspireExportIgnoreData(method);
+        return AttributeDataReader.HasAspireExportIgnoreData(method) ||
+               (method.DeclaringType is not null && AttributeDataReader.HasAspireExportIgnoreData(method.DeclaringType));
     }
 
     /// <summary>

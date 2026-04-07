@@ -105,6 +105,10 @@ internal sealed class CapabilityDispatcher
             {
                 _logger.LogError("{Message} at {Location}", diagnostic.Message, diagnostic.Location);
             }
+            else if (diagnostic.Severity == AtsDiagnosticSeverity.Info)
+            {
+                _logger.LogDebug("{Message} at {Location}", diagnostic.Message, diagnostic.Location);
+            }
             else
             {
                 _logger.LogWarning("{Message} at {Location}", diagnostic.Message, diagnostic.Location);

@@ -70,6 +70,14 @@ public class AttributeDataReaderTests
     }
 
     [Fact]
+    public void HasAspireExportIgnoreData_FindsOfficialAttribute_OnType()
+    {
+        var result = AttributeDataReader.HasAspireExportIgnoreData(typeof(OfficialIgnoredType));
+
+        Assert.True(result);
+    }
+
+    [Fact]
     public void HasAspireDtoData_FindsOfficialAttribute()
     {
         var result = AttributeDataReader.HasAspireDtoData(typeof(OfficialDtoType));
@@ -106,6 +114,17 @@ public class AttributeDataReaderTests
         var result = AttributeDataReader.GetAspireUnionData(param);
 
         Assert.Null(result);
+    }
+
+    [Fact]
+    public void GetObsoleteData_FindsOfficialAttribute_OnMethod()
+    {
+        var method = typeof(OfficialAttributeExports).GetMethod(nameof(OfficialAttributeExports.ObsoleteExportMethod))!;
+        var result = AttributeDataReader.GetObsoleteData(method);
+
+        Assert.NotNull(result);
+        Assert.Equal("Official obsolete method", result.Message);
+        Assert.False(result.IsError);
     }
 
     [Fact]
@@ -190,10 +209,17 @@ public class AttributeDataReaderTests
             _ = resource;
         }
 
-        [AspireExport("officialUnionMethod")]
+        [AspireExport]
         public static void OfficialUnionMethod([AspireUnion(typeof(string), typeof(int))] object value)
         {
             _ = value;
+        }
+
+        [Obsolete("Official obsolete method")]
+        [AspireExport("obsoleteMethod")]
+        public static void ObsoleteExportMethod(IResource resource)
+        {
+            _ = resource;
         }
     }
 
@@ -214,6 +240,11 @@ public class AttributeDataReaderTests
         public OfficialMethodsResource(string name) : base(name) { }
 
         public void DoSomething() { }
+    }
+
+    [AspireExportIgnore]
+    public class OfficialIgnoredType
+    {
     }
 
     [AspireDto]

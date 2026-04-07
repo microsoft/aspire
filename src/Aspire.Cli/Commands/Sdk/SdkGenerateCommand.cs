@@ -114,6 +114,8 @@ internal sealed class SdkGenerateCommand : BaseCommand
         DirectoryInfo outputDir,
         CancellationToken cancellationToken)
     {
+        var integrationAssemblyName = IntegrationAssemblyNameResolver.Resolve(integrationProject);
+
         // Use a temporary directory for the AppHost server
         var tempDir = Path.Combine(Path.GetTempPath(), "aspire-sdk-gen", Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(tempDir);
@@ -135,7 +137,7 @@ internal sealed class SdkGenerateCommand : BaseCommand
 
             // Add the integration project as a project reference
             integrations.Add(IntegrationReference.FromProject(
-                Path.GetFileNameWithoutExtension(integrationProject.FullName),
+                integrationAssemblyName,
                 integrationProject.FullName));
 
             _logger.LogDebug("Building AppHost server for SDK generation");
@@ -158,60 +160,43 @@ internal sealed class SdkGenerateCommand : BaseCommand
                 return ExitCodeConstants.FailedToBuildArtifacts;
             }
 
-            // Start the server
-            var currentPid = Environment.ProcessId;
-            var (socketPath, serverProcess, _) = appHostServerProject.Run(currentPid, new Dictionary<string, string>());
+            await using var serverSession = AppHostServerSession.Start(
+                appHostServerProject,
+                environmentVariables: null,
+                debug: false,
+                _logger);
 
-            try
+            // Connect and generate code
+            var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
+
+            _logger.LogDebug("Generating {Language} SDK via RPC", languageInfo.CodeGenerator);
+            var generatedFiles = await rpcClient.GenerateCodeForAssemblyAsync(languageInfo.CodeGenerator, integrationAssemblyName, cancellationToken);
+
+            // Write generated files
+            var outputDirFullPath = Path.GetFullPath(outputDir.FullName);
+            foreach (var (fileName, content) in generatedFiles)
             {
-                // Connect and generate code
-                await using var rpcClient = await AppHostRpcClient.ConnectAsync(socketPath, cancellationToken);
+                var filePath = Path.GetFullPath(Path.Combine(outputDir.FullName, fileName));
 
-                _logger.LogDebug("Generating {Language} SDK via RPC", languageInfo.CodeGenerator);
-                var generatedFiles = await rpcClient.GenerateCodeAsync(languageInfo.CodeGenerator, cancellationToken);
-
-                // Write generated files
-                var outputDirFullPath = Path.GetFullPath(outputDir.FullName);
-                foreach (var (fileName, content) in generatedFiles)
+                // Validate path is within output directory (prevent path traversal)
+                if (!filePath.StartsWith(outputDirFullPath, StringComparison.OrdinalIgnoreCase))
                 {
-                    var filePath = Path.GetFullPath(Path.Combine(outputDir.FullName, fileName));
-
-                    // Validate path is within output directory (prevent path traversal)
-                    if (!filePath.StartsWith(outputDirFullPath, StringComparison.OrdinalIgnoreCase))
-                    {
-                        _logger.LogWarning("Skipping file with invalid path: {FileName}", fileName);
-                        continue;
-                    }
-
-                    var fileDirectory = Path.GetDirectoryName(filePath);
-                    if (!string.IsNullOrEmpty(fileDirectory))
-                    {
-                        Directory.CreateDirectory(fileDirectory);
-                    }
-                    await File.WriteAllTextAsync(filePath, content, cancellationToken);
-                    _logger.LogDebug("Wrote {FileName}", fileName);
+                    _logger.LogWarning("Skipping file with invalid path: {FileName}", fileName);
+                    continue;
                 }
 
-                InteractionService.DisplaySuccess($"Generated {generatedFiles.Count} files in {outputDir.FullName}");
-
-                return ExitCodeConstants.Success;
+                var fileDirectory = Path.GetDirectoryName(filePath);
+                if (!string.IsNullOrEmpty(fileDirectory))
+                {
+                    Directory.CreateDirectory(fileDirectory);
+                }
+                await File.WriteAllTextAsync(filePath, content, cancellationToken);
+                _logger.LogDebug("Wrote {FileName}", fileName);
             }
-            finally
-            {
-                // Stop the server - just try to kill, catch if already exited
-                try
-                {
-                    serverProcess.Kill(entireProcessTree: true);
-                }
-                catch (InvalidOperationException)
-                {
-                    // Process already exited - this is fine
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogDebug(ex, "Error killing AppHost server process");
-                }
-            }
+
+            InteractionService.DisplaySuccess($"Generated {generatedFiles.Count} files in {outputDir.FullName}");
+
+            return ExitCodeConstants.Success;
         }
         finally
         {

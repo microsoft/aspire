@@ -34,13 +34,17 @@ public static class AzureCognitiveServicesProjectExtensions
     /// <param name="builder">The <see cref="IResourceBuilder{T}"/> for the parent Microsoft Foundry account resource.</param>
     /// <param name="name">The name of the Microsoft Foundry project resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the Microsoft Foundry project resource.</returns>
-    [AspireExport("addProject", Description = "Adds a Microsoft Foundry project resource to a Microsoft Foundry resource.")]
+    [AspireExport(Description = "Adds a Microsoft Foundry project resource to a Microsoft Foundry resource.")]
     public static IResourceBuilder<AzureCognitiveServicesProjectResource> AddProject(
         this IResourceBuilder<FoundryResource> builder,
         string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
+        if (builder.Resource.IsEmulator)
+        {
+            throw new InvalidOperationException(FoundryExtensions.LocalProjectsNotSupportedMessage);
+        }
 
         builder.ApplicationBuilder.Services.Configure<AzureProvisioningOptions>(o => o.SupportsTargetedRoleAssignments = true);
 
@@ -53,7 +57,7 @@ public static class AzureCognitiveServicesProjectExtensions
     /// Associates a container registry with the Microsoft Foundry project resource for
     /// publishing and locating hosted agents.
     /// </summary>
-    [AspireExport("withContainerRegistry", Description = "Associates a container registry with a Microsoft Foundry project resource.")]
+    [AspireExport(Description = "Associates a container registry with a Microsoft Foundry project resource.")]
     public static IResourceBuilder<AzureCognitiveServicesProjectResource> WithContainerRegistry(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         IResourceBuilder<AzureContainerRegistryResource> registryBuilder)
@@ -110,7 +114,7 @@ public static class AzureCognitiveServicesProjectExtensions
     /// <param name="keyVault">The Key Vault resource to associate with the project.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <exception cref="InvalidOperationException">Thrown when the project already has a Key Vault connection configured.</exception>
-    [AspireExport("withKeyVault", Description = "Associates an Azure Key Vault resource with a Microsoft Foundry project.")]
+    [AspireExport(Description = "Associates an Azure Key Vault resource with a Microsoft Foundry project.")]
     public static IResourceBuilder<AzureCognitiveServicesProjectResource> WithKeyVault(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         IResourceBuilder<AzureKeyVaultResource> keyVault)
@@ -135,7 +139,7 @@ public static class AzureCognitiveServicesProjectExtensions
     /// <param name="builder">The resource builder for the Microsoft Foundry project.</param>
     /// <param name="appInsights">The Application Insights resource to associate with the project.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport("withAppInsights", Description = "Associates an Azure Application Insights resource with a Microsoft Foundry project.")]
+    [AspireExport(Description = "Associates an Azure Application Insights resource with a Microsoft Foundry project.")]
     public static IResourceBuilder<AzureCognitiveServicesProjectResource> WithAppInsights(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         IResourceBuilder<AzureApplicationInsightsResource> appInsights)
@@ -195,7 +199,7 @@ public static class AzureCognitiveServicesProjectExtensions
     /// <summary>
     /// Adds a model deployment to the parent Microsoft Foundry resource of the Microsoft Foundry project.
     /// </summary>
-    [AspireExport("addModelDeployment", Description = "Adds a model deployment to the parent Microsoft Foundry resource.")]
+    [AspireExport(Description = "Adds a model deployment to the parent Microsoft Foundry resource.")]
     public static IResourceBuilder<FoundryDeploymentResource> AddModelDeployment(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         [ResourceName] string name,
@@ -598,10 +602,7 @@ public static class AzureCognitiveServicesProjectExtensions
         }
 
         var resource = new AzureContainerRegistryResource(name, configureInfrastructure);
-        if (builder.ExecutionContext.IsPublishMode)
-        {
-            builder.AddResource(resource);
-        }
+        builder.AddResource(resource);
         return resource;
     }
 }

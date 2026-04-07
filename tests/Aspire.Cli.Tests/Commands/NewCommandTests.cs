@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Commands;
@@ -1502,8 +1503,8 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(ExitCodeConstants.FailedToBuildArtifacts, exitCode);
-        Assert.Single(interactionService.DisplayedErrors);
-        Assert.Equal("Automatic 'aspire restore' failed for the new TypeScript starter project. Run 'aspire restore' in the project directory for more details.", interactionService.DisplayedErrors[0]);
+        Assert.Collection(interactionService.DisplayedErrors,
+            error => Assert.Equal("Automatic 'aspire restore' failed for the new TypeScript starter project. Run 'aspire restore' in the project directory for more details.", error));
     }
 
     [Fact]
@@ -1551,6 +1552,117 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         // the template to try to prompt for options.
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task NewCommand_WhenCSharpTemplateApplyFails_DisplaysCreationErrorMessage()
+    {
+        TestInteractionService? testInteractionService = null;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = (sp) =>
+            {
+                testInteractionService = new TestInteractionService();
+                return testInteractionService;
+            };
+
+            options.NewCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                return new TestNewCommandPrompter(interactionService);
+            };
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (dir, query, prerelease, take, skip, nugetSource, useCache, options, cancellationToken) =>
+                {
+                    var package = new NuGetPackage()
+                    {
+                        Id = "Aspire.ProjectTemplates",
+                        Source = "nuget",
+                        Version = "9.2.0"
+                    };
+
+                    return (0, new NuGetPackage[] { package });
+                };
+
+                runner.NewProjectAsyncCallback = (templateName, projectName, outputPath, invocationOptions, ct) =>
+                {
+                    return 1; // Simulate failure
+                };
+
+                return runner;
+            };
+        });
+
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new aspire-starter --use-redis-cache --test-framework None");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        var executionContext = provider.GetRequiredService<CliExecutionContext>();
+        var expectedMessage = string.Format(CultureInfo.CurrentCulture, TemplatingStrings.ProjectCreationFailed, 1, executionContext.LogFilePath);
+
+        Assert.NotEqual(0, exitCode);
+        Assert.NotNull(testInteractionService);
+        Assert.Contains(expectedMessage, testInteractionService.DisplayedErrors);
+    }
+
+    [Fact]
+    public async Task NewCommand_WhenTypeScriptTemplateApplyFails_ReturnsNonZeroExitCode()
+    {
+        TestInteractionService? testInteractionService = null;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = (sp) =>
+            {
+                testInteractionService = new TestInteractionService();
+                return testInteractionService;
+            };
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (dir, query, prerelease, take, skip, nugetSource, useCache, options, cancellationToken) =>
+                {
+                    var package = new NuGetPackage()
+                    {
+                        Id = "Aspire.ProjectTemplates",
+                        Source = "nuget",
+                        Version = "9.2.0"
+                    };
+
+                    return (0, new NuGetPackage[] { package });
+                };
+
+                return runner;
+            };
+        });
+
+        services.AddSingleton<IScaffoldingService>(new TestScaffoldingService
+        {
+            ScaffoldAsyncCallback = (context, cancellationToken) =>
+            {
+                return Task.FromResult(false); // Simulate failure for TypeScript template
+            }
+        });
+
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new aspire-ts-empty --name TestApp --output .");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.NotEqual(0, exitCode);
+        Assert.NotNull(testInteractionService);
     }
 }
 

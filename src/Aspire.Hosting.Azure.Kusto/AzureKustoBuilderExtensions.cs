@@ -41,7 +41,7 @@ public static class AzureKustoBuilderExtensions
     /// - <see cref="KustoDatabasePrincipalRole.User"/>
     /// </para>
     /// </remarks>
-    [AspireExport("addAzureKustoCluster", Description = "Adds an Azure Data Explorer (Kusto) cluster resource")]
+    [AspireExport(Description = "Adds an Azure Data Explorer (Kusto) cluster resource")]
     public static IResourceBuilder<AzureKustoClusterResource> AddAzureKustoCluster(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -103,7 +103,7 @@ public static class AzureKustoBuilderExtensions
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <param name="databaseName">The name of the database. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("addReadWriteDatabase", Description = "Adds a Kusto read-write database resource")]
+    [AspireExport(Description = "Adds a Kusto read-write database resource")]
     public static IResourceBuilder<AzureKustoReadWriteDatabaseResource> AddReadWriteDatabase(this IResourceBuilder<AzureKustoClusterResource> builder, [ResourceName] string name, string? databaseName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -149,7 +149,7 @@ public static class AzureKustoBuilderExtensions
     /// Optional action to configure the Kusto emulator container.
     /// </param>
     /// <returns>The resource builder.</returns>
-    [AspireExport("runAsEmulator", Description = "Configures the Kusto cluster to run using the local emulator", RunSyncOnBackgroundThread = true)]
+    [AspireExport(Description = "Configures the Kusto cluster to run using the local emulator", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureKustoClusterResource> RunAsEmulator(
         this IResourceBuilder<AzureKustoClusterResource> builder,
         Action<IResourceBuilder<AzureKustoEmulatorResource>>? configureContainer = null)
@@ -194,7 +194,7 @@ public static class AzureKustoBuilderExtensions
     /// <param name="builder">The resource builder to configure.</param>
     /// <param name="script">KQL script to create databases, tables, or data.</param>
     /// <returns>The resource builder.</returns>
-    [AspireExport("withCreationScript", Description = "Defines the KQL script used to create the database")]
+    [AspireExport(Description = "Defines the KQL script used to create the database")]
     public static IResourceBuilder<AzureKustoReadWriteDatabaseResource> WithCreationScript(this IResourceBuilder<AzureKustoReadWriteDatabaseResource> builder, string script)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -212,7 +212,7 @@ public static class AzureKustoBuilderExtensions
     /// <param name="builder">Kusto emulator resource builder.</param>
     /// <param name="port">Host port to use.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/> for the <see cref="AzureKustoEmulatorResource"/>.</returns>
-    [AspireExport("withHostPort", Description = "Sets the host port for the Kusto emulator endpoint")]
+    [AspireExport(Description = "Sets the host port for the Kusto emulator endpoint")]
     public static IResourceBuilder<AzureKustoEmulatorResource> WithHostPort(this IResourceBuilder<AzureKustoEmulatorResource> builder, int port)
     {
         ArgumentNullException.ThrowIfNull(builder);

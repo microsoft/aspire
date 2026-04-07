@@ -1,0 +1,127 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="zh-Hans" original="../DashboardCommandStrings.resx">
+    <body>
+      <trans-unit id="AllowAnonymousOptionDescription">
+        <source>Allow anonymous access to the dashboard</source>
+        <target state="new">Allow anonymous access to the dashboard</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="BundleLayoutNotFound">
+        <source>The 'aspire dashboard' command requires the CLI bundle, but no bundle layout was found. The bundle provides the dashboard binary and supporting files. Run 'aspire setup --force' to extract the bundle, or reinstall the Aspire CLI.</source>
+        <target state="new">The 'aspire dashboard' command requires the CLI bundle, but no bundle layout was found. The bundle provides the dashboard binary and supporting files. Run 'aspire setup --force' to extract the bundle, or reinstall the Aspire CLI.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="BundleNotAvailable">
+        <source>The Aspire dashboard requires the CLI bundle. The bundle was not found.</source>
+        <target state="new">The Aspire dashboard requires the CLI bundle. The bundle was not found.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigFilePathOptionDescription">
+        <source>The path for a JSON configuration file</source>
+        <target state="new">The path for a JSON configuration file</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardExitedAddressInUse">
+        <source>Dashboard could not start because a configured port is already in use. Use a different port or stop the conflicting process.</source>
+        <target state="new">Dashboard could not start because a configured port is already in use. Use a different port or stop the conflicting process.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardExitedUnexpectedError">
+        <source>Dashboard exited unexpectedly due to an error. See logs for details.</source>
+        <target state="new">Dashboard exited unexpectedly due to an error. See logs for details.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardExitedValidationFailure">
+        <source>Dashboard configuration is invalid. Check the provided options and try again.</source>
+        <target state="new">Dashboard configuration is invalid. Check the provided options and try again.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardExitedWithError">
+        <source>Dashboard exited with exit code {0}.</source>
+        <target state="new">Dashboard exited with exit code {0}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFailedToStart">
+        <source>Failed to start Aspire dashboard: {0}</source>
+        <target state="new">Failed to start Aspire dashboard: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardLabel">
+        <source>Dashboard</source>
+        <target state="new">Dashboard</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardStartTimedOut">
+        <source>Dashboard did not become ready within the expected time.</source>
+        <target state="new">Dashboard did not become ready within the expected time.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardStarted">
+        <source>Dashboard started (PID {0}).</source>
+        <target state="new">Dashboard started (PID {0}).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Description">
+        <source>Manage the Aspire dashboard</source>
+        <target state="new">Manage the Aspire dashboard</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="EnableApiOptionDescription">
+        <source>Enable the telemetry API endpoint on the dashboard</source>
+        <target state="new">Enable the telemetry API endpoint on the dashboard</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FrontendUrlOptionDescription">
+        <source>One or more HTTP endpoints through which the dashboard frontend is served</source>
+        <target state="new">One or more HTTP endpoints through which the dashboard frontend is served</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LogsLabel">
+        <source>Logs</source>
+        <target state="new">Logs</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ManagedBinaryNotFound">
+        <source>The CLI bundle layout was found, but the dashboard binary (aspire-managed) is missing. The bundle may be corrupted or incomplete. Run 'aspire setup --force' to re-extract the bundle, or reinstall the Aspire CLI.</source>
+        <target state="new">The CLI bundle layout was found, but the dashboard binary (aspire-managed) is missing. The bundle may be corrupted or incomplete. Run 'aspire setup --force' to re-extract the bundle, or reinstall the Aspire CLI.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OtlpGrpcLabel">
+        <source>OTLP/gRPC</source>
+        <target state="new">OTLP/gRPC</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OtlpGrpcUrlOptionDescription">
+        <source>The OTLP/gRPC endpoint. This endpoint hosts an OTLP service and receives telemetry using gRPC</source>
+        <target state="new">The OTLP/gRPC endpoint. This endpoint hosts an OTLP service and receives telemetry using gRPC</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OtlpHttpLabel">
+        <source>OTLP/HTTP</source>
+        <target state="new">OTLP/HTTP</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OtlpHttpUrlOptionDescription">
+        <source>The OTLP/HTTP endpoint. This endpoint hosts an OTLP service and receives telemetry using Protobuf over HTTP</source>
+        <target state="new">The OTLP/HTTP endpoint. This endpoint hosts an OTLP service and receives telemetry using Protobuf over HTTP</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RunDescription">
+        <source>Start the Aspire dashboard</source>
+        <target state="new">Start the Aspire dashboard</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StartingDashboard">
+        <source>Starting dashboard...</source>
+        <target state="new">Starting dashboard...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StoppingDashboard">
+        <source>Stopping dashboard</source>
+        <target state="new">Stopping dashboard</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

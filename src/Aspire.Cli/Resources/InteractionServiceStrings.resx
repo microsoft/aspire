@@ -122,7 +122,7 @@
     <comment>{0} is the original selection prompt text.</comment>
   </data>
   <data name="AppHostNotCompatibleConsiderUpgrading" xml:space="preserve">
-    <value>The apphost version is not compatible. Please upgrade the apphost or Aspire CLI.</value>
+    <value>The AppHost version is not compatible. Please upgrade the AppHost or Aspire CLI.</value>
   </data>
   <data name="AspireHostingSDKVersion" xml:space="preserve">
     <value>Aspire.Hosting Version</value>
@@ -151,7 +151,7 @@
     <value>Checking project type...</value>
   </data>
   <data name="BuildingAppHost" xml:space="preserve">
-    <value>Building apphost...</value>
+    <value>Building AppHost...</value>
   </data>
   <data name="CheckingCertificates" xml:space="preserve">
     <value>Checking certificates...</value>
@@ -163,10 +163,10 @@
     <value>Searching...</value>
   </data>
   <data name="FindingAppHosts" xml:space="preserve">
-    <value>Finding apphosts...</value>
+    <value>Finding AppHosts...</value>
   </data>
   <data name="SelectAppHostToUse" xml:space="preserve">
-    <value>Select an apphost to use:</value>
+    <value>Select an AppHost to use:</value>
   </data>
   <data name="CreatedSettingsFile" xml:space="preserve">
     <value>Created settings file at {0}.</value>
@@ -180,25 +180,28 @@
     <value>The --apphost option specified a project that does not exist.</value>
   </data>
   <data name="ProjectOptionNotSpecifiedMultipleAppHostsFound" xml:space="preserve">
-    <value>The --apphost option was not specified and multiple app host project files were detected.</value>
+    <value>The --apphost option was not specified and multiple AppHost project files were detected.</value>
   </data>
   <data name="ProjectOptionNotSpecifiedNoCsprojFound" xml:space="preserve">
-    <value>The project argument was not specified and no app host project files were detected.</value>
+    <value>The project argument was not specified and no AppHost project files were detected.</value>
   </data>
   <data name="ProjectCouldNotBeBuilt" xml:space="preserve">
     <value>The project could not be built. See logs at {0}</value>
+  </data>
+  <data name="ProjectCouldNotBeCreated" xml:space="preserve">
+    <value>The app could not be created. See logs at {0}</value>
   </data>
   <data name="OperationCancelled" xml:space="preserve">
     <value>The operation was canceled.</value>
   </data>
   <data name="SpecifiedProjectFileNotAppHostProject" xml:space="preserve">
-    <value>The specified project file is not an Aspire apphost project.</value>
+    <value>The specified project file is not an Aspire AppHost project.</value>
   </data>
   <data name="ErrorConnectingToAppHost" xml:space="preserve">
-    <value>An error occurred while connecting to the app host. The app host possibly crashed before it was available: {0}.</value>
+    <value>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}.</value>
   </data>
   <data name="AppHostConnectionLost" xml:space="preserve">
-    <value>The connection to the app host was lost: {0}.</value>
+    <value>The connection to the AppHost was lost: {0}.</value>
   </data>
   <data name="UnexpectedErrorOccurred" xml:space="preserve">
     <value>An unexpected error occurred: {0}</value>
@@ -209,7 +212,7 @@
     <comment>{0} is the log file path</comment>
   </data>
   <data name="WaitingForDebuggerToAttachToAppHost" xml:space="preserve">
-    <value>Waiting for debugger to attach to app host process</value>
+    <value>Waiting for debugger to attach to AppHost process</value>
   </data>
   <data name="NewCliVersionAvailable" xml:space="preserve">
     <value>[yellow]A new version of Aspire is available: {0}[/]</value>
@@ -224,7 +227,7 @@
     <comment>Do not translate [dim]. Also leave [/] as-is. {0} is the command to run</comment>
   </data>
   <data name="UnbuildableAppHostsDetected" xml:space="preserve">
-    <value>No app hosts were found (there may be app hosts project files with syntax errors/invalid SDK versions).</value>
+    <value>No AppHosts were found (there may be AppHost project files with syntax errors/invalid SDK versions).</value>
   </data>
   <data name="CustomChoiceLabel" xml:space="preserve">
     <value>Other (specify next)</value>

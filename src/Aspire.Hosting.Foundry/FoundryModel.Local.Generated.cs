@@ -896,7 +896,95 @@ public partial class FoundryModel
         ///   </para>
         ///   <para>See Hugging Face model <see href="https://huggingface.co/Qwen/Qwen3-0.6B">Qwen3-0.6B</see> for details.</para>
         /// </summary>
-        public static readonly FoundryModel Qwen306b = new() { Name = "qwen3-0.6b", Version = "2", Format = "Microsoft" };
+        public static readonly FoundryModel Qwen306b = new() { Name = "qwen3-0.6b", Version = "1", Format = "Microsoft" };
+
+        /// <summary>
+        ///   <para>This model is an optimized version of Qwen3-1.7B to enable local inference. This model uses KLD Gradient quantization.</para>
+        ///   <para>
+        ///     <b>Model Description</b>
+        ///   </para>
+        ///   <list type="bullet">
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Developed by:</b> Microsoft</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model type:</b> ONNX</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>License:</b> apache-2.0</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model Description:</b> This is a conversion of the Qwen3-1.7B for local inference.</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Disclaimer:</b> Model is only an optimization of the base model, any risk associated with the model is the responsibility of the user of the model. Please verify and test for your scenarios. There may be a slight difference in output from the base model with the optimizations applied. Note that optimizations applied are distinct from fine tuning and thus do not alter the intended uses or capabilities of the model.</para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>
+        ///     <b>Base Model Information</b>
+        ///   </para>
+        ///   <para>See Hugging Face model <see href="https://huggingface.co/Qwen/Qwen3-1.7B">Qwen3-1.7B</see> for details.</para>
+        /// </summary>
+        public static readonly FoundryModel Qwen317b = new() { Name = "qwen3-1.7b", Version = "1", Format = "Microsoft" };
+
+        /// <summary>
+        ///   <para>This model is an optimized version of Qwen3-14B to enable local inference. This model uses GPTQ quantization.</para>
+        ///   <para>
+        ///     <b>Model Description</b>
+        ///   </para>
+        ///   <list type="bullet">
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Developed by:</b> Microsoft</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model type:</b> ONNX</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>License:</b> apache-2.0</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model Description:</b> This is a conversion of the Qwen3-14B for local inference.</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Disclaimer:</b> Model is only an optimization of the base model, any risk associated with the model is the responsibility of the user of the model. Please verify and test for your scenarios. There may be a slight difference in output from the base model with the optimizations applied. Note that optimizations applied are distinct from fine tuning and thus do not alter the intended uses or capabilities of the model.</para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>
+        ///     <b>Base Model Information</b>
+        ///   </para>
+        ///   <para>See Hugging Face model <see href="https://huggingface.co/Qwen/Qwen3-14B">Qwen3-14B</see> for details.</para>
+        /// </summary>
+        public static readonly FoundryModel Qwen314b = new() { Name = "qwen3-14b", Version = "1", Format = "Microsoft" };
 
         /// <summary>
         ///   <para>This model is an optimized version of Qwen3-4B to enable local inference. This model uses KLD Gradient quantization.</para>
@@ -941,6 +1029,50 @@ public partial class FoundryModel
         ///   <para>See Hugging Face model <see href="https://huggingface.co/Qwen/Qwen3-4B">Qwen3-4B</see> for details.</para>
         /// </summary>
         public static readonly FoundryModel Qwen34b = new() { Name = "qwen3-4b", Version = "1", Format = "Microsoft" };
+
+        /// <summary>
+        ///   <para>This model is an optimized version of Qwen3-8B to enable local inference. This model uses KLD Gradient quantization.</para>
+        ///   <para>
+        ///     <b>Model Description</b>
+        ///   </para>
+        ///   <list type="bullet">
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Developed by:</b> Microsoft</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model type:</b> ONNX</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>License:</b> apache-2.0</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model Description:</b> This is a conversion of the Qwen3-8B for local inference.</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Disclaimer:</b> Model is only an optimization of the base model, any risk associated with the model is the responsibility of the user of the model. Please verify and test for your scenarios. There may be a slight difference in output from the base model with the optimizations applied. Note that optimizations applied are distinct from fine tuning and thus do not alter the intended uses or capabilities of the model.</para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>
+        ///     <b>Base Model Information</b>
+        ///   </para>
+        ///   <para>See Hugging Face model <see href="https://huggingface.co/Qwen/Qwen3-8B">Qwen3-8B</see> for details.</para>
+        /// </summary>
+        public static readonly FoundryModel Qwen38b = new() { Name = "qwen3-8b", Version = "1", Format = "Microsoft" };
 
         /// <summary>
         ///   <para>This model is an optimized version of Qwen3-VL-2B-Instruct to enable local inference. This model uses RTN quantization.</para>

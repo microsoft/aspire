@@ -13,7 +13,7 @@ public static class TestExtensions
     /// <summary>
     /// Adds a test Redis resource.
     /// </summary>
-    [AspireExport("addTestRedis", Description = "Adds a test Redis resource")]
+    [AspireExport(Description = "Adds a test Redis resource")]
     public static IResourceBuilder<TestRedisResource> AddTestRedis(
         this IDistributedApplicationBuilder builder,
         string name,
@@ -46,7 +46,7 @@ public static class TestExtensions
     /// This method tests the factory method codegen pattern where a method on builder type A
     /// returns builder type B (e.g., SqlServerServerResource.AddDatabase returning SqlServerDatabaseResource).
     /// </remarks>
-    [AspireExport("addTestChildDatabase", Description = "Adds a child database to a test Redis resource")]
+    [AspireExport(Description = "Adds a child database to a test Redis resource")]
     public static IResourceBuilder<TestDatabaseResource> AddTestChildDatabase(
         this IResourceBuilder<TestRedisResource> builder,
         string name,
@@ -62,7 +62,7 @@ public static class TestExtensions
     /// <summary>
     /// Configures the Redis resource with persistence.
     /// </summary>
-    [AspireExport("withPersistence", Description = "Configures the Redis resource with persistence")]
+    [AspireExport(Description = "Configures the Redis resource with persistence")]
     public static IResourceBuilder<TestRedisResource> WithPersistence(
         this IResourceBuilder<TestRedisResource> builder,
         TestPersistenceMode mode = TestPersistenceMode.Volume)
@@ -84,7 +84,7 @@ public static class TestExtensions
     /// <summary>
     /// Adds an optional string parameter.
     /// </summary>
-    [AspireExport("withOptionalString", Description = "Adds an optional string parameter")]
+    [AspireExport(Description = "Adds an optional string parameter")]
     public static IResourceBuilder<T> WithOptionalString<T>(
         this IResourceBuilder<T> builder,
         string? value = null,
@@ -389,7 +389,7 @@ public static class TestExtensions
     /// <summary>
     /// Tests DTO parameter - verifies [AspireDto] generates TypeScript interface.
     /// </summary>
-    [AspireExport("withConfig", Description = "Configures the resource with a DTO")]
+    [AspireExport(Description = "Configures the resource with a DTO")]
     public static IResourceBuilder<T> WithConfig<T>(
         this IResourceBuilder<T> builder,
         TestConfigDto config) where T : IResource
@@ -400,7 +400,7 @@ public static class TestExtensions
     /// <summary>
     /// Tests mutable List return type - verifies AspireList wrapper generation.
     /// </summary>
-    [AspireExport("getTags", Description = "Gets the tags for the resource")]
+    [AspireExport(Description = "Gets the tags for the resource")]
     public static List<string> GetTags(this IResourceBuilder<TestRedisResource> builder)
     {
         return [];
@@ -409,7 +409,7 @@ public static class TestExtensions
     /// <summary>
     /// Tests mutable Dictionary return type - verifies AspireDict wrapper generation.
     /// </summary>
-    [AspireExport("getMetadata", Description = "Gets the metadata for the resource")]
+    [AspireExport(Description = "Gets the metadata for the resource")]
     public static Dictionary<string, string> GetMetadata(this IResourceBuilder<TestRedisResource> builder)
     {
         return [];
@@ -418,7 +418,7 @@ public static class TestExtensions
     /// <summary>
     /// Tests ReferenceExpression parameter - verifies special handling (pass directly via toJSON).
     /// </summary>
-    [AspireExport("withConnectionString", Description = "Sets the connection string using a reference expression")]
+    [AspireExport(Description = "Sets the connection string using a reference expression")]
     public static IResourceBuilder<T> WithConnectionString<T>(
         this IResourceBuilder<T> builder,
         ReferenceExpression connectionString) where T : IResourceWithConnectionString
@@ -430,7 +430,7 @@ public static class TestExtensions
     /// Tests callback receiving context wrapper.
     /// Verifies callback auto-wraps handle into context class with property-like objects.
     /// </summary>
-    [AspireExport("testWithEnvironmentCallback", Description = "Configures environment with callback (test version)")]
+    [AspireExport(Description = "Configures environment with callback (test version)")]
     public static IResourceBuilder<T> TestWithEnvironmentCallback<T>(
         this IResourceBuilder<T> builder,
         Func<TestEnvironmentContext, Task> callback) where T : IResourceWithEnvironment
@@ -441,7 +441,7 @@ public static class TestExtensions
     /// <summary>
     /// Tests DateTime parameter - verifies mapping to ISO 8601 string.
     /// </summary>
-    [AspireExport("withCreatedAt", Description = "Sets the created timestamp")]
+    [AspireExport(Description = "Sets the created timestamp")]
     public static IResourceBuilder<T> WithCreatedAt<T>(
         this IResourceBuilder<T> builder,
         DateTime createdAt) where T : IResource
@@ -452,7 +452,7 @@ public static class TestExtensions
     /// <summary>
     /// Tests DateTimeOffset parameter - verifies mapping to ISO 8601 string.
     /// </summary>
-    [AspireExport("withModifiedAt", Description = "Sets the modified timestamp")]
+    [AspireExport(Description = "Sets the modified timestamp")]
     public static IResourceBuilder<T> WithModifiedAt<T>(
         this IResourceBuilder<T> builder,
         DateTimeOffset modifiedAt) where T : IResource
@@ -463,7 +463,7 @@ public static class TestExtensions
     /// <summary>
     /// Tests Guid parameter - verifies mapping to string.
     /// </summary>
-    [AspireExport("withCorrelationId", Description = "Sets the correlation ID")]
+    [AspireExport(Description = "Sets the correlation ID")]
     public static IResourceBuilder<T> WithCorrelationId<T>(
         this IResourceBuilder<T> builder,
         Guid correlationId) where T : IResource
@@ -474,7 +474,7 @@ public static class TestExtensions
     /// <summary>
     /// Tests optional callback parameter - verifies conditional callback registration.
     /// </summary>
-    [AspireExport("withOptionalCallback", Description = "Configures with optional callback")]
+    [AspireExport(Description = "Configures with optional callback")]
     public static IResourceBuilder<T> WithOptionalCallback<T>(
         this IResourceBuilder<T> builder,
         Func<TestCallbackContext, Task>? callback = null) where T : IResource
@@ -486,7 +486,7 @@ public static class TestExtensions
     /// <summary>
     /// Tests enum parameter - verifies string literal union generation.
     /// </summary>
-    [AspireExport("withStatus", Description = "Sets the resource status")]
+    [AspireExport(Description = "Sets the resource status")]
     public static IResourceBuilder<T> WithStatus<T>(
         this IResourceBuilder<T> builder,
         TestResourceStatus status) where T : IResource
@@ -497,7 +497,7 @@ public static class TestExtensions
     /// <summary>
     /// Tests nested DTO parameter.
     /// </summary>
-    [AspireExport("withNestedConfig", Description = "Configures with nested DTO")]
+    [AspireExport(Description = "Configures with nested DTO")]
     public static IResourceBuilder<T> WithNestedConfig<T>(
         this IResourceBuilder<T> builder,
         TestNestedDto config) where T : IResource
@@ -508,7 +508,7 @@ public static class TestExtensions
     /// <summary>
     /// Tests async callback with context that returns a value.
     /// </summary>
-    [AspireExport("withValidator", Description = "Adds validation callback")]
+    [AspireExport(Description = "Adds validation callback")]
     public static IResourceBuilder<T> WithValidator<T>(
         this IResourceBuilder<T> builder,
         Func<TestResourceContext, Task<bool>> validator) where T : IResource
@@ -520,7 +520,7 @@ public static class TestExtensions
     /// Tests builder passed as parameter to another capability.
     /// Verifies wrapper class acceptance with internal handle extraction.
     /// </summary>
-    [AspireExport("testWaitFor", Description = "Waits for another resource (test version)")]
+    [AspireExport(Description = "Waits for another resource (test version)")]
     public static IResourceBuilder<T> TestWaitFor<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<IResource> dependency) where T : IResource
@@ -531,7 +531,7 @@ public static class TestExtensions
     /// <summary>
     /// Tests readonly array return type - verifies copy/pass directly.
     /// </summary>
-    [AspireExport("getEndpoints", Description = "Gets the endpoints")]
+    [AspireExport(Description = "Gets the endpoints")]
     public static string[] GetEndpoints(this IResourceBuilder<TestRedisResource> builder)
     {
         return [];
@@ -544,7 +544,7 @@ public static class TestExtensions
     /// This targets IResourceWithConnectionString directly, not via generic parameter.
     /// Should expand to all types implementing IResourceWithConnectionString.
     /// </summary>
-    [AspireExport("withConnectionStringDirect", Description = "Sets connection string using direct interface target")]
+    [AspireExport(Description = "Sets connection string using direct interface target")]
     public static IResourceBuilder<IResourceWithConnectionString> WithConnectionStringDirect(
         IResourceBuilder<IResourceWithConnectionString> builder,
         string connectionString)
@@ -557,7 +557,7 @@ public static class TestExtensions
     /// This targets TestRedisResource directly (extends ContainerResource).
     /// Should expand to TestRedisResource AND any types that inherit from it.
     /// </summary>
-    [AspireExport("withRedisSpecific", Description = "Redis-specific configuration")]
+    [AspireExport(Description = "Redis-specific configuration")]
     public static IResourceBuilder<TestRedisResource> WithRedisSpecific(
         IResourceBuilder<TestRedisResource> builder,
         string option)
@@ -569,7 +569,7 @@ public static class TestExtensions
     /// Pattern 4/5: Tests interface/concrete type as parameter (not target).
     /// The dependency parameter should generate a union type: Handle | ResourceBuilderBase.
     /// </summary>
-    [AspireExport("withDependency", Description = "Adds a dependency on another resource")]
+    [AspireExport(Description = "Adds a dependency on another resource")]
     public static IResourceBuilder<T> WithDependency<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<IResourceWithConnectionString> dependency) where T : IResource
@@ -578,9 +578,21 @@ public static class TestExtensions
     }
 
     /// <summary>
+    /// Tests an Aspire union parameter that includes an interface handle.
+    /// The dependency parameter should generate a union type: string | ResourceBuilderBase.
+    /// </summary>
+    [AspireExport("withUnionDependency", Description = "Adds a dependency from a string or another resource")]
+    public static IResourceBuilder<T> WithUnionDependency<T>(
+        this IResourceBuilder<T> builder,
+        [AspireUnion(typeof(string), typeof(IResourceBuilder<IResourceWithConnectionString>))] object dependency) where T : IResource
+    {
+        return builder;
+    }
+
+    /// <summary>
     /// Tests IReadOnlyList parameter - verifies readonly array handling.
     /// </summary>
-    [AspireExport("withEndpoints", Description = "Sets the endpoints")]
+    [AspireExport(Description = "Sets the endpoints")]
     public static IResourceBuilder<T> WithEndpoints<T>(
         this IResourceBuilder<T> builder,
         IReadOnlyList<string> endpoints) where T : IResource
@@ -591,7 +603,7 @@ public static class TestExtensions
     /// <summary>
     /// Tests IReadOnlyDictionary parameter - verifies readonly dict handling.
     /// </summary>
-    [AspireExport("withEnvironmentVariables", Description = "Sets environment variables")]
+    [AspireExport(Description = "Sets environment variables")]
     public static IResourceBuilder<T> WithEnvironmentVariables<T>(
         this IResourceBuilder<T> builder,
         IReadOnlyDictionary<string, string> variables) where T : IResourceWithEnvironment
@@ -604,7 +616,7 @@ public static class TestExtensions
     /// <summary>
     /// Tests CancellationToken parameter - generated TypeScript should accept AbortSignal or CancellationToken for inputs.
     /// </summary>
-    [AspireExport("getStatusAsync", Description = "Gets the status of the resource asynchronously")]
+    [AspireExport(Description = "Gets the status of the resource asynchronously")]
     public static Task<string> GetStatusAsync(
         this IResourceBuilder<TestRedisResource> builder,
         CancellationToken cancellationToken = default)
@@ -615,7 +627,7 @@ public static class TestExtensions
     /// <summary>
     /// Tests CancellationToken in callback parameter - generated TypeScript should materialize host values as CancellationToken.
     /// </summary>
-    [AspireExport("withCancellableOperation", Description = "Performs a cancellable operation")]
+    [AspireExport(Description = "Performs a cancellable operation")]
     public static IResourceBuilder<T> WithCancellableOperation<T>(
         this IResourceBuilder<T> builder,
         Func<CancellationToken, Task> operation) where T : IResource
@@ -626,7 +638,7 @@ public static class TestExtensions
     /// <summary>
     /// Tests CancellationToken mixed with other parameters.
     /// </summary>
-    [AspireExport("waitForReadyAsync", Description = "Waits for the resource to be ready")]
+    [AspireExport(Description = "Waits for the resource to be ready")]
     public static Task<bool> WaitForReadyAsync(
         this IResourceBuilder<TestRedisResource> builder,
         TimeSpan timeout,
@@ -640,7 +652,7 @@ public static class TestExtensions
     /// <summary>
     /// Tests multi-parameter callback with handle types for destructuring codegen.
     /// </summary>
-    [AspireExport("withMultiParamHandleCallback", Description = "Tests multi-param callback destructuring")]
+    [AspireExport(Description = "Tests multi-param callback destructuring")]
     public static IResourceBuilder<TestRedisResource> WithMultiParamHandleCallback(
         this IResourceBuilder<TestRedisResource> builder,
         Func<TestCallbackContext, TestEnvironmentContext, Task> callback)
@@ -654,7 +666,7 @@ public static class TestExtensions
     /// WithDataVolume on TestRedisResource — has both name and isReadOnly parameters.
     /// Tests that options interfaces merge parameters across overloads targeting different types.
     /// </summary>
-    [AspireExport("withDataVolume", Description = "Adds a data volume with persistence")]
+    [AspireExport(Description = "Adds a data volume with persistence")]
     public static IResourceBuilder<TestRedisResource> WithDataVolume(
         this IResourceBuilder<TestRedisResource> builder,
         string? name = null,
@@ -668,7 +680,7 @@ public static class TestExtensions
     /// When combined with the TestRedisResource overload, the generated WithDataVolumeOptions
     /// interface must include both name and isReadOnly (the union of all parameters).
     /// </summary>
-    [AspireExport("withDataVolume", Description = "Adds a data volume")]
+    [AspireExport(Description = "Adds a data volume")]
     public static IResourceBuilder<TestDatabaseResource> WithDataVolume(
         this IResourceBuilder<TestDatabaseResource> builder,
         string? name = null)
@@ -681,7 +693,7 @@ public static class TestExtensions
     /// <summary>
     /// Targets the concrete TestVaultResource so it gets a builder class named "TestVaultResource".
     /// </summary>
-    [AspireExport("addTestVault", Description = "Adds a test vault resource")]
+    [AspireExport(Description = "Adds a test vault resource")]
     public static IResourceBuilder<TestVaultResource> AddTestVault(
         this IDistributedApplicationBuilder builder,
         string name)
@@ -694,7 +706,7 @@ public static class TestExtensions
     /// DeriveClassName strips the 'I' prefix producing "TestVaultResource" — the same name
     /// as the concrete builder. The codegen must deduplicate to avoid emitting two classes.
     /// </summary>
-    [AspireExport("withVaultDirect", Description = "Configures vault using direct interface target")]
+    [AspireExport(Description = "Configures vault using direct interface target")]
     public static IResourceBuilder<ITestVaultResource> WithVaultDirect(
         IResourceBuilder<ITestVaultResource> builder,
         string option)
@@ -711,7 +723,7 @@ public static class TestExtensions
     /// Scenario 1: Single-param merge — one overload has name only, the other adds tag.
     /// Tests merge where the option variation is: single type vs tuple(type, type).
     /// </summary>
-    [AspireExport("withMergeLabel", Description = "Adds a label to the resource")]
+    [AspireExport(Description = "Adds a label to the resource")]
     public static IResourceBuilder<T> WithMergeLabel<T>(
         this IResourceBuilder<T> builder,
         string label) where T : IResource
@@ -735,7 +747,7 @@ public static class TestExtensions
     /// Scenario 2: Tuple-param merge — both have multiple required params, differ by one.
     /// Tests merge where the option variation is: tuple(type, type) vs tuple(type, type, type).
     /// </summary>
-    [AspireExport("withMergeEndpoint", Description = "Configures a named endpoint")]
+    [AspireExport(Description = "Configures a named endpoint")]
     public static IResourceBuilder<T> WithMergeEndpoint<T>(
         this IResourceBuilder<T> builder,
         string endpointName,
@@ -761,7 +773,7 @@ public static class TestExtensions
     /// Scenario 3: Dict/Parameters merge — both have required + optional params, differ by one.
     /// Tests merge where the option variation involves Parameters dict.
     /// </summary>
-    [AspireExport("withMergeLogging", Description = "Configures resource logging")]
+    [AspireExport(Description = "Configures resource logging")]
     public static IResourceBuilder<T> WithMergeLogging<T>(
         this IResourceBuilder<T> builder,
         string logLevel,
@@ -789,7 +801,7 @@ public static class TestExtensions
     /// Scenario 4: Both-dict merge — both overloads have 4+ required params so both use Parameters dicts.
     /// The shorter overload has 4 required params, the longer has 5.
     /// </summary>
-    [AspireExport("withMergeRoute", Description = "Configures a route")]
+    [AspireExport(Description = "Configures a route")]
     public static IResourceBuilder<T> WithMergeRoute<T>(
         this IResourceBuilder<T> builder,
         string path,

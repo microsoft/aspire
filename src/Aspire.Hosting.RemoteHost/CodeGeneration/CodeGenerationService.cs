@@ -12,15 +12,18 @@ namespace Aspire.Hosting.RemoteHost.CodeGeneration;
 /// </summary>
 internal sealed class CodeGenerationService
 {
+    private readonly JsonRpcAuthenticationState _authenticationState;
     private readonly AtsContextFactory _atsContextFactory;
     private readonly CodeGeneratorResolver _resolver;
     private readonly ILogger<CodeGenerationService> _logger;
 
     public CodeGenerationService(
+        JsonRpcAuthenticationState authenticationState,
         AtsContextFactory atsContextFactory,
         CodeGeneratorResolver resolver,
         ILogger<CodeGenerationService> logger)
     {
+        _authenticationState = authenticationState;
         _atsContextFactory = atsContextFactory;
         _resolver = resolver;
         _logger = logger;
@@ -29,16 +32,26 @@ internal sealed class CodeGenerationService
     /// <summary>
     /// Gets the ATS capabilities, types, and diagnostics.
     /// </summary>
+    /// <param name="assemblyNames">
+    /// An optional list of assembly names used to scope the returned capabilities and types to those
+    /// exported by the specified assemblies and their referenced assemblies. If <c>null</c> or empty,
+    /// capabilities are returned for all available assemblies.
+    /// </param>
     /// <returns>The capabilities information.</returns>
     [JsonRpcMethod("getCapabilities")]
-    public CapabilitiesResponse GetCapabilities()
+    public CapabilitiesResponse GetCapabilities(string[]? assemblyNames = null)
     {
+        _authenticationState.ThrowIfNotAuthenticated();
         _logger.LogDebug(">> getCapabilities()");
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
         try
         {
             var context = _atsContextFactory.GetContext();
+            if (assemblyNames is { Length: > 0 })
+            {
+                context = AtsContextFilter.FilterByExportingAssemblies(context, assemblyNames);
+            }
 
             var response = new CapabilitiesResponse
             {
@@ -146,10 +159,12 @@ internal sealed class CodeGenerationService
     /// Generates SDK code for the specified language.
     /// </summary>
     /// <param name="language">The target language (e.g., "TypeScript", "Python").</param>
+    /// <param name="assemblyName">The exporting assembly to scope the generated SDK to, or null to use the full ATS context.</param>
     /// <returns>A dictionary of file paths to file contents.</returns>
     [JsonRpcMethod("generateCode")]
-    public Dictionary<string, string> GenerateCode(string language)
+    public Dictionary<string, string> GenerateCode(string language, string? assemblyName = null)
     {
+        _authenticationState.ThrowIfNotAuthenticated();
         _logger.LogDebug(">> generateCode({Language})", language);
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
@@ -160,7 +175,14 @@ internal sealed class CodeGenerationService
             {
                 throw new ArgumentException($"No code generator found for language: {language}");
             }
-            var files = generator.GenerateDistributedApplication(_atsContextFactory.GetContext());
+
+            var context = _atsContextFactory.GetContext();
+            if (!string.IsNullOrWhiteSpace(assemblyName))
+            {
+                context = AtsContextFilter.FilterByExportingAssembliesWithReferences(context, [assemblyName]);
+            }
+
+            var files = generator.GenerateDistributedApplication(context);
 
             _logger.LogDebug("<< generateCode({Language}) completed in {ElapsedMs}ms, generated {FileCount} files", language, sw.ElapsedMilliseconds, files.Count);
             return files;

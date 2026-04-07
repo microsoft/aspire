@@ -28,13 +28,23 @@ namespace Aspire.Cli.Commands;
 /// </summary>
 internal sealed class AgentMcpCommand : BaseCommand
 {
-    private readonly Dictionary<string, CliMcpTool> _knownTools;
+    private readonly Dictionary<string, CliMcpTool> _knownTools = [];
     private readonly IMcpResourceToolRefreshService _resourceToolRefreshService;
     private McpServer? _server;
     private readonly IAuxiliaryBackchannelMonitor _auxiliaryBackchannelMonitor;
     private readonly IMcpTransportFactory _transportFactory;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<AgentMcpCommand> _logger;
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IPackagingService _packagingService;
+    private readonly IEnvironmentChecker _environmentChecker;
+    private readonly IDocsSearchService _docsSearchService;
+    private readonly IDocsIndexService _docsIndexService;
+    private readonly CliExecutionContext _executionContext;
+    private bool _dashboardOnlyMode;
+
+    private static readonly Option<string?> s_dashboardUrlOption = TelemetryCommandHelpers.CreateDashboardUrlOption();
+    private static readonly Option<string?> s_apiKeyOption = TelemetryCommandHelpers.CreateApiKeyOption();
 
     /// <summary>
     /// Gets the dictionary of known MCP tools. Exposed for testing purposes.
@@ -62,24 +72,16 @@ internal sealed class AgentMcpCommand : BaseCommand
         _transportFactory = transportFactory;
         _loggerFactory = loggerFactory;
         _logger = logger;
+        _httpClientFactory = httpClientFactory;
+        _packagingService = packagingService;
+        _environmentChecker = environmentChecker;
+        _docsSearchService = docsSearchService;
+        _docsIndexService = docsIndexService;
+        _executionContext = executionContext;
         _resourceToolRefreshService = new McpResourceToolRefreshService(auxiliaryBackchannelMonitor, loggerFactory.CreateLogger<McpResourceToolRefreshService>());
-        _knownTools = new Dictionary<string, CliMcpTool>
-        {
-            [KnownMcpTools.ListResources] = new ListResourcesTool(auxiliaryBackchannelMonitor, loggerFactory.CreateLogger<ListResourcesTool>()),
-            [KnownMcpTools.ListConsoleLogs] = new ListConsoleLogsTool(auxiliaryBackchannelMonitor, loggerFactory.CreateLogger<ListConsoleLogsTool>()),
-            [KnownMcpTools.ExecuteResourceCommand] = new ExecuteResourceCommandTool(auxiliaryBackchannelMonitor, loggerFactory.CreateLogger<ExecuteResourceCommandTool>()),
-            [KnownMcpTools.ListStructuredLogs] = new ListStructuredLogsTool(auxiliaryBackchannelMonitor, httpClientFactory, loggerFactory.CreateLogger<ListStructuredLogsTool>()),
-            [KnownMcpTools.ListTraces] = new ListTracesTool(auxiliaryBackchannelMonitor, httpClientFactory, loggerFactory.CreateLogger<ListTracesTool>()),
-            [KnownMcpTools.ListTraceStructuredLogs] = new ListTraceStructuredLogsTool(auxiliaryBackchannelMonitor, httpClientFactory, loggerFactory.CreateLogger<ListTraceStructuredLogsTool>()),
-            [KnownMcpTools.SelectAppHost] = new SelectAppHostTool(auxiliaryBackchannelMonitor, executionContext),
-            [KnownMcpTools.ListAppHosts] = new ListAppHostsTool(auxiliaryBackchannelMonitor, executionContext),
-            [KnownMcpTools.ListIntegrations] = new ListIntegrationsTool(packagingService, executionContext, auxiliaryBackchannelMonitor),
-            [KnownMcpTools.Doctor] = new DoctorTool(environmentChecker),
-            [KnownMcpTools.RefreshTools] = new RefreshToolsTool(_resourceToolRefreshService),
-            [KnownMcpTools.ListDocs] = new ListDocsTool(docsIndexService),
-            [KnownMcpTools.SearchDocs] = new SearchDocsTool(docsSearchService, docsIndexService),
-            [KnownMcpTools.GetDoc] = new GetDocTool(docsIndexService)
-        };
+
+        Options.Add(s_dashboardUrlOption);
+        Options.Add(s_apiKeyOption);
     }
 
     protected override bool UpdateNotificationsEnabled => false;
@@ -95,6 +97,44 @@ internal sealed class AgentMcpCommand : BaseCommand
 
     protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
+        var dashboardUrl = parseResult.GetValue(s_dashboardUrlOption);
+        var apiKey = parseResult.GetValue(s_apiKeyOption);
+
+        if (dashboardUrl is not null)
+        {
+            if (!UrlHelper.IsHttpUrl(dashboardUrl))
+            {
+                _logger.LogError("Invalid --dashboard-url: {DashboardUrl}", dashboardUrl);
+                return ExitCodeConstants.InvalidCommand;
+            }
+
+            _dashboardOnlyMode = true;
+            var staticProvider = new StaticDashboardInfoProvider(dashboardUrl, apiKey);
+
+            _knownTools[KnownMcpTools.ListStructuredLogs] = new ListStructuredLogsTool(staticProvider, _httpClientFactory, _loggerFactory.CreateLogger<ListStructuredLogsTool>());
+            _knownTools[KnownMcpTools.ListTraces] = new ListTracesTool(staticProvider, _httpClientFactory, _loggerFactory.CreateLogger<ListTracesTool>());
+            _knownTools[KnownMcpTools.ListTraceStructuredLogs] = new ListTraceStructuredLogsTool(staticProvider, _httpClientFactory, _loggerFactory.CreateLogger<ListTraceStructuredLogsTool>());
+        }
+        else
+        {
+            var dashboardInfoProvider = new BackchannelDashboardInfoProvider(_auxiliaryBackchannelMonitor, _logger);
+
+            _knownTools[KnownMcpTools.ListResources] = new ListResourcesTool(_auxiliaryBackchannelMonitor, _loggerFactory.CreateLogger<ListResourcesTool>());
+            _knownTools[KnownMcpTools.ListConsoleLogs] = new ListConsoleLogsTool(_auxiliaryBackchannelMonitor, _loggerFactory.CreateLogger<ListConsoleLogsTool>());
+            _knownTools[KnownMcpTools.ExecuteResourceCommand] = new ExecuteResourceCommandTool(_auxiliaryBackchannelMonitor, _loggerFactory.CreateLogger<ExecuteResourceCommandTool>());
+            _knownTools[KnownMcpTools.ListStructuredLogs] = new ListStructuredLogsTool(dashboardInfoProvider, _httpClientFactory, _loggerFactory.CreateLogger<ListStructuredLogsTool>());
+            _knownTools[KnownMcpTools.ListTraces] = new ListTracesTool(dashboardInfoProvider, _httpClientFactory, _loggerFactory.CreateLogger<ListTracesTool>());
+            _knownTools[KnownMcpTools.ListTraceStructuredLogs] = new ListTraceStructuredLogsTool(dashboardInfoProvider, _httpClientFactory, _loggerFactory.CreateLogger<ListTraceStructuredLogsTool>());
+            _knownTools[KnownMcpTools.SelectAppHost] = new SelectAppHostTool(_auxiliaryBackchannelMonitor, _executionContext);
+            _knownTools[KnownMcpTools.ListAppHosts] = new ListAppHostsTool(_auxiliaryBackchannelMonitor, _executionContext);
+            _knownTools[KnownMcpTools.ListIntegrations] = new ListIntegrationsTool(_packagingService, _executionContext, _auxiliaryBackchannelMonitor);
+            _knownTools[KnownMcpTools.Doctor] = new DoctorTool(_environmentChecker);
+            _knownTools[KnownMcpTools.RefreshTools] = new RefreshToolsTool(_resourceToolRefreshService);
+            _knownTools[KnownMcpTools.ListDocs] = new ListDocsTool(_docsIndexService);
+            _knownTools[KnownMcpTools.SearchDocs] = new SearchDocsTool(_docsSearchService, _docsIndexService);
+            _knownTools[KnownMcpTools.GetDoc] = new GetDocTool(_docsIndexService);
+        }
+
         var icons = McpIconHelper.GetAspireIcons(typeof(AgentMcpCommand).Assembly, "Aspire.Cli.Mcp.Resources");
 
         var options = new McpServerOptions
@@ -135,32 +175,40 @@ internal sealed class AgentMcpCommand : BaseCommand
 
         var tools = new List<Tool>();
 
-        tools.AddRange(KnownTools.Values.Select(tool => new Tool
+        tools.AddRange(KnownTools.Select(tool => new Tool
         {
-            Name = tool.Name,
-            Description = tool.Description,
-            InputSchema = tool.GetInputSchema()
+            Name = tool.Value.Name,
+            Description = tool.Value.Description,
+            InputSchema = tool.Value.GetInputSchema()
         }));
 
         try
         {
-            // Refresh resource tools if needed (e.g., AppHost selection changed or invalidated)
-            if (!_resourceToolRefreshService.TryGetResourceToolMap(out var resourceToolMap))
+            // In dashboard-only mode, skip resource tool discovery
+            if (_dashboardOnlyMode)
             {
-                // Don't send tools/list_changed here — the client already called tools/list
-                // and will receive the up-to-date result. Sending a notification during the
-                // list handler would cause the client to call tools/list again, creating an
-                // infinite loop when tool availability is unstable (e.g., container MCP tools
-                // oscillating between available/unavailable).
-                (resourceToolMap, _) = await _resourceToolRefreshService.RefreshResourceToolMapAsync(cancellationToken);
+                _logger.LogDebug("Dashboard-only mode: skipping resource tool discovery");
             }
-
-            tools.AddRange(resourceToolMap.Select(x => new Tool
+            else
             {
-                Name = x.Key,
-                Description = x.Value.Tool.Description,
-                InputSchema = x.Value.Tool.InputSchema
-            }));
+                // Refresh resource tools if needed (e.g., AppHost selection changed or invalidated)
+                if (!_resourceToolRefreshService.TryGetResourceToolMap(out var resourceToolMap))
+                {
+                    // Don't send tools/list_changed here — the client already called tools/list
+                    // and will receive the up-to-date result. Sending a notification during the
+                    // list handler would cause the client to call tools/list again, creating an
+                    // infinite loop when tool availability is unstable (e.g., container MCP tools
+                    // oscillating between available/unavailable).
+                    (resourceToolMap, _) = await _resourceToolRefreshService.RefreshResourceToolMapAsync(cancellationToken);
+                }
+
+                tools.AddRange(resourceToolMap.Select(x => new Tool
+                {
+                    Name = x.Key,
+                    Description = x.Value.Tool.Description,
+                    InputSchema = x.Value.Tool.InputSchema
+                }));
+            }
         }
         catch (Exception ex)
         {
@@ -178,6 +226,14 @@ internal sealed class AgentMcpCommand : BaseCommand
         var toolName = request.Params?.Name ?? string.Empty;
 
         _logger.LogDebug("MCP CallTool request received for tool: {ToolName}", toolName);
+
+        // In dashboard-only mode, only allow tools that were registered
+        if (_dashboardOnlyMode && !_knownTools.ContainsKey(toolName))
+        {
+            throw new McpProtocolException(
+                $"Tool '{toolName}' is not available in dashboard-only mode. Only telemetry tools (list_structured_logs, list_traces, list_trace_structured_logs) are available when using --dashboard-url.",
+                McpErrorCode.MethodNotFound);
+        }
 
         if (KnownTools.TryGetValue(toolName, out var tool))
         {

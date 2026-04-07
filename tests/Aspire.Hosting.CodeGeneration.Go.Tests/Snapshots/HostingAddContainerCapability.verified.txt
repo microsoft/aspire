@@ -3,6 +3,7 @@
   MethodName: addContainer,
   QualifiedMethodName: addContainer,
   Description: Adds a container resource,
+  IsObsolete: false,
   Parameters: [
     {
       Name: name,

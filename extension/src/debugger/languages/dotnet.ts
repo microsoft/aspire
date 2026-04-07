@@ -15,7 +15,9 @@ import {
     mergeEnvironmentVariables,
     determineArguments,
     determineWorkingDirectory,
-    determineServerReadyAction
+    determineServerReadyAction,
+    LaunchProfileCommandName,
+    expandEnvironmentVariables
 } from '../launchProfiles';
 import { AspireDebugSession } from '../AspireDebugSession';
 
@@ -253,7 +255,29 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                 env.push({ name: "ASPIRE_DASHBOARD_AI_DISABLED", value: "true" });
             }
 
-            if (!isFileBasedApp(projectPath)) {
+            if (baseProfile?.commandName?.toLowerCase() === LaunchProfileCommandName.executable && baseProfile.executablePath) {
+                // For Executable command profiles (e.g., class library integrations), the launch profile
+                // specifies an external executable to run instead of the project output.
+                // Build the project to ensure dependencies are compiled, then launch
+                // using the profile's executable path and command line arguments.
+                // Expand environment variable references (e.g. $(HOME)) that VS handles natively
+                // but aren't expanded by the coreclr debugger.
+                await dotNetService.buildDotNetProject(projectPath);
+
+                debugConfiguration.program = expandEnvironmentVariables(baseProfile.executablePath);
+                if (debugConfiguration.args) {
+                    debugConfiguration.args = expandEnvironmentVariables(debugConfiguration.args);
+                } else if (baseProfile.commandLineArgs) {
+                    // Fall back to launch profile args if run session args were empty
+                    debugConfiguration.args = expandEnvironmentVariables(baseProfile.commandLineArgs);
+                }
+                debugConfiguration.env = Object.fromEntries(mergeEnvironmentVariables(
+                    baseProfile?.environmentVariables,
+                    debugConfiguration.env,
+                    env
+                ));
+            }
+            else if (!isFileBasedApp(projectPath)) {
                 const outputPath = await dotNetService.getDotNetTargetPath(projectPath);
                 if ((!(await doesFileExist(outputPath)) || launchOptions.forceBuild)) {
                     await dotNetService.buildDotNetProject(projectPath);

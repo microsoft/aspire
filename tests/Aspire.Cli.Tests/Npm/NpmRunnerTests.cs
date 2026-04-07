@@ -126,4 +126,63 @@ public class NpmRunnerTests
         Assert.Contains("npm.cmd", startInfo.Arguments);
         Assert.Equal(@"C:\temp", startInfo.WorkingDirectory);
     }
+
+    [Fact]
+    public void TryExtractLastVersion_SingleVersion_ReturnsTrimmedVersion()
+    {
+        var result = NpmRunner.TryExtractLastVersion("0.1.1\n", out var version);
+        Assert.True(result);
+        Assert.Equal("0.1.1", version);
+    }
+
+    [Fact]
+    public void TryExtractLastVersion_MultipleVersions_ReturnsLastVersion()
+    {
+        var output = "@playwright/cli@0.1.1 '0.1.1'\n@playwright/cli@0.1.2 '0.1.2'\n@playwright/cli@0.1.3 '0.1.3'\n";
+        var result = NpmRunner.TryExtractLastVersion(output, out var version);
+        Assert.True(result);
+        Assert.Equal("0.1.3", version);
+    }
+
+    [Fact]
+    public void TryExtractLastVersion_MultipleVersions_WindowsLineEndings_ReturnsLastVersion()
+    {
+        var output = "@playwright/cli@0.1.1 '0.1.1'\r\n@playwright/cli@0.1.2 '0.1.2'\r\n@playwright/cli@0.1.3 '0.1.3'\r\n";
+        var result = NpmRunner.TryExtractLastVersion(output, out var version);
+        Assert.True(result);
+        Assert.Equal("0.1.3", version);
+    }
+
+    [Fact]
+    public void TryExtractLastVersion_EmptyString_ReturnsFalse()
+    {
+        var result = NpmRunner.TryExtractLastVersion("", out var version);
+        Assert.False(result);
+        Assert.Null(version);
+    }
+
+    [Fact]
+    public void TryExtractLastVersion_WhitespaceOnly_ReturnsFalse()
+    {
+        var result = NpmRunner.TryExtractLastVersion("  \n  \n  ", out var version);
+        Assert.False(result);
+        Assert.Null(version);
+    }
+
+    [Fact]
+    public void TryExtractLastVersion_SingleVersionNoNewline_ReturnsTrimmedVersion()
+    {
+        var result = NpmRunner.TryExtractLastVersion("1.2.3", out var version);
+        Assert.True(result);
+        Assert.Equal("1.2.3", version);
+    }
+
+    [Fact]
+    public void TryExtractLastVersion_MultipleVersionsWithPrerelease_ReturnsLastVersion()
+    {
+        var output = "@scope/pkg@1.0.0-alpha '1.0.0-alpha'\n@scope/pkg@1.0.0 '1.0.0'\n";
+        var result = NpmRunner.TryExtractLastVersion(output, out var version);
+        Assert.True(result);
+        Assert.Equal("1.0.0", version);
+    }
 }

@@ -58,6 +58,7 @@
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <PackageReference Include="Semver" />
     <PackageReference Include="Sigstore" />
+    <PackageReference Include="System.IO.Hashing" />
     <PackageReference Include="Tuf" />
     <PackageReference Include="ModelContextProtocol" />
   </ItemGroup>
@@ -76,8 +77,10 @@
     <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Layout\BundleDiscovery.cs" />
     <Compile Include="$(SharedDir)EnumerableExtensions.cs" Link="Utils\EnumerableExtensions.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />
+    <Compile Include="$(SharedDir)DashboardExitCodes.cs" Link="Utils\DashboardExitCodes.cs" />
     <Compile Include="$(SharedDir)KnownOtelConfigNames.cs" Link="Utils\KnownOtelConfigNames.cs" />
     <Compile Include="$(SharedDir)KnownFormats.cs" Link="Utils\KnownFormats.cs" />
+    <Compile Include="$(SharedDir)TokenGenerator.cs" Link="Utils\TokenGenerator.cs" />
     <Compile Include="$(SharedDir)PathNormalizer.cs" Link="Utils\PathNormalizer.cs" />
     <Compile Include="$(SharedDir)CircularBuffer.cs" Link="Utils\CircularBuffer.cs" />
     <Compile Include="$(SharedDir)ColorGenerator.cs" Link="Utils\ColorGenerator.cs" />
@@ -213,6 +216,9 @@
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
     <EmbeddedResource Include="Templating\Templates\py-starter\**\*" LogicalName="py-starter.%(RecursiveDir)%(Filename)%(Extension)">
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\.agents\skills\aspire\**\*" LogicalName="skills.aspire/%(RecursiveDir)%(Filename)%(Extension)">
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
   </ItemGroup>

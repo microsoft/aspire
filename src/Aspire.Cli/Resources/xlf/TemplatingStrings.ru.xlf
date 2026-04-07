@@ -122,6 +122,16 @@
         <target state="translated">Создан nuGet.config для выбранного канала пакета.</target>
         <note />
       </trans-unit>
+      <trans-unit id="NuGetConfigCreatedOrUpdatedConfirmationMessage">
+        <source>Created or updated NuGet.config in the project directory with required package sources.</source>
+        <target state="new">Created or updated NuGet.config in the project directory with required package sources.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NuGetConfigUpdatedConfirmationMessage">
+        <source>Updated NuGet.config with required package sources.</source>
+        <target state="new">Updated NuGet.config with required package sources.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ProjectAlreadyExists">
         <source>The new project cannot be created because it would overwrite existing files in the output folder. Please remove or move the conflicting files, or choose a different location.</source>
         <target state="translated">Невозможно создать новый проект, так как он перезапишет существующие файлы в выходной папке. Удалите или переместите конфликтующие файлы либо выберите другое расположение.</target>
@@ -170,6 +180,11 @@
       <trans-unit id="Unknown">
         <source>Unknown</source>
         <target state="translated">Unbekannt</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UpdateNuGetConfigConfirmation">
+        <source>Update NuGet.config to add missing package sources for the selected channel?</source>
+        <target state="new">Update NuGet.config to add missing package sources for the selected channel?</target>
         <note />
       </trans-unit>
       <trans-unit id="UseLocalhostTld_Description">
@@ -223,13 +238,13 @@
         <note />
       </trans-unit>
       <trans-unit id="RunAspireRun">
-        <source>Run 'aspire run' to start your apphost.</source>
-        <target state="new">Run 'aspire run' to start your apphost.</target>
+        <source>Run 'aspire run' to start your AppHost.</source>
+        <target state="new">Run 'aspire run' to start your AppHost.</target>
         <note />
       </trans-unit>
       <trans-unit id="RunCdThenAspireRun">
-        <source>Run 'cd "{0}"' and then 'aspire run' to start your apphost.</source>
-        <target state="new">Run 'cd "{0}"' and then 'aspire run' to start your apphost.</target>
+        <source>Run 'cd "{0}"' and then 'aspire run' to start your AppHost.</source>
+        <target state="new">Run 'cd "{0}"' and then 'aspire run' to start your AppHost.</target>
         <note>{0} is the relative path to the project directory</note>
       </trans-unit>
     </body>

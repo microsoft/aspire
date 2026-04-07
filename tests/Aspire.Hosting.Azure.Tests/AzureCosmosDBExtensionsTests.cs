@@ -58,7 +58,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
         Assert.NotNull(containerImageAnnotation);
 
         var actualTag = containerImageAnnotation.Tag;
-        Assert.Equal(imageTag ?? "latest", actualTag);
+        Assert.Equal(imageTag ?? "stable", actualTag);
     }
 
     [Theory]

@@ -16,6 +16,7 @@ public static class AttributeDataReader
     private const string AspireExportIgnoreAttributeFullName = HostingTypeNames.AspireExportIgnoreAttribute;
     private const string AspireDtoAttributeFullName = HostingTypeNames.AspireDtoAttribute;
     private const string AspireUnionAttributeFullName = HostingTypeNames.AspireUnionAttribute;
+    private const string ObsoleteAttributeFullName = "System.ObsoleteAttribute";
 
     // --- AspireExport lookup ---
 
@@ -44,6 +45,12 @@ public static class AttributeDataReader
         => FindAllAttributes(assembly.GetCustomAttributesData(), AspireExportAttributeFullName, ParseAspireExportData);
 
     // --- AspireExportIgnore lookup ---
+
+    /// <summary>
+    /// Determines whether the specified <paramref name="type"/> has the AspireExportIgnore attribute.
+    /// </summary>
+    public static bool HasAspireExportIgnoreData(Type type)
+        => HasAttribute(type.GetCustomAttributesData(), AspireExportIgnoreAttributeFullName);
 
     /// <summary>
     /// Determines whether the specified <paramref name="property"/> has the AspireExportIgnore attribute.
@@ -78,6 +85,26 @@ public static class AttributeDataReader
     /// </summary>
     public static AspireUnionData? GetAspireUnionData(PropertyInfo property)
         => FindSingleAttribute<AspireUnionData>(property.GetCustomAttributesData(), AspireUnionAttributeFullName, ParseAspireUnionData);
+
+    // --- Obsolete lookup ---
+
+    /// <summary>
+    /// Gets <see cref="ObsoleteData"/> from the specified <paramref name="method"/>, if present.
+    /// </summary>
+    public static ObsoleteData? GetObsoleteData(MethodInfo method)
+        => FindSingleAttribute<ObsoleteData>(method.GetCustomAttributesData(), ObsoleteAttributeFullName, ParseObsoleteData);
+
+    /// <summary>
+    /// Gets <see cref="ObsoleteData"/> from the specified <paramref name="property"/>, if present.
+    /// </summary>
+    public static ObsoleteData? GetObsoleteData(PropertyInfo property)
+        => FindSingleAttribute<ObsoleteData>(property.GetCustomAttributesData(), ObsoleteAttributeFullName, ParseObsoleteData);
+
+    /// <summary>
+    /// Gets <see cref="ObsoleteData"/> from the specified <paramref name="type"/>, if present.
+    /// </summary>
+    public static ObsoleteData? GetObsoleteData(Type type)
+        => FindSingleAttribute<ObsoleteData>(type.GetCustomAttributesData(), ObsoleteAttributeFullName, ParseObsoleteData);
 
     // --- Generic helpers ---
 
@@ -243,6 +270,30 @@ public static class AttributeDataReader
             Types = [.. types]
         };
     }
+
+    private static ObsoleteData ParseObsoleteData(CustomAttributeData data)
+    {
+        string? message = null;
+        var isError = false;
+
+        if (data.ConstructorArguments.Count > 0 &&
+            data.ConstructorArguments[0].Value is string messageValue)
+        {
+            message = messageValue;
+        }
+
+        if (data.ConstructorArguments.Count > 1 &&
+            data.ConstructorArguments[1].Value is bool isErrorValue)
+        {
+            isError = isErrorValue;
+        }
+
+        return new ObsoleteData
+        {
+            Message = message,
+            IsError = isError
+        };
+    }
 }
 
 /// <summary>
@@ -295,4 +346,20 @@ public sealed class AspireUnionData
     /// Gets the CLR types that form the union.
     /// </summary>
     public required Type[] Types { get; init; }
+}
+
+/// <summary>
+/// Name-based adapter for <see cref="ObsoleteAttribute"/> data, parsed from <see cref="CustomAttributeData"/>.
+/// </summary>
+public sealed class ObsoleteData
+{
+    /// <summary>
+    /// Gets the obsolete message, if any.
+    /// </summary>
+    public string? Message { get; init; }
+
+    /// <summary>
+    /// Gets whether use of the obsolete API is an error.
+    /// </summary>
+    public bool IsError { get; init; }
 }
