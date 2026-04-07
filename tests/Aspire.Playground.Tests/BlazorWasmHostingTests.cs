@@ -81,10 +81,12 @@ public class BlazorWasmHostingTests(ITestOutputHelper testOutput)
         var rows = tableLocator.Locator("tbody tr");
         await Assertions.Expect(rows).Not.ToHaveCountAsync(0);
 
-        // Give the WASM client time to flush telemetry batches
-        await page.WaitForTimeoutAsync(5_000);
+        // Wait up to 60s for all three OTLP signal types to arrive (metrics may take longest)
+        await WaitForOtlpSignalsAsync(page, otlpRequests);
 
         Assert.Contains(otlpRequests, url => url.Contains("/_otlp/v1/traces"));
+        Assert.Contains(otlpRequests, url => url.Contains("/_otlp/v1/logs"));
+        Assert.Contains(otlpRequests, url => url.Contains("/_otlp/v1/metrics"));
 
         await page.CloseAsync();
         await app.StopAsync();
@@ -153,12 +155,32 @@ public class BlazorWasmHostingTests(ITestOutputHelper testOutput)
         var rows = tableLocator.Locator("tbody tr");
         await Assertions.Expect(rows).Not.ToHaveCountAsync(0);
 
-        await page.WaitForTimeoutAsync(5_000);
+        // Wait up to 60s for all three OTLP signal types to arrive (metrics may take longest)
+        await WaitForOtlpSignalsAsync(page, otlpRequests);
 
         Assert.Contains(otlpRequests, url => url.Contains("/_otlp/v1/traces"));
+        Assert.Contains(otlpRequests, url => url.Contains("/_otlp/v1/logs"));
+        Assert.Contains(otlpRequests, url => url.Contains("/_otlp/v1/metrics"));
 
         await page.CloseAsync();
         await app.StopAsync();
+    }
+
+    private static async Task WaitForOtlpSignalsAsync(IPage page, ConcurrentBag<string> otlpRequests)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(60);
+        while (DateTime.UtcNow < deadline)
+        {
+            var hasTraces = otlpRequests.Any(url => url.Contains("/_otlp/v1/traces"));
+            var hasLogs = otlpRequests.Any(url => url.Contains("/_otlp/v1/logs"));
+            var hasMetrics = otlpRequests.Any(url => url.Contains("/_otlp/v1/metrics"));
+            if (hasTraces && hasLogs && hasMetrics)
+            {
+                return;
+            }
+
+            await page.WaitForTimeoutAsync(1_000);
+        }
     }
 
     private async Task<Aspire.Hosting.DistributedApplication> CreateAppAsync(Type appHostType)
