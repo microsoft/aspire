@@ -53,8 +53,7 @@ Packages named `Aspire.Hosting.*` — these are maintained by the Aspire team an
 | Package | Unlocks |
 |---------|---------|
 | `Aspire.Hosting.Python` | `AddPythonApp()`, `AddUvicornApp()` |
-| `Aspire.Hosting.JavaScript` | `AddJavaScriptApp()`, `AddNodeApp()`, `AddViteApp()` |
-| `Aspire.Hosting.JavaScript` | Additional JavaScript hosting support |
+| `Aspire.Hosting.JavaScript` | `AddJavaScriptApp()`, `AddNodeApp()`, `AddViteApp()`, `.WithYarn()`, `.WithPnpm()` |
 | `Aspire.Hosting.PostgreSQL` | `AddPostgres()`, `AddDatabase()` |
 | `Aspire.Hosting.Redis` | `AddRedis()` |
 
@@ -87,6 +86,63 @@ Before writing any builder call:
 **Don't invent APIs** — if the docs search and integration list don't return it, it doesn't exist. Fall back to Tier 3 and note the limitation to the user.
 
 **API shapes differ between C# and TypeScript** — always check the correct language docs.
+
+### Choosing the right JavaScript resource type
+
+The `Aspire.Hosting.JavaScript` package provides three resource types. Pick the right one:
+
+| Signal | Use | Example |
+|--------|-----|---------|
+| Vite app (has `vite.config.*`) | `AddViteApp(name, dir)` | Frontend SPA, Vite + React/Vue/Svelte |
+| App runs via package.json script only | `AddJavaScriptApp(name, dir, { runScriptName })` | CRA app, Next.js, monorepo root scripts |
+| App has a specific Node entry file (`.js`/`.ts`) | `AddNodeApp(name, dir, "path/to/entry.js")` | Express/Fastify API, Socket.IO server |
+| App needs different scripts for dev vs publish | `AddNodeApp(...)` + `.WithRunScript("dev")` + `.WithBuildScript("build")` | TypeScript server compiled to `dist/` |
+
+**Key distinctions:**
+- `AddNodeApp` separates the **production entry point** (`dist/index.js`) from the **dev script** (`WithRunScript("start:dev")`), which is critical for `aspire publish` to work correctly.
+- `AddJavaScriptApp` runs the same npm/yarn script in all modes — simpler but no dev/prod distinction.
+- `AddViteApp` is `AddJavaScriptApp` with Vite-specific defaults (auto-HTTPS config augmentation, `dev` as default script).
+
+**Always add `.WithBuildScript("build")` when the app has a TypeScript compilation or bundling step** — without it, `aspire publish` will fail because there's nothing to produce production assets.
+
+### Dev vs publish scripts for JavaScript apps
+
+```typescript
+// Express API with TypeScript: runs ts-node-dev in dev, compiled JS in prod
+const api = await builder
+    .addNodeApp("api", "./api", "dist/index.js")   // production entry point
+    .withRunScript("start:dev")                      // dev: runs "npm run start:dev"
+    .withBuildScript("build")                        // publish: runs "npm run build" first
+    .withYarn()
+    .withHttpEndpoint({ env: "PORT" });
+
+// Vite frontend: vite dev server in dev, built assets in prod
+const web = await builder
+    .addViteApp("web", "./frontend")
+    .withBuildScript("build")                        // publish: runs "npm run build"
+    .withYarn();
+```
+
+### Framework-specific port binding
+
+Not all frameworks read ports from env vars the same way:
+
+| Framework | Port mechanism | AppHost pattern |
+|-----------|---------------|-----------------|
+| Express/Fastify | `process.env.PORT` | `.withHttpEndpoint({ env: "PORT" })` |
+| Vite | `--port` CLI arg or `server.port` in config | `.withHttpEndpoint({ env: "PORT" })` — Aspire's Vite integration handles this automatically |
+| Next.js | `PORT` env or `--port` | `.withHttpEndpoint({ env: "PORT" })` |
+| CRA | `PORT` env | `.withHttpEndpoint({ env: "PORT" })` |
+
+**Suppress auto-browser-open:** Many dev servers (Vite, CRA, Next.js) auto-open a browser on start. Add `.withEnvironment("BROWSER", "none")` to prevent this in Aspire-managed apps. Vite also respects `server.open: false` in its config.
+
+### Never call it ".NET Aspire"
+
+Always refer to the product as just **Aspire**, never ".NET Aspire". This applies to all comments in generated AppHost code, messages to the user, and any documentation you produce.
+
+### Dashboard URL must include auth token
+
+When printing or displaying the Aspire dashboard URL to the user, always include the full login token query parameter. The dashboard requires authentication — a bare URL like `http://localhost:18888` won't work. Use the full URL as printed by `aspire start` (e.g., `http://localhost:18888/login?t=<token>`).
 
 ### Prefer HTTPS over HTTP
 
@@ -204,7 +260,15 @@ Analyze the repository to discover all projects and services that could be model
   - `dotnet msbuild <project> -getProperty:TargetFramework` — must be `net8.0` or newer
   - `dotnet msbuild <project> -getProperty:IsAspireHost` — skip if `true`
 - **Solution files**: `*.sln` or `*.slnx` — if found, the C# AppHost **must** use full project mode (with `.csproj`) so it can be opened in Visual Studio alongside the rest of the solution. This is a hard requirement.
-- **Node.js/TypeScript apps**: directories with `package.json` containing a `start`, `dev`, or `main`/`module` entry
+- **Node.js/TypeScript apps**: directories with `package.json` containing a `start`, `dev`, or `main`/`module` entry. For each, also check:
+  - Does it have a `vite.config.*` file? → use `AddViteApp`
+  - Does it have a specific entry file (e.g., `src/index.ts`, `server.js`) and a `build` script that compiles TypeScript? → use `AddNodeApp` with `.WithRunScript()` and `.WithBuildScript()`
+  - Otherwise → use `AddJavaScriptApp`
+- **Monorepo/workspace detection**: Check root `package.json` for `"workspaces"` field (Yarn/npm) or `pnpm-workspace.yaml` (pnpm). If this is a monorepo:
+  - **Map workspace packages** — each workspace with a runnable script (`start`, `dev`) is a potential Aspire resource
+  - **Root scripts that delegate** — some monorepos have root-level scripts like `"start": "yarn --cwd ./subdir start"`. Model the *actual app directory* as the resource, not the root
+  - **Path resolution** — `appDirectory` is relative to the AppHost location. In monorepos you often need `../`, `../../`, or similar paths. Double-check these
+  - **Shared dependencies** — `.WithYarn()` / `.WithPnpm()` on each resource handles workspace-aware installs automatically
 - **Python apps**: directories with `pyproject.toml`, `requirements.txt`, or `main.py`/`app.py`
 - **Go apps**: directories with `go.mod`
 - **Java apps**: directories with `pom.xml` or `build.gradle`
@@ -271,16 +335,22 @@ import { createBuilder } from './.modules/aspire.js';
 
 const builder = await createBuilder();
 
-// Node.js/TypeScript app — HTTPS with dev cert
+// Express/Node.js API with TypeScript — needs build for publish
 const api = await builder
-    .addNodeApp("api", "./api", "src/index.ts")
+    .addNodeApp("api", "./api", "dist/index.js")   // production entry point
+    .withRunScript("start:dev")                      // dev: runs ts-node-dev or similar
+    .withBuildScript("build")                        // publish: compiles TS first
+    .withYarn()                                      // or .withPnpm() — match the repo
     .withHttpsDeveloperCertificate()
     .withHttpsEndpoint({ env: "PORT" });
 
-// Vite frontend — HTTPS with dev cert
+// Vite frontend — HTTPS with dev cert, suppress auto-browser
 const frontend = await builder
     .addViteApp("frontend", "./frontend")
+    .withBuildScript("build")
+    .withYarn()
     .withHttpsDeveloperCertificate()
+    .withEnvironment("BROWSER", "none")              // prevent auto-opening browser
     .withReference(api)
     .waitFor(api);
 
@@ -645,7 +715,7 @@ Once the app is running, use the Aspire CLI to verify everything is wired up cor
 2. **Environment flows correctly**: `aspire describe` — check that environment variables (connection strings, ports, secrets from parameters) are injected into each resource as expected. Verify `.env` values that were migrated to parameters are present.
 3. **OTel is flowing** (if configured in Step 7): `aspire otel` — verify that services instrumented with OpenTelemetry are exporting traces and metrics to the Aspire dashboard collector.
 4. **No startup errors**: `aspire logs <resource>` — check logs for each resource to ensure clean startup with no crashes, missing config, or connection failures.
-5. **Dashboard is accessible**: Confirm the dashboard URL is printed and can be opened.
+5. **Dashboard is accessible**: Confirm the dashboard URL (including the login token) is printed and can be opened. The full URL looks like `http://localhost:18888/login?t=<token>` — always include the token.
 
 **This skill is not done until `aspire start` runs without errors and all resources are healthy.** If anything fails, diagnose, fix, and run `aspire start` again. Keep iterating until it works — do not move on to Step 10 with a broken app.
 
@@ -833,6 +903,33 @@ var frontend = builder.AddViteApp("frontend", "../frontend")
 - `.WithHttpsEndpoint(env: "PORT")` (C#)
 
 Aspire assigns a port and injects it as the specified environment variable. The service should read it and listen on that port.
+
+### Cross-service environment variable wiring
+
+When a service expects a **specific env var name** for a dependency's URL (not the standard `services__` format from `WithReference`), use `WithEnvironment` with an endpoint reference:
+
+```typescript
+// Get the endpoint from the dependency
+const roomEndpoint = await room.getEndpoint("http");
+
+// Pass it as the specific env var the consuming app expects
+const frontend = await builder
+    .addViteApp("frontend", "./frontend")
+    .withEnvironment("VITE_APP_WS_SERVER_URL", roomEndpoint)  // EndpointReference accepted
+    .withReference(room)   // also sets up standard service discovery
+    .waitFor(room);
+```
+
+```csharp
+// C# equivalent
+var roomEndpoint = room.GetEndpoint("http");
+var frontend = builder.AddViteApp("frontend", "../frontend")
+    .WithEnvironment("VITE_APP_WS_SERVER_URL", roomEndpoint)
+    .WithReference(room)
+    .WaitFor(room);
+```
+
+Use `WithEnvironment(name, endpointRef)` when the consuming service reads a **specific env var name**. Use `WithReference()` when the service uses Aspire service discovery or standard connection string patterns. You can use both together.
 
 ### URL labels and dashboard niceties
 
