@@ -91,10 +91,11 @@ internal sealed class InitCommand : BaseCommand
         var workspaceRoot = solutionFile?.Directory ?? workingDirectory;
         var agentInitResult = await _agentInitCommand.PromptAndChainAsync(_hostEnvironment, InteractionService, ExitCodeConstants.Success, workspaceRoot, cancellationToken);
 
-        // Step 5: Print closing message.
+        // Step 5: Print closing message with one-shot agent command.
         InteractionService.DisplayEmptyLine();
-        InteractionService.DisplayMessage(KnownEmojis.Sparkles, "Aspire skeleton created! Open your agent and ask it to complete setup.");
-        InteractionService.DisplaySubtleMessage("The aspire-init skill will guide your agent through wiring up projects, dependencies, and validation.");
+        InteractionService.DisplayMessage(KnownEmojis.Sparkles, "Aspire AppHost created! To complete setup, run:");
+        InteractionService.DisplayEmptyLine();
+        InteractionService.DisplaySubtleMessage("  <agent> \"run the aspire-init skill\"");
 
         return agentInitResult;
     }
