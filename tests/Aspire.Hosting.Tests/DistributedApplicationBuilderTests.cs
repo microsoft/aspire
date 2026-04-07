@@ -366,7 +366,7 @@ public class DistributedApplicationBuilderTests
 
         var longName = new string('a', 65);
         var resource = new ContainerResource(longName);
-        resource.Annotations.Add(new SuppressNameValidationAnnotation());
+        resource.Annotations.Add(NameValidationPolicyAnnotation.None);
 
         appBuilder.AddResource(resource);
 
@@ -392,7 +392,7 @@ public class DistributedApplicationBuilderTests
 
         var longName = new string('a', 65);
         var resource = new ContainerResource(longName);
-        resource.Annotations.Add(new SuppressNameValidationAnnotation());
+        resource.Annotations.Add(NameValidationPolicyAnnotation.None);
         appBuilder.Resources.Add(resource);
 
         var app = appBuilder.Build();

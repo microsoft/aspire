@@ -931,7 +931,7 @@ public class ProjectResourceTests
     }
 
     [Fact]
-    public void AddProjectCreatesRebuilderWithSuppressNameValidationAnnotation()
+    public void AddProjectCreatesRebuilderWithNameValidationPolicyAnnotation()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         builder.AddProject<TestProject>("projectName", options => { options.ExcludeLaunchProfile = true; });
@@ -941,7 +941,7 @@ public class ProjectResourceTests
 
         var rebuilder = appModel.Resources.OfType<ProjectRebuilderResource>().SingleOrDefault();
         Assert.NotNull(rebuilder);
-        Assert.True(rebuilder.HasAnnotationOfType<SuppressNameValidationAnnotation>());
+        Assert.True(rebuilder.HasAnnotationOfType<NameValidationPolicyAnnotation>());
     }
 
     internal static IDistributedApplicationBuilder CreateBuilder(string[]? args = null, DistributedApplicationOperation operation = DistributedApplicationOperation.Publish)

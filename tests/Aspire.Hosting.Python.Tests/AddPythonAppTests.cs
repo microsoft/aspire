@@ -2390,7 +2390,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void InstallerResourceHasSuppressNameValidationAnnotation()
+    public void InstallerResourceHasNameValidationPolicyAnnotation()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
         using var tempDir = new TestTempDirectory();
@@ -2404,11 +2404,11 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
 
         var installerResource = appModel.Resources.OfType<PythonInstallerResource>().Single();
-        Assert.True(installerResource.HasAnnotationOfType<SuppressNameValidationAnnotation>());
+        Assert.True(installerResource.HasAnnotationOfType<NameValidationPolicyAnnotation>());
     }
 
     [Fact]
-    public void VenvCreatorResourceHasSuppressNameValidationAnnotation()
+    public void VenvCreatorResourceHasNameValidationPolicyAnnotation()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
         using var tempDir = new TestTempDirectory();
@@ -2429,7 +2429,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
         var venvCreatorResource = appModel.Resources.OfType<PythonVenvCreatorResource>().SingleOrDefault();
         Assert.NotNull(venvCreatorResource);
-        Assert.True(venvCreatorResource.HasAnnotationOfType<SuppressNameValidationAnnotation>());
+        Assert.True(venvCreatorResource.HasAnnotationOfType<NameValidationPolicyAnnotation>());
     }
 
     /// <summary>

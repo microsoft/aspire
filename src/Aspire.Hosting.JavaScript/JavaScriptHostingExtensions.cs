@@ -1668,7 +1668,7 @@ public static class JavaScriptHostingExtensions
             }
 
             var installer = new JavaScriptInstallerResource(installerName, resource.Resource.WorkingDirectory);
-            installer.Annotations.Add(new SuppressNameValidationAnnotation());
+            installer.Annotations.Add(NameValidationPolicyAnnotation.None);
             var installerBuilder = resource.ApplicationBuilder.AddResource(installer)
                 .WithParentRelationship(resource.Resource)
                 .ExcludeFromManifest()

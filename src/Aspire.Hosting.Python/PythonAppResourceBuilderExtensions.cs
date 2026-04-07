@@ -1320,7 +1320,7 @@ public static class PythonAppResourceBuilderExtensions
             }
 
             var installer = new PythonInstallerResource(installerName, builder.Resource);
-            installer.Annotations.Add(new SuppressNameValidationAnnotation());
+            installer.Annotations.Add(NameValidationPolicyAnnotation.None);
             var installerBuilder = builder.ApplicationBuilder.AddResource(installer)
                 .WithParentRelationship(builder.Resource)
                 .ExcludeFromManifest()
@@ -1394,7 +1394,7 @@ public static class PythonAppResourceBuilderExtensions
 
         // Create new venv creator resource
         var venvCreator = new PythonVenvCreatorResource(venvCreatorName, builder.Resource, venvPath);
-        venvCreator.Annotations.Add(new SuppressNameValidationAnnotation());
+        venvCreator.Annotations.Add(NameValidationPolicyAnnotation.None);
 
         // Determine which Python command to use
         string pythonCommand;

@@ -562,7 +562,7 @@ public class PackageInstallationTests
     }
 
     [Fact]
-    public void InstallerResourceHasSuppressNameValidationAnnotation()
+    public void InstallerResourceHasNameValidationPolicyAnnotation()
     {
         var builder = DistributedApplication.CreateBuilder();
 
@@ -573,7 +573,7 @@ public class PackageInstallationTests
 
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
         var installerResource = Assert.Single(appModel.Resources.OfType<JavaScriptInstallerResource>());
-        Assert.True(installerResource.TryGetLastAnnotation<SuppressNameValidationAnnotation>(out _));
+        Assert.True(installerResource.TryGetLastAnnotation<NameValidationPolicyAnnotation>(out _));
     }
 
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]

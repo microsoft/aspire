@@ -742,10 +742,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             // Validate resource names. Resources added directly to the collection bypass AddResource validation.
             foreach (var resource in Resources)
             {
-                if (!resource.HasAnnotationOfType<SuppressNameValidationAnnotation>())
-                {
-                    ModelName.ValidateName(nameof(Resource), resource.Name);
-                }
+                ValidateResourceName(resource);
             }
 
             var application = new DistributedApplication(_innerBuilder.Build());
@@ -766,10 +763,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
     {
         ArgumentNullException.ThrowIfNull(resource);
 
-        if (!resource.HasAnnotationOfType<SuppressNameValidationAnnotation>())
-        {
-            ModelName.ValidateName(nameof(Resource), resource.Name);
-        }
+        ValidateResourceName(resource);
 
         if (Resources.FirstOrDefault(r => string.Equals(r.Name, resource.Name, StringComparisons.ResourceName)) is { } existingResource)
         {
@@ -846,6 +840,16 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
                 configuration.Sources.RemoveAt(i);
             }
         }
+    }
+
+    private static void ValidateResourceName(IResource resource)
+    {
+        if (!resource.TryGetLastAnnotation<NameValidationPolicyAnnotation>(out var policy))
+        {
+            policy = NameValidationPolicyAnnotation.Default;
+        }
+
+        ModelName.ValidateName(nameof(Resource), resource.Name, policy.MaxLength, policy.ValidateStartsWithLetter, policy.ValidateAllowedCharacters, policy.ValidateNoConsecutiveHyphens, policy.ValidateNoTrailingHyphen);
     }
 
     private static bool PathsEqual(string left, string right) =>
