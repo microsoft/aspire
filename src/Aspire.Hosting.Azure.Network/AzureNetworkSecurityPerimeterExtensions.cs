@@ -183,14 +183,29 @@ public static class AzureNetworkSecurityPerimeterExtensions
                 accessRule.AddressPrefixes.Add(prefix);
             }
 
+            foreach (var prefixReference in rule.AddressPrefixReferences)
+            {
+                accessRule.AddressPrefixes.Add(prefixReference.AsProvisioningParameter(infra));
+            }
+
             foreach (var sub in rule.Subscriptions)
             {
                 accessRule.Subscriptions.Add(new WritableSubResource { Id = new ResourceIdentifier(sub) });
             }
 
+            foreach (var subReference in rule.SubscriptionReferences)
+            {
+                accessRule.Subscriptions.Add(new WritableSubResource { Id = subReference.AsProvisioningParameter(infra) });
+            }
+
             foreach (var fqdn in rule.FullyQualifiedDomainNames)
             {
                 accessRule.FullyQualifiedDomainNames.Add(fqdn);
+            }
+
+            foreach (var fqdnReference in rule.FullyQualifiedDomainNameReferences)
+            {
+                accessRule.FullyQualifiedDomainNames.Add(fqdnReference.AsProvisioningParameter(infra));
             }
 
             infra.Add(accessRule);

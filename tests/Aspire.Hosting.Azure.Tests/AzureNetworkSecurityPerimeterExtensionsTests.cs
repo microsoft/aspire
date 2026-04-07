@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable AZPROVISION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning.Network;
 
@@ -80,6 +81,43 @@ public class AzureNetworkSecurityPerimeterExtensionsTests
                 Name = "allow-subscription",
                 Direction = NetworkSecurityPerimeterAccessRuleDirection.Inbound,
                 Subscriptions = { "/subscriptions/00000000-0000-0000-0000-000000000001" }
+            });
+
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(nsp.Resource);
+
+        await Verify(manifest.BicepText, extension: "bicep");
+    }
+
+    [Fact]
+    public async Task AddNetworkSecurityPerimeter_WithParameterBasedAccessRules_GeneratesCorrectBicep()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var inboundAddressPrefix = builder.AddParameter("inboundAddressPrefix");
+        var allowedSubscription = builder.AddParameter("allowedSubscription");
+        var outboundFqdn = builder.AddParameter("outboundFqdn");
+
+        var nsp = builder.AddNetworkSecurityPerimeter("my-nsp")
+            .WithAccessRule(new AzureNspAccessRule
+            {
+                Name = "allow-my-ip",
+                Direction = NetworkSecurityPerimeterAccessRuleDirection.Inbound,
+                AddressPrefixes = { "203.0.113.0/24" },
+                AddressPrefixReferences = { ReferenceExpression.Create($"{inboundAddressPrefix}") }
+            })
+            .WithAccessRule(new AzureNspAccessRule
+            {
+                Name = "allow-subscription",
+                Direction = NetworkSecurityPerimeterAccessRuleDirection.Inbound,
+                Subscriptions = { "/subscriptions/00000000-0000-0000-0000-000000000001" },
+                SubscriptionReferences = { ReferenceExpression.Create($"{allowedSubscription}") }
+            })
+            .WithAccessRule(new AzureNspAccessRule
+            {
+                Name = "allow-outbound-fqdn",
+                Direction = NetworkSecurityPerimeterAccessRuleDirection.Outbound,
+                FullyQualifiedDomainNames = { "*.blob.core.windows.net" },
+                FullyQualifiedDomainNameReferences = { ReferenceExpression.Create($"{outboundFqdn}") }
             });
 
         var manifest = await AzureManifestUtils.GetManifestWithBicep(nsp.Resource);
