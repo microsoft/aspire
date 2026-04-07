@@ -206,7 +206,7 @@ if (-not $packages -or $packages.Count -eq 0) {
 }
 Write-Log ("Found {0} packages in {1}" -f $packages.Count, $pkgDir)
 
-$hivesRoot = Join-Path (Join-Path $HOME '.aspire') 'hives'
+$hivesRoot = Join-Path (Join-Path (Join-Path (Join-Path $HOME '.aspire') 'dogfood') $Name) 'hives'
 $hiveRoot  = Join-Path $hivesRoot $Name
 $hivePath  = Join-Path $hiveRoot 'packages'
 
@@ -262,7 +262,8 @@ if ($IsWindows) {
 }
 
 $aspireRoot = Join-Path $HOME '.aspire'
-$cliBinDir = Join-Path $aspireRoot 'bin'
+$dogfoodRoot = Join-Path $aspireRoot 'dogfood' $Name
+$cliBinDir = $dogfoodRoot
 
 # Build the bundle (aspire-managed + DCP, and optionally native AOT CLI)
 if (-not $SkipBundle) {
@@ -287,10 +288,10 @@ if (-not $SkipBundle) {
     exit 1
   }
 
-  # Copy managed/ and dcp/ to $HOME/.aspire so the CLI auto-discovers them
+  # Copy managed/ and dcp/ to dogfood install root so the CLI auto-discovers them
   foreach ($component in @('managed', 'dcp')) {
     $sourceDir = Join-Path $bundleLayoutDir $component
-    $destDir = Join-Path $aspireRoot $component
+    $destDir = Join-Path $dogfoodRoot $component
     if (Test-Path -LiteralPath $sourceDir) {
       if (Test-Path -LiteralPath $destDir) {
         Remove-Item -LiteralPath $destDir -Force -Recurse
@@ -302,10 +303,10 @@ if (-not $SkipBundle) {
     }
   }
 
-  Write-Log "Bundle installed to $aspireRoot (managed/ + dcp/)"
+  Write-Log "Bundle installed to $dogfoodRoot (managed/ + dcp/)"
 }
 
-# Install the CLI to $HOME/.aspire/bin
+# Install the CLI to the dogfood root
 if (-not $SkipCli) {
   $cliExeName = if ($IsWindows) { 'aspire.exe' } else { 'aspire' }
 
@@ -377,9 +378,8 @@ if (-not $SkipCli) {
     $installedCliPath = Join-Path $cliBinDir $cliExeName
     Write-Log "Aspire CLI installed to: $installedCliPath"
 
-    # Set the channel to the local hive so templates and packages resolve from it
-    & $installedCliPath config set channel $Name -g 2>$null
-    Write-Log "Set global channel to '$Name'"
+    # Dogfood installs no longer set the global channel.
+    # The self-contained install discovers its own hives relative to its install root.
 
     # Check if the bin directory is in PATH
     $pathSeparator = [System.IO.Path]::PathSeparator
@@ -404,12 +404,12 @@ Write-Host
 Write-Log "Channel behavior: Aspire* comes from the hive; others from nuget.org."
 Write-Host
 if (-not $SkipCli) {
-  Write-Log "The locally-built CLI was installed to: $(Join-Path (Join-Path $HOME '.aspire') 'bin')"
+  Write-Log "The locally-built CLI was installed to: $dogfoodRoot"
   Write-Host
 }
 if (-not $SkipBundle) {
-  Write-Log "Bundle (aspire-managed + DCP) installed to: $(Join-Path $HOME '.aspire')"
-  Write-Log "  The CLI at ~/.aspire/bin/ will auto-discover managed/ and dcp/ in the parent directory."
+  Write-Log "Bundle (aspire-managed + DCP) installed to: $dogfoodRoot"
+  Write-Log "  The CLI at $dogfoodRoot/ will auto-discover managed/ and dcp/ in the same directory."
   Write-Host
 }
 Write-Log 'The Aspire CLI discovers channels automatically from the hives directory; no extra flags are required.'

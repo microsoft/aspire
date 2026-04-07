@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Utils;
+
 namespace Aspire.Cli.Tests;
 
 public class ProgramTests
@@ -27,5 +29,15 @@ public class ProgramTests
         var result = Program.ParseLogFileOption(["run", "--", "--log-file", "app.log"]);
 
         Assert.Null(result);
+    }
+
+    [Fact]
+    public void GetInstallRootDirectory_FallsBackToHome_WhenProcessIsNotAspireCli()
+    {
+        // The test runner is not named "aspire", so it should fall back to ~/.aspire
+        var result = Program.GetInstallRootDirectory();
+        var expected = CliPathHelper.GetAspireHomeDirectory();
+
+        Assert.Equal(expected, result.FullName);
     }
 }

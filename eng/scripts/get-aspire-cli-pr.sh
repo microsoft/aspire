@@ -61,8 +61,8 @@ USAGE:
     PR_NUMBER                   Pull request number (required)
     --run-id, -r WORKFLOW_ID    Workflow run ID to download from (optional)
     -i, --install-path PATH     Directory prefix to install (default: ~/.aspire)
-                                CLI installs to: <install-path>/bin
-                                NuGet hive:      <install-path>/hives/pr-<PR_NUMBER>/packages
+                                CLI installs to: <install-path>/dogfood/pr-<PR_NUMBER>
+                                NuGet hive:      <install-path>/dogfood/pr-<PR_NUMBER>/hives/pr-<PR_NUMBER>/packages
     --os OS                     Override OS detection (win, linux, linux-musl, osx)
     --arch ARCH                 Override architecture detection (x64, arm64)
     --hive-only                 Only install NuGet packages to the hive, skip CLI download
@@ -422,19 +422,19 @@ save_global_settings() {
     local cli_path="$1"
     local key="$2"
     local value="$3"
-    
+
     if [[ "$DRY_RUN" == true ]]; then
         say_info "[DRY RUN] Would run: $cli_path config set -g $key $value"
         return 0
     fi
-    
+
     say_verbose "Setting global config: $key = $value"
-    
+
     if ! "$cli_path" config set -g "$key" "$value" 2>/dev/null; then
         say_warn "Failed to set global config via aspire CLI"
         return 1
     fi
-    
+
     say_verbose "Global config saved: $key = $value"
 }
 
@@ -631,41 +631,41 @@ get_pr_head_sha() {
 # Function to extract version suffix from downloaded NuGet packages
 extract_version_suffix_from_packages() {
     local download_dir="$1"
-    
+
     if [[ "$DRY_RUN" == true ]]; then
         # Return a mock version for dry run
         printf "pr.1234.a1b2c3d4"
         return 0
     fi
-    
+
     # Look for any .nupkg file and extract version from its name
     local nupkg_file
     nupkg_file=$(find "$download_dir" -name "*.nupkg" | head -1)
-    
+
     if [[ -z "$nupkg_file" ]]; then
         say_verbose "No .nupkg files found to extract version from"
         return 1
     fi
-    
+
     local filename
     filename=$(basename "$nupkg_file")
     say_verbose "Extracting version from package: $filename"
-    
+
     # Extract version from package name using a more robust two-step approach
     # First remove the .nupkg extension, then extract the version part
     local base_name="${filename%.nupkg}"
     local version
-    
+
     # Look for semantic version pattern with PR suffix (more specific and robust)
     version=$(echo "$base_name" | sed -En 's/.*\.([0-9]+\.[0-9]+\.[0-9]+-pr\.[0-9]+\.[a-g0-9]+)/\1/p')
-    
+
     if [[ -z "$version" ]]; then
         say_verbose "Could not extract version from package name: $filename"
         return 1
     fi
-    
+
     say_verbose "Extracted full version: $version"
-    
+
     # Extract just the PR suffix part using bash regex for better compatibility
     if [[ "$version" =~ (pr\.[0-9]+\.[a-g0-9]+) ]]; then
         local version_suffix="${BASH_REMATCH[1]}"
@@ -972,9 +972,9 @@ download_and_install_from_pr() {
 
     say_info "Using workflow run https://github.com/${REPO}/actions/runs/$workflow_run_id"
 
-    # Set installation paths
-    local cli_install_dir="$INSTALL_PREFIX/bin"
-    local nuget_hive_dir="$INSTALL_PREFIX/hives/pr-$PR_NUMBER/packages"
+    # Set installation paths (self-contained dogfood layout)
+    local cli_install_dir="$INSTALL_PREFIX/dogfood/pr-$PR_NUMBER"
+    local nuget_hive_dir="$INSTALL_PREFIX/dogfood/pr-$PR_NUMBER/hives/pr-$PR_NUMBER/packages"
 
     # First, download both artifacts
     local cli_archive_path nuget_download_dir
@@ -1039,19 +1039,8 @@ download_and_install_from_pr() {
         fi
     fi
 
-    # Save the global channel setting to the PR hive channel
-    # This allows 'aspire new' and 'aspire init' to use the same channel by default
-    if [[ "$HIVE_ONLY" != true ]]; then
-        # Determine CLI path
-        local cli_path
-        if [[ -f "$cli_install_dir/aspire.exe" ]]; then
-            cli_path="$cli_install_dir/aspire.exe"
-        else
-            cli_path="$cli_install_dir/aspire"
-        fi
-        # Non-fatal: channel can be set manually if this fails
-        save_global_settings "$cli_path" "channel" "pr-$PR_NUMBER" || true
-    fi
+    # Dogfood installs no longer set the global channel.
+    # The self-contained install discovers its own hives relative to its install root.
 }
 
 # =============================================================================
@@ -1084,9 +1073,9 @@ else
     INSTALL_PREFIX_UNEXPANDED="$INSTALL_PREFIX"
 fi
 
-# Set paths based on install prefix
-cli_install_dir="$INSTALL_PREFIX/bin"
-INSTALL_PATH_UNEXPANDED="$INSTALL_PREFIX_UNEXPANDED/bin"
+# Set paths based on install prefix (self-contained dogfood layout)
+cli_install_dir="$INSTALL_PREFIX/dogfood/pr-$PR_NUMBER"
+INSTALL_PATH_UNEXPANDED="$INSTALL_PREFIX_UNEXPANDED/dogfood/pr-$PR_NUMBER"
 
 # Create a temporary directory for downloads
 if [[ "$DRY_RUN" == true ]]; then

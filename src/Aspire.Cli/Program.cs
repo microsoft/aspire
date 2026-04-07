@@ -513,9 +513,41 @@ public class Program
 
     private static DirectoryInfo GetHivesDirectory()
     {
+        var installRoot = GetInstallRootDirectory();
+        return new DirectoryInfo(Path.Combine(installRoot.FullName, "hives"));
+    }
+
+    internal static DirectoryInfo GetInstallRootDirectory()
+    {
         var homeDirectory = GetUsersAspirePath();
-        var hivesDirectory = Path.Combine(homeDirectory, "hives");
-        return new DirectoryInfo(hivesDirectory);
+        var processPath = Environment.ProcessPath;
+
+        if (string.IsNullOrEmpty(processPath))
+        {
+            return new DirectoryInfo(homeDirectory);
+        }
+
+        var fileName = Path.GetFileName(processPath);
+        if (!string.Equals(fileName, "aspire", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(fileName, "aspire.exe", StringComparison.OrdinalIgnoreCase))
+        {
+            return new DirectoryInfo(homeDirectory);
+        }
+
+        var cliDir = Path.GetDirectoryName(processPath);
+        if (string.IsNullOrEmpty(cliDir))
+        {
+            return new DirectoryInfo(homeDirectory);
+        }
+
+        var cliDirectoryInfo = new DirectoryInfo(cliDir);
+        if (string.Equals(cliDirectoryInfo.Name, "bin", StringComparison.OrdinalIgnoreCase) &&
+            cliDirectoryInfo.Parent is not null)
+        {
+            return cliDirectoryInfo.Parent;
+        }
+
+        return cliDirectoryInfo;
     }
 
     private static DirectoryInfo GetSdksDirectory()

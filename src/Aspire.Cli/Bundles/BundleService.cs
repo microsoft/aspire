@@ -156,8 +156,8 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
 
     /// <summary>
     /// Determines the default extraction directory for the current CLI binary.
-    /// If CLI is at ~/.aspire/bin/aspire, returns ~/.aspire/ so layout discovery
-    /// finds components via the bin/ layout pattern.
+    /// For stable layout (CLI in bin/), returns the parent directory.
+    /// For flat/dogfood layout (CLI directly in dir), returns that directory.
     /// </summary>
     internal static string? GetDefaultExtractDir(string processPath)
     {
@@ -167,7 +167,14 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
             return null;
         }
 
-        return Path.GetDirectoryName(cliDir) ?? cliDir;
+        var cliDirectoryInfo = new DirectoryInfo(cliDir);
+        if (string.Equals(cliDirectoryInfo.Name, "bin", StringComparison.OrdinalIgnoreCase) &&
+            cliDirectoryInfo.Parent is not null)
+        {
+            return cliDirectoryInfo.Parent.FullName;
+        }
+
+        return cliDirectoryInfo.FullName;
     }
 
     /// <summary>

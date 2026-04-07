@@ -53,7 +53,7 @@ public class BundleServiceTests
     }
 
     [Fact]
-    public void GetDefaultExtractDir_ReturnsParentOfParent()
+    public void GetDefaultExtractDir_StableLayout_ReturnsParentOfBinDir()
     {
         if (OperatingSystem.IsWindows())
         {
@@ -64,6 +64,21 @@ public class BundleServiceTests
         {
             var result = BundleService.GetDefaultExtractDir("/home/test/.aspire/bin/aspire");
             Assert.Equal("/home/test/.aspire", result);
+        }
+    }
+
+    [Fact]
+    public void GetDefaultExtractDir_DogfoodFlatLayout_ReturnsCliDirectory()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var result = BundleService.GetDefaultExtractDir(@"C:\Users\test\.aspire\dogfood\pr-1234\aspire.exe");
+            Assert.Equal(@"C:\Users\test\.aspire\dogfood\pr-1234", result);
+        }
+        else
+        {
+            var result = BundleService.GetDefaultExtractDir("/home/test/.aspire/dogfood/pr-1234/aspire");
+            Assert.Equal("/home/test/.aspire/dogfood/pr-1234", result);
         }
     }
 

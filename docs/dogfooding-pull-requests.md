@@ -28,14 +28,14 @@ Notes:
 ## What gets installed
 
 - Aspire CLI:
-  - Default location: `~/.aspire/bin/aspire` (or `aspire.exe` on Windows)
-  - Important: If you already have the Aspire CLI installed under the same prefix (default `~/.aspire`), running this script will overwrite that installation. To switch back to the official build, simply re-run the standard Aspire CLI install script referenced in the README to reinstall the released version.
+  - Default location: `~/.aspire/dogfood/pr-<PR_NUMBER>/aspire` (or `aspire.exe` on Windows)
+  - Important: PR installs are self-contained under `~/.aspire/dogfood/pr-<PR_NUMBER>/` and do not overwrite the stable CLI at `~/.aspire/bin/aspire`. Each PR has its own isolated install root.
 
 - PR-scoped NuGet packages "hive":
-  - Default location: `~/.aspire/hives/pr-<PR_NUMBER>/packages`
+  - Default location: `~/.aspire/dogfood/pr-<PR_NUMBER>/hives/pr-<PR_NUMBER>/packages`
   - This local, PR-specific hive is isolated, making it easy to create new projects with just the packages produced by the PR build without affecting your global NuGet caches or other projects.
 
-The scripts attempt to add `~/.aspire/bin` to your shell/profile PATH so you can invoke `aspire` directly in new terminals. If PATH isn't updated automatically, add it manually per the script's message.
+The scripts attempt to add `~/.aspire/dogfood/pr-<PR_NUMBER>` to your shell/profile PATH so you can invoke `aspire` directly in new terminals. If PATH isn't updated automatically, add it manually per the script's message.
 
 ## Quickstart
 
@@ -166,12 +166,14 @@ The scripts auto-detect your OS and architecture and locate the latest `ci.yml` 
 
 ## Uninstall/Cleanup
 
-- Remove the CLI:
-  - Delete `~/.aspire/bin/aspire` (or the custom install path you used)
+- Remove a PR dogfood install (CLI, bundle, hives — everything):
+  - Delete the entire install root: `rm -rf ~/.aspire/dogfood/pr-<PR_NUMBER>` (or the custom install path you used)
   - Remove the PATH entry from your shell profile if added
 
-- Remove PR-specific packages:
-  - Delete `~/.aspire/hives/pr-<PR_NUMBER>/packages`
+- Remove all dogfood installs:
+  - `rm -rf ~/.aspire/dogfood`
+
+- The stable CLI at `~/.aspire/bin/aspire` is not affected by dogfood installs.
 
 ## Safety note
 

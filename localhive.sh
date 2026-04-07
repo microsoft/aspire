@@ -192,7 +192,7 @@ if [[ $pkg_count -eq 0 ]]; then
 fi
 log "Found $pkg_count packages in $PKG_DIR"
 
-HIVES_ROOT="$HOME/.aspire/hives"
+HIVES_ROOT="$HOME/.aspire/dogfood/$HIVE_NAME/hives"
 HIVE_ROOT="$HIVES_ROOT/$HIVE_NAME"
 HIVE_PATH="$HIVE_ROOT/packages"
 
@@ -238,7 +238,8 @@ case "$(uname -s)" in
 esac
 
 ASPIRE_ROOT="$HOME/.aspire"
-CLI_BIN_DIR="$ASPIRE_ROOT/bin"
+DOGFOOD_ROOT="$ASPIRE_ROOT/dogfood/$HIVE_NAME"
+CLI_BIN_DIR="$DOGFOOD_ROOT"
 
 # Build the bundle (aspire-managed + DCP, and optionally native AOT CLI)
 if [[ $SKIP_BUNDLE -eq 0 ]]; then
@@ -263,10 +264,10 @@ if [[ $SKIP_BUNDLE -eq 0 ]]; then
     exit 1
   fi
 
-  # Copy managed/ and dcp/ to $HOME/.aspire so the CLI auto-discovers them
+  # Copy managed/ and dcp/ to dogfood install root so the CLI auto-discovers them
   for component in managed dcp; do
     SOURCE_DIR="$BUNDLE_LAYOUT_DIR/$component"
-    DEST_DIR="$ASPIRE_ROOT/$component"
+    DEST_DIR="$DOGFOOD_ROOT/$component"
     if [[ -d "$SOURCE_DIR" ]]; then
       rm -rf "$DEST_DIR"
       log "Copying $component/ to $DEST_DIR"
@@ -282,10 +283,10 @@ if [[ $SKIP_BUNDLE -eq 0 ]]; then
     fi
   done
 
-  log "Bundle installed to $ASPIRE_ROOT (managed/ + dcp/)"
+  log "Bundle installed to $DOGFOOD_ROOT (managed/ + dcp/)"
 fi
 
-# Install the CLI to $HOME/.aspire/bin
+# Install the CLI to the dogfood root
 if [[ $SKIP_CLI -eq 0 ]]; then
   if [[ $NATIVE_AOT -eq 1 ]]; then
     # Native AOT CLI from Bundle.proj publish
@@ -319,11 +320,8 @@ if [[ $SKIP_CLI -eq 0 ]]; then
 
     log "Aspire CLI installed to: $CLI_BIN_DIR/aspire"
 
-    if "$CLI_BIN_DIR/aspire" config set channel "$HIVE_NAME" -g >/dev/null 2>&1; then
-      log "Set global channel to '$HIVE_NAME'"
-    else
-      warn "Failed to set global channel to '$HIVE_NAME'. Run: aspire config set channel '$HIVE_NAME' -g"
-    fi
+    # Dogfood installs no longer set the global channel.
+    # The self-contained install discovers its own hives relative to its install root.
 
     # Check if the bin directory is in PATH
     if [[ ":$PATH:" != *":$CLI_BIN_DIR:"* ]]; then
@@ -345,12 +343,12 @@ echo
 log "Channel behavior: Aspire* comes from the hive; others from nuget.org."
 echo
 if [[ $SKIP_CLI -eq 0 ]]; then
-  log "The locally-built CLI was installed to: $HOME/.aspire/bin"
+  log "The locally-built CLI was installed to: $DOGFOOD_ROOT"
   echo
 fi
 if [[ $SKIP_BUNDLE -eq 0 ]]; then
-  log "Bundle (aspire-managed + DCP) installed to: $HOME/.aspire"
-  log "  The CLI at ~/.aspire/bin/ will auto-discover managed/ and dcp/ in the parent directory."
+  log "Bundle (aspire-managed + DCP) installed to: $DOGFOOD_ROOT"
+  log "  The CLI at $DOGFOOD_ROOT/ will auto-discover managed/ and dcp/ in the same directory."
   echo
 fi
 log "The Aspire CLI discovers channels automatically from the hives directory; no extra flags are required."
