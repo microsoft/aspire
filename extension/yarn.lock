@@ -4529,10 +4529,10 @@ postcss@^7.0.16:
     picocolors "^0.2.1"
     source-map "^0.6.1"
 
-postcss@^8.5.7:
-  version "8.5.7"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/postcss/-/postcss-8.5.7.tgz#76cddaeb9cc3eb529c77d88d93f0993d90763eb8"
-  integrity sha1-ds3a65zD61Kcd9iNk/CZPZB2Prg=
+postcss@^8.5.8:
+  version "8.5.8"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/postcss/-/postcss-8.5.8.tgz#6230ecc8fb02e7a0f6982e53990937857e13f399"
+  integrity sha1-YjDsyPsC56D2mC5TmQk3hX4T85k=
   dependencies:
     nanoid "^3.3.11"
     picocolors "^1.1.1"
