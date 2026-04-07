@@ -270,17 +270,28 @@ internal static class HttpHealthCheckHelpers
     // isn't warranted — both messages are user-friendly and actionable.
     public static string GetFriendlyErrorMessage(Uri uri, Exception exception, CancellationToken cancellationToken)
     {
+        var sanitizedUri = SanitizeUri(uri);
         return exception switch
         {
             TaskCanceledException or OperationCanceledException when cancellationToken.IsCancellationRequested
-                => $"Health check for {uri} was canceled.",
+                => $"Health check for {sanitizedUri} was canceled",
             TaskCanceledException or OperationCanceledException
-                => $"Request to {uri} timed out.",
+                => $"Request to {sanitizedUri} timed out",
             HttpRequestException hre when hre.StatusCode.HasValue =>
-                $"Request to {uri} returned {(int)hre.StatusCode.Value} {hre.StatusCode.Value}.",
-            HttpRequestException => $"Failed to connect to {uri}.",
-            _ => $"Health check failed for {uri}."
+                $"Request to {sanitizedUri} returned {(int)hre.StatusCode.Value} {hre.StatusCode.Value}",
+            HttpRequestException => $"Failed to connect to {sanitizedUri}",
+            _ => $"Health check failed for {sanitizedUri}"
         };
+    }
+
+    /// <summary>
+    /// Strips userinfo (credentials) from a URI to avoid leaking secrets in health check descriptions.
+    /// </summary>
+    private static string SanitizeUri(Uri uri)
+    {
+        return string.IsNullOrEmpty(uri.UserInfo)
+            ? uri.ToString()
+            : new UriBuilder(uri) { UserName = string.Empty, Password = string.Empty }.Uri.ToString();
     }
 }
 
@@ -290,17 +301,16 @@ internal static class HttpHealthCheckHelpers
 internal sealed class StaticUriHealthCheck : IHealthCheck
 {
     private readonly Uri _uri;
-    private readonly Func<HttpClient> _httpClientFactory;
-    private readonly UriHealthCheckOptions _options;
     private readonly UriHealthCheck _uriHealthCheck;
 
     public StaticUriHealthCheck(Uri uri, int expectedStatusCode, Func<HttpClient> httpClientFactory)
     {
-        _uri = uri ?? throw new ArgumentNullException(nameof(uri));
-        _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
-        _options = new UriHealthCheckOptions();
-        _options.AddUri(uri, setup => setup.ExpectHttpCode(expectedStatusCode));
-        _uriHealthCheck = new UriHealthCheck(_options, _httpClientFactory);
+        ArgumentNullException.ThrowIfNull(uri);
+        ArgumentNullException.ThrowIfNull(httpClientFactory);
+        _uri = uri;
+        var options = new UriHealthCheckOptions();
+        options.AddUri(uri, setup => setup.ExpectHttpCode(expectedStatusCode));
+        _uriHealthCheck = new UriHealthCheck(options, httpClientFactory);
     }
 
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
@@ -316,8 +326,8 @@ internal sealed class StaticUriHealthCheck : IHealthCheck
             {
                 var friendlyMessage = result.Exception is not null
                     ? HttpHealthCheckHelpers.GetFriendlyErrorMessage(_uri, result.Exception, cancellationToken)
-                    : result.Description ?? $"Health check failed for {_uri}.";
-                return HealthCheckResult.Unhealthy(friendlyMessage, result.Exception);
+                    : result.Description ?? $"Health check failed for {_uri}";
+                return HealthCheckResult.Unhealthy(friendlyMessage, result.Exception, result.Data);
             }
 
             return result;
@@ -342,10 +352,12 @@ internal sealed class ParameterUriHealthCheck : IHealthCheck
 
     public ParameterUriHealthCheck(ParameterResource urlParameter, string? path, int expectedStatusCode, Func<HttpClient> httpClientFactory)
     {
-        _urlParameter = urlParameter ?? throw new ArgumentNullException(nameof(urlParameter));
+        ArgumentNullException.ThrowIfNull(urlParameter);
+        ArgumentNullException.ThrowIfNull(httpClientFactory);
+        _urlParameter = urlParameter;
         _path = path;
         _expectedStatusCode = expectedStatusCode;
-        _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
+        _httpClientFactory = httpClientFactory;
     }
 
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
@@ -391,8 +403,8 @@ internal sealed class ParameterUriHealthCheck : IHealthCheck
             {
                 var friendlyMessage = result.Exception is not null
                     ? HttpHealthCheckHelpers.GetFriendlyErrorMessage(targetUri, result.Exception, cancellationToken)
-                    : result.Description ?? $"Health check failed for {targetUri}.";
-                return HealthCheckResult.Unhealthy(friendlyMessage, result.Exception);
+                    : result.Description ?? $"Health check failed for {targetUri}";
+                return HealthCheckResult.Unhealthy(friendlyMessage, result.Exception, result.Data);
             }
 
             return result;
@@ -421,9 +433,11 @@ internal sealed class DeferredUriHealthCheck : IHealthCheck
 
     public DeferredUriHealthCheck(Func<Uri?> uriFactory, int expectedStatusCode, Func<HttpClient> httpClientFactory)
     {
-        _uriFactory = uriFactory ?? throw new ArgumentNullException(nameof(uriFactory));
+        ArgumentNullException.ThrowIfNull(uriFactory);
+        ArgumentNullException.ThrowIfNull(httpClientFactory);
+        _uriFactory = uriFactory;
         _expectedStatusCode = expectedStatusCode;
-        _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
+        _httpClientFactory = httpClientFactory;
     }
 
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
@@ -446,8 +460,8 @@ internal sealed class DeferredUriHealthCheck : IHealthCheck
             {
                 var friendlyMessage = result.Exception is not null
                     ? HttpHealthCheckHelpers.GetFriendlyErrorMessage(uri, result.Exception, cancellationToken)
-                    : result.Description ?? $"Health check failed for {uri}.";
-                return HealthCheckResult.Unhealthy(friendlyMessage, result.Exception);
+                    : result.Description ?? $"Health check failed for {uri}";
+                return HealthCheckResult.Unhealthy(friendlyMessage, result.Exception, result.Data);
             }
 
             return result;
