@@ -2116,10 +2116,20 @@ detect-newline@^2.0.0:
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/detect-newline/-/detect-newline-2.1.0.tgz#f41f1c10be4b00e87b5f13da680759f2c5bfd3e2"
   integrity sha1-9B8cEL5LAOh7XxPaaAdZ8sW/0+I=
 
-diff@8.0.3, diff@^4.0.1, diff@^7.0.0, diff@^8.0.3:
-  version "8.0.3"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/diff/-/diff-8.0.3.tgz#c7da3d9e0e8c283bb548681f8d7174653720c2d5"
-  integrity sha1-x9o9ng6MKDu1SGgfjXF0ZTcgwtU=
+diff@^4.0.1:
+  version "4.0.4"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/diff/-/diff-4.0.4.tgz#7a6dbfda325f25f07517e9b518f897c08332e07d"
+  integrity sha1-em2/2jJfJfB1F+m1GPiXwIMy4H0=
+
+diff@^7.0.0:
+  version "7.0.0"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/diff/-/diff-7.0.0.tgz#3fb34d387cd76d803f6eebea67b921dab0182a9a"
+  integrity sha1-P7NNOHzXbYA/buvqZ7kh2rAYKpo=
+
+diff@^8.0.3:
+  version "8.0.4"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/diff/-/diff-8.0.4.tgz#4f5baf3188b9b2431117b962eb20ba330fadf696"
+  integrity sha1-T1uvMYi5skMRF7li6yC6Mw+t9pY=
 
 dom-serializer@^2.0.0:
   version "2.0.0"
@@ -4439,6 +4449,11 @@ pend@~1.2.0:
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/pend/-/pend-1.2.0.tgz#7a57eb550a6783f9115331fcf4663d5c8e007a50"
   integrity sha1-elfrVQpng/kRUzH89GY9XI4AelA=
 
+picocolors@^0.2.1:
+  version "0.2.1"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/picocolors/-/picocolors-0.2.1.tgz#570670f793646851d1ba135996962abad587859f"
+  integrity sha1-VwZw95NkaFHRuhNZlpYqutWHhZ8=
+
 picocolors@^1.1.1:
   version "1.1.1"
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/picocolors/-/picocolors-1.1.1.tgz#3d321af3eab939b083c8f929a1d12cda81c26b6b"
@@ -4476,7 +4491,7 @@ pluralize@^8.0.0:
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/pluralize/-/pluralize-8.0.0.tgz#1a6fa16a38d12a1901e0320fa017051c539ce3b1"
   integrity sha1-Gm+hajjRKhkB4DIPoBcFHFOc47E=
 
-postcss@8.5.8, postcss@^7.0.16:
+postcss@8.5.8:
   version "8.5.8"
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/postcss/-/postcss-8.5.8.tgz#6230ecc8fb02e7a0f6982e53990937857e13f399"
   integrity sha1-YjDsyPsC56D2mC5TmQk3hX4T85k=
@@ -4484,6 +4499,14 @@ postcss@8.5.8, postcss@^7.0.16:
     nanoid "^3.3.11"
     picocolors "^1.1.1"
     source-map-js "^1.2.1"
+
+postcss@^7.0.16:
+  version "7.0.39"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/postcss/-/postcss-7.0.39.tgz#9624375d965630e2e1f2c02a935c82a59cb48309"
+  integrity sha1-liQ3XZZWMOLh8sAqk1yCpZy0gwk=
+  dependencies:
+    picocolors "^0.2.1"
+    source-map "^0.6.1"
 
 prebuild-install@^7.0.1:
   version "7.1.3"
