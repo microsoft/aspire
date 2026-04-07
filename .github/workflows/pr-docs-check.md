@@ -26,6 +26,11 @@ if: >-
 
 checkout:
   - repository: microsoft/aspire.dev
+    github-app:
+      app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+      private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+      owner: "microsoft"
+      repositories: ["aspire.dev"]
     current: true
 
 permissions:
