@@ -346,7 +346,7 @@ internal static class HttpHealthCheckHelpers
 }
 
 /// <summary>
-/// HTTP health check for static URIs with friendly error messages.
+/// HTTP health check for static URIs.
 /// </summary>
 internal sealed class StaticUriHealthCheck : IHealthCheck
 {
@@ -422,13 +422,13 @@ internal sealed class ParameterUriHealthCheck : IHealthCheck
             // Use ExternalServiceResource validation for the base URL
             if (!ExternalServiceResource.UrlIsValidForExternalService(urlValue, out var uri, out var message))
             {
-                return HealthCheckResult.Unhealthy($"The URL '{urlValue}' from parameter '{_urlParameter.Name}' is invalid: {message}");
+                return HealthCheckResult.Unhealthy($"The URL from parameter '{_urlParameter.Name}' is invalid: {message}");
             }
 
             // Additional validation for health check: ensure HTTP/HTTPS scheme
             if (uri.Scheme != "http" && uri.Scheme != "https")
             {
-                return HealthCheckResult.Unhealthy($"The URL '{uri}' from parameter '{_urlParameter.Name}' cannot be used for HTTP health checks because it has a non-HTTP scheme.");
+                return HealthCheckResult.Unhealthy($"The URL from parameter '{_urlParameter.Name}' cannot be used for HTTP health checks because it has a non-HTTP scheme.");
             }
 
             // Apply path if specified
