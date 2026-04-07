@@ -7,6 +7,41 @@ description: "One-time skill for completing Aspire initialization after `aspire 
 
 This is a **one-time setup skill**. It completes the Aspire initialization that `aspire init` started. After this skill finishes successfully, it should be deleted — the evergreen `aspire` skill handles ongoing AppHost work.
 
+## Guiding principles
+
+### Minimize changes to the user's code
+
+The default stance is **adapt the AppHost to fit the app, not the other way around**. The user's services already work — the goal is to model them in Aspire without breaking anything.
+
+- Prefer `WithEnvironment()` to match existing env var names over asking users to rename vars in their code
+- Use `WithHttpEndpoint(port: <existing-port>)` to match hardcoded ports rather than changing the service
+- Map existing `docker-compose.yml` config 1:1 before optimizing
+- Don't restructure project directories, rename files, or change build scripts
+
+### Surface tradeoffs, don't decide silently
+
+Sometimes a small code change unlocks significantly better Aspire integration. When this happens, **present the tradeoff to the user and let them decide**. Examples:
+
+- **Connection strings**: A service reads `DATABASE_URL` but Aspire injects `ConnectionStrings__mydb`. You can use `WithEnvironment("DATABASE_URL", db.Resource.ConnectionStringExpression)` (zero code change) or suggest the service reads from config so `WithReference(db)` just works (enables service discovery, health checks, auto-retry).
+  → Ask: *"Your API reads DATABASE_URL. I can map that with WithEnvironment (no code change) or you could switch to reading ConnectionStrings:mydb which unlocks WithReference and automatic service discovery. Which do you prefer?"*
+
+- **Port binding**: A service hardcodes `PORT=3000`. You can match it with `WithHttpEndpoint(port: 3000)` (zero change) or suggest reading from env so Aspire can assign ports dynamically and avoid conflicts.
+  → Ask: *"Your frontend hardcodes port 3000. I can match that, but if you read PORT from env instead, Aspire can assign ports dynamically and avoid conflicts when running multiple services. Want me to make that change?"*
+
+- **OTel setup**: Service has its own tracing config pointing to Jaeger. You can leave it (Aspire won't show its traces) or suggest switching the exporter to read `OTEL_EXPORTER_OTLP_ENDPOINT` (which Aspire injects).
+  → Ask: *"Your API exports traces to Jaeger directly. I can leave that, or switch it to use the OTEL_EXPORTER_OTLP_ENDPOINT env var so traces show up in the Aspire dashboard. The Jaeger endpoint would still work in non-Aspire environments. Want me to update it?"*
+
+**Format for presenting tradeoffs:**
+1. Explain what the current code does
+2. Show the zero-change option and what it gives you
+3. Show the small-change option and the extra benefits
+4. Ask which they prefer
+5. If they decline the change, implement the zero-change option without complaint
+
+### When in doubt, ask
+
+If you're unsure whether something is a service, whether two services depend on each other, whether a port is significant, or whether a Docker Compose service should be modeled — ask. Don't guess at architectural intent.
+
 ## Prerequisites
 
 Before running this skill, `aspire init` must have already:
