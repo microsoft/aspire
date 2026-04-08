@@ -249,5 +249,44 @@ public class ReleaseScriptPowerShellTests
         Assert.EndsWith(".sha512", url);
     }
 
+    [Fact]
+    public async Task VersionAndQualityTogether_ReturnsError()
+    {
+        using var env = new TestEnvironment();
+        var cmd = new ScriptToolCommand("eng/scripts/get-aspire-cli.ps1", env, _testOutput);
+        var result = await cmd.ExecuteAsync(
+            "-Version", "9.5.0-preview.1.25366.3",
+            "-Quality", "dev",
+            "-WhatIf");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.True(
+            result.Output.Contains("Cannot specify both", StringComparison.OrdinalIgnoreCase) ||
+            result.Output.Contains("Version", StringComparison.OrdinalIgnoreCase),
+            "Output should indicate version/quality mutual exclusion");
+    }
+
+    [Fact]
+    public async Task InstallExtensionWithReleaseQuality_ReturnsError()
+    {
+        using var env = new TestEnvironment();
+        var cmd = new ScriptToolCommand("eng/scripts/get-aspire-cli.ps1", env, _testOutput);
+        var result = await cmd.ExecuteAsync("-Quality", "release", "-InstallExtension", "-WhatIf");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("dev", result.Output, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task InstallExtensionWithStagingQuality_ReturnsError()
+    {
+        using var env = new TestEnvironment();
+        var cmd = new ScriptToolCommand("eng/scripts/get-aspire-cli.ps1", env, _testOutput);
+        var result = await cmd.ExecuteAsync("-Quality", "staging", "-InstallExtension", "-WhatIf");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("dev", result.Output, StringComparison.OrdinalIgnoreCase);
+    }
+
     #endregion
 }

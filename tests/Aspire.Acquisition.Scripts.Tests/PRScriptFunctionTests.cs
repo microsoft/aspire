@@ -178,4 +178,50 @@ public class PRScriptFunctionTests
     }
 
     #endregion
+
+    #region detect_os (PR script copy)
+
+    [Fact]
+    public async Task DetectOs_ReturnsKnownPlatform()
+    {
+        using var env = new TestEnvironment();
+        var cmd = new ScriptFunctionCommand(
+            PRScript,
+            "detect_os",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        var os = result.Output.Trim();
+        Assert.True(
+            os is "osx" or "linux" or "linux-musl" or "win",
+            $"Expected a recognized OS, got: '{os}'");
+    }
+
+    #endregion
+
+    #region detect_architecture (PR script copy)
+
+    [Fact]
+    public async Task DetectArchitecture_ReturnsKnownArch()
+    {
+        using var env = new TestEnvironment();
+        var cmd = new ScriptFunctionCommand(
+            PRScript,
+            "detect_architecture",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        var arch = result.Output.Trim();
+        Assert.True(
+            arch is "x64" or "arm64",
+            $"Expected x64 or arm64, got: '{arch}'");
+    }
+
+    #endregion
 }

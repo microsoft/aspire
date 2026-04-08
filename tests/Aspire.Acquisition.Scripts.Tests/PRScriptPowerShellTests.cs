@@ -226,4 +226,49 @@ public class PRScriptPowerShellTests
         result.EnsureSuccessful();
         Assert.Contains(customPath, result.Output);
     }
+
+    [Fact]
+    public async Task InvalidPRNumber_NonNumeric_ReturnsError()
+    {
+        using var env = new TestEnvironment();
+        var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("-PRNumber", "abc", "-WhatIf");
+
+        Assert.NotEqual(0, result.ExitCode);
+    }
+
+    [Fact]
+    public async Task InvalidPRNumber_Zero_ReturnsError()
+    {
+        using var env = new TestEnvironment();
+        var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("-PRNumber", "0", "-WhatIf");
+
+        Assert.NotEqual(0, result.ExitCode);
+    }
+
+    [Fact]
+    public async Task InvalidPRNumber_Negative_ReturnsError()
+    {
+        using var env = new TestEnvironment();
+        var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("-PRNumber", "-1", "-WhatIf");
+
+        Assert.NotEqual(0, result.ExitCode);
+    }
+
+    [Fact]
+    public async Task DryRun_ShowsDefaultInstallPath()
+    {
+        using var env = new TestEnvironment();
+        var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("-PRNumber", "12345", "-SkipPath", "-WhatIf");
+
+        result.EnsureSuccessful();
+        Assert.Contains(".aspire", result.Output);
+    }
 }

@@ -304,4 +304,82 @@ public class ReleaseScriptShellTests
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains("Unknown option", result.Output, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public async Task VersionAndQualityTogether_ReturnsError()
+    {
+        using var env = new TestEnvironment();
+        var cmd = new ScriptToolCommand("eng/scripts/get-aspire-cli.sh", env, _testOutput);
+        var result = await cmd.ExecuteAsync(
+            "--dry-run",
+            "--version", "9.5.0-preview.1.25366.3",
+            "--quality", "dev");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("Cannot specify both", result.Output, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task DefaultInstallPath_UsesHomeDotAspireBin()
+    {
+        using var env = new TestEnvironment();
+        var cmd = new ScriptToolCommand("eng/scripts/get-aspire-cli.sh", env, _testOutput);
+        var result = await cmd.ExecuteAsync("--dry-run", "--quality", "release");
+
+        result.EnsureSuccessful();
+        Assert.Contains(".aspire/bin", result.Output);
+    }
+
+    [Fact]
+    public async Task DryRunWithGitHubActions_MentionsGitHubPath()
+    {
+        using var env = new TestEnvironment();
+        var githubPathFile = Path.Combine(env.TempDirectory, "github_path");
+        await File.WriteAllTextAsync(githubPathFile, "");
+        var cmd = new ScriptToolCommand("eng/scripts/get-aspire-cli.sh", env, _testOutput);
+        cmd.WithEnvironmentVariable("GITHUB_ACTIONS", "true");
+        cmd.WithEnvironmentVariable("GITHUB_PATH", githubPathFile);
+
+        var result = await cmd.ExecuteAsync("--dry-run", "--quality", "release");
+
+        result.EnsureSuccessful();
+        Assert.Contains("GITHUB_PATH", result.Output);
+    }
+
+    [Fact]
+    public async Task DryRun_ShowsCorrectUrlForDevQuality()
+    {
+        using var env = new TestEnvironment();
+        var cmd = new ScriptToolCommand("eng/scripts/get-aspire-cli.sh", env, _testOutput);
+        var result = await cmd.ExecuteAsync("--dry-run", "--quality", "dev", "--verbose");
+
+        result.EnsureSuccessful();
+        // dev quality uses base URL path "aspire/daily", which in dry-run shows as "from 'daily'"
+        // staging uses "rc/daily" and release uses "ga/daily" — neither should appear for dev
+        Assert.Contains("from 'daily'", result.Output);
+        Assert.DoesNotContain("ga/daily", result.Output);
+        Assert.DoesNotContain("rc/daily", result.Output);
+    }
+
+    [Fact]
+    public async Task DryRunWithVersion_ShowsVersionInOutput()
+    {
+        using var env = new TestEnvironment();
+        var cmd = new ScriptToolCommand("eng/scripts/get-aspire-cli.sh", env, _testOutput);
+        var result = await cmd.ExecuteAsync("--dry-run", "--version", "9.5.0-preview.1.25366.3", "--verbose");
+
+        result.EnsureSuccessful();
+        Assert.Contains("9.5.0-preview.1.25366.3", result.Output);
+    }
+
+    [Fact]
+    public async Task InstallExtensionWithStagingQuality_ReturnsError()
+    {
+        using var env = new TestEnvironment();
+        var cmd = new ScriptToolCommand("eng/scripts/get-aspire-cli.sh", env, _testOutput);
+        var result = await cmd.ExecuteAsync("--dry-run", "--quality", "staging", "--install-extension");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("--quality dev", result.Output, StringComparison.OrdinalIgnoreCase);
+    }
 }

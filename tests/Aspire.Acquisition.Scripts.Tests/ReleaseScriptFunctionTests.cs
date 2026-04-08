@@ -226,5 +226,157 @@ public class ReleaseScriptFunctionTests
             "Extracted binary should exist at destination");
     }
 
+    [Fact]
+    public async Task InstallArchive_Zip_ExtractsToDestination()
+    {
+        using var env = new TestEnvironment();
+
+        var archive = await FakeArchiveHelper.CreateFakeArchiveAsync(env.TempDirectory, "win-x64");
+        var destPath = Path.Combine(env.TempDirectory, "install-dest-zip");
+
+        var cmd = new ScriptFunctionCommand(
+            ReleaseScript,
+            $"install_archive '{archive.ArchivePath}' '{destPath}' 'win'",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.True(File.Exists(Path.Combine(destPath, "aspire.exe")),
+            "Extracted binary should exist at destination");
+    }
+
+    #endregion
+
+    #region detect_os
+
+    [Fact]
+    public async Task DetectOs_ReturnsKnownPlatform()
+    {
+        using var env = new TestEnvironment();
+        var cmd = new ScriptFunctionCommand(
+            ReleaseScript,
+            "detect_os",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        var os = result.Output.Trim();
+        Assert.True(
+            os is "osx" or "linux" or "linux-musl" or "win",
+            $"Expected a recognized OS, got: '{os}'");
+    }
+
+    #endregion
+
+    #region detect_architecture
+
+    [Fact]
+    public async Task DetectArchitecture_ReturnsKnownArch()
+    {
+        using var env = new TestEnvironment();
+        var cmd = new ScriptFunctionCommand(
+            ReleaseScript,
+            "detect_architecture",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        var arch = result.Output.Trim();
+        Assert.True(
+            arch is "x64" or "arm64",
+            $"Expected x64 or arm64, got: '{arch}'");
+    }
+
+    #endregion
+
+    #region get_cli_architecture_from_architecture
+
+    [Theory]
+    [InlineData("amd64", "x64")]
+    [InlineData("x64", "x64")]
+    [InlineData("arm64", "arm64")]
+    [InlineData("AMD64", "x64")]
+    [InlineData("X64", "x64")]
+    [InlineData("ARM64", "arm64")]
+    public async Task GetCliArchitectureFromArchitecture_NormalizesArchNames(string input, string expected)
+    {
+        using var env = new TestEnvironment();
+        var cmd = new ScriptFunctionCommand(
+            ReleaseScript,
+            $"get_cli_architecture_from_architecture '{input}'",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.Equal(expected, result.Output.Trim());
+    }
+
+    [Fact]
+    public async Task GetCliArchitectureFromArchitecture_UnsupportedArch_Fails()
+    {
+        using var env = new TestEnvironment();
+        var cmd = new ScriptFunctionCommand(
+            ReleaseScript,
+            "get_cli_architecture_from_architecture 'mips'",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("not supported", result.Output, StringComparison.OrdinalIgnoreCase);
+    }
+
+    #endregion
+
+    #region construct_aspire_extension_url
+
+    [Theory]
+    [InlineData("dev", "https://aka.ms/dotnet/9/aspire/daily/aspire-vscode.vsix.zip")]
+    [InlineData("staging", "https://aka.ms/dotnet/9/aspire/rc/daily/aspire-vscode.vsix.zip")]
+    [InlineData("release", "https://aka.ms/dotnet/9/aspire/ga/daily/aspire-vscode.vsix.zip")]
+    public async Task ConstructAspireExtensionUrl_NoVersion_ReturnsAkaMsUrl(string quality, string expectedUrl)
+    {
+        using var env = new TestEnvironment();
+        var cmd = new ScriptFunctionCommand(
+            ReleaseScript,
+            $"construct_aspire_extension_url '' '{quality}'",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.Equal(expectedUrl, result.Output.Trim());
+    }
+
+    [Fact]
+    public async Task ConstructAspireExtensionUrl_WithVersion_ReturnsCiDotNetUrl()
+    {
+        using var env = new TestEnvironment();
+        var version = "9.5.0-preview.1.25366.3";
+        var cmd = new ScriptFunctionCommand(
+            ReleaseScript,
+            $"construct_aspire_extension_url '{version}' 'dev'",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        var url = result.Output.Trim();
+        Assert.Contains("ci.dot.net/public/aspire", url);
+        Assert.Contains(version, url);
+        Assert.Contains("vsix.zip", url);
+    }
+
     #endregion
 }

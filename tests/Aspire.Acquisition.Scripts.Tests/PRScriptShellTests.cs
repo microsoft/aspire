@@ -206,4 +206,123 @@ public class PRScriptShellTests
         Assert.Contains(customPath, result.Output);
         Assert.Contains("[DRY RUN]", result.Output);
     }
+
+    [Fact]
+    public async Task InvalidPRNumber_NonNumeric_ReturnsError()
+    {
+        using var env = new TestEnvironment();
+        var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("abc", "--dry-run", "--skip-path");
+
+        Assert.NotEqual(0, result.ExitCode);
+    }
+
+    [Fact]
+    public async Task InvalidPRNumber_Zero_ReturnsError()
+    {
+        using var env = new TestEnvironment();
+        var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("0", "--dry-run", "--skip-path");
+
+        Assert.NotEqual(0, result.ExitCode);
+    }
+
+    [Fact]
+    public async Task InvalidPRNumber_Negative_ReturnsError()
+    {
+        using var env = new TestEnvironment();
+        var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("-1", "--dry-run", "--skip-path");
+
+        Assert.NotEqual(0, result.ExitCode);
+    }
+
+    [Fact]
+    public async Task InvalidPRNumber_OptionAsFirst_ReturnsError()
+    {
+        using var env = new TestEnvironment();
+        var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("--dry-run", "--skip-path");
+
+        Assert.NotEqual(0, result.ExitCode);
+    }
+
+    [Fact]
+    public async Task UnknownFlag_ReturnsError()
+    {
+        using var env = new TestEnvironment();
+        var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("12345", "--nonexistent-flag", "--dry-run", "--skip-path");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("Unknown option", result.Output, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AspireRepoEnvVar_IsUsedInDryRun()
+    {
+        using var env = new TestEnvironment();
+        var cmd = await CreateCommandWithMockGhAsync(env);
+        cmd.WithEnvironmentVariable("ASPIRE_REPO", "my-org/my-aspire");
+
+        var result = await cmd.ExecuteAsync("12345", "--dry-run", "--skip-path", "--verbose");
+
+        result.EnsureSuccessful();
+        Assert.Contains("my-org/my-aspire", result.Output);
+    }
+
+    [Fact]
+    public async Task DryRun_ShowsArtifactNameWithRid()
+    {
+        using var env = new TestEnvironment();
+        var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync(
+            "12345", "--dry-run", "--skip-path", "--verbose",
+            "--os", "linux", "--arch", "x64");
+
+        result.EnsureSuccessful();
+        Assert.Contains("cli-native-archives", result.Output);
+    }
+
+    [Fact]
+    public async Task DryRun_ShowsDefaultInstallPath()
+    {
+        using var env = new TestEnvironment();
+        var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("12345", "--dry-run", "--skip-path");
+
+        result.EnsureSuccessful();
+        Assert.Contains(".aspire", result.Output);
+    }
+
+    [Fact]
+    public async Task DryRun_ShowsNugetHivePath()
+    {
+        using var env = new TestEnvironment();
+        var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("12345", "--dry-run", "--skip-path", "--verbose");
+
+        result.EnsureSuccessful();
+        Assert.Contains("hive", result.Output, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task HiveOnly_SkipsCLIDownload()
+    {
+        using var env = new TestEnvironment();
+        var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("12345", "--dry-run", "--skip-path", "--hive-only", "--verbose");
+
+        result.EnsureSuccessful();
+        Assert.Contains("Skipping CLI download", result.Output, StringComparison.OrdinalIgnoreCase);
+    }
 }
