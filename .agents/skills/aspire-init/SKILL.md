@@ -298,17 +298,30 @@ Standard `dotnet` commands (`dotnet build`, `dotnet add reference`, `dotnet sln 
 
 ## Determine your context
 
-Read `aspire.config.json` at the repository root. Key fields:
+Read `aspire.config.json` at the repository root **if it exists**. Key fields:
 
 - **`appHost.language`**: `"typescript/nodejs"` or `"csharp"` — determines which syntax and tooling to use
 - **`appHost.path`**: path to the AppHost file or project directory — this is where you'll edit code
 
 For C# AppHosts, there are two sub-modes:
 
-- **Single-file mode**: `appHost.path` points directly to an `apphost.cs` file using the `#:sdk` directive. No `.csproj` needed.
-- **Full project mode**: `appHost.path` points to a directory containing a `.csproj` and `apphost.cs`. This was created because a `.sln`/`.slnx` was found — full project mode is required so the AppHost can be opened in Visual Studio alongside the rest of the solution.
+- **Single-file mode**: `appHost.path` points directly to an `apphost.cs` file using the `#:sdk` directive. No `.csproj` needed. Configuration lives in `aspire.config.json`.
+- **Full project mode**: A directory containing a `.csproj` and `Program.cs` (or `apphost.cs`). This was created because a `.sln`/`.slnx` was found. Configuration lives in `Properties/launchSettings.json` inside the AppHost project directory (standard .NET launch settings), **not** in `aspire.config.json`.
 
-Check which mode you're in by looking at what exists at the `appHost.path` location.
+### Configuration files — which is which
+
+**Do not confuse these files. Do not create or modify config files for the user's service projects — only for the AppHost.**
+
+| File | Where it lives | What it's for | Who uses it |
+|------|---------------|---------------|-------------|
+| `aspire.config.json` | Repo root | AppHost path, language, profiles (ports, env vars) | Single-file and polyglot AppHosts only |
+| `Properties/launchSettings.json` | Inside the AppHost project dir | Launch profiles (ports, env vars) | Full project mode `.csproj` AppHosts (standard .NET) |
+| `appsettings.json` | Inside service projects | Service-specific configuration | The services themselves — **do not create or modify these** |
+| `launchSettings.json` in service projects | Inside service project dirs | Service launch config | The services themselves — **do not create or modify these** |
+
+**Key rule:** When the AppHost is a `.csproj` project, it's a standard .NET project. It uses `Properties/launchSettings.json` for launch profiles, just like any other .NET project. `aspire init` creates this file with the correct ports. Do not create a duplicate `aspire.config.json` for project-mode AppHosts.
+
+Check which mode you're in by looking at what exists at the `appHost.path` location. If there's no `aspire.config.json`, look for a `.csproj` AppHost directory with `Properties/launchSettings.json` instead.
 
 If you're in **full project mode**, also load [references/full-solution-apphosts.md](references/full-solution-apphosts.md). It covers:
 
@@ -380,12 +393,13 @@ Before investing time in wiring, verify that the Aspire skeleton boots correctly
 aspire start
 ```
 
-The empty AppHost should start successfully — the dashboard should come up and the process should run without errors. You won't see any resources yet (that's expected), but if `aspire start` fails here, the problem is in the generated `aspire.config.json` or the skeleton AppHost file. Fix the issue before proceeding.
+The empty AppHost should start successfully — the dashboard should come up and the process should run without errors. You won't see any resources yet (that's expected), but if `aspire start` fails here, fix the issue before proceeding.
 
 Common failures at this stage:
 
-- **Missing profiles in `aspire.config.json`**: The file must have a `profiles` section with `applicationUrl`. Re-run `aspire init` to regenerate it.
-- **Missing dependencies**: For TypeScript, ensure `@aspect/aspire-hosting` or the `.modules/aspire.js` SDK is available. Run `aspire restore` if needed.
+- **Missing launch profile**: For full project mode, the AppHost needs `Properties/launchSettings.json` with an `applicationUrl`. For single-file mode, `aspire.config.json` needs a `profiles` section. If either is missing, re-run `aspire init` to regenerate.
+- **SDK version mismatch**: For full project mode in a repo with an older root `global.json`, the AppHost directory needs its own nested `global.json` pinning the Aspire-supported SDK (see Critical Rules above).
+- **Missing dependencies**: For TypeScript, ensure the `.modules/aspire.js` SDK is available. Run `aspire restore` if needed.
 - **Port conflicts**: If another Aspire app is running, the randomly assigned ports may conflict. Stop other instances first.
 
 Once it boots, stop it (Ctrl+C) and continue.
@@ -410,19 +424,23 @@ Ask the user:
 
 If the AppHost is in **full project mode**, consult [references/full-solution-apphosts.md](references/full-solution-apphosts.md) before making ServiceDefaults changes. Some existing solutions need bootstrap updates before `AddServiceDefaults()` and `MapDefaultEndpoints()` can be applied safely.
 
-If no ServiceDefaults project exists in the repo, create one:
+**Placement is your decision.** Where to put ServiceDefaults depends on the repo's structure:
+
+- If the AppHost has its own nested SDK boundary (nested `global.json`), ServiceDefaults should live next to the AppHost in that same boundary so it can target the same TFM.
+- If the repo's root SDK is compatible with the AppHost's TFM, ServiceDefaults can live alongside existing source (e.g., in `src/`).
+- If a ServiceDefaults project already exists (look for references to `Microsoft.Extensions.ServiceDiscovery` or `Aspire.ServiceDefaults`), skip creation and use the existing one.
+
+To create one:
 
 ```bash
 dotnet new aspire-servicedefaults -n <SolutionName>.ServiceDefaults -o <path>
 ```
 
-Place it alongside the AppHost (e.g., `src/` or solution root). If a `.sln` exists, add it:
+If a `.sln` exists and the ServiceDefaults project is compatible with the solution's SDK, add it:
 
 ```bash
 dotnet sln <solution> add <ServiceDefaults.csproj>
 ```
-
-If a ServiceDefaults project already exists (look for references to `Microsoft.Extensions.ServiceDiscovery` or `Aspire.ServiceDefaults`), skip creation and use the existing one.
 
 ### Step 5: Wire up the AppHost
 
