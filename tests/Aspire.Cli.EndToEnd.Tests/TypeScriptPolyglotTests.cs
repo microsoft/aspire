@@ -58,12 +58,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
         // Step 4: Add Aspire.Hosting.JavaScript package
-        // When channel is set (CI) and there's only one channel with one version,
-        // the version is auto-selected without prompting.
-        await auto.TypeAsync("aspire add Aspire.Hosting.JavaScript");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("The package Aspire.Hosting.", timeout: TimeSpan.FromMinutes(2));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.AspireAddAsync("Aspire.Hosting.JavaScript", counter);
 
         // Step 5: Modify apphost.ts to add the Vite app
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");

@@ -43,15 +43,8 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
         await auto.DeclineAgentInitPromptAsync(counter);
 
-        await auto.TypeAsync("aspire add Aspire.Hosting.Docker");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("The package Aspire.Hosting.", timeout: TimeSpan.FromMinutes(2));
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        await auto.TypeAsync("aspire add Aspire.Hosting.PostgreSQL");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("The package Aspire.Hosting.", timeout: TimeSpan.FromMinutes(2));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.AspireAddAsync("Aspire.Hosting.Docker", counter);
+        await auto.AspireAddAsync("Aspire.Hosting.PostgreSQL", counter);
 
         await auto.TypeAsync("aspire restore");
         await auto.EnterAsync();

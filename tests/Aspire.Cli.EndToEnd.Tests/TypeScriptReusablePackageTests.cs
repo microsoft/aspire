@@ -47,10 +47,7 @@ public sealed class TypeScriptReusablePackageTests(ITestOutputHelper output)
         var appAppHostPath = Path.Combine(appDirectory.FullName, "apphost.ts");
         Assert.True(File.Exists(appAppHostPath), $"Expected the CLI-created app to contain {appAppHostPath}.");
 
-        await auto.TypeAsync("aspire add Aspire.Hosting.Redis");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("The package Aspire.Hosting.", timeout: TimeSpan.FromMinutes(2));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.AspireAddAsync("Aspire.Hosting.Redis", counter);
 
         var sdkVersion = GetSdkVersion(appDirectory);
         WriteHelperPackageFiles(helperDirectory, helperSourceDirectory, sdkVersion);

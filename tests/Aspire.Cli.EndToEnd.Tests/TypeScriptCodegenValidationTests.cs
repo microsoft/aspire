@@ -40,15 +40,8 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 2: Add two integrations
-        await auto.TypeAsync("aspire add Aspire.Hosting.Redis");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("The package Aspire.Hosting.", timeout: TimeSpan.FromMinutes(2));
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        await auto.TypeAsync("aspire add Aspire.Hosting.SqlServer");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("The package Aspire.Hosting.", timeout: TimeSpan.FromMinutes(2));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.AspireAddAsync("Aspire.Hosting.Redis", counter);
+        await auto.AspireAddAsync("Aspire.Hosting.SqlServer", counter);
 
         // Step 3: Run aspire restore and verify success
         await auto.TypeAsync("aspire restore");
@@ -126,10 +119,7 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        await auto.TypeAsync("aspire add Aspire.Hosting.PostgreSQL");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("The package Aspire.Hosting.", timeout: TimeSpan.FromMinutes(2));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.AspireAddAsync("Aspire.Hosting.PostgreSQL", counter);
 
         await auto.TypeAsync("aspire restore");
         await auto.EnterAsync();

@@ -53,13 +53,8 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
         await auto.DeclineAgentInitPromptAsync(counter);
 
-        await auto.TypeAsync("aspire add Aspire.Hosting.JavaScript");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
-
-        await auto.TypeAsync("aspire add Aspire.Hosting.Docker");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+        await auto.AspireAddAsync("Aspire.Hosting.JavaScript", counter, timeout: TimeSpan.FromSeconds(180));
+        await auto.AspireAddAsync("Aspire.Hosting.Docker", counter, timeout: TimeSpan.FromSeconds(180));
 
         // Copy checked-in fixture apps and write the apphost
         CopyFixtures(workspace);

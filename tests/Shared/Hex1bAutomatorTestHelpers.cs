@@ -352,4 +352,42 @@ internal static class Hex1bAutomatorTestHelpers
 
         await auto.DeclineAgentInitPromptAsync(counter);
     }
+
+    /// <summary>
+    /// Runs <c>aspire add {packageName}</c> and handles the optional version selection prompt
+    /// that appears with dogfood installs. Waits for the success prompt.
+    /// </summary>
+    internal static async Task AspireAddAsync(
+        this Hex1bTerminalAutomator auto,
+        string packageName,
+        SequenceCounter counter,
+        TimeSpan? timeout = null)
+    {
+        var effectiveTimeout = timeout ?? TimeSpan.FromMinutes(2);
+
+        await auto.TypeAsync($"aspire add {packageName}");
+        await auto.EnterAsync();
+
+        // Dogfood installs may present a version selection prompt for the package.
+        // Wait for either the version selection prompt or the package success message.
+        var versionSelectionShown = false;
+        await auto.WaitUntilAsync(s =>
+        {
+            if (new CellPatternSearcher().Find("Select a version of").Search(s).Count > 0)
+            {
+                versionSelectionShown = true;
+                return true;
+            }
+
+            return new CellPatternSearcher().Find("The package ").Search(s).Count > 0;
+        }, timeout: effectiveTimeout, description: "version selection or package added");
+
+        if (versionSelectionShown)
+        {
+            // Accept the default version
+            await auto.EnterAsync();
+        }
+
+        await auto.WaitForSuccessPromptAsync(counter);
+    }
 }

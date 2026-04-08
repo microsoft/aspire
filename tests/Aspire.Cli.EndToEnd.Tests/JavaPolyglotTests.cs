@@ -50,10 +50,7 @@ public sealed class JavaPolyglotTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
-        await auto.TypeAsync("aspire add Aspire.Hosting.JavaScript");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("The package Aspire.Hosting.", timeout: TimeSpan.FromMinutes(2));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.AspireAddAsync("Aspire.Hosting.JavaScript", counter);
 
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.java");
         var newContent = """
