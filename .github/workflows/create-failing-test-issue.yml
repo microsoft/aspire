@@ -3,11 +3,42 @@ name: Create Failing-Test Issue
 on:
   issue_comment:
     types: [created]
+  workflow_dispatch:
+    inputs:
+      test_query:
+        description: 'Test name to create an issue for (leave empty to list all failures)'
+        required: false
+        type: string
+      source_url:
+        description: 'Source URL: PR, workflow run, or workflow job URL'
+        required: true
+        type: string
+      workflow:
+        description: 'Workflow selector alias or file path'
+        required: false
+        default: 'ci'
+        type: string
+      force_new:
+        description: 'Create a new issue even if one already exists'
+        required: false
+        default: false
+        type: boolean
+      pr_number:
+        description: 'PR or issue number to post result comments on (optional)'
+        required: false
+        type: number
 
 permissions: {}
 
 concurrency:
-  group: create-failing-test-issue-${{ github.event.issue.pull_request && 'pr' || 'issue' }}-${{ github.event.issue.number }}
+  group: >-
+    create-failing-test-issue-${{
+      github.event_name == 'workflow_dispatch'
+      && format('dispatch-{0}', github.run_id)
+      || format('{0}-{1}',
+          github.event.issue.pull_request && 'pr' || 'issue',
+          github.event.issue.number)
+    }}
   cancel-in-progress: false
 
 jobs:
@@ -15,7 +46,8 @@ jobs:
     name: Create failing-test issue
     if: >-
       github.repository == 'microsoft/aspire' &&
-      startsWith(github.event.comment.body, '/create-issue')
+      (github.event_name == 'workflow_dispatch' ||
+       startsWith(github.event.comment.body, '/create-issue'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -25,6 +57,7 @@ jobs:
       actions: read # list workflow runs and download artifacts
     steps:
     - name: Verify user has write access
+      if: github.event_name == 'issue_comment'
       id: verify-permission
       uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
       with:
@@ -61,6 +94,22 @@ jobs:
       uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
       with:
         script: |
+          if (context.eventName === 'workflow_dispatch') {
+            const testQuery = context.payload.inputs?.test_query ?? '';
+            const sourceUrl = context.payload.inputs?.source_url ?? '';
+            const workflow = context.payload.inputs?.workflow ?? 'ci';
+            const forceNew = context.payload.inputs?.force_new === 'true';
+            const listOnly = !testQuery;
+
+            core.setOutput('test_query', testQuery);
+            core.setOutput('source_url', sourceUrl);
+            core.setOutput('workflow', workflow);
+            core.setOutput('force_new', forceNew ? 'true' : 'false');
+            core.setOutput('list_only', listOnly ? 'true' : 'false');
+            core.setOutput('pr_number', context.payload.inputs?.pr_number ?? '');
+            return;
+          }
+
           const helper = require(`${process.env.GITHUB_WORKSPACE}/.github/workflows/create-failing-test-issue.js`);
           const defaultSourceUrl = context.payload.issue.pull_request
             ? `https://github.com/${context.repo.owner}/${context.repo.repo}/pull/${context.issue.number}`
@@ -84,9 +133,10 @@ jobs:
           core.setOutput('workflow', parsed.workflow);
           core.setOutput('force_new', parsed.forceNew ? 'true' : 'false');
           core.setOutput('list_only', parsed.listOnly ? 'true' : 'false');
+          core.setOutput('pr_number', String(context.issue.number));
 
     - name: Add processing reaction
-      if: success()
+      if: success() && github.event_name == 'issue_comment'
       uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
       with:
         script: |
@@ -124,7 +174,7 @@ jobs:
           args+=(--force-new)
         fi
 
-        dotnet build tools/CreateFailingTestIssue --no-restore -v:q
+        dotnet build tools/CreateFailingTestIssue -v:q
         dotnet run --no-build --project tools/CreateFailingTestIssue -- "${args[@]}" --output "$RUNNER_TEMP/failing-test-result.json"
 
     - name: Create or update failing-test issue
@@ -134,10 +184,28 @@ jobs:
         RESULT_PATH: ${{ runner.temp }}/failing-test-result.json
         FORCE_NEW: ${{ steps.extract-command.outputs.force_new }}
         LIST_ONLY: ${{ steps.extract-command.outputs.list_only }}
+        PR_NUMBER: ${{ steps.extract-command.outputs.pr_number }}
+        RESOLVE_OUTCOME: ${{ steps.resolve-failure.outcome }}
       with:
         script: |
           const fs = require('fs');
           const helper = require(`${process.env.GITHUB_WORKSPACE}/.github/workflows/create-failing-test-issue.js`);
+          const prNumber = process.env.PR_NUMBER ? parseInt(process.env.PR_NUMBER, 10) : null;
+          const resolverFailed = process.env.RESOLVE_OUTCOME === 'failure';
+          const hasResultFile = fs.existsSync(process.env.RESULT_PATH) && fs.statSync(process.env.RESULT_PATH).size > 0;
+
+          async function postComment(body) {
+            if (!prNumber) {
+              core.info(`No PR/issue number available. Comment:\n${body}`);
+              return;
+            }
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body
+            });
+          }
 
           const helpBlock = [
             '📋 **`/create-issue` — Usage**',
@@ -153,11 +221,20 @@ jobs:
             '```',
           ].join('\n');
 
+          // If the resolver step failed and produced no output, report the error
+          if (resolverFailed && !hasResultFile) {
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const message = `❌ The failing-test resolver failed to run. See the [workflow run](${runUrl}) for details.`;
+            await postComment(message);
+            core.setFailed(message);
+            return;
+          }
+
           // List-only mode: show available failures + help when no --test was given
           if (process.env.LIST_ONLY === 'true') {
             let body = '';
 
-            if (fs.existsSync(process.env.RESULT_PATH) && fs.statSync(process.env.RESULT_PATH).size > 0) {
+            if (hasResultFile) {
               const result = JSON.parse(fs.readFileSync(process.env.RESULT_PATH, 'utf8'));
               const tests = result.allFailures?.tests?.map(t => t.canonicalTestName ?? t.displayTestName)
                 ?? result.diagnostics?.availableFailedTests
@@ -174,23 +251,13 @@ jobs:
               body = 'No test failures were found. Use `--url` to point to a specific workflow run.\n\n';
             }
 
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: `${body}${helpBlock}`
-            });
+            await postComment(`${body}${helpBlock}`);
             return;
           }
 
-          if (!fs.existsSync(process.env.RESULT_PATH) || fs.statSync(process.env.RESULT_PATH).size === 0) {
-            const message = `@${context.payload.comment.user.login} ❌ The failing-test resolver did not produce a JSON result. See the workflow run for details.`;
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: message
-            });
+          if (!hasResultFile) {
+            const message = '❌ The failing-test resolver did not produce a JSON result. See the workflow run for details.';
+            await postComment(message);
             core.setFailed(message);
             return;
           }
@@ -200,13 +267,8 @@ jobs:
             const candidates = result.diagnostics?.availableFailedTests?.length
               ? `\n\n**Available failed tests:**\n${result.diagnostics.availableFailedTests.map(name => `- \`${name}\``).join('\n')}`
               : '';
-            const message = `@${context.payload.comment.user.login} ❌ ${result.errorMessage ?? 'The failing-test resolver could not create an issue.'}${candidates}`;
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: message
-            });
+            const message = `❌ ${result.errorMessage ?? 'The failing-test resolver could not create an issue.'}${candidates}`;
+            await postComment(message);
             core.setFailed(result.errorMessage ?? 'The failing-test resolver failed.');
             return;
           }
@@ -276,30 +338,34 @@ jobs:
             disableHint = `\n\nTo disable this test on your PR, comment:\n\`\`\`\n/disable-test ${testName} ${issueUrl}\n\`\`\``;
           }
 
-          await github.rest.issues.createComment({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            issue_number: context.issue.number,
-            body: `✅ ${action[0].toUpperCase()}${action.slice(1)} failing-test issue #${issueNumber}: ${issueUrl}${disableHint}`
-          });
+          await postComment(`✅ ${action[0].toUpperCase()}${action.slice(1)} failing-test issue #${issueNumber}: ${issueUrl}${disableHint}`);
 
-          await github.rest.reactions.createForIssueComment({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            comment_id: context.payload.comment.id,
-            content: 'rocket'
-          });
+          if (context.eventName === 'issue_comment') {
+            await github.rest.reactions.createForIssueComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: context.payload.comment.id,
+              content: 'rocket'
+            });
+          }
 
     - name: Post failure comment on unexpected error
-      if: failure() && steps.extract-command.outcome == 'success' && steps.verify-permission.outcome == 'success'
+      if: failure() && steps.extract-command.outcome == 'success' && (steps.verify-permission.outcome == 'success' || steps.verify-permission.outcome == 'skipped')
       uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      env:
+        PR_NUMBER: ${{ steps.extract-command.outputs.pr_number }}
       with:
         script: |
+          const prNumber = process.env.PR_NUMBER ? parseInt(process.env.PR_NUMBER, 10) : null;
           const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-          const message = `@${context.payload.comment.user.login} ❌ The \`/create-issue\` command failed. See the [workflow run](${runUrl}) for details.`;
-          await github.rest.issues.createComment({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            issue_number: context.issue.number,
-            body: message
-          });
+          const message = `❌ The \`/create-issue\` command failed. See the [workflow run](${runUrl}) for details.`;
+          if (prNumber) {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: message
+            });
+          } else {
+            core.info(message);
+          }
