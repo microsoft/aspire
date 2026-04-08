@@ -270,7 +270,7 @@ sealed partial class TestSummaryGenerator
                 reportBuilder.AppendLine();
                 reportBuilder.AppendLine("```yml");
 
-                reportBuilder.AppendLine(test.Output?.ErrorInfo?.InnerText);
+                reportBuilder.AppendLine(test.Output?.ErrorInfoString);
                 if (test.Output?.StdOut is not null)
                 {
                     const int halfLength = 5_000;

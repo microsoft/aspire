@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using System.Xml;
 using System.Xml.Serialization;
 
 namespace Aspire.TestTools;
@@ -44,6 +43,47 @@ public class TrxReader
                 ErrorMessage: unitTestResult.Output?.ErrorInfoString,
                 Stdout: unitTestResult.Output?.StdOut
             ));
+        }
+
+        return testResults;
+    }
+
+    public static IList<DetailedTestResult> GetDetailedTestResultsFromTrx(string filepath, Func<DetailedTestResult, bool>? testFilter = null)
+    {
+        var testRun = DeserializeTrxFile(filepath);
+        if (testRun?.Results?.UnitTestResults is null)
+        {
+            return Array.Empty<DetailedTestResult>();
+        }
+
+        var testDefinitions = testRun.TestDefinitions?.UnitTests?
+            .Where(static testDefinition => !string.IsNullOrWhiteSpace(testDefinition.Id))
+            .ToDictionary(static testDefinition => testDefinition.Id!, StringComparer.OrdinalIgnoreCase);
+
+        var testResults = new List<DetailedTestResult>();
+
+        foreach (var unitTestResult in testRun.Results.UnitTestResults)
+        {
+            if (string.IsNullOrWhiteSpace(unitTestResult.TestName) || string.IsNullOrWhiteSpace(unitTestResult.Outcome))
+            {
+                continue;
+            }
+
+            var canonicalName = GetCanonicalTestName(unitTestResult, testDefinitions);
+            var detailedTestResult = new DetailedTestResult(
+                CanonicalName: canonicalName,
+                DisplayName: unitTestResult.TestName,
+                Outcome: unitTestResult.Outcome,
+                ErrorMessage: unitTestResult.Output?.ErrorMessage,
+                StackTrace: unitTestResult.Output?.StackTrace,
+                Stdout: unitTestResult.Output?.StdOut);
+
+            if (testFilter is not null && !testFilter(detailedTestResult))
+            {
+                continue;
+            }
+
+            testResults.Add(detailedTestResult);
         }
 
         return testResults;
@@ -111,6 +151,24 @@ public class TrxReader
 
         return (latestEndTime.Value - earliestStartTime.Value).TotalMinutes;
     }
+
+    private static string GetCanonicalTestName(UnitTestResult unitTestResult, IReadOnlyDictionary<string, UnitTestDefinition>? testDefinitions)
+    {
+        if (!string.IsNullOrWhiteSpace(unitTestResult.TestId)
+            && testDefinitions is not null
+            && testDefinitions.TryGetValue(unitTestResult.TestId, out var testDefinition)
+            && testDefinition.TestMethod is { ClassName: { Length: > 0 } className, Name: { Length: > 0 } methodName })
+        {
+            if (methodName.StartsWith($"{className}.", StringComparison.Ordinal))
+            {
+                return methodName;
+            }
+
+            return $"{className}.{methodName}";
+        }
+
+        return unitTestResult.TestName ?? string.Empty;
+    }
 }
 
 [XmlRoot("TestRun", Namespace = "http://microsoft.com/schemas/VisualStudio/TeamTest/2010")]
@@ -121,6 +179,8 @@ public class TestRun
     public ResultSummary? ResultSummary { get; set; }
 
     public Times? Times { get; set; }
+
+    public TestDefinitions? TestDefinitions { get; set; }
 }
 
 public class Results
@@ -146,6 +206,9 @@ public class Times
 
 public class UnitTestResult
 {
+    [XmlAttribute("testId")]
+    public string? TestId { get; set; }
+
     [XmlAttribute("testName")]
     public string? TestName { get; set; }
 
@@ -166,12 +229,26 @@ public class UnitTestResult
 
 public class Output
 {
-    [XmlAnyElement]
-    public XmlElement? ErrorInfo { get; set; }
+    public ErrorInfo? ErrorInfo { get; set; }
     public string? StdOut { get; set; }
 
     [XmlIgnore]
-    public string ErrorInfoString => ErrorInfo?.InnerText ?? string.Empty;
+    public string ErrorInfoString => string.Join(
+        Environment.NewLine,
+        new[] { ErrorMessage, StackTrace }.Where(static value => !string.IsNullOrWhiteSpace(value)));
+
+    [XmlIgnore]
+    public string? ErrorMessage => ErrorInfo?.Message;
+
+    [XmlIgnore]
+    public string? StackTrace => ErrorInfo?.StackTrace;
+}
+
+public class ErrorInfo
+{
+    public string? Message { get; set; }
+
+    public string? StackTrace { get; set; }
 }
 
 public class ResultSummary
@@ -217,3 +294,31 @@ public class Counters
 }
 
 public record TestResult(string Name, string Outcome, TimeSpan StartTime, TimeSpan EndTime, string? ErrorMessage = null, string? Stdout = null);
+
+public record DetailedTestResult(string CanonicalName, string DisplayName, string Outcome, string? ErrorMessage = null, string? StackTrace = null, string? Stdout = null);
+
+public class TestDefinitions
+{
+    [XmlElement("UnitTest")]
+    public List<UnitTestDefinition>? UnitTests { get; set; }
+}
+
+public class UnitTestDefinition
+{
+    [XmlAttribute("id")]
+    public string? Id { get; set; }
+
+    [XmlAttribute("name")]
+    public string? Name { get; set; }
+
+    public TestMethodDefinition? TestMethod { get; set; }
+}
+
+public class TestMethodDefinition
+{
+    [XmlAttribute("className")]
+    public string? ClassName { get; set; }
+
+    [XmlAttribute("name")]
+    public string? Name { get; set; }
+}

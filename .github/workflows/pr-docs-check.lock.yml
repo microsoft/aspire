@@ -921,6 +921,7 @@ jobs:
     if: always() && (needs.agent.result != 'skipped' || needs.activation.outputs.lockdown_check_failed == 'true')
     runs-on: ubuntu-slim
     permissions:
+      discussions: write
       issues: write
     concurrency:
       group: "gh-aw-conclusion-pr-docs-check"
@@ -949,6 +950,7 @@ jobs:
             aspire.dev
             aspire
           github-api-url: ${{ github.api_url }}
+          permission-discussions: write
           permission-issues: write
       - name: Download agent output artifact
         id: download-agent-output
@@ -1240,6 +1242,7 @@ jobs:
     runs-on: ubuntu-slim
     permissions:
       contents: write
+      discussions: write
       issues: write
       pull-requests: write
     timeout-minutes: 15
@@ -1302,6 +1305,7 @@ jobs:
             aspire
           github-api-url: ${{ github.api_url }}
           permission-contents: write
+          permission-discussions: write
           permission-issues: write
           permission-pull-requests: write
       - name: Checkout repository
@@ -1312,9 +1316,11 @@ jobs:
           ref: ${{ github.base_ref || github.event.pull_request.base.ref || github.ref_name || github.event.repository.default_branch }}
           token: ${{ steps.safe-outputs-app-token.outputs.token }}
           persist-credentials: false
+          path: aspire.dev
           fetch-depth: 1
       - name: Configure Git credentials
         if: (!cancelled()) && needs.agent.result != 'skipped' && contains(needs.agent.outputs.output_types, 'create_pull_request')
+        working-directory: aspire.dev
         env:
           REPO_NAME: "microsoft/aspire.dev"
           SERVER_URL: ${{ github.server_url }}

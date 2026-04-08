@@ -1,17 +1,17 @@
-name: Failing test on CI
-description: Create a report about a failing test
+name: Failing test
+description: Create a report about a failing test.
 title: "[Failing test]: "
-labels: [ 'blocking-clean-ci' ]
+labels: [ "failing-test" ]
 body:
   - type: markdown
     attributes:
       value: |
-        Test(s) failing on an Azure DevOps CI run. This issue will track the failures on Azure DevOps runs using the [Known Issues infrastructure](https://github.com/dotnet/arcade/blob/main/Documentation/Projects/Build%20Analysis/KnownIssues.md).
-        Fill in the `Build information` block. And `Error message template` needs to be filled in by using either `ErrorMessage` or `ErrorPattern` to enable automatic tracking of failing builds.
+        Test(s) failing on a GitHub Actions CI run. This issue tracks the failure using the known-issues style format.
+        Fill in the `Build information` block. `Fill in the error message template` should use either `ErrorMessage` or `ErrorPattern` so the issue stays actionable.
   - type: checkboxes
     attributes:
       label: Is there an existing issue for this?
-      description: Please search to see if an issue already exists for the failure you encountered ([aspire/issues](https://github.com/microsoft/aspire/issues)). More information on our issue management policies is available [here](https://aka.ms/aspnet/issue-policies).
+      description: Please search [aspire/issues](https://github.com/microsoft/aspire/issues) before filing a new failing-test issue.
       options:
         - label: I have searched the existing issues
           required: true
@@ -19,9 +19,8 @@ body:
     attributes:
       label: Build information
       value: |
-        Build:
-        Build error leg or test failing:
-        Pull Request: N/A
+        Build: 
+        Build error leg or test failing: 
     validations:
       required: true
   - type: textarea
@@ -47,7 +46,30 @@ body:
       required: false
   - type: textarea
     attributes:
-      label: Other info
-      description: Any other useful information about the failure
+      label: Error details
+      description: Include the failing error message and stack trace in the same style as existing failing-test issues.
+      value: |
+        ```yml
+        Error Message:
+        Stack Trace:
+        ```
     validations:
       required: false
+  - type: textarea
+    attributes:
+      label: Standard output
+      description: Paste the relevant standard output inside the existing collapsible details block format.
+      value: |
+        <details>
+        <summary>Standard Output</summary>
+
+        ```yml
+        ```
+
+        </details>
+    validations:
+      required: false
+  - type: markdown
+    attributes:
+      value: |
+        <!-- failing-test-signature: v1:manual -->
