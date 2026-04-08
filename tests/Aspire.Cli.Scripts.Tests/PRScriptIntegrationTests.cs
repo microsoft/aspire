@@ -36,11 +36,9 @@ public class PRScriptIntegrationTests : IClassFixture<RealGitHubPRFixture>
     [Fact]
     public async Task ShellScript_WithRealPR_DryRun_Succeeds()
     {
-        // Skip if GH_TOKEN is not available
         if (_prFixture.PRNumber == 0)
         {
-            _testOutput.WriteLine("Skipping: GH_TOKEN not available or no suitable PR found");
-            return;
+            Assert.Skip("GH_TOKEN not available or no suitable PR found");
         }
 
         using var env = new TestEnvironment();
@@ -59,11 +57,9 @@ public class PRScriptIntegrationTests : IClassFixture<RealGitHubPRFixture>
     [Fact]
     public async Task PowerShellScript_WithRealPR_WhatIf_Succeeds()
     {
-        // Skip if GH_TOKEN is not available
         if (_prFixture.PRNumber == 0)
         {
-            _testOutput.WriteLine("Skipping: GH_TOKEN not available or no suitable PR found");
-            return;
+            Assert.Skip("GH_TOKEN not available or no suitable PR found");
         }
 
         using var env = new TestEnvironment();
@@ -82,11 +78,9 @@ public class PRScriptIntegrationTests : IClassFixture<RealGitHubPRFixture>
     [Fact]
     public async Task ShellScript_WithRealPR_DiscoverRunId_DryRun_Succeeds()
     {
-        // Skip if GH_TOKEN is not available
         if (_prFixture.PRNumber == 0)
         {
-            _testOutput.WriteLine("Skipping: GH_TOKEN not available or no suitable PR found");
-            return;
+            Assert.Skip("GH_TOKEN not available or no suitable PR found");
         }
 
         using var env = new TestEnvironment();
@@ -105,11 +99,9 @@ public class PRScriptIntegrationTests : IClassFixture<RealGitHubPRFixture>
     [Fact]
     public async Task PowerShellScript_WithRealPR_DiscoverRunId_WhatIf_Succeeds()
     {
-        // Skip if GH_TOKEN is not available
         if (_prFixture.PRNumber == 0)
         {
-            _testOutput.WriteLine("Skipping: GH_TOKEN not available or no suitable PR found");
-            return;
+            Assert.Skip("GH_TOKEN not available or no suitable PR found");
         }
 
         using var env = new TestEnvironment();

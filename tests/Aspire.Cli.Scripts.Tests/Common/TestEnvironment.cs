@@ -54,6 +54,10 @@ public sealed class TestEnvironment : IDisposable
             // Windows batch script
             scriptContent = @"@echo off
 REM Mock gh CLI for testing
+if ""%1""==""--version"" (
+    echo gh version 2.50.0 ^(mock^)
+    exit /b 0
+)
 if ""%1""==""pr"" (
     if ""%2""==""list"" (
         echo [{""number"":12345,""mergedAt"":""2024-01-01T00:00:00Z"",""headRefOid"":""abc123""}]
@@ -70,8 +74,13 @@ if ""%1""==""run"" (
         exit /b 0
     )
 )
-echo Mock gh: Unknown command
-exit /b 0
+if ""%1""==""api"" (
+    REM Mock gh api responses for PR discovery
+    echo {}
+    exit /b 0
+)
+echo Mock gh: Unknown command: %* 1>&2
+exit /b 1
 ";
         }
         else
@@ -79,6 +88,10 @@ exit /b 0
             // Unix shell script
             scriptContent = @"#!/bin/bash
 # Mock gh CLI for testing
+if [ ""$1"" = ""--version"" ]; then
+    echo ""gh version 2.50.0 (mock)""
+    exit 0
+fi
 if [ ""$1"" = ""pr"" ] && [ ""$2"" = ""list"" ]; then
     echo '[{""number"":12345,""mergedAt"":""2024-01-01T00:00:00Z"",""headRefOid"":""abc123""}]'
     exit 0
@@ -93,8 +106,13 @@ if [ ""$1"" = ""run"" ]; then
         exit 0
     fi
 fi
-echo ""Mock gh: Unknown command""
-exit 0
+if [ ""$1"" = ""api"" ]; then
+    # Mock gh api responses for PR discovery
+    echo '{}'
+    exit 0
+fi
+echo ""Mock gh: Unknown command: $*"" >&2
+exit 1
 ";
         }
 

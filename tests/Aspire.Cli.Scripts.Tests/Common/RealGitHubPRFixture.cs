@@ -54,10 +54,7 @@ public class RealGitHubPRFixture : IAsyncLifetime
         }
 
         // Query recent merged PRs using gh CLI
-        var cmd = new ToolCommand("gh", _testOutput)
-            .WithTimeout(TimeSpan.FromMinutes(2));
-
-        var result = await cmd.ExecuteAsync(
+        var stdoutJson = await ExecuteGhJsonAsync(
             "pr", "list",
             "--repo", "dotnet/aspire",
             "--state", "merged",
@@ -65,10 +62,8 @@ public class RealGitHubPRFixture : IAsyncLifetime
             "--json", "number,mergedAt,headRefOid"
         );
 
-        result.EnsureSuccessful();
-
         // Parse JSON response in C# to avoid jq quoting issues
-        var prs = JsonSerializer.Deserialize<List<GitHubPR>>(result.Output)
+        var prs = JsonSerializer.Deserialize<List<GitHubPR>>(stdoutJson)
             ?? throw new InvalidOperationException("Failed to parse PR list JSON");
 
         // Try each PR to find one with required artifacts
@@ -89,26 +84,26 @@ public class RealGitHubPRFixture : IAsyncLifetime
     private async Task<bool> TryFindRunWithArtifactsAsync(int prNumber, string commitSha)
     {
         // Query workflow runs for this PR's commit
-        var cmd = new ToolCommand("gh", _testOutput)
-            .WithTimeout(TimeSpan.FromMinutes(2));
-
-        var result = await cmd.ExecuteAsync(
-            "run", "list",
-            "--repo", "dotnet/aspire",
-            "--commit", commitSha,
-            "--workflow", "ci.yml",
-            "--status", "completed",
-            "--limit", "5",
-            "--json", "databaseId,conclusion"
-        );
-
-        if (result.ExitCode != 0)
+        string runsJson;
+        try
+        {
+            runsJson = await ExecuteGhJsonAsync(
+                "run", "list",
+                "--repo", "dotnet/aspire",
+                "--commit", commitSha,
+                "--workflow", "ci.yml",
+                "--status", "completed",
+                "--limit", "5",
+                "--json", "databaseId,conclusion"
+            );
+        }
+        catch
         {
             return false;
         }
 
-        var runs = JsonSerializer.Deserialize<List<GitHubWorkflowRun>>(result.Output);
-        if (runs == null || runs.Count == 0)
+        var runs = JsonSerializer.Deserialize<List<GitHubWorkflowRun>>(runsJson);
+        if (runs is null || runs.Count == 0)
         {
             return false;
         }
@@ -117,28 +112,28 @@ public class RealGitHubPRFixture : IAsyncLifetime
         var successfulRun = runs.FirstOrDefault(r => 
             r.Conclusion?.Equals("success", StringComparison.OrdinalIgnoreCase) == true);
 
-        if (successfulRun == null)
+        if (successfulRun is null)
         {
             return false;
         }
 
         // Check if this run has required artifacts
-        var artifactsCmd = new ToolCommand("gh", _testOutput)
-            .WithTimeout(TimeSpan.FromMinutes(1));
-
-        var artifactsResult = await artifactsCmd.ExecuteAsync(
-            "run", "view", successfulRun.DatabaseId.ToString(),
-            "--repo", "dotnet/aspire",
-            "--json", "artifacts"
-        );
-
-        if (artifactsResult.ExitCode != 0)
+        string artifactsJson;
+        try
+        {
+            artifactsJson = await ExecuteGhJsonAsync(
+                "run", "view", successfulRun.DatabaseId.ToString(),
+                "--repo", "dotnet/aspire",
+                "--json", "artifacts"
+            );
+        }
+        catch
         {
             return false;
         }
 
-        var artifactsResponse = JsonSerializer.Deserialize<ArtifactsResponse>(artifactsResult.Output);
-        if (artifactsResponse?.Artifacts == null)
+        var artifactsResponse = JsonSerializer.Deserialize<ArtifactsResponse>(artifactsJson);
+        if (artifactsResponse?.Artifacts is null)
         {
             return false;
         }
@@ -159,6 +154,29 @@ public class RealGitHubPRFixture : IAsyncLifetime
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Executes a gh CLI command and captures only stdout for JSON parsing,
+    /// avoiding stderr pollution (upgrade notices, warnings) that would break deserialization.
+    /// </summary>
+    private async Task<string> ExecuteGhJsonAsync(params string[] args)
+    {
+        var stdoutLines = new List<string>();
+        var cmd = new ToolCommand("gh", _testOutput)
+            .WithTimeout(TimeSpan.FromMinutes(2))
+            .WithOutputDataReceived(line =>
+            {
+                if (line is not null)
+                {
+                    stdoutLines.Add(line);
+                }
+            });
+
+        var result = await cmd.ExecuteAsync(args);
+        result.EnsureSuccessful();
+
+        return string.Join(Environment.NewLine, stdoutLines);
     }
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
