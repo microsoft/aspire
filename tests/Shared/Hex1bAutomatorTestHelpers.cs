@@ -253,27 +253,34 @@ internal static class Hex1bAutomatorTestHelpers
                 throw new ArgumentOutOfRangeException(nameof(template), template, $"Unsupported template: {template}");
         }
 
-        // Handle optional template version selection (dogfood installs add a hive
-        // that causes the CLI to present a version menu). Accept the default version.
-        try
-        {
-            await auto.WaitUntilAsync(
-                s => new CellPatternSearcher().Find("Select a template version").Search(s).Count > 0,
-                timeout: TimeSpan.FromSeconds(5),
-                description: "template version prompt (dogfood)");
-
-            // Accept the default version (the PR hive version is typically first)
-            await auto.EnterAsync();
-        }
-        catch (Hex1bAutomationException)
-        {
-            // Non-dogfood installs don't show version selection — continue normally
-        }
-
+        // Dogfood installs may show "Select a template version" before the project
+        // name prompt. Wait for whichever appears first to avoid a race condition
+        // where a fixed timeout misses a slow-appearing version prompt.
+        var versionPromptHandled = false;
+        var sawVersionPrompt1 = false;
         await auto.WaitUntilAsync(
-            s => new CellPatternSearcher().Find("Enter the project name").Search(s).Count > 0,
-            timeout: TimeSpan.FromSeconds(10),
-            description: "project name prompt");
+            s =>
+            {
+                if (new CellPatternSearcher().Find("Select a template version").Search(s).Count > 0)
+                {
+                    sawVersionPrompt1 = true;
+                    return true;
+                }
+                return new CellPatternSearcher().Find("Enter the project name").Search(s).Count > 0;
+            },
+            timeout: TimeSpan.FromSeconds(15),
+            description: "version prompt or project name prompt");
+
+        if (sawVersionPrompt1)
+        {
+            versionPromptHandled = true;
+            await auto.EnterAsync(); // Accept the default version
+
+            await auto.WaitUntilAsync(
+                s => new CellPatternSearcher().Find("Enter the project name").Search(s).Count > 0,
+                timeout: TimeSpan.FromSeconds(10),
+                description: "project name prompt");
+        }
         await auto.TypeAsync(projectName);
         await auto.EnterAsync();
 
@@ -284,27 +291,44 @@ internal static class Hex1bAutomatorTestHelpers
             description: "output path prompt");
         await auto.EnterAsync();
 
-        // Handle optional template version selection for templates that show
-        // the version prompt after the output path (e.g. Starter). Accept default.
-        try
+        // Dogfood installs may show "Select a template version" after the output
+        // path (e.g. Starter template). Only check if not already handled above
+        // to avoid matching stale text from a previous version selection.
+        if (!versionPromptHandled)
         {
+            var sawVersionPrompt2 = false;
             await auto.WaitUntilAsync(
-                s => new CellPatternSearcher().Find("Select a template version").Search(s).Count > 0,
-                timeout: TimeSpan.FromSeconds(5),
-                description: "template version prompt after output path (dogfood)");
+                s =>
+                {
+                    if (new CellPatternSearcher().Find("Select a template version").Search(s).Count > 0)
+                    {
+                        sawVersionPrompt2 = true;
+                        return true;
+                    }
+                    return new CellPatternSearcher().Find("Use *.dev.localhost URLs").Search(s).Count > 0;
+                },
+                timeout: TimeSpan.FromSeconds(15),
+                description: "version prompt or URLs prompt");
 
-            await auto.EnterAsync();
+            if (sawVersionPrompt2)
+            {
+                await auto.EnterAsync(); // Accept the default version
+
+                await auto.WaitUntilAsync(
+                    s => new CellPatternSearcher().Find("Use *.dev.localhost URLs").Search(s).Count > 0,
+                    timeout: TimeSpan.FromSeconds(10),
+                    description: "URLs prompt");
+            }
         }
-        catch (Hex1bAutomationException)
+        else
         {
-            // No version prompt at this point — continue normally
+            // Version already handled at position 1 — just wait for the URLs prompt
+            await auto.WaitUntilAsync(
+                s => new CellPatternSearcher().Find("Use *.dev.localhost URLs").Search(s).Count > 0,
+                timeout: TimeSpan.FromSeconds(15),
+                description: "URLs prompt");
         }
 
-        // Step 5: URLs prompt (all templates have this)
-        await auto.WaitUntilAsync(
-            s => new CellPatternSearcher().Find("Use *.dev.localhost URLs").Search(s).Count > 0,
-            timeout: TimeSpan.FromSeconds(10),
-            description: "URLs prompt");
         await auto.EnterAsync(); // Accept default "No"
 
         // Step 6: Redis prompt (only Starter, JsReact, PythonReact)
