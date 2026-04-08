@@ -101,4 +101,52 @@ public class SpectreConsoleLoggerProviderTests
         // The format should be: [HH:mm:ss] [dbug] Test: Test debug message
         Assert.Matches(@"\[\d{2}:\d{2}:\d{2}\] \[dbug\] Test: Test debug message", outputString);
     }
+
+    [Fact]
+    public void SpectreConsoleLogger_Log_BuffersWhileInteractivePromptScopeIsActive()
+    {
+        // Arrange
+        var output = new StringWriter();
+        var logger = new SpectreConsoleLogger(output, "Aspire.Cli.Test");
+
+        // Act
+        using (SpectreConsoleLoggerProvider.BeginInteractivePromptScope())
+        {
+            logger.LogInformation("buffered while prompting");
+
+            // Assert
+            Assert.DoesNotContain("buffered while prompting", output.ToString());
+        }
+
+        // Assert
+        Assert.Contains("[info] Test: buffered while prompting", output.ToString());
+    }
+
+    [Fact]
+    public void SpectreConsoleLogger_Log_FlushesOnlyAfterOuterPromptScopeEnds()
+    {
+        // Arrange
+        var output = new StringWriter();
+        var logger = new SpectreConsoleLogger(output, "Aspire.Cli.Test");
+
+        // Act
+        using (SpectreConsoleLoggerProvider.BeginInteractivePromptScope())
+        {
+            logger.LogInformation("first");
+
+            using (SpectreConsoleLoggerProvider.BeginInteractivePromptScope())
+            {
+                logger.LogInformation("second");
+            }
+
+            Assert.DoesNotContain("first", output.ToString());
+            Assert.DoesNotContain("second", output.ToString());
+        }
+
+        // Assert
+        var flushedOutput = output.ToString();
+        Assert.Contains("[info] Test: first", flushedOutput);
+        Assert.Contains("[info] Test: second", flushedOutput);
+        Assert.True(flushedOutput.IndexOf("first", StringComparison.Ordinal) < flushedOutput.IndexOf("second", StringComparison.Ordinal));
+    }
 }
