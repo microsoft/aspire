@@ -270,7 +270,7 @@ if (-not $SkipBundle) {
   $skipNativeArg = if ($NativeAot) { '' } else { '/p:SkipNativeBuild=true' }
 
   Write-Log "Building bundle (aspire-managed + DCP$(if ($NativeAot) { ' + native AOT CLI' }))..."
-  $buildArgs = @($bundleProjPath, '-c', $effectiveConfig, "/p:VersionSuffix=$VersionSuffix")
+  $buildArgs = @($bundleProjPath, '-c', $effectiveConfig, "/p:VersionSuffix=$VersionSuffix", "/p:CliChannel=pr")
   if (-not $NativeAot) {
     $buildArgs += '/p:SkipNativeBuild=true'
   }
@@ -376,10 +376,7 @@ if (-not $SkipCli) {
 
     $installedCliPath = Join-Path $cliBinDir $cliExeName
     Write-Log "Aspire CLI installed to: $installedCliPath"
-
-    # Set the channel to the local hive so templates and packages resolve from it
-    & $installedCliPath config set channel $Name -g 2>$null
-    Write-Log "Set global channel to '$Name'"
+    Write-Log "CLI has embedded channel 'pr' - hive packages at $aspireRoot\packages\"
 
     # Check if the bin directory is in PATH
     $pathSeparator = [System.IO.Path]::PathSeparator

@@ -94,8 +94,8 @@ internal sealed class AddCommand : BaseCommand
             var source = parseResult.GetValue(s_sourceOption);
 
             // For non-.NET projects, read the channel from the local Aspire configuration if available.
-            // Unlike .NET projects which have a nuget.config, polyglot apphosts persist the channel
-            // in aspire.config.json (or the legacy settings.json during migration).
+            // Unlike .NET projects which have a nuget.config, polyglot apphosts may persist the channel
+            // in the legacy settings.json. Falls back to the embedded channel baked into the binary.
             string? configuredChannel = null;
             if (project.LanguageId != KnownLanguageId.CSharp)
             {
@@ -107,8 +107,8 @@ internal sealed class AddCommand : BaseCommand
                     // have migrated. Tracked by https://github.com/microsoft/aspire/issues/15239
                     try
                     {
-                        configuredChannel = AspireConfigFile.Load(appHostDirectory)?.Channel
-                            ?? AspireJsonConfiguration.Load(appHostDirectory)?.Channel;
+                        configuredChannel = AspireJsonConfiguration.Load(appHostDirectory)?.Channel
+                            ?? PackagingService.GetEmbeddedChannel();
                     }
                     catch (JsonException ex)
                     {

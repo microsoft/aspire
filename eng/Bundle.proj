@@ -89,9 +89,10 @@
       <_CliBinlog Condition="'$(ContinuousIntegrationBuild)' == 'true'">-bl:$(ArtifactsLogDir)PublishCli.binlog</_CliBinlog>
       <!-- The tar.gz archive produced by CreateLayout is embedded as a resource in the CLI binary -->
       <_BundleArchivePath>$(ArtifactsDir)bundle\aspire-$(BundleVersion)-$(TargetRid).tar.gz</_BundleArchivePath>
+      <_CliChannelArg Condition="'$(CliChannel)' != ''">/p:CliChannel=$(CliChannel)</_CliChannelArg>
     </PropertyGroup>
     <Message Importance="high" Text="Publishing native AOT CLI with embedded bundle: $(_BundleArchivePath)" />
-    <Exec Command="dotnet publish &quot;$(CliProjectPath)&quot; -c $(Configuration) -r $(TargetRid) /p:BundlePayloadPath=&quot;$(_BundleArchivePath)&quot; $(_VersionSuffixArg) $(_CliBinlog)" />
+    <Exec Command="dotnet publish &quot;$(CliProjectPath)&quot; -c $(Configuration) -r $(TargetRid) /p:BundlePayloadPath=&quot;$(_BundleArchivePath)&quot; $(_VersionSuffixArg) $(_CliChannelArg) $(_CliBinlog)" />
   </Target>
 
   <Target Name="_PublishManagedProjects" Condition="'$(SkipManagedBuild)' != 'true'">

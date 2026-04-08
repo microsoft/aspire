@@ -330,7 +330,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
     }
 
     /// <summary>
-    /// Resolves the configured channel name from local settings.json or global config.
+    /// Resolves the configured channel name from local settings.json, global config, or embedded channel.
     /// </summary>
     private async Task<string?> ResolveChannelNameAsync(CancellationToken cancellationToken)
     {
@@ -338,10 +338,11 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         var localConfig = AspireJsonConfiguration.Load(_appDirectoryPath);
         var channelName = localConfig?.Channel;
 
-        // Fall back to global config
+        // Fall back to global config, then embedded channel
         if (string.IsNullOrEmpty(channelName))
         {
-            channelName = await _configurationService.GetConfigurationAsync("channel", cancellationToken);
+            channelName = await _configurationService.GetConfigurationAsync("channel", cancellationToken)
+                ?? PackagingService.GetEmbeddedChannel();
         }
 
         if (!string.IsNullOrEmpty(channelName))

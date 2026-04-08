@@ -24,7 +24,6 @@ namespace Aspire.Cli.Configuration;
 /// {
 ///   "appHost": { "path": "app.ts", "language": "typescript/nodejs" },
 ///   "sdk": { "version": "9.2.0" },
-///   "channel": "stable",
 ///   "features": { "polyglotSupportEnabled": true },
 ///   "profiles": {
 ///     "default": {
@@ -82,13 +81,6 @@ internal sealed class AspireConfigFile
     }
 
     /// <summary>
-    /// Aspire channel for package resolution.
-    /// </summary>
-    [JsonPropertyName("channel")]
-    [Description("The Aspire channel to use for package resolution (e.g., \"stable\", \"preview\", \"staging\", \"daily\"). Used by aspire add to determine which NuGet feed to use.")]
-    public string? Channel { get; set; }
-
-    /// <summary>
     /// Feature flags.
     /// </summary>
     [JsonPropertyName("features")]
@@ -108,6 +100,14 @@ internal sealed class AspireConfigFile
     [JsonPropertyName("packages")]
     [Description("Package references for non-first-class languages. Key is package name, value is version. A value ending in \".csproj\" is treated as a project reference.")]
     public Dictionary<string, string>? Packages { get; set; }
+
+    /// <summary>
+    /// Captures any additional JSON properties not mapped to a typed member.
+    /// Ensures forward/backward compatibility when the file contains properties
+    /// from older or newer CLI versions (e.g., the former <c>"channel"</c> property).
+    /// </summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 
     /// <summary>
     /// Loads aspire.config.json from the specified directory.
@@ -400,7 +400,8 @@ internal sealed class AspireConfigFile
                 config.Sdk = new AspireConfigSdk { Version = settings.SdkVersion };
             }
 
-            config.Channel = settings.Channel;
+            // Note: Channel is no longer migrated — it's now embedded in the binary
+            // via [assembly: AssemblyMetadata("CliChannel", "...")].
             config.Features = settings.Features;
             config.Packages = settings.Packages;
         }

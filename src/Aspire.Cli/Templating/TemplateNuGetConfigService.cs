@@ -63,7 +63,8 @@ internal sealed class TemplateNuGetConfigService(
     {
         if (string.IsNullOrWhiteSpace(channelName))
         {
-            channelName = await configurationService.GetConfigurationAsync("channel", cancellationToken);
+            channelName = await configurationService.GetConfigurationAsync("channel", cancellationToken)
+                ?? PackagingService.GetEmbeddedChannel();
         }
 
         if (string.IsNullOrWhiteSpace(channelName))

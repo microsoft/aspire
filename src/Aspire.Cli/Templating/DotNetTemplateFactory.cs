@@ -626,10 +626,11 @@ internal class DotNetTemplateFactory(
         // Check if channel was provided via inputs (highest priority)
         var channelName = inputs.Channel;
         
-        // If no channel in inputs, check for global channel setting
+        // If no channel in inputs, check for global channel setting, then embedded channel
         if (string.IsNullOrEmpty(channelName))
         {
-            channelName = await configurationService.GetConfigurationAsync("channel", cancellationToken);
+            channelName = await configurationService.GetConfigurationAsync("channel", cancellationToken)
+                ?? PackagingService.GetEmbeddedChannel();
         }
         
         IEnumerable<PackageChannel> channels;

@@ -267,10 +267,9 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal(JsonValueKind.String, node!.GetValueKind());
         Assert.Equal("true", node.GetValue<string>());
 
-        // Verify it round-trips correctly through AspireConfigFile.Load
+        // Verify it round-trips correctly through AspireConfigFile.Load (channel is now in ExtensionData)
         var config = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
         Assert.NotNull(config);
-        Assert.Equal("true", config.Channel);
     }
 
     [Fact]

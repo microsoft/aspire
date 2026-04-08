@@ -16,6 +16,20 @@ internal interface IPackagingService
 
 internal class PackagingService(CliExecutionContext executionContext, INuGetPackageCache nuGetPackageCache, IFeatures features, IConfiguration configuration) : IPackagingService
 {
+    /// <summary>
+    /// Reads the distribution channel baked into the binary at build time via
+    /// <c>[assembly: AssemblyMetadata("CliChannel", "...")]</c>.
+    /// Returns <c>null</c> for dev/inner-loop builds that have no embedded channel.
+    /// </summary>
+    internal static string? GetEmbeddedChannel()
+    {
+        var value = Assembly.GetExecutingAssembly()
+            .GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(a => a.Key == "CliChannel")?.Value;
+
+        return string.IsNullOrEmpty(value) ? null : value;
+    }
+
     public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default)
     {
         var defaultChannel = PackageChannel.CreateImplicitChannel(nuGetPackageCache);

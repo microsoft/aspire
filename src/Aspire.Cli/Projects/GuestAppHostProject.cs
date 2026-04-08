@@ -361,12 +361,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     return (Success: true, Output: prepareOutput, Error: (string?)null, ChannelName: channelName, NeedsCodeGen: needsCodeGen);
                 }, emoji: KnownEmojis.Gear);
 
-            // Save the channel to settings if available (config already has SdkVersion)
-            if (buildResult.ChannelName is not null)
-            {
-                config.Channel = buildResult.ChannelName;
-                SaveConfiguration(config, directory);
-            }
+            // Channel is now embedded in the binary via assembly metadata — no need to save.
 
             if (!buildResult.Success)
             {
@@ -1124,11 +1119,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         {
             config.SdkVersion = newSdkVersion;
         }
-        // Update channel if it's an explicit channel (not the implicit/default one)
-        if (context.Channel.Type == Packaging.PackageChannelType.Explicit)
-        {
-            config.Channel = context.Channel.Name;
-        }
+        // Update channel is now embedded in the binary — don't persist to config.
         foreach (var (packageId, _, newVersion) in updates)
         {
             config.AddOrUpdatePackage(packageId, newVersion);

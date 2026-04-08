@@ -246,10 +246,10 @@ if [[ $SKIP_BUNDLE -eq 0 ]]; then
 
   if [[ $NATIVE_AOT -eq 1 ]]; then
     log "Building bundle (aspire-managed + DCP + native AOT CLI)..."
-    dotnet build "$BUNDLE_PROJ" -c "$EFFECTIVE_CONFIG" "/p:VersionSuffix=$VERSION_SUFFIX"
+    dotnet build "$BUNDLE_PROJ" -c "$EFFECTIVE_CONFIG" "/p:VersionSuffix=$VERSION_SUFFIX" "/p:CliChannel=pr"
   else
     log "Building bundle (aspire-managed + DCP)..."
-    dotnet build "$BUNDLE_PROJ" -c "$EFFECTIVE_CONFIG" /p:SkipNativeBuild=true "/p:VersionSuffix=$VERSION_SUFFIX"
+    dotnet build "$BUNDLE_PROJ" -c "$EFFECTIVE_CONFIG" /p:SkipNativeBuild=true "/p:VersionSuffix=$VERSION_SUFFIX" "/p:CliChannel=pr"
   fi
   if [[ $? -ne 0 ]]; then
     error "Bundle build failed."
@@ -318,12 +318,7 @@ if [[ $SKIP_CLI -eq 0 ]]; then
     chmod +x "$CLI_BIN_DIR/aspire"
 
     log "Aspire CLI installed to: $CLI_BIN_DIR/aspire"
-
-    if "$CLI_BIN_DIR/aspire" config set channel "$HIVE_NAME" -g >/dev/null 2>&1; then
-      log "Set global channel to '$HIVE_NAME'"
-    else
-      warn "Failed to set global channel to '$HIVE_NAME'. Run: aspire config set channel '$HIVE_NAME' -g"
-    fi
+    log "CLI has embedded channel 'pr' — hive packages at $ASPIRE_ROOT/packages/"
 
     # Check if the bin directory is in PATH
     if [[ ":$PATH:" != *":$CLI_BIN_DIR:"* ]]; then

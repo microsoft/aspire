@@ -24,7 +24,19 @@
     <DefineConstants>$(DefineConstants);CLI</DefineConstants>
     <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
     <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+
+    <!-- Distribution channel baked into the binary via AssemblyMetadata.
+         Set by CI/packaging: "stable", "daily", or "pr".
+         Empty/unset means dev/inner-loop build (uses implicit channel). -->
+    <CliChannel Condition="'$(CliChannel)' == ''"></CliChannel>
   </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>CliChannel</_Parameter1>
+      <_Parameter2>$(CliChannel)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
 
   <!-- Set the nuget properties when building as a global tool. -->
   <PropertyGroup Condition="'$(IsCliToolProject)' == 'true'">

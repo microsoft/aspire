@@ -146,10 +146,6 @@ internal sealed class ScaffoldingService : IScaffoldingService
         }
 
         config.Profiles = profiles;
-        if (prepareResult.ChannelName is not null)
-        {
-            config.Channel = prepareResult.ChannelName;
-        }
         config.AppHost ??= new AspireConfigAppHost();
         config.AppHost.Path ??= language.AppHostFileName;
         config.AppHost.Language = language.LanguageId;

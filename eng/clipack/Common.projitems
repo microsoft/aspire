@@ -12,6 +12,10 @@
     <CliUpdateInstructions Condition="$(CliRuntime.StartsWith('win-'))">winget upgrade Microsoft.Aspire</CliUpdateInstructions>
     <CliUpdateInstructions Condition="$(CliRuntime.StartsWith('osx-'))">brew upgrade --cask aspire</CliUpdateInstructions>
 
+    <!-- Distribution channel embedded in the CLI binary.
+         Defaults to 'stable' for archive builds; overridden to 'daily' or 'pr' by CI pipelines. -->
+    <CliChannel Condition="'$(CliChannel)' == ''">stable</CliChannel>
+
     <!-- PublishNativeAot is explicitly set to false in the projects for cases where we don't want to AOT at all.
          For the rest, publish native AOT if running on the target platfrom -->
     <PublishNativeAot Condition="'$(PublishNativeAot)' == '' and $([System.OperatingSystem]::IsWindows()) and $(CliRuntime.StartsWith('win-'))">true</PublishNativeAot>
@@ -77,6 +81,8 @@
       <AdditionalProperties Include="PublishDir=$(OutputPath)" />
       <AdditionalProperties Include="SelfContained=true" />
       <AdditionalProperties Condition="'$(BundlePayloadPath)' != ''" Include="BundlePayloadPath=$(BundlePayloadPath)" />
+      <!-- Forward the distribution channel to embed in the CLI binary via AssemblyMetadata -->
+      <AdditionalProperties Condition="'$(CliChannel)' != ''" Include="CliChannel=$(CliChannel)" />
       <!-- Pass through version properties so the CLI gets the correct version -->
       <AdditionalProperties Condition="'$(VersionSuffix)' != ''" Include="VersionSuffix=$(VersionSuffix)" />
       <AdditionalProperties Condition="'$(OfficialBuildId)' != ''" Include="OfficialBuildId=$(OfficialBuildId)" />

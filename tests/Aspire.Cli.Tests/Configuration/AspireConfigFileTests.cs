@@ -36,7 +36,7 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
 
         Assert.NotNull(result);
         Assert.Equal("MyApp/MyApp.csproj", result.AppHost?.Path);
-        Assert.Equal("daily", result.Channel);
+        // "channel" is no longer a typed property — it's preserved via ExtensionData for backward compat
     }
 
     [Fact]
@@ -59,7 +59,7 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
 
         Assert.NotNull(result);
         Assert.Equal("MyApp/MyApp.csproj", result.AppHost?.Path);
-        Assert.Equal("stable", result.Channel);
+        // "channel" is no longer a typed property — it's preserved via ExtensionData for backward compat
     }
 
     [Fact]
@@ -120,7 +120,6 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
 
         Assert.NotNull(result);
         Assert.Null(result.AppHost);
-        Assert.Null(result.Channel);
     }
 
     [Fact]
@@ -130,8 +129,7 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
 
         var config = new AspireConfigFile
         {
-            AppHost = new AspireConfigAppHost { Path = "src/AppHost/AppHost.csproj" },
-            Channel = "daily"
+            AppHost = new AspireConfigAppHost { Path = "src/AppHost/AppHost.csproj" }
         };
 
         config.Save(workspace.WorkspaceRoot.FullName);
@@ -141,7 +139,6 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
 
         var content = File.ReadAllText(filePath);
         Assert.Contains("src/AppHost/AppHost.csproj", content);
-        Assert.Contains("daily", content);
     }
 
     [Fact]

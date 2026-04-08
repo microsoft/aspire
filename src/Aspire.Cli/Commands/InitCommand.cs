@@ -736,10 +736,11 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
         // Check if --channel option was provided (highest priority)
         var channelName = parseResult.GetValue(_channelOption);
 
-        // If no --channel option, check for global channel setting
+        // If no --channel option, check for global channel setting, then embedded channel
         if (string.IsNullOrEmpty(channelName))
         {
-            channelName = await _configurationService.GetConfigurationAsync("channel", cancellationToken);
+            channelName = await _configurationService.GetConfigurationAsync("channel", cancellationToken)
+                ?? PackagingService.GetEmbeddedChannel();
         }
 
         IEnumerable<PackageChannel> channels;
